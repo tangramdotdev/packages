@@ -1,5 +1,5 @@
 export let metadata = {
-	name: "download_util"
+	name: "download"
 };
 
 export type Arg = {
