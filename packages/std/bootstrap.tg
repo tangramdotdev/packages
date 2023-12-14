@@ -11,8 +11,6 @@ export type Arg = {
 	component?: string;
 	/** Optionally select a system different from the detected host. */
 	host?: Triple.Arg;
-	/** Optionally download components from remote hosting instead of including local files. */
-	remote?: boolean;
 };
 
 export let bootstrap = tg.target(async (arg?: Arg) => {
@@ -21,45 +19,22 @@ export let bootstrap = tg.target(async (arg?: Arg) => {
 	if (tg.System.os(host) === "darwin") {
 		hostString = "universal_darwin";
 	} else {
-		// FIXME - regenerate bootstrap compnents to use - instead, and .tar.zst instead of .tar.zstd.
 		hostString = hostString.replace("-", "_");
 	}
 	let requestedComponentName = `${component}_${hostString}`;
-	if (remote) {
-		if (!component) {
-			// Download all and aggregate.
-			let allComponents = await componentList({ host });
-			let dirObject = allComponents.reduce(
-				(acc, name) => {
-					acc[name] = remoteComponent(name);
-					return acc;
-				},
-				{} as Record<string, Promise<tg.Directory>>,
-			);
-			return tg.directory(dirObject);
-		}
-		return remoteComponent(requestedComponentName);
+	if (!component) {
+		// Download all and aggregate.
+		let allComponents = await componentList({ host });
+		let dirObject = allComponents.reduce(
+			(acc, name) => {
+				acc[name] = remoteComponent(name);
+				return acc;
+			},
+			{} as Record<string, Promise<tg.Directory>>,
+		);
+		return tg.directory(dirObject);
 	}
-	throw new Error("Local source is not yet implemented.");
-	// let result = tg.Directory.expect(await tg.include("dist"));
-	// // If this folder is empty, the user must populate it outside of tangram!
-	// let entries = await result.entries();
-	// // NOTE - assert greater than 1 to account for the .gitinore file.
-	// assert(
-	// 	entries && Object.keys(entries).length > 1,
-	// 	"The dist folder is empty. Please run `make` to populate it.  See the adjacent README.md for details.",
-	// );
-	// // Get the requested subdirectory, if any.
-	// if (requestedComponent) {
-	// 	let componentPath = await result.tryGet(`${requestedComponentName}`);
-	// 	assert(
-	// 		componentPath,
-	// 		`The requested component ${requestedComponentName} does not exist.`,
-	// 	);
-	// 	tg.Directory.assert(componentPath);
-	// 	result = componentPath;
-	// }
-	// return result;
+	return remoteComponent(requestedComponentName);
 });
 
 export default bootstrap;
@@ -219,7 +194,7 @@ export let patch = async (
 
 /** Download a component tarball from the remote host. */
 export let remoteComponent = tg.target(async (componentName: string) => {
-	let version = "v2023.10.19";
+	let version = "v2023.12.14";
 	let url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}.tar.zstd`;
 	let checksum = checksums[componentName];
 	tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
@@ -229,9 +204,6 @@ export let remoteComponent = tg.target(async (componentName: string) => {
 	let contents = tg.Directory.expect(
 		await downloadUtil.download({ url, checksum, unpackFormat }),
 	);
-	// let compressedTarball = await tg.download(url, checksum);
-	// let decompressedTarball = await compressedTarball.decompress(".zst");
-	// let contents = tg.Directory.expect(await decompressedTarball.extract(".tar"));
 
 	return contents;
 });
@@ -256,7 +228,7 @@ export let componentList = async (arg?: Arg) => {
 		"sdk_12.1_universal_darwin",
 		"sdk_12.3_universal_darwin",
 		"sdk_13.3_universal_darwin",
-		"sdk_14.0_universal_darwin",
+		"sdk_14.2_universal_darwin",
 		"toolchain_universal_darwin",
 		"utils_universal_darwin",
 	];
