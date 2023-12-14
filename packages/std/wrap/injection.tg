@@ -1,0 +1,166 @@
+import * as bootstrap from "../bootstrap.tg";
+import * as canadianCross from "../sdk/canadian_cross.tg";
+import * as std from "../tangram.tg";
+
+type Arg = {
+	/** Additional environment to use for the build. */
+	env?: std.env.Arg;
+	/* This is the triple your injection library should work for. If you built a cross-compiler, this will be "target". */
+	host?: std.Triple.Arg;
+};
+
+export let injection = tg.target(async (arg?: Arg) => {
+	let host = await std.Triple.host(arg);
+	let os = host.os;
+
+	// Get the source.
+	let sourceDir = tg.Directory.expect(await tg.include("injection/"));
+	let source = tg.File.expect(await sourceDir.get(`${os}/lib.c`));
+
+	// Prepare sdk.
+	let buildToolchain = await bootstrap.toolchain({ host });
+	// If on Linux and glibc is requested, use the full build.
+	if (os === "linux" && host.environment !== "musl") {
+		host.vendor = "unknown";
+		buildToolchain = await canadianCross.toolchain({ host });
+	}
+	let env = arg?.env;
+
+	// Select the correct toolchain and options for the given triple.
+	let additionalArgs: Array<string | tg.Template> = [];
+	if (os === "linux") {
+		additionalArgs = ["-Wl,--no-as-needed", "-s"];
+		let injection = dylib({
+			buildToolchain,
+			env,
+			host,
+			source,
+			additionalArgs,
+		});
+		return injection;
+	} else if (os === "darwin") {
+		let injection = macOsInjection({
+			buildToolchain,
+			env,
+			host,
+			source,
+		});
+		return injection;
+	} else {
+		return tg.unreachable();
+	}
+});
+
+export default injection;
+
+type MacOsInjectionArg = {
+	buildToolchain: tg.Directory;
+	env: std.env.Arg;
+	host?: std.Triple.Arg;
+	source: tg.File;
+};
+
+export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
+	let host = await std.Triple.host(arg);
+	let os = host.os;
+	if (os !== "darwin") {
+		throw new Error(`Unsupported OS ${os}`);
+	}
+
+	let source = arg.source;
+
+	// Define common options.
+	let additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
+	let env = [
+		{
+			SDKROOT: await bootstrap.macOsSdk(),
+		},
+		arg.env,
+	];
+
+	// Compile arm64 dylib.
+	let arm64Args = additionalArgs.concat(["--target=aarch64-apple-darwin"]);
+	let arm64injection = dylib({
+		...arg,
+		source,
+		additionalArgs: arm64Args,
+		env,
+	});
+
+	// Compile amd64 dylib.
+	let amd64Args = additionalArgs.concat(["--target=x86_64-apple-darwin"]);
+	let amd64injection = dylib({
+		...arg,
+		source,
+		additionalArgs: amd64Args,
+		env,
+	});
+
+	// Combine into universal dylib.
+	let system = std.Triple.system(host);
+	let injection = tg.File.expect(
+		await tg.build(
+			tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
+			{ host: system, env: std.env.object(arg.buildToolchain, env) },
+		),
+	);
+	return injection;
+});
+
+type DylibArg = {
+	additionalArgs: Array<string | tg.Template>;
+	buildToolchain: tg.Directory;
+	env: std.env.Arg;
+	host?: std.Triple.Arg;
+	source: tg.File;
+};
+
+export let dylib = tg.target(async (arg: DylibArg): Promise<tg.File> => {
+	let host = await std.Triple.host(arg);
+
+	let additionalArgs = arg.additionalArgs ?? [];
+	if (host.os === "linux") {
+		additionalArgs.push(await tg`--sysroot=${arg.buildToolchain}`);
+	}
+
+	let executable = `cc`;
+
+	let system = std.Triple.system(host);
+	let output = tg.File.expect(
+		await tg.build(
+			tg`${executable} -xc ${
+				arg.source
+			} -o $OUTPUT -shared  -fPIC -ldl -Os ${tg.Template.join(
+				" ",
+				...additionalArgs,
+			)}`,
+			{
+				host: system,
+				env: std.env.object(arg.buildToolchain, arg.env),
+			},
+		),
+	);
+	return output;
+});
+
+export let test = tg.target(async () => {
+	let detectedHost = await std.Triple.host();
+	let hostArch = detectedHost.arch;
+	if (detectedHost.os === "linux") {
+		detectedHost.environment = "musl";
+	}
+	let nativeInjection = await injection({ host: detectedHost });
+
+	// Assert the native injection dylib was built for the build machine.
+	let os = tg.System.os(std.Triple.system(detectedHost));
+	let nativeMetadata = await std.file.executableMetadata(nativeInjection);
+	if (os === "linux") {
+		tg.assert(nativeMetadata.format === "elf");
+		tg.assert(nativeMetadata.arch === hostArch);
+	} else if (os === "darwin") {
+		tg.assert(nativeMetadata.format === "mach-o");
+		tg.assert(nativeMetadata.arches.includes(hostArch));
+	} else {
+		return tg.unreachable();
+	}
+});

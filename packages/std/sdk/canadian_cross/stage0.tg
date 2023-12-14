@@ -1,0 +1,109 @@
+/** Stage 0: Mise en place. In this stage we prepare our build environment by proxying the bootstrap toolchain and compiling tools we'll need that aren't provided by busybox. This stage doesn't build the full set of utils provided by the SDK - we want to use the toolchain we're building now to build those! */
+
+import * as bootstrap from "../../bootstrap.tg";
+import * as std from "../../tangram.tg";
+import proxy from "../proxy.tg";
+
+export let bootstrapSdk = tg.target(
+	async (arg?: std.Triple.HostArg): Promise<std.env.Arg> => {
+		let host = await std.Triple.host(arg);
+		let toolchain = await prepareBootstrapToolchain({ host });
+		let bootstrapHost = bootstrap.toolchainTriple(host);
+		let proxyEnv = await proxy({
+			env: toolchain,
+			target: bootstrapHost,
+		});
+		let utils = await prepareBootstrapUtils(bootstrapHost);
+		let shellExe = tg.File.expect(await utils.get("bin/dash"));
+		return std.env(toolchain, proxyEnv, utils, { SHELL: shellExe }, { bootstrapMode: true });
+	},
+);
+
+export default bootstrapSdk;
+
+/** Get the bootstrap components as a single directory, for use before SDK. */
+export let prepareBootstrapToolchain = tg.target(
+	async (arg?: std.Triple.HostArg) => {
+		// Detect the host triple if not provided.
+		let host = await std.Triple.host(arg);
+
+		// Obtain the bootstrap toolchain and triple for the detected host to construct the env.
+		let bootstrapToolchain = await bootstrap.toolchain({ host });
+		let bootstrapTripleString = std.Triple.toString(
+			bootstrap.toolchainTriple(host),
+		);
+
+		if (host.os === "darwin") {
+			// Replace the Xcode-tied gcc and g++ entries with symlinks to clang and return.
+			bootstrapToolchain = await tg.directory(bootstrapToolchain, {
+				["bin/gcc"]: tg.symlink("clang"),
+				["bin/g++"]: tg.symlink("clang++"),
+			});
+		} else if (host.os === "linux") {
+			// Add prefixed symlinks for the included binutils.
+			bootstrapToolchain = await prefixBins(
+				bootstrapToolchain,
+				[
+					"addr2line",
+					"ar",
+					"as",
+					"ld",
+					"nm",
+					"objcopy",
+					"objdump",
+					"ranlib",
+					"readelf",
+					"strip",
+					"strings",
+				],
+				bootstrapTripleString + "-",
+			);
+		} else {
+			throw new Error(`Unsupported host OS: ${host.os}.`);
+		}
+
+		return bootstrapToolchain;
+	},
+);
+
+/** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */
+export let prepareBootstrapUtils = tg.target(
+	async (hostArg: std.Triple.Arg) => {
+		let host = std.triple(hostArg);
+		let shell = await bootstrap.shell({ host });
+		let shellFile = tg.File.expect(await shell.get("bin/dash"));
+		let utils = bootstrap.utils({ host });
+		let combined = tg.directory(utils, {
+			"bin/dash": shellFile,
+			"bin/sh": tg.symlink("dash"),
+		});
+		return combined;
+	},
+);
+
+export let prefixBins = async (
+	dir: tg.Directory,
+	bins: Array<String>,
+	prefix: string,
+): Promise<tg.Directory> => {
+	let ret = dir;
+	for (let bin of bins) {
+		if (!ret.tryGet(`bin/${bin}`)) {
+			throw new Error(`Could not locate bin/${bin}.`);
+		}
+		ret = await tg.directory(ret, {
+			bin: {
+				[`${prefix}${bin}`]: tg.symlink(`${bin}`),
+			},
+		});
+	}
+	return ret;
+};
+
+export let test = tg.target(async () => {
+	let env = await bootstrapSdk();
+	let detectedHost = await std.Triple.host();
+	let expectedHost = bootstrap.toolchainTriple(detectedHost);
+	await std.sdk.assertValid(env, { host: expectedHost, bootstrapMode: true });
+	return env;
+});

@@ -1,0 +1,62 @@
+/** Stage 2: The Main Course. Using our new cross compiler, we build a new toolchain with our desired `host` and `target`, and ensure it's capable of building itself again identically. */
+
+import * as bootstrap from "../../bootstrap.tg";
+import * as std from "../../tangram.tg";
+import binutils from "../binutils.tg";
+import gcc from "../gcc.tg";
+import * as stage0 from "./stage0.tg";
+
+type Arg = {
+	env: std.env.Arg;
+	host: std.Triple;
+	sysroot: tg.Directory;
+};
+
+export let nativeHostToolchain = tg.target(async (arg: Arg) => {
+	let build = bootstrap.toolchainTriple(arg.host);
+	let { env, host, sysroot } = arg;
+	let target = host;
+	let sdk = { bootstrapMode: true };
+
+	let nativeHostBinutils = await binutils({
+		env,
+		build,
+		host,
+		sdk,
+		staticBuild: true,
+		target,
+	});
+	nativeHostBinutils = await stage0.prefixBins(
+		nativeHostBinutils,
+		[
+			"addr2line",
+			"ar",
+			"as",
+			"ld",
+			"nm",
+			"objcopy",
+			"objdump",
+			"ranlib",
+			"readelf",
+			"strip",
+			"strings",
+		],
+		std.Triple.toString(host) + "-",
+	);
+	console.log("stage2 binutils", await nativeHostBinutils.id());
+
+	let fullGCC = await gcc({
+		binutils: nativeHostBinutils,
+		build,
+		env,
+		host,
+		sdk,
+		sysroot,
+		target,
+		variant: "stage2_full",
+	});
+	console.log("stage2 gcc", await fullGCC.id());
+
+	// Return just the directory.
+	return fullGCC;
+});

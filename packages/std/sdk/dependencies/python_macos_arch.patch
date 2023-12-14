@@ -1,0 +1,12 @@
+diff -Naur Python-3.12.1/configure Python-3.12.1_patched/configure
+--- Python-3.12.1/configure	2023-12-07 15:45:44
++++ Python-3.12.1_patched/configure	2023-12-10 14:01:06
+@@ -10130,7 +10130,7 @@
+                     ;;
+                 esac
+             else
+-                if test `/usr/bin/arch` = "i386"
++                if test `uname -m` = "i386"
+                 then
+                     # 10.4 was the first release to support Intel archs
+                     cur_target="10.4"

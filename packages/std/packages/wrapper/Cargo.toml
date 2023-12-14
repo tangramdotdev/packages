@@ -1,0 +1,22 @@
+[package]
+name = "tangram_wrapper"
+version = "0.0.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+byteorder = { workspace = true }
+fnv = { workspace = true }
+heck = { workspace = true }
+itertools = { workspace = true }
+libc = { workspace = true }
+num = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tangram_client = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tempfile = { workspace = true }
+xattr = { workspace = true }

@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shopt -s inherit_errexit
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+PACKAGES="$DIR/.."
+
+only=""
+while [[ "$#" -gt 0 ]]; do
+	case $1 in
+		--only)
+			only="$2"
+			shift
+			;;
+		*)
+			echo "Usage: $0 [--only <build|check>]"
+			echo "Unknown option: $1"
+			exit 1
+			;;
+	esac
+
+	shift
+done
+
+# Disable Rust backtraces, they're slow to generate and clutter the test output.
+export RUST_BACKTRACE=0
+
+color_reset="$(tput sgr0)"
+color_bold="$(tput bold)"
+color_red="$(tput setaf 1)"
+color_green="$(tput setaf 2)"
+color_yellow="$(tput setaf 3)"
+color_gray="$(tput setaf 8)"
+
+# Find the 'tg' binary.
+if command -v 'tg' >/dev/null; then
+	# If 'tg' is on the $PATH, then use it.
+	tg="$(command -v 'tg')"
+elif [[ -x "$PACKAGES/../tangram/target/debug/tg" ]]; then
+	tg="$PACKAGES/../tangram/target/debug/tg"
+else
+	echo "Error: Couldn't find 'tg' binary."
+	echo "       Add it to your \$PATH, or make sure the 'tangram' repo is checked out"
+	echo "       adjacently to 'packages', and has 'target/debug/tg' present."
+	exit 1
+fi
+
+# test_package will run various 'tg' subcommands against a package.
+#
+# Usage:
+#    test_package "./path_to_package" check build run
+#    test_package "./path_to_package" 'build targetName' check
+#
+# test_package will first 'cd' into the package, then execute the 'tg' subcommands in order, with arguments as given.
+#
+function test_package() {( # subshell
+	set -e
+	package="$1"
+	echo "${color_green}${color_bold}--- $1 ${color_reset}"
+	cd "$PACKAGES/$package" # Change to the directory of the package to test
+	shift
+
+	for action in "$@"; do
+		if [ -n "$only" -a "$action" != "$only" ]; then
+			echo "${color_gray}    tg $action [SKIPPED]${color_reset}"
+			continue
+		fi
+
+		echo "${color_yellow}  + tg $action${color_reset}"
+		if ! $tg "$action"; then
+			echo "${color_red}  FAILED: $package: tg $action ${color_reset}"
+			exit 1
+		fi
+	done
+)}
+
+# Run a command, expecting it to fail.
+function expect_fail() {(
+	set +e # Allow failures
+	"$@"
+	if [[ "$?" == 0 ]];then
+		if [ -n "$only" ]; then
+			echo "  ${color_gray}Expected the previous test to fail, but some checks are disabled.${color_reset}"
+		else
+			echo "Expected the previous passing test to fail."
+			exit 1
+		fi
+	else
+		echo "  ${color_yellow}# Test failed, as expected. OK.${color_reset}"
+	fi
+)}
+
+# Example packages
+
+test_package 'examples/bundle_bin_demo' check build
+test_package 'examples/bundle_script_demo' check build
+test_package 'examples/bundle_toolchain' check build
+test_package 'examples/bundler' # check build
+test_package 'examples/cargo_hello_world' check build
+test_package 'examples/cargo_simple_dependency' check build
+test_package 'examples/cgo_demo_dynamic' check # build
+test_package 'examples/cgo_demo_static' check build
+test_package 'examples/cmake_curl' # check build
+test_package 'examples/cmake_demo' # check build
+test_package 'examples/container_demo' check build
+test_package 'examples/entrypoint' check build
+test_package 'examples/grep_demo' check build
+test_package 'examples/logging' check build
+test_package 'examples/minimal' check build
+test_package 'examples/nodejs_demo' check build
+test_package 'examples/procSelfExeHook' check build
+test_package 'examples/proc_self_exe_demo' check # build
+test_package 'examples/ripgrep_demo' check build
+test_package 'examples/rust_demo' # check build
+test_package 'examples/rust_demo_cargo' # check build
+test_package 'examples/sandbox_demo' check build
+test_package 'examples/sdk_demo' check # build
+test_package 'examples/simple_example' # check build
+test_package 'examples/test' check build
+
+# Packages
+
+test_package 'packages/autoconf' check # build # Failed to deserialize the args?
+test_package 'packages/automake' check build
+test_package 'packages/autotools' check # no build target
+test_package 'packages/bash' check build
+test_package 'packages/binutils' check # build # Intermediate build steps creates a randomly named executable and needs fix_orphan_bundles to run during build.
+test_package 'packages/bison' check build
+test_package 'packages/bzip2' check build # Intermediate build steps creates a randomly named executable and needs fix_orphan_bundles to run during build.
+test_package 'packages/cmake' check build
+test_package 'packages/coreutils' check build
+test_package 'packages/curl' check build
+test_package 'packages/diffutils' check build
+test_package 'packages/findutils' check build
+test_package 'packages/flex' check # build # Needs help2man
+test_package 'packages/fzf' check build
+test_package 'packages/gawk' check build
+test_package 'packages/gettext' check # build # fatal error: po-gram-gen.tab.h: No such file or directory
+test_package 'packages/gh' check # build # CGo linking errors.
+test_package 'packages/gitea' check # build # CGo linking errors.
+test_package 'packages/glibc' check # build # make[2]: *** Cannot open jobserver /tmp/GMfifo139589r: No such file or directory. 
+test_package 'packages/gmp' check build
+test_package 'packages/gnugrep' check build
+test_package 'packages/gnuhello' check build
+test_package 'packages/gnumake' check build
+test_package 'packages/gnused' check build 
+test_package 'packages/gnutls' check # build # Issue with linking nettle & gmp together
+test_package 'packages/go' check build
+test_package 'packages/gperf' check build
+test_package 'packages/hey' check build
+test_package 'packages/isl' check build
+test_package 'packages/jq' check build
+test_package 'packages/libffi' check build
+test_package 'packages/libiconv' check build
+test_package 'packages/libsigsegv' check build
+test_package 'packages/linux_headers' check # build # Permission error opening scripts/basic/.fixdep.d.
+test_package 'packages/linux_headers_prebuilt' check build
+test_package 'packages/m4' check build
+test_package 'packages/mpc' check # build # error finding libgmp.la after it is moved. pkgconfig is not useful. 
+test_package 'packages/mpfr' check build
+test_package 'packages/ncurses' check build
+test_package 'packages/nettle' check build
+test_package 'packages/nodejs' check build
+test_package 'packages/openssl' check build
+test_package 'packages/patch' check build
+test_package 'packages/pcre2' check build
+test_package 'packages/perl' check build
+test_package 'packages/pkg-config' check build
+test_package 'packages/postgresql' check build
+test_package 'packages/python' check build
+test_package 'packages/readline' check build
+test_package 'packages/ripgrep' check build
+test_package 'packages/rust' check build
+test_package 'packages/sqlite' check build
+test_package 'packages/std' check # no build target
+test_package 'packages/texinfo' check # build # needs debugging
+test_package 'packages/toybox' check build
+test_package 'packages/wget' check # build # depends on gnutls
+test_package 'packages/zlib' check build
+
+echo
+echo "${color_green}${color_bold}All OK 🎉${color_reset}"

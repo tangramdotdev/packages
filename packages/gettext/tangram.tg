@@ -1,0 +1,47 @@
+import * as std from "tg:std" with { path: "../std" };
+
+export let metadata = {
+	name: "gettext",
+	version: "0.21",
+};
+
+export let source = tg.target(() => {
+	let { name, version } = metadata;
+	let checksum =
+		"sha256:c77d0da3102aec9c07f43671e60611ebff89a996ef159497ce8e59d075786b12";
+	return std.download.fromGnu({ name, version, checksum });
+});
+
+type Arg = {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: std.Triple.Arg;
+	env?: std.env.Arg;
+	host?: std.Triple.Arg;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	source?: tg.Directory;
+};
+
+export let gettext = tg.target(async (arg?: Arg) => {
+	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+
+	return std.autotools.build(
+		{
+			...rest,
+			...std.Triple.rotate({ build, host }),
+			source: source_ ?? source(),
+		},
+		autotools,
+	);
+});
+
+export default gettext;
+
+export let test = tg.target(async () => {
+	return std.build(
+		`
+		echo "Checking if we can run gettext." | tee $OUTPUT
+		gettext --version | tee -a $OUTPUT
+	`,
+		{ env: gettext() },
+	);
+});

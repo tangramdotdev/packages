@@ -1,0 +1,45 @@
+[workspace]
+members = [
+  "packages/env",
+  "packages/tgld",
+  "packages/wrapper",
+]
+resolver = "2"
+
+[workspace.lints.clippy]
+pedantic = "warn"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+missing_safety_doc = "allow"
+
+[workspace.dependencies]
+byteorder = "1"
+bytes = "1"
+clap = { version = "4.2.1", features = ["derive"] }
+fnv = "1"
+futures = "0.3"
+goblin = "0.7"
+heck = "0.4"
+hex = { version = "0.4", features = ["serde"] }
+itertools = "0.12"
+libc = "0.2"
+num = "0.4"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tangram_client = { path = "../../../tangram/packages/client" }
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+xattr = "1"
+
+tangram_env = { path = "packages/env" }
+tangram_wrapper = { path = "packages/wrapper" }
+tgld = { path = "packages/tgld" }
+
+[profile.release]
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = true

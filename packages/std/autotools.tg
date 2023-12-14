@@ -1,0 +1,233 @@
+import * as std from "./tangram.tg";
+
+export type Arg = {
+	/** Should we run the check phase? Default: false */
+	doCheck?: boolean;
+
+	/** Any environment to add to the target. */
+	env?: std.env.Arg;
+
+	/** The computer this build should get compiled on. */
+	host?: std.Triple.Arg;
+
+	/** The optlevel to pass. Defaults to "s" */
+	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
+
+	/** Should make jobs run in parallel? Default: false until new branch. */
+	parallel?: boolean | number;
+
+	/** Override the phases. */
+	phases?: std.phases.Arg;
+
+	/** The argument configuring the installation prefix. Default value is `--prefix=${prefixPath}` Set to `"none"` to omit an installation destination argument.*/
+	prefixArg?: tg.Template.Arg | "none";
+
+	/** The filepath to use as the installation prefix. Usually the default of `tg.ouput` is what you want here. */
+	prefixPath?: tg.Template.Arg;
+
+	/** Arguments to use for the SDK. */
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+
+	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
+	source: tg.Directory;
+
+	/** Should executables be stripped? Default is true. */
+	stripExecutables?: boolean;
+
+	/** The computer this build produces executables for. */
+	target?: std.Triple.Arg;
+};
+
+export let target = async (...args: tg.Args<Arg>) => {
+	type Apply = {
+		doCheck: boolean;
+		host: std.Triple;
+		target: std.Triple;
+		opt: "1" | "2" | "3" | "s" | "z" | "fast";
+		parallel: boolean | number;
+		phases: Array<std.phases.Arg>;
+		prefixArg?: tg.Template.Arg | undefined;
+		prefixPath: tg.Template.Arg;
+		sdkArgs?: Array<std.sdk.Arg>;
+		source: tg.Directory;
+		stripExecutables: boolean;
+	};
+
+	let {
+		doCheck: doCheck_,
+		host: host_,
+		target: target_,
+		opt,
+		parallel: parallel_,
+		phases,
+		prefixArg: prefixArg_,
+		prefixPath: prefixPath_,
+		sdkArgs,
+		source,
+		stripExecutables: stripExecutables_,
+	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
+		if (arg === undefined) {
+			return {};
+		} else if (typeof arg === "object") {
+			let object: tg.MutationMap<Apply> = {};
+			let phasesArgs: Array<std.phases.Arg> = [];
+			if ("doCheck" in arg) {
+				object.doCheck = arg.doCheck;
+			}
+			if ("env" in arg && arg.env !== undefined) {
+				phasesArgs.push({ env: arg.env });
+			}
+			if ("host" in arg) {
+				object.host = tg.Mutation.is(arg.host)
+					? arg.host
+					: std.triple(arg.host);
+			}
+			if ("opt" in arg) {
+				object.opt = arg.opt;
+			}
+			if ("parallel" in arg) {
+				object.parallel = arg.parallel;
+			}
+			if ("prefixArg" in arg) {
+				object.prefixArg = arg.prefixArg;
+			}
+			if ("prefixPath" in arg) {
+				object.prefixPath = arg.prefixPath;
+			}
+			if ("source" in arg) {
+				object.source = arg.source;
+			}
+			if ("phases" in arg && arg.phases !== undefined) {
+				if (tg.Mutation.is(arg.phases)) {
+					object.phases = arg.phases;
+				} else {
+					phasesArgs.push(arg.phases);
+				}
+			}
+			if ("sdk" in arg) {
+				object.sdkArgs = tg.Mutation.is(arg.sdk)
+					? arg.sdk
+					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+			}
+			if ("stripExecutables" in arg) {
+				object.stripExecutables = arg.stripExecutables;
+			}
+			if ("target" in arg) {
+				object.target = tg.Mutation.is(arg.target)
+					? arg.target
+					: std.triple(arg.target);
+			}
+			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
+			return object;
+		} else {
+			return tg.unreachable();
+		}
+	});
+
+	// Make sure the the arguments provided a source.
+	tg.assert(source !== undefined, `source must be defined`);
+
+	// Resolve arguments.
+	let doCheck = doCheck_ ?? false;
+	let parallel = parallel_ ?? true;
+	let prefixArg = prefixArg_ ?? `--prefix=`;
+	let prefixPath = prefixPath_ ?? "$OUTPUT";
+	let stripExecutables = stripExecutables_ ?? true;
+
+	// Detect the host system from the environment.
+	let host = await std.Triple.host(host_);
+	let target = target_ ? std.triple(target_) : host;
+	let os = host.os;
+
+	// Set up env.
+	let env: std.env.Arg = {};
+
+	// // C/C++ flags.
+	if (opt) {
+		let optFlag = await tg.mutation({
+			kind: "template_prepend",
+			template: `-O${opt}`,
+			separator: " ",
+		});
+		pushOrSet(env, "CFLAGS", optFlag);
+		pushOrSet(env, "CXXFLAGS", optFlag);
+	}
+
+	// LDFLAGS
+	if (stripExecutables === true) {
+		let stripFlag = await tg.mutation({
+			kind: "template_prepend",
+			template: os === "darwin" ? `-Wl,-S` : `-s`,
+			separator: " ",
+		});
+		pushOrSet(env, "LDFLAGS", stripFlag);
+	}
+
+	// Set up the SDK, add it to the environment.
+	let sdk = await std.sdk({ host, target }, sdkArgs);
+	env = [sdk, env];
+
+	// Define default phases.
+	let configureArgs =
+		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : undefined;
+	let defaultConfigure = {
+		command: tg`${source}/configure`,
+		args: configureArgs,
+	};
+
+	let jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
+	let jobsArg = tg.Mutation.templatePrepend(`-j${jobs}`, " ");
+	let defaultBuild = {
+		command: `make`,
+		args: [jobsArg],
+	};
+
+	let defaultInstall = {
+		command: `make`,
+		args: [`install`],
+	};
+
+	let defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
+		configure: defaultConfigure,
+		build: defaultBuild,
+		install: defaultInstall,
+	};
+
+	if (doCheck) {
+		let defaultCheck = {
+			command: `make`,
+			args: [`check`, jobsArg],
+		};
+		defaultPhases.check = defaultCheck;
+	}
+
+	return await std.phases.target(
+		{ phases: defaultPhases, env, target: { host: std.Triple.system(host) } },
+		...(phases ?? []),
+	);
+};
+
+export let build = async (...args: tg.Args<Arg>) => {
+	return tg.Directory.expect(await (await target(...args)).build());
+};
+
+export let pushOrSet = (
+	obj: { [key: string]: unknown },
+	key: string,
+	value: tg.Value,
+) => {
+	if (obj === undefined) {
+		obj = {};
+		obj[key] = value;
+	} else if (obj[key] === undefined) {
+		obj[key] = value;
+	} else {
+		if (!Array.isArray(obj[key])) {
+			obj[key] = [obj[key]];
+		}
+		tg.assert(obj && key in obj && Array.isArray(obj[key]));
+		let a = obj[key] as Array<tg.Value>;
+		a.push(value);
+		obj[key] = a;
+	}
+};

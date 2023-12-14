@@ -1,0 +1,64 @@
+import * as std from "./tangram.tg";
+
+/** Run an executable and return the artifact written to `tg.output`. */
+export async function build(
+	...args: tg.Args<build.Arg>
+): Promise<tg.Artifact | undefined> {
+	type Apply = {
+		system: tg.System;
+		checksum: tg.Checksum;
+	};
+	let { system, checksum } = await tg.Args.apply<build.Arg, Apply>(
+		args,
+		async (arg) => {
+			if (isArgObject(arg)) {
+				return {
+					system: arg.system,
+					checksum: arg.checksum,
+				};
+			} else {
+				return {};
+			}
+		},
+	);
+
+	// Create the executable.
+	let executable = await std.wrap(...args);
+
+	// If the system was not set in the args, then get it from the executable or the host.
+	let host = await std.Triple.hostSystem();
+	if (!system) {
+		let executableSystems = await std.file.executableSystems(executable);
+		system = executableSystems?.includes(host)
+			? host
+			: executableSystems?.at(0);
+	}
+	system = system ?? host;
+
+	// Run.
+	return tg.Artifact.expect(
+		await tg.build({
+			host: system,
+			executable,
+			checksum,
+		}),
+	);
+}
+
+export namespace build {
+	export type Arg = string | tg.Template | tg.File | tg.Symlink | ArgObject;
+
+	export type ArgObject = std.wrap.ArgObject & {
+		system?: tg.System;
+		unsafe?: boolean;
+		checksum?: tg.Checksum;
+		network?: boolean;
+	};
+}
+
+let isArgObject = (arg: unknown): arg is build.ArgObject => {
+	return (
+		typeof arg === "object" &&
+		!(tg.File.is(arg) || tg.Symlink.is(arg) || tg.Template.is(arg))
+	);
+};

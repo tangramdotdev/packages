@@ -1,0 +1,128 @@
+/** Bootstrapping the compiler toolchain requires these dependencies in addition to `std.utils`. */
+
+import * as std from "../tangram.tg";
+
+import autoconf from "./dependencies/autoconf.tg";
+import automake from "./dependencies/automake.tg";
+import bc from "./dependencies/bc.tg";
+import bison from "./dependencies/bison.tg";
+import bzip2 from "./dependencies/bzip2.tg";
+import file from "./dependencies/file.tg";
+import flex from "./dependencies/flex.tg";
+import gperf from "./dependencies/gperf.tg";
+import help2man from "./dependencies/help2man.tg";
+import libffi from "./dependencies/libffi.tg";
+import m4 from "./dependencies/m4.tg";
+import make from "./dependencies/make.tg";
+import patch from "./dependencies/patch.tg";
+import perl from "./dependencies/perl.tg";
+import pkgconfig from "./dependencies/pkg_config.tg";
+import python from "./dependencies/python.tg";
+import texinfo from "./dependencies/texinfo.tg";
+import xz from "./dependencies/xz.tg";
+import zlib from "./dependencies/zlib.tg";
+import zstd from "./dependencies/zstd.tg";
+
+export * as autoconf from "./dependencies/autoconf.tg";
+export * as automake from "./dependencies/automake.tg";
+export * as bc from "./dependencies/bc.tg";
+export * as bison from "./dependencies/bison.tg";
+export * as bzip2 from "./dependencies/bzip2.tg";
+export * as file from "./dependencies/file.tg";
+export * as flex from "./dependencies/flex.tg";
+export * as gperf from "./dependencies/gperf.tg";
+export * as help2man from "./dependencies/help2man.tg";
+export * as libffi from "./dependencies/libffi.tg";
+export * as m4 from "./dependencies/m4.tg";
+export * as make from "./dependencies/make.tg";
+export * as patch from "./dependencies/patch.tg";
+export * as perl from "./dependencies/perl.tg";
+export * as pkgconfig from "./dependencies/pkg_config.tg";
+export * as python from "./dependencies/python.tg";
+export * as texinfo from "./dependencies/texinfo.tg";
+export * as xz from "./dependencies/xz.tg";
+export * as zlib from "./dependencies/zlib.tg";
+export * as zstd from "./dependencies/zstd.tg";
+
+export type Arg = std.sdk.BuildEnvArg;
+
+/** Obtain a directory containing all provided utils. */
+export let env = tg.target(async (arg?: Arg) => {
+	let dependencies = [];
+
+	// Add the standard utils.
+	dependencies.push(await std.utils.env(arg));
+
+	// Add `make` built against the standard utils.
+	dependencies.push(await make(arg));
+
+	// Add packages with only a handful of dependencies.
+	dependencies = dependencies.concat(
+		await Promise.all([
+			bc(arg),
+			bison(arg),
+			bzip2(arg),
+			gperf(arg),
+			m4(arg),
+			libffi(arg),
+			patch(arg),
+			xz(arg),
+			zlib(arg),
+			zstd(arg),
+		]),
+	);
+
+	// Add packages with multiple dependenices on other packages in this module.
+	dependencies = dependencies.concat(
+		await Promise.all([
+			autoconf(arg),
+			automake(arg),
+			file(arg),
+			flex(arg),
+			help2man(arg),
+			perl(arg),
+			pkgconfig(arg),
+			python(arg),
+			texinfo(arg),
+		]),
+	);
+
+	// The final env contains the standard utils and all packages from this module.
+	return std.env(...dependencies, { bootstrapMode: true });
+});
+
+export default env;
+
+export let assertProvides = tg.target(async (env: std.env.Arg) => {
+	let names = [
+		"aclocal",
+		"automake",
+		"bc",
+		"bzip2",
+		"file",
+		"flex",
+		"gperf",
+		"help2man",
+		"m4",
+		"make",
+		"patch",
+		"perl",
+		"pkg-config",
+		"python3",
+		"texi2any", // texinfo
+		"xz",
+		"yacc", // bison
+	];
+
+	// This env should provide the standard utils and the set added in this module.
+	await Promise.all([
+		std.utils.assertProvides(env),
+		std.env.assertProvides({ env, names }),
+	]);
+	return true;
+});
+
+export let test = tg.target(async () => {
+	await assertProvides(env({ sdk: { bootstrapMode: true } }));
+	return true;
+});

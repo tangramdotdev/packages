@@ -1,0 +1,107 @@
+diff --git a/Makefile.am b/Makefile.am
+index a203c6c..1a3e376 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -35,7 +35,7 @@ DISTCLEANFILES = tool-versions.txt
+ 
+ 
+ # "gnulib-tests" is the gnulib unit test dir.
+-SUBDIRS = gl build-aux lib find xargs locate doc po m4 gnulib-tests
++SUBDIRS = gl build-aux lib find xargs doc po m4 gnulib-tests
+ 
+ ALL_RECURSIVE_TARGETS =
+ 
+diff --git a/Makefile.in b/Makefile.in
+index d8a2ee4..4b0a0d5 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -2247,11 +2247,11 @@ EXTRA_DIST = COPYING ChangeLog README-hacking THANKS TODO \
+ DISTCLEANFILES = tool-versions.txt
+ 
+ # "gnulib-tests" is the gnulib unit test dir.
+-SUBDIRS = gl build-aux lib find xargs locate doc po m4 gnulib-tests
++SUBDIRS = gl build-aux lib find xargs doc po m4 gnulib-tests
+ ALL_RECURSIVE_TARGETS = check-root
+ ACLOCAL_AMFLAGS = -I gl/m4 -I m4
+ TESTFILE_SUFFIXES = .exp .xo .xe .xi
+-built_programs = find xargs frcode locate updatedb
++built_programs = find xargs frcode
+ 
+ # Indirections required so that we'll still be able to know the
+ # complete list of our tests even if the user overrides TESTS
+diff --git a/doc/Makefile.am b/doc/Makefile.am
+index d16ebfa..4baa5a2 100644
+--- a/doc/Makefile.am
++++ b/doc/Makefile.am
+@@ -16,11 +16,11 @@ AM_CFLAGS = $(WARN_CFLAGS)
+ 
+ info_TEXINFOS = find.texi find-maint.texi
+ find_TEXINFOS = perm.texi parse-datetime.texi regexprops.texi fdl.texi
+-BUILT_SOURCES = dblocation.texi
+-nodist_find_TEXINFOS = dblocation.texi
++BUILT_SOURCES = 
++nodist_find_TEXINFOS = 
+ find_maint_TEXINFOS = fdl.texi
+ MOSTLYCLEANFILES = find.cps
+-CLEANFILES = find.txt find_mono.html findutils.texi_html_node.tar.gz dblocation.texi \
++CLEANFILES = find.txt find_mono.html findutils.texi_html_node.tar.gz \
+ 	find_mono.html findutils.texi_html_node.tar.gz \
+ 	find-info.tar.gz find.texi.tar.gz \
+ 	find.txt  tmp-doc-install find_mono.html.gz
+@@ -73,9 +73,6 @@ findutils.texi_html_node.tar.gz: find.html
+ 	tar zcf $@ find.html
+ 
+ 
+-dblocation.texi: ../locate/dblocation.texi
+-	$(LN_S) ../locate/dblocation.texi $@
+-
+ find-info.tar.gz:
+ 	$(MKDIR_P) tmp-doc-install/info
+ 	$(MAKE) $(AM_MAKEFLAGS) \
+@@ -88,7 +85,7 @@ find-info.tar.gz:
+ find.texi.tar.gz: $(TEXINFOS) $(find_TEXINFOS) $(nodist_find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  $(srcdir)/version.texi $(srcdir)/versionmaint.texi Makefile
+ 	$(MKDIR_P) tmp-doc-install/texi
+ 	for f in $(TEXINFOS) $(find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  version.texi versionmaint.texi ; \
+-	do cp $(srcdir)/"$$f" tmp-doc-install/texi/ || break; done && cp dblocation.texi tmp-doc-install/texi/
++	do cp $(srcdir)/"$$f" tmp-doc-install/texi/ || break; done && cp tmp-doc-install/texi/
+ 	( cd tmp-doc-install/texi/ && tar -c -f - *.texi ) | GZIP=$(GZIP_ENV) gzip -c >| $@
+ 	rm -rf tmp-doc-install/texi
+ 	rmdir tmp-doc-install
+diff --git a/doc/Makefile.in b/doc/Makefile.in
+index cefb6ae..a485b9f 100644
+--- a/doc/Makefile.in
++++ b/doc/Makefile.in
+@@ -2022,11 +2022,11 @@ top_srcdir = @top_srcdir@
+ AM_CFLAGS = $(WARN_CFLAGS)
+ info_TEXINFOS = find.texi find-maint.texi
+ find_TEXINFOS = perm.texi parse-datetime.texi regexprops.texi fdl.texi
+-BUILT_SOURCES = dblocation.texi
+-nodist_find_TEXINFOS = dblocation.texi
++BUILT_SOURCES = 
++nodist_find_TEXINFOS = 
+ find_maint_TEXINFOS = fdl.texi
+ MOSTLYCLEANFILES = find.cps
+-CLEANFILES = find.txt find_mono.html findutils.texi_html_node.tar.gz dblocation.texi \
++CLEANFILES = find.txt find_mono.html findutils.texi_html_node.tar.gz \
+ 	find_mono.html findutils.texi_html_node.tar.gz \
+ 	find-info.tar.gz find.texi.tar.gz \
+ 	find.txt  tmp-doc-install find_mono.html.gz
+@@ -2563,9 +2563,6 @@ find_mono.html: find.texi
+ findutils.texi_html_node.tar.gz: find.html
+ 	tar zcf $@ find.html
+ 
+-dblocation.texi: ../locate/dblocation.texi
+-	$(LN_S) ../locate/dblocation.texi $@
+-
+ find-info.tar.gz:
+ 	$(MKDIR_P) tmp-doc-install/info
+ 	$(MAKE) $(AM_MAKEFLAGS) \
+@@ -2578,7 +2575,7 @@ find-info.tar.gz:
+ find.texi.tar.gz: $(TEXINFOS) $(find_TEXINFOS) $(nodist_find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  $(srcdir)/version.texi $(srcdir)/versionmaint.texi Makefile
+ 	$(MKDIR_P) tmp-doc-install/texi
+ 	for f in $(TEXINFOS) $(find_TEXINFOS) $(info_TEXINFOS) $(find_maint_TEXINFOS)  version.texi versionmaint.texi ; \
+-	do cp $(srcdir)/"$$f" tmp-doc-install/texi/ || break; done && cp dblocation.texi tmp-doc-install/texi/
++	do cp $(srcdir)/"$$f" tmp-doc-install/texi/ || break; done && cp tmp-doc-install/texi/
+ 	( cd tmp-doc-install/texi/ && tar -c -f - *.texi ) | GZIP=$(GZIP_ENV) gzip -c >| $@
+ 	rm -rf tmp-doc-install/texi
+ 	rmdir tmp-doc-install

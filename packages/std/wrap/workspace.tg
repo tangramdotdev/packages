@@ -1,0 +1,206 @@
+import * as bootstrap from "../bootstrap.tg";
+import * as std from "../tangram.tg";
+import * as tangram from "tg:tangram" with { path: "../../../../tangram" };
+
+type Arg = {
+	bootstrapMode?: boolean;
+	host?: std.Triple.Arg;
+	target?: std.Triple.Arg;
+};
+
+/** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
+export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
+	let host = await std.Triple.host(arg);
+	let target = arg?.target ? std.triple(arg.target) : host;
+
+	// Get the source.
+	let source = await tg.directory({
+		tangram: tangram.source(),
+		"packages/packages/std/Cargo.toml": tg.include("../Cargo.toml"),
+		"packages/packages/std/Cargo.lock": tg.include("../Cargo.lock"),
+		"packages/packages/std/packages/env": tg.include("../packages/env"),
+		"packages/packages/std/packages/tgld": tg.include("../packages/tgld"),
+		"packages/packages/std/packages/wrapper": tg.include("../packages/wrapper"),
+	});
+
+	let isCrossCompiling = !std.Triple.eq(host, target);
+
+	let result;
+	if (isCrossCompiling) {
+		return tg.unimplemented();
+	} else {
+		result = bootstrap.rust.build({ source, host });
+	}
+	return result;
+});
+
+// type CrossWorkspaceArg = {
+// 	source: tg.Directory;
+// 	host: std.Triple.Arg;
+// 	target: std.Triple.Arg;
+// };
+
+// export let crossWorkspace = async (arg: CrossWorkspaceArg) => {
+// 	let source = arg.source;
+// 	let host = std.triple(arg.host);
+// 	let system = std.Triple.system(host);
+// 	let os = tg.System.os(system);
+// 	if (os !== "linux") {
+// 		return tg.unimplemented("Cross-compilation is only supported on Linux.");
+// 	}
+
+// 	host.environment = "musl";
+// 	host.vendor = undefined;
+
+// 	let target = std.triple(arg.target);
+// 	if (std.Triple.eq(host, target)) {
+// 		return tg.unreachable(
+// 			"Entered cross-compilation code, but host and target are the same.",
+// 		);
+// 	}
+
+// 	// Get the toolchains.  We use musl for the host.
+// 	let nativeToolchain = bootstrap.toolchain({ host });
+// 	let crossToolchain = toolchain({ host, target });
+
+// 	// Get the Rust toolchain.
+// 	let rustToolchain = rust({ target });
+
+// 	// Create the wrappers.
+// 	let certFile = tg`${caCertificates()}/cacert.pem`;
+// 	let additionalEnv: Record<string, tg.Template.Arg> = {};
+// 	let ldso = tg`lib/${interpreterName(host)}`;
+// 	let interpreter = tg`${nativeToolchain}/${ldso} --library-path ${nativeToolchain}/lib`;
+// 	let rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
+// 	let cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
+
+// 	// Create the script.
+// 	let script = tg`
+// 		echo "#!/bin/sh -eu" > rustc.sh
+// 		echo '${rustc} $@' >> rustc.sh
+// 		chmod +x rustc.sh
+// 		TARGET=$PWD/target
+// 		mkdir -p "$TARGET"
+
+// 		export RUSTC=$(realpath ./rustc.sh)
+// 		env
+// 		${cargo} build \
+// 			--manifest-path ${source}/packages/packages/std/Cargo.toml \
+// 			--target-dir $TARGET \
+// 			--target $RUST_TARGET \
+// 			--release \
+// 			--all \
+// 			--locked
+
+// 		mkdir -p $OUTPUT/bin
+// 		mv $TARGET/$RUST_TARGET/release/tangram_env $OUTPUT/bin/env
+// 		mv $TARGET/$RUST_TARGET/release/tangram_linker $OUTPUT/bin/tgld
+// 		mv $TARGET/$RUST_TARGET/release/tangram_wrapper $OUTPUT/bin/wrapper
+// 	`;
+
+// 	let targetString = std.Triple.toString(target);
+
+// 	let shellArtifact = bootstrap.shell({ host });
+
+// 	let output = await tg.run({
+// 		executable: tg`${shellArtifact}/bin/sh`,
+// 		args: ["-eu", "-c", script],
+// 		system,
+// 		unsafe: true,
+// 		network: true,
+// 		env: {
+// 			SSL_CERT_FILE: certFile,
+// 			CARGO_HTTP_CAINFO: certFile,
+// 			PATH: tg`${nativeToolchain}/bin:${crossToolchain}/bin:${shellArtifact}/bin:${bootstrap.utils(
+// 				{
+// 					host: system,
+// 				},
+// 			)}/bin`,
+// 			RUST_TARGET: std.Triple.toString(target),
+// 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+// 			RUSTC: tg`${rustToolchain}/bin/rustc`,
+// 			RUSTFLAGS: tg`--sysroot ${rustToolchain} -C target-feature=+crt-static`,
+// 			[`CARGO_TARGET_${tripleToEnvVar(
+// 				target,
+// 				true,
+// 			)}_LINKER`]: tg`${crossToolchain}/bin/${targetString}-gcc`,
+// 			[`AR_${tripleToEnvVar(
+// 				target,
+// 			)}`]: tg`${crossToolchain}/bin/${targetString}-ar`,
+// 			[`CC_${tripleToEnvVar(
+// 				target,
+// 			)}`]: tg`${crossToolchain}/bin/${targetString}-gcc`,
+// 			[`CXX_${tripleToEnvVar(
+// 				target,
+// 			)}`]: tg`${crossToolchain}/bin/${targetString}-g++`,
+// 			...additionalEnv,
+// 		},
+// 	});
+// 	tg.assert(tg.Directory.is(output));
+
+// 	return output;
+// };
+
+export let env = tg.target(async (arg?: Arg) => tg.File.expect(await (await workspace(arg)).get("bin/env")));
+
+export let tgld = tg.target(async (arg?: Arg) => tg.File.expect(await (await workspace(arg)).get("bin/tgld")));
+
+export let wrapper = tg.target(async (arg?: Arg) => tg.File.expect(await (await workspace(arg)).get("bin/wrapper")));
+
+export let test = tg.target(async () => {
+	// Detect the host triple.
+	let host = await std.Triple.host();
+
+	// Determine the target triple with differing architecture from the host.
+	let hostArch = host.arch;
+	let targetArch: std.Triple.Arch =
+		hostArch === "x86_64" ? "aarch64" : "x86_64";
+
+	let nativeWorkspace = await workspace({
+		host: std.Triple.system(host),
+	});
+
+	// Assert the native workspace was built for the host.
+	let os = tg.System.os(std.Triple.system(host));
+	let nativeWrapper = await nativeWorkspace.get("bin/wrapper");
+	tg.File.assert(nativeWrapper);
+	let nativeMetadata = await std.file.executableMetadata(nativeWrapper);
+	if (os === "linux") {
+		tg.assert(nativeMetadata.format === "elf");
+		tg.assert(nativeMetadata.arch === hostArch);
+	} else if (os === "darwin") {
+		tg.assert(nativeMetadata.format === "mach-o");
+		tg.assert(nativeMetadata.arches.includes(hostArch));
+	} else {
+		return tg.unreachable();
+	}
+});
+
+export let testCross = tg.target(async () => {
+	// Detect the host triple.
+	let host = await std.Triple.host();
+
+	// Determine the target triple with differing architecture from the host.
+	let hostArch = host.arch;
+	let targetArch: std.Triple.Arch =
+		hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = std.triple({
+		arch: targetArch,
+		vendor: "unknown",
+		os: "linux",
+		environment: "gnu",
+	});
+
+	let crossWorkspace = await workspace({
+		host: std.Triple.system(host),
+		target: target,
+	});
+
+	// Assert the cross workspace was built for the target.
+	let crossWrapper = await crossWorkspace.get("bin/wrapper");
+	tg.File.assert(crossWrapper);
+	let crossMetadata = await std.file.executableMetadata(crossWrapper);
+	tg.assert(crossMetadata.format === "elf");
+	tg.assert(crossMetadata.arch === targetArch);
+	return true;
+});

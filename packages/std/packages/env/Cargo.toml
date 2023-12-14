@@ -1,0 +1,12 @@
+[package]
+name = "tangram_env"
+version = "0.0.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { workspace = true }
+heck = { workspace = true }
+serde = { workspace = true }

@@ -1,0 +1,194 @@
+import * as bootstrap from "../bootstrap.tg";
+import * as std from "../tangram.tg";
+import { injection } from "../wrap/injection.tg";
+import * as workspace from "../wrap/workspace.tg";
+import { wrapArgs } from "./gcc.tg";
+
+/** This module provides the Tangram proxy tools, which are used in conjunction with compilers and linkers to produce Tangram-ready artifacts. */
+
+type Arg = std.sdk.BuildEnvArg & {
+	target?: std.Triple.Arg;
+};
+
+/** Add a proxy to an env that provides a toolchain. */
+export let proxy = tg.target(async (arg?: Arg) => {
+	if (arg === undefined) {
+		throw new Error("Cannot proxy an undefined env");
+	}
+	let { cc, cxx, directory, flavor, host, ld, ldso, target } =
+		await std.sdk.toolchainComponents(arg);
+	let hostString = std.Triple.toString(host);
+	let targetString = std.Triple.toString(target);
+
+	let isCross = !std.Triple.eq(host, target);
+	let targetPrefix = isCross ? `${targetString}-` : ``;
+
+	// Construct the ld proxy.
+	let ldProxyArtifact = await ldProxy({
+		buildEnv: arg.env,
+		linker: ld,
+		interpreter: ldso,
+		host,
+		target,
+	});
+
+	let ldProxyDir = tg.directory({
+		ld: ldProxyArtifact,
+	});
+
+	// Construct wrappers that always pass the ld proxy.
+	let binDir = tg.directory();
+	let wrappedCC;
+	let wrappedCXX;
+	switch (flavor) {
+		case "gcc": {
+			let { ccArgs, cxxArgs } = await wrapArgs({
+				host,
+				target,
+				toolchainDir: directory,
+			});
+			wrappedCC = await std.wrap({
+				identity: "wrapper",
+				executable: cc,
+				args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
+			});
+			wrappedCXX = await std.wrap({
+				identity: "wrapper",
+				executable: cxx,
+				args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
+			});
+
+			if (isCross) {
+				binDir = tg.directory({
+					bin: {
+						[`${targetString}-cc`]: tg.symlink(`${targetPrefix}gcc`),
+						[`${targetString}-c++`]: tg.symlink(`${targetPrefix}g++`),
+						[`${targetString}-gcc`]: wrappedCC,
+						[`${targetString}-g++`]: wrappedCXX,
+					},
+				});
+			} else {
+				binDir = tg.directory({
+					bin: {
+						cc: tg.symlink("gcc"),
+						[`${hostString}-cc`]: tg.symlink("gcc"),
+						"c++": tg.symlink("g++"),
+						[`${hostString}-c++`]: tg.symlink("g++"),
+						gcc: wrappedCC,
+						[`${hostString}-gcc`]: tg.symlink("gcc"),
+						"g++": wrappedCXX,
+						[`${hostString}-g++`]: tg.symlink("g++"),
+					},
+				});
+			}
+			break;
+		}
+		case "llvm": {
+			wrappedCC = std.wrap({
+				executable: cc,
+				args: [tg`-B${ldProxyArtifact}`],
+				env: {
+					SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
+				},
+			});
+			wrappedCXX = wrappedCC;
+			binDir = tg.directory({
+				bin: {
+					clang: wrappedCC,
+					"clang++": wrappedCXX,
+					cc: tg.symlink("clang"),
+					"c++": tg.symlink("clang"),
+					gcc: tg.symlink("clang"),
+					"g++": tg.symlink("clang"),
+				},
+			});
+		}
+	}
+
+	// Return the directory cotaining wrapped compilers and symlinks.
+	return binDir;
+});
+
+export default proxy;
+
+type LdProxyArg = {
+	bootstrapMode?: boolean;
+	buildEnv?: std.env.Arg;
+	linker: tg.File | tg.Symlink;
+	interpreter?: tg.File;
+	interpreterArgs?: Array<tg.Template.Arg>;
+	host: std.Triple.Arg;
+	target?: std.Triple.Arg;
+};
+
+export let ldProxy = tg.target(async (arg: LdProxyArg) => {
+	// Prepare the Tangram tools.
+	let host = std.triple(arg.host);
+	let target = std.triple(arg.target ?? host);
+
+	// Obtain wrapper components.
+	let injectionLibrary = await injection({
+		env: arg.buildEnv,
+		host: target,
+	});
+	let tgld = await workspace.tgld({
+		bootstrapMode: arg.bootstrapMode,
+		host: target,
+	});
+	let wrapper = await workspace.wrapper({
+		bootstrapMode: arg.bootstrapMode,
+		host: target,
+	});
+
+	// Create the linker proxy.
+	let output = await std.wrap({
+		identity: "wrapper",
+		executable: tgld,
+		env: {
+			TANGRAM_LINKER_COMMAND_PATH: arg.linker,
+			TANGRAM_LINKER_INJECTION_PATH: injectionLibrary,
+			TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs,
+			TANGRAM_LINKER_INTERPRETER_PATH: arg.interpreter ?? "none",
+			TANGRAM_LINKER_WRAPPER_PATH: wrapper,
+		},
+	});
+
+	return output;
+});
+
+export let test = tg.target(async () => {
+	let bootstrapSDK = std.sdk({ bootstrapMode: true });
+	let helloSource = await tg.file(`
+#include <stdio.h>
+int main() {
+	printf("Hello from a TGLD-wrapped binary!\\n");
+	return 0;
+}
+	`);
+	let output = tg.File.expect(
+		await tg.build(
+			tg`
+				set -x
+				cc -v -xc ${helloSource} -o $OUTPUT`,
+			{
+				env: await std.env.object([
+					bootstrapSDK,
+					{
+						TGLD_TRACING: "tangram=trace",
+						TANGRAM_WRAPPER_TRACING: "tangram=trace",
+					},
+				]),
+			},
+		),
+	);
+	console.log("output", await output.id());
+	let result = tg.File.expect(
+		await tg.build(tg`${output} > $OUTPUT`, {
+			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+		}),
+	);
+	let text = await result.text();
+	console.log("text", text);
+	tg.assert(text.includes("Hello from a TGLD-wrapped binary!"));
+	return output;
+});

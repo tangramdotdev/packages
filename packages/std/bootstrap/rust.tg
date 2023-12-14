@@ -1,0 +1,244 @@
+import * as bootstrap from "../bootstrap.tg";
+import { caCertificates } from "../certificates.tg";
+import { env } from "../env.tg";
+import * as phases from "../phases.tg";
+import { download } from "../tangram.tg";
+import { Triple, triple } from "../triple.tg";
+
+export let metadata = {
+	name: "rust",
+	version: "1.74.1",
+};
+
+type ToolchainArg = {
+	target?: Triple.Arg;
+};
+
+export let rust = tg.target(
+	async (arg?: ToolchainArg): Promise<tg.Directory> => {
+		let version = metadata.version;
+		let host = await Triple.host();
+		let target = triple(arg?.target ?? host);
+		let hostSystem = Triple.system(host);
+		let os = tg.System.os(hostSystem);
+
+		// Download and parse the Rust manifest for the selected version.
+		let manifestFile = await tg.file(
+			await tg.download(
+				`https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
+				"unsafe",
+			),
+		);
+		tg.assert(tg.File.is(manifestFile));
+		let manifest = tg.encoding.toml.decode(
+			await manifestFile.text(),
+		) as RustupManifest;
+
+		// On Linux, ensure we use a musl target for the host.
+		if (os === "linux") {
+			host.environment = "musl";
+		}
+
+		// Install the full minimal profile for the host.
+		let hostTripleString = Triple.toString(host);
+		let packages = tg.directory();
+		for (let name of manifest.profiles["minimal"] ?? []) {
+			let pkg = manifest.pkg[name]?.target[hostTripleString];
+			if (pkg?.available) {
+				let artifact = download({
+					checksum: `sha256:${pkg.xz_hash}`,
+					unpackFormat: ".tar.xz" as const,
+					url: pkg.xz_url,
+				});
+				packages = tg.directory(packages, {
+					[name]: artifact,
+				});
+			}
+		}
+
+		// If there is a target specified different from the host, install just the rust-std package for that target.
+		if (!Triple.eq(host, target)) {
+			let name = "rust-std";
+			let pkg = manifest.pkg[name]?.target[Triple.toString(target)];
+			if (pkg?.available) {
+				let artifact = download({
+					checksum: `sha256:${pkg.xz_hash}`,
+					unpackFormat: ".tar.xz" as const,
+					url: pkg.xz_url,
+				});
+				packages = tg.directory(packages, {
+					[name]: artifact,
+				});
+			}
+		}
+
+		// Install the packages.
+		let script = tg`
+		for package in ${packages}/*/* ; do
+			sh $package/install.sh --prefix="$OUTPUT"
+			chmod -R +w "$OUTPUT"
+		done
+	`;
+
+		let env = bootstrap.toolchainEnv(host);
+
+		return tg.Directory.expect(
+			await phases.build({
+				host: hostSystem,
+				phases: { build: script },
+				env,
+			}),
+		);
+	},
+);
+
+type RustupManifest = {
+	"manifest-version": "2";
+	artifacts: {
+		[artifact: string]: {
+			target: {
+				[target: string]: Array<{
+					"hash-sha256": string;
+					url: string;
+				}>;
+			};
+		};
+	};
+	date: string;
+	pkg: {
+		[pkg: string]: {
+			git_commit_hash: string;
+			target: {
+				[target: string]:
+					| undefined
+					| { available: false }
+					| {
+							available: true;
+							hash: string;
+							url: string;
+							xz_hash: string;
+							xz_url: string;
+					  };
+			};
+			version: string;
+		};
+	};
+	profiles: {
+		[profile: string]: Array<string>;
+	};
+	renames: {
+		[alias: string]: {
+			to: string;
+		};
+	};
+};
+
+type Arg = {
+	source: tg.Directory;
+	host: Triple.Arg;
+};
+
+export let build = tg.target(async (arg: Arg) => {
+	let source = arg.source;
+	let host = triple(arg.host);
+	let system = Triple.system(host);
+	let os = tg.System.os(system);
+
+	// If not cross-compiling, we want to use the musl target on Linux.
+	if (os === "linux") {
+		host.environment = "musl";
+		host.vendor = undefined;
+	}
+
+	// Get the bootstrap components.
+	let shellArtifact = await bootstrap.shell({ host });
+	let toolchain = bootstrap.toolchain({ host });
+
+	// Get the Rust toolchain.
+	let rustToolchain = await rust();
+
+	// Set up common environemnt.
+	let certFile = await tg`${caCertificates()}/cacert.pem`;
+	let env: tg.Unresolved<env.Arg> = [
+		bootstrap.toolchainEnv(host),
+		rustToolchain,
+		{
+			SSL_CERT_FILE: certFile,
+			CARGO_HTTP_CAINFO: certFile,
+			RUST_TARGET: Triple.toString(host),
+			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+		},
+	];
+
+	// Set up platform-specific environment.
+	let interpreter = tg``;
+	let rustc = tg``;
+	let cargo = tg``;
+	if (os === "linux") {
+		let ldso = tg`lib/${bootstrap.interpreterName(host)}`;
+		interpreter = tg`${toolchain}/${ldso} --library-path ${toolchain}/lib`;
+		rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
+		cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
+	} else if (os === "darwin") {
+		rustc = tg`${rustToolchain}/bin/rustc`;
+		cargo = tg`${rustToolchain}/bin/cargo`;
+
+		let macOsSdk = bootstrap.macOsSdk();
+
+		// https://github.com/rust-lang/cc-rs/issues/810
+		let sdkroot = tg.directory({
+			"MacOSX.sdk": macOsSdk,
+		});
+
+		env.push({
+			SDKROOT: tg`${sdkroot}/MacOSX.sdk`,
+		});
+	}
+
+	// Define phases.
+	let prepare = tg`
+		export CARGO_HOME=$PWD/cargo_home
+		mkdir -p $CARGO_HOME
+
+		export TARGET=$PWD/target
+		mkdir -p "$TARGET"
+
+		echo "#!${shellArtifact}/bin/sh -eu" > rustc.sh
+		echo '${rustc} $@' >> rustc.sh
+		chmod +x rustc.sh
+		export RUSTC=$PWD/rustc.sh
+		`;
+
+	let build = {
+		command: tg`${cargo} build`,
+		args: [
+			`--manifest-path`,
+			tg`${source}/packages/packages/std/Cargo.toml`,
+			`--target-dir $TARGET`,
+			`--release`,
+			`--all`,
+			`--locked`,
+		],
+	};
+
+	let install = {
+		pre: `mkdir -p $OUTPUT/bin`,
+		body: `
+			mv $TARGET/release/tangram_env $OUTPUT/bin/env
+			mv $TARGET/release/tangram_linker $OUTPUT/bin/tgld
+			mv $TARGET/release/tangram_wrapper $OUTPUT/bin/wrapper
+		`,
+	};
+
+	// Build and return.
+	return tg.Directory.expect(
+		await phases.build({
+			env,
+			phases: { prepare, build, install },
+			target: {
+				host: system,
+				checksum: "unsafe",
+			},
+		}),
+	);
+});

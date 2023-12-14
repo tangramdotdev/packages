@@ -1,0 +1,1789 @@
+import * as bootstrap from "./bootstrap.tg";
+import * as canadianCross from "./sdk/canadian_cross.tg";
+import { interpreterName } from "./sdk/libc.tg";
+import * as std from "./tangram.tg";
+import * as injection from "./wrap/injection.tg";
+import musl from "./wrap/prerequisites/musl.tg";
+import * as workspace from "./wrap/workspace.tg";
+
+/** This module provides the `std.wrap()` function, which can be used to bundle an executable with a predefined environment and arguments, either of which may point to other Tangram artifacts.*/
+
+/** Wrap an executable. */
+export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
+	type Apply = {
+		host: std.Triple;
+		identity: wrap.Identity;
+		interpreter?:
+			| tg.File
+			| tg.Symlink
+			| wrap.Interpreter
+			| wrap.Manifest.Interpreter
+			| undefined;
+		libraryPaths?: Array<string | tg.Artifact | tg.Template>;
+		executable: tg.File | tg.Symlink | wrap.Manifest.Executable;
+		env: Array<std.env.Arg>;
+		manifestArgs: Array<wrap.Manifest.Template>;
+	};
+
+	let {
+		host: host_,
+		identity: identity_,
+		libraryPaths,
+		interpreter,
+		executable: executable_,
+		env: env_,
+		manifestArgs,
+	} = await tg.Args.apply<wrap.Arg, Apply>(args, async (arg) => {
+		if (arg === undefined) {
+			return {};
+		} else if (tg.File.is(arg) || tg.Symlink.is(arg)) {
+			let file;
+			if (tg.Symlink.is(arg)) {
+				file = await arg.resolve();
+				tg.assert(
+					file,
+					`Could not resolve symlink ${await arg.id()} to a file.`,
+				);
+			} else {
+				file = arg;
+			}
+			tg.File.assert(file);
+			// Try to read the manifest from it.
+			let existingManifest = await wrap.Manifest.read(file);
+			if (existingManifest) {
+				let env_ = await maybeMutatonEnvArgObjectFromManifestEnv(
+					existingManifest.env,
+				);
+				let env = tg.Mutation.is(env_)
+					? env_
+					: await tg.Mutation.arrayAppend(env_);
+				return {
+					identity: existingManifest.identity,
+					interpreter: existingManifest.interpreter,
+					executable: existingManifest.executable,
+					env,
+					manifestArgs: existingManifest.args,
+				};
+			} else {
+				let executable = await manifestExecutableFromArg(file);
+				let manifestInterpreter =
+					await manifestInterpreterFromExecutableArg(file);
+				let ret: tg.MutationMap<Apply> = { executable };
+				if (manifestInterpreter) {
+					ret = {
+						...ret,
+						interpreter: manifestInterpreter,
+					};
+				}
+				return ret;
+			}
+		} else if (typeof arg === "string" || tg.Template.is(arg)) {
+			// This is a "content" executable.
+			let executable = await manifestExecutableFromArg(arg);
+			let defaultShell = await defaultShellInterpreter();
+			let interpreter = await manifestInterpreterFromArg(defaultShell);
+			return {
+				identity: "executable",
+				interpreter,
+				executable,
+			};
+		} else if (isArgObject(arg)) {
+			let object: tg.MutationMap<Apply> = {};
+			if ("env" in arg) {
+				object.env = tg.Mutation.is(arg.env)
+					? arg.env
+					: await tg.Mutation.arrayAppend<wrap.Manifest.Env>([
+							(await wrap.manifestEnvFromArg(std.flatten(arg.env))) ?? {
+								kind: "map",
+								value: {},
+							},
+					  ]);
+			}
+			if ("identity" in arg) {
+				object.identity = arg.identity ?? "executable";
+			}
+			if ("executable" in arg) {
+				object.executable = {
+					kind:
+						tg.Template.is(arg.executable) ||
+						tg.Artifact.is(arg.executable) ||
+						typeof arg.executable === "string"
+							? "path"
+							: "content",
+					value: await manifestTemplateFromArg(arg.executable),
+				};
+			}
+			if ("libraryPaths" in arg) {
+				if (arg.libraryPaths !== undefined) {
+					object.libraryPaths = tg.Mutation.is(arg.libraryPaths)
+						? arg.libraryPaths
+						: await tg.Mutation.arrayAppend(
+								arg.libraryPaths.map(manifestTemplateFromArg),
+						  );
+				}
+			}
+			if ("interpreter" in arg) {
+				object.interpreter = arg.interpreter;
+			}
+			if ("executable" in arg) {
+				object.executable = arg.executable;
+			}
+			if ("args" in arg) {
+				object.manifestArgs = tg.Mutation.is(arg.args)
+					? arg.args
+					: await tg.Mutation.arrayAppend(
+							(arg.args ?? []).map(manifestTemplateFromArg),
+					  );
+			}
+			if ("host" in arg) {
+				object.host = std.triple(arg.host);
+			}
+
+			return object;
+		} else {
+			return tg.unreachable();
+		}
+	});
+
+	tg.assert(executable_ !== undefined, "No executable was provided.");
+	let executable = await manifestExecutableFromArg(executable_);
+
+	let identity = identity_ ?? "executable";
+
+	let manifestInterpreter = interpreter
+		? await manifestInterpreterFromArg(interpreter)
+		: undefined;
+
+	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
+	if (
+		identity === "executable" &&
+		(tg.File.is(executable) || tg.Symlink.is(executable))
+	) {
+		let file = tg.Symlink.is(executable)
+			? await executable.resolve()
+			: executable;
+		if (!file || tg.Directory.is(file)) {
+			return tg.unreachable(
+				"Following the executable symlink either failed or returned a directory.",
+			);
+		}
+		let metadata = await std.file.executableMetadata(file);
+		if (metadata.format === "elf" && metadata.interpreter == undefined) {
+			throw new Error(
+				`Found a statically-linked executable but selected the "executable" identity.  This combination is not supported.  Please select the "wrapper" identity instead.`,
+			);
+		}
+	}
+
+	// Add remaining library paths.
+	if (manifestInterpreter && "libraryPaths" in manifestInterpreter) {
+		let paths = manifestInterpreter.libraryPaths ?? [];
+		if (libraryPaths) {
+			paths = paths.concat(
+				await Promise.all(libraryPaths.map(manifestTemplateFromArg)),
+			);
+		}
+		manifestInterpreter.libraryPaths = paths;
+	}
+
+	let manifestEnv = await wrap.manifestEnvFromArg(env_);
+
+	let manifest: wrap.Manifest = {
+		identity,
+		interpreter: manifestInterpreter,
+		executable,
+		env: manifestEnv,
+		args: manifestArgs ?? [],
+	};
+
+	// Get the wrapper executable.
+	let host = await std.Triple.host(host_);
+	let wrapper = await workspace.wrapper({ host });
+
+	// Write the manifest to the wrapper and return.
+	let output = await wrap.Manifest.write(wrapper, manifest);
+	return output;
+}
+
+export default wrap;
+
+export namespace wrap {
+	export type Arg = string | tg.Template | tg.File | tg.Symlink | ArgObject;
+
+	export type ArgObject = {
+		/** The host system to produce a wrapper for. */
+		host?: std.Triple.Arg;
+
+		/** The identity of the executable. The default is "executable". */
+		identity?: Identity;
+
+		/** The interpreter to run the executable with. If not provided, a default is detected. */
+		interpreter?: tg.File | tg.Symlink | Interpreter;
+
+		/** Library paths to include. If the executable is wrapped, they will be merged. */
+		libraryPaths?: Array<tg.Directory | tg.Symlink>;
+
+		/** The executable to wrap. */
+		executable?: tg.File | tg.Symlink;
+
+		/** Environment variables to bind to the wrapper. If the executable is wrapped, they will be merged. */
+		env?: std.env.Arg;
+
+		/** Command line arguments to bind to the wrapper. If the executable is wrapped, they will be merged. */
+		args?: Array<tg.Template.Arg>;
+	};
+
+	export type Identity = "wrapper" | "interpreter" | "executable";
+
+	/** Either a normal interpreter, ld-linux, ld-musl, or dyld. */
+	export type Interpreter =
+		| NormalInterpreter
+		| LdLinuxInterpreter
+		| LdMuslInterpreter
+		| DyLdInterpreter;
+
+	export type NormalInterpreter = {
+		/** The interpreter executable. */
+		executable: tg.File | tg.Symlink;
+
+		/** Additional arguments to pass to the interpreter. */
+		args?: Array<tg.Template.Arg>;
+	};
+
+	export type LdLinuxInterpreter = {
+		kind: "ld-linux";
+
+		/** The ld-linux file. */
+		executable: tg.File | tg.Symlink;
+
+		/** Additional library paths to include. */
+		libraryPaths?: Array<tg.Template.Arg>;
+
+		/** Additional preloads to load. */
+		preloads?: Array<tg.Template.Arg>;
+
+		/** Additional arguments to pass to the interpreter. */
+		args?: Array<tg.Template.Arg>;
+	};
+
+	export type LdMuslInterpreter = {
+		kind: "ld-musl";
+
+		/** The ld-musl file. */
+		executable: tg.File | tg.Symlink;
+
+		/** Additional library paths to include. */
+		libraryPaths?: Array<tg.Template.Arg>;
+
+		/** Additional preloads to load. */
+		preloads?: Array<tg.Template.Arg>;
+
+		/** Additional arguments to pass to the interpreter. */
+		args?: Array<tg.Template.Arg>;
+	};
+
+	export type DyLdInterpreter = {
+		kind: "dyld";
+
+		/** Additional library paths to include. */
+		libraryPaths?: Array<tg.Template.Arg>;
+
+		/** Additional preloads to load. */
+		preloads?: Array<tg.Template.Arg>;
+	};
+
+	export type Manifest = {
+		identity: Identity;
+		interpreter?: Manifest.Interpreter;
+		executable: Manifest.Executable;
+		env?: Manifest.Env;
+		args: Array<Manifest.Template>;
+	};
+
+	/** Yield the key/value pairs this manifest sets once all mutations are applied. */
+	export async function* envVars(
+		env: wrap.Manifest.Env | undefined,
+	): AsyncGenerator<[string, tg.Template | undefined]> {
+		if (env === undefined || env.kind !== "map") {
+			return;
+		}
+		let map = env.value;
+		for (let [key, mutations] of Object.entries(map)) {
+			let result: tg.Template | undefined;
+			for (let mutation of std.flatten([mutations])) {
+				result = await mutateTemplate(result, mutation);
+			}
+			let value = result;
+			yield [key, value];
+		}
+	}
+
+	export let manifestEnvFromArg = async (
+		arg: std.env.Arg | wrap.Manifest.Env | undefined,
+	): Promise<wrap.Manifest.Env | undefined> => {
+		if (arg && "kind" in arg && (arg.kind === "unset" || arg.kind === "map")) {
+			return arg as wrap.Manifest.Env;
+		} else if (arg === undefined) {
+			return { kind: "map", value: {} };
+		} else if (tg.Mutation.is(arg)) {
+			tg.assert(
+				arg.inner.kind === "unset",
+				"Only unset mutations are allowed in this position.",
+			);
+			return { kind: "unset" };
+		} else if (tg.File.is(arg)) {
+			// If the arg is a file, then return the env from the file's manifest.
+			let manifest = await wrap.Manifest.read(arg);
+			tg.assert(manifest);
+			return manifest.env;
+		} else if (tg.Symlink.is(arg)) {
+			// If the arg is a symlink, then return the env from the resolved file's manifest.
+			let file = await arg.resolve();
+			tg.assert(tg.File.is(file));
+			let manifest = await wrap.Manifest.read(file);
+			tg.assert(manifest);
+			return manifest.env;
+		} else if (tg.Directory.is(arg)) {
+			// If the directory contains a file at .tangram/env, then return the env from that file's manifest.
+			let envFile = await arg.tryGet(".tangram/env");
+			if (envFile) {
+				return manifestEnvFromArg(tg.File.expect(envFile));
+			}
+
+			// Otherwise, return an env that adds its paths to the appropriate variables.
+			let ret: wrap.Manifest.EnvMap = {};
+			if (await arg.tryGet("bin")) {
+				pushOrSet(
+					ret,
+					"PATH",
+					manifestMaybeMutationFromManifestMutation({
+						kind: "template_prepend",
+						value: {
+							template: await manifestTemplateFromArg(await tg`${arg}/bin`),
+							separator: ":",
+						},
+					}),
+				);
+			}
+			let includeDir = await arg.tryGet("include");
+			if (includeDir) {
+				// If the directory contains stdio.h, assume it's a system include directory and skip it.
+				if (
+					tg.Directory.is(includeDir) &&
+					(await includeDir.tryGet("stdio.h"))
+				) {
+					// do nothing.
+				} else {
+					pushOrSet(
+						ret,
+						"CPATH",
+						manifestMaybeMutationFromManifestMutation({
+							kind: "template_prepend",
+							value: {
+								template: await manifestTemplateFromArg(
+									await tg`${arg}/include`,
+								),
+								separator: ":",
+							},
+						}),
+					);
+				}
+			}
+			if (await arg.tryGet("lib")) {
+				pushOrSet(
+					ret,
+					"LIBRARY_PATH",
+					manifestMaybeMutationFromManifestMutation({
+						kind: "template_prepend",
+						value: {
+							template: await manifestTemplateFromArg(await tg`${arg}/lib`),
+							separator: ":",
+						},
+					}),
+				);
+				if (await arg.tryGet("lib/pkgconfig")) {
+					pushOrSet(
+						ret,
+						"PKG_CONFIG_PATH",
+						manifestMaybeMutationFromManifestMutation({
+							kind: "template_prepend",
+							value: {
+								template: await manifestTemplateFromArg(
+									await tg`${arg}/lib/pkgconfig`,
+								),
+								separator: ":",
+							},
+						}),
+					);
+				}
+			}
+			return { kind: "map", value: ret };
+		} else if (Array.isArray(arg)) {
+			// If the arg is an array, then recurse.
+			return mergeEnvs(...(await Promise.all(arg.map(manifestEnvFromArg))));
+		} else if (typeof arg === "object") {
+			// Handle an object.
+			let ret = Object.fromEntries(
+				await Promise.all(
+					Object.entries(arg).map<
+						Promise<[string, Array<wrap.Manifest.MaybeMutation>]>
+					>(async ([key, mutationArgs]) => {
+						let mutations = tg.Mutation.is(mutationArgs)
+							? [await manifestMutationFromMutation(mutationArgs)]
+							: await Promise.all(
+									std
+										.flatten([mutationArgs])
+										.map(manifestMutationFromMaybeMutation),
+							  );
+						return [
+							key,
+							mutations.map((mutation) => {
+								return { kind: "mutation", value: mutation };
+							}),
+						];
+					}),
+				),
+			);
+			return { kind: "map", value: ret };
+		} else {
+			return tg.unreachable();
+		}
+	};
+
+	export let mergeEnvs = (
+		...envs: Array<wrap.Manifest.Env | undefined>
+	): wrap.Manifest.Env | undefined => {
+		let result: wrap.Manifest.Env | undefined;
+		for (let env of envs) {
+			if (env === undefined) {
+				return undefined;
+			} else if (env.kind === "unset") {
+				result = env;
+			} else {
+				let envMap = env.value ?? {};
+				let map: wrap.Manifest.EnvMap =
+					result?.kind === "map" ? result?.value : {};
+				for (let [name, val] of Object.entries(envMap)) {
+					if (val === undefined) {
+						// do nothing
+					} else {
+						if (!(val instanceof Array)) {
+							val = [val];
+						}
+						if (!(name in map)) {
+							map[name] = [];
+						}
+						for (let mutation of val) {
+							let lastExistingMutation = map[name]?.at(-1);
+							if (
+								lastExistingMutation &&
+								lastExistingMutation.kind === "mutation"
+							) {
+								// Attempt to merge the current mutation with the previous.
+								if (mutation.kind === "mutation") {
+									let mergedMutations = mergeManifestMutations(
+										lastExistingMutation.value,
+										mutation.value,
+									).map((mutation) =>
+										manifestMaybeMutationFromManifestMutation(mutation),
+									);
+
+									// Replace the last mutation with the merged mutations.
+									map[name] = (map[name] ?? [])
+										.slice(0, -1)
+										.concat(mergedMutations);
+								}
+							} else {
+								// Otherwise, just append the mutation.
+								map[name] = (map[name] ?? []).concat([mutation]);
+							}
+						}
+					}
+				}
+				result = { kind: "map", value: map };
+			}
+		}
+		return result;
+	};
+
+	export namespace Manifest {
+		export type Identity = "wrapper" | "interpreter" | "executable";
+
+		export type Interpreter =
+			| NormalInterpreter
+			| LdLinuxInterpreter
+			| LdMuslInterpreter
+			| DyLdInterpreter;
+
+		export type NormalInterpreter = {
+			kind: "normal";
+			path: Manifest.Template;
+			args?: Array<Manifest.Template>;
+		};
+
+		export type LdLinuxInterpreter = {
+			kind: "ld-linux";
+			path: Manifest.Template;
+			libraryPaths?: Array<Manifest.Template>;
+			preloads?: Array<Manifest.Template>;
+			args?: Array<Manifest.Template>;
+		};
+
+		export type LdMuslInterpreter = {
+			kind: "ld-musl";
+			path: Manifest.Template;
+			libraryPaths?: Array<Manifest.Template>;
+			preloads?: Array<Manifest.Template>;
+			args?: Array<Manifest.Template>;
+		};
+
+		export type DyLdInterpreter = {
+			kind: "dyld";
+			libraryPaths?: Array<Manifest.Template>;
+			preloads?: Array<Manifest.Template>;
+		};
+
+		export type Executable =
+			| { kind: "path"; value: Manifest.Template }
+			| { kind: "content"; value: Manifest.Template };
+
+		export type Template = {
+			components: Array<Manifest.Template.Component>;
+		};
+
+		export namespace Template {
+			export type Component =
+				| { kind: "string"; value: string }
+				| { kind: "artifact"; value: tg.Artifact.Id };
+		}
+
+		export type Mutation =
+			| { kind: "unset" }
+			| { kind: "set"; value: Manifest.Template }
+			| { kind: "set_if_unset"; value: Manifest.Template }
+			| {
+					kind: "template_prepend";
+					value: { template: Manifest.Template; separator?: string };
+			  }
+			| {
+					kind: "template_append";
+					value: { template: Manifest.Template; separator?: string };
+			  }
+			| { kind: "array_prepend"; value: Array<Manifest.Template> }
+			| { kind: "array_append"; value: Array<Manifest.Template> };
+
+		export type Env = { kind: "unset" } | { kind: "map"; value: EnvMap };
+
+		export type EnvMap = {
+			[key: string]: Array<Manifest.MaybeMutation>;
+		};
+
+		export type MaybeMutation =
+			| { kind: "mutation"; value: Manifest.Mutation }
+			| { kind: "template"; value: Manifest.Template };
+
+		/** Read a manifest from the end of a file. */
+		export let read = async (
+			file: tg.File,
+		): Promise<wrap.Manifest | undefined> => {
+			// Read the file.
+			let fileBytes = await file.bytes();
+			let filePosition = fileBytes.length;
+
+			// Read and verify the magic number.
+			filePosition -= MANIFEST_MAGIC_NUMBER.length;
+			let magicNumberBytes = fileBytes.slice(-MANIFEST_MAGIC_NUMBER.length);
+			for (let i = 0; i < MANIFEST_MAGIC_NUMBER.length; i++) {
+				if (magicNumberBytes[i] !== MANIFEST_MAGIC_NUMBER[i]) {
+					return undefined;
+				}
+			}
+
+			// Read and verify the version.
+			filePosition -= MANIFEST_MAGIC_NUMBER.length;
+			let version = Number(
+				new DataView(fileBytes.buffer).getBigUint64(filePosition, true),
+			);
+			if (version !== MANIFEST_VERSION) {
+				return undefined;
+			}
+
+			// Read the manifest length.
+			filePosition -= 8;
+			let manifestLength = Number(
+				new DataView(fileBytes.buffer).getBigUint64(filePosition, true),
+			);
+
+			// Read the manifest.
+			filePosition -= manifestLength;
+			let manifestBytes = fileBytes.slice(
+				filePosition,
+				filePosition + manifestLength,
+			);
+
+			// Deserialize the manifest.
+			let manifest = tg.encoding.json.decode(
+				tg.encoding.utf8.decode(manifestBytes),
+			) as wrap.Manifest;
+
+			return manifest;
+		};
+		// Write a manifest to a file.
+		export let write = async (file: tg.File, manifest: wrap.Manifest) => {
+			// Serialize the manifest.
+			let manifestBytes = tg.encoding.utf8.encode(
+				tg.encoding.json.encode(manifest),
+			);
+
+			// Read the file.
+			let fileBytes = await file.bytes();
+
+			// Create a buffer for the new file.
+			let newBytesLength = fileBytes.length + manifestBytes.length + 8 + 8 + 8;
+			let newBytesPosition = 0;
+			let newBytes = new Uint8Array(newBytesLength);
+
+			// Write the file contents.
+			newBytes.set(fileBytes, newBytesPosition);
+			newBytesPosition += fileBytes.length;
+
+			// Write the manifest.
+			newBytes.set(manifestBytes, newBytesPosition);
+			newBytesPosition += manifestBytes.length;
+
+			// Write the length of the manifest.
+			new DataView(newBytes.buffer).setBigUint64(
+				newBytesPosition,
+				BigInt(manifestBytes.length),
+				true,
+			);
+			newBytesPosition += 8;
+
+			// Write the version.
+			new DataView(newBytes.buffer).setBigUint64(
+				newBytesPosition,
+				BigInt(MANIFEST_VERSION),
+				true,
+			);
+			newBytesPosition += 8;
+
+			// Write the magic number.
+			newBytes.set(MANIFEST_MAGIC_NUMBER, newBytesPosition);
+			newBytesPosition += 8;
+
+			// Collect the manifest references.
+			let arr = [];
+			for await (let reference of manifestReferences(manifest)) {
+				arr.push(reference);
+			}
+			let references = await Promise.all(arr);
+
+			// Create the file.
+			let newFile = tg.file({
+				contents: newBytes,
+				executable: true,
+				references: (await file.references()).concat(references),
+			});
+
+			return newFile;
+		};
+	}
+}
+
+let isArgObject = (arg: unknown): arg is wrap.ArgObject => {
+	return (
+		typeof arg === "object" &&
+		!(tg.File.is(arg) || tg.Symlink.is(arg) || tg.Template.is(arg))
+	);
+};
+
+const MANIFEST_MAGIC_NUMBER: Uint8Array = new Uint8Array([
+	116, 97, 110, 103, 114, 97, 109, 0,
+]);
+
+const MANIFEST_VERSION = 0;
+
+let manifestExecutableFromArg = async (
+	arg: string | tg.Template | tg.File | tg.Symlink | wrap.Manifest.Executable,
+): Promise<wrap.Manifest.Executable> => {
+	if (isManifestExecutable(arg)) {
+		return arg;
+	} else if (tg.File.is(arg) || tg.Symlink.is(arg)) {
+		return {
+			kind: "path",
+			value: await manifestTemplateFromArg(arg),
+		};
+	} else if (typeof arg === "string" || tg.Template.is(arg)) {
+		return {
+			kind: "content",
+			value: await manifestTemplateFromArg(arg),
+		};
+	} else {
+		return tg.unreachable();
+	}
+};
+
+let isManifestExecutable = (arg: unknown): arg is wrap.Manifest.Executable => {
+	return (
+		arg !== undefined &&
+		arg !== null &&
+		typeof arg === "object" &&
+		"kind" in arg &&
+		(arg.kind === "path" || arg.kind === "content")
+	);
+};
+
+let manifestInterpreterFromArg = async (
+	arg: tg.File | tg.Symlink | wrap.Interpreter | wrap.Manifest.Interpreter,
+): Promise<wrap.Manifest.Interpreter> => {
+	if (isManifestInterpreter(arg)) {
+		return arg;
+	}
+
+	// If the arg is an executable, then wrap it and create a normal interpreter.
+	if (tg.File.is(arg) || tg.Symlink.is(arg)) {
+		let interpreter = await std.wrap(arg);
+		let path = await manifestTemplateFromArg(interpreter);
+		return {
+			kind: "normal",
+			path,
+			args: [],
+		};
+	}
+
+	// Otherwise, create the interpreter specified by the arg object.
+	if ("kind" in arg && arg.kind === "ld-linux") {
+		// Handle an ld-linux interpreter.
+		let path = await manifestTemplateFromArg(arg.executable);
+		let libraryPaths = arg.libraryPaths
+			? await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg))
+			: undefined;
+
+		// Build an injection dylib to match the interpreter.
+		let interpreterFile = tg.Symlink.is(arg.executable)
+			? await arg.executable.resolve()
+			: arg.executable;
+		if (!interpreterFile || tg.Directory.is(interpreterFile)) {
+			throw new Error("Could not resolve the symlink to the interpreter.");
+		}
+		let interpreterMetadata =
+			await std.file.executableMetadata(interpreterFile);
+		if (interpreterMetadata.format !== "elf") {
+			return tg.unreachable(
+				"Cannot build an ld-linux interpreter for a non-ELF executable.",
+			);
+		}
+		let arch = interpreterMetadata.arch;
+		if (arch === "js") {
+			throw new Error("Unexpected interpreter arch: js");
+		}
+		let injectionLibrary = await injection.default({
+			host: `${arch}-unknown-linux-gnu`,
+		});
+
+		// Combine the injection with any additional preloads specified by the caller.
+		let preloads = [await manifestTemplateFromArg(injectionLibrary)];
+		let additionalPreloads = arg.preloads
+			? await Promise.all(arg.preloads?.map(manifestTemplateFromArg))
+			: [];
+		preloads = preloads.concat(additionalPreloads);
+		let args = arg.args
+			? await Promise.all(arg.args.map(manifestTemplateFromArg))
+			: undefined;
+		return {
+			kind: "ld-linux",
+			path,
+			libraryPaths,
+			preloads,
+			args,
+		};
+	} else if ("kind" in arg && arg.kind === "ld-musl") {
+		// Handle an ld-musl interpreter.
+		let path = await manifestTemplateFromArg(arg.executable);
+		let libraryPaths = arg.libraryPaths
+			? await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg))
+			: undefined;
+
+		// Build an injection dylib to match the interpreter.
+		let interpreterFile = tg.Symlink.is(arg.executable)
+			? await arg.executable.resolve()
+			: arg.executable;
+		if (!interpreterFile || tg.Directory.is(interpreterFile)) {
+			throw new Error("Could not resolve the symlink to the interpreter.");
+		}
+		let interpreterMetadata =
+			await std.file.executableMetadata(interpreterFile);
+		if (interpreterMetadata.format !== "elf") {
+			return tg.unreachable(
+				"Cannot build an ld-musl interpreter for a non-ELF executable.",
+			);
+		}
+		let arch = interpreterMetadata.arch;
+		if (arch === "js") {
+			throw new Error("Unexpected interpreter arch: js");
+		}
+		let injectionLibrary = await injection.default({
+			host: `${arch}-linux-musl`,
+		});
+
+		// Combine the injection with any additional preloads specified by the caller.
+		let preloads = [await manifestTemplateFromArg(injectionLibrary)];
+		let additionalPreloads = arg.preloads
+			? await Promise.all(arg.preloads?.map(manifestTemplateFromArg))
+			: [];
+		preloads = preloads.concat(additionalPreloads);
+
+		let args = arg.args
+			? await Promise.all(arg.args.map(manifestTemplateFromArg))
+			: undefined;
+		return {
+			kind: "ld-musl",
+			path,
+			libraryPaths,
+			preloads,
+			args,
+		};
+	} else if ("kind" in arg && arg.kind === "dyld") {
+		// Handle a dyld interpreter.
+		let libraryPaths = arg.libraryPaths
+			? await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg))
+			: undefined;
+		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
+		let injectionLibrary = await injection.default({
+			host: `aarch64-apple-darwin`,
+		});
+		let preloads = [await manifestTemplateFromArg(injectionLibrary)];
+		let additionalPreloads = arg.preloads
+			? await Promise.all(arg.preloads?.map(manifestTemplateFromArg))
+			: [];
+		preloads = preloads.concat(additionalPreloads);
+		return {
+			kind: "dyld",
+			libraryPaths,
+			preloads,
+		};
+	} else {
+		// Handle a normal interpreter.
+		let path = await manifestTemplateFromArg(arg.executable);
+		let args = await Promise.all(arg.args?.map(manifestTemplateFromArg) ?? []);
+		return {
+			kind: "normal",
+			path,
+			args,
+		};
+	}
+};
+
+let isManifestInterpreter = (
+	arg: unknown,
+): arg is wrap.Manifest.Interpreter => {
+	return (
+		arg !== undefined &&
+		arg !== null &&
+		typeof arg === "object" &&
+		"kind" in arg &&
+		(arg.kind === "normal" ||
+			arg.kind === "ld-linux" ||
+			arg.kind === "ld-musl" ||
+			arg.kind === "dyld")
+	);
+};
+
+let manifestInterpreterFromExecutableArg = async (
+	arg: tg.File | tg.Symlink,
+): Promise<wrap.Manifest.Interpreter | undefined> => {
+	// Resolve the arg to a file if it is a symlink.
+	if (tg.Symlink.is(arg)) {
+		let resolvedArg = await arg.resolve();
+		tg.assert(tg.File.is(resolvedArg));
+		arg = resolvedArg;
+	}
+
+	// Get the file's executable metadata.
+	let metadata = await std.file.executableMetadata(arg);
+
+	// Handle the executable by its format.
+	switch (metadata.format) {
+		case "elf": {
+			return manifestInterpreterFromElf(metadata);
+		}
+		case "mach-o": {
+			let arch = metadata.arches[0];
+			tg.assert(arch);
+			let triple = std.Triple.defaultForSystem(
+				tg.system({ os: "darwin", arch }),
+			);
+			return {
+				kind: "dyld",
+				libraryPaths: undefined,
+				preloads: [
+					await manifestTemplateFromArg(
+						await injection.default({ host: triple }),
+					),
+				],
+			};
+		}
+		case "shebang": {
+			if (metadata.interpreter === undefined) {
+				return manifestInterpreterFromArg(await defaultShellInterpreter());
+			} else {
+				return undefined;
+			}
+		}
+	}
+};
+
+let manifestInterpreterFromElf = async (
+	metadata: std.file.ElfExecutableMetadata,
+): Promise<wrap.Manifest.Interpreter | undefined> => {
+	// If there is no interpreter, this is a statically-linked executable. Nothing to do.
+	if (metadata.interpreter === undefined) {
+		return undefined;
+	}
+
+	let libc = metadata.interpreter?.includes("ld-linux") ? "gnu" : "musl";
+
+	// If host matches detected host AND libc is musl, set bootstrap mode.
+	let host = std.triple({
+		os: "linux",
+		vendor: "unknown",
+		arch: metadata.arch,
+		environment: libc,
+	});
+
+	// Obtain injection library.
+	let injectionLib = await injection.default({ host });
+
+	// Handle each interpreter type.
+	if (metadata.interpreter?.includes("ld-linux")) {
+		// Handle an ld-linux interpreter.
+		let toolchainDir = await canadianCross.toolchain({ host });
+		let { ldso, libDir } = await std.sdk.toolchainComponents({
+			env: toolchainDir,
+		});
+		return {
+			kind: "ld-linux",
+			path: await manifestTemplateFromArg(ldso),
+			libraryPaths: [await manifestTemplateFromArg(libDir)],
+			preloads: [await manifestTemplateFromArg(injectionLib)],
+			args: undefined,
+		};
+	} else if (metadata.interpreter?.includes("ld-musl")) {
+		// Handle an ld-musl interpreter.
+		host.environment = "musl";
+		let muslArtifact = await musl({ host });
+		let libDir = tg.Directory.expect(await muslArtifact.get("lib"));
+		let ldso = tg.File.expect(await libDir.get(interpreterName(host)));
+		return {
+			kind: "ld-musl",
+			path: await manifestTemplateFromArg(ldso),
+			libraryPaths: [await manifestTemplateFromArg(libDir)],
+			preloads: [await manifestTemplateFromArg(injectionLib)],
+			args: undefined,
+		};
+	} else {
+		throw new Error(`Unsupported interpreter: "${metadata.interpreter}".`);
+	}
+};
+
+export let defaultShellInterpreter = tg.target(async () => {
+	// Provide bash for the detected host system. Don't assume an existing SDK.
+	let shellArtifact = await std.utils.bash.build({
+		sdk: { bootstrapMode: true },
+	});
+	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
+
+	//  Add the standard utils.
+	let env = await std.utils.env({ sdk: { bootstrapMode: true } });
+
+	let bash = wrap(shellExecutable, {
+		identity: "wrapper",
+		args: ["-euo", "pipefail"],
+		env,
+	});
+	return bash;
+});
+
+export let maybeMutatonEnvArgObjectFromManifestEnv = async (
+	env: wrap.Manifest.Env | undefined,
+): Promise<tg.MaybeMutation<std.env.ArgObject>> => {
+	if (env === undefined) {
+		return Promise.resolve({});
+	}
+	if (env.kind === "unset") {
+		return tg.Mutation.unset();
+	} else {
+		return envArgObjectFromManifestEnvMap(env.value);
+	}
+};
+
+let envArgObjectFromManifestEnvMap = async (
+	env: wrap.Manifest.EnvMap,
+): Promise<std.env.ArgObject> => {
+	let ret: std.env.ArgObject = {};
+	for (let [key, value] of Object.entries(env)) {
+		ret[key] = await Promise.all(
+			value.map(async (mutation) => {
+				if (mutation.kind === "mutation") {
+					return await mutationFromManifestMutation(mutation.value);
+				} else if (mutation.kind === "template") {
+					return await templateFromManifestTemplate(mutation.value);
+				} else {
+					return tg.unreachable();
+				}
+			}),
+		);
+		if (ret[key] instanceof Array) {
+			let arr = ret[key];
+			tg.assert(arr instanceof Array);
+			tg.assert(arr.length > 0);
+			if (arr.length === 1) {
+				ret[key] = arr[0];
+			}
+		}
+	}
+	return ret;
+};
+
+let manifestMaybeMutationFromManifestMutation = (
+	mutation: wrap.Manifest.Mutation,
+): wrap.Manifest.MaybeMutation => {
+	return { kind: "mutation", value: mutation };
+};
+
+let valueIsTemplateLike = (
+	value: tg.Value,
+): value is string | tg.Template | tg.Artifact => {
+	return (
+		typeof value === "string" || tg.Artifact.is(value) || tg.Template.is(value)
+	);
+};
+
+let manifestMutationFromMutation = async (
+	mutation: tg.Mutation,
+): Promise<wrap.Manifest.Mutation> => {
+	if (mutation.inner.kind === "unset") {
+		return { kind: "unset" };
+	} else if (mutation.inner.kind === "set") {
+		let value = mutation.inner.value;
+		tg.assert(
+			valueIsTemplateLike(value),
+			`Expected a template arg, but got ${JSON.stringify(value)}.`,
+		);
+		return { kind: "set", value: await manifestTemplateFromArg(value) };
+	} else if (mutation.inner.kind === "set_if_unset") {
+		let value = mutation.inner.value;
+		tg.assert(
+			valueIsTemplateLike(value),
+			`Expected a template arg, but got ${JSON.stringify(value)}.`,
+		);
+		return {
+			kind: "set_if_unset",
+			value: await manifestTemplateFromArg(value),
+		};
+	} else if (mutation.inner.kind === "template_prepend") {
+		let template = mutation.inner.template;
+		tg.assert(
+			valueIsTemplateLike(template),
+			`Expected a template arg, but got ${JSON.stringify(template)}.`,
+		);
+		return {
+			kind: "template_prepend",
+			value: {
+				template: await manifestTemplateFromArg(template),
+				separator: mutation.inner.separator,
+			},
+		};
+	} else if (mutation.inner.kind === "template_append") {
+		let template = mutation.inner.template;
+		tg.assert(
+			valueIsTemplateLike(template),
+			`Expected a template arg, but got ${JSON.stringify(template)}.`,
+		);
+		return {
+			kind: "template_append",
+			value: {
+				template: await manifestTemplateFromArg(template),
+				separator: mutation.inner.separator,
+			},
+		};
+	} else if (mutation.inner.kind === "array_prepend") {
+		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
+		let value = await Promise.all(
+			mutation.inner.values.map(manifestTemplateFromArg),
+		);
+		return { kind: "array_prepend", value };
+	} else if (mutation.inner.kind === "array_append") {
+		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
+		let value = await Promise.all(
+			mutation.inner.values.map(manifestTemplateFromArg),
+		);
+		return { kind: "array_append", value };
+	} else {
+		return tg.unreachable();
+	}
+};
+
+let manifestMutationFromMaybeMutation = async (
+	mutation?: tg.MaybeMutation,
+): Promise<wrap.Manifest.Mutation> => {
+	if (mutation === undefined) {
+		return {
+			kind: "unset",
+		};
+	}
+	if (!tg.Mutation.is(mutation)) {
+		return manifestMutationFromMutation(
+			await tg.mutation<tg.Value>({
+				kind: "set",
+				value: mutation,
+			}),
+		);
+	} else {
+		return manifestMutationFromMutation(mutation);
+	}
+};
+
+let mergeManifestMutations = (
+	a: wrap.Manifest.Mutation,
+	b: wrap.Manifest.Mutation,
+): Array<wrap.Manifest.Mutation> => {
+	if (a.kind === "unset" && b.kind === "unset") {
+		return [b];
+	} else if (a.kind === "unset" && b.kind === "set") {
+		return [b];
+	} else if (a.kind === "unset" && b.kind === "set_if_unset") {
+		let val = b.value;
+		return [
+			{
+				kind: "set",
+				value: val,
+			},
+		];
+	} else if (a.kind === "unset" && b.kind === "template_prepend") {
+		return [{ kind: "set", value: b.value.template }];
+	} else if (a.kind === "unset" && b.kind === "template_append") {
+		return [{ kind: "set", value: b.value.template }];
+	} else if (a.kind === "unset" && b.kind === "array_append") {
+		return [{ kind: "set", value: joinManifestTemplates(":", ...b.value) }];
+	} else if (a.kind === "unset" && b.kind === "array_prepend") {
+		return [{ kind: "set", value: joinManifestTemplates(":", ...b.value) }];
+	} else if (a.kind === "set" && b.kind === "unset") {
+		return [b];
+	} else if (a.kind === "set" && b.kind === "set") {
+		return [b];
+	} else if (a.kind === "set" && b.kind === "set_if_unset") {
+		return [a];
+	} else if (a.kind === "set" && b.kind === "template_prepend") {
+		let setVal = a.value;
+		tg.assert(isManifestTemplate(setVal));
+		return [
+			{
+				kind: "set",
+				value: joinManifestTemplates(
+					b.value.separator,
+					setVal,
+					b.value.template,
+				),
+			},
+		];
+	} else if (a.kind === "set" && b.kind === "template_append") {
+		let setVal = a.value;
+		tg.assert(isManifestTemplate(setVal));
+		return [
+			{
+				kind: "set",
+				value: joinManifestTemplates(
+					b.value.separator,
+					b.value.template,
+					setVal,
+				),
+			},
+		];
+	} else if (a.kind === "set" && b.kind === "array_append") {
+		return [a, b];
+	} else if (a.kind === "set" && b.kind === "array_prepend") {
+		return [a, b];
+	} else if (a.kind === "set_if_unset" && b.kind === "unset") {
+		return [b];
+	} else if (a.kind === "set_if_unset" && b.kind === "set") {
+		return [b];
+	} else if (a.kind === "set_if_unset" && b.kind === "set_if_unset") {
+		return [a];
+	} else if (a.kind === "set_if_unset" && b.kind === "template_prepend") {
+		return [a, b];
+	} else if (a.kind === "set_if_unset" && b.kind === "template_append") {
+		return [a, b];
+	} else if (a.kind === "set_if_unset" && b.kind === "array_append") {
+		return [a, b];
+	} else if (a.kind === "set_if_unset" && b.kind === "array_prepend") {
+		return [a, b];
+	} else if (a.kind === "template_prepend" && b.kind === "unset") {
+		return [b];
+	} else if (a.kind === "template_prepend" && b.kind === "set") {
+		return [b];
+	} else if (a.kind === "template_prepend" && b.kind === "set_if_unset") {
+		return [a];
+	} else if (a.kind === "template_prepend" && b.kind === "template_prepend") {
+		if (a.value.separator === b.value.separator) {
+			return [
+				{
+					kind: "template_prepend",
+					value: {
+						template: joinManifestTemplates(
+							a.value.separator,
+							b.value.template,
+							a.value.template,
+						),
+						separator: a.value.separator,
+					},
+				},
+			];
+		} else {
+			return [a, b];
+		}
+	} else if (a.kind === "template_prepend" && b.kind === "template_append") {
+		return [a, b];
+	} else if (a.kind === "template_prepend" && b.kind === "array_append") {
+		return [a, b];
+	} else if (a.kind === "template_prepend" && b.kind === "array_prepend") {
+		return [a, b];
+	} else if (a.kind === "template_append" && b.kind === "unset") {
+		return [b];
+	} else if (a.kind === "template_append" && b.kind === "set") {
+		return [b];
+	} else if (a.kind === "template_append" && b.kind === "set_if_unset") {
+		return [a];
+	} else if (a.kind === "template_append" && b.kind === "template_prepend") {
+		return [a, b];
+	} else if (a.kind === "template_append" && b.kind === "template_append") {
+		if (a.value.separator === b.value.separator) {
+			return [
+				{
+					kind: "template_append",
+					value: {
+						template: joinManifestTemplates(
+							a.value.separator,
+							a.value.template,
+							b.value.template,
+						),
+						separator: a.value.separator,
+					},
+				},
+			];
+		} else {
+			return [a, b];
+		}
+	} else if (a.kind === "template_append" && b.kind === "array_append") {
+		return [a, b];
+	} else if (a.kind === "template_append" && b.kind === "array_prepend") {
+		return [a, b];
+	} else if (a.kind === "array_append" && b.kind === "unset") {
+		return [b];
+	} else if (a.kind === "array_append" && b.kind === "set") {
+		return [b];
+	} else if (a.kind === "array_append" && b.kind === "set_if_unset") {
+		return [a];
+	} else if (a.kind === "array_append" && b.kind === "array_append") {
+		return [{ kind: "array_append", value: a.value.concat(b.value) }];
+	} else if (a.kind === "array_append" && b.kind === "array_prepend") {
+		return [a, b];
+	} else if (a.kind === "array_append" && b.kind === "template_append") {
+		return [a, b];
+	} else if (a.kind === "array_append" && b.kind === "template_prepend") {
+		return [a, b];
+	} else if (a.kind === "array_prepend" && b.kind === "unset") {
+		return [b];
+	} else if (a.kind === "array_prepend" && b.kind === "set") {
+		return [b];
+	} else if (a.kind === "array_prepend" && b.kind === "set_if_unset") {
+		return [a];
+	} else if (a.kind === "array_prepend" && b.kind === "array_append") {
+		return [a, b];
+	} else if (a.kind === "array_prepend" && b.kind === "array_prepend") {
+		return [{ kind: "array_prepend", value: b.value.concat(a.value) }];
+	} else if (a.kind === "array_prepend" && b.kind === "template_append") {
+		return [a, b];
+	} else if (a.kind === "array_prepend" && b.kind === "template_prepend") {
+		return [a, b];
+	} else {
+		return tg.unreachable();
+	}
+};
+
+let mutateTemplate = async (
+	t: tg.Template | undefined,
+	maybeMutation: wrap.Manifest.MaybeMutation,
+): Promise<tg.Template | undefined> => {
+	let mutation: wrap.Manifest.Mutation =
+		maybeMutation.kind === "mutation"
+			? maybeMutation.value
+			: { kind: "set", value: maybeMutation.value };
+	let template = await manifestTemplateFromArg(t);
+	if (mutation.kind === "array_append") {
+		let values = mutation.value;
+		return templateFromManifestTemplate(
+			joinManifestTemplates(":", template, ...values),
+		);
+	} else if (mutation.kind === "array_prepend") {
+		let values = mutation.value;
+		return templateFromManifestTemplate(
+			joinManifestTemplates(":", ...values, template),
+		);
+	} else if (mutation.kind === "template_append") {
+		return templateFromManifestTemplate(
+			joinManifestTemplates(
+				mutation.value.separator,
+				template,
+				mutation.value.template,
+			),
+		);
+	} else if (mutation.kind === "template_prepend") {
+		return templateFromManifestTemplate(
+			joinManifestTemplates(
+				mutation.value.separator,
+				mutation.value.template,
+				template,
+			),
+		);
+	} else if (mutation.kind === "set") {
+		return templateFromManifestTemplate(mutation.value);
+	} else if (mutation.kind === "set_if_unset") {
+		if (template?.components.length === 0) {
+			return templateFromManifestTemplate(mutation.value);
+		}
+	} else if (mutation.kind === "unset") {
+		return tg``;
+	}
+	return tg.unreachable();
+};
+
+let templateFromManifestTemplate = (
+	manifestTemplate: wrap.Manifest.Template,
+): Promise<tg.Template> =>
+	manifestTemplate.components.reduce(
+		(result, component) => {
+			switch (component.kind) {
+				case "artifact": {
+					return tg`${result}${tg.Artifact.withId(component.value)}`;
+				}
+				case "string": {
+					return tg`${result}${component.value}`;
+				}
+				default: {
+					return tg.unreachable();
+				}
+			}
+		},
+		tg``,
+	);
+
+let mutationFromManifestMutation = (
+	manifestMutation: wrap.Manifest.Mutation,
+): Promise<tg.Mutation<tg.Template.Arg>> => {
+	if (manifestMutation.kind === "unset") {
+		return Promise.resolve(tg.Mutation.unset());
+	} else if (manifestMutation.kind === "set") {
+		return tg.Mutation.set(
+			templateFromManifestTemplate(manifestMutation.value),
+		);
+	} else if (manifestMutation.kind === "set_if_unset") {
+		return tg.Mutation.setIfUnset(
+			templateFromManifestTemplate(manifestMutation.value),
+		);
+	} else if (manifestMutation.kind === "array_prepend") {
+		return tg.Mutation.arrayAppend(
+			manifestMutation.value.map(templateFromManifestTemplate),
+		);
+	} else if (manifestMutation.kind === "array_append") {
+		return tg.Mutation.arrayAppend(
+			manifestMutation.value.map(templateFromManifestTemplate),
+		);
+	} else if (manifestMutation.kind === "template_prepend") {
+		return tg.Mutation.templatePrepend(
+			templateFromManifestTemplate(manifestMutation.value.template),
+			manifestMutation.value.separator,
+		);
+	} else if (manifestMutation.kind === "template_append") {
+		return tg.Mutation.templateAppend(
+			templateFromManifestTemplate(manifestMutation.value.template),
+			manifestMutation.value.separator,
+		);
+	} else {
+		return tg.unreachable();
+	}
+};
+
+/** Yield the key/value pairs this manifest sets once all mutations are applied. */
+export async function* manifestEnvVars(
+	manifest: wrap.Manifest,
+): AsyncGenerator<[string, tg.Template | undefined]> {
+	yield* wrap.envVars(manifest.env);
+}
+
+let manifestTemplateFromArg = async (
+	arg: tg.Template.Arg | wrap.Manifest.Template,
+): Promise<wrap.Manifest.Template> => {
+	if (isManifestTemplate(arg)) {
+		return arg as wrap.Manifest.Template;
+	}
+	let t = await tg.template(arg);
+	let components: Array<wrap.Manifest.Template.Component> = await Promise.all(
+		t.components.map(async (component) => {
+			if (typeof component === "string") {
+				return { kind: "string", value: component };
+			} else {
+				return { kind: "artifact", value: await component.id() };
+			}
+		}),
+	);
+	return {
+		components,
+	};
+};
+
+let isManifestTemplate = (
+	arg: tg.Template.Arg | wrap.Manifest.Template,
+): arg is wrap.Manifest.Template => {
+	return (
+		typeof arg === "object" &&
+		arg !== null &&
+		"components" in arg &&
+		typeof arg.components === "object" &&
+		arg.components instanceof Array &&
+		arg.components.every(isManifestTemplateComponent)
+	);
+};
+
+let isManifestTemplateComponent = (
+	arg: unknown,
+): arg is wrap.Manifest.Template.Component => {
+	return (
+		typeof arg === "object" &&
+		arg !== null &&
+		"kind" in arg &&
+		(arg.kind === "string" || arg.kind === "artifact")
+	);
+};
+
+let joinManifestTemplates = (
+	separator: string | undefined,
+	...templates: Array<wrap.Manifest.Template>
+): wrap.Manifest.Template => {
+	// Join the templates.
+	templates = templates.filter((template) => template !== undefined);
+	let components: Array<wrap.Manifest.Template.Component> = [];
+	for (let i = 0; i < templates.length; i++) {
+		if (separator && i > 0 && components.length > 0) {
+			components.push({ kind: "string", value: separator });
+		}
+		let template = templates[i];
+		tg.assert(template);
+		components.push(...template.components);
+	}
+
+	// Normalize the components.
+	let normalizedComponents: Array<wrap.Manifest.Template.Component> = [];
+	for (let component of components) {
+		let lastComponent = normalizedComponents.at(-1);
+		if (component.kind === "string" && component.value === "") {
+			// Ignore empty string components.
+			continue;
+		} else if (
+			lastComponent?.kind === "string" &&
+			component.kind === "string"
+		) {
+			// Merge adjacent string components.
+			normalizedComponents.splice(-1, 1, {
+				kind: "string",
+				value: lastComponent.value + component.value,
+			});
+		} else {
+			normalizedComponents.push(component);
+		}
+	}
+
+	// If the final character is a string matching the separator, chop it.
+	let lastComponent = normalizedComponents.at(-1);
+	if (
+		lastComponent?.kind === "string" &&
+		separator &&
+		lastComponent.value.endsWith(separator)
+	) {
+		normalizedComponents.splice(-1, 1, {
+			kind: "string",
+			value: lastComponent.value.slice(0, -separator.length),
+		});
+	}
+
+	return { components: normalizedComponents };
+};
+
+let manifestTemplatesEqual = (
+	a: wrap.Manifest.Template,
+	b: wrap.Manifest.Template,
+): boolean => {
+	if (a.components.length !== b.components.length) {
+		return false;
+	}
+	for (let i = 0; i < a.components.length; i++) {
+		let aComponent = a.components[i];
+		tg.assert(aComponent !== undefined);
+		let bComponent = b.components[i];
+		tg.assert(bComponent !== undefined);
+		if (aComponent.kind !== bComponent.kind) {
+			return false;
+		}
+		if (aComponent.kind === "string" && bComponent.kind === "string") {
+			if (aComponent.value !== bComponent.value) {
+				return false;
+			}
+		} else if (
+			aComponent.kind === "artifact" &&
+			bComponent.kind === "artifact"
+		) {
+			if (aComponent.value !== bComponent.value) {
+				return false;
+			}
+		}
+	}
+	return true;
+};
+
+/** Yield the artifacts referenced by a manifest. */
+async function* manifestReferences(
+	manifest: wrap.Manifest,
+): AsyncGenerator<tg.Artifact> {
+	// Get the references from the interpreter.
+	switch (manifest.interpreter?.kind) {
+		case undefined: {
+			break;
+		}
+		case "normal":
+			yield* manifestTemplateReferences(manifest.interpreter.path);
+			for (let arg of manifest.interpreter.args ?? []) {
+				yield* manifestTemplateReferences(arg);
+			}
+			break;
+		case "ld-linux": {
+			yield* manifestTemplateReferences(manifest.interpreter.path);
+			if (manifest.interpreter.libraryPaths) {
+				for (let libraryPath of manifest.interpreter.libraryPaths) {
+					yield* manifestTemplateReferences(libraryPath);
+				}
+			}
+			if (manifest.interpreter.preloads) {
+				for (let preload of manifest.interpreter.preloads) {
+					yield* manifestTemplateReferences(preload);
+				}
+			}
+			break;
+		}
+		case "ld-musl": {
+			yield* manifestTemplateReferences(manifest.interpreter.path);
+			if (manifest.interpreter.libraryPaths) {
+				for (let libraryPath of manifest.interpreter.libraryPaths) {
+					yield* manifestTemplateReferences(libraryPath);
+				}
+			}
+			if (manifest.interpreter.preloads) {
+				for (let preload of manifest.interpreter.preloads) {
+					yield* manifestTemplateReferences(preload);
+				}
+			}
+			break;
+		}
+		case "dyld": {
+			if (manifest.interpreter.libraryPaths) {
+				for (let libraryPath of manifest.interpreter.libraryPaths) {
+					yield* manifestTemplateReferences(libraryPath);
+				}
+			}
+			if (manifest.interpreter.preloads) {
+				for (let preload of manifest.interpreter.preloads) {
+					yield* manifestTemplateReferences(preload);
+				}
+			}
+			break;
+		}
+	}
+
+	// Get the references from the executable.
+	yield* manifestTemplateReferences(manifest.executable.value);
+
+	// Get the references from the env.
+	if (manifest.env?.kind == "map") {
+		for (let mutations of Object.values(manifest.env.value)) {
+			for (let maybeMutation of mutations) {
+				if (maybeMutation.kind === "template") {
+					// It's a template.
+					yield* manifestTemplateReferences(maybeMutation.value);
+				} else if (maybeMutation.kind === "mutation") {
+					// It's a mutation.
+					let mutation = maybeMutation.value;
+					// Get the references from the mutation.
+					switch (mutation.kind) {
+						case "unset":
+							break;
+						case "set":
+						case "set_if_unset":
+							yield* manifestTemplateReferences(mutation.value);
+							break;
+						case "template_prepend":
+						case "template_append":
+							yield* manifestTemplateReferences(mutation.value.template);
+							break;
+						case "array_prepend":
+						case "array_append":
+							for (let value of mutation.value) {
+								yield* manifestTemplateReferences(value);
+							}
+							break;
+					}
+				}
+			}
+		}
+	}
+
+	// Get the references from the args.
+	if (manifest.args && manifest.args instanceof Array) {
+		for (let arg of manifest.args) {
+			if (isManifestTemplate(arg)) {
+				yield* manifestTemplateReferences(arg);
+			}
+		}
+	}
+}
+
+/** Yield the artifacts referenced by a template. */
+function* manifestTemplateReferences(
+	template: wrap.Manifest.Template,
+): Generator<tg.Artifact> {
+	for (let component of template.components) {
+		if (component.kind === "artifact") {
+			yield tg.Artifact.withId(component.value);
+		}
+	}
+}
+export let artifactId = (artifact: tg.Artifact): Promise<tg.Artifact.Id> => {
+	if (tg.Directory.is(artifact)) {
+		return artifact.id();
+	} else if (tg.File.is(artifact)) {
+		return artifact.id();
+	} else if (tg.Symlink.is(artifact)) {
+		return artifact.id();
+	} else {
+		return tg.unreachable();
+	}
+};
+
+export let pushOrSet = (
+	obj: { [key: string]: unknown },
+	key: string,
+	value: tg.Value,
+) => {
+	if (obj === undefined) {
+		obj = {};
+		obj[key] = value;
+	} else if (obj[key] === undefined) {
+		obj[key] = value;
+	} else {
+		if (!Array.isArray(obj[key])) {
+			obj[key] = [obj[key]];
+		}
+		tg.assert(obj && key in obj && Array.isArray(obj[key]));
+		let a = obj[key] as Array<tg.Value>;
+		a.push(value);
+		obj[key] = a;
+	}
+};
+
+/** Basic program for testing the wrapper code. */
+export let argAndEnvDump = tg.target(async () => {
+	let programSource = await tg.file(`
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+extern char **environ;
+
+int main(int argc, char *argv[]) {
+		char path[1024];
+		ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+		if (len == -1) {
+			perror("readlink");
+			return EXIT_FAILURE;
+		}
+		path[len] = '\\0';
+		printf("/proc/self/exe: %s\\n\\n", path);
+
+    printf("Command line arguments:\\n");
+    for (int i = 0; i < argc; i++) {
+        printf("argv[%d]: %s\\n", i, argv[i]);
+    }
+
+    printf("\\nEnvironment variables:\\n");
+    for (char **env = environ; *env != NULL; env++) {
+        printf("%s\\n", *env);
+    }
+
+    return EXIT_SUCCESS;
+}`);
+
+	let toolchain = await bootstrap.toolchain();
+	let utils = await bootstrap.utils();
+
+	return tg.File.expect(
+		await tg.build(tg`cc -xc ${programSource} -o $OUTPUT`, {
+			env: { PATH: tg`${toolchain}/bin:${utils}/bin` },
+		}),
+	);
+});
+
+export let testSingleArgObjectNoMutations = tg.target(async () => {
+	let executable = await argAndEnvDump();
+	let executableID = await executable.id();
+
+	let wrapper = await wrap(executable, {
+		args: ["--arg1", "--arg2"],
+		env: {
+			HELLO: "WORLD",
+		},
+	});
+	// let wrapperID = await wrapper.id();
+
+	// // Check the manifest can be deserialized properly.
+	// let manifest = await wrap.Manifest.read(wrapper);
+	// tg.assert(manifest);
+	// tg.assert(manifest.identity === "executable");
+	// tg.assert(manifest.interpreter);
+	// tg.assert(manifest.interpreter.kind === "ld-musl");
+	// tg.assert(manifest.interpreter.preloads?.length === 1);
+
+	// // Check the output matches the expected output.
+	// let output = tg.File.expect(
+	// 	await tg.build(tg`${wrapper} > $OUTPUT`, {
+	// 		env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+	// 	}),
+	// );
+	// let text = await output.text();
+	// tg.assert(
+	// 	text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),
+	// 	"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
+	// );
+	// tg.assert(
+	// 	text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
+	// 	"Expected argv[0] to be set to the wrapper that was invoked",
+	// );
+	// tg.assert(
+	// 	text.includes("argv[1]: --arg1"),
+	// 	"Expected first arg to be --arg1",
+	// );
+	// tg.assert(
+	// 	text.includes("argv[2]: --arg2"),
+	// 	"Expected second arg to be --arg2",
+	// );
+	// tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
+
+	return wrapper;
+});

@@ -1,0 +1,10 @@
+[package]
+name = "hello-world"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+itoa = "1"
+
+# [dev-dependencies]
+# rand = "0.8"
