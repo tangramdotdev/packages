@@ -53,21 +53,21 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
-			if ("env" in arg) {
+			if (arg.env !== undefined) {
 				object.envs = await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
 			}
-			if ("phases" in arg) {
-				object.phases = await tg.Mutation.arrayAppend<std.phases.Arg>(
-					arg.phases,
-				);
+			if (arg.phases !== undefined) {
+				object.phases = tg.Mutation.is(arg.phases)
+					? arg.phases
+					: await tg.Mutation.arrayAppend<std.phases.Arg>(arg.phases);
 			}
-			if ("source" in arg) {
+			if (arg.source !== undefined) {
 				object.source = arg.source;
 			}
-			if ("build" in arg) {
+			if (arg.build !== undefined) {
 				object.build = arg.build;
 			}
-			if ("host" in arg) {
+			if (arg.host !== undefined) {
 				object.host = arg.host;
 			}
 			return object;
@@ -91,6 +91,7 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 
 	// Generate the host and target.
 	let host = await std.Triple.host(host_);
+	let build = build_ ? std.triple(build_) : host;
 
 	let env_ = [
 		libffi({ host }),
@@ -118,7 +119,7 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 				pre: "find ./bin -empty -delete",
 			},
 		},
-		host,
+		...std.Triple.rotate({ build, host }),
 	});
 
 	// Create the RUBYLIB environment variable.

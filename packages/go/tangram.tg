@@ -108,6 +108,8 @@ export type Arg = {
 	 */
 	env?: std.env.Arg;
 
+	build?: std.Triple.Arg;
+
 	host?: std.Triple.Arg;
 
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
@@ -115,57 +117,66 @@ export type Arg = {
 
 export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 	type Apply = {
+		build: std.Triple.Arg;
+		env: Array<std.env.Arg>;
+		generate: boolean | { command: tg.Template.Arg };
+		host: std.Triple.Arg;
+		install: { command: tg.Template.Arg };
+		sdkArgs: Array<std.sdk.Arg>;
 		source: tg.Directory;
 		vendor: boolean | { command: tg.Template.Arg };
-		generate: boolean | { command: tg.Template.Arg };
-		install: { command: tg.Template.Arg };
-		env: Array<std.env.Arg>;
-		host: std.Triple;
-		sdkArgs: Array<std.sdk.Arg>;
 	};
 
 	let {
+		build: build_,
+		env: env_,
+		generate,
+		host: host_,
+		install,
+		sdkArgs,
 		source,
 		vendor: vendor_,
-		generate,
-		install,
-		env,
-		host,
-		sdkArgs,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
-			if ("source" in arg) {
+			if (arg.source === undefined) {
 				object.source = arg.source;
 			}
-			if ("vendor" in arg) {
+			if (arg.vendor === undefined) {
 				object.vendor = arg.vendor;
 			}
-			if ("generate" in arg) {
+			if (arg.generate === undefined) {
 				object.generate = arg.generate;
 			}
-			if ("install" in arg) {
+			if (arg.install === undefined) {
 				object.install = arg.install;
 			}
-			if ("host" in arg) {
-				object.host = std.triple(arg.host);
+			if (arg.build === undefined) {
+				object.host = arg.host;
 			}
-			if ("env" in arg) {
-				object.env = await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+			if (arg.host === undefined) {
+				object.host = arg.host;
 			}
-			if ("sdk" in arg && arg.sdk !== undefined) {
-				object.sdkArgs = await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+			if (arg.env === undefined) {
+				object.env = tg.Mutation.is(arg.env)
+					? arg.env
+					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+			}
+			if (arg.sdk !== undefined) {
+				object.sdkArgs = tg.Mutation.is(arg.sdk)
+					? arg.sdk
+					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
 			}
 			return object;
 		}
 	});
-
+	let host = await std.Triple.host(host_);
+	let build = build_ ? std.triple(build_) : host;
 	tg.assert(source, "Must provide a source directory.");
 
-	// let sdk = std.sdk({ host }, sdkArgs ?? []);
-	let sdk = std.sdk();
+	let sdk = std.sdk(std.Triple.rotate({ build, host }), sdkArgs);
 
 	// Check if the build has a vendor dir, then determine whether or not we're going to be vendoring dependencies.
 	let willVendor =
@@ -214,6 +225,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		GOROOT: goArtifact,
 		SSL_CERT_FILE: certFile,
 	});
+	let env = [buildEnvironment, env_];
 
 	let output = await std.build(
 		tg`
@@ -240,7 +252,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 				${generateCommand}
 				${installCommand}
 			`,
-		{ env: buildEnvironment, checksum: "unsafe" },
+		{ host, env, checksum: "unsafe" },
 	);
 
 	tg.assert(tg.Directory.is(output));
@@ -279,7 +291,6 @@ export let vendor = async ({
 }: VendorArgs): Promise<tg.Directory> => {
 	// TODO: Prune down the artifact to just `go.mod` and `go.sum`. Somehow make this work, where this target will hit cache for changed source code using the same dependencies. This is tricky, because Go will only vendor the dependencies that are used by actual source code. Perhaps we could generate a dummy `main.go` that just imports everything in `go.mod`?
 	let pruned = source;
-	let caCertificatesArtifact = std.caCertificates();
 
 	let command = optionalCommand ?? tg`go mod vendor -v`;
 	let result = await std.build(
@@ -299,7 +310,7 @@ export let vendor = async ({
 				go(),
 				{
 					GOROOT: go(),
-					SSL_CERT_DIR: tg`${caCertificatesArtifact}`,
+					SSL_CERT_DIR: std.caCertificates(),
 				},
 			],
 		},

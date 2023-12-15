@@ -191,15 +191,15 @@ export type Arg = {
 
 export let build = async (...args: tg.Args<Arg>) => {
 	type Apply = {
-		buildTriple?: std.Triple;
-		host?: std.Triple;
+		buildTriple?: std.Triple.Arg;
+		host?: std.Triple.Arg;
 		pythonArg?: Array<ToolchainArg>;
 		pyprojectToml: tg.File;
 		source: tg.Directory;
 	};
 	let {
-		buildTriple,
-		host,
+		buildTriple: buildTriple_,
+		host: host_,
 		pythonArg,
 		pyprojectToml: pyprojectToml_,
 		source,
@@ -209,13 +209,15 @@ export let build = async (...args: tg.Args<Arg>) => {
 		} else {
 			let object: tg.MutationMap<Apply> = {};
 			if (arg.build) {
-				object.buildTriple = std.triple(arg.build);
+				object.buildTriple = arg.build;
 			}
 			if (arg.host) {
-				object.host = std.triple(arg.host);
+				object.host = arg.host;
 			}
 			if (arg.python) {
-				object.pythonArg = await tg.Mutation.arrayAppend(arg.python);
+				object.pythonArg = tg.Mutation.is(arg.python)
+					? arg.python
+					: await tg.Mutation.arrayAppend(arg.python);
 			}
 			if (arg.pyprojectToml) {
 				object.pyprojectToml = arg.pyprojectToml;
@@ -226,6 +228,8 @@ export let build = async (...args: tg.Args<Arg>) => {
 			return object;
 		}
 	});
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let buildTriple = buildTriple_ ? std.triple(buildTriple_) : host;
 
 	tg.assert(source, "Must specify a source directory.");
 

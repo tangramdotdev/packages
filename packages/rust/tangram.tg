@@ -178,19 +178,23 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
-			if ("env" in arg) {
-				object.env = await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+			if (arg.env !== undefined) {
+				object.env = tg.Mutation.is(arg.env) ? arg.env : await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
 			}
-			if ("sdk" in arg && arg.sdk !== undefined) {
-				object.sdk = await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+			if (arg.sdk !== undefined) {
+				object.sdk = tg.Mutation.is(arg.sdk)
+					? arg.sdk
+					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
 			}
-			if ("features" in arg) {
-				object.features = await tg.Mutation.arrayAppend(arg.features);
+			if (arg.features !== undefined) {
+				object.features = tg.Mutation.is(arg.features)
+					? arg.features
+					: await tg.Mutation.arrayAppend(arg.features);
 			}
-			if ("source" in arg) {
+			if (arg.source !== undefined) {
 				object.source = arg.source;
 			}
-			if ("proxy" in arg) {
+			if (arg.proxy !== undefined) {
 				object.proxy = arg.proxy;
 			}
 			return object;
@@ -323,17 +327,18 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 export let vendorDependencies = tg.target(async (cargoLock: tg.File) => {
 	type CargoLock = {
 		package: Array<{
-			name: string,
-			version: string,
-			source?: string,
-			dependencies?: Array<String>,
-			checksum?: string,
-		}>
+			name: string;
+			version: string;
+			source?: string;
+			dependencies?: Array<String>;
+			checksum?: string;
+		}>;
 	};
 
-	let cargoLockToml = tg.encoding.toml.decode(await cargoLock.text()) as CargoLock;
-	let downloads = cargoLockToml
-		.package
+	let cargoLockToml = tg.encoding.toml.decode(
+		await cargoLock.text(),
+	) as CargoLock;
+	let downloads = cargoLockToml.package
 		.filter((pkg) => {
 			return pkg.source?.startsWith("registry+") ?? false;
 		})
@@ -361,10 +366,13 @@ export let vendorDependencies = tg.target(async (cargoLock: tg.File) => {
 });
 
 // Given a crate directory downloaded from crates.io and its checksum, strip excess files and generate the .cargo-checksum.json.
-export let vendorPackage = async (pkg: tg.Directory, checksum: tg.Checksum): Promise<tg.Directory> => {
+export let vendorPackage = async (
+	pkg: tg.Directory,
+	checksum: tg.Checksum,
+): Promise<tg.Directory> => {
 	type CargoChecksum = {
-		files: Record<string, string>,
-		package: string
+		files: Record<string, string>;
+		package: string;
 	};
 
 	// Strip out unused entries.
@@ -377,7 +385,7 @@ export let vendorPackage = async (pkg: tg.Directory, checksum: tg.Checksum): Pro
 	// Create an empty .cargo-checksum.json.
 	let cargoChecksum: CargoChecksum = {
 		files: {},
-		package: checksum.replace("sha256:", "")
+		package: checksum.replace("sha256:", ""),
 	};
 
 	// Recurse over the files to create it.
@@ -537,16 +545,13 @@ export let testVendorDependencies = tg.target(async () => {
 	let rustArtifact = rust();
 	let sdk = std.sdk();
 	let executable = std.wrap(vendorScript, {
-		env: std.env(
-			sdk,
-			{
-				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-				CARGO_HTTP_CAINFO: certFile,
-				PATH: tg`${rustArtifact}/bin`,
-				RUST_TARGET: "x86_64-linux-unknown-gnu",
-				SSL_CERT_FILE: certFile,
-			},
-		),
+		env: std.env(sdk, {
+			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+			CARGO_HTTP_CAINFO: certFile,
+			PATH: tg`${rustArtifact}/bin`,
+			RUST_TARGET: "x86_64-linux-unknown-gnu",
+			SSL_CERT_FILE: certFile,
+		}),
 	});
 	let cargoVendored = await std.build({
 		executable,

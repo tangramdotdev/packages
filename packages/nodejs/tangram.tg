@@ -147,25 +147,31 @@ export let build = async (...args: tg.Args<Arg>) => {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
-			if ("env" in arg) {
-				object.env = await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+			if (arg.env !== undefined) {
+				object.env = tg.Mutation.is(arg.env)
+					? arg.env
+					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
 			}
-			if ("sdk" in arg && arg.sdk !== undefined) {
-				object.sdkArg = await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+			if (arg.sdk !== undefined) {
+				object.sdkArg = tg.Mutation.is(arg.sdk)
+					? arg.sdk
+					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
 			}
-			if ("phases" in arg) {
-				object.phases = await tg.Mutation.arrayAppend(arg.phases);
+			if (arg.phases !== undefined) {
+				object.phases = tg.Mutation.is(arg.phases)
+					? arg.phases
+					: await tg.Mutation.arrayAppend(arg.phases);
 			}
-			if ("source" in arg) {
+			if (arg.source !== undefined) {
 				object.source = arg.source;
 			}
-			if ("packageLock" in arg) {
+			if (arg.packageLock !== undefined) {
 				object.packageLock = arg.packageLock;
 			}
-			if ("build" in arg) {
+			if (arg.build !== undefined) {
 				object.build = arg.build;
 			}
-			if ("host" in arg) {
+			if (arg.host !== undefined) {
 				object.host = arg.host;
 			}
 			return object;
