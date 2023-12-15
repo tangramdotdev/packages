@@ -1,6 +1,5 @@
 import * as bootstrap from "../bootstrap.tg";
 import * as std from "../tangram.tg";
-import * as tangram from "tg:tangram" with { path: "../../../../tangram" };
 
 type Arg = {
 	bootstrapMode?: boolean;
@@ -15,7 +14,6 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 
 	// Get the source.
 	let source = await tg.directory({
-		tangram: tangram.source(),
 		"packages/packages/std/Cargo.toml": tg.include("../Cargo.toml"),
 		"packages/packages/std/Cargo.lock": tg.include("../Cargo.lock"),
 		"packages/packages/std/packages/env": tg.include("../packages/env"),
@@ -141,11 +139,17 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 // 	return output;
 // };
 
-export let env = tg.target(async (arg?: Arg) => tg.File.expect(await (await workspace(arg)).get("bin/env")));
+export let env = tg.target(async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/env")),
+);
 
-export let tgld = tg.target(async (arg?: Arg) => tg.File.expect(await (await workspace(arg)).get("bin/tgld")));
+export let tgld = tg.target(async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/tgld")),
+);
 
-export let wrapper = tg.target(async (arg?: Arg) => tg.File.expect(await (await workspace(arg)).get("bin/wrapper")));
+export let wrapper = tg.target(async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/wrapper")),
+);
 
 export let test = tg.target(async () => {
 	// Detect the host triple.

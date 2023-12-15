@@ -1,6 +1,6 @@
 import { env } from "./env.tg";
+import { download } from "./tangram.tg";
 import { Triple } from "./triple.tg";
-import * as downloadUtil from "tg:download_util" with { path: "../download_util" };
 
 import make from "./bootstrap/make.tg";
 export * as make from "./bootstrap/make.tg";
@@ -14,7 +14,7 @@ export type Arg = {
 };
 
 export let bootstrap = tg.target(async (arg?: Arg) => {
-	let { component, host, remote } = await configure(arg);
+	let { component, host } = await configure(arg);
 	let hostString = host.toString();
 	if (tg.System.os(host) === "darwin") {
 		hostString = "universal_darwin";
@@ -202,7 +202,7 @@ export let remoteComponent = tg.target(async (componentName: string) => {
 	// Download and extract the selected tarball.
 	let unpackFormat = ".tar.zst" as const;
 	let contents = tg.Directory.expect(
-		await downloadUtil.download({ url, checksum, unpackFormat }),
+		await download({ url, checksum, unpackFormat }),
 	);
 
 	return contents;
