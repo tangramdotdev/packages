@@ -9,19 +9,20 @@ import proxy from "./sdk/proxy.tg";
 import * as std from "./tangram.tg";
 
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
+// FIXME - the outer function should resolve the args, then pass to an inner target. Improve caching!
 export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	type Apply = {
 		bootstrapMode: Array<boolean>;
-		host: std.Triple;
-		targets: Array<std.Triple>;
+		host: std.Triple.Arg;
+		targets: Array<std.Triple.Arg>;
 		toolchain: sdk.ToolchainKind;
 		linker: sdk.LinkerKind;
 		existingSdk?: std.env.Arg;
 	};
 	let {
 		bootstrapMode: bootstrapMode_,
-		host,
-		targets,
+		host: host_,
+		targets: targets_,
 		toolchain: toolchain_,
 		linker,
 		existingSdk,
@@ -30,45 +31,39 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
-			let targets = [];
-			if ("host" in arg) {
-				object.host = tg.Mutation.is(arg.host)
-					? arg.host
-					: std.triple(arg.host);
+			let targets: Array<std.Triple.Arg> = [];
+			if (arg.host !== undefined) {
+				object.host = arg.host;
 			}
-			if ("toolchain" in arg) {
+			if (arg.toolchain !== undefined) {
 				object.toolchain = arg.toolchain;
 			}
-			if ("linker" in arg) {
+			if (arg.linker !== undefined) {
 				object.linker = arg.linker;
 			}
-			if ("sdk" in arg) {
+			if (arg.sdk !== undefined) {
 				object.existingSdk = arg.sdk;
 			}
-			if ("bootstrapMode" in arg) {
+			if (arg.bootstrapMode !== undefined) {
 				object.bootstrapMode = tg.Mutation.is(arg.bootstrapMode)
 					? arg.bootstrapMode
-					: await tg.Mutation.arrayAppend(arg.bootstrapMode ?? false);
+					: await tg.Mutation.arrayAppend(arg.bootstrapMode);
 			}
-			if ("target" in arg) {
+			if (arg.target !== undefined) {
 				targets.push(std.triple(arg.target));
 			}
-			if ("targets" in arg) {
+			if (arg.targets !== undefined) {
 				if (tg.Mutation.is(arg.targets)) {
 					object.targets = arg.targets;
 				} else {
-					targets = targets.concat((arg.targets ?? []).map(std.triple));
+					targets = targets.concat(arg.targets ?? []);
 				}
 			}
-			object.targets = await tg.Mutation.arrayAppend(targets);
+			object.targets = await tg.Mutation.arrayAppend<std.Triple.Arg>(targets);
 			return object;
 		}
 	});
-
-	// Finalize host.
-	if (!host) {
-		host = await std.Triple.host();
-	}
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
 
 	// If we're in bootstrap mode, stop here and return the bootstrap SDK.
 	let bootstrapMode = (bootstrapMode_ ?? []).some((mode) => mode);
@@ -77,7 +72,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	}
 
 	// Collect target array.
-	if (!targets || targets.length === 0) {
+	let targets = (targets_ ?? []).map(std.triple);
+	if (targets.length === 0) {
 		targets = [host];
 	}
 
@@ -163,13 +159,9 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	} else if (toolchain === "gcc") {
 		let hostToolchain = await canadianCross.toolchain({ host });
 		let proxyEnv = await proxy({ env: hostToolchain });
-		let dependenciesEnv = await dependencies.env({
-			build: host,
-			env: [hostToolchain, proxyEnv],
-			sdk: { bootstrapMode: true },
-		});
+		let dependenciesEnv = await dependencies.env({ build: host, host });
 		return std.env(hostToolchain, proxyEnv, dependenciesEnv, {
-			bootstrapMode: true,
+			bootstrapMode: true, // Prevent the utils from getting added twice, the dependencies already add them.
 		});
 	} else if (toolchain === "llvm") {
 		return tg.unimplemented();
@@ -189,9 +181,15 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 export namespace sdk {
 	export type Arg = ArgObject | undefined;
 
-	export type ArgObject = HostAndTargetsOptions & {
+	export type ArgObject = {
 		/** Provide an env consisting only of bootstrap components and a linker proxy. Will not build additional utils or bootstrap GCC. */
 		bootstrapMode?: boolean;
+		/** The machine this SDK will compile on. */
+		host?: std.Triple.Arg;
+		/** The machine this SDK produces executables for. */
+		target?: std.Triple.Arg;
+		/** A list of machines this SDK can produce executables for. */
+		targets?: Array<std.Triple.Arg>;
 		/** An alternate linker to use. */
 		linker?: LinkerKind;
 		/** An existing SDK to add to. */

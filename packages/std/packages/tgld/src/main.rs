@@ -42,16 +42,10 @@ async fn main() {
 	}
 
 	// Create the tangram instance.
-	let runtime_json = std::env::var_os("TANGRAM_RUNTIME").expect("Failed to get TANGRAM_RUNTIME.");
-	let runtime: tg::Runtime = serde_json::from_str(
-		runtime_json
-			.to_str()
-			.expect("Could not convert TANGRAM_RUNTIME to str"),
-	)
-	.expect("Failed to parse TANGRAM_RUNTIME.");
-	tracing::trace!(?runtime);
-	let addr = runtime.addr;
-	let tg = tg::client::Builder::new(addr).build();
+	let runtime_json = std::env::var("TANGRAM_RUNTIME").expect("Failed to get TANGRAM_RUNTIME.");
+	let tg = tg::client::Builder::with_runtime_json(&runtime_json)
+		.expect("Could not create client.")
+		.build();
 	tg.connect().await.expect("Failed to connect to server.");
 
 	// Analyze the output file.
@@ -70,8 +64,7 @@ async fn main() {
 		let file = tokio::fs::File::open(&options.output_path)
 			.await
 			.expect("Could not open output file");
-		let reader = tokio::io::BufReader::new(file);
-		let blob = tg::Blob::with_reader(&tg, reader)
+		let blob = tg::Blob::with_reader(&tg, file)
 			.await
 			.expect("Could not create blob");
 		let output_artifact = tg::File::builder(blob).executable(true).build();
@@ -284,21 +277,27 @@ async fn create_manifest(
 		};
 
 		// Unrender the interpreter path.
-		let path = unrender(tg, interpreter_path).await;
+		let path = unrender(tg, interpreter_path);
+		let path = template_to_resolved_symlink(tg, path).await;
 		tracing::trace!(?path, "Interpreter path");
 
 		// Unrender the library path.
 		let library_paths = if options.library_paths.is_empty() {
 			None
 		} else {
-			let paths = options.library_paths.iter().map(|path| unrender(tg, path));
+			let paths = options
+				.library_paths
+				.iter()
+				.map(|path| template_to_resolved_symlink(tg, unrender(tg, path)));
 			Some(futures::future::join_all(paths).await)
 		};
 
 		// Unrender the preloads.
 		let mut preloads = None;
 		if let Some(injection_path) = options.injection_path.as_deref() {
-			preloads = Some(vec![unrender(tg, injection_path).await]);
+			preloads = Some(vec![
+				template_to_resolved_symlink(tg, unrender(tg, injection_path)).await,
+			]);
 		}
 
 		// Unrender the additional args.
@@ -330,12 +329,16 @@ async fn create_manifest(
 		let library_paths = options
 			.library_paths
 			.iter()
-			.map(|library_path| unrender(tg, library_path));
+			.map(|library_path| template_to_resolved_symlink(tg, unrender(tg, library_path)));
 		let library_paths = Some(futures::future::join_all(library_paths).await);
 		let mut preloads = None;
 		if let Some(injection_path) = options.injection_path.as_deref() {
 			preloads = Some(
-				futures::future::join_all(std::iter::once(unrender(tg, injection_path))).await,
+				futures::future::join_all(std::iter::once(template_to_resolved_symlink(
+					tg,
+					unrender(tg, injection_path),
+				)))
+				.await,
 			);
 		}
 
@@ -348,13 +351,18 @@ async fn create_manifest(
 	};
 
 	// Create the executable.
-	let executable = manifest::Executable::Path(tg::template::Data {
-		components: vec![tg::template::component::Data::Artifact(ld_output_id)],
-	});
+	let executable = manifest::Executable::Path(
+		template_to_resolved_symlink(tg, async {
+			tg::template::Data {
+				components: vec![tg::template::component::Data::Artifact(ld_output_id)],
+			}
+		})
+		.await,
+	);
 
 	// Create empty values for env and args.
 	let env = None;
-	let args = Vec::new();
+	let args = None;
 
 	// Create the manifest.
 	Manifest {
@@ -565,6 +573,38 @@ fn setup_tracing() {
 			.with(env_layer)
 			.with(format_layer);
 		subscriber.init();
+	}
+}
+
+async fn template_to_resolved_symlink<F>(tg: &dyn tg::Handle, template: F) -> tg::symlink::Data
+where
+	F: futures::Future<Output = tg::template::Data>,
+{
+	match template.await.components.as_slice() {
+		[tg::template::component::Data::Artifact(id)] => tg::symlink::Data {
+			artifact: Some(id.clone()),
+			path: None,
+		},
+		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] =>
+		{
+			// If there is a subpath, return the artifact it points to.
+			let artifact = tg::Artifact::with_id(artifact_id.clone());
+			if let tg::Artifact::Directory(directory) = artifact {
+				let child = directory
+					.entries(tg)
+					.await
+					.expect("Could not get directory entries")
+					.get(s)
+					.expect("Could not retrieve artifact at subpath");
+				tg::symlink::Data {
+					artifact: Some(child.id(tg).await.expect("Could not get child ID")),
+					path: None,
+				}
+			} else {
+				panic!("Expected a directory artifact.")
+			}
+		},
+		_ => panic!("Expected a template with 1 or 2 components."),
 	}
 }
 

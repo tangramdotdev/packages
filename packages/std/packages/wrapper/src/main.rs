@@ -1,9 +1,7 @@
 use itertools::Itertools;
 use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
-use tangram_wrapper::manifest::{
-	self, Env, Executable, Identity, Interpreter, Manifest, MaybeMutation,
-};
+use tangram_wrapper::manifest::{Executable, Identity, Interpreter, Manifest};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 #[allow(clippy::too_many_lines)]
@@ -37,6 +35,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// Shadow render functions with closures that capture the artifacts directories.
 	let render_template =
 		|template: &tg::template::Data| render_template(template, &artifacts_directories);
+	let render_symlink =
+		|symlink: &tg::symlink::Data| render_symlink(symlink, &artifacts_directories);
 
 	// Get arg0 from the invocation.
 	let arg0 = std::env::args_os().next().unwrap();
@@ -45,19 +45,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let interpreter = match &manifest.interpreter {
 		// Handle a normal interpreter.
 		Some(Interpreter::Normal(interpreter)) => {
-			let interpreter_path = PathBuf::from(render_template(&interpreter.path));
-			let interpreter_args = interpreter
-				.args
-				.iter()
-				.map(|_| render_template(&interpreter.path))
-				.collect();
+			let interpreter_path = PathBuf::from(render_symlink(&interpreter.path));
+			let interpreter_args = interpreter.args.iter().map(render_template).collect();
 			Some((interpreter_path, interpreter_args))
 		},
 
 		// Handle an ld-linux interpreter.
 		Some(Interpreter::LdLinux(interpreter)) => {
 			// Render the interpreter path.
-			let interpreter_path = render_template(&interpreter.path);
+			let interpreter_path = render_symlink(&interpreter.path);
 
 			// Canonicalize the interpreter path.
 			let interpreter_path = PathBuf::from(interpreter_path)
@@ -70,22 +66,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			// Inhibit reading from /etc/ld.so.cache.
 			interpreter_args.push("--inhibit-cache".to_owned());
 
-			// Create a library path for the interpreter itself.
-			let interpreter_library_path = tg::template::Data {
-				components: vec![tg::template::component::Data::String(
-					interpreter_path
-						.parent()
-						.expect("Failed to get the interpreter's parent directory.")
-						.to_str()
-						.unwrap()
-						.to_owned(),
-				)],
-			};
-
 			// Render the interpreter library path and the library paths.
-			let library_path = std::iter::once(&interpreter_library_path)
-				.chain(interpreter.library_paths.iter().flatten())
-				.map(render_template)
+			let library_path = interpreter
+				.library_paths
+				.iter()
+				.flatten()
+				.map(render_symlink)
 				.join(":");
 			tracing::trace!(?library_path);
 			interpreter_args.push("--library-path".to_owned());
@@ -93,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 			// Render the preloads.
 			if let Some(preloads) = &interpreter.preloads {
-				let preload = preloads.iter().map(render_template).join(":");
+				let preload = preloads.iter().map(render_symlink).join(":");
 				tracing::trace!(?preload);
 				interpreter_args.push("--preload".to_owned());
 				interpreter_args.push(preload);
@@ -114,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		// Handle an ld-musl interpreter.
 		Some(Interpreter::LdMusl(interpreter)) => {
 			// Render the interpreter path.
-			let interpreter_path = render_template(&interpreter.path);
+			let interpreter_path = render_symlink(&interpreter.path);
 
 			// Canonicalize the interpreter path.
 			let interpreter_path = PathBuf::from(interpreter_path)
@@ -124,22 +110,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			// Initialize the interpreter arguments.
 			let mut interpreter_args = vec![];
 
-			// Create a library path for the interpreter itself.
-			let interpreter_library_path = tg::template::Data {
-				components: vec![tg::template::component::Data::String(
-					interpreter_path
-						.parent()
-						.expect("Failed to get the interpreter's parent directory.")
-						.to_str()
-						.unwrap()
-						.to_owned(),
-				)],
-			};
-
 			// Render the interpreter library path and the library paths.
-			let library_path = std::iter::once(&interpreter_library_path)
-				.chain(interpreter.library_paths.iter().flatten())
-				.map(render_template)
+			let library_path = interpreter
+				.library_paths
+				.iter()
+				.flatten()
+				.map(render_symlink)
 				.join(":");
 			tracing::trace!(?library_path);
 			interpreter_args.push("--library-path".to_owned());
@@ -147,7 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 			// Render the preloads.
 			if let Some(preloads) = &interpreter.preloads {
-				let preload = preloads.iter().map(render_template).join(":");
+				let preload = preloads.iter().map(render_symlink).join(":");
 				tracing::trace!(?preload);
 				interpreter_args.push("--preload".to_owned());
 				interpreter_args.push(preload);
@@ -172,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	// Render the executable.
 	let executable_path = match &manifest.executable {
-		Executable::Path(file) => PathBuf::from(render_template(file)),
+		Executable::Path(file) => PathBuf::from(render_symlink(file)),
 
 		Executable::Content(template) => unsafe {
 			// Render the template.
@@ -265,7 +241,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			} else {
 				std::env::remove_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH");
 			}
-			let library_path = library_paths.iter().map(render_template).join(":");
+			let library_path = library_paths.iter().map(render_symlink).join(":");
 			std::env::set_var("DYLD_LIBRARY_PATH", library_path);
 		}
 
@@ -279,7 +255,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			} else {
 				std::env::remove_var("TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES");
 			}
-			let insert_libraries = preloads.iter().map(render_template).join(":");
+			let insert_libraries = preloads.iter().map(render_symlink).join(":");
 			std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries);
 		}
 	}
@@ -288,9 +264,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	command.arg0(arg0);
 
 	// Add the args.
-	let command_args = manifest.args.iter().map(render_template).collect_vec();
-	tracing::trace!(?command_args);
-	command.args(command_args);
+	if let Some(args) = manifest.args {
+		let command_args = args.iter().map(render_template).collect_vec();
+		tracing::trace!(?command_args);
+		command.args(command_args);
+	}
 
 	// Add the wrapper args.
 	let wrapper_args = std::env::args_os().skip(1).collect_vec();
@@ -306,100 +284,120 @@ fn clear_env() {
 	std::env::vars().for_each(|(key, _)| std::env::remove_var(key));
 }
 
-fn mutate_env(env: &Env, artifacts_directories: &[impl AsRef<std::path::Path>]) {
+fn mutate_env(env: &tg::mutation::Data, artifacts_directories: &[impl AsRef<std::path::Path>]) {
 	match env {
-		Env::Unset => {
+		tg::mutation::Data::Unset => {
 			clear_env();
 		},
-		Env::Map(mutations) => {
-			apply_env_mutations(mutations, artifacts_directories);
+		tg::mutation::Data::Set { value } => {
+			// We expect this to be a map of string to mutation.
+			if let tg::value::Data::Map(mutations) = *value.clone() {
+				apply_env(&mutations, artifacts_directories);
+			} else {
+				tracing::error!(?value, "Unexpected value found for env, expected a map.");
+				std::process::exit(1);
+			}
+		},
+		_ => {
+			tracing::error!(
+				?env,
+				"Unexpected mutation found for env, expected Set or Unset."
+			);
+			std::process::exit(1);
 		},
 	}
 }
 
-fn apply_env_mutations(
-	env: &BTreeMap<String, Vec<MaybeMutation>>,
+fn apply_env(
+	env: &BTreeMap<String, tg::value::Data>,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) {
-	for (name, mutations) in env {
-		tracing::debug!(?name, ?mutations, "Setting env.");
-		for maybe_mutation in mutations {
-			match maybe_mutation {
-				MaybeMutation::Mutation(mutation) => {
-					apply_single_mutation(name, mutation, artifacts_directories);
-				},
-				MaybeMutation::Template(template) => {
-					std::env::set_var(name, render_template(template, artifacts_directories));
-				},
-			};
-		}
+	for (key, value) in env {
+		tracing::debug!(?key, ?value, "Setting env.");
+		apply_value_to_key(key, value, artifacts_directories);
 	}
 }
 
-fn apply_single_mutation(
-	name: &str,
-	mutation: &manifest::Mutation,
+fn apply_value_to_key(
+	key: &str,
+	value: &tg::value::Data,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) {
-	tracing::debug!(?name, ?mutation, "Applying mutation.");
+	if let tg::value::Data::Mutation(mutation) = value {
+		apply_mutation_to_key(key, mutation, artifacts_directories);
+	} else {
+		std::env::set_var(key, render_value(value, artifacts_directories));
+	}
+}
+
+fn apply_mutation_to_key(
+	key: &str,
+	mutation: &tg::mutation::Data,
+	artifacts_directories: &[impl AsRef<std::path::Path>],
+) {
+	tracing::debug!(?key, ?mutation, "Applying mutation.");
 	match mutation {
-		manifest::Mutation::Unset => {
-			std::env::remove_var(name);
+		tg::mutation::Data::Unset => {
+			std::env::remove_var(key);
 		},
-		manifest::Mutation::Set(value) => {
-			let value = render_template(value, artifacts_directories);
-			std::env::set_var(name, value);
+		tg::mutation::Data::Set { value } => {
+			apply_value_to_key(key, value, artifacts_directories);
 		},
-		manifest::Mutation::SetIfUnset(value) => {
-			let value = render_template(value, artifacts_directories);
-			if std::env::var(name).is_err() {
-				std::env::set_var(name, value);
+		tg::mutation::Data::SetIfUnset { value } => {
+			if std::env::var(key).is_err() {
+				apply_value_to_key(key, value, artifacts_directories);
 			}
 		},
-		manifest::Mutation::ArrayPrepend(values) => {
+		tg::mutation::Data::ArrayPrepend { values } => {
 			let values = values
 				.iter()
-				.map(|arg| render_template(arg, artifacts_directories))
+				.map(|arg| render_value(arg, artifacts_directories))
 				.collect_vec();
-			let existing_values = std::env::var(name).ok().filter(|value| !value.is_empty());
+			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
-				std::env::set_var(name, format!("{s}:{existing_values}"));
+				std::env::set_var(key, format!("{s}:{existing_values}"));
 			} else {
-				std::env::set_var(name, values.join(":"));
+				std::env::set_var(key, values.join(":"));
 			}
 		},
-		manifest::Mutation::ArrayAppend(values) => {
+		tg::mutation::Data::ArrayAppend { values } => {
 			let values = values
 				.iter()
-				.map(|arg| render_template(arg, artifacts_directories))
+				.map(|arg| render_value(arg, artifacts_directories))
 				.collect_vec();
-			let existing_values = std::env::var(name).ok().filter(|value| !value.is_empty());
+			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
-				std::env::set_var(name, format!("{existing_values}:{s}"));
+				std::env::set_var(key, format!("{existing_values}:{s}"));
 			} else {
-				std::env::set_var(name, values.join(":"));
+				std::env::set_var(key, values.join(":"));
 			}
 		},
-		manifest::Mutation::TemplatePrepend(template_mutation) => {
-			let value = render_template(&template_mutation.template, artifacts_directories);
-			let existing_value = std::env::var(name).ok().filter(|value| !value.is_empty());
+		tg::mutation::Data::TemplatePrepend {
+			template,
+			separator,
+		} => {
+			let value = render_template(template, artifacts_directories);
+			let existing_value = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_value) = existing_value {
-				let s = template_mutation.separator.clone().unwrap_or(String::new());
-				std::env::set_var(name, format!("{value}{s}{existing_value}"));
+				let s = separator.clone().unwrap_or(String::new());
+				std::env::set_var(key, format!("{value}{s}{existing_value}"));
 			} else {
-				std::env::set_var(name, value);
+				std::env::set_var(key, value);
 			}
 		},
-		manifest::Mutation::TemplateAppend(template_mutation) => {
-			let value = render_template(&template_mutation.template, artifacts_directories);
-			let existing_value = std::env::var(name).ok().filter(|value| !value.is_empty());
+		tg::mutation::Data::TemplateAppend {
+			template,
+			separator,
+		} => {
+			let value = render_template(template, artifacts_directories);
+			let existing_value = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_value) = existing_value {
-				let s = template_mutation.separator.clone().unwrap_or(String::new());
-				std::env::set_var(name, format!("{existing_value}{s}{value}"));
+				let s = separator.clone().unwrap_or(String::new());
+				std::env::set_var(key, format!("{existing_value}{s}{value}"));
 			} else {
-				std::env::set_var(name, value);
+				std::env::set_var(key, value);
 			}
 		},
 	}
@@ -430,6 +428,74 @@ fn render_template(
 				.to_owned(),
 		})
 		.join("")
+}
+
+fn render_symlink(
+	symlink: &tg::symlink::Data,
+	artifacts_directories: &[impl AsRef<std::path::Path>],
+) -> String {
+	let template = template_from_symlink(symlink);
+	render_template(&template, artifacts_directories)
+}
+
+fn render_value(
+	value: &tg::value::Data,
+	artifacts_directories: &[impl AsRef<std::path::Path>],
+) -> String {
+	match value {
+		tg::value::Data::Null(()) => String::new(),
+		tg::value::Data::Bool(value) => {
+			if *value {
+				"true".to_owned()
+			} else {
+				"false".to_owned()
+			}
+		},
+		tg::value::Data::Number(value) => value.to_string(),
+		tg::value::Data::String(value) => value.clone(),
+		tg::value::Data::Directory(_) | tg::value::Data::File(_) | tg::value::Data::Symlink(_) => {
+			let symlink = symlink_from_artifact_value_data(value);
+			render_symlink(&symlink, artifacts_directories)
+		},
+		tg::value::Data::Template(template) => render_template(template, artifacts_directories),
+		_ => {
+			tracing::error!(?value, "Malformed manifest env value.");
+			std::process::exit(1)
+		},
+	}
+}
+
+fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Data {
+	match value {
+		tg::value::Data::Directory(id) => tg::symlink::Data {
+			artifact: Some(id.clone().try_into().unwrap()),
+			path: None,
+		},
+		tg::value::Data::File(id) => tg::symlink::Data {
+			artifact: Some(id.clone().try_into().unwrap()),
+			path: None,
+		},
+		tg::value::Data::Symlink(id) => tg::symlink::Data {
+			artifact: Some(id.clone().try_into().unwrap()),
+			path: None,
+		},
+		_ => {
+			tracing::error!(?value, "Malformed manifest. Expected an artifact value.");
+			std::process::exit(1);
+		},
+	}
+}
+
+fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
+	let mut components = Vec::with_capacity(3);
+	if let Some(artifact) = &symlink.artifact {
+		components.push(tg::template::component::Data::Artifact(artifact.clone()));
+	}
+	if let Some(subpath) = &symlink.path {
+		components.push(tg::template::component::Data::String("/".to_owned()));
+		components.push(tg::template::component::Data::String(subpath.clone()));
+	}
+	tg::template::Data { components }
 }
 
 fn setup_tracing() {
