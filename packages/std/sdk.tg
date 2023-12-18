@@ -228,155 +228,147 @@ export namespace sdk {
 	] as const;
 
 	/** Assert that an env provides an toolchain. */
-	export let assertProvidesToolchain = tg.target(
-		async (arg: ProvidesToolchainArg) => {
-			let { env, target } = arg;
-			// Provides binutils, cc/c++.
-			let targetPrefix = ``;
-			if (target) {
-				let os = std.triple(target).os;
-				if (os !== "darwin") {
-					targetPrefix = `${std.Triple.toString(std.triple(target))}-`;
-				}
+	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
+		let { env, target } = arg;
+		// Provides binutils, cc/c++.
+		let targetPrefix = ``;
+		if (target) {
+			let os = std.triple(target).os;
+			if (os !== "darwin") {
+				targetPrefix = `${std.Triple.toString(std.triple(target))}-`;
 			}
-			await std.env.assertProvides({
-				env,
-				names: requiredComponents.map((name) => `${targetPrefix}${name}`),
-			});
-			return true;
-		},
-	);
+		}
+		await std.env.assertProvides({
+			env,
+			names: requiredComponents.map((name) => `${targetPrefix}${name}`),
+		});
+		return true;
+	};
 
 	/** Determine whether an env provides an toolchain. */
-	export let providesToolchain = tg.target(
-		(arg: ProvidesToolchainArg): Promise<boolean> => {
-			let { env, target } = arg;
-			// Provides binutils, cc/c++.
-			let targetPrefix = ``;
-			if (target) {
-				let os = std.triple(target).os;
-				if (os !== "darwin") {
-					targetPrefix = `${std.Triple.toString(std.triple(target))}-`;
-				}
+	export let providesToolchain = (
+		arg: ProvidesToolchainArg,
+	): Promise<boolean> => {
+		let { env, target } = arg;
+		// Provides binutils, cc/c++.
+		let targetPrefix = ``;
+		if (target) {
+			let os = std.triple(target).os;
+			if (os !== "darwin") {
+				targetPrefix = `${std.Triple.toString(std.triple(target))}-`;
 			}
-			return std.env.provides({
-				env,
-				names: requiredComponents.map((name) => `${targetPrefix}${name}`),
-			});
-		},
-	);
+		}
+		return std.env.provides({
+			env,
+			names: requiredComponents.map((name) => `${targetPrefix}${name}`),
+		});
+	};
 
 	/** Locate the C and C++ compilers, linker, and ld.so from a toolchain. */
-	export let toolchainComponents = tg.target(
-		async (arg?: ToolchainEnvArg): Promise<ToolchainComponents> => {
-			let { env, target: targetTriple } = arg ?? {};
-			// Make sure we have a toolchain.
-			await sdk.assertProvidesToolchain({ env, target: targetTriple });
-			let host = await getHost({ env });
-			let os = host.os;
-			let target = targetTriple ? std.triple(targetTriple) : host;
-			let isCross = !std.Triple.eq(host, target);
-			let targetString = std.Triple.toString(target);
-			let targetPrefix = isCross ? `${targetString}-` : ``;
+	export let toolchainComponents = async (
+		arg?: ToolchainEnvArg,
+	): Promise<ToolchainComponents> => {
+		let { env, target: targetTriple } = arg ?? {};
+		// Make sure we have a toolchain.
+		await sdk.assertProvidesToolchain({ env, target: targetTriple });
+		let host = await getHost({ env });
+		let os = host.os;
+		let target = targetTriple ? std.triple(targetTriple) : host;
+		let isCross = !std.Triple.eq(host, target);
+		let targetString = std.Triple.toString(target);
+		let targetPrefix = isCross ? `${targetString}-` : ``;
 
-			// Set the default flavor for the os at first, to confirm later.
-			let flavor: "gcc" | "llvm" = os === "linux" ? "gcc" : "llvm";
+		// Set the default flavor for the os at first, to confirm later.
+		let flavor: "gcc" | "llvm" = os === "linux" ? "gcc" : "llvm";
 
-			// Determine actual flavor and locate cc and c++.
-			let cc;
-			let cxx;
-			if (flavor === "gcc") {
-				// Check if `gcc` is available.
-				let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
-				if (gcc) {
-					// If so, try to find `g++`.
-					let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
-					tg.assert(
-						gxx,
-						`Found ${targetPrefix}gcc but not ${targetPrefix}g++.`,
-					);
-					cc = gcc;
-					cxx = gxx;
-				} else {
-					// Try to find clang, which needs no prefix.
-					let clang = await std.env.tryWhich({ env, name: "clang" });
-					tg.assert(clang, `Found neither ${targetPrefix}gcc nor clang.`);
-					// If clang is available, try to find clang++.
-					let clangxx = await std.env.tryWhich({ env, name: "clang++" });
-					tg.assert(clangxx, "Found clang but not clang++.");
-					flavor = "llvm";
-					cc = clang;
-					cxx = clangxx;
-				}
+		// Determine actual flavor and locate cc and c++.
+		let cc;
+		let cxx;
+		if (flavor === "gcc") {
+			// Check if `gcc` is available.
+			let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
+			if (gcc) {
+				// If so, try to find `g++`.
+				let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
+				tg.assert(gxx, `Found ${targetPrefix}gcc but not ${targetPrefix}g++.`);
+				cc = gcc;
+				cxx = gxx;
 			} else {
-				// Check if `clang` is available.
+				// Try to find clang, which needs no prefix.
 				let clang = await std.env.tryWhich({ env, name: "clang" });
-				if (clang) {
-					// If so, try to find `clang++`.
-					let clangxx = await std.env.tryWhich({ env, name: "clang++" });
-					tg.assert(clangxx, "Found clang but not clang++.");
-					cc = clang;
-					cxx = clangxx;
-				} else {
-					// Try to find gcc.
-					let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
-					tg.assert(gcc, `Found neither clang nor ${targetPrefix}gcc.`);
-					// If gcc is available, try to find g++.
-					let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
-					tg.assert(
-						gxx,
-						`Found ${targetPrefix}gcc but not ${targetPrefix}g++.`,
-					);
-					flavor = "gcc";
-					cc = gcc;
-					cxx = gxx;
-				}
+				tg.assert(clang, `Found neither ${targetPrefix}gcc nor clang.`);
+				// If clang is available, try to find clang++.
+				let clangxx = await std.env.tryWhich({ env, name: "clang++" });
+				tg.assert(clangxx, "Found clang but not clang++.");
+				flavor = "llvm";
+				cc = clang;
+				cxx = clangxx;
 			}
-
-			let compiler = flavor === "gcc" ? `${targetPrefix}${flavor}` : "clang";
-			let cxxCompiler = flavor === "gcc" ? `${targetPrefix}g++` : `clang++`;
-			let directory = await std.env.whichArtifact({ name: compiler, env });
-			tg.assert(directory, "Unable to find toolchain directory.");
-			cc = await tg.symlink(tg`${directory}/bin/${compiler}`);
-			cxx = await tg.symlink(tg`${directory}/bin/${cxxCompiler}`);
-
-			// Grab the linker from the same directory as the compiler, not just by using `Env.which`.
-			let linkerName =
-				os === "darwin"
-					? "ld"
-					: flavor === "gcc"
-					  ? `${targetPrefix}ld`
-					  : "ld.lld";
-			let foundLd = await directory.tryGet(`bin/${linkerName}`);
-			tg.assert(foundLd, `Unable to find ${linkerName}.`);
-			let ld = await tg.symlink(tg`${directory}/bin/${linkerName}`);
-
-			// Locate the dynamic interpreter.
-			let ldso;
-			let libDir;
-			if (os !== "darwin") {
-				let ldsoPath = isCross ? `${targetString}/lib` : "lib";
-				libDir = tg.Directory.expect(await directory.tryGet(ldsoPath));
-				let foundLdso = await libDir.tryGet(interpreterName(target));
-				tg.assert(foundLdso, "Unable to find ld.so.");
-				ldso = tg.File.expect(foundLdso);
+		} else {
+			// Check if `clang` is available.
+			let clang = await std.env.tryWhich({ env, name: "clang" });
+			if (clang) {
+				// If so, try to find `clang++`.
+				let clangxx = await std.env.tryWhich({ env, name: "clang++" });
+				tg.assert(clangxx, "Found clang but not clang++.");
+				cc = clang;
+				cxx = clangxx;
 			} else {
-				libDir = tg.Directory.expect(await directory.tryGet("lib"));
+				// Try to find gcc.
+				let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
+				tg.assert(gcc, `Found neither clang nor ${targetPrefix}gcc.`);
+				// If gcc is available, try to find g++.
+				let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
+				tg.assert(gxx, `Found ${targetPrefix}gcc but not ${targetPrefix}g++.`);
+				flavor = "gcc";
+				cc = gcc;
+				cxx = gxx;
 			}
+		}
 
-			return {
-				cc,
-				cxx,
-				directory,
-				flavor,
-				host,
-				ld,
-				ldso,
-				libDir,
-				target,
-			};
-		},
-	);
+		let compiler = flavor === "gcc" ? `${targetPrefix}${flavor}` : "clang";
+		let cxxCompiler = flavor === "gcc" ? `${targetPrefix}g++` : `clang++`;
+		let directory = await std.env.whichArtifact({ name: compiler, env });
+		tg.assert(directory, "Unable to find toolchain directory.");
+		cc = await tg.symlink(tg`${directory}/bin/${compiler}`);
+		cxx = await tg.symlink(tg`${directory}/bin/${cxxCompiler}`);
+
+		// Grab the linker from the same directory as the compiler, not just by using `Env.which`.
+		let linkerName =
+			os === "darwin"
+				? "ld"
+				: flavor === "gcc"
+				  ? `${targetPrefix}ld`
+				  : "ld.lld";
+		let foundLd = await directory.tryGet(`bin/${linkerName}`);
+		tg.assert(foundLd, `Unable to find ${linkerName}.`);
+		let ld = await tg.symlink(tg`${directory}/bin/${linkerName}`);
+
+		// Locate the dynamic interpreter.
+		let ldso;
+		let libDir;
+		if (os !== "darwin") {
+			let ldsoPath = isCross ? `${targetString}/lib` : "lib";
+			libDir = tg.Directory.expect(await directory.tryGet(ldsoPath));
+			let foundLdso = await libDir.tryGet(interpreterName(target));
+			tg.assert(foundLdso, "Unable to find ld.so.");
+			ldso = tg.File.expect(foundLdso);
+		} else {
+			libDir = tg.Directory.expect(await directory.tryGet("lib"));
+		}
+
+		return {
+			cc,
+			cxx,
+			directory,
+			flavor,
+			host,
+			ld,
+			ldso,
+			libDir,
+			target,
+		};
+	};
 
 	type ToolchainEnvArg = {
 		/** The environment to ascertain the host from. */
@@ -398,96 +390,92 @@ export namespace sdk {
 	};
 
 	/** Determine whether an SDK supports compiling for a specific target. */
-	export let supportsTarget = tg.target(
-		async (arg: ToolchainEnvArg): Promise<boolean> => {
-			let target = arg.target
-				? std.triple(arg.target)
-				: await std.Triple.host();
-			if (
-				(await std.Triple.host()).os === "darwin" &&
-				std.triple(arg.target).os === "darwin"
-			) {
-				return true;
-			}
+	export let supportsTarget = async (
+		arg: ToolchainEnvArg,
+	): Promise<boolean> => {
+		let target = arg.target ? std.triple(arg.target) : await std.Triple.host();
+		if (
+			(await std.Triple.host()).os === "darwin" &&
+			std.triple(arg.target).os === "darwin"
+		) {
+			return true;
+		}
 
-			let allTargets = await supportedTargets(arg.env);
-			return std.Triple.arrayIncludes(allTargets, target);
-		},
-	);
+		let allTargets = await supportedTargets(arg.env);
+		return std.Triple.arrayIncludes(allTargets, target);
+	};
 
 	/** Retreive the full range of targets an SDK supports. */
-	export let supportedTargets = tg.target(
-		async (sdk: std.env.Arg): Promise<Array<std.Triple>> => {
-			// Collect all available `*cc` binaries.
-			let foundTargets: Set<std.Triple> = new Set();
+	export let supportedTargets = async (
+		sdk: std.env.Arg,
+	): Promise<Array<std.Triple>> => {
+		// Collect all available `*cc` binaries.
+		let foundTargets: Set<std.Triple> = new Set();
 
-			for await (let [name, _] of std.env.binsInPath({
-				env: sdk,
-				predicate: (name) => name.endsWith("-cc"),
-			})) {
-				let tripleString = name.slice(0, -3);
-				foundTargets.add(std.triple(tripleString));
-			}
-			return Array.from(foundTargets);
-		},
-	);
+		for await (let [name, _] of std.env.binsInPath({
+			env: sdk,
+			predicate: (name) => name.endsWith("-cc"),
+		})) {
+			let tripleString = name.slice(0, -3);
+			foundTargets.add(std.triple(tripleString));
+		}
+		return Array.from(foundTargets);
+	};
 
 	/** Obtain the host system for the compilers provided by this env. Throws an error if no compiler is found. */
-	export let getHost = tg.target(
-		async (arg: ToolchainEnvArg): Promise<std.Triple> => {
-			let { env, target } = arg;
+	export let getHost = async (arg: ToolchainEnvArg): Promise<std.Triple> => {
+		let { env, target } = arg;
 
-			let detectedHost = await std.Triple.host();
-			if (detectedHost.os === "darwin") {
-				return detectedHost;
-			}
+		let detectedHost = await std.Triple.host();
+		if (detectedHost.os === "darwin") {
+			return detectedHost;
+		}
 
-			// Locate the C compiler using the CC variable if set, falling back to "cc" in PATH if not.
-			let targetString = target ? std.Triple.toString(std.triple(target)) : "";
-			let ccEnvVar = target ? `CC_${targetString.replace(/-/g, "_")}` : "CC";
-			let cmd = `$${ccEnvVar}`;
-			let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
-			let targetPrefix = target ? `${targetString}-` : "";
-			if (!foundCC) {
-				foundCC = await std.env.tryWhich({ env, name: `${targetPrefix}cc` });
-				cmd = `${targetPrefix}cc`;
-			}
+		// Locate the C compiler using the CC variable if set, falling back to "cc" in PATH if not.
+		let targetString = target ? std.Triple.toString(std.triple(target)) : "";
+		let ccEnvVar = target ? `CC_${targetString.replace(/-/g, "_")}` : "CC";
+		let cmd = `$${ccEnvVar}`;
+		let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
+		let targetPrefix = target ? `${targetString}-` : "";
+		if (!foundCC) {
+			foundCC = await std.env.tryWhich({ env, name: `${targetPrefix}cc` });
+			cmd = `${targetPrefix}cc`;
+		}
 
-			// If we couldn't locate a file or symlink at either CC or `cc` in $PATH, we can't determine the host.
-			if (!foundCC || !(tg.File.is(foundCC) || tg.Symlink.is(foundCC))) {
-				throw new Error(
-					`Could not find a valid file or symlink via CC or looking up ${targetPrefix}cc in PATH`,
-				);
-			}
-
-			if (tg.File.is(foundCC)) {
-				// Inspect the file to see which system it should run on.
-				let metadata = await std.file.executableMetadata(foundCC);
-				if (metadata.format !== "elf" && metadata.format !== "mach-o") {
-					throw new Error(`Unexpected compiler format ${metadata.format}.`);
-				}
-				let detectedArch: tg.System.Arch | undefined;
-				if (metadata.format === "elf") {
-					detectedArch = metadata.arch;
-				} else if (metadata.format === "mach-o") {
-					detectedArch = metadata.arches[0] ?? "aarch64";
-				}
-				let os: tg.System.Os = metadata.format === "elf" ? "linux" : "darwin";
-				let system = tg.system({ arch: detectedArch ?? "x86_64", os });
-				detectedHost = std.triple(system);
-			}
-
-			// Actually run the compiler on the detected system to ask what host triple it's configured for.
-			let output = tg.File.expect(
-				await tg.build(tg`${cmd} -dumpmachine > $OUTPUT`, {
-					env: std.env.object(env),
-					host: std.Triple.system(detectedHost),
-				}),
+		// If we couldn't locate a file or symlink at either CC or `cc` in $PATH, we can't determine the host.
+		if (!foundCC || !(tg.File.is(foundCC) || tg.Symlink.is(foundCC))) {
+			throw new Error(
+				`Could not find a valid file or symlink via CC or looking up ${targetPrefix}cc in PATH`,
 			);
-			let host = (await output.text()).trim();
-			return std.triple(host);
-		},
-	);
+		}
+
+		if (tg.File.is(foundCC)) {
+			// Inspect the file to see which system it should run on.
+			let metadata = await std.file.executableMetadata(foundCC);
+			if (metadata.format !== "elf" && metadata.format !== "mach-o") {
+				throw new Error(`Unexpected compiler format ${metadata.format}.`);
+			}
+			let detectedArch: tg.System.Arch | undefined;
+			if (metadata.format === "elf") {
+				detectedArch = metadata.arch;
+			} else if (metadata.format === "mach-o") {
+				detectedArch = metadata.arches[0] ?? "aarch64";
+			}
+			let os: tg.System.Os = metadata.format === "elf" ? "linux" : "darwin";
+			let system = tg.system({ arch: detectedArch ?? "x86_64", os });
+			detectedHost = std.triple(system);
+		}
+
+		// Actually run the compiler on the detected system to ask what host triple it's configured for.
+		let output = tg.File.expect(
+			await tg.build(tg`${cmd} -dumpmachine > $OUTPUT`, {
+				env: std.env.object(env),
+				host: std.Triple.system(detectedHost),
+			}),
+		);
+		let host = (await output.text()).trim();
+		return std.triple(host);
+	};
 
 	export let resolveHostAndTarget = async (
 		arg?: HostAndTargetsOptions,
@@ -508,7 +496,7 @@ export namespace sdk {
 	};
 
 	/** Compile a program and assert a correct wrapper for the target was produced. If `host == target`, ensure the wrapper execute and produces the expected output. */
-	export let assertProxiedCompiler = tg.target(async (arg: ProxyTestArg) => {
+	export let assertProxiedCompiler = async (arg: ProxyTestArg) => {
 		// Determine requested host and target.
 		let expected = await resolveHostAndTarget({
 			host: arg.host,
@@ -562,7 +550,7 @@ export namespace sdk {
 			tg.assert(outputText === expectedOutput);
 		}
 		return true;
-	});
+	};
 
 	/** Assert the given env provides everything it should for a particuar arg. */
 	export let assertValid = async (env: std.env.Arg, arg?: sdk.Arg) => {
@@ -831,11 +819,11 @@ type RunAllSdksArg = {
 	package: tg.Target;
 };
 
-export let runAllSdks = tg.target(async (arg: RunAllSdksArg) => {
+export let runAllSdks = async (arg: RunAllSdksArg) => {
 	let options = generateAllOptions();
 	for await (let option of options) {
 		let env = await std.env.object(await sdk(option));
 		await tg.build(arg.package, { env });
 	}
 	return true;
-});
+};

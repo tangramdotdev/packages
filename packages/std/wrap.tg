@@ -1045,11 +1045,12 @@ export let defaultShellInterpreter = tg.target(async () => {
 	return bash;
 });
 
-let manifestValueFromMutation = (
-	mutation: tg.Mutation,
-): Promise<wrap.Manifest.Value> => {
-	return tg.unimplemented();
-};
+// FIXME - remove if unused!
+// let manifestValueFromMutation = (
+// 	mutation: tg.Mutation,
+// ): Promise<wrap.Manifest.Value> => {
+// 	return tg.unimplemented();
+// };
 
 let manifestSymlinkFromArg = async (
 	arg: string | tg.Template | tg.Artifact,
@@ -1063,17 +1064,18 @@ let manifestSymlinkFromArg = async (
 	}
 };
 
-let manifestSymlinkFromManifestTemplate = async (
-	template: wrap.Manifest.Template,
-): Promise<wrap.Manifest.Symlink> => {
-	return tg.unimplemented();
-	// let components = template.components;
-	// if (components.length === 1) {
-	// 	// Just an artifact
-	// 	return { path: mponents[0].value };
-	// } else {
-	// }
-};
+// FIXME - remove if unused!
+// let manifestSymlinkFromManifestTemplate = async (
+// 	template: wrap.Manifest.Template,
+// ): Promise<wrap.Manifest.Symlink> => {
+// 	return tg.unimplemented();
+// 	// let components = template.components;
+// 	// if (components.length === 1) {
+// 	// 	// Just an artifact
+// 	// 	return { path: mponents[0].value };
+// 	// } else {
+// 	// }
+// };
 
 let envArgObjectFromManifestEnv = async (
 	env: wrap.Manifest.Env | undefined,
