@@ -1,0 +1,16 @@
+[package]
+name = "tangram-cc"
+version = "0.0.0"
+edition = "2021"
+description = "A Tangram-backed GCC Proxy."
+
+[dependencies]
+futures = "0.3"
+itertools = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tangram_client = { path = "../../../tangram/packages/client" }
+tangram_error = { path = "../../../tangram/packages/error" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
