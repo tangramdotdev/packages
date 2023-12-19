@@ -5,13 +5,19 @@ use std::{
 	path::{Path, PathBuf},
 };
 use tangram_client as tg;
+use tangram_error::Result;
 use tangram_wrapper::manifest::{self, Manifest};
-use tokio::time::error::Elapsed;
 use tracing_subscriber::prelude::*;
 
 #[tokio::main]
-#[allow(clippy::too_many_lines)]
 async fn main() {
+	if let Err(e) = main_inner().await {
+		eprintln!("linker proxy failed: {e}");
+		std::process::exit(1);
+	}
+}
+
+async fn main_inner() -> Result<()> {
 	setup_tracing();
 
 	// Read the options from the environment and arguments.
@@ -150,6 +156,8 @@ async fn main() {
 		serde_json::to_string(&attributes).expect("Failed to serialize the attributes.");
 	xattr::set(&options.output_path, "user.tangram", attributes.as_bytes())
 		.expect("Failed to write the attributes.");
+
+	Ok(())
 }
 
 // The options read from the environment and arguments.
@@ -239,13 +247,13 @@ fn read_options() -> Options {
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
 		// Pass through any arg that isn't a tangram arg.
-		if !arg.starts_with("--tg") {
-			command_args.push(arg.clone());
-		} else {
+		if arg.starts_with("--tg") {
 			// Handle setting combined library paths. Will override the env var if set.
 			if arg == "--tg-combined-library-paths=false" {
 				combine_library_paths = false;
 			}
+		} else {
+			command_args.push(arg.clone());
 		}
 
 		// Handle the output path argument.
@@ -420,12 +428,22 @@ struct AnalyzeOutputFileOutput {
 	/// Is the output file executable?
 	is_executable: bool,
 	/// Does the output file need an interpreter? On macOS, This should always get `Some(None)`. On Linux, None indicates a statically-linked executable, `Some(None)` indicates a dynamically-linked executable with a default ldso path, and `Some(Some(symlink))` indicates the PT_INTERP field has been explicitly set to point at a non-standard path we need to retain.
-	interpreter: Option<Option<String>>,
+	interpreter: InterpreterRequirement,
 	/// Does the output file specify libraries required at runtime?
 	needed_libraries: Vec<String>,
 }
 
-// Analyze the command output file.
+/// The possible interpreter requirements of an output file.
+enum InterpreterRequirement {
+	/// There is no interpreter needed to execute this file.
+	None,
+	/// Use the system default interpreter to execute this file.
+	Default,
+	/// Use the interpreter at the given path to execute this file.
+	Path(String),
+}
+
+/// Analyze the command output file.
 fn analyze_output_file(path: &Path) -> AnalyzeOutputFileOutput {
 	// Read the file.
 	let bytes = std::fs::read(path).unwrap_or_else(|_| {
@@ -593,12 +611,12 @@ async fn unrender(tg: &dyn tg::Handle, string: &str) -> tg::template::Data {
 		.expect("Failed to unrender template")
 		.data(tg)
 		.await
-		.unwrap()
+		.expect("Failed to produce template data from template")
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use super::{analyze_output_file, AnalyzeOutputFileOutput};
 
 	#[test]
 	fn read_output_files() {
@@ -612,8 +630,7 @@ mod tests {
 			.arg("a.out")
 			.status()
 			.unwrap();
-		let AnalyzeOutputFileOutput { is_executable, .. } =
-			super::analyze_output_file("a.out".as_ref());
+		let AnalyzeOutputFileOutput { is_executable, .. } = analyze_output_file("a.out".as_ref());
 		assert!(
 			!is_executable,
 			"Dynamically linked library was detected as an executable."
@@ -630,7 +647,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = super::analyze_output_file("a.out".as_ref());
+		} = analyze_output_file("a.out".as_ref());
 		assert!(
 			is_executable,
 			"Dynamically linked executable was detected as a library."
@@ -653,7 +670,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = super::analyze_output_file("a.out".as_ref());
+		} = analyze_output_file("a.out".as_ref());
 		assert!(
 			is_executable,
 			"Statically linked executable was detected as a library."
@@ -675,7 +692,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = super::analyze_output_file("a.out".as_ref());
+		} = analyze_output_file("a.out".as_ref());
 		assert!(is_executable, "PIE was detected as a library.");
 		assert!(interpreter.is_some(), "PIEs need an interpreter.");
 
@@ -692,7 +709,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = super::analyze_output_file("a.out".as_ref());
+		} = analyze_output_file("a.out".as_ref());
 		assert!(
 			is_executable,
 			"Static-pie linked executable was detected as a library."

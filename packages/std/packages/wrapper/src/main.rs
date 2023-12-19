@@ -1,11 +1,10 @@
 use itertools::Itertools;
-use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf};
+use std::{collections::BTreeMap, ffi::OsStr, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
-use tangram_wrapper::manifest::{Executable, Identity, Interpreter, Manifest};
+use tangram_wrapper::manifest::{DyLdInterpreter, Executable, Identity, Interpreter, Manifest};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
-#[allow(clippy::too_many_lines)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::io::Result<()> {
 	// Setup tracing.
 	setup_tracing();
 
@@ -23,178 +22,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	}
 
 	// Get the artifacts directories.
-	let mut artifacts_directories = vec![];
-	for path in wrapper_path.ancestors().skip(1) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
-			artifacts_directories.push(directory);
-		}
-	}
+	let artifacts_directories = locate_artifacts_directories(&wrapper_path);
 	tracing::trace!(?artifacts_directories);
-
-	// Shadow render functions with closures that capture the artifacts directories.
-	let render_template =
-		|template: &tg::template::Data| render_template(template, &artifacts_directories);
-	let render_symlink =
-		|symlink: &tg::symlink::Data| render_symlink(symlink, &artifacts_directories);
 
 	// Get arg0 from the invocation.
 	let arg0 = std::env::args_os().next().unwrap();
 
 	// Render the interpreter.
-	let interpreter = match &manifest.interpreter {
-		// Handle a normal interpreter.
-		Some(Interpreter::Normal(interpreter)) => {
-			let interpreter_path = PathBuf::from(render_symlink(&interpreter.path));
-			let interpreter_args = interpreter.args.iter().map(render_template).collect();
-			Some((interpreter_path, interpreter_args))
-		},
-
-		// Handle an ld-linux interpreter.
-		Some(Interpreter::LdLinux(interpreter)) => {
-			// Render the interpreter path.
-			let interpreter_path = render_symlink(&interpreter.path);
-
-			// Canonicalize the interpreter path.
-			let interpreter_path = PathBuf::from(interpreter_path)
-				.canonicalize()
-				.expect("Failed to canonicalize the interpreter path.");
-
-			// Initialize the interpreter arguments.
-			let mut interpreter_args = vec![];
-
-			// Inhibit reading from /etc/ld.so.cache.
-			interpreter_args.push("--inhibit-cache".to_owned());
-
-			// Render the interpreter library path and the library paths.
-			let library_path = interpreter
-				.library_paths
-				.iter()
-				.flatten()
-				.map(render_symlink)
-				.join(":");
-			tracing::trace!(?library_path);
-			interpreter_args.push("--library-path".to_owned());
-			interpreter_args.push(library_path);
-
-			// Render the preloads.
-			if let Some(preloads) = &interpreter.preloads {
-				let preload = preloads.iter().map(render_symlink).join(":");
-				tracing::trace!(?preload);
-				interpreter_args.push("--preload".to_owned());
-				interpreter_args.push(preload);
-			}
-
-			// Add the additional interpreter args.
-			if let Some(additional_args) = &interpreter.args {
-				interpreter_args.extend(additional_args.iter().map(render_template));
-			}
-
-			// Forward argv0.
-			interpreter_args.push("--argv0".to_owned());
-			interpreter_args.push(arg0.to_str().unwrap().to_owned());
-
-			Some((interpreter_path, interpreter_args))
-		},
-
-		// Handle an ld-musl interpreter.
-		Some(Interpreter::LdMusl(interpreter)) => {
-			// Render the interpreter path.
-			let interpreter_path = render_symlink(&interpreter.path);
-
-			// Canonicalize the interpreter path.
-			let interpreter_path = PathBuf::from(interpreter_path)
-				.canonicalize()
-				.expect("Failed to canonicalize the interpreter path.");
-
-			// Initialize the interpreter arguments.
-			let mut interpreter_args = vec![];
-
-			// Render the interpreter library path and the library paths.
-			let library_path = interpreter
-				.library_paths
-				.iter()
-				.flatten()
-				.map(render_symlink)
-				.join(":");
-			tracing::trace!(?library_path);
-			interpreter_args.push("--library-path".to_owned());
-			interpreter_args.push(library_path);
-
-			// Render the preloads.
-			if let Some(preloads) = &interpreter.preloads {
-				let preload = preloads.iter().map(render_symlink).join(":");
-				tracing::trace!(?preload);
-				interpreter_args.push("--preload".to_owned());
-				interpreter_args.push(preload);
-			}
-
-			// Add the additional interpreter args.
-			if let Some(additional_args) = &interpreter.args {
-				interpreter_args.extend(additional_args.iter().map(render_template));
-			}
-
-			// Forward argv0.
-			interpreter_args.push("--argv0".to_owned());
-			interpreter_args.push(arg0.to_str().unwrap().to_owned());
-
-			Some((interpreter_path, interpreter_args))
-		},
-
-		// Handle a dyld interpreter or no interpreter.
-		Some(Interpreter::DyLd(_)) | None => None,
-	};
+	let interpreter = handle_interpreter(
+		&manifest.interpreter,
+		arg0.as_os_str(),
+		&artifacts_directories,
+	)?;
 	let interpreter_path = interpreter.as_ref().map(|(path, _)| path).cloned();
 
 	// Render the executable.
 	let executable_path = match &manifest.executable {
-		Executable::Path(file) => PathBuf::from(render_symlink(file)),
-
-		Executable::Content(template) => unsafe {
-			// Render the template.
-			let contents = render_template(template);
-
-			// Create a temporary file.
-			let temp_path = std::ffi::CString::new("/tmp/XXXXXX").unwrap();
-			let fd = libc::mkstemp(temp_path.as_ptr().cast_mut());
-			if fd == -1 {
-				tracing::error!(?temp_path, "Failed to create temporary file.");
-				return Err(std::io::Error::last_os_error().into());
-			}
-
-			// Unlink the temporary file.
-			let ret = libc::unlink(temp_path.as_ptr());
-			if ret == -1 {
-				tracing::error!(?temp_path, "Failed to unlink temporary file.");
-				return Err(std::io::Error::last_os_error().into());
-			}
-
-			// Write the contents to the temporary file.
-			let mut written = 0;
-			while written < contents.len() {
-				let slice = &contents[written..];
-				let ret = libc::write(fd, slice.as_ptr().cast(), slice.len());
-				if ret == -1 {
-					tracing::error!(?temp_path, "Failed to write to temporary file.");
-					return Err(std::io::Error::last_os_error().into());
-				}
-				#[allow(clippy::cast_sign_loss)]
-				let ret: usize = if ret >= 0 { ret as usize } else { 0 };
-				written += ret;
-			}
-
-			// Seek to the beginning of the temporary file.
-			let ret = libc::lseek(fd, 0, libc::SEEK_SET);
-			if ret == -1 {
-				tracing::error!(
-					?temp_path,
-					"Failed to seek to the beginning of the temporary file."
-				);
-				return Err(std::io::Error::last_os_error().into());
-			}
-
-			// Create a path to the temporary file.
-			PathBuf::from(format!("/dev/fd/{fd}"))
+		Executable::Path(file) => PathBuf::from(render_symlink(file, &artifacts_directories)),
+		Executable::Content(template) => {
+			content_executable(&render_template(template, &artifacts_directories))?
 		},
 	};
 
@@ -234,30 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	// Set interpreter environment variables if necessary.
 	if let Some(Interpreter::DyLd(interpreter)) = &manifest.interpreter {
-		// Set `TANGRAM_INJECTION_DYLD_LIBRARY_PATH`.
-		if let Some(library_paths) = &interpreter.library_paths {
-			if let Ok(dyld_library_path) = std::env::var("DYLD_LIBRARY_PATH") {
-				std::env::set_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH", dyld_library_path);
-			} else {
-				std::env::remove_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH");
-			}
-			let library_path = library_paths.iter().map(render_symlink).join(":");
-			std::env::set_var("DYLD_LIBRARY_PATH", library_path);
-		}
-
-		// Set `TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES`.
-		if let Some(preloads) = &interpreter.preloads {
-			if let Ok(dyld_insert_libraries) = std::env::var("DYLD_INSERT_LIBRARIES") {
-				std::env::set_var(
-					"TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES",
-					dyld_insert_libraries,
-				);
-			} else {
-				std::env::remove_var("TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES");
-			}
-			let insert_libraries = preloads.iter().map(render_symlink).join(":");
-			std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries);
-		}
+		set_dyld_environment(interpreter, &artifacts_directories);
 	}
 
 	// Forward arg 0.
@@ -265,7 +88,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	// Add the args.
 	if let Some(args) = manifest.args {
-		let command_args = args.iter().map(render_template).collect_vec();
+		let command_args = args
+			.iter()
+			.map(|arg| render_template(arg, &artifacts_directories))
+			.collect_vec();
 		tracing::trace!(?command_args);
 		command.args(command_args);
 	}
@@ -277,11 +103,232 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	// Exec the command.
 	tracing::trace!(?command);
-	Err(command.exec().into())
+	Err(command.exec())
 }
 
+/// Unset all currently set env vars.
 fn clear_env() {
 	std::env::vars().for_each(|(key, _)| std::env::remove_var(key));
+}
+
+/// Create a temporary file with the given contents and return the path to the file.
+fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
+	let fd = unsafe {
+		// Create a temporary file.
+		let temp_path = std::ffi::CString::new("/tmp/XXXXXX").unwrap();
+		let fd = libc::mkstemp(temp_path.as_ptr().cast_mut());
+		if fd == -1 {
+			tracing::error!(?temp_path, "Failed to create temporary file.");
+			return Err(std::io::Error::last_os_error());
+		}
+
+		// Unlink the temporary file.
+		let ret = libc::unlink(temp_path.as_ptr());
+		if ret == -1 {
+			tracing::error!(?temp_path, "Failed to unlink temporary file.");
+			return Err(std::io::Error::last_os_error());
+		}
+
+		// Write the contents to the temporary file.
+		let mut written = 0;
+		while written < contents.len() {
+			let slice = &contents[written..];
+			let ret = libc::write(fd, slice.as_ptr().cast(), slice.len());
+			if ret == -1 {
+				tracing::error!(?temp_path, "Failed to write to temporary file.");
+				return Err(std::io::Error::last_os_error());
+			}
+			#[allow(clippy::cast_sign_loss)]
+			let ret: usize = if ret >= 0 { ret as usize } else { 0 };
+			written += ret;
+		}
+
+		// Seek to the beginning of the temporary file.
+		let ret = libc::lseek(fd, 0, libc::SEEK_SET);
+		if ret == -1 {
+			tracing::error!(
+				?temp_path,
+				"Failed to seek to the beginning of the temporary file."
+			);
+			return Err(std::io::Error::last_os_error());
+		}
+		fd
+	};
+
+	// Create a path to the temporary file.
+	Ok(PathBuf::from(format!("/dev/fd/{fd}")))
+}
+
+fn locate_artifacts_directories(path: impl AsRef<std::path::Path>) -> Vec<PathBuf> {
+	let mut ret = vec![];
+	for path in path.as_ref().ancestors().skip(1) {
+		let directory = path.join(".tangram/artifacts");
+		if directory.exists() {
+			ret.push(directory);
+		}
+	}
+	ret
+}
+
+fn handle_interpreter(
+	interpreter: &Option<Interpreter>,
+	arg0: &OsStr,
+	artifacts_directories: &[impl AsRef<std::path::Path>],
+) -> Result<Option<(PathBuf, Vec<String>)>, std::io::Error> {
+	let result = match interpreter {
+		// Handle a normal interpreter.
+		Some(Interpreter::Normal(interpreter)) => {
+			let interpreter_path =
+				PathBuf::from(render_symlink(&interpreter.path, artifacts_directories));
+			let interpreter_args = interpreter
+				.args
+				.iter()
+				.map(|arg| render_template(arg, artifacts_directories))
+				.collect();
+			Some((interpreter_path, interpreter_args))
+		},
+
+		// Handle an ld-linux interpreter.
+		Some(Interpreter::LdLinux(interpreter)) => {
+			// Render the interpreter path.
+			let interpreter_path = render_symlink(&interpreter.path, artifacts_directories);
+
+			// Canonicalize the interpreter path.
+			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
+
+			// Initialize the interpreter arguments.
+			let mut interpreter_args = vec![];
+
+			// Inhibit reading from /etc/ld.so.cache.
+			interpreter_args.push("--inhibit-cache".to_owned());
+
+			// Render the interpreter library path and the library paths.
+			let library_path = interpreter
+				.library_paths
+				.iter()
+				.flatten()
+				.map(|path| render_symlink(path, artifacts_directories))
+				.join(":");
+			tracing::trace!(?library_path);
+			interpreter_args.push("--library-path".to_owned());
+			interpreter_args.push(library_path);
+
+			// Render the preloads.
+			if let Some(preloads) = &interpreter.preloads {
+				let preload = preloads
+					.iter()
+					.map(|preload| render_symlink(preload, artifacts_directories))
+					.join(":");
+				tracing::trace!(?preload);
+				interpreter_args.push("--preload".to_owned());
+				interpreter_args.push(preload);
+			}
+
+			// Add the additional interpreter args.
+			if let Some(additional_args) = &interpreter.args {
+				interpreter_args.extend(
+					additional_args
+						.iter()
+						.map(|arg| render_template(arg, artifacts_directories)),
+				);
+			}
+
+			// Forward argv0.
+			interpreter_args.push("--argv0".to_owned());
+			interpreter_args.push(arg0.to_str().unwrap().to_owned());
+
+			Some((interpreter_path, interpreter_args))
+		},
+
+		// Handle an ld-musl interpreter.
+		Some(Interpreter::LdMusl(interpreter)) => {
+			// Render the interpreter path.
+			let interpreter_path = render_symlink(&interpreter.path, artifacts_directories);
+
+			// Canonicalize the interpreter path.
+			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
+
+			// Initialize the interpreter arguments.
+			let mut interpreter_args = vec![];
+
+			// Render the interpreter library path and the library paths.
+			let library_path = interpreter
+				.library_paths
+				.iter()
+				.flatten()
+				.map(|path| render_symlink(path, artifacts_directories))
+				.join(":");
+			tracing::trace!(?library_path);
+			interpreter_args.push("--library-path".to_owned());
+			interpreter_args.push(library_path);
+
+			// Render the preloads.
+			if let Some(preloads) = &interpreter.preloads {
+				let preload = preloads
+					.iter()
+					.map(|preload| render_symlink(preload, artifacts_directories))
+					.join(":");
+				tracing::trace!(?preload);
+				interpreter_args.push("--preload".to_owned());
+				interpreter_args.push(preload);
+			}
+
+			// Add the additional interpreter args.
+			if let Some(additional_args) = &interpreter.args {
+				interpreter_args.extend(
+					additional_args
+						.iter()
+						.map(|arg| render_template(arg, artifacts_directories)),
+				);
+			}
+
+			// Forward argv0.
+			interpreter_args.push("--argv0".to_owned());
+			interpreter_args.push(arg0.to_str().unwrap().to_owned());
+
+			Some((interpreter_path, interpreter_args))
+		},
+
+		// Handle a dyld interpreter or no interpreter.
+		Some(Interpreter::DyLd(_)) | None => None,
+	};
+	Ok(result)
+}
+
+fn set_dyld_environment(
+	interpreter: &DyLdInterpreter,
+	artifacts_directories: &[impl AsRef<std::path::Path>],
+) {
+	// Set `TANGRAM_INJECTION_DYLD_LIBRARY_PATH`.
+	if let Some(library_paths) = &interpreter.library_paths {
+		if let Ok(dyld_library_path) = std::env::var("DYLD_LIBRARY_PATH") {
+			std::env::set_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH", dyld_library_path);
+		} else {
+			std::env::remove_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH");
+		}
+		let library_path = library_paths
+			.iter()
+			.map(|path| render_symlink(path, artifacts_directories))
+			.join(":");
+		std::env::set_var("DYLD_LIBRARY_PATH", library_path);
+	}
+
+	// Set `TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES`.
+	if let Some(preloads) = &interpreter.preloads {
+		if let Ok(dyld_insert_libraries) = std::env::var("DYLD_INSERT_LIBRARIES") {
+			std::env::set_var(
+				"TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES",
+				dyld_insert_libraries,
+			);
+		} else {
+			std::env::remove_var("TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES");
+		}
+		let insert_libraries = preloads
+			.iter()
+			.map(|path| render_symlink(path, artifacts_directories))
+			.join(":");
+		std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries);
+	}
 }
 
 fn mutate_env(env: &tg::mutation::Data, artifacts_directories: &[impl AsRef<std::path::Path>]) {

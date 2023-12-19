@@ -1,18 +1,22 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use num::ToPrimitive;
 use std::{
 	collections::HashSet,
+	hash::{BuildHasher, BuildHasherDefault},
 	io::{Read, Seek, Write},
 	os::unix::fs::PermissionsExt,
 	path::Path,
 };
 use tangram_client as tg;
+use twox_hash::Xxh3Hash64;
 
 /// The magic number used to indicate an executable has a manifest.
 pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
 
 /// The manifest version.
 pub const VERSION: u64 = 0;
+
+/// Set the algorithm used to hash IDs.;
+type Hasher = BuildHasherDefault<Xxh3Hash64>;
 
 /// The Tangram run entrypoint manifest.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -198,10 +202,10 @@ impl Manifest {
 		file.seek(std::io::SeekFrom::Current(-8))?;
 
 		// Read the manifest.
-		file.seek(std::io::SeekFrom::Current(-length.to_i64().unwrap()))?;
+		file.seek(std::io::SeekFrom::Current(-i64::try_from(length).unwrap()))?;
 		let mut manifest = vec![0u8; usize::try_from(length).unwrap()];
 		file.read_exact(&mut manifest)?;
-		file.seek(std::io::SeekFrom::Current(-length.to_i64().unwrap()))?;
+		file.seek(std::io::SeekFrom::Current(-i64::try_from(length).unwrap()))?;
 		tracing::debug!(manifest = ?std::str::from_utf8(&manifest).unwrap());
 
 		// Deserialize the manifest.
@@ -212,7 +216,7 @@ impl Manifest {
 
 	/// Collect the references from a manifest.
 	#[must_use]
-	pub fn references(&self) -> HashSet<tg::artifact::Id, fnv::FnvBuildHasher> {
+	pub fn references(&self) -> HashSet<tg::artifact::Id, Hasher> {
 		let mut references = HashSet::default();
 
 		// Collect the references from the interpreter.
@@ -288,9 +292,9 @@ impl Manifest {
 	}
 }
 
-pub fn collect_references_from_value_data(
+pub fn collect_references_from_value_data<H: BuildHasher>(
 	value: &tg::value::Data,
-	references: &mut HashSet<tg::artifact::Id, fnv::FnvBuildHasher>,
+	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	match value {
 		tg::value::Data::Directory(id) => {
@@ -322,9 +326,9 @@ pub fn collect_references_from_value_data(
 	}
 }
 
-pub fn collect_references_from_artifact_data(
+pub fn collect_references_from_artifact_data<H: BuildHasher>(
 	value: &tg::artifact::Data,
-	references: &mut HashSet<tg::artifact::Id, fnv::FnvBuildHasher>,
+	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	match value {
 		tg::artifact::Data::Directory(data) => {
@@ -343,18 +347,18 @@ pub fn collect_references_from_artifact_data(
 	}
 }
 
-pub fn collect_references_from_symlink_data(
+pub fn collect_references_from_symlink_data<H: BuildHasher>(
 	value: &tg::symlink::Data,
-	references: &mut HashSet<tg::artifact::Id, fnv::FnvBuildHasher>,
+	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	if let Some(id) = &value.artifact {
 		references.insert(id.clone());
 	}
 }
 
-pub fn collect_references_from_template_data(
+pub fn collect_references_from_template_data<H: BuildHasher>(
 	value: &tg::template::Data,
-	references: &mut HashSet<tg::artifact::Id, fnv::FnvBuildHasher>,
+	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	for component in &value.components {
 		if let tg::template::component::Data::Artifact(id) = component {
@@ -363,9 +367,9 @@ pub fn collect_references_from_template_data(
 	}
 }
 
-pub fn collect_references_from_mutation_data(
+pub fn collect_references_from_mutation_data<H: BuildHasher>(
 	value: &tg::mutation::Data,
-	references: &mut HashSet<tg::artifact::Id, fnv::FnvBuildHasher>,
+	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	match value {
 		tg::mutation::Data::Unset => {},

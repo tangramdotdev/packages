@@ -13,9 +13,10 @@ itertools = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tangram_client = { workspace = true }
+tangram_error = { workspace = true }
 tangram_wrapper = { workspace = true }
-tempfile = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+twox-hash = { workspace = true }
 xattr = { workspace = true }
