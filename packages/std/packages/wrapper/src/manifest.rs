@@ -129,7 +129,7 @@ pub struct DyLdInterpreter {
 
 /// An executable launched by the entrypoint.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case", tag = "kind", content = "value")]
+#[serde(rename_all = "camelCase", tag = "kind", content = "value")]
 pub enum Executable {
 	/// A path to an executable file.
 	Path(tg::symlink::Data),

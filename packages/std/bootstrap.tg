@@ -13,7 +13,7 @@ export type Arg = {
 	host?: Triple.Arg;
 };
 
-export let bootstrap = tg.target(async (arg?: Arg) => {
+export let bootstrap = async (arg?: Arg) => {
 	let { component, host } = await configure(arg);
 	let hostString = host.toString();
 	if (tg.System.os(host) === "darwin") {
@@ -35,7 +35,7 @@ export let bootstrap = tg.target(async (arg?: Arg) => {
 		return tg.directory(dirObject);
 	}
 	return remoteComponent(requestedComponentName);
-});
+};
 
 export default bootstrap;
 
@@ -209,9 +209,9 @@ export let remoteComponent = tg.target(async (componentName: string) => {
 });
 
 /** "Polyfill" for `std.Triple.hostSystem` without depending on `std`. */
-export let hostSystem = tg.target(async () => {
+export let hostSystem = async () => {
 	return (await tg.current.env())["TANGRAM_HOST"] as tg.System;
-});
+};
 
 /** Enumerate the full set of components for a host. */
 export let componentList = async (arg?: Arg) => {
@@ -244,7 +244,7 @@ export let componentList = async (arg?: Arg) => {
 };
 
 /** A build environment providing the bootstrap tools, with no proxying supported. */
-export let toolchainEnv = tg.target(async (arg?: Triple.HostArg) => {
+export let toolchainEnv = async (arg?: Triple.HostArg) => {
 	let host = await Triple.host(arg);
 	let os = host.os;
 	let shell = await dash({ host });
@@ -266,12 +266,12 @@ export let toolchainEnv = tg.target(async (arg?: Triple.HostArg) => {
 		};
 	}
 	return env;
-});
+};
 
 /** The `toolchainEnv` combined with a statically-linked `make` binary. */
-export let buildEnv = tg.target(async (arg?: Triple.HostArg) => {
+export let buildEnv = async (arg?: Triple.HostArg) => {
 	return env.object(toolchainEnv(arg), make(arg));
-});
+};
 
 export let test = tg.target(async () => {
 	let host = await hostSystem();

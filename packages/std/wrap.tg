@@ -201,6 +201,8 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 		env: manifestEnv,
 		args: manifestArgs ?? [],
 	};
+	console.log("manifest", manifest);
+	console.log("json", tg.encoding.json.encode(manifest));
 
 	// Get the wrapper executable.
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
@@ -303,14 +305,14 @@ export namespace wrap {
 		interpreter?: Manifest.Interpreter;
 		executable: Manifest.Executable;
 		env?: Manifest.Mutation;
-		args: Array<Manifest.Template>;
+		args?: Array<Manifest.Template>;
 	};
 
 	export let envMapFromManifestEnv = async (
 		mutation: wrap.Manifest.Mutation | undefined,
 	): Promise<wrap.Manifest.EnvMap> => {
 		let ret: wrap.Manifest.EnvMap = {};
-		if (mutation?.kind === "unset" || mutation?.value === undefined) {
+		if (mutation?.kind !== "set") {
 			return ret;
 		}
 		tg.assert(mutation.kind === "set", "Malformed env, expected set or unset.");
@@ -571,17 +573,19 @@ export namespace wrap {
 		export type Mutation =
 			| { kind: "unset" }
 			| { kind: "set"; value: Manifest.Value }
-			| { kind: "set_if_unset"; value: Manifest.Value }
+			| { kind: "setIfUnset"; value: Manifest.Value }
 			| {
-					kind: "template_prepend";
-					value: { template: Manifest.Template; separator?: string };
+					kind: "templatePrepend";
+					template: Manifest.Template;
+					separator?: string;
 			  }
 			| {
-					kind: "template_append";
-					value: { template: Manifest.Template; separator?: string };
+					kind: "templateAppend";
+					template: Manifest.Template;
+					separator?: string;
 			  }
-			| { kind: "array_prepend"; value: Array<Manifest.Value> }
-			| { kind: "array_append"; value: Array<Manifest.Value> };
+			| { kind: "arrayPrepend"; values: Array<Manifest.Value> }
+			| { kind: "arrayAppend"; values: Array<Manifest.Value> };
 
 		// Matches tg::value::Data
 		export type Value =
@@ -1095,7 +1099,7 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(value)}.`,
 		);
 		return {
-			kind: "set_if_unset",
+			kind: "setIfUnset",
 			value: manifestValueFromManifestTemplate(
 				await manifestTemplateFromArg(value),
 			),
@@ -1107,11 +1111,9 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(template)}.`,
 		);
 		return {
-			kind: "template_prepend",
-			value: {
-				template: await manifestTemplateFromArg(template),
-				separator: mutation.inner.separator,
-			},
+			kind: "templatePrepend",
+			template: await manifestTemplateFromArg(template),
+			separator: mutation.inner.separator,
 		};
 	} else if (mutation.inner.kind === "template_append") {
 		let template = mutation.inner.template;
@@ -1120,28 +1122,26 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(template)}.`,
 		);
 		return {
-			kind: "template_append",
-			value: {
-				template: await manifestTemplateFromArg(template),
-				separator: mutation.inner.separator,
-			},
+			kind: "templateAppend",
+			template: await manifestTemplateFromArg(template),
+			separator: mutation.inner.separator,
 		};
 	} else if (mutation.inner.kind === "array_prepend") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
-		let value = await Promise.all(
+		let values = await Promise.all(
 			mutation.inner.values.map(async (arg) =>
 				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
 			),
 		);
-		return { kind: "array_prepend", value };
+		return { kind: "arrayPrepend", values };
 	} else if (mutation.inner.kind === "array_append") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
-		let value = await Promise.all(
+		let values = await Promise.all(
 			mutation.inner.values.map(async (arg) =>
 				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
 			),
 		);
-		return { kind: "array_append", value };
+		return { kind: "arrayAppend", values };
 	} else {
 		return tg.unreachable();
 	}
@@ -1491,27 +1491,27 @@ let mutationFromManifestMutation = (
 		return Promise.resolve(tg.Mutation.unset());
 	} else if (manifestMutation.kind === "set") {
 		return tg.Mutation.set(valueFromManifestValue(manifestMutation.value));
-	} else if (manifestMutation.kind === "set_if_unset") {
+	} else if (manifestMutation.kind === "setIfUnset") {
 		return tg.Mutation.setIfUnset(
 			valueFromManifestValue(manifestMutation.value),
 		);
-	} else if (manifestMutation.kind === "array_prepend") {
+	} else if (manifestMutation.kind === "arrayPrepend") {
 		return tg.Mutation.arrayAppend(
-			manifestMutation.value.map(valueFromManifestValue),
+			manifestMutation.values.map(valueFromManifestValue),
 		);
-	} else if (manifestMutation.kind === "array_append") {
+	} else if (manifestMutation.kind === "arrayAppend") {
 		return tg.Mutation.arrayAppend(
-			manifestMutation.value.map(valueFromManifestValue),
+			manifestMutation.values.map(valueFromManifestValue),
 		);
-	} else if (manifestMutation.kind === "template_prepend") {
+	} else if (manifestMutation.kind === "templatePrepend") {
 		return tg.Mutation.templatePrepend(
-			templateFromManifestTemplate(manifestMutation.value.template),
-			manifestMutation.value.separator,
+			templateFromManifestTemplate(manifestMutation.template),
+			manifestMutation.separator,
 		);
-	} else if (manifestMutation.kind === "template_append") {
+	} else if (manifestMutation.kind === "templateAppend") {
 		return tg.Mutation.templateAppend(
-			templateFromManifestTemplate(manifestMutation.value.template),
-			manifestMutation.value.separator,
+			templateFromManifestTemplate(manifestMutation.template),
+			manifestMutation.separator,
 		);
 	} else {
 		return tg.unreachable();
@@ -1768,16 +1768,16 @@ function* manifestMutationReferences(
 		case "unset":
 			break;
 		case "set":
-		case "set_if_unset":
+		case "setIfUnset":
 			yield* manifestValueReferences(mutation.value);
 			break;
-		case "template_prepend":
-		case "template_append":
-			yield* manifestTemplateReferences(mutation.value.template);
+		case "templatePrepend":
+		case "templateAppend":
+			yield* manifestTemplateReferences(mutation.template);
 			break;
-		case "array_prepend":
-		case "array_append":
-			for (let value of mutation.value) {
+		case "arrayPrepend":
+		case "arrayAppend":
+			for (let value of mutation.values) {
 				yield* manifestValueReferences(value);
 			}
 			break;
