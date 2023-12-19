@@ -9,7 +9,6 @@ import proxy from "./sdk/proxy.tg";
 import * as std from "./tangram.tg";
 
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
-// FIXME - the outer function should resolve the args, then pass to an inner target. Improve caching!
 export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	type Apply = {
 		bootstrapMode: Array<boolean>;

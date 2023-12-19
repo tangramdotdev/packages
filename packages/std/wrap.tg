@@ -98,14 +98,21 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			if (arg.executable !== undefined) {
 				if (
 					tg.Template.is(arg.executable) ||
-					tg.Artifact.is(arg.executable) ||
 					typeof arg.executable === "string"
 				) {
 					object.executable = {
 						kind: "content",
 						value: await manifestTemplateFromArg(arg.executable),
 					};
+					if (!arg.interpreter) {
+						let defaultShell = await defaultShellInterpreter();
+						object.interpreter = await manifestInterpreterFromArg(defaultShell);
+					}
+					if (!arg.identity) {
+						object.identity = "executable";
+					}
 				} else {
+					// FIXME - use the branch logic from the file/symlink case above.
 					object.executable = {
 						kind: "path",
 						value: await manifestSymlinkFromArg(arg.executable),
@@ -295,31 +302,64 @@ export namespace wrap {
 		identity: Identity;
 		interpreter?: Manifest.Interpreter;
 		executable: Manifest.Executable;
-		env?: Manifest.Env;
+		env?: Manifest.Mutation;
 		args: Array<Manifest.Template>;
+	};
+
+	export let envMapFromManifestEnv = async (
+		mutation: wrap.Manifest.Mutation | undefined,
+	): Promise<wrap.Manifest.EnvMap> => {
+		let ret: wrap.Manifest.EnvMap = {};
+		if (mutation?.kind === "unset" || mutation?.value === undefined) {
+			return ret;
+		}
+		tg.assert(mutation.kind === "set", "Malformed env, expected set or unset.");
+		let value = mutation.value;
+		tg.assert(
+			value.kind === "map",
+			"Malformed env, expected a map of mutations.",
+		);
+		for (let [key, val] of Object.entries(value.value)) {
+			if (val.kind === "mutation") {
+				ret[key] = [await mutationFromManifestMutation(val.value)];
+			} else if (val.kind === "array") {
+				ret[key] = await Promise.all(
+					val.value.map(async (val) => {
+						tg.assert(
+							val.kind === "mutation",
+							"Malformed env, expected a mutation.",
+						);
+						return await mutationFromManifestMutation(val.value);
+					}),
+				);
+			} else {
+				throw new Error(
+					"Malformed env, expected a mutation or array of mutations.",
+				);
+			}
+		}
+		return ret;
 	};
 
 	/** Yield the key/value pairs this manifest sets once all mutations are applied. */
 	export async function* envVars(
-		env: wrap.Manifest.Env | undefined,
+		map: wrap.Manifest.EnvMap | undefined,
 	): AsyncGenerator<[string, tg.Template | undefined]> {
-		if (env === undefined || env.kind !== "set") {
+		if (map === undefined) {
 			return;
 		}
-		let map = envMapFromManifestValue(env.value);
 		for (let [key, mutations] of Object.entries(map)) {
-			let result: tg.Template | undefined;
-			for (let mutation of std.flatten([mutations])) {
-				result = await mutateTemplate(result, mutation);
+			let result = undefined;
+			for (let mutation of mutations) {
+				result = await mutateTemplate(undefined, mutation);
 			}
-			let value = result;
-			yield [key, value];
+			yield [key, result];
 		}
 	}
 
 	export let manifestEnvFromArg = async (
 		arg: std.env.Arg | undefined,
-	): Promise<wrap.Manifest.Env | undefined> => {
+	): Promise<wrap.Manifest.Mutation | undefined> => {
 		if (arg === undefined) {
 			return undefined;
 		} else if (tg.Mutation.is(arg)) {
@@ -415,9 +455,9 @@ export namespace wrap {
 	};
 
 	export let mergeEnvs = async (
-		...envs: Array<wrap.Manifest.Env | undefined>
-	): Promise<wrap.Manifest.Env | undefined> => {
-		let result: wrap.Manifest.Env | undefined;
+		...envs: Array<wrap.Manifest.Mutation | undefined>
+	): Promise<wrap.Manifest.Mutation | undefined> => {
+		let result: wrap.Manifest.Mutation | undefined;
 		for (let env of envs) {
 			if (env === undefined) {
 				return undefined;
@@ -430,24 +470,16 @@ export namespace wrap {
 				);
 				let envMap = env.value ?? {};
 				// If the running env is a set mutation, grab the current contents.
-				let map: wrap.Manifest.EnvMap = manifestEnvMapFromManifestValue(
-					result?.kind === "set" ? result?.value : { kind: "map", value: {} },
-				);
+				let map: wrap.Manifest.EnvMap = await envMapFromManifestEnv(result);
 				for await (let [name, val] of Object.entries(envMap)) {
 					if (val === undefined) {
 						// do nothing
 					} else {
-						if (!(val instanceof Array)) {
-							val = [val];
-						}
-						if (!(name in map)) {
-							map[name] = [];
-						}
 						for (let mutation of val) {
 							let lastExistingMutation = map[name]?.at(-1);
 							if (lastExistingMutation) {
 								// Attempt to merge the current mutation with the previous.
-								let mergedMutations = mergeManifestMutations(
+								let mergedMutations = await mergeMutations(
 									lastExistingMutation,
 									mutation.value,
 								);
@@ -569,14 +601,9 @@ export namespace wrap {
 			| { kind: "array"; value: Array<Manifest.Value> }
 			| { kind: "map"; value: { [key: string]: Manifest.Value } };
 
-		// An Env can be any mutation, but only Unset or Set where the value is an EnvMap are valid.
-		export type Env = Manifest.Mutation;
-		// The expected value type in a Manifest.Env of the Set variant.
-		export type EnvMap = { [key: string]: EnvValueArray };
-		export type EnvValueArray = Manifest.Value; // THis should be an array of manifest mutations.
-
-		// The non-serializeable type of an EnvMap.
-		export type EnvObject = Record<string, Array<tg.Mutation<tg.Template.Arg>>>;
+		// The non-serializeable type of a normalized env.
+		export type Env = tg.Mutation<EnvMap>;
+		export type EnvMap = Record<string, Array<tg.Mutation<tg.Template.Arg>>>;
 
 		/** Read a manifest from the end of a file. */
 		export let read = async (
@@ -699,38 +726,6 @@ const MANIFEST_MAGIC_NUMBER: Uint8Array = new Uint8Array([
 ]);
 
 const MANIFEST_VERSION = 0;
-
-let manifestEnvMapFromManifestValue = (
-	value: wrap.Manifest.Value | undefined,
-): wrap.Manifest.EnvMap => {
-	let ret: wrap.Manifest.EnvMap = {};
-	if (value === undefined) {
-		return ret;
-	} else if (value.kind === "map") {
-		for (let [key, val] of Object.entries(value.value)) {
-			if (val.kind === "mutation") {
-				ret[key] = [val.value];
-			} else if (val.kind === "array") {
-				for (let mutation of val.value) {
-					let arr = ret[key] ?? [];
-					tg.assert(
-						mutation.kind === "mutation",
-						"Malformed env, expected mutation.",
-					);
-					arr.push(mutation.value);
-					ret[key] = arr;
-				}
-			} else {
-				throw new Error(
-					"Malformed env, expected either a mutation or array of mutations.",
-				);
-			}
-		}
-		return ret;
-	} else {
-		return tg.unreachable();
-	}
-};
 
 let manifestExecutableFromArg = async (
 	arg: string | tg.Template | tg.File | tg.Symlink | wrap.Manifest.Executable,
@@ -1076,36 +1071,24 @@ let manifestSymlinkFromArg = async (
 };
 
 let envArgObjectFromManifestEnv = async (
-	env: wrap.Manifest.Env | undefined,
+	env: wrap.Manifest.Mutation | undefined,
 ): Promise<std.env.ArgObject> => {
 	let ret: std.env.ArgObject = {};
 	if (env === undefined) {
 		return ret;
 	}
-	let map = envMapFromManifestValue(manifestValueFromManifestMutation(env));
-	for (let [key, value] of Object.entries(map)) {
-		ret[key] = await Promise.all(value.map(mutationFromManifestMutation));
-		if (ret[key] instanceof Array) {
-			let arr = ret[key];
-			tg.assert(arr instanceof Array);
-			tg.assert(arr.length > 0);
-			if (arr.length === 1) {
-				ret[key] = arr[0];
-			}
-		}
-	}
-	return ret;
+	return envMapFromManifestValue(manifestValueFromManifestMutation(env));
 };
 
 /** Given a manifest value, produce the env object it contains. Error if it's malformed. */
-let envMapFromManifestValue = (
+let envMapFromManifestValue = async (
 	value: wrap.Manifest.Value,
-): wrap.Manifest.EnvMap => {
+): Promise<wrap.Manifest.EnvMap> => {
 	if (value.kind === "map") {
 		let ret: wrap.Manifest.EnvMap = {};
 		for (let [key, val] of Object.entries(value.value)) {
 			if (val.kind === "mutation") {
-				ret[key] = [val.value];
+				ret[key] = [await mutationFromManifestMutation(val.value)];
 			} else if (val.kind === "array") {
 				let arr = [];
 				for (let mutation of val.value) {
@@ -1115,7 +1098,7 @@ let envMapFromManifestValue = (
 					);
 					arr.push(mutation.value);
 				}
-				ret[key] = arr;
+				ret[key] = await Promise.all(arr.map(mutationFromManifestMutation));
 			} else {
 				throw new Error(
 					"Malformed env, expected either a mutation or array of mutations.",
@@ -1232,199 +1215,241 @@ let manifestMutationFromMaybeMutation = async (
 	}
 };
 
-let mergeManifestMutations = (
-	a: wrap.Manifest.Mutation,
-	b: wrap.Manifest.Mutation,
-): Array<wrap.Manifest.Mutation> => {
-	if (a.kind === "unset" && b.kind === "unset") {
+let mergeMutations = async (
+	a: tg.Mutation,
+	b: tg.Mutation,
+): Promise<Array<tg.Mutation>> => {
+	if (a.inner.kind === "unset" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.kind === "unset" && b.kind === "set") {
+	} else if (a.inner.kind === "unset" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.kind === "unset" && b.kind === "set_if_unset") {
-		let val = b.value;
-		return [
-			{
-				kind: "set",
-				value: val,
-			},
-		];
-	} else if (a.kind === "unset" && b.kind === "template_prepend") {
-		return [
-			{
-				kind: "set",
-				value: manifestValueFromManifestTemplate(b.value.template),
-			},
-		];
-	} else if (a.kind === "unset" && b.kind === "template_append") {
-		return [
-			{
-				kind: "set",
-				value: manifestValueFromManifestTemplate(b.value.template),
-			},
-		];
-	} else if (a.kind === "unset" && b.kind === "array_append") {
-		return [
-			{
-				kind: "set",
-				value: manifestValueFromManifestTemplate(
-					joinManifestTemplates(
-						":",
-						...b.value.map(manifestTemplateFromManifestValue),
-					),
-				),
-			},
-		];
-	} else if (a.kind === "unset" && b.kind === "array_prepend") {
-		return [
-			{
-				kind: "set",
-				value: manifestValueFromManifestTemplate(
-					joinManifestTemplates(
-						":",
-						...b.value.map(manifestTemplateFromManifestValue),
-					),
-				),
-			},
-		];
-	} else if (a.kind === "set" && b.kind === "unset") {
+	} else if (a.inner.kind === "unset" && b.inner.kind === "set_if_unset") {
+		let val = b.inner.value;
+		return [await tg.Mutation.set<tg.Value>(val)];
+	} else if (a.inner.kind === "unset" && b.inner.kind === "template_prepend") {
+		return [await tg.Mutation.set(b.inner.template)];
+	} else if (a.inner.kind === "unset" && b.inner.kind === "template_append") {
+		return [await tg.Mutation.set(b.inner.template)];
+	} else if (a.inner.kind === "unset" && b.inner.kind === "array_append") {
 		return [b];
-	} else if (a.kind === "set" && b.kind === "set") {
+	} else if (a.inner.kind === "unset" && b.inner.kind === "array_prepend") {
 		return [b];
-	} else if (a.kind === "set" && b.kind === "set_if_unset") {
+	} else if (a.inner.kind === "set" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "set" && b.inner.kind === "set") {
+		return [b];
+	} else if (a.inner.kind === "set" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.kind === "set" && b.kind === "template_prepend") {
-		let setVal = a.value;
-		return [
-			{
-				kind: "set",
-				value: manifestValueFromManifestTemplate(
-					joinManifestTemplates(
-						b.value.separator,
-						manifestTemplateFromManifestValue(setVal),
-						b.value.template,
-					),
-				),
-			},
-		];
-	} else if (a.kind === "set" && b.kind === "template_append") {
-		let setVal = a.value;
-		return [
-			{
-				kind: "set",
-				value: manifestValueFromManifestTemplate(
-					joinManifestTemplates(
-						b.value.separator,
-						b.value.template,
-						manifestTemplateFromManifestValue(setVal),
-					),
-				),
-			},
-		];
-	} else if (a.kind === "set" && b.kind === "array_append") {
-		return [a, b];
-	} else if (a.kind === "set" && b.kind === "array_prepend") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "unset") {
-		return [b];
-	} else if (a.kind === "set_if_unset" && b.kind === "set") {
-		return [b];
-	} else if (a.kind === "set_if_unset" && b.kind === "set_if_unset") {
-		return [a];
-	} else if (a.kind === "set_if_unset" && b.kind === "template_prepend") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "template_append") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "array_append") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "array_prepend") {
-		return [a, b];
-	} else if (a.kind === "template_prepend" && b.kind === "unset") {
-		return [b];
-	} else if (a.kind === "template_prepend" && b.kind === "set") {
-		return [b];
-	} else if (a.kind === "template_prepend" && b.kind === "set_if_unset") {
-		return [a];
-	} else if (a.kind === "template_prepend" && b.kind === "template_prepend") {
-		if (a.value.separator === b.value.separator) {
+	} else if (a.inner.kind === "set" && b.inner.kind === "template_prepend") {
+		let setVal = a.inner.value;
+		if (isTemplateArg(setVal)) {
 			return [
-				{
-					kind: "template_prepend",
-					value: {
-						template: joinManifestTemplates(
-							a.value.separator,
-							b.value.template,
-							a.value.template,
-						),
-						separator: a.value.separator,
-					},
-				},
+				await tg.Mutation.set(
+					tg.Template.join(
+						b.inner.separator,
+						b.inner.template,
+						tg.template(setVal),
+					),
+				),
 			];
 		} else {
 			return [a, b];
 		}
-	} else if (a.kind === "template_prepend" && b.kind === "template_append") {
-		return [a, b];
-	} else if (a.kind === "template_prepend" && b.kind === "array_append") {
-		return [a, b];
-	} else if (a.kind === "template_prepend" && b.kind === "array_prepend") {
-		return [a, b];
-	} else if (a.kind === "template_append" && b.kind === "unset") {
-		return [b];
-	} else if (a.kind === "template_append" && b.kind === "set") {
-		return [b];
-	} else if (a.kind === "template_append" && b.kind === "set_if_unset") {
-		return [a];
-	} else if (a.kind === "template_append" && b.kind === "template_prepend") {
-		return [a, b];
-	} else if (a.kind === "template_append" && b.kind === "template_append") {
-		if (a.value.separator === b.value.separator) {
+	} else if (a.inner.kind === "set" && b.inner.kind === "template_append") {
+		let setVal = a.inner.value;
+		if (isTemplateArg(setVal)) {
 			return [
-				{
-					kind: "template_append",
-					value: {
-						template: joinManifestTemplates(
-							a.value.separator,
-							a.value.template,
-							b.value.template,
-						),
-						separator: a.value.separator,
-					},
-				},
+				await tg.Mutation.set(
+					tg.Template.join(
+						b.inner.separator,
+						tg.template(setVal),
+						b.inner.template,
+					),
+				),
 			];
 		} else {
 			return [a, b];
 		}
-	} else if (a.kind === "template_append" && b.kind === "array_append") {
+	} else if (a.inner.kind === "set" && b.inner.kind === "array_append") {
 		return [a, b];
-	} else if (a.kind === "template_append" && b.kind === "array_prepend") {
+	} else if (a.inner.kind === "set" && b.inner.kind === "array_prepend") {
 		return [a, b];
-	} else if (a.kind === "array_append" && b.kind === "unset") {
+	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.kind === "array_append" && b.kind === "set") {
+	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.kind === "array_append" && b.kind === "set_if_unset") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "set_if_unset"
+	) {
 		return [a];
-	} else if (a.kind === "array_append" && b.kind === "array_append") {
-		return [{ kind: "array_append", value: a.value.concat(b.value) }];
-	} else if (a.kind === "array_append" && b.kind === "array_prepend") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "template_prepend"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_append" && b.kind === "template_append") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "template_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_append" && b.kind === "template_prepend") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "array_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_prepend" && b.kind === "unset") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "template_prepend" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.kind === "array_prepend" && b.kind === "set") {
+	} else if (a.inner.kind === "template_prepend" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.kind === "array_prepend" && b.kind === "set_if_unset") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "set_if_unset"
+	) {
 		return [a];
-	} else if (a.kind === "array_prepend" && b.kind === "array_append") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "template_prepend"
+	) {
+		if (a.inner.separator === b.inner.separator) {
+			return [
+				await tg.Mutation.templatePrepend(
+					tg.Template.join(
+						a.inner.separator,
+						b.inner.template,
+						a.inner.template,
+					),
+				),
+			];
+		} else {
+			return [a, b];
+		}
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "template_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_prepend" && b.kind === "array_prepend") {
-		return [{ kind: "array_prepend", value: b.value.concat(a.value) }];
-	} else if (a.kind === "array_prepend" && b.kind === "template_append") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "array_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_prepend" && b.kind === "template_prepend") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "template_append" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "template_append" && b.inner.kind === "set") {
+		return [b];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "set_if_unset"
+	) {
+		return [a];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "template_prepend"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "template_append"
+	) {
+		if (a.inner.separator === b.inner.separator) {
+			return [
+				await tg.Mutation.templateAppend(
+					tg.Template.join(
+						a.inner.separator,
+						a.inner.template,
+						b.inner.template,
+					),
+				),
+			];
+		} else {
+			return [a, b];
+		}
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "array_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "array_append" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "array_append" && b.inner.kind === "set") {
+		return [b];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "set_if_unset"
+	) {
+		return [a];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "array_append"
+	) {
+		return [
+			await tg.Mutation.arrayAppend<tg.Value>(
+				a.inner.values.concat(b.inner.values),
+			),
+		];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "template_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "template_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "array_prepend" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "array_prepend" && b.inner.kind === "set") {
+		return [b];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "set_if_unset"
+	) {
+		return [a];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "array_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [
+			await tg.Mutation.arrayPrepend<tg.Value>(
+				b.inner.values.concat(a.inner.values),
+			),
+		];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "template_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "template_prepend"
+	) {
 		return [a, b];
 	} else {
 		return tg.unreachable();
@@ -1440,65 +1465,37 @@ let manifestValueFromManifestTemplate = (
 	};
 };
 
-let manifestTemplateFromManifestValue = (
-	value: wrap.Manifest.Value,
-): wrap.Manifest.Template => {
-	if (value.kind === "template") {
-		return value.value;
-	} else if (value.kind === "string") {
-		return {
-			components: [{ kind: "string", value: value.value }],
-		};
-	} else if (
-		value.kind === "directory" ||
-		value.kind === "file" ||
-		value.kind === "symlink"
-	) {
-		return {
-			components: [{ kind: "artifact", value: value.value }],
-		};
-	} else {
-		throw new Error(
-			"Cannot convert value to template: " + JSON.stringify(value),
-		);
-	}
-};
-
 let mutateTemplate = async (
-	t: tg.Template | undefined,
-	mutation: wrap.Manifest.Mutation,
+	template: tg.Template | undefined,
+	mutation: tg.Mutation<tg.Template.Arg>,
 ): Promise<tg.Template | undefined> => {
-	let template = await manifestTemplateFromArg(t);
-	if (mutation.kind === "array_append" || mutation.kind === "array_prepend") {
+	if (
+		mutation.inner.kind === "array_append" ||
+		mutation.inner.kind === "array_prepend"
+	) {
 		throw new Error("Cannot apply an array mutation to a template");
-	} else if (mutation.kind === "template_append") {
-		return templateFromManifestTemplate(
-			joinManifestTemplates(
-				mutation.value.separator,
-				template,
-				mutation.value.template,
-			),
+	} else if (mutation.inner.kind === "template_append") {
+		return tg.Template.join(
+			mutation.inner.separator,
+			template,
+			mutation.inner.template,
 		);
-	} else if (mutation.kind === "template_prepend") {
-		return templateFromManifestTemplate(
-			joinManifestTemplates(
-				mutation.value.separator,
-				mutation.value.template,
-				template,
-			),
+	} else if (mutation.inner.kind === "template_prepend") {
+		return tg.Template.join(
+			mutation.inner.separator,
+			mutation.inner.template,
+			template,
 		);
-	} else if (mutation.kind === "set") {
-		return templateFromManifestTemplate(
-			manifestTemplateFromManifestValue(mutation.value),
-		);
-	} else if (mutation.kind === "set_if_unset") {
+	} else if (mutation.inner.kind === "set") {
+		tg.assert(isTemplateArg(mutation.inner.value));
+		return tg.template(mutation.inner.value);
+	} else if (mutation.inner.kind === "set_if_unset") {
 		if (template?.components.length === 0) {
-			return templateFromManifestTemplate(
-				manifestTemplateFromManifestValue(mutation.value),
-			);
+			tg.assert(isTemplateArg(mutation.inner.value));
+			return tg.template(mutation.inner.value);
 		}
-	} else if (mutation.kind === "unset") {
-		return tg``;
+	} else if (mutation.inner.kind === "unset") {
+		return tg.template();
 	}
 	return tg.unreachable();
 };
@@ -1643,7 +1640,7 @@ let valueFromManifestValue = async (
 export async function* manifestEnvVars(
 	manifest: wrap.Manifest,
 ): AsyncGenerator<[string, tg.Template | undefined]> {
-	yield* wrap.envVars(manifest.env);
+	yield* wrap.envVars(await wrap.envMapFromManifestEnv(manifest.env));
 }
 
 let manifestTemplateFromArg = async (
@@ -1665,6 +1662,10 @@ let manifestTemplateFromArg = async (
 	return {
 		components,
 	};
+};
+
+let isTemplateArg = (arg: unknown): arg is tg.Template.Arg => {
+	return typeof arg === "string" || tg.Artifact.is(arg) || tg.Template.is(arg);
 };
 
 let isManifestTemplate = (
@@ -1689,90 +1690,6 @@ let isManifestTemplateComponent = (
 		"kind" in arg &&
 		(arg.kind === "string" || arg.kind === "artifact")
 	);
-};
-
-let joinManifestTemplates = (
-	separator: string | undefined,
-	...templates: Array<wrap.Manifest.Template>
-): wrap.Manifest.Template => {
-	// Join the templates.
-	templates = templates.filter((template) => template !== undefined);
-	let components: Array<wrap.Manifest.Template.Component> = [];
-	for (let i = 0; i < templates.length; i++) {
-		if (separator && i > 0 && components.length > 0) {
-			components.push({ kind: "string", value: separator });
-		}
-		let template = templates[i];
-		tg.assert(template);
-		components.push(...template.components);
-	}
-
-	// Normalize the components.
-	let normalizedComponents: Array<wrap.Manifest.Template.Component> = [];
-	for (let component of components) {
-		let lastComponent = normalizedComponents.at(-1);
-		if (component.kind === "string" && component.value === "") {
-			// Ignore empty string components.
-			continue;
-		} else if (
-			lastComponent?.kind === "string" &&
-			component.kind === "string"
-		) {
-			// Merge adjacent string components.
-			normalizedComponents.splice(-1, 1, {
-				kind: "string",
-				value: lastComponent.value + component.value,
-			});
-		} else {
-			normalizedComponents.push(component);
-		}
-	}
-
-	// If the final character is a string matching the separator, chop it.
-	let lastComponent = normalizedComponents.at(-1);
-	if (
-		lastComponent?.kind === "string" &&
-		separator &&
-		lastComponent.value.endsWith(separator)
-	) {
-		normalizedComponents.splice(-1, 1, {
-			kind: "string",
-			value: lastComponent.value.slice(0, -separator.length),
-		});
-	}
-
-	return { components: normalizedComponents };
-};
-
-let manifestTemplatesEqual = (
-	a: wrap.Manifest.Template,
-	b: wrap.Manifest.Template,
-): boolean => {
-	if (a.components.length !== b.components.length) {
-		return false;
-	}
-	for (let i = 0; i < a.components.length; i++) {
-		let aComponent = a.components[i];
-		tg.assert(aComponent !== undefined);
-		let bComponent = b.components[i];
-		tg.assert(bComponent !== undefined);
-		if (aComponent.kind !== bComponent.kind) {
-			return false;
-		}
-		if (aComponent.kind === "string" && bComponent.kind === "string") {
-			if (aComponent.value !== bComponent.value) {
-				return false;
-			}
-		} else if (
-			aComponent.kind === "artifact" &&
-			bComponent.kind === "artifact"
-		) {
-			if (aComponent.value !== bComponent.value) {
-				return false;
-			}
-		}
-	}
-	return true;
 };
 
 /** Yield the artifacts referenced by a manifest. */
@@ -1908,12 +1825,17 @@ function* manifestTemplateReferences(
 	}
 }
 
-/** Yield the artifacts referenes by a value. */
+/** Yield the artifacts referenced by a value. */
 function* manifestValueReferences(
 	value: wrap.Manifest.Value,
 ): Generator<tg.Artifact> {
-	// FIXME - dir/file/symlink!
-	if (value.kind === "template") {
+	if (value.kind === "directory") {
+		yield tg.Artifact.withId(value.value);
+	} else if (value.kind === "file") {
+		yield tg.Artifact.withId(value.value);
+	} else if (value.kind === "symlink") {
+		yield tg.Artifact.withId(value.value);
+	} else if (value.kind === "template") {
 		yield* manifestTemplateReferences(value.value);
 	} else if (value.kind === "mutation") {
 		yield* manifestMutationReferences(value.value);
@@ -1925,8 +1847,6 @@ function* manifestValueReferences(
 		for (let v of Object.values(value.value)) {
 			yield* manifestValueReferences(v);
 		}
-	} else {
-		// Nothing!
 	}
 }
 
