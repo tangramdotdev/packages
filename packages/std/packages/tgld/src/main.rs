@@ -234,7 +234,7 @@ fn read_options() -> Options {
 	// Get the option to disable combining library paths. Enabled by default.
 	let mut combine_library_paths = std::env::var("TANGRAM_LINKER_COMBINED_LIBRARY_PATH")
 		.ok()
-		.map_or(true, |s| s == "1");
+		.map_or(false, |s| s == "1");
 
 	// Get an iterator over the arguments.
 	let mut args = std::env::args();
@@ -247,8 +247,8 @@ fn read_options() -> Options {
 		// Pass through any arg that isn't a tangram arg.
 		if arg.starts_with("--tg") {
 			// Handle setting combined library paths. Will override the env var if set.
-			if arg == "--tg-combined-library-paths=false" {
-				combine_library_paths = false;
+			if arg == "--tg-combined-library-paths=true" {
+				combine_library_paths = true;
 			}
 		} else {
 			command_args.push(arg.clone());
@@ -559,9 +559,21 @@ async fn create_combined_library_directory(
 	let mut found_libs: BTreeMap<String, tg::Artifact> = BTreeMap::default();
 
 	for path in library_paths {
-		if let Some(artifact) = &path.artifact {
-			let directory = tg::Artifact::with_id(artifact.clone());
-			if let tg::Artifact::Directory(directory) = directory {
+		let base_artifact = if let Some(artifact) = &path.artifact {
+			artifact.clone()
+		} else {
+			continue;
+		};
+		let base_artifact = tg::artifact::Artifact::with_id(base_artifact);
+		if let tg::artifact::Artifact::Directory(ref base_directory) = base_artifact {
+			let mut target_artifact = base_artifact.clone();
+			if let Some(path) = &path.path {
+				let path = tg::Path::from_str(path.strip_prefix('/').unwrap())?.normalize();
+				if let Ok(target) = base_directory.get(tg, &path).await {
+					target_artifact = target.clone();
+				}
+			}
+			if let tg::Artifact::Directory(directory) = target_artifact {
 				let entries = directory.entries(tg).await?;
 				for library_name in needed_libraries {
 					let library_name = library_name.as_ref();
@@ -621,10 +633,9 @@ where
 		{
 			// If there is a subpath, return the artifact it points to.
 			let artifact = tg::Artifact::with_id(artifact_id.clone());
-			let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?;
+			let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?.normalize();
 			if let tg::Artifact::Directory(directory) = artifact {
 				if let Ok(child) = directory.get(tg, &path).await {
-					tracing::debug!(?directory, ?path, ?child, "Found");
 					Ok(tg::symlink::Data {
 						artifact: Some(child.id(tg).await?),
 						path: None,
