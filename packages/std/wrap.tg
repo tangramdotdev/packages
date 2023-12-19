@@ -51,7 +51,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			// Try to read the manifest from it.
 			let existingManifest = await wrap.Manifest.read(file);
 			if (existingManifest !== undefined) {
-				let env_ = await envArgObjectFromManifestEnv(existingManifest.env);
+				let env_ = await wrap.envMapFromManifestEnv(existingManifest.env);
 				let env = tg.Mutation.is(env_)
 					? env_
 					: await tg.Mutation.arrayAppend(env_);
@@ -314,31 +314,7 @@ export namespace wrap {
 			return ret;
 		}
 		tg.assert(mutation.kind === "set", "Malformed env, expected set or unset.");
-		let value = mutation.value;
-		tg.assert(
-			value.kind === "map",
-			"Malformed env, expected a map of mutations.",
-		);
-		for (let [key, val] of Object.entries(value.value)) {
-			if (val.kind === "mutation") {
-				ret[key] = [await mutationFromManifestMutation(val.value)];
-			} else if (val.kind === "array") {
-				ret[key] = await Promise.all(
-					val.value.map(async (val) => {
-						tg.assert(
-							val.kind === "mutation",
-							"Malformed env, expected a mutation.",
-						);
-						return await mutationFromManifestMutation(val.value);
-					}),
-				);
-			} else {
-				throw new Error(
-					"Malformed env, expected a mutation or array of mutations.",
-				);
-			}
-		}
-		return ret;
+		return envMapFromMapValue(mutation.value);
 	};
 
 	/** Yield the key/value pairs this manifest sets once all mutations are applied. */
@@ -350,8 +326,10 @@ export namespace wrap {
 		}
 		for (let [key, mutations] of Object.entries(map)) {
 			let result = undefined;
-			for (let mutation of mutations) {
-				result = await mutateTemplate(undefined, mutation);
+			for (let mutation of mutations ?? []) {
+				if (mutation) {
+					result = await mutateTemplate(undefined, mutation);
+				}
 			}
 			yield [key, result];
 		}
@@ -432,17 +410,15 @@ export namespace wrap {
 			return mergeEnvs(...(await Promise.all(arg.map(manifestEnvFromArg))));
 		} else if (typeof arg === "object") {
 			// Handle an object.
-			let ret = Object.fromEntries(
+			let ret: wrap.Manifest.EnvMap = Object.fromEntries(
 				await Promise.all(
 					Object.entries(arg).map<
-						Promise<[string, Array<wrap.Manifest.Mutation>]>
+						Promise<[string, Array<tg.Mutation<tg.Template.Arg>>]>
 					>(async ([key, mutationArgs]) => {
 						let mutations = tg.Mutation.is(mutationArgs)
-							? [await manifestMutationFromMutation(mutationArgs)]
+							? [mutationArgs]
 							: await Promise.all(
-									std
-										.flatten([mutationArgs])
-										.map(manifestMutationFromMaybeMutation),
+									std.flatten([mutationArgs]).map(normalizeEnvVarValue),
 							  );
 						return [key, mutations];
 					}),
@@ -468,20 +444,33 @@ export namespace wrap {
 					env?.kind === "set",
 					"Malformed env, expected set mutation but recieved " + env,
 				);
-				let envMap = env.value ?? {};
+				tg.assert(
+					env.value.kind === "map",
+					"Malformed env, expected a map but recieved " + env.value,
+				);
+				let envMap: wrap.Manifest.EnvMap = await envMapFromMapValue(env.value);
 				// If the running env is a set mutation, grab the current contents.
 				let map: wrap.Manifest.EnvMap = await envMapFromManifestEnv(result);
 				for await (let [name, val] of Object.entries(envMap)) {
+					console.log("name", name, "val", val);
 					if (val === undefined) {
 						// do nothing
 					} else {
+						if (!(val instanceof Array)) {
+							val = [val];
+						}
+						if (!(name in map)) {
+							map[name] = [];
+						}
 						for (let mutation of val) {
+							console.log("map at name", name, map[name]);
 							let lastExistingMutation = map[name]?.at(-1);
+							console.log("lastExistingMutation", lastExistingMutation);
 							if (lastExistingMutation) {
 								// Attempt to merge the current mutation with the previous.
 								let mergedMutations = await mergeMutations(
 									lastExistingMutation,
-									mutation.value,
+									mutation,
 								);
 
 								// Replace the last mutation with the merged mutations.
@@ -603,7 +592,10 @@ export namespace wrap {
 
 		// The non-serializeable type of a normalized env.
 		export type Env = tg.Mutation<EnvMap>;
-		export type EnvMap = Record<string, Array<tg.Mutation<tg.Template.Arg>>>;
+		export type EnvMap = Record<
+			string,
+			Array<tg.Mutation<tg.Template.Arg>> | undefined
+		>;
 
 		/** Read a manifest from the end of a file. */
 		export let read = async (
@@ -1070,52 +1062,43 @@ let manifestSymlinkFromArg = async (
 	}
 };
 
-let envArgObjectFromManifestEnv = async (
-	env: wrap.Manifest.Mutation | undefined,
-): Promise<std.env.ArgObject> => {
-	let ret: std.env.ArgObject = {};
-	if (env === undefined) {
-		return ret;
-	}
-	return envMapFromManifestValue(manifestValueFromManifestMutation(env));
-};
+// FIXME remove or restore
+// /** Given a manifest value, produce the env object it contains. Error if it's malformed. */
+// let envMapFromManifestValue = async (
+// 	value: wrap.Manifest.Value,
+// ): Promise<wrap.Manifest.EnvMap> => {
+// 	if (value.kind === "map") {
+// 		let ret: wrap.Manifest.EnvMap = {};
+// 		for (let [key, val] of Object.entries(value.value)) {
+// 			if (val.kind === "mutation") {
+// 				ret[key] = [await mutationFromManifestMutation(val.value)];
+// 			} else if (val.kind === "array") {
+// 				let arr = [];
+// 				for (let mutation of val.value) {
+// 					tg.assert(
+// 						mutation.kind === "mutation",
+// 						"Malformed env, expected mutation but received " + mutation,
+// 					);
+// 					arr.push(mutation.value);
+// 				}
+// 				ret[key] = await Promise.all(arr.map(mutationFromManifestMutation));
+// 			} else {
+// 				throw new Error(
+// 					"Malformed env, expected either a mutation or array of mutations.",
+// 				);
+// 			}
+// 		}
+// 		return ret;
+// 	} else {
+// 		throw new Error("Malformed env, expected a map.");
+// 	}
+// };
 
-/** Given a manifest value, produce the env object it contains. Error if it's malformed. */
-let envMapFromManifestValue = async (
-	value: wrap.Manifest.Value,
-): Promise<wrap.Manifest.EnvMap> => {
-	if (value.kind === "map") {
-		let ret: wrap.Manifest.EnvMap = {};
-		for (let [key, val] of Object.entries(value.value)) {
-			if (val.kind === "mutation") {
-				ret[key] = [await mutationFromManifestMutation(val.value)];
-			} else if (val.kind === "array") {
-				let arr = [];
-				for (let mutation of val.value) {
-					tg.assert(
-						mutation.kind === "mutation",
-						"Malformed env, expected mutation but received " + mutation,
-					);
-					arr.push(mutation.value);
-				}
-				ret[key] = await Promise.all(arr.map(mutationFromManifestMutation));
-			} else {
-				throw new Error(
-					"Malformed env, expected either a mutation or array of mutations.",
-				);
-			}
-		}
-		return ret;
-	} else {
-		throw new Error("Malformed env, expected a map.");
-	}
-};
-
-let manifestValueFromManifestMutation = (
-	mutation: wrap.Manifest.Mutation,
-): wrap.Manifest.Value => {
-	return { kind: "mutation", value: mutation };
-};
+// let manifestValueFromManifestMutation = (
+// 	mutation: wrap.Manifest.Mutation,
+// ): wrap.Manifest.Value => {
+// 	return { kind: "mutation", value: mutation };
+// };
 
 let valueIsTemplateLike = (
 	value: tg.Value,
@@ -1456,6 +1439,16 @@ let mergeMutations = async (
 	}
 };
 
+let normalizeEnvVarValue = async (value: tg.Value): Promise<tg.Mutation> => {
+	if (tg.Mutation.is(value)) {
+		return value;
+	} else if (isTemplateArg(value)) {
+		return tg.Mutation.set(tg.template(value));
+	} else {
+		throw new Error("Unexpected value type: " + value);
+	}
+};
+
 let manifestValueFromManifestTemplate = (
 	template: wrap.Manifest.Template,
 ): wrap.Manifest.Value => {
@@ -1662,6 +1655,35 @@ let manifestTemplateFromArg = async (
 	return {
 		components,
 	};
+};
+
+let envMapFromMapValue = async (
+	value: wrap.Manifest.Value,
+): Promise<wrap.Manifest.EnvMap> => {
+	tg.assert(
+		value.kind === "map",
+		"Malformed env, expected a map of mutations.",
+	);
+	let ret: wrap.Manifest.EnvMap = {};
+	for (let [key, val] of Object.entries(value.value)) {
+		console.log("key", key, "val", val);
+		if (val.kind === "mutation") {
+			ret[key] = [await mutationFromManifestMutation(val.value)];
+		} else if (val.kind === "array") {
+			ret[key] = await Promise.all(
+				val.value.map(async (inner) => {
+					let val = await valueFromManifestValue(inner);
+					tg.assert(tg.Mutation.is(val), "Malformed env, expected a mutation.");
+					return val;
+				}),
+			);
+		} else {
+			throw new Error(
+				"Malformed env, expected a mutation or array of mutations.",
+			);
+		}
+	}
+	return ret;
 };
 
 let isTemplateArg = (arg: unknown): arg is tg.Template.Arg => {
