@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg";
 import { caCertificates } from "../certificates.tg";
-import { env } from "../env.tg";
+import { env as stdEnv } from "../env.tg";
 import * as phases from "../phases.tg";
 import { download } from "../tangram.tg";
 import { Triple, triple } from "../triple.tg";
@@ -159,7 +159,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up common environemnt.
 	let certFile = await tg`${caCertificates()}/cacert.pem`;
-	let env: tg.Unresolved<env.Arg> = [
+	let env: tg.Unresolved<stdEnv.Arg> = [
 		bootstrap.toolchainEnv(host),
 		rustToolchain,
 		{
@@ -232,14 +232,20 @@ export let build = tg.target(async (arg: Arg) => {
 	};
 
 	// Build and return.
-	return tg.Directory.expect(
-		await phases.build({
-			env,
-			phases: { prepare, build, install },
-			target: {
-				host: system,
-				checksum: "unsafe",
-			},
-		}),
-	);
+	let envObj = await stdEnv.object(env);
+	console.log("envObj", envObj);
+	for (let [key, val] of Object.entries(envObj as Record<string, unknown>)) {
+		console.log(`${key}=${val}`);
+	}
+
+		return tg.Directory.expect(
+			await phases.build({
+				env,
+				phases: { prepare, build, install },
+				target: {
+					host: system,
+					checksum: "unsafe",
+				},
+			}),
+		);
 });
