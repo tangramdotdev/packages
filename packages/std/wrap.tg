@@ -328,7 +328,7 @@ export namespace wrap {
 			let result = undefined;
 			for (let mutation of mutations ?? []) {
 				if (mutation) {
-					result = await mutateTemplate(undefined, mutation);
+					result = await mutateTemplate(result, mutation);
 				}
 			}
 			yield [key, result];
