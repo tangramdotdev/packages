@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 byteorder = { workspace = true }
+fnv = { workspace = true }
 itertools = { workspace = true }
 libc = { workspace = true }
 serde = { workspace = true }
@@ -15,5 +16,4 @@ serde_json = { workspace = true }
 tangram_client = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-twox-hash = { workspace = true }
 xattr = { workspace = true }

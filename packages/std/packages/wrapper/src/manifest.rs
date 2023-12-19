@@ -1,13 +1,12 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::{
 	collections::HashSet,
-	hash::{BuildHasher, BuildHasherDefault},
+	hash::BuildHasher,
 	io::{Read, Seek, Write},
 	os::unix::fs::PermissionsExt,
 	path::Path,
 };
 use tangram_client as tg;
-use twox_hash::Xxh3Hash64;
 
 /// The magic number used to indicate an executable has a manifest.
 pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
@@ -16,7 +15,7 @@ pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
 pub const VERSION: u64 = 0;
 
 /// Set the algorithm used to hash IDs.;
-type Hasher = BuildHasherDefault<Xxh3Hash64>;
+type Hasher = fnv::FnvBuildHasher;
 
 /// The Tangram run entrypoint manifest.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

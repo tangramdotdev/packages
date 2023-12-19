@@ -7,6 +7,7 @@ edition = "2021"
 workspace = true
 
 [dependencies]
+fnv = { workspace = true }
 futures = { workspace = true }
 goblin = { workspace = true }
 itertools = { workspace = true }
@@ -18,5 +19,4 @@ tangram_wrapper = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-twox-hash = { workspace = true }
 xattr = { workspace = true }

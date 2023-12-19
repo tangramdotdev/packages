@@ -16,6 +16,7 @@ missing_safety_doc = "allow"
 [workspace.dependencies]
 byteorder = "1"
 clap = { version = "4.2.1", features = ["derive"] }
+fnv = "1"
 futures = "0.3"
 goblin = "0.7"
 itertools = "0.12"
@@ -28,7 +29,6 @@ tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "e0a36
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-twox-hash = "1"
 xattr = "1"
 
 tangram_env = { path = "packages/env" }
