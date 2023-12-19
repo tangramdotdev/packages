@@ -616,25 +616,22 @@ where
 			// If there is a subpath, return the artifact it points to.
 			let artifact = tg::Artifact::with_id(artifact_id.clone());
 			let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?;
-			Ok(tg::symlink::Data {
-				artifact: Some(artifact.id(tg).await?),
-				path: Some(path.to_string()),
-			})
-			// if let tg::Artifact::Directory(directory) = artifact {
-			// 	let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?;
-			// 	if let Ok(child) = directory.get(tg, &path).await {
-			// 		tracing::debug!(?directory, ?path, ?child, "Found");
-			// 		return Ok(tg::symlink::Data {
-			// 			artifact: Some(child.id(tg).await?),
-			// 			path: None,
-			// 		});
-			// 	} else {
-			// 		tracing::error!(?directory, ?path, "Not found");
-			// 		return_error!("Could not find the artifact.");
-			// 	};
-			// } else {
-			// 	return_error!("Expected a directory artifact.")
-			// }
+			if let tg::Artifact::Directory(directory) = artifact {
+				if let Ok(child) = directory.get(tg, &path).await {
+					tracing::debug!(?directory, ?path, ?child, "Found");
+					Ok(tg::symlink::Data {
+						artifact: Some(child.id(tg).await?),
+						path: None,
+					})
+				} else {
+					Ok(tg::symlink::Data {
+						artifact: Some(artifact_id.clone()),
+						path: Some(s.to_owned()),
+					})
+				}
+			} else {
+				return_error!("Expected a directory artifact.")
+			}
 		},
 		_ => return_error!("Expected a template with 1 or 2 components."),
 	}

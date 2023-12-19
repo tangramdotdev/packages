@@ -232,20 +232,14 @@ export let build = tg.target(async (arg: Arg) => {
 	};
 
 	// Build and return.
-	let envObj = await stdEnv.object(env);
-	console.log("envObj", envObj);
-	for (let [key, val] of Object.entries(envObj as Record<string, unknown>)) {
-		console.log(`${key}=${val}`);
-	}
-
-		return tg.Directory.expect(
-			await phases.build({
-				env,
-				phases: { prepare, build, install },
-				target: {
-					host: system,
-					checksum: "unsafe",
-				},
-			}),
-		);
+	return tg.Directory.expect(
+		await phases.build({
+			env,
+			phases: { prepare, build, install },
+			target: {
+				host: system,
+				checksum: "unsafe",
+			},
+		}),
+	);
 });
