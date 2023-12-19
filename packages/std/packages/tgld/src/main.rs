@@ -600,6 +600,7 @@ async fn template_to_resolved_symlink<F>(tg: &dyn tg::Handle, template: F) -> tg
 where
 	F: futures::Future<Output = tg::template::Data>,
 {
+	// FIXME - re-implement tryGet from the global, you need to walk the path.
 	match template.await.components.as_slice() {
 		[tg::template::component::Data::Artifact(id)] => tg::symlink::Data {
 			artifact: Some(id.clone()),

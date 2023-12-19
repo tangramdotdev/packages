@@ -370,8 +370,12 @@ fn apply_value_to_key(
 	value: &tg::value::Data,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) {
-	if let tg::value::Data::Mutation(mutation) = value {
-		apply_mutation_to_key(key, mutation, artifacts_directories);
+	if let tg::value::Data::Array(mutations) = value {
+		for mutation in mutations {
+			if let tg::value::Data::Mutation(mutation) = mutation {
+				apply_mutation_to_key(key, mutation, artifacts_directories);
+			}
+		}
 	} else {
 		std::env::set_var(key, render_value(value, artifacts_directories));
 	}

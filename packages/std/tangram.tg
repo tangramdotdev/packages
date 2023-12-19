@@ -54,7 +54,7 @@ import * as wrap from "./wrap.tg";
 export let testWrap = tg.target(async () => {
 	let shell = await bootstrap.shell();
 	let exe = tg.File.expect(await shell.get("bin/dash"));
-	return await wrap.wrap(exe, { env: { HELLO: tg.Mutation.templateAppend(tg`hi`) }});
+	return await wrap.wrap(exe, { env: { HELLO: tg.Mutation.set(tg`hi`) }});
 
 });
 export let testMuslWrapper = tg.target(async () => {

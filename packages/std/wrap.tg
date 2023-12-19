@@ -420,7 +420,10 @@ export namespace wrap {
 						let mutations = tg.Mutation.is(mutationArgs)
 							? [mutationArgs]
 							: await Promise.all(
-									std.flatten([mutationArgs]).map(normalizeEnvVarValue),
+									std
+										.flatten([mutationArgs])
+										.filter((arg) => arg !== undefined)
+										.map(normalizeEnvVarValue),
 							  );
 						return [key, mutations];
 					}),
@@ -1147,26 +1150,6 @@ let manifestMutationFromMutation = async (
 	}
 };
 
-let manifestMutationFromMaybeMutation = async (
-	mutation?: tg.MaybeMutation,
-): Promise<wrap.Manifest.Mutation> => {
-	if (mutation === undefined) {
-		return {
-			kind: "unset",
-		};
-	}
-	if (!tg.Mutation.is(mutation)) {
-		return manifestMutationFromMutation(
-			await tg.mutation<tg.Value>({
-				kind: "set",
-				value: mutation,
-			}),
-		);
-	} else {
-		return manifestMutationFromMutation(mutation);
-	}
-};
-
 let mergeMutations = async (
 	a: tg.Mutation,
 	b: tg.Mutation,
@@ -1410,7 +1393,7 @@ let mergeMutations = async (
 
 let normalizeEnvVarValue = async (value: unknown): Promise<tg.Mutation> => {
 	if (value === undefined) {
-		return tg.Mutation.templateAppend("");
+		return tg.Mutation.arrayAppend(tg``);
 	} else if (tg.Mutation.is(value)) {
 		return value;
 	} else if (isTemplateArg(value)) {
@@ -1624,7 +1607,7 @@ let manifestTemplateFromArg = async (
 		}),
 	);
 	return {
-		components,
+		components: components ?? [],
 	};
 };
 
