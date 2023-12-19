@@ -8,6 +8,7 @@ use std::{
 use tangram_client as tg;
 use tangram_error::{return_error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
+use tg::artifact;
 use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;
@@ -559,14 +560,15 @@ async fn create_combined_library_directory(
 	let mut found_libs: BTreeMap<String, tg::Artifact> = BTreeMap::default();
 
 	for path in library_paths {
-		// These symlinks are already resolved, so just take the artifact.
-		let directory = tg::Artifact::with_id(path.artifact.as_ref().unwrap().clone());
-		if let tg::Artifact::Directory(directory) = directory {
-			let entries = directory.entries(tg).await?;
-			for library_name in needed_libraries {
-				let library_name = library_name.as_ref();
-				if let Some(artifact) = entries.get(library_name) {
-					found_libs.insert(library_name.to_owned(), artifact.clone());
+		if let Some(artifact) = &path.artifact {
+			let directory = tg::Artifact::with_id(artifact.clone());
+			if let tg::Artifact::Directory(directory) = directory {
+				let entries = directory.entries(tg).await?;
+				for library_name in needed_libraries {
+					let library_name = library_name.as_ref();
+					if let Some(artifact) = entries.get(library_name) {
+						found_libs.insert(library_name.to_owned(), artifact.clone());
+					}
 				}
 			}
 		}
@@ -606,7 +608,12 @@ async fn template_to_resolved_symlink<F>(
 where
 	F: futures::Future<Output = tg::template::Data>,
 {
-	match template.await.components.as_slice() {
+	let components = template.await.components;
+	match components.as_slice() {
+		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data {
+			artifact: None,
+			path: Some(s.to_owned()),
+		}),
 		[tg::template::component::Data::Artifact(id)] => Ok(tg::symlink::Data {
 			artifact: Some(id.clone()),
 			path: None,
@@ -633,7 +640,12 @@ where
 				return_error!("Expected a directory artifact.")
 			}
 		},
-		_ => return_error!("Expected a template with 1 or 2 components."),
+		_ => {
+			return_error!(
+				"Expected a template with 1 or 2 components, got {:?}.",
+				components
+			)
+		},
 	}
 }
 
