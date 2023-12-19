@@ -11,6 +11,9 @@ use tg::Handle;
 // Data read from environment variables.
 #[derive(Debug)]
 struct Environment {
+	// The value of TANGRAM_CC_ENABLE
+	enable: bool,
+
 	// The contents of TANGRAM_RUNTIME.
 	runtime: tg::Runtime,
 
@@ -70,8 +73,12 @@ impl Environment {
 	fn parse() -> Result<Self> {
 		let mut env = BTreeMap::new();
 		let mut runtime = None;
+		let mut enable = false;
 		for (key, value) in std::env::vars() {
 			match key.as_str() {
+				"TANGRAM_CC_ENABLE" => {
+					enable = value.parse().wrap_err("Failed to parse TANGRAM_CC_ENABLE.")?;
+				},
 				"TANGRAM_RUNTIME" => {
 					runtime = Some(
 						serde_json::from_str(&value)
@@ -85,10 +92,9 @@ impl Environment {
 				},
 			}
 		}
-
 		let runtime = runtime.wrap_err("Missing TANGRAM_RUNTIME.")?;
 		let cc = which_cc()?;
-		Ok(Self { runtime, cc, env })
+		Ok(Self { enable, runtime, cc, env })
 	}
 }
 
@@ -294,7 +300,7 @@ async fn main_inner() -> Result<()> {
 	let args = Args::parse()?;
 
 	// If this invocation isn't being used to generate output or needs to read from stdin, fallback on the detected C compiler.
-	if args.output.is_none() || args.stdin {
+	if !environment.enable || args.output.is_none() || args.stdin {
 		let error = std::process::Command::new(&environment.cc)
 			.args(std::env::args_os().skip(1))
 			.exec();
@@ -427,7 +433,8 @@ async fn main_inner() -> Result<()> {
 
 // Find the C compiler by checking the TANGRAM_CC_CC compiler or searching PATH for cc.
 fn which_cc() -> Result<PathBuf> {
-	if let Ok(cc) = std::env::var("TANGRAM_CC_CC") {
+	let compiler_name = std::env::args().nth(0).unwrap();
+	if let Ok(cc) = std::env::var("TANGRAM_CC_COMPILER") {
 		return Ok(cc.into());
 	}
 	let path = std::env::var("PATH").wrap_err("PATH is not set.")?;
@@ -435,7 +442,7 @@ fn which_cc() -> Result<PathBuf> {
 		.split(':')
 		.filter_map(|path| {
 			let path: &Path = path.as_ref();
-			let path = path.join("cc");
+			let path = path.join(&compiler_name);
 			path.exists().then_some(path)
 		})
 		.skip(1)
@@ -594,9 +601,10 @@ async fn check_in_source_tree(
 const DRIVER_SH: &str = include_str!("driver.sh");
 
 // Environment variables that must be filtered out before invoking the driver target.
-const BLACKLISTED_ENV_VARS: [&str; 5] = [
+const BLACKLISTED_ENV_VARS: [&str; 6] = [
 	"TANGRAM_RUNTIME",
 	"TANGRAM_CC_TRACING",
+	"TANGRAM_CC_COMPILER",
 	"TANGRAM_HOST",
 	"HOME",
 	"OUTPUT",

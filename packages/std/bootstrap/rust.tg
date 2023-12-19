@@ -225,6 +225,7 @@ export let build = tg.target(async (arg: Arg) => {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
 			mv $TARGET/release/tangram_env $OUTPUT/bin/env
+			mv $TARGET/release/tangram_cc $OUTPUT/bin/tgcc
 			mv $TARGET/release/tangram_linker $OUTPUT/bin/tgld
 			mv $TARGET/release/tangram_wrapper $OUTPUT/bin/wrapper
 		`,

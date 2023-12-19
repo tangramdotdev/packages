@@ -1581,6 +1581,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tangram_cc"
+version = "0.0.0"
+dependencies = [
+ "futures",
+ "itertools",
+ "serde",
+ "serde_json",
+ "tangram_client",
+ "tangram_error",
+ "tokio",
+]
+
+[[package]]
 name = "tangram_client"
 version = "0.0.0"
 source = "git+https://github.com/tangramdotdev/tangram?rev=e0a36420ea2529904795e4b42250036cd26f71dc#e0a36420ea2529904795e4b42250036cd26f71dc"
