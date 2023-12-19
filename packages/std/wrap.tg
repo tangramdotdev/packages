@@ -486,13 +486,27 @@ export namespace wrap {
 	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */
 	export let tryUnwrap = async (
 		file: tg.File,
-	): Promise<tg.File | undefined> => {
-		return tg.unimplemented();
+	): Promise<tg.Template | tg.Symlink | undefined> => {
+		let manifest = await wrap.Manifest.read(file);
+		if (!manifest) {
+			return undefined;
+		}
+		if (manifest.executable.kind === "content") {
+			return templateFromManifestTemplate(manifest.executable.value);
+		} else {
+			return manifest.executable.value as tg.Symlink | tg.Template;
+		}
 	};
 
 	/** Unwrap a wrapped executable. Throws an error if the input was not a Tangram executable. */
-	export let unwrap = async (file: tg.File): Promise<tg.File> => {
-		return tg.unimplemented();
+	export let unwrap = async (
+		file: tg.File,
+	): Promise<tg.Template | tg.Symlink> => {
+		let result = await tryUnwrap(file);
+		if (!result) {
+			throw new Error("File does not have a wrapper manifest.");
+		}
+		return result;
 	};
 
 	export namespace Manifest {
@@ -1025,7 +1039,7 @@ let manifestInterpreterFromElf = async (
 	}
 };
 
-export let defaultShellInterpreter = tg.target(async () => {
+export let defaultShellInterpreter = async () => {
 	// Provide bash for the detected host system. Don't assume an existing SDK.
 	let shellArtifact = await std.utils.bash.build({
 		sdk: { bootstrapMode: true },
@@ -1041,7 +1055,7 @@ export let defaultShellInterpreter = tg.target(async () => {
 		env,
 	});
 	return bash;
-});
+};
 
 let manifestSymlinkFromArg = async (
 	arg: string | tg.Template | tg.Artifact,
@@ -1394,8 +1408,10 @@ let mergeMutations = async (
 	}
 };
 
-let normalizeEnvVarValue = async (value: tg.Value): Promise<tg.Mutation> => {
-	if (tg.Mutation.is(value)) {
+let normalizeEnvVarValue = async (value: unknown): Promise<tg.Mutation> => {
+	if (value === undefined) {
+		return tg.Mutation.templateAppend("");
+	} else if (tg.Mutation.is(value)) {
 		return value;
 	} else if (isTemplateArg(value)) {
 		return tg.Mutation.set(tg.template(value));
