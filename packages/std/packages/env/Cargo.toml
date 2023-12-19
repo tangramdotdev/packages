@@ -8,5 +8,4 @@ workspace = true
 
 [dependencies]
 clap = { workspace = true }
-heck = { workspace = true }
 serde = { workspace = true }

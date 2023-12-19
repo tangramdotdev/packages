@@ -808,9 +808,9 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hyper"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "403f9214f3e703236b221f1a9cd88ec8b4adfa5296de01ab96216361f4692f56"
+checksum = "fb5aa53871fc917b1a9ed87b683a5d86db645e23acb32c2e0785a353e522fb75"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -1596,7 +1596,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e0a36420ea2529904795e4b42250036cd26f71dc#e0a36420ea2529904795e4b42250036cd26f71dc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=3cac07e49d80d0a571184be17b17f4daec32d566#3cac07e49d80d0a571184be17b17f4daec32d566"
 dependencies = [
  "async-compression",
  "async-recursion",
@@ -1653,14 +1653,13 @@ name = "tangram_env"
 version = "0.0.0"
 dependencies = [
  "clap",
- "heck",
  "serde",
 ]
 
 [[package]]
 name = "tangram_error"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e0a36420ea2529904795e4b42250036cd26f71dc#e0a36420ea2529904795e4b42250036cd26f71dc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=3cac07e49d80d0a571184be17b17f4daec32d566#3cac07e49d80d0a571184be17b17f4daec32d566"
 dependencies = [
  "serde",
  "thiserror",
@@ -1670,14 +1669,15 @@ dependencies = [
 name = "tangram_linker"
 version = "0.0.0"
 dependencies = [
+ "fnv",
  "futures",
  "goblin",
  "itertools",
  "serde",
  "serde_json",
  "tangram_client",
+ "tangram_error",
  "tangram_wrapper",
- "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1690,14 +1690,11 @@ version = "0.0.0"
 dependencies = [
  "byteorder",
  "fnv",
- "heck",
  "itertools",
  "libc",
- "num",
  "serde",
  "serde_json",
  "tangram_client",
- "tempfile",
  "tracing",
  "tracing-subscriber",
  "xattr",
@@ -1729,18 +1726,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.50"
+version = "1.0.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9a7210f5c9a7156bb50aa36aed4c95afb51df0df00713949448cf9e97d382d2"
+checksum = "f11c217e1416d6f036b870f14e0413d480dbf28edbee1f877abaf0206af43bb7"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.50"
+version = "1.0.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "266b2e40bc00e5a6c09c3584011e08b06f123c00362c92b975ba9843aaaa14b8"
+checksum = "01742297787513b79cf8e29d1056ede1313e2420b7b3b15d0a768b4921f549df"
 dependencies = [
  "proc-macro2",
  "quote",

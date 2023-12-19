@@ -1,16 +1,26 @@
 use itertools::Itertools;
 use std::{
-	collections::HashSet,
+	collections::{BTreeMap, HashSet},
 	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
+	str::FromStr,
 };
 use tangram_client as tg;
+use tangram_error::{return_error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
 use tracing_subscriber::prelude::*;
 
+type Hasher = fnv::FnvBuildHasher;
+
 #[tokio::main]
-#[allow(clippy::too_many_lines)]
 async fn main() {
+	if let Err(e) = main_inner().await {
+		eprintln!("linker proxy failed: {e}");
+		std::process::exit(1);
+	}
+}
+
+async fn main_inner() -> Result<()> {
 	setup_tracing();
 
 	// Read the options from the environment and arguments.
@@ -21,7 +31,7 @@ async fn main() {
 	let status = std::process::Command::new(&options.command_path)
 		.args(&options.command_args)
 		.status()
-		.expect("Failed to run the command.");
+		.wrap_err("Failed to run the command")?;
 
 	// If the command did not exit successfully, then exit with its code.
 	if !status.success() {
@@ -32,65 +42,71 @@ async fn main() {
 	// If passthrough mode is enabled, then exit.
 	if options.passthrough {
 		tracing::trace!("Passthrough mode enabled. Exiting.");
-		return;
+		return Ok(());
 	}
 
 	// If there is no file with the output path name, then exit.
 	if !options.output_path.exists() {
 		tracing::trace!("No output file found. Exiting.");
-		return;
+		return Ok(());
 	}
 
 	// Create the tangram instance.
-	let runtime_json = std::env::var_os("TANGRAM_RUNTIME").expect("Failed to get TANGRAM_RUNTIME.");
-	let runtime: tg::Runtime = serde_json::from_str(
-		runtime_json
-			.to_str()
-			.expect("Could not convert TANGRAM_RUNTIME to str"),
-	)
-	.expect("Failed to parse TANGRAM_RUNTIME.");
-	tracing::trace!(?runtime);
-	let addr = runtime.addr;
-	let tg = tg::client::Builder::new(addr).build();
-	tg.connect().await.expect("Failed to connect to server.");
+	let runtime_json =
+		std::env::var("TANGRAM_RUNTIME").wrap_err("Failed to get TANGRAM_RUNTIME.")?;
+	let tg = tg::client::Builder::with_runtime_json(&runtime_json)?.build();
+	tg.connect().await?;
 
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
 		is_executable,
-		needs_interpreter,
-	} = analyze_output_file(&options.output_path);
-	tracing::trace!(?is_executable, ?needs_interpreter,);
+		interpreter,
+		needed_libraries,
+	} = analyze_output_file(&options.output_path)?;
+	tracing::trace!(?is_executable, ?interpreter, ?needed_libraries,);
+
+	// Unrender and resolve all library paths.
+	let library_paths = options
+		.library_paths
+		.iter()
+		.map(|library_path| template_to_resolved_symlink(&tg, unrender(&tg, library_path)));
+	let library_paths = futures::future::try_join_all(library_paths).await?;
+
+	// Produce a combined library directory if needed and create the manifest value.
+	let library_paths = if options.library_paths.is_empty() {
+		None
+	} else if options.combine_library_paths {
+		// Produce a directory containing the libraries required by the output file found in the library paths.
+		let combined_library_directory =
+			create_combined_library_directory(&tg, &library_paths, &needed_libraries).await?;
+		Some(vec![combined_library_directory])
+	} else {
+		Some(library_paths)
+	};
 
 	// Keep track of the references.
-	let mut references = HashSet::default();
+	let mut references: HashSet<tg::artifact::Id, Hasher> = HashSet::default();
 
 	// Handle an executable or a library.
 	if is_executable {
 		// If the linker generated an executable, then check it in and replace it with the wrapper with an embedded manifest.
 		let file = tokio::fs::File::open(&options.output_path)
 			.await
-			.expect("Could not open output file");
-		let reader = tokio::io::BufReader::new(file);
-		let blob = tg::Blob::with_reader(&tg, reader)
+			.wrap_err("Could not open output file")?;
+		let blob = tg::Blob::with_reader(&tg, file)
 			.await
-			.expect("Could not create blob");
+			.wrap_err("Could not create blob")?;
 		let output_artifact = tg::File::builder(blob).executable(true).build();
-		let output_artifact_id = output_artifact
-			.id(&tg)
-			.await
-			.expect("Failed to get the output file id.")
-			.clone()
-			.try_into()
-			.unwrap();
+		let output_artifact_id = output_artifact.id(&tg).await?.clone().try_into().unwrap();
 
 		// Copy the wrapper to the temporary path.
 		let wrapper_path = options
 			.wrapper_path
 			.as_ref()
-			.expect("TANGRAM_LINKER_WRAPPER_PATH must be set.");
+			.wrap_err("TANGRAM_LINKER_WRAPPER_PATH must be set.")?;
 		std::fs::remove_file(&options.output_path).ok();
 		std::fs::copy(wrapper_path, &options.output_path)
-			.expect("Failed to copy the wrapper file.");
+			.wrap_err("Failed to copy the wrapper file.")?;
 
 		// Set the permissions of the wrapper file so we can write the manifest to the end.
 		let mut perms = std::fs::metadata(&options.output_path)
@@ -100,7 +116,14 @@ async fn main() {
 		std::fs::set_permissions(&options.output_path, perms)
 			.expect("Failed to set the wrapper file permissions.");
 
-		let manifest = create_manifest(&tg, output_artifact_id, &options, needs_interpreter).await;
+		let manifest = create_manifest(
+			&tg,
+			output_artifact_id,
+			&options,
+			interpreter,
+			library_paths,
+		)
+		.await?;
 		tracing::trace!(?manifest);
 
 		// Write the manifest.
@@ -131,11 +154,16 @@ async fn main() {
 		serde_json::to_string(&attributes).expect("Failed to serialize the attributes.");
 	xattr::set(&options.output_path, "user.tangram", attributes.as_bytes())
 		.expect("Failed to write the attributes.");
+
+	Ok(())
 }
 
 // The options read from the environment and arguments.
 #[derive(Debug)]
 struct Options {
+	/// Whether or not to combine the library paths filtering for needed libraries. Defaults to true.
+	combine_library_paths: bool,
+
 	/// The path to the command that will be invoked.
 	command_path: PathBuf,
 
@@ -203,6 +231,11 @@ fn read_options() -> Options {
 	// Get the injection path.
 	let injection_path = std::env::var("TANGRAM_LINKER_INJECTION_PATH").ok();
 
+	// Get the option to disable combining library paths. Enabled by default.
+	let mut combine_library_paths = std::env::var("TANGRAM_LINKER_COMBINED_LIBRARY_PATH")
+		.ok()
+		.map_or(false, |s| s == "1");
+
 	// Get an iterator over the arguments.
 	let mut args = std::env::args();
 
@@ -212,7 +245,12 @@ fn read_options() -> Options {
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
 		// Pass through any arg that isn't a tangram arg.
-		if !arg.starts_with("--tg") {
+		if arg.starts_with("--tg") {
+			// Handle setting combined library paths. Will override the env var if set.
+			if arg == "--tg-combined-library-paths=true" {
+				combine_library_paths = true;
+			}
+		} else {
 			command_args.push(arg.clone());
 		}
 
@@ -240,10 +278,11 @@ fn read_options() -> Options {
 		}
 	}
 
-	// Set defaults.
+	// If no explicit output path was provided, instead look for `a.out`.
 	let output_path = output_path.as_deref().unwrap_or("a.out").into();
 
 	Options {
+		combine_library_paths,
 		command_path,
 		command_args,
 		interpreter_path,
@@ -261,81 +300,94 @@ async fn create_manifest(
 	tg: &dyn tg::Handle,
 	ld_output_id: tg::artifact::Id,
 	options: &Options,
-	needs_interpreter: bool,
-) -> Manifest {
+	interpreter: InterpreterRequirement,
+	library_paths: Option<Vec<tg::symlink::Data>>,
+) -> Result<Manifest> {
 	// Create the interpreter.
-	let interpreter = if cfg!(target_os = "linux") && needs_interpreter {
-		let interpreter_path = options
-			.interpreter_path
-			.as_ref()
-			.expect("Cannot construct static executables without an interpreter path.");
+	let interpreter = if cfg!(target_os = "linux") {
+		let config = match interpreter {
+			InterpreterRequirement::Default => {
+				let path = options
+					.interpreter_path
+					.as_ref()
+					.expect("TANGRAM_LINKER_INTERPRETER_PATH must be set.");
 
-		// Check if this is a musl interpreter.  Follow the symlink, get the pathname.
-		let is_musl = {
-			let canonical_interpreter = std::fs::canonicalize(interpreter_path)
-				.expect("Failed to canonicalize the interpreter path.");
-			// Canonicalizing the musl interpreter will resolve to libc.so.  We check that the filename does NOT contain "ld-linux".
-			!canonical_interpreter
-				.file_name()
-				.expect("Failed to read the interpreter file name")
-				.to_str()
-				.expect("Invalid interpreter file name")
-				.contains("ld-linux")
+				// Check if this is a musl interpreter.  Follow the symlink, get the pathname.
+				let is_musl = {
+					let canonical_interpreter = std::fs::canonicalize(path)
+						.expect("Failed to canonicalize the interpreter path.");
+					// Canonicalizing the musl interpreter will resolve to libc.so.  We check that the filename does NOT contain "ld-linux".
+					!canonical_interpreter
+						.file_name()
+						.expect("Failed to read the interpreter file name")
+						.to_str()
+						.expect("Invalid interpreter file name")
+						.contains("ld-linux")
+				};
+
+				Some((path.clone(), is_musl))
+			},
+			InterpreterRequirement::Path(path) => Some((path, false)),
+			InterpreterRequirement::None => None,
 		};
 
-		// Unrender the interpreter path.
-		let path = unrender(tg, interpreter_path).await;
-		tracing::trace!(?path, "Interpreter path");
+		if let Some((path, is_musl)) = config {
+			// Unrender the interpreter path.
+			let path = unrender(tg, &path);
+			let path = template_to_resolved_symlink(tg, path).await?;
+			tracing::trace!(?path, "Interpreter path");
 
-		// Unrender the library path.
-		let library_paths = if options.library_paths.is_empty() {
-			None
-		} else {
-			let paths = options.library_paths.iter().map(|path| unrender(tg, path));
-			Some(futures::future::join_all(paths).await)
-		};
+			// Unrender the preloads.
+			let mut preloads = None;
+			if let Some(injection_path) = options.injection_path.as_deref() {
+				preloads = Some(vec![
+					template_to_resolved_symlink(tg, unrender(tg, injection_path)).await?,
+				]);
+			}
 
-		// Unrender the preloads.
-		let mut preloads = None;
-		if let Some(injection_path) = options.injection_path.as_deref() {
-			preloads = Some(vec![unrender(tg, injection_path).await]);
-		}
+			// Unrender the additional args.
+			let mut args = None;
+			if let Some(interpreter_args) = options.interpreter_args.as_deref() {
+				let interpreter_args = interpreter_args.iter().map(|arg| unrender(tg, arg));
+				args = Some(futures::future::join_all(interpreter_args).await);
+			}
 
-		// Unrender the additional args.
-		let mut args = None;
-		if let Some(interpreter_args) = options.interpreter_args.as_deref() {
-			let interpreter_args = interpreter_args.iter().map(|arg| unrender(tg, arg));
-			args = Some(futures::future::join_all(interpreter_args).await);
-		}
-
-		if is_musl {
-			Some(manifest::Interpreter::LdMusl(manifest::LdMuslInterpreter {
-				path,
-				library_paths,
-				preloads,
-				args,
-			}))
-		} else {
-			Some(manifest::Interpreter::LdLinux(
-				manifest::LdLinuxInterpreter {
+			if is_musl {
+				Some(manifest::Interpreter::LdMusl(manifest::LdMuslInterpreter {
 					path,
 					library_paths,
 					preloads,
 					args,
-				},
-			))
+				}))
+			} else {
+				Some(manifest::Interpreter::LdLinux(
+					manifest::LdLinuxInterpreter {
+						path,
+						library_paths,
+						preloads,
+						args,
+					},
+				))
+			}
+		} else {
+			// There was no interpreter specified. We are likely a statically linked executable.
+			None
 		}
 	} else if cfg!(target_os = "macos") {
 		// Unrender the library paths.
 		let library_paths = options
 			.library_paths
 			.iter()
-			.map(|library_path| unrender(tg, library_path));
-		let library_paths = Some(futures::future::join_all(library_paths).await);
+			.map(|library_path| template_to_resolved_symlink(tg, unrender(tg, library_path)));
+		let library_paths = Some(futures::future::try_join_all(library_paths).await?);
 		let mut preloads = None;
 		if let Some(injection_path) = options.injection_path.as_deref() {
 			preloads = Some(
-				futures::future::join_all(std::iter::once(unrender(tg, injection_path))).await,
+				futures::future::try_join_all(std::iter::once(template_to_resolved_symlink(
+					tg,
+					unrender(tg, injection_path),
+				)))
+				.await?,
 			);
 		}
 
@@ -344,50 +396,74 @@ async fn create_manifest(
 			preloads,
 		}))
 	} else {
-		None
+		unreachable!();
 	};
 
 	// Create the executable.
-	let executable = manifest::Executable::Path(tg::template::Data {
-		components: vec![tg::template::component::Data::Artifact(ld_output_id)],
-	});
+	let executable = manifest::Executable::Path(
+		template_to_resolved_symlink(tg, async {
+			tg::template::Data {
+				components: vec![tg::template::component::Data::Artifact(ld_output_id)],
+			}
+		})
+		.await?,
+	);
 
 	// Create empty values for env and args.
 	let env = None;
-	let args = Vec::new();
+	let args = None;
 
 	// Create the manifest.
-	Manifest {
+	let manifest = Manifest {
 		identity: manifest::Identity::Wrapper,
 		interpreter,
 		executable,
 		env,
 		args,
-	}
+	};
+
+	Ok(manifest)
 }
 
 struct AnalyzeOutputFileOutput {
+	/// Is the output file executable?
 	is_executable: bool,
-	needs_interpreter: bool,
+	/// Does the output file need an interpreter? On macOS, This should always get `Some(None)`. On Linux, None indicates a statically-linked executable, `Some(None)` indicates a dynamically-linked executable with a default ldso path, and `Some(Some(symlink))` indicates the PT_INTERP field has been explicitly set to point at a non-standard path we need to retain.
+	interpreter: InterpreterRequirement,
+	/// Does the output file specify libraries required at runtime?
+	needed_libraries: Vec<String>,
 }
 
-// Analyze the command output file.
-fn analyze_output_file(path: &Path) -> AnalyzeOutputFileOutput {
+/// The possible interpreter requirements of an output file.
+#[derive(Debug)]
+enum InterpreterRequirement {
+	/// There is no interpreter needed to execute this file.
+	None,
+	/// Use the system default interpreter to execute this file.
+	Default,
+	/// Use the interpreter at the given path to execute this file.
+	Path(String),
+}
+
+/// Analyze the command output file.
+fn analyze_output_file(path: &Path) -> Result<AnalyzeOutputFileOutput> {
 	// Read the file.
-	let bytes = std::fs::read(path).unwrap_or_else(|_| {
-		panic!(
+	let bytes = std::fs::read(path).wrap_err_with(|| {
+		format!(
 			r#"Failed to read the output file at path "{}"."#,
 			path.display()
 		)
-	});
+	})?;
 
 	// Parse the object and analyze it.
-	let object = goblin::Object::parse(&bytes).expect("Failed to parse output file as an object.");
-	match object {
+	let object =
+		goblin::Object::parse(&bytes).wrap_err("Failed to parse output file as an object.")?;
+	let result = match object {
 		// Handle an archive file.
 		goblin::Object::Archive(_) => AnalyzeOutputFileOutput {
 			is_executable: false,
-			needs_interpreter: true,
+			interpreter: InterpreterRequirement::None,
+			needed_libraries: vec![],
 		},
 
 		// Handle an ELF file.
@@ -400,15 +476,32 @@ fn analyze_output_file(path: &Path) -> AnalyzeOutputFileOutput {
 			// Read the ELF header to determine if it is an executable.
 			let is_executable = !elf.is_lib || is_pie;
 
+			let needed_libraries = elf
+				.libraries
+				.iter()
+				.map(std::string::ToString::to_string)
+				.collect_vec();
+
 			// Check whether or not the object requires an interpreter:
 			// - If the object has an interpreter field.
 			// - If the object is a PIE and has 1 or more NEEDS.
-			let needs_interpreter =
-				elf.interpreter.is_some() || (is_pie && !elf.libraries.is_empty());
+			let interpreter =
+				if elf.interpreter.is_some() || (is_pie && !needed_libraries.is_empty()) {
+					let interpreter = elf.interpreter.unwrap();
+					if interpreter.starts_with("/lib") {
+						InterpreterRequirement::Default
+					} else {
+						// If a path not in /lib is specified, then we need to retain it.
+						InterpreterRequirement::Path(interpreter.to_owned())
+					}
+				} else {
+					InterpreterRequirement::None
+				};
 
 			AnalyzeOutputFileOutput {
 				is_executable,
-				needs_interpreter,
+				interpreter,
+				needed_libraries,
 			}
 		},
 
@@ -416,137 +509,88 @@ fn analyze_output_file(path: &Path) -> AnalyzeOutputFileOutput {
 		goblin::Object::Mach(mach) => match mach {
 			goblin::mach::Mach::Binary(mach) => {
 				let is_executable = mach.header.filetype == goblin::mach::header::MH_EXECUTE;
+				let needed_libraries = mach
+					.libs
+					.iter()
+					.map(std::string::ToString::to_string)
+					.collect_vec();
+
 				AnalyzeOutputFileOutput {
 					is_executable,
-					needs_interpreter: true,
+					interpreter: InterpreterRequirement::Default,
+					needed_libraries,
 				}
 			},
 			goblin::mach::Mach::Fat(mach) => {
-				let is_executable =
-					mach.into_iter()
-						.filter_map(std::result::Result::ok)
-						.all(|arch| match arch {
-							goblin::mach::SingleArch::Archive(_) => true,
-							goblin::mach::SingleArch::MachO(mach) => {
-								mach.header.filetype == goblin::mach::header::MH_EXECUTE
-							},
-						});
+				let (is_executable, needed_libraries) = mach
+					.into_iter()
+					.filter_map(std::result::Result::ok)
+					.fold((false, vec![]), |acc, arch| match arch {
+						goblin::mach::SingleArch::Archive(_) => (true, acc.1),
+						goblin::mach::SingleArch::MachO(mach) => {
+							let acc_executable = acc.0;
+							let mut libs = acc.1;
+							let executable = acc_executable
+								|| (mach.header.filetype == goblin::mach::header::MH_EXECUTE);
+							libs.extend(mach.libs.iter().map(std::string::ToString::to_string));
+							(executable, libs)
+						},
+					});
 				AnalyzeOutputFileOutput {
 					is_executable,
-					needs_interpreter: true,
+					interpreter: InterpreterRequirement::Default,
+					needed_libraries,
 				}
 			},
 		},
 
 		_ => panic!("Unsupported object type."),
-	}
+	};
+
+	Ok(result)
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
+/// Create a directory containing the libraries required by the output file found in the library paths, and return it as a symlink with no subpath.
+async fn create_combined_library_directory(
+	tg: &dyn tg::Handle,
+	library_paths: &[tg::symlink::Data],
+	needed_libraries: &[impl AsRef<str>],
+) -> Result<tg::symlink::Data> {
+	let mut found_libs: BTreeMap<String, tg::Artifact> = BTreeMap::default();
 
-	#[test]
-	fn read_output_files() {
-		std::fs::write("main.c", "int main() { return 0; }").unwrap();
-
-		// Test analyzing a shared library.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-shared")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
-		let AnalyzeOutputFileOutput { is_executable, .. } =
-			super::analyze_output_file("a.out".as_ref());
-		assert!(
-			!is_executable,
-			"Dynamically linked library was detected as an executable."
-		);
-
-		// Test analyzing a dynamic executable with an interpreter.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
-		let AnalyzeOutputFileOutput {
-			is_executable,
-			needs_interpreter,
-		} = super::analyze_output_file("a.out".as_ref());
-		assert!(
-			is_executable,
-			"Dynamically linked executable was detected as a library."
-		);
-		assert!(
-			needs_interpreter,
-			"Dynamically linked executables need an interpreter."
-		);
-
-		// Test analyzing a statically linked executable.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-static")
-			.arg("-static-libgcc")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
-		let AnalyzeOutputFileOutput {
-			is_executable,
-			needs_interpreter,
-		} = super::analyze_output_file("a.out".as_ref());
-		assert!(
-			is_executable,
-			"Statically linked executable was detected as a library."
-		);
-		assert!(
-			!needs_interpreter,
-			"Statically linked executables do not need an interpreter."
-		);
-
-		// Test analyzing a static-pie executable.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-pie")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
-		let AnalyzeOutputFileOutput {
-			is_executable,
-			needs_interpreter,
-		} = super::analyze_output_file("a.out".as_ref());
-		assert!(is_executable, "PIE was detected as a library.");
-		assert!(needs_interpreter, "PIEs need an interpreter.");
-
-		// Test analyzing a static-pie linked executable.
-		std::process::Command::new("cc")
-			.arg("main.c")
-			.arg("-static-pie")
-			.arg("-static-libgcc")
-			.arg("-o")
-			.arg("a.out")
-			.status()
-			.unwrap();
-		let AnalyzeOutputFileOutput {
-			is_executable,
-			needs_interpreter,
-		} = super::analyze_output_file("a.out".as_ref());
-		assert!(
-			is_executable,
-			"Static-pie linked executable was detected as a library."
-		);
-		assert!(
-			!needs_interpreter,
-			"Static-PIE linked executables do not need an interpreter."
-		);
-
-		std::fs::remove_file("a.out").ok();
-		std::fs::remove_file("main.c").ok();
+	for path in library_paths {
+		let base_artifact = if let Some(artifact) = &path.artifact {
+			artifact.clone()
+		} else {
+			continue;
+		};
+		let base_artifact = tg::artifact::Artifact::with_id(base_artifact);
+		if let tg::artifact::Artifact::Directory(ref base_directory) = base_artifact {
+			let mut target_artifact = base_artifact.clone();
+			if let Some(path) = &path.path {
+				let path = tg::Path::from_str(path.strip_prefix('/').unwrap())?.normalize();
+				if let Ok(target) = base_directory.get(tg, &path).await {
+					target_artifact = target.clone();
+				}
+			}
+			if let tg::Artifact::Directory(directory) = target_artifact {
+				let entries = directory.entries(tg).await?;
+				for library_name in needed_libraries {
+					let library_name = library_name.as_ref();
+					if let Some(artifact) = entries.get(library_name) {
+						found_libs.insert(library_name.to_owned(), artifact.clone());
+					}
+				}
+			}
+		}
 	}
+
+	// Create the manifest value.
+	let directory = tg::Artifact::Directory(tg::Directory::new(found_libs));
+	let symlink = tg::Symlink::new(Some(directory), None);
+	let data = symlink.data(tg).await?;
+
+	Ok(data)
 }
 
 fn setup_tracing() {
@@ -568,10 +612,171 @@ fn setup_tracing() {
 	}
 }
 
+async fn template_to_resolved_symlink<F>(
+	tg: &dyn tg::Handle,
+	template: F,
+) -> Result<tg::symlink::Data>
+where
+	F: futures::Future<Output = tg::template::Data>,
+{
+	let components = template.await.components;
+	match components.as_slice() {
+		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data {
+			artifact: None,
+			path: Some(s.to_owned()),
+		}),
+		[tg::template::component::Data::Artifact(id)] => Ok(tg::symlink::Data {
+			artifact: Some(id.clone()),
+			path: None,
+		}),
+		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] =>
+		{
+			// If there is a subpath, return the artifact it points to.
+			let artifact = tg::Artifact::with_id(artifact_id.clone());
+			let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?.normalize();
+			if let tg::Artifact::Directory(directory) = artifact {
+				if let Ok(child) = directory.get(tg, &path).await {
+					Ok(tg::symlink::Data {
+						artifact: Some(child.id(tg).await?),
+						path: None,
+					})
+				} else {
+					Ok(tg::symlink::Data {
+						artifact: Some(artifact_id.clone()),
+						path: Some(s.to_owned()),
+					})
+				}
+			} else {
+				return_error!("Expected a directory artifact.")
+			}
+		},
+		_ => {
+			return_error!(
+				"Expected a template with 1 or 2 components, got {:?}.",
+				components
+			)
+		},
+	}
+}
+
 async fn unrender(tg: &dyn tg::Handle, string: &str) -> tg::template::Data {
 	tg::Template::unrender(string)
 		.expect("Failed to unrender template")
 		.data(tg)
 		.await
-		.unwrap()
+		.expect("Failed to produce template data from template")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{analyze_output_file, AnalyzeOutputFileOutput, InterpreterRequirement};
+
+	#[test]
+	fn read_output_files() {
+		std::fs::write("main.c", "int main() { return 0; }").unwrap();
+
+		// Test analyzing a shared library.
+		std::process::Command::new("cc")
+			.arg("main.c")
+			.arg("-shared")
+			.arg("-o")
+			.arg("a.out")
+			.status()
+			.unwrap();
+		let AnalyzeOutputFileOutput { is_executable, .. } =
+			analyze_output_file("a.out".as_ref()).unwrap();
+		assert!(
+			!is_executable,
+			"Dynamically linked library was detected as an executable."
+		);
+
+		// Test analyzing a dynamic executable with an interpreter.
+		std::process::Command::new("cc")
+			.arg("main.c")
+			.arg("-o")
+			.arg("a.out")
+			.status()
+			.unwrap();
+		let AnalyzeOutputFileOutput {
+			is_executable,
+			interpreter,
+			..
+		} = analyze_output_file("a.out".as_ref()).unwrap();
+		assert!(
+			is_executable,
+			"Dynamically linked executable was detected as a library."
+		);
+		assert!(
+			!matches!(interpreter, InterpreterRequirement::None),
+			"Dynamically linked executables need an interpreter."
+		);
+
+		// Test analyzing a statically linked executable.
+		std::process::Command::new("cc")
+			.arg("main.c")
+			.arg("-static")
+			.arg("-static-libgcc")
+			.arg("-o")
+			.arg("a.out")
+			.status()
+			.unwrap();
+		let AnalyzeOutputFileOutput {
+			is_executable,
+			interpreter,
+			..
+		} = analyze_output_file("a.out".as_ref()).unwrap();
+		assert!(
+			is_executable,
+			"Statically linked executable was detected as a library."
+		);
+		assert!(
+			matches!(interpreter, InterpreterRequirement::None),
+			"Statically linked executables do not need an interpreter."
+		);
+
+		// Test analyzing a static-pie executable.
+		std::process::Command::new("cc")
+			.arg("main.c")
+			.arg("-pie")
+			.arg("-o")
+			.arg("a.out")
+			.status()
+			.unwrap();
+		let AnalyzeOutputFileOutput {
+			is_executable,
+			interpreter,
+			..
+		} = analyze_output_file("a.out".as_ref()).unwrap();
+		assert!(is_executable, "PIE was detected as a library.");
+		assert!(
+			!matches!(interpreter, InterpreterRequirement::None),
+			"PIEs need an interpreter."
+		);
+
+		// Test analyzing a static-pie linked executable.
+		std::process::Command::new("cc")
+			.arg("main.c")
+			.arg("-static-pie")
+			.arg("-static-libgcc")
+			.arg("-o")
+			.arg("a.out")
+			.status()
+			.unwrap();
+		let AnalyzeOutputFileOutput {
+			is_executable,
+			interpreter,
+			..
+		} = analyze_output_file("a.out".as_ref()).unwrap();
+		assert!(
+			is_executable,
+			"Static-pie linked executable was detected as a library."
+		);
+		assert!(
+			matches!(interpreter, InterpreterRequirement::None),
+			"Static-PIE linked executables do not need an interpreter."
+		);
+
+		std::fs::remove_file("a.out").ok();
+		std::fs::remove_file("main.c").ok();
+	}
 }

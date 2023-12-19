@@ -223,38 +223,38 @@ export let layer = tg.target(
 
 /** The JSON configuration schema for a container image. This format is shared by both the OCI container image spec and the Docker image spec. */
 export type ImageConfigV1 = Platform & {
-	config?: ImageExecutionConfig | null;
+	config?: ImageExecutionConfig;
 	rootfs: {
 		type: "layers";
 		diff_ids: Array<string>;
 	};
-	history?: Array<ImageHistory> | null;
+	history?: Array<ImageHistory>;
 };
 
 /** The execution configuration. */
 export type ImageExecutionConfig = {
-	User?: string | null;
-	ExposedPorts?: Record<string, {}> | null;
-	Env?: Array<string> | null;
-	Entrypoint?: Array<string> | null;
-	Cmd?: Array<string> | null;
-	Volumes?: Record<string, {}> | null;
-	WorkingDir?: string | null;
-	Labels?: Record<string, string> | null;
-	StopSignal?: string | null;
-	ArgsEscaped?: boolean | null;
-	Memory?: number | null;
-	MemorySwap?: number | null;
-	CpuShares?: number | null;
-	Healthcheck?: Record<string, unknown> | null;
+	User?: string;
+	ExposedPorts?: Record<string, {}>;
+	Env?: Array<string>;
+	Entrypoint?: Array<string>;
+	Cmd?: Array<string>;
+	Volumes?: Record<string, {}>;
+	WorkingDir?: string;
+	Labels?: Record<string, string>;
+	StopSignal?: string;
+	ArgsEscaped?: boolean;
+	Memory?: number;
+	MemorySwap?: number;
+	CpuShares?: number;
+	Healthcheck?: Record<string, unknown>;
 };
 
 export type ImageHistory = {
-	created?: string | null;
-	author?: string | null;
-	created_by?: string | null;
-	comment?: string | null;
-	empty_layer?: boolean | null;
+	created?: string;
+	author?: string;
+	created_by?: string;
+	comment?: string;
+	empty_layer?: boolean;
 };
 
 export default container;

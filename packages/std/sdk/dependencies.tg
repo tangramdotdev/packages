@@ -93,7 +93,7 @@ export let env = tg.target(async (arg?: Arg) => {
 
 export default env;
 
-export let assertProvides = tg.target(async (env: std.env.Arg) => {
+export let assertProvides = async (env: std.env.Arg) => {
 	let names = [
 		"aclocal",
 		"automake",
@@ -120,9 +120,9 @@ export let assertProvides = tg.target(async (env: std.env.Arg) => {
 		std.env.assertProvides({ env, names }),
 	]);
 	return true;
-});
+};
 
 export let test = tg.target(async () => {
-	await assertProvides(env({ sdk: { bootstrapMode: true } }));
+	await assertProvides(await env({ sdk: { bootstrapMode: true } }));
 	return true;
 });

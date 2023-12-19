@@ -11,7 +11,7 @@ import * as workspace from "./wrap/workspace.tg";
 /** Wrap an executable. */
 export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	type Apply = {
-		host: std.Triple;
+		host: std.Triple.Arg;
 		identity: wrap.Identity;
 		interpreter?:
 			| tg.File
@@ -50,10 +50,8 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			tg.File.assert(file);
 			// Try to read the manifest from it.
 			let existingManifest = await wrap.Manifest.read(file);
-			if (existingManifest) {
-				let env_ = await maybeMutatonEnvArgObjectFromManifestEnv(
-					existingManifest.env,
-				);
+			if (existingManifest !== undefined) {
+				let env_ = await wrap.envMapFromManifestEnv(existingManifest.env);
 				let env = tg.Mutation.is(env_)
 					? env_
 					: await tg.Mutation.arrayAppend(env_);
@@ -89,31 +87,39 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			};
 		} else if (isArgObject(arg)) {
 			let object: tg.MutationMap<Apply> = {};
-			if ("env" in arg) {
+			if (arg.env !== undefined) {
 				object.env = tg.Mutation.is(arg.env)
 					? arg.env
-					: await tg.Mutation.arrayAppend<wrap.Manifest.Env>([
-							(await wrap.manifestEnvFromArg(std.flatten(arg.env))) ?? {
-								kind: "map",
-								value: {},
-							},
-					  ]);
+					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
 			}
-			if ("identity" in arg) {
+			if (arg.identity !== undefined) {
 				object.identity = arg.identity ?? "executable";
 			}
-			if ("executable" in arg) {
-				object.executable = {
-					kind:
-						tg.Template.is(arg.executable) ||
-						tg.Artifact.is(arg.executable) ||
-						typeof arg.executable === "string"
-							? "path"
-							: "content",
-					value: await manifestTemplateFromArg(arg.executable),
-				};
+			if (arg.executable !== undefined) {
+				if (
+					tg.Template.is(arg.executable) ||
+					typeof arg.executable === "string"
+				) {
+					object.executable = {
+						kind: "content",
+						value: await manifestTemplateFromArg(arg.executable),
+					};
+					if (!arg.interpreter) {
+						let defaultShell = await defaultShellInterpreter();
+						object.interpreter = await manifestInterpreterFromArg(defaultShell);
+					}
+					if (!arg.identity) {
+						object.identity = "executable";
+					}
+				} else {
+					// FIXME - use the branch logic from the file/symlink case above.
+					object.executable = {
+						kind: "path",
+						value: await manifestSymlinkFromArg(arg.executable),
+					};
+				}
 			}
-			if ("libraryPaths" in arg) {
+			if (arg.libraryPaths !== undefined) {
 				if (arg.libraryPaths !== undefined) {
 					object.libraryPaths = tg.Mutation.is(arg.libraryPaths)
 						? arg.libraryPaths
@@ -122,20 +128,20 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						  );
 				}
 			}
-			if ("interpreter" in arg) {
+			if (arg.interpreter !== undefined) {
 				object.interpreter = arg.interpreter;
 			}
-			if ("executable" in arg) {
+			if (arg.executable !== undefined) {
 				object.executable = arg.executable;
 			}
-			if ("args" in arg) {
+			if (arg.args !== undefined) {
 				object.manifestArgs = tg.Mutation.is(arg.args)
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
 					  );
 			}
-			if ("host" in arg) {
+			if (arg.host !== undefined) {
 				object.host = std.triple(arg.host);
 			}
 
@@ -180,7 +186,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 		let paths = manifestInterpreter.libraryPaths ?? [];
 		if (libraryPaths) {
 			paths = paths.concat(
-				await Promise.all(libraryPaths.map(manifestTemplateFromArg)),
+				await Promise.all(libraryPaths.map(manifestSymlinkFromArg)),
 			);
 		}
 		manifestInterpreter.libraryPaths = paths;
@@ -197,7 +203,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	};
 
 	// Get the wrapper executable.
-	let host = await std.Triple.host(host_);
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let wrapper = await workspace.wrapper({ host });
 
 	// Write the manifest to the wrapper and return.
@@ -296,35 +302,44 @@ export namespace wrap {
 		identity: Identity;
 		interpreter?: Manifest.Interpreter;
 		executable: Manifest.Executable;
-		env?: Manifest.Env;
-		args: Array<Manifest.Template>;
+		env?: Manifest.Mutation;
+		args?: Array<Manifest.Template>;
+	};
+
+	export let envMapFromManifestEnv = async (
+		mutation: wrap.Manifest.Mutation | undefined,
+	): Promise<wrap.Manifest.EnvMap> => {
+		let ret: wrap.Manifest.EnvMap = {};
+		if (mutation?.kind !== "set") {
+			return ret;
+		}
+		tg.assert(mutation.kind === "set", "Malformed env, expected set or unset.");
+		return envMapFromMapValue(mutation.value);
 	};
 
 	/** Yield the key/value pairs this manifest sets once all mutations are applied. */
 	export async function* envVars(
-		env: wrap.Manifest.Env | undefined,
+		map: wrap.Manifest.EnvMap | undefined,
 	): AsyncGenerator<[string, tg.Template | undefined]> {
-		if (env === undefined || env.kind !== "map") {
+		if (map === undefined) {
 			return;
 		}
-		let map = env.value;
 		for (let [key, mutations] of Object.entries(map)) {
-			let result: tg.Template | undefined;
-			for (let mutation of std.flatten([mutations])) {
-				result = await mutateTemplate(result, mutation);
+			let result = undefined;
+			for (let mutation of mutations ?? []) {
+				if (mutation) {
+					result = await mutateTemplate(result, mutation);
+				}
 			}
-			let value = result;
-			yield [key, value];
+			yield [key, result];
 		}
 	}
 
 	export let manifestEnvFromArg = async (
-		arg: std.env.Arg | wrap.Manifest.Env | undefined,
-	): Promise<wrap.Manifest.Env | undefined> => {
-		if (arg && "kind" in arg && (arg.kind === "unset" || arg.kind === "map")) {
-			return arg as wrap.Manifest.Env;
-		} else if (arg === undefined) {
-			return { kind: "map", value: {} };
+		arg: std.env.Arg | undefined,
+	): Promise<wrap.Manifest.Mutation | undefined> => {
+		if (arg === undefined) {
+			return undefined;
 		} else if (tg.Mutation.is(arg)) {
 			tg.assert(
 				arg.inner.kind === "unset",
@@ -356,13 +371,7 @@ export namespace wrap {
 				pushOrSet(
 					ret,
 					"PATH",
-					manifestMaybeMutationFromManifestMutation({
-						kind: "template_prepend",
-						value: {
-							template: await manifestTemplateFromArg(await tg`${arg}/bin`),
-							separator: ":",
-						},
-					}),
+					await tg.Mutation.templatePrepend(tg`${arg}/bin`, ":"),
 				);
 			}
 			let includeDir = await arg.tryGet("include");
@@ -377,15 +386,7 @@ export namespace wrap {
 					pushOrSet(
 						ret,
 						"CPATH",
-						manifestMaybeMutationFromManifestMutation({
-							kind: "template_prepend",
-							value: {
-								template: await manifestTemplateFromArg(
-									await tg`${arg}/include`,
-								),
-								separator: ":",
-							},
-						}),
+						await tg.Mutation.templatePrepend(tg`${arg}/include`, ":"),
 					);
 				}
 			}
@@ -393,77 +394,63 @@ export namespace wrap {
 				pushOrSet(
 					ret,
 					"LIBRARY_PATH",
-					manifestMaybeMutationFromManifestMutation({
-						kind: "template_prepend",
-						value: {
-							template: await manifestTemplateFromArg(await tg`${arg}/lib`),
-							separator: ":",
-						},
-					}),
+					await tg.Mutation.templatePrepend(tg`${arg}/lib`, ":"),
 				);
 				if (await arg.tryGet("lib/pkgconfig")) {
 					pushOrSet(
 						ret,
 						"PKG_CONFIG_PATH",
-						manifestMaybeMutationFromManifestMutation({
-							kind: "template_prepend",
-							value: {
-								template: await manifestTemplateFromArg(
-									await tg`${arg}/lib/pkgconfig`,
-								),
-								separator: ":",
-							},
-						}),
+						await tg.Mutation.templatePrepend(tg`${arg}/lib/pkgconfig`, ":"),
 					);
 				}
 			}
-			return { kind: "map", value: ret };
+			return manifestMutationFromMutation(await tg.Mutation.set(ret));
 		} else if (Array.isArray(arg)) {
 			// If the arg is an array, then recurse.
 			return mergeEnvs(...(await Promise.all(arg.map(manifestEnvFromArg))));
 		} else if (typeof arg === "object") {
 			// Handle an object.
-			let ret = Object.fromEntries(
+			let ret: wrap.Manifest.EnvMap = Object.fromEntries(
 				await Promise.all(
 					Object.entries(arg).map<
-						Promise<[string, Array<wrap.Manifest.MaybeMutation>]>
+						Promise<[string, Array<tg.Mutation<tg.Template.Arg>>]>
 					>(async ([key, mutationArgs]) => {
 						let mutations = tg.Mutation.is(mutationArgs)
-							? [await manifestMutationFromMutation(mutationArgs)]
+							? [mutationArgs]
 							: await Promise.all(
 									std
 										.flatten([mutationArgs])
-										.map(manifestMutationFromMaybeMutation),
+										.filter((arg) => arg !== undefined)
+										.map(normalizeEnvVarValue),
 							  );
-						return [
-							key,
-							mutations.map((mutation) => {
-								return { kind: "mutation", value: mutation };
-							}),
-						];
+						return [key, mutations];
 					}),
 				),
 			);
-			return { kind: "map", value: ret };
+			return manifestMutationFromMutation(await tg.Mutation.set(ret));
 		} else {
 			return tg.unreachable();
 		}
 	};
 
-	export let mergeEnvs = (
-		...envs: Array<wrap.Manifest.Env | undefined>
-	): wrap.Manifest.Env | undefined => {
-		let result: wrap.Manifest.Env | undefined;
+	export let mergeEnvs = async (
+		...envs: Array<wrap.Manifest.Mutation | undefined>
+	): Promise<wrap.Manifest.Mutation | undefined> => {
+		let result: wrap.Manifest.Mutation | undefined;
 		for (let env of envs) {
 			if (env === undefined) {
 				return undefined;
 			} else if (env.kind === "unset") {
 				result = env;
 			} else {
-				let envMap = env.value ?? {};
-				let map: wrap.Manifest.EnvMap =
-					result?.kind === "map" ? result?.value : {};
-				for (let [name, val] of Object.entries(envMap)) {
+				tg.assert(
+					env?.kind === "set",
+					"Malformed env, expected set mutation but recieved " + env?.kind,
+				);
+				let envMap: wrap.Manifest.EnvMap = await envMapFromMapValue(env.value);
+				// If the running env is a set mutation, grab the current contents.
+				let map: wrap.Manifest.EnvMap = await envMapFromManifestEnv(result);
+				for await (let [name, val] of Object.entries(envMap)) {
 					if (val === undefined) {
 						// do nothing
 					} else {
@@ -475,24 +462,17 @@ export namespace wrap {
 						}
 						for (let mutation of val) {
 							let lastExistingMutation = map[name]?.at(-1);
-							if (
-								lastExistingMutation &&
-								lastExistingMutation.kind === "mutation"
-							) {
+							if (lastExistingMutation) {
 								// Attempt to merge the current mutation with the previous.
-								if (mutation.kind === "mutation") {
-									let mergedMutations = mergeManifestMutations(
-										lastExistingMutation.value,
-										mutation.value,
-									).map((mutation) =>
-										manifestMaybeMutationFromManifestMutation(mutation),
-									);
+								let mergedMutations = await mergeMutations(
+									lastExistingMutation,
+									mutation,
+								);
 
-									// Replace the last mutation with the merged mutations.
-									map[name] = (map[name] ?? [])
-										.slice(0, -1)
-										.concat(mergedMutations);
-								}
+								// Replace the last mutation with the merged mutations.
+								map[name] = (map[name] ?? [])
+									.slice(0, -1)
+									.concat(mergedMutations);
 							} else {
 								// Otherwise, just append the mutation.
 								map[name] = (map[name] ?? []).concat([mutation]);
@@ -500,8 +480,34 @@ export namespace wrap {
 						}
 					}
 				}
-				result = { kind: "map", value: map };
+				result = await manifestMutationFromMutation(await tg.Mutation.set(map));
 			}
+		}
+		return result;
+	};
+
+	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */
+	export let tryUnwrap = async (
+		file: tg.File,
+	): Promise<tg.Template | tg.Symlink | undefined> => {
+		let manifest = await wrap.Manifest.read(file);
+		if (!manifest) {
+			return undefined;
+		}
+		if (manifest.executable.kind === "content") {
+			return templateFromManifestTemplate(manifest.executable.value);
+		} else {
+			return manifest.executable.value as tg.Symlink | tg.Template;
+		}
+	};
+
+	/** Unwrap a wrapped executable. Throws an error if the input was not a Tangram executable. */
+	export let unwrap = async (
+		file: tg.File,
+	): Promise<tg.Template | tg.Symlink> => {
+		let result = await tryUnwrap(file);
+		if (!result) {
+			throw new Error("File does not have a wrapper manifest.");
 		}
 		return result;
 	};
@@ -517,70 +523,91 @@ export namespace wrap {
 
 		export type NormalInterpreter = {
 			kind: "normal";
-			path: Manifest.Template;
+			path: Manifest.Symlink;
 			args?: Array<Manifest.Template>;
 		};
 
 		export type LdLinuxInterpreter = {
 			kind: "ld-linux";
-			path: Manifest.Template;
-			libraryPaths?: Array<Manifest.Template>;
-			preloads?: Array<Manifest.Template>;
+			path: Manifest.Symlink;
+			libraryPaths?: Array<Manifest.Symlink>;
+			preloads?: Array<Manifest.Symlink>;
 			args?: Array<Manifest.Template>;
 		};
 
 		export type LdMuslInterpreter = {
 			kind: "ld-musl";
-			path: Manifest.Template;
-			libraryPaths?: Array<Manifest.Template>;
-			preloads?: Array<Manifest.Template>;
+			path: Manifest.Symlink;
+			libraryPaths?: Array<Manifest.Symlink>;
+			preloads?: Array<Manifest.Symlink>;
 			args?: Array<Manifest.Template>;
 		};
 
 		export type DyLdInterpreter = {
 			kind: "dyld";
-			libraryPaths?: Array<Manifest.Template>;
-			preloads?: Array<Manifest.Template>;
+			libraryPaths?: Array<Manifest.Symlink>;
+			preloads?: Array<Manifest.Symlink>;
 		};
 
 		export type Executable =
-			| { kind: "path"; value: Manifest.Template }
+			| { kind: "path"; value: Manifest.Symlink }
 			| { kind: "content"; value: Manifest.Template };
 
+		export type Symlink = {
+			artifact?: tg.Artifact.Id;
+			path?: string;
+		};
+
+		// Matches tg::template::Data
 		export type Template = {
 			components: Array<Manifest.Template.Component>;
 		};
 
+		// Matches tg::template::component::Data
 		export namespace Template {
 			export type Component =
 				| { kind: "string"; value: string }
 				| { kind: "artifact"; value: tg.Artifact.Id };
 		}
 
+		// Matches tg::mutation::Data
 		export type Mutation =
 			| { kind: "unset" }
-			| { kind: "set"; value: Manifest.Template }
-			| { kind: "set_if_unset"; value: Manifest.Template }
+			| { kind: "set"; value: Manifest.Value }
+			| { kind: "setIfUnset"; value: Manifest.Value }
 			| {
-					kind: "template_prepend";
-					value: { template: Manifest.Template; separator?: string };
+					kind: "templatePrepend";
+					template: Manifest.Template;
+					separator?: string;
 			  }
 			| {
-					kind: "template_append";
-					value: { template: Manifest.Template; separator?: string };
+					kind: "templateAppend";
+					template: Manifest.Template;
+					separator?: string;
 			  }
-			| { kind: "array_prepend"; value: Array<Manifest.Template> }
-			| { kind: "array_append"; value: Array<Manifest.Template> };
+			| { kind: "arrayPrepend"; values: Array<Manifest.Value> }
+			| { kind: "arrayAppend"; values: Array<Manifest.Value> };
 
-		export type Env = { kind: "unset" } | { kind: "map"; value: EnvMap };
-
-		export type EnvMap = {
-			[key: string]: Array<Manifest.MaybeMutation>;
-		};
-
-		export type MaybeMutation =
+		// Matches tg::value::Data
+		export type Value =
+			| { kind: "null" }
+			| { kind: "bool"; value: boolean }
+			| { kind: "number"; value: number }
+			| { kind: "string"; value: string }
+			| { kind: "directory"; value: tg.Directory.Id }
+			| { kind: "file"; value: tg.File.Id }
+			| { kind: "symlink"; value: tg.Symlink.Id }
+			| { kind: "template"; value: Manifest.Template }
 			| { kind: "mutation"; value: Manifest.Mutation }
-			| { kind: "template"; value: Manifest.Template };
+			| { kind: "array"; value: Array<Manifest.Value> }
+			| { kind: "map"; value: { [key: string]: Manifest.Value } };
+
+		// The non-serializeable type of a normalized env.
+		export type Env = tg.Mutation<EnvMap>;
+		export type EnvMap = Record<
+			string,
+			Array<tg.Mutation<tg.Template.Arg>> | undefined
+		>;
 
 		/** Read a manifest from the end of a file. */
 		export let read = async (
@@ -628,7 +655,8 @@ export namespace wrap {
 
 			return manifest;
 		};
-		// Write a manifest to a file.
+
+		/** Write a manifest to a file. */
 		export let write = async (file: tg.File, manifest: wrap.Manifest) => {
 			// Serialize the manifest.
 			let manifestBytes = tg.encoding.utf8.encode(
@@ -709,9 +737,11 @@ let manifestExecutableFromArg = async (
 	if (isManifestExecutable(arg)) {
 		return arg;
 	} else if (tg.File.is(arg) || tg.Symlink.is(arg)) {
+		let value = await manifestSymlinkFromArg(arg);
+		tg.assert(value);
 		return {
 			kind: "path",
-			value: await manifestTemplateFromArg(arg),
+			value,
 		};
 	} else if (typeof arg === "string" || tg.Template.is(arg)) {
 		return {
@@ -743,7 +773,7 @@ let manifestInterpreterFromArg = async (
 	// If the arg is an executable, then wrap it and create a normal interpreter.
 	if (tg.File.is(arg) || tg.Symlink.is(arg)) {
 		let interpreter = await std.wrap(arg);
-		let path = await manifestTemplateFromArg(interpreter);
+		let path = await manifestSymlinkFromArg(interpreter);
 		return {
 			kind: "normal",
 			path,
@@ -754,9 +784,13 @@ let manifestInterpreterFromArg = async (
 	// Otherwise, create the interpreter specified by the arg object.
 	if ("kind" in arg && arg.kind === "ld-linux") {
 		// Handle an ld-linux interpreter.
-		let path = await manifestTemplateFromArg(arg.executable);
+		let path = await manifestSymlinkFromArg(arg.executable);
 		let libraryPaths = arg.libraryPaths
-			? await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg))
+			? await Promise.all(
+					arg.libraryPaths.map(async (arg) =>
+						manifestSymlinkFromArg(await tg.template(arg)),
+					),
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -782,9 +816,13 @@ let manifestInterpreterFromArg = async (
 		});
 
 		// Combine the injection with any additional preloads specified by the caller.
-		let preloads = [await manifestTemplateFromArg(injectionLibrary)];
+		let preloads = [await manifestSymlinkFromArg(injectionLibrary)];
 		let additionalPreloads = arg.preloads
-			? await Promise.all(arg.preloads?.map(manifestTemplateFromArg))
+			? await Promise.all(
+					arg.preloads?.map(async (arg) =>
+						manifestSymlinkFromArg(await tg.template(arg)),
+					),
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -799,9 +837,13 @@ let manifestInterpreterFromArg = async (
 		};
 	} else if ("kind" in arg && arg.kind === "ld-musl") {
 		// Handle an ld-musl interpreter.
-		let path = await manifestTemplateFromArg(arg.executable);
+		let path = await manifestSymlinkFromArg(arg.executable);
 		let libraryPaths = arg.libraryPaths
-			? await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg))
+			? await Promise.all(
+					arg.libraryPaths.map(async (arg) =>
+						manifestSymlinkFromArg(await tg.template(arg)),
+					),
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -827,9 +869,13 @@ let manifestInterpreterFromArg = async (
 		});
 
 		// Combine the injection with any additional preloads specified by the caller.
-		let preloads = [await manifestTemplateFromArg(injectionLibrary)];
+		let preloads = [await manifestSymlinkFromArg(injectionLibrary)];
 		let additionalPreloads = arg.preloads
-			? await Promise.all(arg.preloads?.map(manifestTemplateFromArg))
+			? await Promise.all(
+					arg.preloads?.map(async (arg) =>
+						manifestSymlinkFromArg(await tg.template(arg)),
+					),
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -846,15 +892,23 @@ let manifestInterpreterFromArg = async (
 	} else if ("kind" in arg && arg.kind === "dyld") {
 		// Handle a dyld interpreter.
 		let libraryPaths = arg.libraryPaths
-			? await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg))
+			? await Promise.all(
+					arg.libraryPaths.map(async (arg) =>
+						manifestSymlinkFromArg(await tg.template(arg)),
+					),
+			  )
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
 		let injectionLibrary = await injection.default({
 			host: `aarch64-apple-darwin`,
 		});
-		let preloads = [await manifestTemplateFromArg(injectionLibrary)];
+		let preloads = [await manifestSymlinkFromArg(injectionLibrary)];
 		let additionalPreloads = arg.preloads
-			? await Promise.all(arg.preloads?.map(manifestTemplateFromArg))
+			? await Promise.all(
+					arg.preloads?.map(async (arg) =>
+						manifestSymlinkFromArg(await tg.template(arg)),
+					),
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -864,7 +918,7 @@ let manifestInterpreterFromArg = async (
 		};
 	} else {
 		// Handle a normal interpreter.
-		let path = await manifestTemplateFromArg(arg.executable);
+		let path = await manifestSymlinkFromArg(arg.executable);
 		let args = await Promise.all(arg.args?.map(manifestTemplateFromArg) ?? []);
 		return {
 			kind: "normal",
@@ -917,7 +971,7 @@ let manifestInterpreterFromExecutableArg = async (
 				kind: "dyld",
 				libraryPaths: undefined,
 				preloads: [
-					await manifestTemplateFromArg(
+					await manifestSymlinkFromArg(
 						await injection.default({ host: triple }),
 					),
 				],
@@ -961,11 +1015,15 @@ let manifestInterpreterFromElf = async (
 		let { ldso, libDir } = await std.sdk.toolchainComponents({
 			env: toolchainDir,
 		});
+		tg.assert(
+			ldso,
+			"Could not find a valid ldso, required for Linux wrappers.",
+		);
 		return {
 			kind: "ld-linux",
-			path: await manifestTemplateFromArg(ldso),
-			libraryPaths: [await manifestTemplateFromArg(libDir)],
-			preloads: [await manifestTemplateFromArg(injectionLib)],
+			path: await manifestSymlinkFromArg(ldso),
+			libraryPaths: [await manifestSymlinkFromArg(libDir)],
+			preloads: [await manifestSymlinkFromArg(injectionLib)],
 			args: undefined,
 		};
 	} else if (metadata.interpreter?.includes("ld-musl")) {
@@ -976,9 +1034,9 @@ let manifestInterpreterFromElf = async (
 		let ldso = tg.File.expect(await libDir.get(interpreterName(host)));
 		return {
 			kind: "ld-musl",
-			path: await manifestTemplateFromArg(ldso),
-			libraryPaths: [await manifestTemplateFromArg(libDir)],
-			preloads: [await manifestTemplateFromArg(injectionLib)],
+			path: await manifestSymlinkFromArg(ldso),
+			libraryPaths: [await manifestSymlinkFromArg(libDir)],
+			preloads: [await manifestSymlinkFromArg(injectionLib)],
 			args: undefined,
 		};
 	} else {
@@ -986,7 +1044,7 @@ let manifestInterpreterFromElf = async (
 	}
 };
 
-export let defaultShellInterpreter = tg.target(async () => {
+export let defaultShellInterpreter = async () => {
 	// Provide bash for the detected host system. Don't assume an existing SDK.
 	let shellArtifact = await std.utils.bash.build({
 		sdk: { bootstrapMode: true },
@@ -1002,53 +1060,27 @@ export let defaultShellInterpreter = tg.target(async () => {
 		env,
 	});
 	return bash;
-});
+};
 
-export let maybeMutatonEnvArgObjectFromManifestEnv = async (
-	env: wrap.Manifest.Env | undefined,
-): Promise<tg.MaybeMutation<std.env.ArgObject>> => {
-	if (env === undefined) {
-		return Promise.resolve({});
-	}
-	if (env.kind === "unset") {
-		return tg.Mutation.unset();
+let manifestSymlinkFromArg = async (
+	arg: string | tg.Template | tg.Artifact | wrap.Manifest.Template,
+): Promise<wrap.Manifest.Symlink> => {
+	if (isManifestTemplate(arg)) {
+		let t = await templateFromManifestTemplate(arg);
+		return manifestSymlinkFromArg(t);
+	} else if (typeof arg === "string" || tg.Template.is(arg)) {
+		return manifestSymlinkFromArg(await tg.symlink(arg));
+	} else if (tg.Symlink.is(arg)) {
+		return {
+			artifact: await (await arg.artifact())?.id(),
+			path: await arg.path(),
+		};
+	} else if (tg.Artifact.is(arg)) {
+		return { artifact: await arg.id() };
 	} else {
-		return envArgObjectFromManifestEnvMap(env.value);
+		console.log("Bad arg", arg);
+		return tg.unreachable();
 	}
-};
-
-let envArgObjectFromManifestEnvMap = async (
-	env: wrap.Manifest.EnvMap,
-): Promise<std.env.ArgObject> => {
-	let ret: std.env.ArgObject = {};
-	for (let [key, value] of Object.entries(env)) {
-		ret[key] = await Promise.all(
-			value.map(async (mutation) => {
-				if (mutation.kind === "mutation") {
-					return await mutationFromManifestMutation(mutation.value);
-				} else if (mutation.kind === "template") {
-					return await templateFromManifestTemplate(mutation.value);
-				} else {
-					return tg.unreachable();
-				}
-			}),
-		);
-		if (ret[key] instanceof Array) {
-			let arr = ret[key];
-			tg.assert(arr instanceof Array);
-			tg.assert(arr.length > 0);
-			if (arr.length === 1) {
-				ret[key] = arr[0];
-			}
-		}
-	}
-	return ret;
-};
-
-let manifestMaybeMutationFromManifestMutation = (
-	mutation: wrap.Manifest.Mutation,
-): wrap.Manifest.MaybeMutation => {
-	return { kind: "mutation", value: mutation };
 };
 
 let valueIsTemplateLike = (
@@ -1066,11 +1098,10 @@ let manifestMutationFromMutation = async (
 		return { kind: "unset" };
 	} else if (mutation.inner.kind === "set") {
 		let value = mutation.inner.value;
-		tg.assert(
-			valueIsTemplateLike(value),
-			`Expected a template arg, but got ${JSON.stringify(value)}.`,
-		);
-		return { kind: "set", value: await manifestTemplateFromArg(value) };
+		return {
+			kind: "set",
+			value: await manifestValueFromValue(value),
+		};
 	} else if (mutation.inner.kind === "set_if_unset") {
 		let value = mutation.inner.value;
 		tg.assert(
@@ -1078,8 +1109,10 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(value)}.`,
 		);
 		return {
-			kind: "set_if_unset",
-			value: await manifestTemplateFromArg(value),
+			kind: "setIfUnset",
+			value: manifestValueFromManifestTemplate(
+				await manifestTemplateFromArg(value),
+			),
 		};
 	} else if (mutation.inner.kind === "template_prepend") {
 		let template = mutation.inner.template;
@@ -1088,11 +1121,9 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(template)}.`,
 		);
 		return {
-			kind: "template_prepend",
-			value: {
-				template: await manifestTemplateFromArg(template),
-				separator: mutation.inner.separator,
-			},
+			kind: "templatePrepend",
+			template: await manifestTemplateFromArg(template),
+			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "template_append") {
 		let template = mutation.inner.template;
@@ -1101,259 +1132,324 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(template)}.`,
 		);
 		return {
-			kind: "template_append",
-			value: {
-				template: await manifestTemplateFromArg(template),
-				separator: mutation.inner.separator,
-			},
+			kind: "templateAppend",
+			template: await manifestTemplateFromArg(template),
+			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "array_prepend") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
-		let value = await Promise.all(
-			mutation.inner.values.map(manifestTemplateFromArg),
+		let values = await Promise.all(
+			mutation.inner.values.map(async (arg) =>
+				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
+			),
 		);
-		return { kind: "array_prepend", value };
+		return { kind: "arrayPrepend", values };
 	} else if (mutation.inner.kind === "array_append") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
-		let value = await Promise.all(
-			mutation.inner.values.map(manifestTemplateFromArg),
+		let values = await Promise.all(
+			mutation.inner.values.map(async (arg) =>
+				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
+			),
 		);
-		return { kind: "array_append", value };
+		return { kind: "arrayAppend", values };
 	} else {
 		return tg.unreachable();
 	}
 };
 
-let manifestMutationFromMaybeMutation = async (
-	mutation?: tg.MaybeMutation,
-): Promise<wrap.Manifest.Mutation> => {
-	if (mutation === undefined) {
-		return {
-			kind: "unset",
-		};
-	}
-	if (!tg.Mutation.is(mutation)) {
-		return manifestMutationFromMutation(
-			await tg.mutation<tg.Value>({
-				kind: "set",
-				value: mutation,
-			}),
-		);
-	} else {
-		return manifestMutationFromMutation(mutation);
-	}
-};
-
-let mergeManifestMutations = (
-	a: wrap.Manifest.Mutation,
-	b: wrap.Manifest.Mutation,
-): Array<wrap.Manifest.Mutation> => {
-	if (a.kind === "unset" && b.kind === "unset") {
+let mergeMutations = async (
+	a: tg.Mutation,
+	b: tg.Mutation,
+): Promise<Array<tg.Mutation>> => {
+	if (a.inner.kind === "unset" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.kind === "unset" && b.kind === "set") {
+	} else if (a.inner.kind === "unset" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.kind === "unset" && b.kind === "set_if_unset") {
-		let val = b.value;
-		return [
-			{
-				kind: "set",
-				value: val,
-			},
-		];
-	} else if (a.kind === "unset" && b.kind === "template_prepend") {
-		return [{ kind: "set", value: b.value.template }];
-	} else if (a.kind === "unset" && b.kind === "template_append") {
-		return [{ kind: "set", value: b.value.template }];
-	} else if (a.kind === "unset" && b.kind === "array_append") {
-		return [{ kind: "set", value: joinManifestTemplates(":", ...b.value) }];
-	} else if (a.kind === "unset" && b.kind === "array_prepend") {
-		return [{ kind: "set", value: joinManifestTemplates(":", ...b.value) }];
-	} else if (a.kind === "set" && b.kind === "unset") {
+	} else if (a.inner.kind === "unset" && b.inner.kind === "set_if_unset") {
+		let val = b.inner.value;
+		return [await tg.Mutation.set<tg.Value>(val)];
+	} else if (a.inner.kind === "unset" && b.inner.kind === "template_prepend") {
+		return [await tg.Mutation.set(b.inner.template)];
+	} else if (a.inner.kind === "unset" && b.inner.kind === "template_append") {
+		return [await tg.Mutation.set(b.inner.template)];
+	} else if (a.inner.kind === "unset" && b.inner.kind === "array_append") {
 		return [b];
-	} else if (a.kind === "set" && b.kind === "set") {
+	} else if (a.inner.kind === "unset" && b.inner.kind === "array_prepend") {
 		return [b];
-	} else if (a.kind === "set" && b.kind === "set_if_unset") {
+	} else if (a.inner.kind === "set" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "set" && b.inner.kind === "set") {
+		return [b];
+	} else if (a.inner.kind === "set" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.kind === "set" && b.kind === "template_prepend") {
-		let setVal = a.value;
-		tg.assert(isManifestTemplate(setVal));
-		return [
-			{
-				kind: "set",
-				value: joinManifestTemplates(
-					b.value.separator,
-					setVal,
-					b.value.template,
-				),
-			},
-		];
-	} else if (a.kind === "set" && b.kind === "template_append") {
-		let setVal = a.value;
-		tg.assert(isManifestTemplate(setVal));
-		return [
-			{
-				kind: "set",
-				value: joinManifestTemplates(
-					b.value.separator,
-					b.value.template,
-					setVal,
-				),
-			},
-		];
-	} else if (a.kind === "set" && b.kind === "array_append") {
-		return [a, b];
-	} else if (a.kind === "set" && b.kind === "array_prepend") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "unset") {
-		return [b];
-	} else if (a.kind === "set_if_unset" && b.kind === "set") {
-		return [b];
-	} else if (a.kind === "set_if_unset" && b.kind === "set_if_unset") {
-		return [a];
-	} else if (a.kind === "set_if_unset" && b.kind === "template_prepend") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "template_append") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "array_append") {
-		return [a, b];
-	} else if (a.kind === "set_if_unset" && b.kind === "array_prepend") {
-		return [a, b];
-	} else if (a.kind === "template_prepend" && b.kind === "unset") {
-		return [b];
-	} else if (a.kind === "template_prepend" && b.kind === "set") {
-		return [b];
-	} else if (a.kind === "template_prepend" && b.kind === "set_if_unset") {
-		return [a];
-	} else if (a.kind === "template_prepend" && b.kind === "template_prepend") {
-		if (a.value.separator === b.value.separator) {
+	} else if (a.inner.kind === "set" && b.inner.kind === "template_prepend") {
+		let setVal = a.inner.value;
+		if (isTemplateArg(setVal)) {
 			return [
-				{
-					kind: "template_prepend",
-					value: {
-						template: joinManifestTemplates(
-							a.value.separator,
-							b.value.template,
-							a.value.template,
-						),
-						separator: a.value.separator,
-					},
-				},
+				await tg.Mutation.set(
+					tg.Template.join(
+						b.inner.separator,
+						b.inner.template,
+						tg.template(setVal),
+					),
+				),
 			];
 		} else {
 			return [a, b];
 		}
-	} else if (a.kind === "template_prepend" && b.kind === "template_append") {
-		return [a, b];
-	} else if (a.kind === "template_prepend" && b.kind === "array_append") {
-		return [a, b];
-	} else if (a.kind === "template_prepend" && b.kind === "array_prepend") {
-		return [a, b];
-	} else if (a.kind === "template_append" && b.kind === "unset") {
-		return [b];
-	} else if (a.kind === "template_append" && b.kind === "set") {
-		return [b];
-	} else if (a.kind === "template_append" && b.kind === "set_if_unset") {
-		return [a];
-	} else if (a.kind === "template_append" && b.kind === "template_prepend") {
-		return [a, b];
-	} else if (a.kind === "template_append" && b.kind === "template_append") {
-		if (a.value.separator === b.value.separator) {
+	} else if (a.inner.kind === "set" && b.inner.kind === "template_append") {
+		let setVal = a.inner.value;
+		if (isTemplateArg(setVal)) {
 			return [
-				{
-					kind: "template_append",
-					value: {
-						template: joinManifestTemplates(
-							a.value.separator,
-							a.value.template,
-							b.value.template,
-						),
-						separator: a.value.separator,
-					},
-				},
+				await tg.Mutation.set(
+					tg.Template.join(
+						b.inner.separator,
+						tg.template(setVal),
+						b.inner.template,
+					),
+				),
 			];
 		} else {
 			return [a, b];
 		}
-	} else if (a.kind === "template_append" && b.kind === "array_append") {
+	} else if (a.inner.kind === "set" && b.inner.kind === "array_append") {
 		return [a, b];
-	} else if (a.kind === "template_append" && b.kind === "array_prepend") {
+	} else if (a.inner.kind === "set" && b.inner.kind === "array_prepend") {
 		return [a, b];
-	} else if (a.kind === "array_append" && b.kind === "unset") {
+	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.kind === "array_append" && b.kind === "set") {
+	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.kind === "array_append" && b.kind === "set_if_unset") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "set_if_unset"
+	) {
 		return [a];
-	} else if (a.kind === "array_append" && b.kind === "array_append") {
-		return [{ kind: "array_append", value: a.value.concat(b.value) }];
-	} else if (a.kind === "array_append" && b.kind === "array_prepend") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "template_prepend"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_append" && b.kind === "template_append") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "template_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_append" && b.kind === "template_prepend") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "array_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_prepend" && b.kind === "unset") {
+	} else if (
+		a.inner.kind === "set_if_unset" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "template_prepend" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.kind === "array_prepend" && b.kind === "set") {
+	} else if (a.inner.kind === "template_prepend" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.kind === "array_prepend" && b.kind === "set_if_unset") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "set_if_unset"
+	) {
 		return [a];
-	} else if (a.kind === "array_prepend" && b.kind === "array_append") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "template_prepend"
+	) {
+		if (a.inner.separator === b.inner.separator) {
+			return [
+				await tg.Mutation.templatePrepend(
+					tg.Template.join(
+						a.inner.separator,
+						b.inner.template,
+						a.inner.template,
+					),
+				),
+			];
+		} else {
+			return [a, b];
+		}
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "template_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_prepend" && b.kind === "array_prepend") {
-		return [{ kind: "array_prepend", value: b.value.concat(a.value) }];
-	} else if (a.kind === "array_prepend" && b.kind === "template_append") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "array_append"
+	) {
 		return [a, b];
-	} else if (a.kind === "array_prepend" && b.kind === "template_prepend") {
+	} else if (
+		a.inner.kind === "template_prepend" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "template_append" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "template_append" && b.inner.kind === "set") {
+		return [b];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "set_if_unset"
+	) {
+		return [a];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "template_prepend"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "template_append"
+	) {
+		if (a.inner.separator === b.inner.separator) {
+			return [
+				await tg.Mutation.templateAppend(
+					tg.Template.join(
+						a.inner.separator,
+						a.inner.template,
+						b.inner.template,
+					),
+				),
+			];
+		} else {
+			return [a, b];
+		}
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "array_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "template_append" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "array_append" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "array_append" && b.inner.kind === "set") {
+		return [b];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "set_if_unset"
+	) {
+		return [a];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "array_append"
+	) {
+		return [
+			await tg.Mutation.arrayAppend<tg.Value>(
+				a.inner.values.concat(b.inner.values),
+			),
+		];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "template_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_append" &&
+		b.inner.kind === "template_prepend"
+	) {
+		return [a, b];
+	} else if (a.inner.kind === "array_prepend" && b.inner.kind === "unset") {
+		return [b];
+	} else if (a.inner.kind === "array_prepend" && b.inner.kind === "set") {
+		return [b];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "set_if_unset"
+	) {
+		return [a];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "array_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "array_prepend"
+	) {
+		return [
+			await tg.Mutation.arrayPrepend<tg.Value>(
+				b.inner.values.concat(a.inner.values),
+			),
+		];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "template_append"
+	) {
+		return [a, b];
+	} else if (
+		a.inner.kind === "array_prepend" &&
+		b.inner.kind === "template_prepend"
+	) {
 		return [a, b];
 	} else {
 		return tg.unreachable();
 	}
+};
+
+let normalizeEnvVarValue = async (value: unknown): Promise<tg.Mutation> => {
+	if (value === undefined) {
+		return tg.Mutation.arrayAppend(tg``);
+	} else if (tg.Mutation.is(value)) {
+		return value;
+	} else if (isTemplateArg(value)) {
+		return tg.Mutation.set(tg.template(value));
+	} else {
+		throw new Error("Unexpected value type: " + value);
+	}
+};
+
+let manifestValueFromManifestTemplate = (
+	template: wrap.Manifest.Template,
+): wrap.Manifest.Value => {
+	return {
+		kind: "template",
+		value: template,
+	};
 };
 
 let mutateTemplate = async (
-	t: tg.Template | undefined,
-	maybeMutation: wrap.Manifest.MaybeMutation,
+	template: tg.Template | undefined,
+	mutation: tg.Mutation<tg.Template.Arg>,
 ): Promise<tg.Template | undefined> => {
-	let mutation: wrap.Manifest.Mutation =
-		maybeMutation.kind === "mutation"
-			? maybeMutation.value
-			: { kind: "set", value: maybeMutation.value };
-	let template = await manifestTemplateFromArg(t);
-	if (mutation.kind === "array_append") {
-		let values = mutation.value;
-		return templateFromManifestTemplate(
-			joinManifestTemplates(":", template, ...values),
+	if (
+		mutation.inner.kind === "array_append" ||
+		mutation.inner.kind === "array_prepend"
+	) {
+		throw new Error("Cannot apply an array mutation to a template");
+	} else if (mutation.inner.kind === "template_append") {
+		return tg.Template.join(
+			mutation.inner.separator,
+			template,
+			mutation.inner.template,
 		);
-	} else if (mutation.kind === "array_prepend") {
-		let values = mutation.value;
-		return templateFromManifestTemplate(
-			joinManifestTemplates(":", ...values, template),
+	} else if (mutation.inner.kind === "template_prepend") {
+		return tg.Template.join(
+			mutation.inner.separator,
+			mutation.inner.template,
+			template,
 		);
-	} else if (mutation.kind === "template_append") {
-		return templateFromManifestTemplate(
-			joinManifestTemplates(
-				mutation.value.separator,
-				template,
-				mutation.value.template,
-			),
-		);
-	} else if (mutation.kind === "template_prepend") {
-		return templateFromManifestTemplate(
-			joinManifestTemplates(
-				mutation.value.separator,
-				mutation.value.template,
-				template,
-			),
-		);
-	} else if (mutation.kind === "set") {
-		return templateFromManifestTemplate(mutation.value);
-	} else if (mutation.kind === "set_if_unset") {
+	} else if (mutation.inner.kind === "set") {
+		tg.assert(isTemplateArg(mutation.inner.value));
+		return tg.template(mutation.inner.value);
+	} else if (mutation.inner.kind === "set_if_unset") {
 		if (template?.components.length === 0) {
-			return templateFromManifestTemplate(mutation.value);
+			tg.assert(isTemplateArg(mutation.inner.value));
+			return tg.template(mutation.inner.value);
 		}
-	} else if (mutation.kind === "unset") {
-		return tg``;
+	} else if (mutation.inner.kind === "unset") {
+		return tg.template();
 	}
 	return tg.unreachable();
 };
@@ -1384,31 +1480,111 @@ let mutationFromManifestMutation = (
 	if (manifestMutation.kind === "unset") {
 		return Promise.resolve(tg.Mutation.unset());
 	} else if (manifestMutation.kind === "set") {
-		return tg.Mutation.set(
-			templateFromManifestTemplate(manifestMutation.value),
-		);
-	} else if (manifestMutation.kind === "set_if_unset") {
+		return tg.Mutation.set(valueFromManifestValue(manifestMutation.value));
+	} else if (manifestMutation.kind === "setIfUnset") {
 		return tg.Mutation.setIfUnset(
-			templateFromManifestTemplate(manifestMutation.value),
+			valueFromManifestValue(manifestMutation.value),
 		);
-	} else if (manifestMutation.kind === "array_prepend") {
+	} else if (manifestMutation.kind === "arrayPrepend") {
 		return tg.Mutation.arrayAppend(
-			manifestMutation.value.map(templateFromManifestTemplate),
+			manifestMutation.values.map(valueFromManifestValue),
 		);
-	} else if (manifestMutation.kind === "array_append") {
+	} else if (manifestMutation.kind === "arrayAppend") {
 		return tg.Mutation.arrayAppend(
-			manifestMutation.value.map(templateFromManifestTemplate),
+			manifestMutation.values.map(valueFromManifestValue),
 		);
-	} else if (manifestMutation.kind === "template_prepend") {
+	} else if (manifestMutation.kind === "templatePrepend") {
 		return tg.Mutation.templatePrepend(
-			templateFromManifestTemplate(manifestMutation.value.template),
-			manifestMutation.value.separator,
+			templateFromManifestTemplate(manifestMutation.template),
+			manifestMutation.separator,
 		);
-	} else if (manifestMutation.kind === "template_append") {
+	} else if (manifestMutation.kind === "templateAppend") {
 		return tg.Mutation.templateAppend(
-			templateFromManifestTemplate(manifestMutation.value.template),
-			manifestMutation.value.separator,
+			templateFromManifestTemplate(manifestMutation.template),
+			manifestMutation.separator,
 		);
+	} else {
+		return tg.unreachable();
+	}
+};
+
+let manifestValueFromValue = async (
+	value: tg.Value,
+): Promise<wrap.Manifest.Value> => {
+	if (typeof value === undefined) {
+		return { kind: "null" };
+	} else if (typeof value === "boolean") {
+		return { kind: "bool", value };
+	} else if (typeof value === "number") {
+		return { kind: "number", value };
+	} else if (typeof value === "string") {
+		return { kind: "string", value };
+	} else if (tg.Directory.is(value)) {
+		return { kind: "directory", value: await value.id() };
+	} else if (tg.File.is(value)) {
+		return { kind: "file", value: await value.id() };
+	} else if (tg.Symlink.is(value)) {
+		return { kind: "symlink", value: await value.id() };
+	} else if (tg.Template.is(value)) {
+		return { kind: "template", value: await manifestTemplateFromArg(value) };
+	} else if (tg.Mutation.is(value)) {
+		return {
+			kind: "mutation",
+			value: await manifestMutationFromMutation(value),
+		};
+	} else if (value instanceof Array) {
+		let arr = await Promise.all(value.map(manifestValueFromValue));
+		return { kind: "array", value: arr };
+	} else if (typeof value === "object") {
+		let obj: { [key: string]: wrap.Manifest.Value } = {};
+		let entries = Object.entries(value);
+		let promises = entries.map(async ([key, val]) => {
+			return { key, value: await manifestValueFromValue(val) };
+		});
+		let resolvedEntries = await Promise.all(promises);
+		for (let entry of resolvedEntries) {
+			obj[entry.key] = entry.value;
+		}
+		return { kind: "map", value: obj };
+	} else {
+		return tg.unreachable();
+	}
+};
+
+let valueFromManifestValue = async (
+	value: wrap.Manifest.Value,
+): Promise<tg.Value> => {
+	if (value.kind === "null") {
+		undefined;
+	} else if (value.kind === "bool") {
+		return value.value;
+	} else if (value.kind === "number") {
+		return value.value;
+	} else if (value.kind === "string") {
+		return value.value;
+	} else if (value.kind === "directory") {
+		return tg.Directory.withId(value.value);
+	} else if (value.kind === "file") {
+		return tg.File.withId(value.value);
+	} else if (value.kind === "symlink") {
+		return tg.Symlink.withId(value.value);
+	} else if (value.kind === "template") {
+		return await templateFromManifestTemplate(value.value);
+	} else if (value.kind === "mutation") {
+		return mutationFromManifestMutation(value.value);
+	} else if (value.kind === "array") {
+		return await Promise.all(value.value.map(valueFromManifestValue));
+	} else if (value.kind === "map") {
+		let ret: tg.Value = {};
+		let entries = Object.entries(value.value);
+		let promises = entries.map(async ([key, val]) => {
+			return { key, value: await valueFromManifestValue(val) };
+		});
+		let resolvedEntries = await Promise.all(promises);
+		for (let entry of resolvedEntries) {
+			ret[entry.key] = entry.value;
+		}
+		return ret;
 	} else {
 		return tg.unreachable();
 	}
@@ -1418,7 +1594,7 @@ let mutationFromManifestMutation = (
 export async function* manifestEnvVars(
 	manifest: wrap.Manifest,
 ): AsyncGenerator<[string, tg.Template | undefined]> {
-	yield* wrap.envVars(manifest.env);
+	yield* wrap.envVars(await wrap.envMapFromManifestEnv(manifest.env));
 }
 
 let manifestTemplateFromArg = async (
@@ -1438,8 +1614,40 @@ let manifestTemplateFromArg = async (
 		}),
 	);
 	return {
-		components,
+		components: components ?? [],
 	};
+};
+
+let envMapFromMapValue = async (
+	value: wrap.Manifest.Value,
+): Promise<wrap.Manifest.EnvMap> => {
+	tg.assert(
+		value.kind === "map",
+		"Malformed env, expected a map of mutations.",
+	);
+	let ret: wrap.Manifest.EnvMap = {};
+	for (let [key, val] of Object.entries(value.value)) {
+		if (val.kind === "mutation") {
+			ret[key] = [await mutationFromManifestMutation(val.value)];
+		} else if (val.kind === "array") {
+			ret[key] = await Promise.all(
+				val.value.map(async (inner) => {
+					let val = await valueFromManifestValue(inner);
+					tg.assert(tg.Mutation.is(val), "Malformed env, expected a mutation.");
+					return val;
+				}),
+			);
+		} else {
+			throw new Error(
+				"Malformed env, expected a mutation or array of mutations.",
+			);
+		}
+	}
+	return ret;
+};
+
+let isTemplateArg = (arg: unknown): arg is tg.Template.Arg => {
+	return typeof arg === "string" || tg.Artifact.is(arg) || tg.Template.is(arg);
 };
 
 let isManifestTemplate = (
@@ -1466,90 +1674,6 @@ let isManifestTemplateComponent = (
 	);
 };
 
-let joinManifestTemplates = (
-	separator: string | undefined,
-	...templates: Array<wrap.Manifest.Template>
-): wrap.Manifest.Template => {
-	// Join the templates.
-	templates = templates.filter((template) => template !== undefined);
-	let components: Array<wrap.Manifest.Template.Component> = [];
-	for (let i = 0; i < templates.length; i++) {
-		if (separator && i > 0 && components.length > 0) {
-			components.push({ kind: "string", value: separator });
-		}
-		let template = templates[i];
-		tg.assert(template);
-		components.push(...template.components);
-	}
-
-	// Normalize the components.
-	let normalizedComponents: Array<wrap.Manifest.Template.Component> = [];
-	for (let component of components) {
-		let lastComponent = normalizedComponents.at(-1);
-		if (component.kind === "string" && component.value === "") {
-			// Ignore empty string components.
-			continue;
-		} else if (
-			lastComponent?.kind === "string" &&
-			component.kind === "string"
-		) {
-			// Merge adjacent string components.
-			normalizedComponents.splice(-1, 1, {
-				kind: "string",
-				value: lastComponent.value + component.value,
-			});
-		} else {
-			normalizedComponents.push(component);
-		}
-	}
-
-	// If the final character is a string matching the separator, chop it.
-	let lastComponent = normalizedComponents.at(-1);
-	if (
-		lastComponent?.kind === "string" &&
-		separator &&
-		lastComponent.value.endsWith(separator)
-	) {
-		normalizedComponents.splice(-1, 1, {
-			kind: "string",
-			value: lastComponent.value.slice(0, -separator.length),
-		});
-	}
-
-	return { components: normalizedComponents };
-};
-
-let manifestTemplatesEqual = (
-	a: wrap.Manifest.Template,
-	b: wrap.Manifest.Template,
-): boolean => {
-	if (a.components.length !== b.components.length) {
-		return false;
-	}
-	for (let i = 0; i < a.components.length; i++) {
-		let aComponent = a.components[i];
-		tg.assert(aComponent !== undefined);
-		let bComponent = b.components[i];
-		tg.assert(bComponent !== undefined);
-		if (aComponent.kind !== bComponent.kind) {
-			return false;
-		}
-		if (aComponent.kind === "string" && bComponent.kind === "string") {
-			if (aComponent.value !== bComponent.value) {
-				return false;
-			}
-		} else if (
-			aComponent.kind === "artifact" &&
-			bComponent.kind === "artifact"
-		) {
-			if (aComponent.value !== bComponent.value) {
-				return false;
-			}
-		}
-	}
-	return true;
-};
-
 /** Yield the artifacts referenced by a manifest. */
 async function* manifestReferences(
 	manifest: wrap.Manifest,
@@ -1560,35 +1684,35 @@ async function* manifestReferences(
 			break;
 		}
 		case "normal":
-			yield* manifestTemplateReferences(manifest.interpreter.path);
+			yield* manifestSymlinkReferences(manifest.interpreter.path);
 			for (let arg of manifest.interpreter.args ?? []) {
 				yield* manifestTemplateReferences(arg);
 			}
 			break;
 		case "ld-linux": {
-			yield* manifestTemplateReferences(manifest.interpreter.path);
+			yield* manifestSymlinkReferences(manifest.interpreter.path);
 			if (manifest.interpreter.libraryPaths) {
 				for (let libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestTemplateReferences(libraryPath);
+					yield* manifestSymlinkReferences(libraryPath);
 				}
 			}
 			if (manifest.interpreter.preloads) {
 				for (let preload of manifest.interpreter.preloads) {
-					yield* manifestTemplateReferences(preload);
+					yield* manifestSymlinkReferences(preload);
 				}
 			}
 			break;
 		}
 		case "ld-musl": {
-			yield* manifestTemplateReferences(manifest.interpreter.path);
+			yield* manifestSymlinkReferences(manifest.interpreter.path);
 			if (manifest.interpreter.libraryPaths) {
 				for (let libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestTemplateReferences(libraryPath);
+					yield* manifestSymlinkReferences(libraryPath);
 				}
 			}
 			if (manifest.interpreter.preloads) {
 				for (let preload of manifest.interpreter.preloads) {
-					yield* manifestTemplateReferences(preload);
+					yield* manifestSymlinkReferences(preload);
 				}
 			}
 			break;
@@ -1596,12 +1720,12 @@ async function* manifestReferences(
 		case "dyld": {
 			if (manifest.interpreter.libraryPaths) {
 				for (let libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestTemplateReferences(libraryPath);
+					yield* manifestSymlinkReferences(libraryPath);
 				}
 			}
 			if (manifest.interpreter.preloads) {
 				for (let preload of manifest.interpreter.preloads) {
-					yield* manifestTemplateReferences(preload);
+					yield* manifestSymlinkReferences(preload);
 				}
 			}
 			break;
@@ -1609,40 +1733,11 @@ async function* manifestReferences(
 	}
 
 	// Get the references from the executable.
-	yield* manifestTemplateReferences(manifest.executable.value);
+	yield* manifestExecutableReferences(manifest.executable);
 
 	// Get the references from the env.
-	if (manifest.env?.kind == "map") {
-		for (let mutations of Object.values(manifest.env.value)) {
-			for (let maybeMutation of mutations) {
-				if (maybeMutation.kind === "template") {
-					// It's a template.
-					yield* manifestTemplateReferences(maybeMutation.value);
-				} else if (maybeMutation.kind === "mutation") {
-					// It's a mutation.
-					let mutation = maybeMutation.value;
-					// Get the references from the mutation.
-					switch (mutation.kind) {
-						case "unset":
-							break;
-						case "set":
-						case "set_if_unset":
-							yield* manifestTemplateReferences(mutation.value);
-							break;
-						case "template_prepend":
-						case "template_append":
-							yield* manifestTemplateReferences(mutation.value.template);
-							break;
-						case "array_prepend":
-						case "array_append":
-							for (let value of mutation.value) {
-								yield* manifestTemplateReferences(value);
-							}
-							break;
-					}
-				}
-			}
-		}
+	if (manifest.env) {
+		yield* manifestMutationReferences(manifest.env);
 	}
 
 	// Get the references from the args.
@@ -1652,6 +1747,52 @@ async function* manifestReferences(
 				yield* manifestTemplateReferences(arg);
 			}
 		}
+	}
+}
+
+/** Yield the artifacts prent in the manifest env. */
+function* manifestMutationReferences(
+	mutation: wrap.Manifest.Mutation,
+): Generator<tg.Artifact> {
+	switch (mutation.kind) {
+		case "unset":
+			break;
+		case "set":
+		case "setIfUnset":
+			yield* manifestValueReferences(mutation.value);
+			break;
+		case "templatePrepend":
+		case "templateAppend":
+			yield* manifestTemplateReferences(mutation.template);
+			break;
+		case "arrayPrepend":
+		case "arrayAppend":
+			for (let value of mutation.values) {
+				yield* manifestValueReferences(value);
+			}
+			break;
+	}
+}
+
+/** Yield the artifacts references by an executable. */
+function* manifestExecutableReferences(
+	executable: wrap.Manifest.Executable,
+): Generator<tg.Artifact> {
+	if (executable.kind === "path") {
+		yield* manifestSymlinkReferences(executable.value);
+	} else if (executable.kind === "content") {
+		yield* manifestTemplateReferences(executable.value);
+	} else {
+		return tg.unreachable();
+	}
+}
+
+/** Yield the artifact referenced by a symlink. */
+function* manifestSymlinkReferences(
+	symlink: wrap.Manifest.Symlink,
+): Generator<tg.Artifact> {
+	if (symlink.artifact) {
+		yield tg.Artifact.withId(symlink.artifact);
 	}
 }
 
@@ -1665,6 +1806,32 @@ function* manifestTemplateReferences(
 		}
 	}
 }
+
+/** Yield the artifacts referenced by a value. */
+function* manifestValueReferences(
+	value: wrap.Manifest.Value,
+): Generator<tg.Artifact> {
+	if (value.kind === "directory") {
+		yield tg.Artifact.withId(value.value);
+	} else if (value.kind === "file") {
+		yield tg.Artifact.withId(value.value);
+	} else if (value.kind === "symlink") {
+		yield tg.Artifact.withId(value.value);
+	} else if (value.kind === "template") {
+		yield* manifestTemplateReferences(value.value);
+	} else if (value.kind === "mutation") {
+		yield* manifestMutationReferences(value.value);
+	} else if (value.kind === "array") {
+		for (let v of value.value) {
+			yield* manifestValueReferences(v);
+		}
+	} else if (value.kind === "map") {
+		for (let v of Object.values(value.value)) {
+			yield* manifestValueReferences(v);
+		}
+	}
+}
+
 export let artifactId = (artifact: tg.Artifact): Promise<tg.Artifact.Id> => {
 	if (tg.Directory.is(artifact)) {
 		return artifact.id();

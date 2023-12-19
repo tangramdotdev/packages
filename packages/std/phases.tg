@@ -63,26 +63,22 @@ export let target = async (...args: tg.Args<Arg>) => {
 			return {};
 		} else if (isArgObject(arg)) {
 			let object: tg.MutationMap<Apply> = {};
-			if ("target" in arg) {
-				object.targetArgs = await tg.Mutation.arrayAppend<tg.Target.Arg>(
-					arg.target,
-				);
+			if (arg.target !== undefined) {
+				object.targetArgs = tg.Mutation.is(arg.target)
+					? arg.target
+					: await tg.Mutation.arrayAppend<tg.Target.Arg>(arg.target);
 			}
-			if ("env" in arg) {
+			if (arg.env !== undefined) {
 				if (tg.Mutation.is(arg.env)) {
-					if (arg.env.inner.kind === "unset") {
-						object.env = tg.Mutation.unset();
-					} else {
-						return tg.unreachable();
-					}
+					object.env = arg.env;
 				} else {
 					object.env = await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
 				}
 			}
-			if ("order" in arg) {
+			if (arg.order !== undefined) {
 				object.order = arg.order;
 			}
-			if ("phases" in arg) {
+			if (arg.phases !== undefined) {
 				if (tg.Mutation.is(arg.phases)) {
 					object.phases = arg.phases;
 				} else {
@@ -206,10 +202,11 @@ export let isPhaseArgObject = (arg: unknown): arg is PhaseArgObject => {
 	);
 };
 
-export let isPhaseObject = (arg: PhaseArg): arg is Phase => {
+export let isPhaseObject = (arg: unknown): arg is Phase => {
 	return (
 		arg !== undefined &&
 		typeof arg === "object" &&
+		arg !== null &&
 		"body" in arg &&
 		isCommand(arg.body)
 	);
@@ -253,7 +250,7 @@ export let mergeCommandArgs = async (
 						? arg.inner.value.command
 						: await tg.template(arg.inner.value.command);
 					let args = undefined;
-					if ("args" in arg.inner.value) {
+					if (arg.inner.value.args !== undefined) {
 						args = tg.Mutation.is(arg.inner.value.args)
 							? arg.inner.value.args
 							: await Promise.all(
@@ -282,7 +279,7 @@ export let mergeCommandArgs = async (
 								await tg.template(arg.inner.value.command),
 						  );
 					let args = undefined;
-					if ("args" in arg.inner.value) {
+					if (arg.inner.value.args !== undefined) {
 						args = tg.Mutation.is(arg.inner.value.args)
 							? arg.inner.value.args
 							: await tg.Mutation.setIfUnset(
@@ -310,18 +307,18 @@ export let mergeCommandArgs = async (
 			) {
 				throw new Error("Cannot apply array mutation to a command.");
 			} else {
-				return tg.unreachable();
+				throw new Error("Unexpected mutation for command.");
 			}
 		} else if (isCommandArgObject(arg)) {
 			let ret: tg.MutationMap<Apply> = {};
 			// Handle command, default mutation is `set`.
-			if ("command" in arg) {
+			if (arg.command !== undefined) {
 				ret.command = tg.Mutation.is(arg.command)
 					? arg.command
 					: await tg.template(arg.command);
 			}
 			// Handle args, detault mutation is `array_append`.
-			if ("args" in arg) {
+			if (arg.args !== undefined) {
 				ret.args = tg.Mutation.is(arg.args)
 					? arg.args
 					: await tg.mutation({
@@ -364,15 +361,11 @@ export let mergePhaseArgs = async (
 					? await tg.Mutation.arrayAppend<CommandArg>(arg.body)
 					: "",
 			};
-			if ("pre" in arg) {
-				ret.pre = arg.pre
-					? await tg.Mutation.arrayAppend<CommandArg>(arg.pre)
-					: undefined;
+			if (arg.pre !== undefined) {
+				ret.pre = await tg.Mutation.arrayAppend<CommandArg>(arg.pre);
 			}
-			if ("post" in arg) {
-				ret.post = arg.post
-					? await tg.Mutation.arrayAppend<CommandArg>(arg.post)
-					: undefined;
+			if (arg.post !== undefined) {
+				ret.post = await tg.Mutation.arrayAppend<CommandArg>(arg.post);
 			}
 			return ret;
 		} else if (tg.Mutation.is(arg)) {
@@ -399,7 +392,7 @@ export let mergePhaseArgs = async (
 				body: await tg.Mutation.arrayAppend<CommandArg>(arg),
 			};
 		} else {
-			return tg.unreachable();
+			throw new Error("Unexpected phase arg type.");
 		}
 	});
 
@@ -444,7 +437,7 @@ export let isCommandArgObject = (arg: unknown): arg is CommandArgObject => {
 	);
 };
 
-export let isCommand = (arg: PhaseArg): arg is Command => {
+export let isCommand = (arg: unknown): arg is Command => {
 	return isCommandArgObject(arg) && tg.Template.is(arg.command);
 };
 

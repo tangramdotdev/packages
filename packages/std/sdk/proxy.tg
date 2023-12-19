@@ -170,9 +170,8 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// Create the linker proxy.
-	let output = await std.wrap({
+	let output = await std.wrap(tgld, {
 		identity: "wrapper",
-		executable: tgld,
 		env: {
 			TANGRAM_LINKER_COMMAND_PATH: arg.linker,
 			TANGRAM_LINKER_INJECTION_PATH: injectionLibrary,

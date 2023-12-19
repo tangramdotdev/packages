@@ -1,7 +1,7 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use num::ToPrimitive;
 use std::{
-	collections::{BTreeMap, HashSet},
+	collections::HashSet,
+	hash::BuildHasher,
 	io::{Read, Seek, Write},
 	os::unix::fs::PermissionsExt,
 	path::Path,
@@ -14,6 +14,9 @@ pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
 /// The manifest version.
 pub const VERSION: u64 = 0;
 
+/// Set the algorithm used to hash IDs.;
+type Hasher = fnv::FnvBuildHasher;
+
 /// The Tangram run entrypoint manifest.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Manifest {
@@ -21,6 +24,7 @@ pub struct Manifest {
 	pub identity: Identity,
 
 	/// The interpreter for the executable.
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub interpreter: Option<Interpreter>,
 
 	/// The executable to run.
@@ -28,32 +32,11 @@ pub struct Manifest {
 
 	/// The environment variable mutations to apply.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub env: Option<Env>,
+	pub env: Option<tg::mutation::Data>,
 
 	/// The command line arguments to pass to the executable.
-	pub args: Vec<tg::template::Data>,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "camelCase")]
-pub enum MaybeMutation {
-	Mutation(Mutation),
-	Template(tg::template::Data),
-}
-
-/// An Env can be either a single mutation or a map of mutations.
-/// In the mutation case, only Unset and Set are allowed.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "camelCase")]
-pub enum Env {
-	Unset,
-	Map(BTreeMap<String, Vec<MaybeMutation>>),
-}
-
-impl Default for Env {
-	fn default() -> Self {
-		Env::Map(BTreeMap::new())
-	}
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub args: Option<Vec<tg::template::Data>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -88,7 +71,7 @@ pub enum Interpreter {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NormalInterpreter {
 	/// The path to the file to exec.
-	pub path: tg::template::Data,
+	pub path: tg::symlink::Data,
 
 	/// Arguments for the interpreter.
 	pub args: Vec<tg::template::Data>,
@@ -98,15 +81,15 @@ pub struct NormalInterpreter {
 #[serde(rename_all = "camelCase")]
 pub struct LdLinuxInterpreter {
 	/// The path to ld-linux.so.
-	pub path: tg::template::Data,
+	pub path: tg::symlink::Data,
 
 	/// The paths for the `--library-path` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<tg::template::Data>>,
+	pub library_paths: Option<Vec<tg::symlink::Data>>,
 
 	/// The paths for the `--preload` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<tg::template::Data>>,
+	pub preloads: Option<Vec<tg::symlink::Data>>,
 
 	/// Any additional arguments.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -117,15 +100,15 @@ pub struct LdLinuxInterpreter {
 #[serde(rename_all = "camelCase")]
 pub struct LdMuslInterpreter {
 	/// The path to ld-linux.so.
-	pub path: tg::template::Data,
+	pub path: tg::symlink::Data,
 
 	/// The paths for the `--library-path` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<tg::template::Data>>,
+	pub library_paths: Option<Vec<tg::symlink::Data>>,
 
 	/// The paths for the `--preload` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<tg::template::Data>>,
+	pub preloads: Option<Vec<tg::symlink::Data>>,
 
 	/// Any additional arguments.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -137,40 +120,22 @@ pub struct LdMuslInterpreter {
 pub struct DyLdInterpreter {
 	/// The paths for the `DYLD_LIBRARY_PATH` environment variable.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<tg::template::Data>>,
+	pub library_paths: Option<Vec<tg::symlink::Data>>,
 
 	/// The paths for the `DYLD_INSERT_LIBRARIES` environment variable.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<tg::template::Data>>,
+	pub preloads: Option<Vec<tg::symlink::Data>>,
 }
 
 /// An executable launched by the entrypoint.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case", tag = "kind", content = "value")]
+#[serde(rename_all = "camelCase", tag = "kind", content = "value")]
 pub enum Executable {
 	/// A path to an executable file.
-	Path(tg::template::Data),
+	Path(tg::symlink::Data),
 
 	/// A script which will be rendered to a file and interpreted.
 	Content(tg::template::Data),
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
-pub enum Mutation {
-	Unset,
-	Set(tg::template::Data),
-	SetIfUnset(tg::template::Data),
-	ArrayPrepend(Vec<tg::template::Data>),
-	ArrayAppend(Vec<tg::template::Data>),
-	TemplatePrepend(TemplateMutationValue),
-	TemplateAppend(TemplateMutationValue),
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct TemplateMutationValue {
-	pub template: tg::template::Data,
-	pub separator: Option<String>,
 }
 
 impl Manifest {
@@ -236,10 +201,10 @@ impl Manifest {
 		file.seek(std::io::SeekFrom::Current(-8))?;
 
 		// Read the manifest.
-		file.seek(std::io::SeekFrom::Current(-length.to_i64().unwrap()))?;
+		file.seek(std::io::SeekFrom::Current(-i64::try_from(length).unwrap()))?;
 		let mut manifest = vec![0u8; usize::try_from(length).unwrap()];
 		file.read_exact(&mut manifest)?;
-		file.seek(std::io::SeekFrom::Current(-length.to_i64().unwrap()))?;
+		file.seek(std::io::SeekFrom::Current(-i64::try_from(length).unwrap()))?;
 		tracing::debug!(manifest = ?std::str::from_utf8(&manifest).unwrap());
 
 		// Deserialize the manifest.
@@ -250,52 +215,52 @@ impl Manifest {
 
 	/// Collect the references from a manifest.
 	#[must_use]
-	pub fn references(&self) -> HashSet<tg::artifact::Id, fnv::FnvBuildHasher> {
+	pub fn references(&self) -> HashSet<tg::artifact::Id, Hasher> {
 		let mut references = HashSet::default();
 
 		// Collect the references from the interpreter.
 		match &self.interpreter {
 			Some(Interpreter::Normal(interpreter)) => {
-				collect_references_from_template_data(&interpreter.path, &mut references);
+				collect_references_from_symlink_data(&interpreter.path, &mut references);
 				for arg in &interpreter.args {
 					collect_references_from_template_data(arg, &mut references);
 				}
 			},
 			Some(Interpreter::LdLinux(interpreter)) => {
-				collect_references_from_template_data(&interpreter.path, &mut references);
+				collect_references_from_symlink_data(&interpreter.path, &mut references);
 				if let Some(library_paths) = &interpreter.library_paths {
 					for library_path in library_paths {
-						collect_references_from_template_data(library_path, &mut references);
+						collect_references_from_symlink_data(library_path, &mut references);
 					}
 				}
 				if let Some(preloads) = &interpreter.preloads {
 					for preload in preloads {
-						collect_references_from_template_data(preload, &mut references);
+						collect_references_from_symlink_data(preload, &mut references);
 					}
 				}
 			},
 			Some(Interpreter::LdMusl(interpreter)) => {
-				collect_references_from_template_data(&interpreter.path, &mut references);
+				collect_references_from_symlink_data(&interpreter.path, &mut references);
 				if let Some(library_paths) = &interpreter.library_paths {
 					for library_path in library_paths {
-						collect_references_from_template_data(library_path, &mut references);
+						collect_references_from_symlink_data(library_path, &mut references);
 					}
 				}
 				if let Some(preloads) = &interpreter.preloads {
 					for preload in preloads {
-						collect_references_from_template_data(preload, &mut references);
+						collect_references_from_symlink_data(preload, &mut references);
 					}
 				}
 			},
 			Some(Interpreter::DyLd(interpreter)) => {
 				if let Some(library_paths) = &interpreter.library_paths {
 					for library_path in library_paths {
-						collect_references_from_template_data(library_path, &mut references);
+						collect_references_from_symlink_data(library_path, &mut references);
 					}
 				}
 				if let Some(preloads) = &interpreter.preloads {
 					for preload in preloads {
-						collect_references_from_template_data(preload, &mut references);
+						collect_references_from_symlink_data(preload, &mut references);
 					}
 				}
 			},
@@ -304,40 +269,95 @@ impl Manifest {
 
 		// Collect the references from the executable.
 		match &self.executable {
-			Executable::Path(path) => collect_references_from_template_data(path, &mut references),
+			Executable::Path(path) => collect_references_from_symlink_data(path, &mut references),
 			Executable::Content(template) => {
 				collect_references_from_template_data(template, &mut references);
 			},
 		};
 
 		// Collect the references from the env.
-		if let Some(Env::Map(env)) = &self.env {
-			for mutations in env.values() {
-				for maybe_mutation in mutations {
-					match maybe_mutation {
-						MaybeMutation::Mutation(mutation) => {
-							collect_references_from_mutation(mutation, &mut references);
-						},
-						MaybeMutation::Template(template) => {
-							collect_references_from_template_data(template, &mut references);
-						},
-					}
-				}
-			}
+		if let Some(env) = &self.env {
+			collect_references_from_mutation_data(env, &mut references);
 		}
 
 		// Collect the references from the args.
-		for arg in &self.args {
-			collect_references_from_template_data(arg, &mut references);
+		if let Some(args) = &self.args {
+			for arg in args {
+				collect_references_from_template_data(arg, &mut references);
+			}
 		}
 
 		references
 	}
 }
 
-pub fn collect_references_from_template_data(
+pub fn collect_references_from_value_data<H: BuildHasher>(
+	value: &tg::value::Data,
+	references: &mut HashSet<tg::artifact::Id, H>,
+) {
+	match value {
+		tg::value::Data::Directory(id) => {
+			references.insert(id.clone().try_into().unwrap());
+		},
+		tg::value::Data::File(id) => {
+			references.insert(id.clone().try_into().unwrap());
+		},
+		tg::value::Data::Symlink(id) => {
+			references.insert(id.clone().try_into().unwrap());
+		},
+		tg::value::Data::Mutation(data) => {
+			collect_references_from_mutation_data(data, references);
+		},
+		tg::value::Data::Template(data) => {
+			collect_references_from_template_data(data, references);
+		},
+		tg::value::Data::Array(arr) => {
+			for value in arr {
+				collect_references_from_value_data(value, references);
+			}
+		},
+		tg::value::Data::Map(map) => {
+			for value in map.values() {
+				collect_references_from_value_data(value, references);
+			}
+		},
+		_ => {},
+	}
+}
+
+pub fn collect_references_from_artifact_data<H: BuildHasher>(
+	value: &tg::artifact::Data,
+	references: &mut HashSet<tg::artifact::Id, H>,
+) {
+	match value {
+		tg::artifact::Data::Directory(data) => {
+			for id in data.entries.values() {
+				references.insert(id.clone());
+			}
+		},
+		tg::artifact::Data::File(data) => {
+			for id in &data.references {
+				references.insert(id.clone());
+			}
+		},
+		tg::artifact::Data::Symlink(data) => {
+			collect_references_from_symlink_data(data, references);
+		},
+	}
+}
+
+pub fn collect_references_from_symlink_data<H: BuildHasher>(
+	value: &tg::symlink::Data,
+	references: &mut HashSet<tg::artifact::Id, H>,
+) {
+	if let Some(id) = &value.artifact {
+		references.insert(id.clone());
+	}
+}
+
+pub fn collect_references_from_template_data<H: BuildHasher>(
 	value: &tg::template::Data,
-	references: &mut HashSet<tg::artifact::Id, fnv::FnvBuildHasher>,
+	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	for component in &value.components {
 		if let tg::template::component::Data::Artifact(id) = component {
@@ -346,23 +366,24 @@ pub fn collect_references_from_template_data(
 	}
 }
 
-pub fn collect_references_from_mutation(
-	value: &Mutation,
-	references: &mut HashSet<tg::artifact::Id, fnv::FnvBuildHasher>,
+pub fn collect_references_from_mutation_data<H: BuildHasher>(
+	value: &tg::mutation::Data,
+	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	match value {
-		Mutation::Unset => {},
-		Mutation::Set(value) | Mutation::SetIfUnset(value) => {
-			collect_references_from_template_data(value, references);
+		tg::mutation::Data::Unset => {},
+		tg::mutation::Data::Set { value } | tg::mutation::Data::SetIfUnset { value } => {
+			collect_references_from_value_data(value, references);
 		},
-		Mutation::ArrayPrepend(values) | Mutation::ArrayAppend(values) => {
+		tg::mutation::Data::ArrayPrepend { values }
+		| tg::mutation::Data::ArrayAppend { values } => {
 			for value in values {
-				collect_references_from_template_data(value, references);
+				collect_references_from_value_data(value, references);
 			}
 		},
-		Mutation::TemplatePrepend(template_mutation)
-		| Mutation::TemplateAppend(template_mutation) => {
-			collect_references_from_template_data(&template_mutation.template, references);
+		tg::mutation::Data::TemplatePrepend { template, .. }
+		| tg::mutation::Data::TemplateAppend { template, .. } => {
+			collect_references_from_template_data(template, references);
 		},
 	}
 }
