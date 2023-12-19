@@ -11,7 +11,7 @@ type Arg = std.sdk.BuildEnvArg & {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export let proxy = tg.target(async (arg?: Arg) => {
+export let proxy = async (arg?: Arg): Promise<Array<tg.Directory>> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -38,6 +38,10 @@ export let proxy = tg.target(async (arg?: Arg) => {
 
 	// Construct wrappers that always pass the ld proxy.
 	let binDir = tg.directory();
+	let ccBinDir = ccProxy({
+		host,
+		target,
+	});
 	let wrappedCC;
 	let wrappedCXX;
 	switch (flavor) {
@@ -105,11 +109,36 @@ export let proxy = tg.target(async (arg?: Arg) => {
 		}
 	}
 
-	// Return the directory cotaining wrapped compilers and symlinks.
-	return binDir;
-});
+	// Return the env containing wrapped compilers and symlinks.
+	return Promise.all([binDir, ccBinDir]);
+};
 
 export default proxy;
+
+type CcProxyArg = {
+	bootstrapMode?: boolean,
+	host?: std.Triple.Arg,
+	target?: std.Triple.Arg,
+}
+
+export let ccProxy = async (arg: CcProxyArg) => {
+	let host = std.triple(arg.host);
+	let target = std.triple(arg.target ?? host);
+	let tgcc = workspace.tgcc({
+		bootstrapMode: arg.bootstrapMode,
+		host: target,
+	});
+
+	let isCross = !std.Triple.eq(host, target);
+	let targetPrefix = isCross ? `${std.Triple.toString(target)}-` : ``;
+
+	return tg.directory({
+		[`bin/${targetPrefix}cc`]: tgcc,
+		[`bin/${targetPrefix}gcc`]: tgcc,
+		[`bin/${targetPrefix}c++`]: tgcc,
+		[`bin/${targetPrefix}g++`]: tgcc,
+	});
+};
 
 type LdProxyArg = {
 	bootstrapMode?: boolean;
@@ -121,7 +150,7 @@ type LdProxyArg = {
 	target?: std.Triple.Arg;
 };
 
-export let ldProxy = tg.target(async (arg: LdProxyArg) => {
+export let ldProxy = async (arg: LdProxyArg) => {
 	// Prepare the Tangram tools.
 	let host = std.triple(arg.host);
 	let target = std.triple(arg.target ?? host);
@@ -154,7 +183,7 @@ export let ldProxy = tg.target(async (arg: LdProxyArg) => {
 	});
 
 	return output;
-});
+};
 
 export let test = tg.target(async () => {
 	let bootstrapSDK = std.sdk({ bootstrapMode: true });

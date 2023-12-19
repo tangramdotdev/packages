@@ -17,6 +17,7 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 		"packages/packages/std/Cargo.toml": tg.include("../Cargo.toml"),
 		"packages/packages/std/Cargo.lock": tg.include("../Cargo.lock"),
 		"packages/packages/std/packages/env": tg.include("../packages/env"),
+		"packages/packages/std/packages/tgcc": tg.include("../packages/tgcc"),
 		"packages/packages/std/packages/tgld": tg.include("../packages/tgld"),
 		"packages/packages/std/packages/wrapper": tg.include("../packages/wrapper"),
 	});
@@ -142,6 +143,11 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 export let env = tg.target(async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/env")),
 );
+
+export let tgcc = tg.target(async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/tgcc")),
+);
+
 
 export let tgld = tg.target(async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/tgld")),

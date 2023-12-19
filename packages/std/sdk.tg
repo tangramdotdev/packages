@@ -152,7 +152,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 					`Provided toolchain does not provide a ${hostString} -> ${targetString} toolchain.`,
 				);
 			}
-			env = [env, await proxy({ env, target: requestedTarget })];
+			let proxyEnv = await proxy({ env, target: requestedTarget });
+			env = [env, ...proxyEnv];
 		}
 		// If no previous SDK was provided, build the utils using the proxied host toolchain and add them to the env.
 		if (!existingSdk) {
