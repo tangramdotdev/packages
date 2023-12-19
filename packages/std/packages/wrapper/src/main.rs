@@ -376,6 +376,8 @@ fn apply_value_to_key(
 				apply_mutation_to_key(key, mutation, artifacts_directories);
 			}
 		}
+	} else if let tg::value::Data::Mutation(mutation) = value {
+		apply_mutation_to_key(key, mutation, artifacts_directories);
 	} else {
 		std::env::set_var(key, render_value(value, artifacts_directories));
 	}

@@ -3,9 +3,10 @@ use std::{
 	collections::{BTreeMap, HashSet},
 	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
+	str::FromStr,
 };
 use tangram_client as tg;
-use tangram_error::{Result, WrapErr};
+use tangram_error::{return_error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
 use tracing_subscriber::prelude::*;
 
@@ -69,7 +70,7 @@ async fn main_inner() -> Result<()> {
 		.library_paths
 		.iter()
 		.map(|library_path| template_to_resolved_symlink(&tg, unrender(&tg, library_path)));
-	let library_paths = futures::future::join_all(library_paths).await;
+	let library_paths = futures::future::try_join_all(library_paths).await?;
 
 	// Produce a combined library directory if needed and create the manifest value.
 	let library_paths = if options.library_paths.is_empty() {
@@ -122,7 +123,7 @@ async fn main_inner() -> Result<()> {
 			interpreter,
 			library_paths,
 		)
-		.await;
+		.await?;
 		tracing::trace!(?manifest);
 
 		// Write the manifest.
@@ -301,7 +302,7 @@ async fn create_manifest(
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<Vec<tg::symlink::Data>>,
-) -> Manifest {
+) -> Result<Manifest> {
 	// Create the interpreter.
 	let interpreter = if cfg!(target_os = "linux") {
 		let config = match interpreter {
@@ -333,14 +334,14 @@ async fn create_manifest(
 		if let Some((path, is_musl)) = config {
 			// Unrender the interpreter path.
 			let path = unrender(tg, &path);
-			let path = template_to_resolved_symlink(tg, path).await;
+			let path = template_to_resolved_symlink(tg, path).await?;
 			tracing::trace!(?path, "Interpreter path");
 
 			// Unrender the preloads.
 			let mut preloads = None;
 			if let Some(injection_path) = options.injection_path.as_deref() {
 				preloads = Some(vec![
-					template_to_resolved_symlink(tg, unrender(tg, injection_path)).await,
+					template_to_resolved_symlink(tg, unrender(tg, injection_path)).await?,
 				]);
 			}
 
@@ -378,15 +379,15 @@ async fn create_manifest(
 			.library_paths
 			.iter()
 			.map(|library_path| template_to_resolved_symlink(tg, unrender(tg, library_path)));
-		let library_paths = Some(futures::future::join_all(library_paths).await);
+		let library_paths = Some(futures::future::try_join_all(library_paths).await?);
 		let mut preloads = None;
 		if let Some(injection_path) = options.injection_path.as_deref() {
 			preloads = Some(
-				futures::future::join_all(std::iter::once(template_to_resolved_symlink(
+				futures::future::try_join_all(std::iter::once(template_to_resolved_symlink(
 					tg,
 					unrender(tg, injection_path),
 				)))
-				.await,
+				.await?,
 			);
 		}
 
@@ -405,7 +406,7 @@ async fn create_manifest(
 				components: vec![tg::template::component::Data::Artifact(ld_output_id)],
 			}
 		})
-		.await,
+		.await?,
 	);
 
 	// Create empty values for env and args.
@@ -413,13 +414,15 @@ async fn create_manifest(
 	let args = None;
 
 	// Create the manifest.
-	Manifest {
+	let manifest = Manifest {
 		identity: manifest::Identity::Wrapper,
 		interpreter,
 		executable,
 		env,
 		args,
-	}
+	};
+
+	Ok(manifest)
 }
 
 struct AnalyzeOutputFileOutput {
@@ -596,36 +599,44 @@ fn setup_tracing() {
 	}
 }
 
-async fn template_to_resolved_symlink<F>(tg: &dyn tg::Handle, template: F) -> tg::symlink::Data
+async fn template_to_resolved_symlink<F>(
+	tg: &dyn tg::Handle,
+	template: F,
+) -> Result<tg::symlink::Data>
 where
 	F: futures::Future<Output = tg::template::Data>,
 {
-	// FIXME - re-implement tryGet from the global, you need to walk the path.
 	match template.await.components.as_slice() {
-		[tg::template::component::Data::Artifact(id)] => tg::symlink::Data {
+		[tg::template::component::Data::Artifact(id)] => Ok(tg::symlink::Data {
 			artifact: Some(id.clone()),
 			path: None,
-		},
+		}),
 		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] =>
 		{
 			// If there is a subpath, return the artifact it points to.
 			let artifact = tg::Artifact::with_id(artifact_id.clone());
-			if let tg::Artifact::Directory(directory) = artifact {
-				let child = directory
-					.entries(tg)
-					.await
-					.expect("Could not get directory entries")
-					.get(s)
-					.expect("Could not retrieve artifact at subpath");
-				tg::symlink::Data {
-					artifact: Some(child.id(tg).await.expect("Could not get child ID")),
-					path: None,
-				}
-			} else {
-				panic!("Expected a directory artifact.")
-			}
+			let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?;
+			Ok(tg::symlink::Data {
+				artifact: Some(artifact.id(tg).await?),
+				path: Some(path.to_string()),
+			})
+			// if let tg::Artifact::Directory(directory) = artifact {
+			// 	let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?;
+			// 	if let Ok(child) = directory.get(tg, &path).await {
+			// 		tracing::debug!(?directory, ?path, ?child, "Found");
+			// 		return Ok(tg::symlink::Data {
+			// 			artifact: Some(child.id(tg).await?),
+			// 			path: None,
+			// 		});
+			// 	} else {
+			// 		tracing::error!(?directory, ?path, "Not found");
+			// 		return_error!("Could not find the artifact.");
+			// 	};
+			// } else {
+			// 	return_error!("Expected a directory artifact.")
+			// }
 		},
-		_ => panic!("Expected a template with 1 or 2 components."),
+		_ => return_error!("Expected a template with 1 or 2 components."),
 	}
 }
 
