@@ -445,7 +445,7 @@ export namespace wrap {
 			} else {
 				tg.assert(
 					env?.kind === "set",
-					"Malformed env, expected set mutation but recieved " + env,
+					"Malformed env, expected set mutation but recieved " + env?.kind,
 				);
 				let envMap: wrap.Manifest.EnvMap = await envMapFromMapValue(env.value);
 				// If the running env is a set mutation, grab the current contents.
@@ -1063,13 +1063,22 @@ export let defaultShellInterpreter = async () => {
 };
 
 let manifestSymlinkFromArg = async (
-	arg: string | tg.Template | tg.Artifact,
+	arg: string | tg.Template | tg.Artifact | wrap.Manifest.Template,
 ): Promise<wrap.Manifest.Symlink> => {
-	if (typeof arg === "string" || tg.Template.is(arg)) {
+	if (isManifestTemplate(arg)) {
+		let t = await templateFromManifestTemplate(arg);
+		return manifestSymlinkFromArg(t);
+	} else if (typeof arg === "string" || tg.Template.is(arg)) {
 		return manifestSymlinkFromArg(await tg.symlink(arg));
+	} else if (tg.Symlink.is(arg)) {
+		return {
+			artifact: await (await arg.artifact())?.id(),
+			path: await arg.path(),
+		};
 	} else if (tg.Artifact.is(arg)) {
 		return { artifact: await arg.id() };
 	} else {
+		console.log("Bad arg", arg);
 		return tg.unreachable();
 	}
 };
@@ -1114,7 +1123,7 @@ let manifestMutationFromMutation = async (
 		return {
 			kind: "templatePrepend",
 			template: await manifestTemplateFromArg(template),
-			separator: mutation.inner.separator,
+			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "template_append") {
 		let template = mutation.inner.template;
@@ -1125,7 +1134,7 @@ let manifestMutationFromMutation = async (
 		return {
 			kind: "templateAppend",
 			template: await manifestTemplateFromArg(template),
-			separator: mutation.inner.separator,
+			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "array_prepend") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));

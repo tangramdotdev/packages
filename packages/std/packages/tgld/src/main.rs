@@ -8,7 +8,6 @@ use std::{
 use tangram_client as tg;
 use tangram_error::{return_error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
-use tg::artifact;
 use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;

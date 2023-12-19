@@ -71,48 +71,48 @@ export let target = async (...args: tg.Args<Arg>) => {
 		} else if (typeof arg === "object") {
 			let object: tg.MutationMap<Apply> = {};
 			let phasesArgs: Array<std.phases.Arg> = [];
-			if ("doCheck" in arg) {
+			if (arg.doCheck !== undefined) {
 				object.doCheck = arg.doCheck;
 			}
-			if ("env" in arg && arg.env !== undefined) {
+			if (arg.env !== undefined) {
 				phasesArgs.push({ env: arg.env });
 			}
-			if ("host" in arg) {
+			if (arg.host !== undefined) {
 				object.host = tg.Mutation.is(arg.host)
 					? arg.host
 					: std.triple(arg.host);
 			}
-			if ("opt" in arg) {
+			if (arg.opt !== undefined) {
 				object.opt = arg.opt;
 			}
-			if ("parallel" in arg) {
+			if (arg.parallel !== undefined) {
 				object.parallel = arg.parallel;
 			}
-			if ("prefixArg" in arg) {
+			if (arg.prefixArg !== undefined) {
 				object.prefixArg = arg.prefixArg;
 			}
-			if ("prefixPath" in arg) {
+			if (arg.prefixPath !== undefined) {
 				object.prefixPath = arg.prefixPath;
 			}
-			if ("source" in arg) {
+			if (arg.source !== undefined) {
 				object.source = arg.source;
 			}
-			if ("phases" in arg && arg.phases !== undefined) {
+			if (arg.phases !== undefined) {
 				if (tg.Mutation.is(arg.phases)) {
 					object.phases = arg.phases;
 				} else {
 					phasesArgs.push(arg.phases);
 				}
 			}
-			if ("sdk" in arg) {
+			if (arg.sdk !== undefined) {
 				object.sdkArgs = tg.Mutation.is(arg.sdk)
 					? arg.sdk
 					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
 			}
-			if ("stripExecutables" in arg) {
+			if (arg.stripExecutables !== undefined) {
 				object.stripExecutables = arg.stripExecutables;
 			}
-			if ("target" in arg) {
+			if (arg.target !== undefined) {
 				object.target = tg.Mutation.is(arg.target)
 					? arg.target
 					: std.triple(arg.target);

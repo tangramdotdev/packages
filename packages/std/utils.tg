@@ -84,7 +84,7 @@ export let buildUtil = tg.target(
 );
 
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
-export let changeShebang = tg.target(async (scriptFile: tg.File) => {
+export let changeShebang = async (scriptFile: tg.File) => {
 	// Ensure the file has a shebang.
 	let metadata = await std.file.executableMetadata(scriptFile);
 	tg.assert(metadata.format === "shebang");
@@ -101,9 +101,9 @@ export let changeShebang = tg.target(async (scriptFile: tg.File) => {
 	let newFileContents = `#!/usr/bin/env bash\n${fileWithoutShebangLine}`;
 	let newFile = tg.file({ contents: newFileContents, executable: true });
 	return newFile;
-});
+};
 
-export let assertProvides = tg.target(async (env: std.env.Arg) => {
+export let assertProvides = async (env: std.env.Arg) => {
 	let names = [
 		"bash",
 		"ls", // coreutils
@@ -117,7 +117,7 @@ export let assertProvides = tg.target(async (env: std.env.Arg) => {
 	];
 	await std.env.assertProvides({ env, names });
 	return true;
-});
+};
 
 export let test = tg.target(async () => {
 	let utilsEnv = await env({ sdk: { bootstrapMode: true } });
