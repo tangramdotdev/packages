@@ -345,7 +345,7 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 		`;
 		let rustArtifact = rust();
 		let sdk = std.sdk();
-		let result = await std.build(tg``, {
+		let result = await std.build(vendorScript, {
 			env: std.env(sdk, {
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 				CARGO_HTTP_CAINFO: certFile,
