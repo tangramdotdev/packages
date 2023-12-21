@@ -59,8 +59,6 @@ export let go = tg.target(async (): Promise<tg.Directory> => {
 			[bin]: std.wrap(file, {
 				env: {
 					GOROOT: go,
-					// GO_EXTLINK_ENABLED: tg.Mutation.setIfUnset("1"),
-					// TANGRAM_LINKER_PASSTHROUGH: "1"
 				},
 			}),
 		});
@@ -108,6 +106,8 @@ export type Arg = {
 	 */
 	env?: std.env.Arg;
 
+	cgo?: boolean;
+
 	build?: std.Triple.Arg;
 
 	host?: std.Triple.Arg;
@@ -118,6 +118,7 @@ export type Arg = {
 export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 	type Apply = {
 		build: std.Triple.Arg;
+		cgo: boolean;
 		env: Array<std.env.Arg>;
 		generate: boolean | { command: tg.Template.Arg };
 		host: std.Triple.Arg;
@@ -129,6 +130,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 
 	let {
 		build: build_,
+		cgo,
 		env: env_,
 		generate,
 		host: host_,
@@ -141,25 +143,28 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
-			if (arg.source === undefined) {
+			if (arg.source !== undefined) {
 				object.source = arg.source;
 			}
-			if (arg.vendor === undefined) {
+			if (arg.cgo !== undefined) {
+				object.cgo = arg.cgo;
+			}
+			if (arg.vendor !== undefined) {
 				object.vendor = arg.vendor;
 			}
-			if (arg.generate === undefined) {
+			if (arg.generate !== undefined) {
 				object.generate = arg.generate;
 			}
-			if (arg.install === undefined) {
+			if (arg.install !== undefined) {
 				object.install = arg.install;
 			}
-			if (arg.build === undefined) {
+			if (arg.build !== undefined) {
 				object.host = arg.host;
 			}
-			if (arg.host === undefined) {
+			if (arg.host !== undefined) {
 				object.host = arg.host;
 			}
-			if (arg.env === undefined) {
+			if (arg.env !== undefined) {
 				object.env = tg.Mutation.is(arg.env)
 					? arg.env
 					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
@@ -221,38 +226,32 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 	let goArtifact = go();
 
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
-	let buildEnvironment = std.env(sdk, goArtifact, {
-		GOROOT: goArtifact,
-		SSL_CERT_FILE: certFile,
-	});
-	let env = [buildEnvironment, env_];
+	let cgoEnabled = cgo ? "1" : "0";
+	let env = [sdk, goArtifact, { CGO_ENABLED: cgoEnabled, SSL_CERT_FILE: certFile }];
 
 	let output = await std.build(
 		tg`
+				set -x
 				# Copy the build tree into the working directory
 				cp -rT ${source}/. .
+				chmod -R u+w .
 
-				# Create a tempory directory in the build tree.
 				export TEMPDIR=$(mktemp -d)
 				mkdir -p $OUTPUT/bin
 
-				# Define env vars to use as the
 				export GOBIN=$OUTPUT/bin
 				export GOCACHE=$TEMPDIR
 				export GOMODCACHE=$TEMPDIR
-				export CGO_ENABLED=1
-
-				# Hack to workaround buggy process client code.
-				mkdir -p __temp__
-				export TMP=$PWD/__temp__
-				export TEMP=$TMP
-				export TMPDIR=$TMP
 
 				# Build Go.
 				${generateCommand}
 				${installCommand}
 			`,
-		{ host, env, checksum: "unsafe" },
+		{
+			host,
+			env,
+			checksum: "unsafe",
+		},
 	);
 
 	tg.assert(tg.Directory.is(output));
@@ -309,7 +308,6 @@ export let vendor = async ({
 			env: [
 				go(),
 				{
-					GOROOT: go(),
 					SSL_CERT_DIR: std.caCertificates(),
 				},
 			],
@@ -341,7 +339,7 @@ export let test = tg.target(() => {
 					panic(error)
 				}
 
-				error := helloCmd.Wait()
+				error = helloCmd.Wait()
 				if (error != nil) {
 					panic(error)
 				}
@@ -351,16 +349,14 @@ export let test = tg.target(() => {
 
 	return std.build(
 		tg`
-				set -eux
 				mkdir -p $OUTPUT
-				env
 				cp -r ${source}/. .
 				chmod -R u+w .
 				go env
 				go mod init main.go
 				go mod tidy
 				go run main.go
-				# go run ./subcommand.go
+				go run ./subcommand.go
 			`,
 		{ env: [std.sdk(), go()] },
 	);
