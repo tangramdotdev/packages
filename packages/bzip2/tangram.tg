@@ -44,6 +44,11 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 	let os = tg.System.os(std.Triple.system(host));
 	let sharedObjectExt = os === "darwin" ? "dylib" : "so";
 
+	let sourceDir = source_ ?? source();
+
+	let prepare = tg`set -x && cp -R ${sourceDir}/* .`;
+	let configure = "sed -i 's@\\(ln -s -f \\)$(PREFIX)/bin/@\\1@' Makefile";
+
 	// Only build the shared library on Linux.
 	// TODO: support cross compilation.
 	let buildCommand =
@@ -62,14 +67,10 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 			: "";
 
 	let phases = {
-		build: {
-			command: buildCommand,
-		},
-		configure: {
-			// Patch makefile to install regular symlinks.
-			command: "sed -i 's@\\(ln -s -f \\)$(PREFIX)/bin/@\\1@' Makefile",
-		},
-		install: tg`make CC="cc" install PREFIX="$OUTPUT"`,
+		prepare,
+		build: buildCommand,
+		configure,
+		install: `make CC="cc" install PREFIX="$OUTPUT"`,
 		fixup: postProcess,
 	};
 
@@ -77,30 +78,23 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
-			source: source_ ?? source(),
+			source: sourceDir,
 			prefixArg: undefined,
 			phases,
 			host,
 		},
-		arg?.autotools ?? [],
+		autotools,
 	);
 });
 
 export default bzip2;
 
-export let test = tg.target(() => {
-	let source = tg.directory({
-		["main.c"]: tg.file(`
-			#include <stdio.h>
-			int main () {}
-		`),
+export let test = tg.target(async () => {
+	await std.assert.pkg({
+		directory: await bzip2(),
+		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
+		libs: [{ name: "bz2", dylib: false, staticlib: true }],
+		metadata,
 	});
-
-	return std.build(
-		tg`
-			echo "Checking if we can link against libbzip2."
-			cc ${source}/main.c -o $OUTPUT -L${bzip2()}/lib -lbz2
-		`,
-		{ env: std.sdk() },
-	);
+	return true;
 });
