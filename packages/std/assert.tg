@@ -217,7 +217,7 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 	let stdout = await output.text();
 	tg.assert(
 		testPredicate(stdout),
-		`Binary ${name} did not produce expected output.`,
+		`Binary ${name} did not produce expected output. Received: ${stdout}`,
 	);
 	return true;
 };
