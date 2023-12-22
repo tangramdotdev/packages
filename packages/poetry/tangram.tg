@@ -5,13 +5,13 @@ import * as lockfile from "./lockfile.tg";
 
 export let metadata = {
 	name: "poetry",
-	version: "1.4.2",
+	version: "1.7.1",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:8cdbad22dfd11ca9c7e37bcafe18ae931b80e0776adbe6df8d24091bd2b23eff";
+		"sha256:b348a70e7d67ad9c0bd3d0ea255bc6df84c24cf4b16f8d104adb30b425d6ff32";
 	let owner = "python-poetry";
 	let repo = name;
 	let tag = version;
@@ -109,7 +109,7 @@ export let build = tg.target(async (args: BuildArgs) => {
 
 	// Wrap any binaries that appear.
 	return python.wrapScripts(
-		await tg.symlink(tg`${poetryArtifact}/bin/python3.11`),
+		await tg.symlink(tg`${poetryArtifact}/bin/python3.12`),
 		poetryArtifact,
 		installed,
 	);
