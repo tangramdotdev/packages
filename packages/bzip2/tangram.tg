@@ -53,15 +53,15 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 	// TODO: support cross compilation.
 	let buildCommand =
 		os === "linux"
-			? `make CC="cc" -f Makefile-libbz2_so && make clean && make CC="cc"`
+			? `make -f Makefile-libbz2_so && make clean && make`
 			: `make CC="cc \${CFLAGS}"`;
 
-	let postProcess =
+	let fixup =
 		os === "linux"
 			? `
-				cp -av libbz2.${sharedObjectExt}* $PREFIX/lib
-				chmod -R u+w $PREFIX
-				cd $PREFIX/lib
+				cp -av libbz2.${sharedObjectExt}* $OUTPUT/lib
+				chmod -R u+w $OUTPUT
+				cd $OUTPUT/lib
 				ln -sv libbz2.${sharedObjectExt}.${metadata.version} libbz2.${sharedObjectExt}
 			`
 			: "";
@@ -70,8 +70,8 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 		prepare,
 		build: buildCommand,
 		configure,
-		install: `make CC="cc" install PREFIX="$OUTPUT"`,
-		fixup: postProcess,
+		install: `make install PREFIX="$OUTPUT"`,
+		fixup,
 	};
 
 	return std.autotools.build(
@@ -81,7 +81,6 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 			source: sourceDir,
 			prefixArg: undefined,
 			phases,
-			host,
 		},
 		autotools,
 	);
