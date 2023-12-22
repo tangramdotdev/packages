@@ -3,7 +3,6 @@ import * as std from "tg:std" with { path: "../std" };
 import bzip2 from "tg:bzip2" with { path: "../bzip2" };
 import libffi from "tg:libffi" with { path: "../libffi" };
 import openssl from "tg:openssl" with { path: "../openssl" };
-import readline from "tg:readline" with { path: "../readline" };
 import sqlite from "tg:sqlite" with { path: "../sqlite" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
@@ -11,14 +10,14 @@ import * as requirements from "./requirements.tg";
 export { requirements };
 
 /** Package metadata for python */
-export const metadata = {
+export let metadata = {
 	name: "Python",
-	version: "3.11.3",
+	version: "3.12.1",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
 export let versionString = () => {
-	let [maj, min, ...rest] = metadata.version.split(".");
+	let [maj, min, ..._] = metadata.version.split(".");
 	return `${maj}.${min}`;
 };
 
@@ -26,7 +25,7 @@ export let versionString = () => {
 export let source = tg.target(async (): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:8a5db99c961a7ecf27c75956189c9602c968751f11dbeae2b900dbff1c085b5e";
+		"sha256:8dfb8f426fcd226657f9e2bd5f1e96e53264965176fa17d32658e873591aeb21";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://www.python.org/ftp/python/${version}/${name}-${version}${unpackFormat}`;
 
@@ -42,6 +41,8 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 });
 
 type ToolchainArg = {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+
 	/** Optional python source override. */
 	source?: tg.Directory;
 
@@ -62,19 +63,22 @@ type ToolchainArg = {
 
 /** Build and create a python environment. */
 export let python = tg.target(async (arg?: ToolchainArg) => {
-	let { build, host, source: source_, ...rest } = arg ?? {};
+	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
 
 	let env = [
 		bzip2({ host }),
 		libffi({ host }),
 		openssl({ host }),
-		readline({ host }),
 		sqlite({ host }),
 		zlib({ host }),
+		{
+			LDFLAGS: tg.Mutation.templateAppend("-lgcov --coverage", " "),
+		},
 	];
 
 	let configure = {
 		args: [
+			"--disable-test-modules",
 			"--enable-optimizations",
 			"--with-pkg-config=yes",
 			"--without-c-locale-coercion",
@@ -83,36 +87,41 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 
 	let phases = { configure };
 
-	let output = await std.autotools.build({
-		...rest,
-		...std.Triple.rotate({ build, host }),
-		phases,
-		source: arg?.source ?? (await source()),
-	});
-
-	let pythonInterpreter = await std.wrap({
-		executable: tg.symlink(tg`${output}/bin/python${versionString()}`),
-		env: {
-			PYTHONHOME: tg`${output}`,
+	let output = await std.autotools.build(
+		{
+			...rest,
+			...std.Triple.rotate({ build, host }),
+			env,
+			phases,
+			source: source_ ?? (await source()),
 		},
-	});
+		autotools,
+	);
+
+	let pythonInterpreter = await std.wrap(
+		tg.symlink(tg`${output}/bin/python${versionString()}`),
+		{
+			env: {
+				PYTHONHOME: tg`${output}`,
+			},
+		},
+	);
 
 	let python = wrapScripts(pythonInterpreter, undefined, output);
 
 	// When pip3 installs a python script it writes the absolute path of the python interpreter on the shebang line. We force it to be /usr/bin/env python3.
 	python = tg.directory(python, {
-		["bin/pip3"]: std.wrap({
-			executable: (await output.get("bin/pip3")) as tg.File,
-			interpreter: tg.symlink(tg`${output}/bin/python3.11`),
-			args: ["--python", tg`${output}/bin/python3.11`],
+		["bin/pip3"]: std.wrap(tg.File.expect(await output.get("bin/pip3")), {
+			interpreter: tg.symlink(tg`${output}/bin/python3.12`),
+			args: ["--python", tg`${output}/bin/python3.12`],
 		}),
 	});
 
 	python = tg.directory(python, {
 		["bin/pip"]: tg.symlink("pip3"),
 		["bin/python"]: tg.symlink("python3"),
-		["bin/python3"]: tg.symlink("python3.11"),
-		["bin/python3.11"]: pythonInterpreter,
+		["bin/python3"]: tg.symlink("python3.12"),
+		["bin/python3.12"]: pythonInterpreter,
 	});
 
 	if (arg?.requirements) {
@@ -133,7 +142,7 @@ export let wrapScripts = async (
 ) => {
 	let scripts = [];
 
-	let bin = await tg.Directory.expect(await artifact.get("bin"));
+	let bin = tg.Directory.expect(await artifact.get("bin"));
 	for await (let [filename, file] of bin) {
 		if (tg.File.is(file) && (await file.executable())) {
 			let metadata = await std.file.executableMetadata(file);
@@ -146,8 +155,7 @@ export let wrapScripts = async (
 	for (let script of scripts) {
 		let executable = (await bin.get(script)) as tg.File;
 		artifact = await tg.directory(artifact, {
-			[`bin/${script}`]: std.wrap({
-				executable,
+			[`bin/${script}`]: std.wrap(executable, {
 				interpreter: pythonInterpreter,
 				env: {
 					PYTHONPATH: tg.Mutation.templateAppend(pythonPath, ":"),
