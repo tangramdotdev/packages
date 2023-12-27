@@ -63,9 +63,12 @@ export let build = tg.target(async (arg?: Arg) => {
 		? `make && make clean && make LDFLAGS=-all-static`
 		: undefined;
 
-	let additionalEnv;
+	let additionalEnv: std.env.Arg = {
+		LDFLAGS: "-Wl,--tg-combined-library-path=false",
+	};
 	if (staticBuild) {
 		additionalEnv = {
+			...additionalEnv,
 			CC: await tg`${targetString}-cc -static -fPIC`,
 			CXX: await tg`${targetString}-c++ -static-libstdc++ -fPIC`,
 		};

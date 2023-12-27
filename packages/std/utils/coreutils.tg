@@ -56,7 +56,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	} else if (os === "darwin") {
 		dependencies.push(libiconv(arg));
 	}
-	let env = [...dependencies, env_];
+	let env = [
+		...dependencies,
+		{ LDFLAGS: "-Wl,--tg-combined-library-path=false" },
+		env_,
+	];
 
 	let configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],

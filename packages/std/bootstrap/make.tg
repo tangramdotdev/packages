@@ -36,10 +36,15 @@ export let build = tg.target(async (arg?: std.Triple.HostArg) => {
 		install,
 	};
 
+	let env = {
+		CC: "gcc -static",
+	};
+
 	let output = std.autotools.build({
+		env,
 		host: await std.Triple.host(arg),
-		phases,
 		opt: "s",
+		phases,
 		prefixArg: "none",
 		sdk: { bootstrapMode: true },
 		source: source(),

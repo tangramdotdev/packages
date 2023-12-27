@@ -1,5 +1,5 @@
 import * as bootstrap from "./bootstrap.tg";
-import * as canadianCross from "./sdk/canadian_cross.tg";
+import * as gcc from "./sdk/gcc.tg";
 import { interpreterName } from "./sdk/libc.tg";
 import * as std from "./tangram.tg";
 import * as injection from "./wrap/injection.tg";
@@ -23,6 +23,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 		executable: tg.File | tg.Symlink | wrap.Manifest.Executable;
 		env: Array<std.env.Arg>;
 		manifestArgs: Array<wrap.Manifest.Template>;
+		sdkArgs: Array<std.sdk.Arg>;
 	};
 
 	let {
@@ -33,6 +34,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 		executable: executable_,
 		env: env_,
 		manifestArgs,
+		sdkArgs,
 	} = await tg.Args.apply<wrap.Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
@@ -94,6 +96,11 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			}
 			if (arg.identity !== undefined) {
 				object.identity = arg.identity ?? "executable";
+			}
+			if (arg.sdk !== undefined) {
+				object.sdkArgs = tg.Mutation.is(arg.sdk)
+					? arg.sdk
+					: await tg.Mutation.arrayAppend(arg.sdk);
 			}
 			if (arg.executable !== undefined) {
 				if (
@@ -199,12 +206,12 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 		interpreter: manifestInterpreter,
 		executable,
 		env: manifestEnv,
-		args: manifestArgs ?? [],
+		args: manifestArgs,
 	};
 
 	// Get the wrapper executable.
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let wrapper = await workspace.wrapper({ host });
+	let wrapper = await workspace.wrapper({ host, sdk: sdkArgs });
 
 	// Write the manifest to the wrapper and return.
 	let output = await wrap.Manifest.write(wrapper, manifest);
@@ -237,6 +244,9 @@ export namespace wrap {
 
 		/** Command line arguments to bind to the wrapper. If the executable is wrapped, they will be merged. */
 		args?: Array<tg.Template.Arg>;
+
+		/** Arguments for the SDK used to compile the wrapper and any other components used. */
+		sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	};
 
 	export type Identity = "wrapper" | "interpreter" | "executable";
@@ -574,19 +584,19 @@ export namespace wrap {
 		export type Mutation =
 			| { kind: "unset" }
 			| { kind: "set"; value: Manifest.Value }
-			| { kind: "setIfUnset"; value: Manifest.Value }
+			| { kind: "set_if_unset"; value: Manifest.Value }
 			| {
-					kind: "templatePrepend";
+					kind: "template_prepend";
 					template: Manifest.Template;
 					separator?: string;
 			  }
 			| {
-					kind: "templateAppend";
+					kind: "template_append";
 					template: Manifest.Template;
 					separator?: string;
 			  }
-			| { kind: "arrayPrepend"; values: Array<Manifest.Value> }
-			| { kind: "arrayAppend"; values: Array<Manifest.Value> };
+			| { kind: "array_prepend"; values: Array<Manifest.Value> }
+			| { kind: "array_append"; values: Array<Manifest.Value> };
 
 		// Matches tg::value::Data
 		export type Value =
@@ -1011,7 +1021,7 @@ let manifestInterpreterFromElf = async (
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {
 		// Handle an ld-linux interpreter.
-		let toolchainDir = await canadianCross.toolchain({ host });
+		let toolchainDir = await gcc.toolchain({ host });
 		let { ldso, libDir } = await std.sdk.toolchainComponents({
 			env: toolchainDir,
 		});
@@ -1044,15 +1054,18 @@ let manifestInterpreterFromElf = async (
 	}
 };
 
-export let defaultShellInterpreter = async () => {
+export let defaultShellInterpreter = async (
+	sdkArg?: tg.MaybeNestedArray<std.sdk.Arg>,
+) => {
+	// If no args were passed, force bootstrap mode.
+	let sdk = sdkArg ?? { bootstrapMode: true };
+
 	// Provide bash for the detected host system. Don't assume an existing SDK.
-	let shellArtifact = await std.utils.bash.build({
-		sdk: { bootstrapMode: true },
-	});
+	let shellArtifact = await std.utils.bash.build({ sdk });
 	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
 
 	//  Add the standard utils.
-	let env = await std.utils.env({ sdk: { bootstrapMode: true } });
+	let env = await std.utils.env({ sdk });
 
 	let bash = wrap(shellExecutable, {
 		identity: "wrapper",
@@ -1109,7 +1122,7 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(value)}.`,
 		);
 		return {
-			kind: "setIfUnset",
+			kind: "set_if_unset",
 			value: manifestValueFromManifestTemplate(
 				await manifestTemplateFromArg(value),
 			),
@@ -1121,7 +1134,7 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(template)}.`,
 		);
 		return {
-			kind: "templatePrepend",
+			kind: "template_prepend",
 			template: await manifestTemplateFromArg(template),
 			separator: mutation.inner.separator ?? ":",
 		};
@@ -1132,7 +1145,7 @@ let manifestMutationFromMutation = async (
 			`Expected a template arg, but got ${JSON.stringify(template)}.`,
 		);
 		return {
-			kind: "templateAppend",
+			kind: "template_append",
 			template: await manifestTemplateFromArg(template),
 			separator: mutation.inner.separator ?? ":",
 		};
@@ -1143,7 +1156,7 @@ let manifestMutationFromMutation = async (
 				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
 			),
 		);
-		return { kind: "arrayPrepend", values };
+		return { kind: "array_prepend", values };
 	} else if (mutation.inner.kind === "array_append") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));
 		let values = await Promise.all(
@@ -1151,7 +1164,7 @@ let manifestMutationFromMutation = async (
 				manifestValueFromManifestTemplate(await manifestTemplateFromArg(arg)),
 			),
 		);
-		return { kind: "arrayAppend", values };
+		return { kind: "array_append", values };
 	} else {
 		return tg.unreachable();
 	}
@@ -1405,6 +1418,8 @@ let normalizeEnvVarValue = async (value: unknown): Promise<tg.Mutation> => {
 		return value;
 	} else if (isTemplateArg(value)) {
 		return tg.Mutation.set(tg.template(value));
+	} else if (typeof value === "boolean" || typeof value === "number") {
+		return tg.Mutation.set(tg.template(value.toString()));
 	} else {
 		throw new Error("Unexpected value type: " + value);
 	}
@@ -1481,24 +1496,24 @@ let mutationFromManifestMutation = (
 		return Promise.resolve(tg.Mutation.unset());
 	} else if (manifestMutation.kind === "set") {
 		return tg.Mutation.set(valueFromManifestValue(manifestMutation.value));
-	} else if (manifestMutation.kind === "setIfUnset") {
+	} else if (manifestMutation.kind === "set_if_unset") {
 		return tg.Mutation.setIfUnset(
 			valueFromManifestValue(manifestMutation.value),
 		);
-	} else if (manifestMutation.kind === "arrayPrepend") {
+	} else if (manifestMutation.kind === "array_prepend") {
 		return tg.Mutation.arrayAppend(
 			manifestMutation.values.map(valueFromManifestValue),
 		);
-	} else if (manifestMutation.kind === "arrayAppend") {
+	} else if (manifestMutation.kind === "array_append") {
 		return tg.Mutation.arrayAppend(
 			manifestMutation.values.map(valueFromManifestValue),
 		);
-	} else if (manifestMutation.kind === "templatePrepend") {
+	} else if (manifestMutation.kind === "template_prepend") {
 		return tg.Mutation.templatePrepend(
 			templateFromManifestTemplate(manifestMutation.template),
 			manifestMutation.separator,
 		);
-	} else if (manifestMutation.kind === "templateAppend") {
+	} else if (manifestMutation.kind === "template_append") {
 		return tg.Mutation.templateAppend(
 			templateFromManifestTemplate(manifestMutation.template),
 			manifestMutation.separator,
@@ -1758,15 +1773,15 @@ function* manifestMutationReferences(
 		case "unset":
 			break;
 		case "set":
-		case "setIfUnset":
+		case "set_if_unset":
 			yield* manifestValueReferences(mutation.value);
 			break;
-		case "templatePrepend":
-		case "templateAppend":
+		case "template_prepend":
+		case "template_append":
 			yield* manifestTemplateReferences(mutation.template);
 			break;
-		case "arrayPrepend":
-		case "arrayAppend":
+		case "array_prepend":
+		case "array_append":
 			for (let value of mutation.values) {
 				yield* manifestValueReferences(value);
 			}

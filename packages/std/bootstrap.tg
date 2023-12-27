@@ -4,7 +4,6 @@ import { Triple } from "./triple.tg";
 
 import make from "./bootstrap/make.tg";
 export * as make from "./bootstrap/make.tg";
-export * as rust from "./bootstrap/rust.tg";
 
 export type Arg = {
 	/** Specify which component to provide. */

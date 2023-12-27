@@ -7,6 +7,7 @@ edition = "2021"
 workspace = true
 
 [dependencies]
+async-recursion = { workspace = true }
 fnv = { workspace = true }
 futures = { workspace = true }
 goblin = { workspace = true }

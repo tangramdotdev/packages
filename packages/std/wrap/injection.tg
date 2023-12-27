@@ -1,29 +1,23 @@
 import * as bootstrap from "../bootstrap.tg";
-import * as canadianCross from "../sdk/canadian_cross.tg";
 import * as std from "../tangram.tg";
 
-type Arg = {
-	/** Additional environment to use for the build. */
-	env?: std.env.Arg;
-	/* This is the triple your injection library should work for. If you built a cross-compiler, this will be "target". */
-	host?: std.Triple.Arg;
-};
-
-export let injection = tg.target(async (arg?: Arg) => {
+export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	let host = await std.Triple.host(arg);
+	let build = arg?.build ? std.triple(arg.build) : host;
 	let os = host.os;
 
 	// Get the source.
 	let sourceDir = tg.Directory.expect(await tg.include("injection/"));
 	let source = tg.File.expect(await sourceDir.get(`${os}/lib.c`));
 
-	// Prepare sdk.
-	let buildToolchain = await bootstrap.toolchain({ host });
-	// If on Linux and glibc is requested, use the full build.
-	if (os === "linux" && host.environment !== "musl") {
-		host.vendor = "unknown";
-		buildToolchain = await canadianCross.toolchain({ host });
-	}
+	// Prepare sdk, making sure not to use any proxying.
+	let sdk = await std.sdk(std.Triple.rotate({ build, host }), arg?.sdk, {
+		proxy: { compiler: false, linker: false },
+	});
+
+	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
+		env: sdk,
+	});
 	let env = arg?.env;
 
 	// Select the correct toolchain and options for the given triple.
@@ -31,6 +25,7 @@ export let injection = tg.target(async (arg?: Arg) => {
 	if (os === "linux") {
 		additionalArgs = ["-Wl,--no-as-needed", "-s"];
 		let injection = dylib({
+			build,
 			buildToolchain,
 			env,
 			host,
@@ -109,6 +104,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
+	build?: std.Triple.Arg;
 	buildToolchain: tg.Directory;
 	env: std.env.Arg;
 	host?: std.Triple.Arg;
@@ -117,13 +113,17 @@ type DylibArg = {
 
 export let dylib = tg.target(async (arg: DylibArg): Promise<tg.File> => {
 	let host = await std.Triple.host(arg);
+	let build = arg.build ? std.triple(arg.build) : host;
 
 	let additionalArgs = arg.additionalArgs ?? [];
 	if (host.os === "linux") {
 		additionalArgs.push(await tg`--sysroot=${arg.buildToolchain}`);
 	}
 
-	let executable = `cc`;
+	let prefix = std.Triple.eq(build, host)
+		? ""
+		: `${std.Triple.toString(host)}-`;
+	let executable = `${prefix}cc`;
 
 	let system = std.Triple.system(host);
 	let output = tg.File.expect(
@@ -146,10 +146,10 @@ export let dylib = tg.target(async (arg: DylibArg): Promise<tg.File> => {
 export let test = tg.target(async () => {
 	let detectedHost = await std.Triple.host();
 	let hostArch = detectedHost.arch;
-	if (detectedHost.os === "linux") {
-		detectedHost.environment = "musl";
-	}
-	let nativeInjection = await injection({ host: detectedHost });
+	let nativeInjection = await injection({
+		host: detectedHost,
+		sdk: { bootstrapMode: true },
+	});
 
 	// Assert the native injection dylib was built for the build machine.
 	let os = tg.System.os(std.Triple.system(detectedHost));

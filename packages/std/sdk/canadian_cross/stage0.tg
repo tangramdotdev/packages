@@ -2,20 +2,20 @@
 
 import * as bootstrap from "../../bootstrap.tg";
 import * as std from "../../tangram.tg";
-import proxy from "../proxy.tg";
 
 export let bootstrapSdk = tg.target(
 	async (arg?: std.Triple.HostArg): Promise<std.env.Arg> => {
 		let host = await std.Triple.host(arg);
 		let toolchain = await prepareBootstrapToolchain({ host });
 		let bootstrapHost = bootstrap.toolchainTriple(host);
-		let proxyEnv = await proxy({
-			env: toolchain,
-			target: bootstrapHost,
-		});
 		let utils = await prepareBootstrapUtils(bootstrapHost);
 		let shellExe = tg.File.expect(await utils.get("bin/dash"));
-		return std.env(toolchain, proxyEnv, utils, { SHELL: shellExe }, { bootstrapMode: true });
+		return std.env.object(
+			toolchain,
+			utils,
+			{ SHELL: shellExe },
+			{ bootstrapMode: true },
+		);
 	},
 );
 

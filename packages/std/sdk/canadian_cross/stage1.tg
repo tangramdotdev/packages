@@ -7,7 +7,7 @@ import * as dependencies from "../dependencies.tg";
 import gcc from "../gcc.tg";
 import kernelHeaders from "../kernel_headers.tg";
 import { constructSysroot } from "../libc.tg";
-import proxy from "../proxy.tg";
+import * as proxy from "../proxy.tg";
 
 type Arg = std.sdk.BuildEnvArg;
 
@@ -65,21 +65,20 @@ export let buildToHostCrossToolchain = tg.target(async (arg?: Arg) => {
 	});
 	console.log("cross gcc", await crossGCC.id());
 
-	// // Produce a cross-proxy env.
-	// let crossProxy = await proxy({
-	// 	env,
-	// 	host: build,
-	// 	target: arg.host,
-	// });
-	// console.log("crossProxy", await crossProxy.id());
-	// env = [...env, crossProxy];
+	// Produce a cross-proxy env.
+	let crossProxy = await proxy.env({
+		env: crossGCC,
+		host: build,
+		target: host,
+	});
+	console.log("crossProxy", await crossProxy.id());
 
-	return { env: crossGCC, sysroot };
+	return { env: [crossGCC, crossProxy], sysroot };
 });
 
 export let test = async () => {
 	let host = await std.Triple.host();
-	let buildSDK = await std.sdk.bootstrap(host);
+	let buildSDK = await std.sdk.bootstrap({ host });
 	let utilsEnv = await dependencies.env({ sdk: { bootstrapMode: true } });
 	let build = std.triple(bootstrap.toolchainTriple(host));
 	let { env } = await buildToHostCrossToolchain({

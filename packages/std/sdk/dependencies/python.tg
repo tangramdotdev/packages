@@ -57,9 +57,12 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ? std.triple(build_) : host;
 	let os = build.os;
 
-	let additionalEnv = {};
+	let additionalEnv: std.env.Arg = {
+		LDFLAGS: "-Wl,--tg-combined-library-path=false",
+	};
 	if (os === "darwin") {
 		additionalEnv = {
+			...additionalEnv,
 			MACOSX_DEPLOYMENT_TARGET: "14.0",
 		};
 	}

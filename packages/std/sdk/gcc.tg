@@ -1,8 +1,12 @@
 import * as bootstrap from "../bootstrap.tg";
 import { mergeLibDirs } from "../sdk.tg";
 import * as std from "../tangram.tg";
+import binutils from "./binutils.tg";
+import * as canadianCross from "./canadian_cross.tg";
 import * as dependencies from "./dependencies.tg";
+import kernelHeaders from "./kernel_headers.tg";
 import { interpreterName } from "./libc.tg";
+import { constructSysroot } from "./libc.tg";
 import { defaultGlibcVersion } from "./libc/glibc.tg";
 
 export let metadata = {
@@ -89,7 +93,9 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv: std.env.Arg = {};
+	let additionalEnv: std.env.Arg = {
+		LDFLAGS: "-Wl,--tg-combined-library-path=false",
+	};
 
 	// On Musl hosts, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (host.environment === "musl") {
@@ -125,7 +131,6 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage1_limited") {
 		let stage1LimitedArgs = [
-			`--with-build-sysroot=$SYSROOT`,
 			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
@@ -146,15 +151,6 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-initfini-array",
 		];
 		additionalArgs.push(...stage2FullArgs);
-
-		let stage2Env = {
-			CC: `${targetString}-cc -static --static`,
-			CXX: `${targetString}-c++ -static --static`,
-		};
-		additionalEnv = {
-			...additionalEnv,
-			...stage2Env,
-		};
 	}
 
 	let configure = { args: [...commonArgs, ...additionalArgs] };
@@ -191,6 +187,62 @@ export let build = tg.target(async (arg: Arg) => {
 });
 
 export default build;
+
+export type ToolchainArg = std.sdk.BuildEnvArg & {
+	target?: std.Triple.Arg;
+};
+
+/** Construct a complete binutils + libc + gcc toolchain. */
+export let toolchain = tg.target(async (arg: ToolchainArg) => {
+	let { build: build_, host: host_, target: target_, ...rest } = arg;
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let buildTriple = build_ ? std.triple(build_) : host;
+	let target = target_ ? std.triple(target_) : host;
+
+	let sdkArg = { bootstrapMode: true };
+
+	// Always build a native toolchain.
+	let nativeToolchain = await canadianCross.toolchain({ host });
+
+	// If only the native toolchain was requested, return it.
+	if (std.Triple.eq(host, buildTriple)) {
+		return nativeToolchain;
+	}
+
+	// If a cross-target was requested, build the components required using the native toolchain.
+
+	let crossBinutils = await binutils({
+		...rest,
+		build: buildTriple,
+		host,
+		target,
+		sdk: sdkArg,
+	});
+
+	let crossLinuxHeaders = await tg.directory({
+		include: await kernelHeaders({ ...rest, host, sdk: sdkArg }),
+	});
+
+	let crossSysroot = await constructSysroot({
+		...rest,
+		build: buildTriple,
+		host: target,
+		sdk: sdkArg,
+		linuxHeaders: crossLinuxHeaders,
+	});
+
+	let crossGcc = await build({
+		binutils: crossBinutils,
+		build: buildTriple,
+		host,
+		sdk: sdkArg,
+		sysroot: crossSysroot,
+		target,
+		variant: "stage2_full",
+	});
+
+	return crossGcc;
+});
 
 export let gccSource = tg.target(async () => {
 	let { name, version } = metadata;

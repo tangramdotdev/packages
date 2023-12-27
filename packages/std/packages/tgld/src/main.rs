@@ -2,12 +2,12 @@ use itertools::Itertools;
 use std::{
 	collections::{BTreeMap, HashSet},
 	os::unix::fs::PermissionsExt,
-	path::{Path, PathBuf},
-	str::FromStr,
+	path::PathBuf,
 };
 use tangram_client as tg;
 use tangram_error::{return_error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;
@@ -57,28 +57,38 @@ async fn main_inner() -> Result<()> {
 	let tg = tg::client::Builder::with_runtime_json(&runtime_json)?.build();
 	tg.connect().await?;
 
+	// Open the output file.
+	let file = tokio::fs::File::open(&options.output_path)
+		.await
+		.wrap_err("Could not open output file")?;
+	// If the linker generated an executable, then check it in and replace it with the wrapper with an embedded manifest.
+	let blob = tg::Blob::with_reader(&tg, file)
+		.await
+		.wrap_err("Could not create blob")?;
+	let output_artifact = tg::File::builder(blob).executable(true).build();
+
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
 		is_executable,
 		interpreter,
-		needed_libraries,
-	} = analyze_output_file(&options.output_path)?;
-	tracing::trace!(?is_executable, ?interpreter, ?needed_libraries,);
+		..
+	} = analyze_executable(output_artifact.reader(&tg).await?).await?;
+	tracing::trace!(?is_executable, ?interpreter);
 
 	// Unrender and resolve all library paths.
 	let library_paths = options
 		.library_paths
 		.iter()
-		.map(|library_path| template_to_resolved_symlink(&tg, unrender(&tg, library_path)));
+		.map(|library_path| template_data_to_symlink_data(&tg, unrender(&tg, library_path)));
 	let library_paths = futures::future::try_join_all(library_paths).await?;
 
 	// Produce a combined library directory if needed and create the manifest value.
 	let library_paths = if options.library_paths.is_empty() {
 		None
-	} else if options.combine_library_paths {
+	} else if options.combined_library_path {
 		// Produce a directory containing the libraries required by the output file found in the library paths.
 		let combined_library_directory =
-			create_combined_library_directory(&tg, &library_paths, &needed_libraries).await?;
+			create_combined_library_directory(&tg, &output_artifact, &library_paths).await?;
 		Some(vec![combined_library_directory])
 	} else {
 		Some(library_paths)
@@ -89,14 +99,6 @@ async fn main_inner() -> Result<()> {
 
 	// Handle an executable or a library.
 	if is_executable {
-		// If the linker generated an executable, then check it in and replace it with the wrapper with an embedded manifest.
-		let file = tokio::fs::File::open(&options.output_path)
-			.await
-			.wrap_err("Could not open output file")?;
-		let blob = tg::Blob::with_reader(&tg, file)
-			.await
-			.wrap_err("Could not create blob")?;
-		let output_artifact = tg::File::builder(blob).executable(true).build();
 		let output_artifact_id = output_artifact.id(&tg).await?.clone().try_into().unwrap();
 
 		// Copy the wrapper to the temporary path.
@@ -162,7 +164,7 @@ async fn main_inner() -> Result<()> {
 #[derive(Debug)]
 struct Options {
 	/// Whether or not to combine the library paths filtering for needed libraries. Defaults to true.
-	combine_library_paths: bool,
+	combined_library_path: bool,
 
 	/// The path to the command that will be invoked.
 	command_path: PathBuf,
@@ -232,7 +234,7 @@ fn read_options() -> Options {
 	let injection_path = std::env::var("TANGRAM_LINKER_INJECTION_PATH").ok();
 
 	// Get the option to disable combining library paths. Enabled by default.
-	let mut combine_library_paths = std::env::var("TANGRAM_LINKER_COMBINED_LIBRARY_PATH")
+	let mut combined_library_path = std::env::var("TANGRAM_LINKER_COMBINED_LIBRARY_PATH")
 		.ok()
 		.map_or(false, |s| s == "1");
 
@@ -247,8 +249,8 @@ fn read_options() -> Options {
 		// Pass through any arg that isn't a tangram arg.
 		if arg.starts_with("--tg") {
 			// Handle setting combined library paths. Will override the env var if set.
-			if arg == "--tg-combined-library-paths=true" {
-				combine_library_paths = true;
+			if arg == "--tg-combined-library-path=true" {
+				combined_library_path = true;
 			}
 		} else {
 			command_args.push(arg.clone());
@@ -282,7 +284,7 @@ fn read_options() -> Options {
 	let output_path = output_path.as_deref().unwrap_or("a.out").into();
 
 	Options {
-		combine_library_paths,
+		combined_library_path,
 		command_path,
 		command_args,
 		interpreter_path,
@@ -334,14 +336,14 @@ async fn create_manifest(
 		if let Some((path, is_musl)) = config {
 			// Unrender the interpreter path.
 			let path = unrender(tg, &path);
-			let path = template_to_resolved_symlink(tg, path).await?;
+			let path = template_data_to_symlink_data(tg, path).await?;
 			tracing::trace!(?path, "Interpreter path");
 
 			// Unrender the preloads.
 			let mut preloads = None;
 			if let Some(injection_path) = options.injection_path.as_deref() {
 				preloads = Some(vec![
-					template_to_resolved_symlink(tg, unrender(tg, injection_path)).await?,
+					template_data_to_symlink_data(tg, unrender(tg, injection_path)).await?,
 				]);
 			}
 
@@ -378,12 +380,12 @@ async fn create_manifest(
 		let library_paths = options
 			.library_paths
 			.iter()
-			.map(|library_path| template_to_resolved_symlink(tg, unrender(tg, library_path)));
+			.map(|library_path| template_data_to_symlink_data(tg, unrender(tg, library_path)));
 		let library_paths = Some(futures::future::try_join_all(library_paths).await?);
 		let mut preloads = None;
 		if let Some(injection_path) = options.injection_path.as_deref() {
 			preloads = Some(
-				futures::future::try_join_all(std::iter::once(template_to_resolved_symlink(
+				futures::future::try_join_all(std::iter::once(template_data_to_symlink_data(
 					tg,
 					unrender(tg, injection_path),
 				)))
@@ -401,7 +403,7 @@ async fn create_manifest(
 
 	// Create the executable.
 	let executable = manifest::Executable::Path(
-		template_to_resolved_symlink(tg, async {
+		template_data_to_symlink_data(tg, async {
 			tg::template::Data {
 				components: vec![tg::template::component::Data::Artifact(ld_output_id)],
 			}
@@ -445,15 +447,26 @@ enum InterpreterRequirement {
 	Path(String),
 }
 
-/// Analyze the command output file.
-fn analyze_output_file(path: &Path) -> Result<AnalyzeOutputFileOutput> {
-	// Read the file.
-	let bytes = std::fs::read(path).wrap_err_with(|| {
+/// Analyze an output file.
+#[cfg(test)]
+async fn analyze_output_file(path: impl AsRef<std::path::Path>) -> Result<AnalyzeOutputFileOutput> {
+	let file = tokio::fs::File::open(&path).await.wrap_err_with(|| {
 		format!(
-			r#"Failed to read the output file at path "{}"."#,
-			path.display()
+			r#"Failed to open the output file at path "{}"."#,
+			path.as_ref().display()
 		)
 	})?;
+	analyze_executable(file).await
+}
+
+/// Analyze an executable.
+async fn analyze_executable(mut reader: impl AsyncRead + Unpin) -> Result<AnalyzeOutputFileOutput> {
+	// Collect the bytes.
+	let mut bytes = Vec::new();
+	reader
+		.read_to_end(&mut bytes)
+		.await
+		.wrap_err("Failed to read the output file.")?;
 
 	// Parse the object and analyze it.
 	let object =
@@ -553,44 +566,53 @@ fn analyze_output_file(path: &Path) -> Result<AnalyzeOutputFileOutput> {
 /// Create a directory containing the libraries required by the output file found in the library paths, and return it as a symlink with no subpath.
 async fn create_combined_library_directory(
 	tg: &dyn tg::Handle,
+	file: &tg::File,
 	library_paths: &[tg::symlink::Data],
-	needed_libraries: &[impl AsRef<str>],
 ) -> Result<tg::symlink::Data> {
-	let mut found_libs: BTreeMap<String, tg::Artifact> = BTreeMap::default();
+	let mut found_libraries: BTreeMap<String, tg::Artifact> = BTreeMap::default();
+	locate_needed_libraries(tg, file, library_paths, &mut found_libraries).await?;
+	let directory = tg::Artifact::Directory(tg::Directory::new(found_libraries));
+	let symlink = tg::Symlink::new(Some(directory), None);
+	let data = symlink.data(tg).await?;
+	Ok(data)
+}
 
-	for path in library_paths {
-		let base_artifact = if let Some(artifact) = &path.artifact {
-			artifact.clone()
-		} else {
-			continue;
-		};
-		let base_artifact = tg::artifact::Artifact::with_id(base_artifact);
-		if let tg::artifact::Artifact::Directory(ref base_directory) = base_artifact {
-			let mut target_artifact = base_artifact.clone();
-			if let Some(path) = &path.path {
-				let path = tg::Path::from_str(path.strip_prefix('/').unwrap())?.normalize();
-				if let Ok(target) = base_directory.get(tg, &path).await {
-					target_artifact = target.clone();
-				}
-			}
-			if let tg::Artifact::Directory(directory) = target_artifact {
-				let entries = directory.entries(tg).await?;
-				for library_name in needed_libraries {
-					let library_name = library_name.as_ref();
-					if let Some(artifact) = entries.get(library_name) {
-						found_libs.insert(library_name.to_owned(), artifact.clone());
-					}
-				}
+#[async_recursion::async_recursion]
+async fn locate_needed_libraries(
+	tg: &dyn tg::Handle,
+	file: &tg::File,
+	library_paths: &[tg::symlink::Data],
+	found_libraries: &mut BTreeMap<String, tg::Artifact>,
+) -> Result<()> {
+	let reader = file.reader(tg).await?;
+	let AnalyzeOutputFileOutput {
+		mut needed_libraries,
+		..
+	} = analyze_executable(reader).await?;
+
+	for symlink_data in library_paths {
+		needed_libraries.retain(|library_name| !found_libraries.contains_key(library_name));
+		if needed_libraries.is_empty() {
+			return Ok(());
+		}
+		let object = tg::symlink::Object::try_from(symlink_data.clone())?;
+		let symlink = tg::Symlink::with_object(object);
+		if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
+			let entries = directory.entries(tg).await?;
+			for library_name in &needed_libraries {
+				if let Some(tg::Artifact::File(found_library)) = entries.get(library_name) {
+					tracing::trace!(?found_library, ?library_name, "Found library.");
+					found_libraries.insert(
+						library_name.to_owned(),
+						tg::Artifact::File(found_library.clone()),
+					);
+					locate_needed_libraries(tg, found_library, library_paths, found_libraries)
+						.await?;
+				};
 			}
 		}
 	}
-
-	// Create the manifest value.
-	let directory = tg::Artifact::Directory(tg::Directory::new(found_libs));
-	let symlink = tg::Symlink::new(Some(directory), None);
-	let data = symlink.data(tg).await?;
-
-	Ok(data)
+	Ok(())
 }
 
 fn setup_tracing() {
@@ -612,7 +634,7 @@ fn setup_tracing() {
 	}
 }
 
-async fn template_to_resolved_symlink<F>(
+async fn template_data_to_symlink_data<F>(
 	tg: &dyn tg::Handle,
 	template: F,
 ) -> Result<tg::symlink::Data>
@@ -632,22 +654,22 @@ where
 		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] =>
 		{
 			// If there is a subpath, return the artifact it points to.
-			let artifact = tg::Artifact::with_id(artifact_id.clone());
-			let path = tg::Path::from_str(s.strip_prefix('/').unwrap())?.normalize();
-			if let tg::Artifact::Directory(directory) = artifact {
-				if let Ok(child) = directory.get(tg, &path).await {
-					Ok(tg::symlink::Data {
-						artifact: Some(child.id(tg).await?),
-						path: None,
-					})
-				} else {
-					Ok(tg::symlink::Data {
-						artifact: Some(artifact_id.clone()),
-						path: Some(s.to_owned()),
-					})
-				}
+			let data = tg::symlink::Data {
+				artifact: Some(artifact_id.clone()),
+				path: Some(s.strip_prefix('/').unwrap().to_owned()),
+			};
+			let object = tg::symlink::Object::try_from(data.clone())?;
+			let symlink = tg::Symlink::with_object(object);
+			if let Ok(Some(target)) = symlink.resolve(tg).await {
+				Ok(tg::symlink::Data {
+					artifact: Some(target.id(tg).await?.clone()),
+					path: None,
+				})
 			} else {
-				return_error!("Expected a directory artifact.")
+				Ok(tg::symlink::Data {
+					artifact: None,
+					path: None,
+				})
 			}
 		},
 		_ => {
@@ -671,8 +693,8 @@ async fn unrender(tg: &dyn tg::Handle, string: &str) -> tg::template::Data {
 mod tests {
 	use super::{analyze_output_file, AnalyzeOutputFileOutput, InterpreterRequirement};
 
-	#[test]
-	fn read_output_files() {
+	#[tokio::test]
+	async fn read_output_files() {
 		std::fs::write("main.c", "int main() { return 0; }").unwrap();
 
 		// Test analyzing a shared library.
@@ -684,7 +706,7 @@ mod tests {
 			.status()
 			.unwrap();
 		let AnalyzeOutputFileOutput { is_executable, .. } =
-			analyze_output_file("a.out".as_ref()).unwrap();
+			analyze_output_file("a.out").await.unwrap();
 		assert!(
 			!is_executable,
 			"Dynamically linked library was detected as an executable."
@@ -701,7 +723,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = analyze_output_file("a.out".as_ref()).unwrap();
+		} = analyze_output_file("a.out").await.unwrap();
 		assert!(
 			is_executable,
 			"Dynamically linked executable was detected as a library."
@@ -724,7 +746,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = analyze_output_file("a.out".as_ref()).unwrap();
+		} = analyze_output_file("a.out").await.unwrap();
 		assert!(
 			is_executable,
 			"Statically linked executable was detected as a library."
@@ -746,7 +768,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = analyze_output_file("a.out".as_ref()).unwrap();
+		} = analyze_output_file("a.out").await.unwrap();
 		assert!(is_executable, "PIE was detected as a library.");
 		assert!(
 			!matches!(interpreter, InterpreterRequirement::None),
@@ -766,7 +788,7 @@ mod tests {
 			is_executable,
 			interpreter,
 			..
-		} = analyze_output_file("a.out".as_ref()).unwrap();
+		} = analyze_output_file("a.out").await.unwrap();
 		assert!(
 			is_executable,
 			"Static-pie linked executable was detected as a library."

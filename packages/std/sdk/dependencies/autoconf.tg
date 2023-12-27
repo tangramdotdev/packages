@@ -7,13 +7,13 @@ import zlib from "./zlib.tg";
 
 export let metadata = {
 	name: "autoconf",
-	version: "2.71",
+	version: "2.72",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:f14c83cfebcc9427f2c3cea7258bd90df972d92eb26752da4ddad81c87a0faa4";
+		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
 	let compressionFormat = ".xz" as const;
 	return std.download.fromGnu({ name, version, checksum, compressionFormat });
 });
