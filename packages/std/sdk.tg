@@ -68,7 +68,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	// If we're in bootstrap mode, stop here and return the bootstrap SDK.
 	let bootstrapMode = (bootstrapMode_ ?? []).some((mode) => mode);
 	if (bootstrapMode) {
-		return sdk.bootstrap({ ...proxyArg, host });
+		return sdk.bootstrap({ host });
 	}
 
 	// Collect target array.
@@ -83,12 +83,15 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 
 	if (host.os === "darwin") {
 		// Build the utils using the bootstrap SDK and add them to the env.
-		let bootstrapSDK = sdk.bootstrap({ ...proxyArg, host });
+		let bootstrapSDK = await sdk.bootstrap({ host });
+		let proxyEnv = await proxy.env({ ...proxyArg, env: bootstrapSDK });
 		let dependenciesEnv = await dependencies.env({
 			host,
 			sdk: { bootstrapMode: true },
 		});
-		return std.env(bootstrapSDK, dependenciesEnv, { bootstrapMode: true });
+		return std.env(bootstrapSDK, proxyEnv, dependenciesEnv, {
+			bootstrapMode: true,
+		});
 	}
 
 	let toolchain = toolchain_ ?? (host.vendor === "apple" ? "llvm" : "gcc");
@@ -140,7 +143,11 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 					`Provided toolchain does not provide a ${hostString} -> ${targetString} toolchain.`,
 				);
 			}
-			let proxyEnv = await proxy.env({ ...proxyArg, env, target: requestedTarget });
+			let proxyEnv = await proxy.env({
+				...proxyArg,
+				env,
+				target: requestedTarget,
+			});
 			env = [env, proxyEnv];
 		}
 		// Build the utils using the proxied host toolchain and add them to the env.

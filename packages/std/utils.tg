@@ -27,23 +27,10 @@ export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	// Ensure the bootstrap SDK exists.
 	await std.sdk({ bootstrapMode: true });
 
-	let bootstrapMode = (std.flatten([arg?.sdk])).some((arg) => arg?.bootstrapMode);
-	let env: std.env.Arg = {};
-	if (bootstrapMode) {
-		// If bootstrap mode is requested, build statically-linked tools.
-		env = {
-			...env,
-			CC: "gcc -static",
-			CXX: "g++ -static",
-			LDFLAGS: "-static",
-		};
-	}
-
 	// Build bash and use it as the default shell.
-	let bashAritfact = await bash.build({ ...arg, env });
+	let bashAritfact = await bash.build(arg);
 	let bashExecutable = tg.File.expect(await bashAritfact.get("bin/bash"));
-	env = {
-		...env,
+	let env = {
 		CONFIG_SHELL: bashExecutable,
 		SHELL: bashExecutable,
 	};
@@ -58,16 +45,6 @@ export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 		sed({ ...arg, env }),
 		tar({ ...arg, env }),
 	]);
-
-	// Clear static flags prior to returning if set.
-	if (bootstrapMode) {
-		env = {
-			...env,
-			CC: undefined,
-			CXX: undefined,
-			LDFLAGS: undefined,
-		};
-	}
 
 	return std.env(...utils, env, { bootstrapMode: true });
 });

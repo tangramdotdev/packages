@@ -236,7 +236,7 @@ fn read_options() -> Options {
 	// Get the option to disable combining library paths. Enabled by default.
 	let mut combined_library_path = std::env::var("TANGRAM_LINKER_COMBINED_LIBRARY_PATH")
 		.ok()
-		.map_or(false, |s| s == "1");
+		.map_or(true, |s| s == "1");
 
 	// Get an iterator over the arguments.
 	let mut args = std::env::args();
@@ -249,8 +249,8 @@ fn read_options() -> Options {
 		// Pass through any arg that isn't a tangram arg.
 		if arg.starts_with("--tg") {
 			// Handle setting combined library paths. Will override the env var if set.
-			if arg == "--tg-combined-library-path=true" {
-				combined_library_path = true;
+			if arg == "--tg-combined-library-path=false" {
+				combined_library_path = false;
 			}
 		} else {
 			command_args.push(arg.clone());

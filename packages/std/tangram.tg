@@ -39,9 +39,14 @@ export let testCompileInjection = tg.target(async () => {
 });
 
 import * as workspace from "./wrap/workspace.tg";
+
+export let testEarlyRust = tg.target(async () => {
+	return await workspace.rust();
+});
+
 export let testWorkspace = tg.target(async () => {
 	let host = await Triple.host();
-	return await workspace.workspace({ host });
+	return await workspace.test();
 });
 
 import * as proxy from "./sdk/proxy.tg";

@@ -71,7 +71,6 @@ export let buildToHostCrossToolchain = tg.target(async (arg?: Arg) => {
 		host: build,
 		target: host,
 	});
-	console.log("crossProxy", await crossProxy.id());
 
 	return { env: [crossGCC, crossProxy], sysroot };
 });

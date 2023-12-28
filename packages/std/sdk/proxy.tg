@@ -16,7 +16,7 @@ export type Arg = std.sdk.BuildEnvArg & {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export let env = async (arg?: Arg): Promise<tg.File> => {
+export let env = async (arg?: Arg) => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -24,115 +24,119 @@ export let env = async (arg?: Arg): Promise<tg.File> => {
 	let proxyCompiler = arg.compiler ?? false;
 	let proxyLinker = arg.linker ?? true;
 
-	// If no proxies were requested, return the incoming env.
 	if (!proxyCompiler && !proxyLinker) {
-		return std.env(arg?.env);
+		return;
 	}
+
+	let dirs = [];
 
 	let { cc, cxx, directory, flavor, host, ld, ldso, target } =
 		await std.sdk.toolchainComponents(arg);
-	let hostString = std.Triple.toString(host);
-	let targetString = std.Triple.toString(target);
 
-	let isCross = !std.Triple.eq(host, target);
-	let targetPrefix = isCross ? `${targetString}-` : ``;
+	if (proxyLinker) {
+		let hostString = std.Triple.toString(host);
+		let targetString = std.Triple.toString(target);
 
-	// Construct the ld proxy.
-	let ldProxyArtifact = await ldProxy({
-		buildEnv: arg.env,
-		linker: ld,
-		interpreter: ldso,
-		host,
-		target,
-		sdk: arg.sdk,
-	});
+		let isCross = !std.Triple.eq(host, target);
+		let targetPrefix = isCross ? `${targetString}-` : ``;
 
-	let ldProxyDir = tg.directory({
-		ld: ldProxyArtifact,
-	});
-
-	// Construct wrappers that always pass the ld proxy.
-	let binDir = tg.directory();
-
-	let ccBinDir = undefined;
-
-	if (proxyCompiler) {
-		ccBinDir = await ccProxy({
+		// Construct the ld proxy.
+		let ldProxyArtifact = await ldProxy({
+			buildEnv: arg.env,
+			linker: ld,
+			interpreter: ldso,
 			host,
 			target,
 			sdk: arg.sdk,
 		});
-	}
 
-	let wrappedCC;
-	let wrappedCXX;
-	switch (flavor) {
-		case "gcc": {
-			let { ccArgs, cxxArgs } = await wrapArgs({
-				host,
-				target,
-				toolchainDir: directory,
-			});
-			wrappedCC = await std.wrap({
-				identity: "wrapper",
-				executable: cc,
-				args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
-			});
-			wrappedCXX = await std.wrap({
-				identity: "wrapper",
-				executable: cxx,
-				args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
-			});
+		let ldProxyDir = tg.directory({
+			ld: ldProxyArtifact,
+		});
 
-			if (isCross) {
-				binDir = tg.directory({
-					bin: {
-						[`${targetString}-cc`]: tg.symlink(`${targetPrefix}gcc`),
-						[`${targetString}-c++`]: tg.symlink(`${targetPrefix}g++`),
-						[`${targetString}-gcc`]: wrappedCC,
-						[`${targetString}-g++`]: wrappedCXX,
+		// Construct wrappers that always pass the ld proxy.
+		let binDir = tg.directory();
+
+		let wrappedCC;
+		let wrappedCXX;
+		switch (flavor) {
+			case "gcc": {
+				let { ccArgs, cxxArgs } = await wrapArgs({
+					host,
+					target,
+					toolchainDir: directory,
+				});
+				wrappedCC = await std.wrap(cc, {
+					identity: "wrapper",
+					args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
+					sdk: arg.sdk,
+				});
+				wrappedCXX = await std.wrap(cxx, {
+					identity: "wrapper",
+					args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
+					sdk: arg.sdk,
+				});
+
+				if (isCross) {
+					binDir = tg.directory({
+						bin: {
+							[`${targetString}-cc`]: tg.symlink(`${targetPrefix}gcc`),
+							[`${targetString}-c++`]: tg.symlink(`${targetPrefix}g++`),
+							[`${targetString}-gcc`]: wrappedCC,
+							[`${targetString}-g++`]: wrappedCXX,
+						},
+					});
+				} else {
+					binDir = tg.directory({
+						bin: {
+							cc: tg.symlink("gcc"),
+							[`${hostString}-cc`]: tg.symlink("gcc"),
+							"c++": tg.symlink("g++"),
+							[`${hostString}-c++`]: tg.symlink("g++"),
+							gcc: wrappedCC,
+							[`${hostString}-gcc`]: tg.symlink("gcc"),
+							"g++": wrappedCXX,
+							[`${hostString}-g++`]: tg.symlink("g++"),
+						},
+					});
+				}
+				break;
+			}
+			case "llvm": {
+				wrappedCC = std.wrap({
+					executable: cc,
+					args: [tg`-B${ldProxyArtifact}`],
+					env: {
+						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 					},
 				});
-			} else {
+				wrappedCXX = wrappedCC;
 				binDir = tg.directory({
 					bin: {
-						cc: tg.symlink("gcc"),
-						[`${hostString}-cc`]: tg.symlink("gcc"),
-						"c++": tg.symlink("g++"),
-						[`${hostString}-c++`]: tg.symlink("g++"),
-						gcc: wrappedCC,
-						[`${hostString}-gcc`]: tg.symlink("gcc"),
-						"g++": wrappedCXX,
-						[`${hostString}-g++`]: tg.symlink("g++"),
+						clang: wrappedCC,
+						"clang++": wrappedCXX,
+						cc: tg.symlink("clang"),
+						"c++": tg.symlink("clang"),
+						gcc: tg.symlink("clang"),
+						"g++": tg.symlink("clang"),
 					},
 				});
 			}
-			break;
 		}
-		case "llvm": {
-			wrappedCC = std.wrap({
-				executable: cc,
-				args: [tg`-B${ldProxyArtifact}`],
-				env: {
-					SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
-				},
-			});
-			wrappedCXX = wrappedCC;
-			binDir = tg.directory({
-				bin: {
-					clang: wrappedCC,
-					"clang++": wrappedCXX,
-					cc: tg.symlink("clang"),
-					"c++": tg.symlink("clang"),
-					gcc: tg.symlink("clang"),
-					"g++": tg.symlink("clang"),
-				},
-			});
-		}
+		dirs.push(binDir);
 	}
 
-	// Return the env containing wrapped compilers and symlinks.
-	return std.env(binDir, ccBinDir);
+	if (proxyCompiler) {
+		dirs.push(
+			ccProxy({
+				host,
+				target,
+				sdk: arg.sdk,
+			}),
+		);
+	}
+
+	return await Promise.all(dirs);
 };
 
 export default env;
@@ -179,14 +183,15 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	let injectionLibrary = await injection({
 		env: arg.buildEnv,
 		host: target,
+		sdk: arg.sdk,
 	});
 	let tgld = await workspace.tgld({
-		sdk: arg.sdk,
 		host: target,
+		sdk: arg.sdk,
 	});
 	let wrapper = await workspace.wrapper({
-		sdk: arg.sdk,
 		host: target,
+		sdk: arg.sdk,
 	});
 
 	// Create the linker proxy.
@@ -199,13 +204,15 @@ export let ldProxy = async (arg: LdProxyArg) => {
 			TANGRAM_LINKER_INTERPRETER_PATH: arg.interpreter ?? "none",
 			TANGRAM_LINKER_WRAPPER_PATH: wrapper,
 		},
+		sdk: arg.sdk,
 	});
 
 	return output;
 };
 
 export let test = tg.target(async () => {
-	let bootstrapSDK = std.sdk({ bootstrapMode: true });
+	let bootstrapSDK = await std.sdk({ bootstrapMode: true });
+	let proxyEnv = await env({ env: bootstrapSDK, sdk: { bootstrapMode: true } });
 	let helloSource = await tg.file(`
 #include <stdio.h>
 int main() {
@@ -217,15 +224,13 @@ int main() {
 		await tg.build(
 			tg`
 				set -x
+				env
 				cc -v -xc ${helloSource} -o $OUTPUT`,
 			{
-				env: await std.env.object([
-					bootstrapSDK,
-					{
-						TGLD_TRACING: "tangram=trace",
-						TANGRAM_WRAPPER_TRACING: "tangram=trace",
-					},
-				]),
+				env: await std.env.object(bootstrapSDK, proxyEnv, {
+					TGLD_TRACING: "tangram=trace",
+					TANGRAM_WRAPPER_TRACING: "tangram=trace",
+				}),
 			},
 		),
 	);

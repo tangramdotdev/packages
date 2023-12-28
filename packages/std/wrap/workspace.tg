@@ -35,7 +35,7 @@ export let tgld = async (arg?: Arg) =>
 export let wrapper = async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
-let version = "1.74.1";
+let version = "1.75.0";
 
 type ToolchainArg = {
 	target?: std.Triple.Arg;
@@ -63,6 +63,9 @@ export let rust = tg.target(
 		// On Linux, ensure we use a musl target for the host.
 		if (os === "linux") {
 			host.environment = "musl";
+			host.vendor = "unknown";
+			target.environment = "musl";
+			target.vendor = "unknown";
 		}
 
 		// Install the full minimal profile for the host.
@@ -166,12 +169,20 @@ type BuildArg = {
 	sdkArg?: tg.MaybeNestedArray<std.sdk.Arg>;
 };
 
-export let build = tg.target(async (arg: BuildArg) => {
+export let build = async (arg: BuildArg) => {
 	let source = arg.source;
 	let host = std.triple(arg.host);
 	let target = arg.target ? std.triple(arg.target) : host;
 	let system = std.Triple.system(host);
 	let os = tg.System.os(system);
+
+	// On Linux, ensure we use a musl target.
+	if (os === "linux") {
+		host.environment = "musl";
+		host.vendor = "unknown";
+		target.environment = "musl";
+		target.vendor = "unknown";
+	}
 
 	let isCross = !std.Triple.eq(host, target);
 
@@ -189,6 +200,10 @@ export let build = tg.target(async (arg: BuildArg) => {
 
 	// Set up common environemnt.
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
+	let prefix = ``;
+	if (isCross) {
+		prefix = `${std.Triple.toString(target)}-`;
+	}
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
 		sdk,
 		rustToolchain,
@@ -197,19 +212,13 @@ export let build = tg.target(async (arg: BuildArg) => {
 			CARGO_HTTP_CAINFO: certFile,
 			RUST_TARGET: std.Triple.toString(target),
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-		},
-	];
-
-	if (isCross) {
-		let prefix = `${std.Triple.toString(target)}-`;
-		env.push({
 			RUSTFLAGS: `-C target-feature=+crt-static`,
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}gcc`,
 			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
 			[`CC_${tripleToEnvVar(target)}`]: `${prefix}gcc`,
 			[`CXX_${tripleToEnvVar(target)}`]: `${prefix}g++`,
-		});
-	}
+		},
+	];
 
 	// Set up platform-specific environment.
 	let interpreter = tg``;
@@ -244,7 +253,8 @@ export let build = tg.target(async (arg: BuildArg) => {
 		export TARGET=$PWD/target
 		mkdir -p "$TARGET"
 
-		echo "#!/usr/bin/env sh -eu" > rustc.sh
+		echo "#!/usr/bin/env sh" > rustc.sh
+		echo 'set -eu' >> rustc.sh
 		echo '${rustc} $@' >> rustc.sh
 		chmod +x rustc.sh
 		export RUSTC=$PWD/rustc.sh
@@ -283,7 +293,7 @@ export let build = tg.target(async (arg: BuildArg) => {
 			},
 		}),
 	);
-});
+};
 
 let tripleToEnvVar = (triple: std.Triple, upcase?: boolean) => {
 	let tripleString = std.Triple.toString(triple);
@@ -305,7 +315,8 @@ export let test = tg.target(async () => {
 		hostArch === "x86_64" ? "aarch64" : "x86_64";
 
 	let nativeWorkspace = await workspace({
-		host: std.Triple.system(host),
+		host,
+		sdk: { bootstrapMode: true },
 	});
 
 	// Assert the native workspace was built for the host.
@@ -322,6 +333,7 @@ export let test = tg.target(async () => {
 	} else {
 		return tg.unreachable();
 	}
+	return nativeWorkspace;
 });
 
 export let testCross = tg.target(async () => {
@@ -339,10 +351,7 @@ export let testCross = tg.target(async () => {
 		environment: "gnu",
 	});
 
-	let crossWorkspace = await workspace({
-		host: std.Triple.system(host),
-		target: target,
-	});
+	let crossWorkspace = await workspace({ host, target });
 
 	// Assert the cross workspace was built for the target.
 	let crossWrapper = await crossWorkspace.get("bin/wrapper");
