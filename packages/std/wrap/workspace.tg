@@ -1,14 +1,13 @@
 import * as bootstrap from "../bootstrap.tg";
 import * as std from "../tangram.tg";
 
-type Arg = std.sdk.BuildEnvArg & {
-	target?: std.Triple.Arg;
-};
+type Arg = std.sdk.BuildEnvArg;
 
 /** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
 export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
-	let host = await std.Triple.host(arg);
-	let target = arg?.target ? std.triple(arg.target) : host;
+	let { build: build_, host: host_, sdk: sdkArg } = arg ?? {};
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let buildTriple = build_ ? std.triple(build_) : host;
 
 	// Get the source.
 	let source = await tg.directory({
@@ -20,7 +19,11 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 		"packages/wrapper": tg.include("../packages/wrapper"),
 	});
 
-	return build({ source, host, target, sdkArg: arg?.sdk });
+	return build({
+		source,
+		...(await std.Triple.rotate({ build: buildTriple, host })),
+		sdkArg,
+	});
 });
 
 export let env = async (arg?: Arg) =>
@@ -187,11 +190,7 @@ export let build = async (arg: BuildArg) => {
 	let isCross = !std.Triple.eq(host, target);
 
 	// Get the SDK, without proxying enabled.
-	let sdk = await std.sdk(
-		{ host, target },
-		arg.sdkArg,
-		{ proxy: false }
-	);
+	let sdk = await std.sdk({ host, target }, arg.sdkArg, { proxy: false });
 	let { directory: toolchain } = await std.sdk.toolchainComponents({
 		env: sdk,
 	});
@@ -352,7 +351,7 @@ export let testCross = tg.target(async () => {
 		environment: "gnu",
 	});
 
-	let crossWorkspace = await workspace({ host, target });
+	let crossWorkspace = await workspace({ build: host, host: target });
 
 	// Assert the cross workspace was built for the target.
 	let crossWrapper = await crossWorkspace.get("bin/wrapper");

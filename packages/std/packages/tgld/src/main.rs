@@ -223,7 +223,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	let library_paths = options
 		.library_paths
 		.iter()
-		.map(|library_path| template_data_to_symlink_data(&tg, unrender(&tg, library_path)));
+		.map(|library_path| template_data_to_symlink_data(unrender(&tg, library_path)));
 	let library_paths = futures::future::try_join_all(library_paths).await?;
 
 	// We need to obtain an artifact if the file is executable or we are creating a combined library directory.
@@ -352,14 +352,14 @@ async fn create_manifest(
 		if let Some((path, is_musl)) = config {
 			// Unrender the interpreter path.
 			let path = unrender(tg, &path);
-			let path = template_data_to_symlink_data(tg, path).await?;
+			let path = template_data_to_symlink_data(path).await?;
 			tracing::trace!(?path, "Interpreter path");
 
 			// Unrender the preloads.
 			let mut preloads = None;
 			if let Some(injection_path) = options.injection_path.as_deref() {
 				preloads = Some(vec![
-					template_data_to_symlink_data(tg, unrender(tg, injection_path)).await?,
+					template_data_to_symlink_data(unrender(tg, injection_path)).await?,
 				]);
 			}
 
@@ -396,13 +396,12 @@ async fn create_manifest(
 		let library_paths = options
 			.library_paths
 			.iter()
-			.map(|library_path| template_data_to_symlink_data(tg, unrender(tg, library_path)));
+			.map(|library_path| template_data_to_symlink_data(unrender(tg, library_path)));
 		let library_paths = Some(futures::future::try_join_all(library_paths).await?);
 		let mut preloads = None;
 		if let Some(injection_path) = options.injection_path.as_deref() {
 			preloads = Some(
 				futures::future::try_join_all(std::iter::once(template_data_to_symlink_data(
-					tg,
 					unrender(tg, injection_path),
 				)))
 				.await?,
@@ -624,15 +623,31 @@ async fn locate_needed_libraries(
 		if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
 			let entries = directory.entries(tg).await?;
 			for library_name in &needed_libraries {
-				if let Some(tg::Artifact::File(found_library)) = entries.get(library_name) {
-					tracing::trace!(?found_library, ?library_name, "Found library.");
+				let found_library = match entries.get(library_name) {
+					Some(tg::Artifact::Directory(_)) | None => None,
+					Some(tg::Artifact::File(found_library)) => Some(found_library.clone()),
+					Some(tg::Artifact::Symlink(found_symlink)) => {
+						let found_symlink_id = found_symlink.id(tg).await?;
+						tracing::trace!(?found_symlink_id, ?library_name, "Found library symlink.");
+						let from = symlink.clone();
+						if let Some(tg::Artifact::File(found_library)) =
+							found_symlink.resolve_from(tg, Some(from)).await?
+						{
+							Some(found_library)
+						} else {
+							None
+						}
+					},
+				};
+				if let Some(found_library) = found_library {
+					tracing::trace!(?found_library, ?library_name, "Found library file.");
 					found_libraries.insert(
 						library_name.to_owned(),
 						tg::Artifact::File(found_library.clone()),
 					);
-					locate_needed_libraries(tg, found_library, library_paths, found_libraries)
+					locate_needed_libraries(tg, &found_library, library_paths, found_libraries)
 						.await?;
-				};
+				}
 			}
 		}
 	}
@@ -658,10 +673,7 @@ fn setup_tracing() {
 	}
 }
 
-async fn template_data_to_symlink_data<F>(
-	tg: &dyn tg::Handle,
-	template: F,
-) -> Result<tg::symlink::Data>
+async fn template_data_to_symlink_data<F>(template: F) -> Result<tg::symlink::Data>
 where
 	F: futures::Future<Output = tg::template::Data>,
 {
@@ -675,26 +687,11 @@ where
 			artifact: Some(id.clone()),
 			path: None,
 		}),
-		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] =>
-		{
-			// If there is a subpath, return the artifact it points to.
-			let data = tg::symlink::Data {
+		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
+			Ok(tg::symlink::Data {
 				artifact: Some(artifact_id.clone()),
 				path: Some(s.strip_prefix('/').unwrap().to_owned()),
-			};
-			let object = tg::symlink::Object::try_from(data.clone())?;
-			let symlink = tg::Symlink::with_object(object);
-			if let Ok(Some(target)) = symlink.resolve(tg).await {
-				Ok(tg::symlink::Data {
-					artifact: Some(target.id(tg).await?.clone()),
-					path: None,
-				})
-			} else {
-				Ok(tg::symlink::Data {
-					artifact: None,
-					path: None,
-				})
-			}
+			})
 		},
 		_ => {
 			return_error!(

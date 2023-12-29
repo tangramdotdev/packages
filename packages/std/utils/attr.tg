@@ -72,11 +72,12 @@ export let build = tg.target(async (arg?: Arg) => {
 		autotools,
 	);
 
-	let bins = ["getfattr", "setfattr"];
+	let bins = ["attr", "getfattr", "setfattr"];
 	for (let bin of bins) {
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
 		let wrappedBin = std.wrap(unwrappedBin, {
 			libraryPaths: [tg.symlink(tg`${output}/lib`)],
+			sdk: arg?.sdk,
 		});
 		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
 	}
@@ -86,10 +87,21 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
+	let directory = build({ sdk: { bootstrapMode: true } });
+	let binTest = (name: string) => {
+		return {
+			name,
+			testArgs: [],
+			testPredicate: (stdout: string) => stdout.includes("Usage:"),
+		};
+	};
+	let binaries = ["attr", "getfattr", "setfattr"].map(binTest);
+
 	await std.assert.pkg({
-		binaries: ["getfattr", "setfattr"],
-		directory: build({ sdk: { bootstrapMode: true } }),
+		binaries,
+		directory,
 		libs: ["attr"],
+		metadata,
 	});
-	return true;
+	return directory;
 });

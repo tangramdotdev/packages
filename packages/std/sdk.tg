@@ -232,7 +232,7 @@ export namespace sdk {
 		host?: std.Triple.Arg;
 		/** An alternate linker to use. */
 		linker?: LinkerKind;
-		/** Which components should get proxied. */
+		/** Which components should get proxied. Use `true` or `false` as a shorthand for enabling or disabling all proxies. If not provided, the default behavior is to proxy the linker but not the compiler. */
 		proxy?: proxy.Arg | boolean;
 		/** The machine this SDK produces executables for. */
 		target?: std.Triple.Arg;

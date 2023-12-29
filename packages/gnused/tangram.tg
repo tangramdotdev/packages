@@ -34,7 +34,7 @@ export let sed = tg.target(async (arg?: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			source: source_ ?? source(),
-			phases: { phases },
+			phases,
 		},
 		autotools,
 	);

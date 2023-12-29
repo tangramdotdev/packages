@@ -58,12 +58,12 @@ export let build = tg.target(async (arg?: Arg) => {
 	let os = build.os;
 
 	let additionalEnv: std.env.Arg = {
-		LDFLAGS: "-Wl,--tg-combined-library-path=false",
+		// LDFLAGS: "-Wl,--tg-combined-library-path=false",
 	};
 	if (os === "darwin") {
 		additionalEnv = {
 			...additionalEnv,
-			MACOSX_DEPLOYMENT_TARGET: "14.0",
+			MACOSX_DEPLOYMENT_TARGET: "14.2",
 		};
 	}
 
@@ -84,7 +84,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			env,
-			phases: { phases: { configure } },
+			phases: { configure },
 			source: source_ ?? source(os),
 		},
 		autotools,
