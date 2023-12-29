@@ -58,7 +58,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	let os = build.os;
 
 	let additionalEnv: std.env.Arg = {
-		// LDFLAGS: "-Wl,--tg-combined-library-path=false",
+		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "none",
+		LDFLAGS: await tg.Mutation.templatePrepend("-lgcov --coverage", " "),
 	};
 	if (os === "darwin") {
 		additionalEnv = {

@@ -1,8 +1,9 @@
 use itertools::Itertools;
 use std::{
-	collections::{BTreeMap, HashSet},
+	collections::{BTreeMap, BTreeSet, HashSet},
 	os::unix::fs::PermissionsExt,
 	path::PathBuf,
+	str::FromStr,
 };
 use tangram_client as tg;
 use tangram_error::{return_error, Result, WrapErr};
@@ -60,8 +61,8 @@ async fn main_inner() -> Result<()> {
 // The options read from the environment and arguments.
 #[derive(Debug)]
 struct Options {
-	/// Whether or not to combine the library paths filtering for needed libraries. Defaults to true.
-	combined_library_path: bool,
+	/// Library path optimization strategy. Select `filter`, `combine`, or `none`. Defaults to `filter`.
+	library_path_optimization: LibraryPathOptimizationStrategy,
 
 	/// The path to the command that will be invoked.
 	command_path: PathBuf,
@@ -131,9 +132,11 @@ fn read_options() -> Options {
 	let injection_path = std::env::var("TANGRAM_LINKER_INJECTION_PATH").ok();
 
 	// Get the option to disable combining library paths. Enabled by default.
-	let mut combined_library_path = std::env::var("TANGRAM_LINKER_COMBINED_LIBRARY_PATH")
+	let mut library_optimization_strategy = std::env::var("TANGRAM_LINKER_LIBRARY_PATH_STRATEGY")
 		.ok()
-		.map_or(true, |s| s == "1");
+		.map_or(LibraryPathOptimizationStrategy::default(), |s| {
+			s.parse().unwrap_or_default()
+		});
 
 	// Get an iterator over the arguments.
 	let mut args = std::env::args();
@@ -146,8 +149,12 @@ fn read_options() -> Options {
 		// Pass through any arg that isn't a tangram arg.
 		if arg.starts_with("--tg") {
 			// Handle setting combined library paths. Will override the env var if set.
-			if arg == "--tg-combined-library-path=false" {
-				combined_library_path = false;
+			if arg.starts_with("--tg-library-path-strategy=") {
+				let option = arg
+					.strip_prefix("--tg-library-path-strategy=")
+					.expect("Invalid argument");
+				library_optimization_strategy =
+					LibraryPathOptimizationStrategy::from_str(option).unwrap_or_default();
 			}
 		} else {
 			command_args.push(arg.clone());
@@ -181,7 +188,7 @@ fn read_options() -> Options {
 	let output_path = output_path.as_deref().unwrap_or("a.out").into();
 
 	Options {
-		combined_library_path,
+		library_path_optimization: library_optimization_strategy,
 		command_path,
 		command_args,
 		interpreter_path,
@@ -227,7 +234,11 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	let library_paths = futures::future::try_join_all(library_paths).await?;
 
 	// We need to obtain an artifact if the file is executable or we are creating a combined library directory.
-	let output_artifact = if is_executable || options.combined_library_path {
+	let output_artifact = if is_executable
+		|| !matches!(
+			options.library_path_optimization,
+			LibraryPathOptimizationStrategy::None
+		) {
 		file.rewind()
 			.await
 			.wrap_err("Could not seek to beginning of output file.")?;
@@ -239,18 +250,13 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		None
 	};
 
-	// Produce a combined library directory if needed and create the manifest value.
-	let library_paths = if options.library_paths.is_empty() {
-		None
-	} else if options.combined_library_path {
-		let output_artifact = output_artifact.as_ref().unwrap();
-		// Produce a directory containing the libraries required by the output file found in the library paths.
-		let combined_library_directory =
-			create_combined_library_directory(&tg, output_artifact, &library_paths).await?;
-		Some(vec![combined_library_directory])
-	} else {
-		Some(library_paths)
-	};
+	let library_paths = optimize_library_paths(
+		&tg,
+		&output_artifact,
+		&library_paths,
+		options.library_path_optimization,
+	)
+	.await?;
 
 	// Keep track of the references.
 	let mut references: HashSet<tg::artifact::Id, Hasher> = HashSet::default();
@@ -456,6 +462,149 @@ enum InterpreterRequirement {
 	Default,
 	/// Use the interpreter at the given path to execute this file.
 	Path(String),
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum LibraryPathOptimizationStrategy {
+	/// Do not optimize library paths.
+	None,
+	/// Combine library paths into a single directory.
+	#[default]
+	Combine,
+	/// Filter library paths for needed libraries.
+	Filter,
+}
+
+impl std::str::FromStr for LibraryPathOptimizationStrategy {
+	type Err = tangram_error::Error;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.to_ascii_lowercase().as_str() {
+			"none" => Ok(Self::None),
+			"combine" => Ok(Self::Combine),
+			"filter" => Ok(Self::Filter),
+			_ => return_error!("Invalid library path optimization strategy {s}."),
+		}
+	}
+}
+
+async fn optimize_library_paths(
+	tg: &dyn tg::Handle,
+	file: &Option<tg::File>,
+	library_paths: &[tg::symlink::Data],
+	strategy: LibraryPathOptimizationStrategy,
+) -> Result<Option<Vec<tg::symlink::Data>>> {
+	if library_paths.is_empty() {
+		return Ok(None);
+	}
+	match strategy {
+		LibraryPathOptimizationStrategy::None => Ok(Some(library_paths.to_vec())),
+		LibraryPathOptimizationStrategy::Combine => {
+			let combined_library_directory =
+				create_combined_library_directory(tg, file.as_ref().unwrap(), library_paths)
+					.await?;
+			Ok(Some(vec![combined_library_directory]))
+		},
+		LibraryPathOptimizationStrategy::Filter => Ok(Some(
+			filtered_library_paths(tg, file.as_ref().unwrap(), library_paths).await?,
+		)),
+	}
+}
+
+async fn filtered_library_paths(
+	tg: &dyn tg::Handle,
+	file: &tg::File,
+	library_paths: &[tg::symlink::Data],
+) -> Result<Vec<tg::symlink::Data>> {
+	// Find all the transitive needed libraries of the output file.
+	let needed_libraries: BTreeSet<String> = BTreeSet::default();
+	let mut selected_paths: BTreeMap<tg::directory::Id, Vec<String>> = BTreeMap::default();
+	find_transitive_needed_libraries(
+		tg,
+		file,
+		library_paths,
+		&needed_libraries,
+		&mut selected_paths,
+	)
+	.await?;
+
+	// Return just those directories we found matches for.
+	let selected_paths = selected_paths
+		.keys()
+		.cloned()
+		.map(|id| tg::symlink::Data {
+			artifact: Some(id.into()),
+			path: None,
+		})
+		.collect_vec();
+
+	Ok(selected_paths)
+}
+
+#[async_recursion::async_recursion]
+async fn find_transitive_needed_libraries(
+	tg: &dyn tg::Handle,
+	file: &tg::File,
+	library_paths: &[tg::symlink::Data],
+	all_needed_libraries: &BTreeSet<String>,
+	selected_paths: &mut BTreeMap<tg::directory::Id, Vec<String>>,
+) -> Result<()> {
+	let mut all_needed_libraries_ = all_needed_libraries.clone();
+	let reader = file.reader(tg).await?;
+	let AnalyzeOutputFileOutput {
+		needed_libraries, ..
+	} = analyze_executable(reader).await?;
+	for library in &needed_libraries {
+		all_needed_libraries_.insert(library.clone());
+	}
+
+	for symlink_data in library_paths {
+		all_needed_libraries_.retain(|library_name| !all_needed_libraries.contains(library_name));
+		if all_needed_libraries_.is_empty() {
+			return Ok(());
+		}
+		let object = tg::symlink::Object::try_from(symlink_data.clone())?;
+		let symlink = tg::Symlink::with_object(object);
+		if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
+			let entries = directory.entries(tg).await?;
+			for library_name in &all_needed_libraries_ {
+				let found_library = match entries.get(library_name) {
+					Some(tg::Artifact::Directory(_)) | None => None,
+					Some(tg::Artifact::File(file)) => Some(file.clone()),
+					Some(tg::Artifact::Symlink(found_symlink)) => {
+						let found_symlink_id = found_symlink.id(tg).await?;
+						tracing::trace!(?found_symlink_id, ?library_name, "Found library symlink.");
+						let from = symlink.clone();
+						if let Some(tg::Artifact::File(found_library)) =
+							found_symlink.resolve_from(tg, Some(from)).await?
+						{
+							Some(found_library)
+						} else {
+							None
+						}
+					},
+				};
+				if let Some(found_library) = found_library {
+					let id = directory.id(tg).await?;
+					selected_paths
+						.entry(id.clone())
+						.or_insert_with(|| Vec::with_capacity(1))
+						.push(library_name.to_owned());
+					tracing::trace!(?found_library, ?library_name, "Found library file.");
+					find_transitive_needed_libraries(
+						tg,
+						&found_library,
+						library_paths,
+						&all_needed_libraries_,
+						selected_paths,
+					)
+					.await?;
+				}
+			}
+		}
+	}
+
+	Ok(())
 }
 
 /// Analyze an output file.

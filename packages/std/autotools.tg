@@ -166,12 +166,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 	let configureArgs =
 		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : undefined;
 	let defaultConfigure = {
-		pre: "export TANGRAM_LINKER_COMBINED_LIBRARY_PATH=false",
-		body: {
-			command: tg`${source}/configure`,
-			args: configureArgs,
-		},
-		post: "unset TANGRAM_LINKER_COMBINED_LIBRARY_PATH",
+		command: tg`${source}/configure`,
+		args: configureArgs,
 	};
 
 	let jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";

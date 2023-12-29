@@ -44,7 +44,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let additionalEnv = {};
 	if (build.os === "linux") {
-		additionalEnv = { LDFLAGS: tg.Mutation.templateAppend("-static", " ") };
+		additionalEnv = { CFLAGS: tg.Mutation.templatePrepend("-static", " ") };
 	}
 
 	let configure = {

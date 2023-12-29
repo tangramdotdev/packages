@@ -62,7 +62,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let env = [...dependencies, env_];
 	if (os === "linux") {
 		env.push({
-			CFLAGS: "-static",
+			CFLAGS: await tg.Mutation.templatePrepend("-static", " "),
 		});
 	}
 
