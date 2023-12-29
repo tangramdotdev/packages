@@ -16,7 +16,7 @@ export type Arg = std.sdk.BuildEnvArg & {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export let env = async (arg?: Arg) => {
+export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -31,7 +31,7 @@ export let env = async (arg?: Arg) => {
 	let dirs = [];
 
 	let { cc, cxx, directory, flavor, host, ld, ldso, target } =
-		await std.sdk.toolchainComponents(arg);
+		await std.sdk.toolchainComponents({ env: arg.env, target: arg.target });
 
 	if (proxyLinker) {
 		let hostString = std.Triple.toString(host);
@@ -103,8 +103,7 @@ export let env = async (arg?: Arg) => {
 				break;
 			}
 			case "llvm": {
-				wrappedCC = std.wrap({
-					executable: cc,
+				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyArtifact}`],
 					env: {
 						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
@@ -136,8 +135,8 @@ export let env = async (arg?: Arg) => {
 		);
 	}
 
-	return await Promise.all(dirs);
-};
+	return std.env.object(...dirs);
+});
 
 export default env;
 
@@ -212,7 +211,6 @@ export let ldProxy = async (arg: LdProxyArg) => {
 
 export let test = tg.target(async () => {
 	let bootstrapSDK = await std.sdk({ bootstrapMode: true });
-	let proxyEnv = await env({ env: bootstrapSDK, sdk: { bootstrapMode: true } });
 	let helloSource = await tg.file(`
 #include <stdio.h>
 int main() {
@@ -224,24 +222,22 @@ int main() {
 		await tg.build(
 			tg`
 				set -x
-				env
+				/usr/bin/env
 				cc -v -xc ${helloSource} -o $OUTPUT`,
 			{
-				env: await std.env.object(bootstrapSDK, proxyEnv, {
+				env: await std.env.object(bootstrapSDK, {
 					TGLD_TRACING: "tangram=trace",
 					TANGRAM_WRAPPER_TRACING: "tangram=trace",
 				}),
 			},
 		),
 	);
-	console.log("output", await output.id());
 	let result = tg.File.expect(
 		await tg.build(tg`${output} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		}),
 	);
 	let text = await result.text();
-	console.log("text", text);
 	tg.assert(text.includes("Hello from a TGLD-wrapped binary!"));
 	return output;
 });

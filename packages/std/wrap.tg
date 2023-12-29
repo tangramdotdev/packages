@@ -3,7 +3,6 @@ import * as gcc from "./sdk/gcc.tg";
 import { interpreterName } from "./sdk/libc.tg";
 import * as std from "./tangram.tg";
 import * as injection from "./wrap/injection.tg";
-import musl from "./wrap/prerequisites/musl.tg";
 import * as workspace from "./wrap/workspace.tg";
 
 /** This module provides the `std.wrap()` function, which can be used to bundle an executable with a predefined environment and arguments, either of which may point to other Tangram artifacts.*/
@@ -89,19 +88,6 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			};
 		} else if (isArgObject(arg)) {
 			let object: tg.MutationMap<Apply> = {};
-			if (arg.env !== undefined) {
-				object.env = tg.Mutation.is(arg.env)
-					? arg.env
-					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
-			}
-			if (arg.identity !== undefined) {
-				object.identity = arg.identity ?? "executable";
-			}
-			if (arg.sdk !== undefined) {
-				object.sdkArgs = tg.Mutation.is(arg.sdk)
-					? arg.sdk
-					: await tg.Mutation.arrayAppend(arg.sdk);
-			}
 			if (arg.executable !== undefined) {
 				if (
 					tg.Template.is(arg.executable) ||
@@ -119,12 +105,52 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						object.identity = "executable";
 					}
 				} else {
-					// FIXME - use the branch logic from the file/symlink case above.
-					object.executable = {
-						kind: "path",
-						value: await manifestSymlinkFromArg(arg.executable),
-					};
+					let file;
+					if (tg.Symlink.is(arg)) {
+						file = await arg.resolve();
+						tg.assert(
+							file,
+							`Could not resolve symlink ${await arg.id()} to a file.`,
+						);
+					} else {
+						file = arg;
+					}
+					tg.File.assert(file);
+					// Try to read the manifest from it.
+					let existingManifest = await wrap.Manifest.read(file);
+					if (existingManifest !== undefined) {
+						let env_ = await wrap.envMapFromManifestEnv(existingManifest.env);
+						let env = tg.Mutation.is(env_)
+							? env_
+							: await tg.Mutation.arrayAppend(env_);
+						object.identity = existingManifest.identity;
+						object.interpreter = existingManifest.interpreter;
+						object.executable = existingManifest.executable;
+						object.env = env;
+						object.manifestArgs = existingManifest.args;
+					} else {
+						let executable = await manifestExecutableFromArg(file);
+						let manifestInterpreter =
+							await manifestInterpreterFromExecutableArg(file);
+						object.executable = executable;
+						if (manifestInterpreter) {
+							object.interpreter = manifestInterpreter;
+						}
+					}
 				}
+			}
+			if (arg.env !== undefined) {
+				object.env = tg.Mutation.is(arg.env)
+					? arg.env
+					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+			}
+			if (arg.identity !== undefined) {
+				object.identity = arg.identity ?? "executable";
+			}
+			if (arg.sdk !== undefined) {
+				object.sdkArgs = tg.Mutation.is(arg.sdk)
+					? arg.sdk
+					: await tg.Mutation.arrayAppend(arg.sdk);
 			}
 			if (arg.libraryPaths !== undefined) {
 				if (arg.libraryPaths !== undefined) {
@@ -211,8 +237,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 
 	// Get the wrapper executable.
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	// let wrapper = await workspace.wrapper({ host, sdk: sdkArgs });
-	let wrapper = await workspace.wrapper({ host, sdk: { bootstrapMode: true } });
+	let wrapper = await workspace.wrapper({ host, sdk: sdkArgs });
 
 	// Write the manifest to the wrapper and return.
 	let output = await wrap.Manifest.write(wrapper, manifest);
@@ -347,7 +372,7 @@ export namespace wrap {
 	}
 
 	export let manifestEnvFromArg = async (
-		arg: std.env.Arg | undefined,
+		arg: std.env.Arg,
 	): Promise<wrap.Manifest.Mutation | undefined> => {
 		if (arg === undefined) {
 			return undefined;
@@ -475,7 +500,7 @@ export namespace wrap {
 							let lastExistingMutation = map[name]?.at(-1);
 							if (lastExistingMutation) {
 								// Attempt to merge the current mutation with the previous.
-								let mergedMutations = await mergeMutations(
+								let mergedMutations = await wrap.mergeMutations(
 									lastExistingMutation,
 									mutation,
 								);
@@ -495,6 +520,297 @@ export namespace wrap {
 			}
 		}
 		return result;
+	};
+
+	/** Merge mutations if possible. By default, it will not merge template or array mutations where one is a prepend and the other is an append. Set `combinePrependAndAppend` to `true` to merge these cases as well. */
+	export let mergeMutations = async (
+		a: tg.Mutation,
+		b: tg.Mutation,
+		combinePrependAndAppend: boolean = false,
+	): Promise<Array<tg.Mutation>> => {
+		if (a.inner.kind === "unset" && b.inner.kind === "unset") {
+			return [b];
+		} else if (a.inner.kind === "unset" && b.inner.kind === "set") {
+			return [b];
+		} else if (a.inner.kind === "unset" && b.inner.kind === "set_if_unset") {
+			let val = b.inner.value;
+			return [await tg.Mutation.set<tg.Value>(val)];
+		} else if (
+			a.inner.kind === "unset" &&
+			b.inner.kind === "template_prepend"
+		) {
+			return [await tg.Mutation.set(b.inner.template)];
+		} else if (a.inner.kind === "unset" && b.inner.kind === "template_append") {
+			return [await tg.Mutation.set(b.inner.template)];
+		} else if (a.inner.kind === "unset" && b.inner.kind === "array_append") {
+			return [b];
+		} else if (a.inner.kind === "unset" && b.inner.kind === "array_prepend") {
+			return [b];
+		} else if (a.inner.kind === "set" && b.inner.kind === "unset") {
+			return [b];
+		} else if (a.inner.kind === "set" && b.inner.kind === "set") {
+			return [b];
+		} else if (a.inner.kind === "set" && b.inner.kind === "set_if_unset") {
+			return [a];
+		} else if (a.inner.kind === "set" && b.inner.kind === "template_prepend") {
+			let setVal = a.inner.value;
+			if (isTemplateArg(setVal)) {
+				return [
+					await tg.Mutation.set(
+						tg.Template.join(
+							b.inner.separator,
+							b.inner.template,
+							tg.template(setVal),
+						),
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (a.inner.kind === "set" && b.inner.kind === "template_append") {
+			let setVal = a.inner.value;
+			if (isTemplateArg(setVal)) {
+				return [
+					await tg.Mutation.set(
+						tg.Template.join(
+							b.inner.separator,
+							tg.template(setVal),
+							b.inner.template,
+						),
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (a.inner.kind === "set" && b.inner.kind === "array_append") {
+			return [a, b];
+		} else if (a.inner.kind === "set" && b.inner.kind === "array_prepend") {
+			return [a, b];
+		} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "unset") {
+			return [b];
+		} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "set") {
+			return [b];
+		} else if (
+			a.inner.kind === "set_if_unset" &&
+			b.inner.kind === "set_if_unset"
+		) {
+			return [a];
+		} else if (
+			a.inner.kind === "set_if_unset" &&
+			b.inner.kind === "template_prepend"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "set_if_unset" &&
+			b.inner.kind === "template_append"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "set_if_unset" &&
+			b.inner.kind === "array_append"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "set_if_unset" &&
+			b.inner.kind === "array_prepend"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "template_prepend" &&
+			b.inner.kind === "unset"
+		) {
+			return [b];
+		} else if (a.inner.kind === "template_prepend" && b.inner.kind === "set") {
+			return [b];
+		} else if (
+			a.inner.kind === "template_prepend" &&
+			b.inner.kind === "set_if_unset"
+		) {
+			return [a];
+		} else if (
+			a.inner.kind === "template_prepend" &&
+			b.inner.kind === "template_prepend"
+		) {
+			if (a.inner.separator === b.inner.separator) {
+				return [
+					await tg.Mutation.templatePrepend(
+						tg.Template.join(
+							a.inner.separator,
+							b.inner.template,
+							a.inner.template,
+						),
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (
+			a.inner.kind === "template_prepend" &&
+			b.inner.kind === "template_append"
+		) {
+			if (combinePrependAndAppend) {
+				return [
+					await tg.Mutation.templatePrepend(
+						tg.Template.join(
+							a.inner.separator,
+							b.inner.template,
+							a.inner.template,
+						),
+						a.inner.separator,
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (
+			a.inner.kind === "template_prepend" &&
+			b.inner.kind === "array_append"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "template_prepend" &&
+			b.inner.kind === "array_prepend"
+		) {
+			return [a, b];
+		} else if (a.inner.kind === "template_append" && b.inner.kind === "unset") {
+			return [b];
+		} else if (a.inner.kind === "template_append" && b.inner.kind === "set") {
+			return [b];
+		} else if (
+			a.inner.kind === "template_append" &&
+			b.inner.kind === "set_if_unset"
+		) {
+			return [a];
+		} else if (
+			a.inner.kind === "template_append" &&
+			b.inner.kind === "template_prepend"
+		) {
+			if (combinePrependAndAppend) {
+				return [
+					await tg.Mutation.templateAppend(
+						tg.Template.join(
+							b.inner.separator,
+							b.inner.template,
+							a.inner.template,
+						),
+						a.inner.separator,
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (
+			a.inner.kind === "template_append" &&
+			b.inner.kind === "template_append"
+		) {
+			if (a.inner.separator === b.inner.separator) {
+				return [
+					await tg.Mutation.templateAppend(
+						tg.Template.join(
+							a.inner.separator,
+							a.inner.template,
+							b.inner.template,
+						),
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (
+			a.inner.kind === "template_append" &&
+			b.inner.kind === "array_append"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "template_append" &&
+			b.inner.kind === "array_prepend"
+		) {
+			return [a, b];
+		} else if (a.inner.kind === "array_append" && b.inner.kind === "unset") {
+			return [b];
+		} else if (a.inner.kind === "array_append" && b.inner.kind === "set") {
+			return [b];
+		} else if (
+			a.inner.kind === "array_append" &&
+			b.inner.kind === "set_if_unset"
+		) {
+			return [a];
+		} else if (
+			a.inner.kind === "array_append" &&
+			b.inner.kind === "array_append"
+		) {
+			return [
+				await tg.Mutation.arrayAppend<tg.Value>(
+					a.inner.values.concat(b.inner.values),
+				),
+			];
+		} else if (
+			a.inner.kind === "array_append" &&
+			b.inner.kind === "array_prepend"
+		) {
+			if (combinePrependAndAppend) {
+				return [
+					await tg.Mutation.arrayAppend<tg.Value>(
+						b.inner.values.concat(a.inner.values),
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (
+			a.inner.kind === "array_append" &&
+			b.inner.kind === "template_append"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "array_append" &&
+			b.inner.kind === "template_prepend"
+		) {
+			return [a, b];
+		} else if (a.inner.kind === "array_prepend" && b.inner.kind === "unset") {
+			return [b];
+		} else if (a.inner.kind === "array_prepend" && b.inner.kind === "set") {
+			return [b];
+		} else if (
+			a.inner.kind === "array_prepend" &&
+			b.inner.kind === "set_if_unset"
+		) {
+			return [a];
+		} else if (
+			a.inner.kind === "array_prepend" &&
+			b.inner.kind === "array_append"
+		) {
+			if (combinePrependAndAppend) {
+				return [
+					await tg.Mutation.arrayPrepend<tg.Value>(
+						a.inner.values.concat(b.inner.values),
+					),
+				];
+			} else {
+				return [a, b];
+			}
+		} else if (
+			a.inner.kind === "array_prepend" &&
+			b.inner.kind === "array_prepend"
+		) {
+			return [
+				await tg.Mutation.arrayPrepend<tg.Value>(
+					b.inner.values.concat(a.inner.values),
+				),
+			];
+		} else if (
+			a.inner.kind === "array_prepend" &&
+			b.inner.kind === "template_append"
+		) {
+			return [a, b];
+		} else if (
+			a.inner.kind === "array_prepend" &&
+			b.inner.kind === "template_prepend"
+		) {
+			return [a, b];
+		} else {
+			return tg.unreachable();
+		}
 	};
 
 	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */
@@ -1040,7 +1356,7 @@ let manifestInterpreterFromElf = async (
 	} else if (metadata.interpreter?.includes("ld-musl")) {
 		// Handle an ld-musl interpreter.
 		host.environment = "musl";
-		let muslArtifact = await musl({ host });
+		let muslArtifact = await bootstrap.musl.build({ host });
 		let libDir = tg.Directory.expect(await muslArtifact.get("lib"));
 		let ldso = tg.File.expect(await libDir.get(interpreterName(host)));
 		return {
@@ -1166,247 +1482,6 @@ let manifestMutationFromMutation = async (
 			),
 		);
 		return { kind: "array_append", values };
-	} else {
-		return tg.unreachable();
-	}
-};
-
-let mergeMutations = async (
-	a: tg.Mutation,
-	b: tg.Mutation,
-): Promise<Array<tg.Mutation>> => {
-	if (a.inner.kind === "unset" && b.inner.kind === "unset") {
-		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "set") {
-		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "set_if_unset") {
-		let val = b.inner.value;
-		return [await tg.Mutation.set<tg.Value>(val)];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "template_prepend") {
-		return [await tg.Mutation.set(b.inner.template)];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "template_append") {
-		return [await tg.Mutation.set(b.inner.template)];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "array_append") {
-		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "array_prepend") {
-		return [b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "unset") {
-		return [b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "set") {
-		return [b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "set_if_unset") {
-		return [a];
-	} else if (a.inner.kind === "set" && b.inner.kind === "template_prepend") {
-		let setVal = a.inner.value;
-		if (isTemplateArg(setVal)) {
-			return [
-				await tg.Mutation.set(
-					tg.Template.join(
-						b.inner.separator,
-						b.inner.template,
-						tg.template(setVal),
-					),
-				),
-			];
-		} else {
-			return [a, b];
-		}
-	} else if (a.inner.kind === "set" && b.inner.kind === "template_append") {
-		let setVal = a.inner.value;
-		if (isTemplateArg(setVal)) {
-			return [
-				await tg.Mutation.set(
-					tg.Template.join(
-						b.inner.separator,
-						tg.template(setVal),
-						b.inner.template,
-					),
-				),
-			];
-		} else {
-			return [a, b];
-		}
-	} else if (a.inner.kind === "set" && b.inner.kind === "array_append") {
-		return [a, b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "array_prepend") {
-		return [a, b];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "unset") {
-		return [b];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "set") {
-		return [b];
-	} else if (
-		a.inner.kind === "set_if_unset" &&
-		b.inner.kind === "set_if_unset"
-	) {
-		return [a];
-	} else if (
-		a.inner.kind === "set_if_unset" &&
-		b.inner.kind === "template_prepend"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "set_if_unset" &&
-		b.inner.kind === "template_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "set_if_unset" &&
-		b.inner.kind === "array_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "set_if_unset" &&
-		b.inner.kind === "array_prepend"
-	) {
-		return [a, b];
-	} else if (a.inner.kind === "template_prepend" && b.inner.kind === "unset") {
-		return [b];
-	} else if (a.inner.kind === "template_prepend" && b.inner.kind === "set") {
-		return [b];
-	} else if (
-		a.inner.kind === "template_prepend" &&
-		b.inner.kind === "set_if_unset"
-	) {
-		return [a];
-	} else if (
-		a.inner.kind === "template_prepend" &&
-		b.inner.kind === "template_prepend"
-	) {
-		if (a.inner.separator === b.inner.separator) {
-			return [
-				await tg.Mutation.templatePrepend(
-					tg.Template.join(
-						a.inner.separator,
-						b.inner.template,
-						a.inner.template,
-					),
-				),
-			];
-		} else {
-			return [a, b];
-		}
-	} else if (
-		a.inner.kind === "template_prepend" &&
-		b.inner.kind === "template_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "template_prepend" &&
-		b.inner.kind === "array_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "template_prepend" &&
-		b.inner.kind === "array_prepend"
-	) {
-		return [a, b];
-	} else if (a.inner.kind === "template_append" && b.inner.kind === "unset") {
-		return [b];
-	} else if (a.inner.kind === "template_append" && b.inner.kind === "set") {
-		return [b];
-	} else if (
-		a.inner.kind === "template_append" &&
-		b.inner.kind === "set_if_unset"
-	) {
-		return [a];
-	} else if (
-		a.inner.kind === "template_append" &&
-		b.inner.kind === "template_prepend"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "template_append" &&
-		b.inner.kind === "template_append"
-	) {
-		if (a.inner.separator === b.inner.separator) {
-			return [
-				await tg.Mutation.templateAppend(
-					tg.Template.join(
-						a.inner.separator,
-						a.inner.template,
-						b.inner.template,
-					),
-				),
-			];
-		} else {
-			return [a, b];
-		}
-	} else if (
-		a.inner.kind === "template_append" &&
-		b.inner.kind === "array_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "template_append" &&
-		b.inner.kind === "array_prepend"
-	) {
-		return [a, b];
-	} else if (a.inner.kind === "array_append" && b.inner.kind === "unset") {
-		return [b];
-	} else if (a.inner.kind === "array_append" && b.inner.kind === "set") {
-		return [b];
-	} else if (
-		a.inner.kind === "array_append" &&
-		b.inner.kind === "set_if_unset"
-	) {
-		return [a];
-	} else if (
-		a.inner.kind === "array_append" &&
-		b.inner.kind === "array_append"
-	) {
-		return [
-			await tg.Mutation.arrayAppend<tg.Value>(
-				a.inner.values.concat(b.inner.values),
-			),
-		];
-	} else if (
-		a.inner.kind === "array_append" &&
-		b.inner.kind === "array_prepend"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "array_append" &&
-		b.inner.kind === "template_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "array_append" &&
-		b.inner.kind === "template_prepend"
-	) {
-		return [a, b];
-	} else if (a.inner.kind === "array_prepend" && b.inner.kind === "unset") {
-		return [b];
-	} else if (a.inner.kind === "array_prepend" && b.inner.kind === "set") {
-		return [b];
-	} else if (
-		a.inner.kind === "array_prepend" &&
-		b.inner.kind === "set_if_unset"
-	) {
-		return [a];
-	} else if (
-		a.inner.kind === "array_prepend" &&
-		b.inner.kind === "array_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "array_prepend" &&
-		b.inner.kind === "array_prepend"
-	) {
-		return [
-			await tg.Mutation.arrayPrepend<tg.Value>(
-				b.inner.values.concat(a.inner.values),
-			),
-		];
-	} else if (
-		a.inner.kind === "array_prepend" &&
-		b.inner.kind === "template_append"
-	) {
-		return [a, b];
-	} else if (
-		a.inner.kind === "array_prepend" &&
-		b.inner.kind === "template_prepend"
-	) {
-		return [a, b];
 	} else {
 		return tg.unreachable();
 	}

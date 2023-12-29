@@ -7,7 +7,7 @@ use std::{
 use tangram_client as tg;
 use tangram_error::{return_error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeekExt};
 use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;
@@ -51,111 +51,8 @@ async fn main_inner() -> Result<()> {
 		return Ok(());
 	}
 
-	// Create the tangram instance.
-	let runtime_json =
-		std::env::var("TANGRAM_RUNTIME").wrap_err("Failed to get TANGRAM_RUNTIME.")?;
-	let tg = tg::client::Builder::with_runtime_json(&runtime_json)?.build();
-	tg.connect().await?;
-
-	// Open the output file.
-	let file = tokio::fs::File::open(&options.output_path)
-		.await
-		.wrap_err("Could not open output file")?;
-	// If the linker generated an executable, then check it in and replace it with the wrapper with an embedded manifest.
-	let blob = tg::Blob::with_reader(&tg, file)
-		.await
-		.wrap_err("Could not create blob")?;
-	let output_artifact = tg::File::builder(blob).executable(true).build();
-
-	// Analyze the output file.
-	let AnalyzeOutputFileOutput {
-		is_executable,
-		interpreter,
-		..
-	} = analyze_executable(output_artifact.reader(&tg).await?).await?;
-	tracing::trace!(?is_executable, ?interpreter);
-
-	// Unrender and resolve all library paths.
-	let library_paths = options
-		.library_paths
-		.iter()
-		.map(|library_path| template_data_to_symlink_data(&tg, unrender(&tg, library_path)));
-	let library_paths = futures::future::try_join_all(library_paths).await?;
-
-	// Produce a combined library directory if needed and create the manifest value.
-	let library_paths = if options.library_paths.is_empty() {
-		None
-	} else if options.combined_library_path {
-		// Produce a directory containing the libraries required by the output file found in the library paths.
-		let combined_library_directory =
-			create_combined_library_directory(&tg, &output_artifact, &library_paths).await?;
-		Some(vec![combined_library_directory])
-	} else {
-		Some(library_paths)
-	};
-
-	// Keep track of the references.
-	let mut references: HashSet<tg::artifact::Id, Hasher> = HashSet::default();
-
-	// Handle an executable or a library.
-	if is_executable {
-		let output_artifact_id = output_artifact.id(&tg).await?.clone().try_into().unwrap();
-
-		// Copy the wrapper to the temporary path.
-		let wrapper_path = options
-			.wrapper_path
-			.as_ref()
-			.wrap_err("TANGRAM_LINKER_WRAPPER_PATH must be set.")?;
-		std::fs::remove_file(&options.output_path).ok();
-		std::fs::copy(wrapper_path, &options.output_path)
-			.wrap_err("Failed to copy the wrapper file.")?;
-
-		// Set the permissions of the wrapper file so we can write the manifest to the end.
-		let mut perms = std::fs::metadata(&options.output_path)
-			.expect("Failed to get the wrapper file metadata.")
-			.permissions();
-		perms.set_mode(0o755);
-		std::fs::set_permissions(&options.output_path, perms)
-			.expect("Failed to set the wrapper file permissions.");
-
-		let manifest = create_manifest(
-			&tg,
-			output_artifact_id,
-			&options,
-			interpreter,
-			library_paths,
-		)
-		.await?;
-		tracing::trace!(?manifest);
-
-		// Write the manifest.
-		manifest
-			.write(&options.output_path)
-			.expect("Failed to write the manifest.");
-
-		// Get the manifest's references.
-		references = manifest.references();
-	} else {
-		// Otherwise, if the linker generated a library, then add its references.
-		references.reserve(options.library_paths.len());
-		for library_path in &options.library_paths {
-			let template = unrender(&tg, library_path).await;
-			tangram_wrapper::manifest::collect_references_from_template_data(
-				&template,
-				&mut references,
-			);
-		}
-		tracing::trace!(?references);
-	}
-
-	// Set the xattrs of the output file.
-	let attributes = tg::file::Attributes {
-		references: references.into_iter().collect(),
-	};
-	let attributes =
-		serde_json::to_string(&attributes).expect("Failed to serialize the attributes.");
-	xattr::set(&options.output_path, "user.tangram", attributes.as_bytes())
-		.expect("Failed to write the attributes.");
+	// Create the wrapper.
+	create_wrapper(&options).await?;
 
 	Ok(())
 }
@@ -297,6 +194,125 @@ fn read_options() -> Options {
 	}
 }
 
+async fn create_wrapper(options: &Options) -> Result<()> {
+	// Create the tangram instance.
+	let runtime_json =
+		std::env::var("TANGRAM_RUNTIME").wrap_err("Failed to get TANGRAM_RUNTIME.")?;
+	let tg = tg::client::Builder::with_runtime_json(&runtime_json)?.build();
+	tg.connect().await?;
+
+	// Open the output file.
+	let mut file = tokio::fs::File::open(&options.output_path)
+		.await
+		.wrap_err("Could not open output file")?;
+
+	// Analyze the output file.
+	let AnalyzeOutputFileOutput {
+		is_executable,
+		interpreter,
+		..
+	} = analyze_executable(
+		file.try_clone()
+			.await
+			.wrap_err("Could not clone file handle")?,
+	)
+	.await?;
+	tracing::trace!(?is_executable, ?interpreter);
+
+	// Unrender and resolve all library paths.
+	let library_paths = options
+		.library_paths
+		.iter()
+		.map(|library_path| template_data_to_symlink_data(&tg, unrender(&tg, library_path)));
+	let library_paths = futures::future::try_join_all(library_paths).await?;
+
+	// We need to obtain an artifact if the file is executable or we are creating a combined library directory.
+	let output_artifact = if is_executable || options.combined_library_path {
+		file.rewind()
+			.await
+			.wrap_err("Could not seek to beginning of output file.")?;
+		let output_artifact = file_from_reader(&tg, file, is_executable).await?;
+		let output_artifact_id = output_artifact.id(&tg).await?;
+		tracing::trace!(?output_artifact_id, "Output artifact");
+		Some(output_artifact)
+	} else {
+		None
+	};
+
+	// Produce a combined library directory if needed and create the manifest value.
+	let library_paths = if options.library_paths.is_empty() {
+		None
+	} else if options.combined_library_path {
+		let output_artifact = output_artifact.as_ref().unwrap();
+		// Produce a directory containing the libraries required by the output file found in the library paths.
+		let combined_library_directory =
+			create_combined_library_directory(&tg, output_artifact, &library_paths).await?;
+		Some(vec![combined_library_directory])
+	} else {
+		Some(library_paths)
+	};
+
+	// Keep track of the references.
+	let mut references: HashSet<tg::artifact::Id, Hasher> = HashSet::default();
+
+	// Handle an executable or a library.
+	if is_executable {
+		let output_artifact = output_artifact.unwrap();
+		let output_artifact_id = output_artifact.id(&tg).await?.clone().into();
+
+		// Copy the wrapper to the temporary path.
+		let wrapper_path = options
+			.wrapper_path
+			.as_ref()
+			.wrap_err("TANGRAM_LINKER_WRAPPER_PATH must be set.")?;
+		std::fs::remove_file(&options.output_path).ok();
+		std::fs::copy(wrapper_path, &options.output_path)
+			.wrap_err("Failed to copy the wrapper file.")?;
+
+		// Set the permissions of the wrapper file so we can write the manifest to the end.
+		let mut perms = std::fs::metadata(&options.output_path)
+			.expect("Failed to get the wrapper file metadata.")
+			.permissions();
+		perms.set_mode(0o755);
+		std::fs::set_permissions(&options.output_path, perms)
+			.expect("Failed to set the wrapper file permissions.");
+
+		let manifest =
+			create_manifest(&tg, output_artifact_id, options, interpreter, library_paths).await?;
+		tracing::trace!(?manifest);
+
+		// Write the manifest.
+		manifest
+			.write(&options.output_path)
+			.expect("Failed to write the manifest.");
+
+		// Get the manifest's references.
+		references = manifest.references();
+	} else {
+		// Otherwise, if the linker generated a library, then add its references.
+		references.reserve(options.library_paths.len());
+		for library_path in &options.library_paths {
+			let template = unrender(&tg, library_path).await;
+			tangram_wrapper::manifest::collect_references_from_template_data(
+				&template,
+				&mut references,
+			);
+		}
+		tracing::trace!(?references);
+	}
+
+	// Set the xattrs of the output file.
+	let attributes = tg::file::Attributes {
+		references: references.into_iter().collect(),
+	};
+	let attributes =
+		serde_json::to_string(&attributes).expect("Failed to serialize the attributes.");
+	xattr::set(&options.output_path, "user.tangram", attributes.as_bytes())
+		.expect("Failed to write the attributes.");
+
+	Ok(())
+}
+
 /// Create a manifest.
 async fn create_manifest(
 	tg: &dyn tg::Handle,
@@ -402,14 +418,10 @@ async fn create_manifest(
 	};
 
 	// Create the executable.
-	let executable = manifest::Executable::Path(
-		template_data_to_symlink_data(tg, async {
-			tg::template::Data {
-				components: vec![tg::template::component::Data::Artifact(ld_output_id)],
-			}
-		})
-		.await?,
-	);
+	let executable = manifest::Executable::Path(tg::symlink::Data {
+		artifact: Some(ld_output_id),
+		path: None,
+	});
 
 	// Create empty values for env and args.
 	let env = None;
@@ -575,6 +587,18 @@ async fn create_combined_library_directory(
 	let symlink = tg::Symlink::new(Some(directory), None);
 	let data = symlink.data(tg).await?;
 	Ok(data)
+}
+
+async fn file_from_reader(
+	tg: &dyn tg::Handle,
+	reader: impl AsyncRead + Unpin,
+	is_executable: bool,
+) -> Result<tg::File> {
+	let blob = tg::Blob::with_reader(tg, reader)
+		.await
+		.wrap_err("Could not create blob")?;
+	let file = tg::File::builder(blob).executable(is_executable).build();
+	Ok(file)
 }
 
 #[async_recursion::async_recursion]

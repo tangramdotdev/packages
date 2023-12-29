@@ -2,7 +2,7 @@ import * as std from "./tangram.tg";
 
 type PkgArg = {
 	/* The package to check. If no other options are given, just asserts the package directory is non-empty. */
-	directory: tg.Directory;
+	directory: tg.Unresolved<tg.Directory>;
 	/* All executables that should exist under `bin/`, with optional behavior to check. */
 	binaries?: Array<BinarySpec>;
 	/* Any documentation files that should exist under `share/`. */
@@ -50,7 +50,7 @@ type RuntimeDep = {
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export let pkg = async (arg: PkgArg) => {
 	let metadata = arg.metadata;
-	let directory = arg.directory;
+	let directory = await tg.resolve(arg.directory);
 
 	// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
 	let tests = [nonEmpty(directory)];

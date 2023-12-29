@@ -1,25 +1,27 @@
-/** Stage 0: Mise en place. In this stage we prepare our build environment by proxying the bootstrap toolchain and compiling tools we'll need that aren't provided by busybox. This stage doesn't build the full set of utils provided by the SDK - we want to use the toolchain we're building now to build those! */
+import * as bootstrap from "../bootstrap.tg";
+import * as std from "../tangram.tg";
 
-import * as bootstrap from "../../bootstrap.tg";
-import * as std from "../../tangram.tg";
-
-export let bootstrapSdk = async (
-	arg?: std.Triple.HostArg,
-): Promise<std.env.Arg> => {
+/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxying. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
+export let env = async (arg?: std.Triple.HostArg): Promise<std.env.Arg> => {
 	let host = await std.Triple.host(arg);
 	let toolchain = await prepareBootstrapToolchain({ host });
 	let bootstrapHost = bootstrap.toolchainTriple(host);
 	let utils = await prepareBootstrapUtils(bootstrapHost);
 	let shellExe = tg.File.expect(await utils.get("bin/dash"));
-	return std.env.object(
-		toolchain,
-		utils,
-		{ SHELL: shellExe },
-		{ bootstrapMode: true },
-	);
+	let env: tg.MutationMap<Record<string, tg.Template.Arg>> = {
+		SHELL: shellExe,
+	};
+	if (host.os === "darwin") {
+		let sdkroot = await tg.Mutation.setIfUnset(bootstrap.macOsSdk());
+		env = {
+			...env,
+			SDKROOT: sdkroot,
+		};
+	}
+	return std.env.object(toolchain, utils, { SHELL: shellExe });
 };
 
-export default bootstrapSdk;
+export default env;
 
 /** Get the bootstrap components as a single directory, for use before SDK. */
 export let prepareBootstrapToolchain = async (arg?: std.Triple.HostArg) => {
@@ -28,9 +30,7 @@ export let prepareBootstrapToolchain = async (arg?: std.Triple.HostArg) => {
 
 	// Obtain the bootstrap toolchain and triple for the detected host to construct the env.
 	let bootstrapToolchain = await bootstrap.toolchain({ host });
-	let bootstrapTripleString = std.Triple.toString(
-		bootstrap.toolchainTriple(host),
-	);
+	let bootstrapTripleString = std.Triple.toString(bootstrap.toolchainTriple(host));
 
 	if (host.os === "darwin") {
 		// Replace the Xcode-tied gcc and g++ entries with symlinks to clang and return.
@@ -97,9 +97,9 @@ export let prefixBins = async (
 };
 
 export let test = tg.target(async () => {
-	let env = await bootstrapSdk();
+	let sdk = await env();
 	let detectedHost = await std.Triple.host();
 	let expectedHost = bootstrap.toolchainTriple(detectedHost);
-	await std.sdk.assertValid(env, { host: expectedHost, bootstrapMode: true });
-	return env;
+	await std.sdk.assertValid(sdk, { host: expectedHost, bootstrapMode: true });
+	return sdk;
 });

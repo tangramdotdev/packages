@@ -109,7 +109,7 @@ export let rust = tg.target(
 		done
 	`;
 
-		let env = bootstrap.toolchainEnv(host);
+		let env = bootstrap.sdk.env(host);
 
 		return tg.Directory.expect(
 			await std.phases.build({
@@ -188,8 +188,9 @@ export let build = async (arg: BuildArg) => {
 
 	// Get the SDK, without proxying enabled.
 	let sdk = await std.sdk(
-		{ host, target, proxy: { compiler: false, linker: false } },
+		{ host, target },
 		arg.sdkArg,
+		{ proxy: false }
 	);
 	let { directory: toolchain } = await std.sdk.toolchainComponents({
 		env: sdk,

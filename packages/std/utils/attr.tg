@@ -88,7 +88,7 @@ export default build;
 export let test = tg.target(async () => {
 	await std.assert.pkg({
 		binaries: ["getfattr", "setfattr"],
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		libs: ["attr"],
 	});
 	return true;

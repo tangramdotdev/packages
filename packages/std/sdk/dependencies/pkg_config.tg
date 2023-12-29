@@ -100,7 +100,7 @@ export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["pkg-config"],
 		metadata,
 	});

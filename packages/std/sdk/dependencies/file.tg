@@ -90,7 +90,7 @@ export default build;
 export let test = tg.target(async () => {
 	// TODO - test magic file wrapping.
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["file"],
 		metadata,
 	});

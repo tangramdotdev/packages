@@ -64,7 +64,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		host,
 	)} -Wl,-rpath,${buildLibPath}`;
 	let env = [
-		bootstrap.toolchainEnv({ host }),
+		bootstrap.sdk.env({ host }),
 		bootstrap.make.build({ host }),
 		std.utils.env({ ...rest, host, sdk: { bootstrapMode: true } }),
 		{

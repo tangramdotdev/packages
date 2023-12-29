@@ -1,0 +1,172 @@
+/** This package takes a bootstrap C/C++ compiler and some utilities and canadian-crosses up a sizzling plate of farm-fresh GCC. The output of this package can then be used to build other compilers like LLVM. */
+
+import * as bootstrap from "../../bootstrap.tg";
+import * as std from "../../tangram.tg";
+import binutils from "../binutils.tg";
+import * as dependencies from "../dependencies.tg";
+import gcc from "../gcc.tg";
+import kernelHeaders from "../kernel_headers.tg";
+import { constructSysroot } from "../libc.tg";
+import * as proxy from "../proxy.tg";
+
+export let toolchain = tg.target(async (arg?: std.Triple.HostArg) => {
+	let host = await std.Triple.host(arg);
+	let build = bootstrap.toolchainTriple(host);
+
+	let sdk = { bootstrapMode: true };
+
+	// Ensure the dependencies are built.
+	await dependencies.env({ host, sdk });
+
+	// Stage 1: Produce build -> host cross-compiler.
+	let { env, sysroot } = await buildToHostCrossToolchain({
+		build,
+		host,
+		sdk,
+	});
+
+	// Stage 2: Produce host -> target compiler.
+	let hostToTargetToolchain = nativeHostToolchain({
+		env,
+		host,
+		sysroot,
+	});
+
+	return hostToTargetToolchain;
+});
+
+export let buildToHostCrossToolchain = tg.target(
+	async (arg?: std.sdk.BuildEnvArg) => {
+		let { build: build_, env: env_, host: host_, ...rest } = arg ?? {};
+
+		let build = build_ ? std.triple(build_) : await std.Triple.host();
+		let host = host_ ? std.triple(host_) : build;
+		let target = host_ ? std.triple(host_) : host;
+
+		// Produce the binutils.
+		let buildToHostBinutils = await binutils({ ...rest, build, host, target });
+		console.log("buildToHostBinutils", await buildToHostBinutils.id());
+
+		// Produce the linux headers.
+		let linuxHeaders = await tg.directory({
+			include: await kernelHeaders({ host: target }),
+		});
+		console.log("linuxHeaders", await linuxHeaders.id());
+
+		let linuxHeadersSysroot = await tg.directory({
+			[std.Triple.toString(target)]: linuxHeaders,
+		});
+
+		// Produce the initial gcc required to build the standard C library.
+		let bootstrapGCC = await gcc({
+			...rest,
+			binutils: buildToHostBinutils,
+			build,
+			host,
+			sysroot: linuxHeadersSysroot,
+			target,
+			variant: "stage1_bootstrap",
+		});
+		console.log("bootstrapGCC", await bootstrapGCC.id());
+
+		// Produce a combined directory contianing the correct C library for the host and the Linux headers.
+		let sysroot = await constructSysroot({
+			...rest,
+			linuxHeaders,
+			env: bootstrapGCC,
+			target,
+		});
+		console.log("hostSysroot", await sysroot.id());
+
+		// Produce a toolchain containing the sysroot and a cross-compiler.
+		let crossGCC = await gcc({
+			...rest,
+			binutils: buildToHostBinutils,
+			build,
+			host,
+			sysroot,
+			target,
+			variant: "stage1_limited",
+		});
+		console.log("cross gcc", await crossGCC.id());
+
+		// Produce a cross-proxy env.
+		let crossProxy = await proxy.env({
+			env: crossGCC,
+			host: build,
+			target: host,
+		});
+
+		return { env: [crossGCC, crossProxy], sysroot };
+	},
+);
+
+type NativeHostToolchainArg = {
+	env: std.env.Arg;
+	host: std.Triple;
+	sysroot: tg.Directory;
+};
+
+export let nativeHostToolchain = tg.target(
+	async (arg: NativeHostToolchainArg) => {
+		let build = bootstrap.toolchainTriple(arg.host);
+		let { env, host, sysroot } = arg;
+		let target = host;
+		let sdk = { bootstrapMode: true };
+
+		let nativeHostBinutils = await binutils({
+			env,
+			build,
+			host,
+			sdk,
+			staticBuild: true,
+			target,
+		});
+		nativeHostBinutils = await bootstrap.sdk.prefixBins(
+			nativeHostBinutils,
+			[
+				"addr2line",
+				"ar",
+				"as",
+				"ld",
+				"nm",
+				"objcopy",
+				"objdump",
+				"ranlib",
+				"readelf",
+				"strip",
+				"strings",
+			],
+			std.Triple.toString(host) + "-",
+		);
+		console.log("stage2 binutils", await nativeHostBinutils.id());
+
+		let fullGCC = await gcc({
+			binutils: nativeHostBinutils,
+			build,
+			env,
+			host,
+			sdk,
+			sysroot,
+			target,
+			variant: "stage2_full",
+		});
+		console.log("stage2 gcc", await fullGCC.id());
+
+		// Return just the directory.
+		return fullGCC;
+	},
+);
+
+export let testStage1 = async () => {
+	let host = await std.Triple.host();
+	let buildSDK = await bootstrap.sdk.env({ host });
+	let utilsEnv = await dependencies.env({ sdk: { bootstrapMode: true } });
+	let build = std.triple(bootstrap.toolchainTriple(host));
+	let { env } = await buildToHostCrossToolchain({
+		env: [buildSDK, utilsEnv],
+		host,
+	});
+	await std.sdk.assertValid(env, { host: build, target: host });
+	return true;
+};

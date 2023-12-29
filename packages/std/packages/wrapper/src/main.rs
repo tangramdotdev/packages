@@ -521,15 +521,15 @@ fn render_value(
 fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Data {
 	match value {
 		tg::value::Data::Directory(id) => tg::symlink::Data {
-			artifact: Some(id.clone().try_into().unwrap()),
+			artifact: Some(id.clone().into()),
 			path: None,
 		},
 		tg::value::Data::File(id) => tg::symlink::Data {
-			artifact: Some(id.clone().try_into().unwrap()),
+			artifact: Some(id.clone().into()),
 			path: None,
 		},
 		tg::value::Data::Symlink(id) => tg::symlink::Data {
-			artifact: Some(id.clone().try_into().unwrap()),
+			artifact: Some(id.clone().into()),
 			path: None,
 		},
 		_ => {

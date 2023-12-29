@@ -4,7 +4,7 @@ import { buildUtil } from "../utils.tg";
 
 export let metadata = {
 	name: "bash",
-	version: "5.2.15",
+	version: "5.2.21",
 };
 
 type Arg = std.sdk.BuildEnvArg & {
@@ -15,10 +15,10 @@ type Arg = std.sdk.BuildEnvArg & {
 export let source = tg.target(async (arg?: Arg) => {
 	let { name, version } = metadata;
 	let build = arg?.build ? std.triple(arg?.build) : await std.Triple.host();
-	let env = std.env.object([std.sdk({ host: build }, arg?.sdk), arg?.env]);
+	let env = std.env.object(std.sdk({ host: build }, arg?.sdk), arg?.env);
 
 	let checksum =
-		"sha256:13720965b5f4fc3a0d4b61dd37e7565c741da9a5be24edc2ae00182fc1b3588c";
+		"sha256:c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8";
 	let source = std.download.fromGnu({ name, version, checksum });
 	// See https://lists.gnu.org/archive/html/bug-bash/2022-10/msg00000.html
 	// We don't have autoreconf available so we additionally manually resolve the configure script change. The m4 change isn't used, just here for completeness.
@@ -76,7 +76,7 @@ export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["bash"],
 		metadata,
 	});

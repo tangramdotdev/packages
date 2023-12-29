@@ -1,9 +1,9 @@
-import { env } from "./env.tg";
 import { download } from "./tangram.tg";
 import { Triple } from "./triple.tg";
 
-import make from "./bootstrap/make.tg";
 export * as make from "./bootstrap/make.tg";
+export * as musl from "./bootstrap/musl.tg";
+export * as sdk from "./bootstrap/sdk.tg";
 
 export type Arg = {
 	/** Specify which component to provide. */
@@ -240,36 +240,6 @@ export let componentList = async (arg?: Arg) => {
 	};
 
 	return expectedComponents[host];
-};
-
-/** A build environment providing the bootstrap tools, with no proxying supported. */
-export let toolchainEnv = async (arg?: Triple.HostArg) => {
-	let host = await Triple.host(arg);
-	let os = host.os;
-	let shell = await dash({ host });
-	let shellExe = tg.File.expect(await shell.get("bin/dash"));
-	let path = await tg.Mutation.templateAppend(
-		tg`${toolchain({ host })}/bin:${utils({ host })}/bin:${shell}/bin`,
-		":",
-	);
-	let env: tg.MutationMap<Record<string, tg.Template.Arg>> = {
-		PATH: path,
-		SHELL: shellExe,
-	};
-	// On Darwin, set SDKROOT.
-	if (os === "darwin") {
-		let sdkroot = await tg.Mutation.setIfUnset(macOsSdk());
-		env = {
-			...env,
-			SDKROOT: sdkroot,
-		};
-	}
-	return env;
-};
-
-/** The `toolchainEnv` combined with a statically-linked `make` binary. */
-export let buildEnv = async (arg?: Triple.HostArg) => {
-	return env.object(toolchainEnv(arg), make(arg));
 };
 
 export let test = tg.target(async () => {

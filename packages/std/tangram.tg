@@ -71,6 +71,10 @@ export let testBootstrapMake = tg.target(async () => {
 	return await bootstrapMake.test();
 });
 
+export let testBootstrapMusl = tg.target(async () => {
+	return await bootstrap.musl.build();
+});
+
 // std.utils tests
 
 import * as utils from "./utils.tg";
@@ -198,10 +202,7 @@ export let testGccSource = tg.target(async () => {
 	return await gcc.source();
 });
 
-import { testStage1 } from "./sdk.tg";
-
-export { shell as bootstrapShell } from "./bootstrap.tg";
-
+import { testStage1 } from "./sdk/gcc/canadian_cross.tg";
 export let stage1 = tg.target(async () => {
 	await testStage1();
 	return true;

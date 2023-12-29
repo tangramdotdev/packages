@@ -1,5 +1,5 @@
-import * as bootstrap from "../../bootstrap.tg";
-import * as std from "../../tangram.tg";
+import * as bootstrap from "../bootstrap.tg";
+import * as std from "../tangram.tg";
 
 export let metadata = {
 	homepage: "https://musl.libc.org",
@@ -31,7 +31,7 @@ export let source = tg.target(async () => {
 	return source;
 });
 
-export let musl = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
+export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	let host = await std.Triple.host(arg);
 	let hostSystem = std.Triple.system(host);
 
@@ -47,7 +47,7 @@ export let musl = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	};
 
 	let env = [
-		bootstrap.toolchainEnv(arg),
+		bootstrap.sdk.env(arg),
 		bootstrap.make.build(arg),
 		{
 			CPATH: tg.Mutation.unset(),
@@ -72,7 +72,7 @@ export let musl = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	return result;
 });
 
-export default musl;
+export default build;
 
 export let interpreterPath = (system: std.Triple.Arg) =>
 	`lib/${interpreterName(system)}`;
@@ -88,10 +88,3 @@ export let linkerPath = (system: tg.System) => {
 	let tripleString = std.Triple.toString(triple);
 	return `${tripleString}/bin/ld`;
 };
-
-export let test = tg.target(async () => {
-	let host = await std.Triple.host();
-	let muslArtifact = await musl({ host });
-	console.log("musl", muslArtifact);
-	return muslArtifact;
-});

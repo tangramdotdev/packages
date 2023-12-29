@@ -12,11 +12,12 @@ export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 
 	// Prepare sdk, making sure not to use any proxying.
 	let sdk = await std.sdk(std.Triple.rotate({ build, host }), arg?.sdk, {
-		proxy: { compiler: false, linker: false },
+		proxy: false,
 	});
 
 	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
 		env: sdk,
+		// target: host
 	});
 	let env = arg?.env;
 
@@ -111,8 +112,8 @@ type DylibArg = {
 	source: tg.File;
 };
 
-export let dylib = tg.target(async (arg: DylibArg): Promise<tg.File> => {
-	let host = await std.Triple.host(arg);
+export let dylib = async (arg: DylibArg): Promise<tg.File> => {
+	let host = arg.host ? std.triple(arg.host) : await std.Triple.host();
 	let build = arg.build ? std.triple(arg.build) : host;
 
 	let additionalArgs = arg.additionalArgs ?? [];
@@ -126,6 +127,7 @@ export let dylib = tg.target(async (arg: DylibArg): Promise<tg.File> => {
 	let executable = `${prefix}cc`;
 
 	let system = std.Triple.system(host);
+	let env = std.env.object(arg.buildToolchain, arg.env);
 	let output = tg.File.expect(
 		await tg.build(
 			tg`${executable} -xc ${
@@ -136,12 +138,12 @@ export let dylib = tg.target(async (arg: DylibArg): Promise<tg.File> => {
 			)}`,
 			{
 				host: system,
-				env: std.env.object(arg.buildToolchain, arg.env),
+				env,
 			},
 		),
 	);
 	return output;
-});
+};
 
 export let test = tg.target(async () => {
 	let detectedHost = await std.Triple.host();

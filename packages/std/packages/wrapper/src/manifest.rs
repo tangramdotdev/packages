@@ -297,13 +297,13 @@ pub fn collect_references_from_value_data<H: BuildHasher>(
 ) {
 	match value {
 		tg::value::Data::Directory(id) => {
-			references.insert(id.clone().try_into().unwrap());
+			references.insert(id.clone().into());
 		},
 		tg::value::Data::File(id) => {
-			references.insert(id.clone().try_into().unwrap());
+			references.insert(id.clone().into());
 		},
 		tg::value::Data::Symlink(id) => {
-			references.insert(id.clone().try_into().unwrap());
+			references.insert(id.clone().into());
 		},
 		tg::value::Data::Mutation(data) => {
 			collect_references_from_mutation_data(data, references);

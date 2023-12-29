@@ -1,7 +1,6 @@
 /** This module provides environments ready to produce Tangram-wrapped executables from C and C++ code. */
 
-import * as canadianCross from "./sdk/canadian_cross.tg";
-import * as stage0 from "./sdk/canadian_cross/stage0.tg";
+import * as bootstrap from "./bootstrap.tg";
 import * as dependencies from "./sdk/dependencies.tg";
 import * as gcc from "./sdk/gcc.tg";
 import { interpreterName } from "./sdk/libc.tg";
@@ -21,7 +20,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	};
 	let {
 		bootstrapMode: bootstrapMode_,
-		proxyArg,
+		proxyArg: proxyArg_,
 		host: host_,
 		targets: targets_,
 		toolchain: toolchain_,
@@ -36,7 +35,15 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 				object.host = arg.host;
 			}
 			if (arg.proxy !== undefined) {
-				object.proxyArg = arg.proxy;
+				let proxy;
+				if (typeof arg.proxy === "boolean") {
+					proxy = arg.proxy
+						? { compiler: true, linker: true }
+						: { compiler: false, linker: false };
+				} else {
+					proxy = arg.proxy;
+				}
+				object.proxyArg = proxy;
 			}
 			if (arg.toolchain !== undefined) {
 				object.toolchain = arg.toolchain;
@@ -64,11 +71,19 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		}
 	});
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let proxyArg = proxyArg_ ?? { compiler: false, linker: true };
 
 	// If we're in bootstrap mode, stop here and return the bootstrap SDK.
 	let bootstrapMode = (bootstrapMode_ ?? []).some((mode) => mode);
 	if (bootstrapMode) {
-		return sdk.bootstrap({ host });
+		let bootstrapSDK = bootstrap.sdk.env({ host });
+		let proxyEnv = proxy.env({
+			...proxyArg,
+			env: bootstrapSDK,
+			host,
+			sdk: { bootstrapMode },
+		});
+		return std.env.object(bootstrapSDK, proxyEnv);
 	}
 
 	// Collect target array.
@@ -83,8 +98,12 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 
 	if (host.os === "darwin") {
 		// Build the utils using the bootstrap SDK and add them to the env.
-		let bootstrapSDK = await sdk.bootstrap({ host });
-		let proxyEnv = await proxy.env({ ...proxyArg, env: bootstrapSDK });
+		let bootstrapSDK = await bootstrap.sdk.env({ host });
+		let proxyEnv = await proxy.env({
+			...proxyArg,
+			env: bootstrapSDK,
+			sdk: { bootstrapMode },
+		});
 		let dependenciesEnv = await dependencies.env({
 			host,
 			sdk: { bootstrapMode: true },
@@ -107,7 +126,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	}
 
 	// If a previous SDK was provided, use that as the base env, otherwise start with an empty list.
-	let env: std.env.Arg = [];
+	let env: Array<tg.Unresolved<std.env.Arg>> = [];
 
 	// If the toolchain is not a string, proxy it for the host.
 	if (typeof toolchain !== "string") {
@@ -143,39 +162,47 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 					`Provided toolchain does not provide a ${hostString} -> ${targetString} toolchain.`,
 				);
 			}
-			let proxyEnv = await proxy.env({
-				...proxyArg,
-				env,
-				target: requestedTarget,
-			});
-			env = [env, proxyEnv];
+			env.push(
+				proxy.env({
+					...proxyArg,
+					env,
+					sdk: { bootstrapMode },
+					target: requestedTarget,
+				}),
+			);
 		}
 		// Build the utils using the proxied host toolchain and add them to the env.
-		env = [env, await dependencies.env({ env })];
-		return std.env(env, { bootstrapMode: true });
+		env.push(dependencies.env({ env }));
+		return std.env(...env, { bootstrapMode: true });
 	} else if (toolchain === "gcc") {
 		// Collect environments to compose.
-		let envs: std.env.Arg = [];
+		let envs: tg.Unresolved<Array<std.env.Arg>> = [];
 
 		// Add the host toolchain and full set of packages for the host.
-		let hostToolchain = await gcc.toolchain({ host });
-		let proxyEnv = await proxy.env({ ...proxyArg, env: hostToolchain });
-		let dependenciesEnv = await dependencies.env({
+		let hostToolchain = gcc.toolchain({ host });
+		envs.push(hostToolchain);
+		let proxyEnv = proxy.env({ ...proxyArg, env: hostToolchain });
+		envs.push(proxyEnv);
+		let dependenciesEnv = dependencies.env({
 			build: host,
 			host,
-			env: [hostToolchain, proxyEnv],
+			env: envs,
 			sdk: { bootstrapMode: true },
 		});
-		envs = envs.concat([hostToolchain, proxyEnv, dependenciesEnv]);
+		envs.push(dependenciesEnv);
 
 		// Add any requested cross-compilers, without packages.
 		for await (let target of targets) {
 			if (std.Triple.eq(host, target)) {
 				continue;
 			}
-			let crossToolchain = await gcc.toolchain({ host, target });
-			let proxyEnv = await proxy.env({ env: crossToolchain });
-			envs = envs.concat([crossToolchain, proxyEnv]);
+			let crossToolchain = gcc.toolchain({ host, target });
+			envs.push(crossToolchain);
+			let proxyEnv = proxy.env({
+				env: crossToolchain,
+				sdk: { bootstrapMode },
+			});
+			envs.push(proxyEnv);
 		}
 
 		// Combine envs, preventing the utils from recompiling.
@@ -206,7 +233,7 @@ export namespace sdk {
 		/** An alternate linker to use. */
 		linker?: LinkerKind;
 		/** Which components should get proxied. */
-		proxy?: proxy.Arg;
+		proxy?: proxy.Arg | boolean;
 		/** The machine this SDK produces executables for. */
 		target?: std.Triple.Arg;
 		/** A list of machines this SDK can produce executables for. */
@@ -221,9 +248,6 @@ export namespace sdk {
 		host?: std.Triple.Arg;
 		sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	};
-
-	/** Produce an SDK using the bootstrap toolchain and utils. */
-	export let bootstrap = (arg?: proxy.Arg) => stage0.bootstrapSdk(arg);
 
 	///////// QUERIES
 
@@ -777,10 +801,6 @@ type ProxyTestArg = {
 	host?: std.Triple.Arg;
 	target?: std.Triple.Arg;
 };
-
-export let testStage1 = tg.target(async () => {
-	return canadianCross.stage1.test();
-});
 
 export let testLLVM = tg.target(async () => {
 	let env = await sdk({ toolchain: "llvm" });

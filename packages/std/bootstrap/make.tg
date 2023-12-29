@@ -36,13 +36,8 @@ export let build = tg.target(async (arg?: std.Triple.HostArg) => {
 		install,
 	};
 
-	let env = {
-		CC: "gcc -static",
-	};
-
 	let output = std.autotools.build({
-		env,
-		host: await std.Triple.host(arg),
+		host: std.Triple.host(arg),
 		opt: "s",
 		phases,
 		prefixArg: "none",
@@ -58,7 +53,7 @@ export default build;
 export let test = tg.target(async () => {
 	await std.assert.pkg({
 		binaries: ["make"],
-		directory: await build(),
+		directory: build(),
 		metadata,
 	});
 	return true;
