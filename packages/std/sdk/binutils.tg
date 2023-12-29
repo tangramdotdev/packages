@@ -55,7 +55,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ? std.triple(build_) : host;
 	let target = target_ ? std.triple(target_) : host;
 
-	tg.assert(target, "Must set `target` when building binutils.");
 	let buildString = std.Triple.toString(build);
 	let hostString = std.Triple.toString(host);
 	let targetString = std.Triple.toString(target);
@@ -64,7 +63,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		: undefined;
 
 	let additionalEnv: std.env.Arg = {
-		LDFLAGS: "-Wl,--tg-combined-library-path=false",
+		// FIXME - with "filter", binutils builds but libzstd isn't available at runtime.
+		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "none",
 	};
 	if (staticBuild) {
 		additionalEnv = {
@@ -73,7 +73,11 @@ export let build = tg.target(async (arg?: Arg) => {
 			CXX: await tg`${targetString}-c++ -static-libstdc++ -fPIC`,
 		};
 	}
-	let env = [dependencies.env({ ...rest, host }), additionalEnv, env_];
+	let env = [
+		dependencies.env({ host: build, sdk: rest.sdk }),
+		additionalEnv,
+		env_,
+	];
 
 	// Collect configuration.
 	let configure = {
@@ -100,6 +104,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			env,
+			// parallel: false,
 			phases,
 			source: source_ ?? source(),
 		},

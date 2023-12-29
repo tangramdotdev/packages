@@ -1,4 +1,5 @@
 import * as bootstrap from "../bootstrap.tg";
+import * as gcc from "../sdk/gcc.tg";
 import * as std from "../tangram.tg";
 
 export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
@@ -11,14 +12,17 @@ export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	let source = tg.File.expect(await sourceDir.get(`${os}/lib.c`));
 
 	// Prepare sdk, making sure not to use any proxying.
-	let sdk = await std.sdk(std.Triple.rotate({ build, host }), arg?.sdk, {
-		proxy: false,
-	});
+	let buildToolchain = await tg.directory();
+	if (std.flatten([arg?.sdk]).some((sdk) => sdk?.bootstrapMode)) {
+		let toolchain = await bootstrap.sdk.env();
+		let { directory } = await std.sdk.toolchainComponents({
+			env: toolchain,
+		});
+		buildToolchain = directory;
+	} else {
+		buildToolchain = await gcc.toolchain(std.Triple.rotate({ build, host }));
+	}
 
-	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
-		env: sdk,
-		// target: host
-	});
 	let env = arg?.env;
 
 	// Select the correct toolchain and options for the given triple.

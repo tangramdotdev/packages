@@ -179,6 +179,11 @@ export let build = async (arg: BuildArg) => {
 	let system = std.Triple.system(host);
 	let os = tg.System.os(system);
 
+	let sdkArg: std.sdk.Arg = { host, target};
+	if (host.arch === target.arch) {
+		sdkArg = { ...sdkArg, bootstrapMode: true };
+	}
+
 	// On Linux, ensure we use a musl target.
 	if (os === "linux") {
 		host.environment = "musl";
@@ -190,7 +195,7 @@ export let build = async (arg: BuildArg) => {
 	let isCross = !std.Triple.eq(host, target);
 
 	// Get the SDK, without proxying enabled.
-	let sdk = await std.sdk({ host, target }, arg.sdkArg, { proxy: false });
+	let sdk = await std.sdk(sdkArg, arg.sdkArg, { proxy: false });
 	let { directory: toolchain } = await std.sdk.toolchainComponents({
 		env: sdk,
 	});

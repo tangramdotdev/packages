@@ -202,10 +202,13 @@ export let testGccSource = tg.target(async () => {
 	return await gcc.source();
 });
 
-import { testStage1 } from "./sdk/gcc/canadian_cross.tg";
+import { testCanadianCross, testStage1 } from "./sdk/gcc/canadian_cross.tg";
 export let stage1 = tg.target(async () => {
 	await testStage1();
 	return true;
+});
+export let canadianCross = tg.target(async () => {
+	return testCanadianCross();
 });
 
 // SDK tests.

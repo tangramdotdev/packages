@@ -90,7 +90,7 @@ export default tg.target(async (arg?: Arg) => {
 	};
 
 	let env = [
-		dependencies.env({ ...rest, host }),
+		dependencies.env({ host: build, sdk: rest.sdk }),
 		{ CPATH: tg.Mutation.unset() },
 		env_,
 	];

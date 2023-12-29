@@ -33,7 +33,7 @@ type Arg = std.sdk.BuildEnvArg & {
 	variant: Variant;
 };
 
-type Variant =
+export type Variant =
 	| "stage1_bootstrap" // C only, no libraries.
 	| "stage1_limited" // C/C++ only, most libraries disabled, but inclded libgcc/libstdc++.
 	| "stage2_full"; // Everything enabled.
@@ -94,7 +94,8 @@ export let build = tg.target(async (arg: Arg) => {
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
 	let additionalEnv: std.env.Arg = {
-		LDFLAGS: "-Wl,--tg-combined-library-path=false",
+		// FIXME - same bug as everyone else, some libs get dropped.
+		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "none",
 	};
 
 	// On Musl hosts, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
@@ -131,6 +132,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage1_limited") {
 		let stage1LimitedArgs = [
+			"--with-build-sysroot=$SYSROOT",
 			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
@@ -151,13 +153,22 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-initfini-array",
 		];
 		additionalArgs.push(...stage2FullArgs);
+		additionalEnv = {
+			...additionalEnv,
+			CC: `${targetString}-cc -static -fPIC`,
+			CXX: `${targetString}-c++ -static -fPIC`,
+		};
 	}
 
 	let configure = { args: [...commonArgs, ...additionalArgs] };
 
 	let phases = { prepare, configure };
 
-	let env = [dependencies.env({ ...rest, host }), additionalEnv, env_];
+	let env = [
+		dependencies.env({ host: build, sdk: rest.sdk }),
+		additionalEnv,
+		env_,
+	];
 
 	let result = await std.autotools.build(
 		{
@@ -199,49 +210,96 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	let buildTriple = build_ ? std.triple(build_) : host;
 	let target = target_ ? std.triple(target_) : host;
 
-	let sdkArg = { bootstrapMode: true };
-
 	// Always build a native toolchain.
 	let nativeToolchain = await canadianCross.toolchain({ host });
 
 	// If only the native toolchain was requested, return it.
-	if (std.Triple.eq(host, buildTriple)) {
+	if (std.Triple.eq(host, target)) {
 		return nativeToolchain;
 	}
 
 	// If a cross-target was requested, build the components required using the native toolchain.
+	return await crossToolchain({
+		...rest,
+		build: buildTriple,
+		host,
+		target,
+		variant: "stage2_full",
+	});
+});
 
+type CrossToolchainArg = std.sdk.BuildEnvArg & {
+	target: std.Triple.Arg;
+	variant?: Variant;
+};
+
+export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
+	let {
+		build: build_,
+		env: env_,
+		host: host_,
+		target: target_,
+		variant = "stage2_full",
+		...rest
+	} = arg ?? {};
+
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let buildTriple = build_ ? std.triple(build_) : host;
+	let target = host_ ? std.triple(target_) : host;
+
+	// Produce the binutils.
 	let crossBinutils = await binutils({
 		...rest,
 		build: buildTriple,
 		host,
 		target,
-		sdk: sdkArg,
+	});
+	console.log("crossBinutils", await crossBinutils.id());
+
+	// Produce the linux headers.
+	let linuxHeaders = await tg.directory({
+		include: await kernelHeaders({ host: target }),
+	});
+	console.log("linuxHeaders", await linuxHeaders.id());
+
+	let linuxHeadersSysroot = await tg.directory({
+		[std.Triple.toString(target)]: linuxHeaders,
 	});
 
-	let crossLinuxHeaders = await tg.directory({
-		include: await kernelHeaders({ ...rest, host, sdk: sdkArg }),
-	});
-
-	let crossSysroot = await constructSysroot({
+	// Produce the initial gcc required to build the standard C library.
+	let bootstrapGCC = await build({
 		...rest,
-		build: buildTriple,
-		host: target,
-		sdk: sdkArg,
-		linuxHeaders: crossLinuxHeaders,
-	});
-
-	let crossGcc = await build({
 		binutils: crossBinutils,
 		build: buildTriple,
 		host,
-		sdk: sdkArg,
-		sysroot: crossSysroot,
+		sysroot: linuxHeadersSysroot,
 		target,
-		variant: "stage2_full",
+		variant: "stage1_bootstrap",
 	});
+	console.log("bootstrapGCC", await bootstrapGCC.id());
 
-	return crossGcc;
+	// Produce a combined directory contianing the correct C library for the host and the Linux headers.
+	let sysroot = await constructSysroot({
+		...rest,
+		linuxHeaders,
+		env: bootstrapGCC,
+		target,
+	});
+	console.log("hostSysroot", await sysroot.id());
+
+	// Produce a toolchain containing the sysroot and a cross-compiler.
+	let crossGCC = await build({
+		...rest,
+		binutils: crossBinutils,
+		build: buildTriple,
+		host,
+		sysroot,
+		target,
+		variant,
+	});
+	console.log("cross gcc", await crossGCC.id());
+
+	return { env: crossGCC, sysroot };
 });
 
 export let gccSource = tg.target(async () => {

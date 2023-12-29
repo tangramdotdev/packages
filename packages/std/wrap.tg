@@ -237,7 +237,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 
 	// Get the wrapper executable.
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let wrapper = await workspace.wrapper({ host, sdk: sdkArgs });
+	let wrapper = await workspace.wrapper({ host, sdk: sdkArgs || { bootstrapMode: true } });
 
 	// Write the manifest to the wrapper and return.
 	let output = await wrap.Manifest.write(wrapper, manifest);
