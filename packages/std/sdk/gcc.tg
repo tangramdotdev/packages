@@ -299,7 +299,7 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	});
 	console.log("cross gcc", await crossGCC.id());
 
-	return { env: crossGCC, sysroot };
+	return crossGCC;
 });
 
 export let gccSource = tg.target(async () => {

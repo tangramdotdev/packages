@@ -17,7 +17,7 @@ export let toolchain = tg.target(async (arg?: std.Triple.HostArg) => {
 	await dependencies.env({ host, sdk });
 
 	// Stage 1: Produce build -> host cross-compiler.
-	let { env, sysroot } = await buildToHostCrossToolchain({
+	let env = await buildToHostCrossToolchain({
 		build,
 		host,
 		sdk,
@@ -26,8 +26,8 @@ export let toolchain = tg.target(async (arg?: std.Triple.HostArg) => {
 	// Stage 2: Produce host -> target compiler.
 	let hostToTargetToolchain = nativeHostToolchain({
 		env,
+		build,
 		host,
-		sysroot,
 	});
 
 	return hostToTargetToolchain;
@@ -51,67 +51,70 @@ export let buildToHostCrossToolchain = tg.target(
 	},
 );
 
-type NativeHostToolchainArg = {
-	env: std.env.Arg;
-	host: std.Triple;
-	sysroot: tg.Directory;
-};
-
 export let nativeHostToolchain = tg.target(
-	async (arg: NativeHostToolchainArg) => {
-		let build = bootstrap.toolchainTriple(arg.host);
-		let { env, host, sysroot } = arg;
+	async (arg: std.sdk.BuildEnvArg) => {
+		let { build: build_, host: host_, ...rest } = arg ?? {};
+
+		let host = host_ ? std.triple(host_) : await std.Triple.host();
+		let build = build_ ? std.triple(build_) : host;
 		let target = host;
-		let sdk = { bootstrapMode: true };
 
-		let nativeHostBinutils = await binutils({
-			env,
+		return gcc.crossToolchain({
+			...rest,
 			build,
 			host,
-			sdk,
-			staticBuild: true,
-			target,
-		});
-		nativeHostBinutils = await bootstrap.sdk.prefixBins(
-			nativeHostBinutils,
-			[
-				"addr2line",
-				"ar",
-				"as",
-				"ld",
-				"nm",
-				"objcopy",
-				"objdump",
-				"ranlib",
-				"readelf",
-				"strip",
-				"strings",
-			],
-			std.Triple.toString(host) + "-",
-		);
-		console.log("stage2 binutils", await nativeHostBinutils.id());
-
-		let fullGCC = await gcc.build({
-			binutils: nativeHostBinutils,
-			build,
-			env,
-			host,
-			sdk,
-			sysroot,
 			target,
 			variant: "stage2_full",
 		});
-		console.log("stage2 gcc", await fullGCC.id());
 
-		// Return just the directory.
-		return fullGCC;
+		// let nativeHostBinutils = await binutils({
+		// 	env,
+		// 	build,
+		// 	host,
+		// 	sdk,
+		// 	staticBuild: true,
+		// 	target,
+		// });
+		// nativeHostBinutils = await bootstrap.sdk.prefixBins(
+		// 	nativeHostBinutils,
+		// 	[
+		// 		"addr2line",
+		// 		"ar",
+		// 		"as",
+		// 		"ld",
+		// 		"nm",
+		// 		"objcopy",
+		// 		"objdump",
+		// 		"ranlib",
+		// 		"readelf",
+		// 		"strip",
+		// 		"strings",
+		// 	],
+		// 	std.Triple.toString(host) + "-",
+		// );
+		// console.log("stage2 binutils", await nativeHostBinutils.id());
+
+		// let fullGCC = await gcc.build({
+		// 	binutils: nativeHostBinutils,
+		// 	build,
+		// 	env,
+		// 	host,
+		// 	sdk,
+		// 	sysroot,
+		// 	target,
+		// 	variant: "stage2_full",
+		// });
+		// console.log("stage2 gcc", await fullGCC.id());
+
+		// // Return just the directory.
+		// return fullGCC;
 	},
 );
 
 export let testStage1 = async () => {
 	let host = await std.Triple.host();
 	let build = bootstrap.toolchainTriple(host);
-	let { env } = await buildToHostCrossToolchain({
+	let env = await buildToHostCrossToolchain({
 		build,
 		host,
 		sdk: { bootstrapMode: true },
