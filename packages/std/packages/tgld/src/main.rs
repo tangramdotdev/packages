@@ -268,15 +268,11 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 			futures::future::try_join_all(library_paths.into_iter().map(|symlink_data| async {
 				let object = tg::symlink::Object::try_from(symlink_data).unwrap();
 				let symlink = tg::Symlink::with_object(object);
-				if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(&tg).await {
-					let symlink = tg::Symlink::new(Some(directory.into()), None);
-					return Ok::<_, tangram_error::Error>(Some(symlink.id(&tg).await?.clone()));
-				}
-				Ok(None)
+				let id = symlink.id(&tg).await?;
+				Ok::<_, tangram_error::Error>(id.clone())
 			}))
 			.await?
 			.into_iter()
-			.flatten()
 			.collect::<HashSet<_, Hasher>>();
 		let strategy = options.library_path_optimization;
 		tracing::trace!(
@@ -546,7 +542,7 @@ impl std::str::FromStr for LibraryPathOptimizationStrategy {
 	}
 }
 
-#[tracing::instrument(skip(tg))]
+#[tracing::instrument(skip(tg, file))]
 async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tg: &dyn tg::Handle,
 	file: &Option<tg::File>,
@@ -580,16 +576,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			let mut entries: BTreeMap<String, tg::Artifact> = BTreeMap::default();
 			for (symlink_id, _) in selected_paths {
 				let symlink = tg::Symlink::with_id(symlink_id.clone());
-				let artifact = if symlink.path(tg).await?.is_none() {
-					if let Some(artifact) = symlink.artifact(tg).await? {
-						artifact.clone()
-					} else {
-						return_error!("Expected {symlink_id} to have an artifact.");
-					}
-				} else {
-					symlink.into()
-				};
-				entries.insert(symlink_id.to_string(), artifact);
+				entries.insert(symlink_id.to_string(), symlink.into());
 			}
 			let combined_library_directory = tg::directory::Builder::new(entries).build();
 			let combined_library_directory =
@@ -599,15 +586,20 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		},
 		LibraryPathOptimizationStrategy::Filter => {
 			// The selected paths already contain the subset of paths we need.
-			let selected_paths =
-				futures::future::try_join_all(selected_paths.into_keys().map(|id| async {
-					let symlink = tg::Symlink::with_id(id);
-					symlink.data(tg).await
-				}))
-				.await?;
+			let selected_paths = futures::future::try_join_all(
+				selected_paths
+					.into_keys()
+					.map(|id| async move { Ok::<_, tangram_error::Error>(id.clone()) }),
+			)
+			.await?;
 			tracing::trace!(?selected_paths);
+			library_paths.clear();
+			for symlink_id in selected_paths {
+				library_paths.insert(symlink_id.clone());
+			}
 		},
 	}
+	tracing::trace!(?library_paths, "post-optimize");
 
 	// Check which libraries we found against which libraries we needed. Anything missing will need to be supplied separately at runtime.
 	let mut found_libraries = HashSet::default();
@@ -636,7 +628,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 }
 
 #[async_recursion::async_recursion]
-#[tracing::instrument(skip(tg))]
+#[tracing::instrument(skip(tg, file))]
 async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
 	tg: &dyn tg::Handle,
 	file: &tg::File,
@@ -661,6 +653,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	for symlink_id in library_paths {
 		let symlink = tg::Symlink::with_id(symlink_id.clone());
 		if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
+			tracing::trace!(?directory, "Checking directory for libraries.");
 			let copy = all_needed_libraries.iter().cloned().collect_vec();
 			for library_name in copy {
 				let found_library = match directory
@@ -718,6 +711,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	Ok(())
 }
 
+#[tracing::instrument]
 fn found_all_libraries<H: BuildHasher + Default>(
 	all_needed_libraries: &HashSet<String, H>,
 	selected_paths: &HashMap<tg::symlink::Id, Vec<String>, H>,
