@@ -153,8 +153,8 @@ export let test = tg.target(async () => {
 	let detectedHost = await std.Triple.host();
 	let hostArch = detectedHost.arch;
 	let nativeInjection = await injection({
-		// host: detectedHost,
-		// sdk: { bootstrapMode: true },
+		host: detectedHost,
+		sdk: { bootstrapMode: true },
 	});
 
 	// Assert the native injection dylib was built for the build machine.

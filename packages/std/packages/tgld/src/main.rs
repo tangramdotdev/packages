@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use std::{
-	collections::{BTreeMap, BTreeSet, HashSet},
+	collections::{BTreeMap, HashMap, HashSet},
+	hash::BuildHasher,
 	os::unix::fs::PermissionsExt,
 	path::PathBuf,
 	str::FromStr,
@@ -17,6 +18,8 @@ type Hasher = fnv::FnvBuildHasher;
 async fn main() {
 	if let Err(e) = main_inner().await {
 		eprintln!("linker proxy failed: {e}");
+		let trace = e.trace();
+		tracing::trace!("{trace}");
 		std::process::exit(1);
 	}
 }
@@ -201,6 +204,7 @@ fn read_options() -> Options {
 	}
 }
 
+#[allow(clippy::too_many_lines)]
 async fn create_wrapper(options: &Options) -> Result<()> {
 	// Create the tangram instance.
 	let runtime_json =
@@ -217,21 +221,22 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	let AnalyzeOutputFileOutput {
 		is_executable,
 		interpreter,
-		..
+		needed_libraries: initial_needed_libraries,
 	} = analyze_executable(
 		file.try_clone()
 			.await
 			.wrap_err("Could not clone file handle")?,
 	)
 	.await?;
-	tracing::trace!(?is_executable, ?interpreter);
+	tracing::trace!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
-	// Unrender and resolve all library paths.
+	// Unrender all library paths to symlinks.
 	let library_paths = options
 		.library_paths
 		.iter()
 		.map(|library_path| template_data_to_symlink_data(unrender(&tg, library_path)));
 	let library_paths = futures::future::try_join_all(library_paths).await?;
+	tracing::trace!(?library_paths);
 
 	// We need to obtain an artifact if the file is executable or we are creating a combined library directory.
 	let output_artifact = if is_executable
@@ -250,13 +255,54 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		None
 	};
 
-	let library_paths = optimize_library_paths(
-		&tg,
-		&output_artifact,
-		&library_paths,
-		options.library_path_optimization,
-	)
-	.await?;
+	let library_paths = if library_paths.is_empty() {
+		None
+	} else {
+		// Set the initially known needed libraries.
+		let mut needed_libraries: HashSet<String, Hasher> = HashSet::default();
+		for library in &initial_needed_libraries {
+			needed_libraries.insert(library.clone());
+		}
+
+		let mut library_paths =
+			futures::future::try_join_all(library_paths.into_iter().map(|symlink_data| async {
+				let object = tg::symlink::Object::try_from(symlink_data).unwrap();
+				let symlink = tg::Symlink::with_object(object);
+				if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(&tg).await {
+					let symlink = tg::Symlink::new(Some(directory.into()), None);
+					return Ok::<_, tangram_error::Error>(Some(symlink.id(&tg).await?.clone()));
+				}
+				Ok(None)
+			}))
+			.await?
+			.into_iter()
+			.flatten()
+			.collect::<HashSet<_, Hasher>>();
+		let strategy = options.library_path_optimization;
+		tracing::trace!(
+			?library_paths,
+			?needed_libraries,
+			?strategy,
+			"pre-optimize library paths"
+		);
+
+		optimize_library_paths(
+			&tg,
+			&output_artifact,
+			&mut library_paths,
+			&mut needed_libraries,
+			options.library_path_optimization,
+		)
+		.await?;
+		tracing::trace!(
+			?library_paths,
+			?needed_libraries,
+			?strategy,
+			"post-optimize library paths"
+		);
+
+		Some(library_paths)
+	};
 
 	// Keep track of the references.
 	let mut references: HashSet<tg::artifact::Id, Hasher> = HashSet::default();
@@ -296,15 +342,13 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		references = manifest.references();
 	} else {
 		// Otherwise, if the linker generated a library, then add its references.
-		references.reserve(options.library_paths.len());
-		for library_path in &options.library_paths {
-			let template = unrender(&tg, library_path).await;
-			tangram_wrapper::manifest::collect_references_from_template_data(
-				&template,
-				&mut references,
-			);
+		if let Some(library_paths) = library_paths {
+			references.reserve(library_paths.len());
+			for library_path in &library_paths {
+				references.insert(library_path.clone().into());
+			}
+			tracing::trace!(?references);
 		}
-		tracing::trace!(?references);
 	}
 
 	// Set the xattrs of the output file.
@@ -320,12 +364,13 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 }
 
 /// Create a manifest.
-async fn create_manifest(
+#[allow(clippy::too_many_lines)]
+async fn create_manifest<H: BuildHasher>(
 	tg: &dyn tg::Handle,
 	ld_output_id: tg::artifact::Id,
 	options: &Options,
 	interpreter: InterpreterRequirement,
-	library_paths: Option<Vec<tg::symlink::Data>>,
+	library_paths: Option<HashSet<tg::symlink::Id, H>>,
 ) -> Result<Manifest> {
 	// Create the interpreter.
 	let interpreter = if cfg!(target_os = "linux") {
@@ -353,6 +398,19 @@ async fn create_manifest(
 			},
 			InterpreterRequirement::Path(path) => Some((path, false)),
 			InterpreterRequirement::None => None,
+		};
+
+		// Render the library paths.
+		let library_paths = if let Some(library_paths) = library_paths {
+			let result = futures::future::try_join_all(library_paths.into_iter().map(|id| async {
+				let symlink = tg::Symlink::with_id(id);
+				let data = symlink.data(tg).await?;
+				Ok::<_, tangram_error::Error>(data)
+			}))
+			.await?;
+			Some(result)
+		} else {
+			None
 		};
 
 		if let Some((path, is_musl)) = config {
@@ -488,87 +546,130 @@ impl std::str::FromStr for LibraryPathOptimizationStrategy {
 	}
 }
 
-async fn optimize_library_paths(
+#[tracing::instrument(skip(tg))]
+async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tg: &dyn tg::Handle,
 	file: &Option<tg::File>,
-	library_paths: &[tg::symlink::Data],
+	library_paths: &mut HashSet<tg::symlink::Id, H>,
+	needed_libraries: &mut HashSet<String, H>,
 	strategy: LibraryPathOptimizationStrategy,
-) -> Result<Option<Vec<tg::symlink::Data>>> {
-	if library_paths.is_empty() {
-		return Ok(None);
+) -> Result<()> {
+	if file.is_none()
+		|| matches!(strategy, LibraryPathOptimizationStrategy::None)
+		|| library_paths.is_empty()
+	{
+		return Ok(());
 	}
-	match strategy {
-		LibraryPathOptimizationStrategy::None => Ok(Some(library_paths.to_vec())),
-		LibraryPathOptimizationStrategy::Combine => {
-			let combined_library_directory =
-				create_combined_library_directory(tg, file.as_ref().unwrap(), library_paths)
-					.await?;
-			Ok(Some(vec![combined_library_directory]))
-		},
-		LibraryPathOptimizationStrategy::Filter => Ok(Some(
-			filtered_library_paths(tg, file.as_ref().unwrap(), library_paths).await?,
-		)),
-	}
-}
 
-async fn filtered_library_paths(
-	tg: &dyn tg::Handle,
-	file: &tg::File,
-	library_paths: &[tg::symlink::Data],
-) -> Result<Vec<tg::symlink::Data>> {
-	// Find all the transitive needed libraries of the output file.
-	let needed_libraries: BTreeSet<String> = BTreeSet::default();
-	let mut selected_paths: BTreeMap<tg::directory::Id, Vec<String>> = BTreeMap::default();
+	// Find all the transitive needed libraries of the output file we can locate in the library path.
+	let file = file.as_ref().unwrap();
+	let mut selected_paths = HashMap::default();
 	find_transitive_needed_libraries(
 		tg,
 		file,
 		library_paths,
-		&needed_libraries,
+		needed_libraries,
 		&mut selected_paths,
 	)
 	.await?;
+	tracing::trace!(?needed_libraries, ?selected_paths);
 
-	// Return just those directories we found matches for.
-	let selected_paths = selected_paths
-		.keys()
-		.cloned()
-		.map(|id| tg::symlink::Data {
-			artifact: Some(id.into()),
-			path: None,
-		})
-		.collect_vec();
+	match strategy {
+		LibraryPathOptimizationStrategy::None => unreachable!(),
+		LibraryPathOptimizationStrategy::Combine => {
+			let mut entries: BTreeMap<String, tg::Artifact> = BTreeMap::default();
+			for (symlink_id, _) in selected_paths {
+				let symlink = tg::Symlink::with_id(symlink_id.clone());
+				let artifact = if symlink.path(tg).await?.is_none() {
+					if let Some(artifact) = symlink.artifact(tg).await? {
+						artifact.clone()
+					} else {
+						return_error!("Expected {symlink_id} to have an artifact.");
+					}
+				} else {
+					symlink.into()
+				};
+				entries.insert(symlink_id.to_string(), artifact);
+			}
+			let combined_library_directory = tg::directory::Builder::new(entries).build();
+			let combined_library_directory =
+				tg::Symlink::new(Some(combined_library_directory.into()), None);
+			library_paths.clear();
+			library_paths.insert(combined_library_directory.id(tg).await?.clone());
+		},
+		LibraryPathOptimizationStrategy::Filter => {
+			// The selected paths already contain the subset of paths we need.
+			let selected_paths =
+				futures::future::try_join_all(selected_paths.into_keys().map(|id| async {
+					let symlink = tg::Symlink::with_id(id);
+					symlink.data(tg).await
+				}))
+				.await?;
+			tracing::trace!(?selected_paths);
+		},
+	}
 
-	Ok(selected_paths)
+	// Check which libraries we found against which libraries we needed. Anything missing will need to be supplied separately at runtime.
+	let mut found_libraries = HashSet::default();
+	for library in needed_libraries.iter() {
+		for library_path in library_paths.iter() {
+			let symlink = tg::Symlink::with_id(library_path.clone());
+			let artifact = symlink
+				.artifact(tg)
+				.await?
+				.as_ref()
+				.ok_or(tangram_error::Error::with_message("Expected a directory."))?;
+			if let tg::Artifact::Directory(directory) = artifact {
+				if directory.entries(tg).await?.contains_key(library) {
+					found_libraries.insert(library.clone());
+					continue;
+				}
+			}
+		}
+	}
+	let missing_libs = needed_libraries.difference(&found_libraries).collect_vec();
+	if !missing_libs.is_empty() {
+		tracing::warn!("Could not find the following libraries, they will be required at runtime: {missing_libs:?}");
+	}
+
+	Ok(())
 }
 
 #[async_recursion::async_recursion]
-async fn find_transitive_needed_libraries(
+#[tracing::instrument(skip(tg))]
+async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
 	tg: &dyn tg::Handle,
 	file: &tg::File,
-	library_paths: &[tg::symlink::Data],
-	all_needed_libraries: &BTreeSet<String>,
-	selected_paths: &mut BTreeMap<tg::directory::Id, Vec<String>>,
+	library_paths: &HashSet<tg::symlink::Id, H>,
+	all_needed_libraries: &mut HashSet<String, H>,
+	selected_paths: &mut HashMap<tg::symlink::Id, Vec<String>, H>,
 ) -> Result<()> {
-	let mut all_needed_libraries_ = all_needed_libraries.clone();
+	// Check if we're done.
+	if all_needed_libraries.is_empty() || found_all_libraries(all_needed_libraries, selected_paths)
+	{
+		return Ok(());
+	}
+
 	let reader = file.reader(tg).await?;
 	let AnalyzeOutputFileOutput {
 		needed_libraries, ..
 	} = analyze_executable(reader).await?;
 	for library in &needed_libraries {
-		all_needed_libraries_.insert(library.clone());
+		all_needed_libraries.insert(library.clone());
 	}
 
-	for symlink_data in library_paths {
-		all_needed_libraries_.retain(|library_name| !all_needed_libraries.contains(library_name));
-		if all_needed_libraries_.is_empty() {
-			return Ok(());
-		}
-		let object = tg::symlink::Object::try_from(symlink_data.clone())?;
-		let symlink = tg::Symlink::with_object(object);
+	for symlink_id in library_paths {
+		let symlink = tg::Symlink::with_id(symlink_id.clone());
 		if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
-			let entries = directory.entries(tg).await?;
-			for library_name in &all_needed_libraries_ {
-				let found_library = match entries.get(library_name) {
+			let copy = all_needed_libraries.iter().cloned().collect_vec();
+			for library_name in copy {
+				let found_library = match directory
+					.try_get(
+						tg,
+						&tg::Path::from_str(&library_name).wrap_err("Could not create path")?,
+					)
+					.await?
+				{
 					Some(tg::Artifact::Directory(_)) | None => None,
 					Some(tg::Artifact::File(file)) => Some(file.clone()),
 					Some(tg::Artifact::Symlink(found_symlink)) => {
@@ -580,31 +681,56 @@ async fn find_transitive_needed_libraries(
 						{
 							Some(found_library)
 						} else {
+							tracing::warn!("Could not resolve symlink {found_symlink_id}.");
 							None
 						}
 					},
 				};
+				tracing::trace!(
+					?found_library,
+					?library_name,
+					"Checking if library is needed."
+				);
 				if let Some(found_library) = found_library {
-					let id = directory.id(tg).await?;
+					let symlink = tg::Symlink::new(Some(directory.clone().into()), None);
+					let id = symlink.id(tg).await?;
 					selected_paths
 						.entry(id.clone())
 						.or_insert_with(|| Vec::with_capacity(1))
-						.push(library_name.to_owned());
+						.push(library_name.clone());
 					tracing::trace!(?found_library, ?library_name, "Found library file.");
 					find_transitive_needed_libraries(
 						tg,
 						&found_library,
 						library_paths,
-						&all_needed_libraries_,
+						all_needed_libraries,
 						selected_paths,
 					)
 					.await?;
+					if found_all_libraries(all_needed_libraries, selected_paths) {
+						return Ok(());
+					}
 				}
 			}
 		}
 	}
 
 	Ok(())
+}
+
+fn found_all_libraries<H: BuildHasher + Default>(
+	all_needed_libraries: &HashSet<String, H>,
+	selected_paths: &HashMap<tg::symlink::Id, Vec<String>, H>,
+) -> bool {
+	let found_libraries = selected_paths
+		.iter()
+		.fold(HashSet::default(), |mut acc, (_, v)| {
+			for library in v {
+				acc.insert(library.clone());
+			}
+			acc
+		});
+	found_libraries.is_superset(all_needed_libraries)
 }
 
 /// Analyze an output file.
@@ -723,20 +849,6 @@ async fn analyze_executable(mut reader: impl AsyncRead + Unpin) -> Result<Analyz
 	Ok(result)
 }
 
-/// Create a directory containing the libraries required by the output file found in the library paths, and return it as a symlink with no subpath.
-async fn create_combined_library_directory(
-	tg: &dyn tg::Handle,
-	file: &tg::File,
-	library_paths: &[tg::symlink::Data],
-) -> Result<tg::symlink::Data> {
-	let mut found_libraries: BTreeMap<String, tg::Artifact> = BTreeMap::default();
-	locate_needed_libraries(tg, file, library_paths, &mut found_libraries).await?;
-	let directory = tg::Artifact::Directory(tg::Directory::new(found_libraries));
-	let symlink = tg::Symlink::new(Some(directory), None);
-	let data = symlink.data(tg).await?;
-	Ok(data)
-}
-
 async fn file_from_reader(
 	tg: &dyn tg::Handle,
 	reader: impl AsyncRead + Unpin,
@@ -747,60 +859,6 @@ async fn file_from_reader(
 		.wrap_err("Could not create blob")?;
 	let file = tg::File::builder(blob).executable(is_executable).build();
 	Ok(file)
-}
-
-#[async_recursion::async_recursion]
-async fn locate_needed_libraries(
-	tg: &dyn tg::Handle,
-	file: &tg::File,
-	library_paths: &[tg::symlink::Data],
-	found_libraries: &mut BTreeMap<String, tg::Artifact>,
-) -> Result<()> {
-	let reader = file.reader(tg).await?;
-	let AnalyzeOutputFileOutput {
-		mut needed_libraries,
-		..
-	} = analyze_executable(reader).await?;
-
-	for symlink_data in library_paths {
-		needed_libraries.retain(|library_name| !found_libraries.contains_key(library_name));
-		if needed_libraries.is_empty() {
-			return Ok(());
-		}
-		let object = tg::symlink::Object::try_from(symlink_data.clone())?;
-		let symlink = tg::Symlink::with_object(object);
-		if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
-			let entries = directory.entries(tg).await?;
-			for library_name in &needed_libraries {
-				let found_library = match entries.get(library_name) {
-					Some(tg::Artifact::Directory(_)) | None => None,
-					Some(tg::Artifact::File(found_library)) => Some(found_library.clone()),
-					Some(tg::Artifact::Symlink(found_symlink)) => {
-						let found_symlink_id = found_symlink.id(tg).await?;
-						tracing::trace!(?found_symlink_id, ?library_name, "Found library symlink.");
-						let from = symlink.clone();
-						if let Some(tg::Artifact::File(found_library)) =
-							found_symlink.resolve_from(tg, Some(from)).await?
-						{
-							Some(found_library)
-						} else {
-							None
-						}
-					},
-				};
-				if let Some(found_library) = found_library {
-					tracing::trace!(?found_library, ?library_name, "Found library file.");
-					found_libraries.insert(
-						library_name.to_owned(),
-						tg::Artifact::File(found_library.clone()),
-					);
-					locate_needed_libraries(tg, &found_library, library_paths, found_libraries)
-						.await?;
-				}
-			}
-		}
-	}
-	Ok(())
 }
 
 fn setup_tracing() {

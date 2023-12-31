@@ -304,9 +304,9 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 
 export let gccSource = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.xz" as const;
+	let unpackFormat = ".tar.gz" as const;
 	let checksum =
-		"sha256:e275e76442a6067341a27f04c5c6b83d8613144004c0413528863dc6b5c743da";
+		"sha256:8cb4be3796651976f94b9356fa08d833524f62420d6292c5033a9a26af315078";
 	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${name}-${version}${unpackFormat}`;
 	let outer = tg.Directory.expect(
 		await std.download({ checksum, url, unpackFormat }),
