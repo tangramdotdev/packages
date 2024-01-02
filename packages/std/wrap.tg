@@ -926,8 +926,8 @@ export namespace wrap {
 			| { kind: "symlink"; value: tg.Symlink.Id }
 			| { kind: "template"; value: Manifest.Template }
 			| { kind: "mutation"; value: Manifest.Mutation }
-			| { kind: "array"; value: Array<Manifest.Value> }
-			| { kind: "map"; value: { [key: string]: Manifest.Value } };
+			| { kind: "map"; value: { [key: string]: Manifest.Value } }
+			| Array<Manifest.Value>;
 
 		// The non-serializeable type of a normalized env.
 		export type Env = tg.Mutation<EnvMap>;
@@ -1624,8 +1624,7 @@ let manifestValueFromValue = async (
 			value: await manifestMutationFromMutation(value),
 		};
 	} else if (value instanceof Array) {
-		let arr = await Promise.all(value.map(manifestValueFromValue));
-		return { kind: "array", value: arr };
+		return await Promise.all(value.map(manifestValueFromValue));
 	} else if (typeof value === "object") {
 		let obj: { [key: string]: wrap.Manifest.Value } = {};
 		let entries = Object.entries(value);
@@ -1645,7 +1644,9 @@ let manifestValueFromValue = async (
 let valueFromManifestValue = async (
 	value: wrap.Manifest.Value,
 ): Promise<tg.Value> => {
-	if (value.kind === "null") {
+	if (value instanceof Array) {
+		return await Promise.all(value.value.map(valueFromManifestValue));
+	} else if (value.kind === "null") {
 		undefined;
 	} else if (value.kind === "bool") {
 		return value.value;
@@ -1663,8 +1664,6 @@ let valueFromManifestValue = async (
 		return await templateFromManifestTemplate(value.value);
 	} else if (value.kind === "mutation") {
 		return mutationFromManifestMutation(value.value);
-	} else if (value.kind === "array") {
-		return await Promise.all(value.value.map(valueFromManifestValue));
 	} else if (value.kind === "map") {
 		let ret: tg.Value = {};
 		let entries = Object.entries(value.value);
@@ -1718,16 +1717,16 @@ let envMapFromMapValue = async (
 	);
 	let ret: wrap.Manifest.EnvMap = {};
 	for (let [key, val] of Object.entries(value.value)) {
-		if (val.kind === "mutation") {
-			ret[key] = [await mutationFromManifestMutation(val.value)];
-		} else if (val.kind === "array") {
+		if (val instanceof Array) {
 			ret[key] = await Promise.all(
-				val.value.map(async (inner) => {
+				val.map(async (inner) => {
 					let val = await valueFromManifestValue(inner);
 					tg.assert(tg.Mutation.is(val), "Malformed env, expected a mutation.");
 					return val;
 				}),
 			);
+		} else if (val.kind === "mutation") {
+			ret[key] = [await mutationFromManifestMutation(val.value)];
 		} else {
 			throw new Error(
 				"Malformed env, expected a mutation or array of mutations.",
@@ -1902,6 +1901,11 @@ function* manifestTemplateReferences(
 function* manifestValueReferences(
 	value: wrap.Manifest.Value,
 ): Generator<tg.Artifact> {
+	if (value instanceof Array) {
+		for (let v of value) {
+			yield* manifestValueReferences(v);
+		}
+	}
 	if (value.kind === "directory") {
 		yield tg.Artifact.withId(value.value);
 	} else if (value.kind === "file") {
@@ -1912,10 +1916,6 @@ function* manifestValueReferences(
 		yield* manifestTemplateReferences(value.value);
 	} else if (value.kind === "mutation") {
 		yield* manifestMutationReferences(value.value);
-	} else if (value.kind === "array") {
-		for (let v of value.value) {
-			yield* manifestValueReferences(v);
-		}
 	} else if (value.kind === "map") {
 		for (let v of Object.values(value.value)) {
 			yield* manifestValueReferences(v);

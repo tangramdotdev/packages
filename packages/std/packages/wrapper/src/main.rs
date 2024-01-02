@@ -496,7 +496,7 @@ fn render_value(
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) -> String {
 	match value {
-		tg::value::Data::Null(()) => String::new(),
+		tg::value::Data::Null => String::new(),
 		tg::value::Data::Bool(value) => {
 			if *value {
 				"true".to_owned()

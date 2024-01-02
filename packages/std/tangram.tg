@@ -55,12 +55,15 @@ export let testProxy = tg.target(async () => {
 });
 
 import * as bootstrap from "./bootstrap.tg";
+export let testBootstrap = tg.target(async () => {
+	return await bootstrap.test();
+});
+
 import * as wrap from "./wrap.tg";
 export let testWrap = tg.target(async () => {
 	let shell = await bootstrap.shell();
 	let exe = tg.File.expect(await shell.get("bin/dash"));
-	return await wrap.wrap(exe, { env: { HELLO: tg.Mutation.set(tg`hi`) }});
-
+	return await wrap.wrap(exe, { env: { HELLO: tg.Mutation.set(tg`hi`) } });
 });
 export let testMuslWrapper = tg.target(async () => {
 	return await wrap.testSingleArgObjectNoMutations();
@@ -252,19 +255,31 @@ export let reproDroppedLibs = tg.target(async () => {
 	`);
 
 	// Compile the library.
-	let dylib = tg.Directory.expect(await tg.build(tg`mkdir -p $OUTPUT/lib && cc -xc ${dylibSource} -shared -o $OUTPUT/lib/hello.so`, {
-		env: await env.object(bootstrapSDK),
-	}));
+	let dylib = tg.Directory.expect(
+		await tg.build(
+			tg`mkdir -p $OUTPUT/lib && cc -xc ${dylibSource} -shared -o $OUTPUT/lib/hello.so`,
+			{
+				env: await env.object(bootstrapSDK),
+			},
+		),
+	);
 
 	// Compile the driver.
-	let driver = tg.Directory.expect(await tg.build(tg`mkdir -p $OUTPUT/bin && cc -xc ${driverSource} -o $OUTPUT/bin/driver -lhello`, {
-		env: await env.object(bootstrapSDK, dylib),
-	}));
+	let driver = tg.Directory.expect(
+		await tg.build(
+			tg`mkdir -p $OUTPUT/bin && cc -xc ${driverSource} -o $OUTPUT/bin/driver -lhello`,
+			{
+				env: await env.object(bootstrapSDK, dylib),
+			},
+		),
+	);
 
 	// Run the driver.
-	let output = tg.File.expect(await tg.build(tg`${driver} > $OUTPUT`, {
-		env: await env.object(bootstrapSDK, driver),
-	}));
+	let output = tg.File.expect(
+		await tg.build(tg`${driver} > $OUTPUT`, {
+			env: await env.object(bootstrapSDK, driver),
+		}),
+	);
 	let text = await output.text();
 	tg.assert(text.includes("Hello, world!\n"));
 

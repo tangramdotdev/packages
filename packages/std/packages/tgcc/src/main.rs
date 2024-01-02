@@ -375,7 +375,7 @@ async fn main_inner() -> Result<()> {
 	// Create a build.
 	let id = target.id(tg).await?;
 	let build_id = tg
-		.get_or_create_build_for_target(None, id, 0, tg::build::Retry::Canceled)
+		.get_or_create_build(None, id, 0, tg::build::Retry::Canceled)
 		.await?;
 	tg.add_build_child(None, &environment.runtime.build, &build_id)
 		.await?;
