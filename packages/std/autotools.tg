@@ -170,26 +170,26 @@ export let target = async (...args: tg.Args<Arg>) => {
 		cflags = tg`${cflags} ${extraCFlags}`;
 	}
 
-// 		if (host.environment === "gnu") {
-// 			let cc1Specs = tg.file(`
-// *cc1_options:
-// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+	// 		if (host.environment === "gnu") {
+	// 			let cc1Specs = tg.file(`
+	// *cc1_options:
+	// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
 
-// *cpp_options:
-// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
-// 		`);
-// 			let ldSpecs = tg.file(`
-// *self_spec:
-// + %{!static:%{!shared:%{!r:-pie}}}
-// 		`);
-// 			let extraCxxFlags = await tg.Mutation.templatePrepend(
-// 				`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
-// 				" ",
-// 			);
-// 			pushOrSet(env, "CXXFLAGS", extraCxxFlags);
-// 		}
-			pushOrSet(env, "CFLAGS", await cflags);
-			pushOrSet(env, "CXXFLAGS", await cflags);
+	// *cpp_options:
+	// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+	// 		`);
+	// 			let ldSpecs = tg.file(`
+	// *self_spec:
+	// + %{!static:%{!shared:%{!r:-pie}}}
+	// 		`);
+	// 			let extraCxxFlags = await tg.Mutation.templatePrepend(
+	// 				`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
+	// 				" ",
+	// 			);
+	// 			pushOrSet(env, "CXXFLAGS", extraCxxFlags);
+	// 		}
+	pushOrSet(env, "CFLAGS", await cflags);
+	pushOrSet(env, "CXXFLAGS", await cflags);
 
 	// LDFLAGS
 	if (stripExecutables === true) {
@@ -208,10 +208,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 	}
 
 	// Set up the SDK, add it to the environment.
-	if (sdkArgs !== undefined) {
-		let sdk = await std.sdk({ host, target }, sdkArgs);
-		env = [sdk, env];
-	}
+	let sdk = await std.sdk({ host, target }, sdkArgs);
+	env = [sdk, env];
 
 	// Define default phases.
 	let configureArgs =
@@ -250,7 +248,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	return await std.phases.target(
 		{
 			phases: defaultPhases,
-			env:env,
+			env: env,
 			target: { host: std.Triple.system(host) },
 		},
 		...(phases ?? []),
