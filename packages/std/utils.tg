@@ -63,7 +63,6 @@ export let buildUtil = tg.target(
 		let output = await std.autotools.build(
 			{
 				...arg,
-				env,
 				opt,
 			},
 			autotools,
