@@ -62,9 +62,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 	};
 
 	let {
-		defaultCFlags = true,
+		defaultCFlags = false,
 		doCheck = false,
-		extraCFlags = true,
+		extraCFlags = false,
 		host: host_,
 		target: target_,
 		opt = 2,
@@ -156,45 +156,45 @@ export let target = async (...args: tg.Args<Arg>) => {
 	let env: std.env.Arg = {};
 
 	// // C/C++ flags.
+	let cflags = tg``;
 	if (opt) {
 		let optFlag = await tg.Mutation.templatePrepend(`-O${opt}`, " ");
-		pushOrSet(env, "CFLAGS", optFlag);
-		pushOrSet(env, "CXXFLAGS", optFlag);
+		cflags = tg`${cflags} ${optFlag}`;
 	}
 	if (defaultCFlags) {
 		let defaultCFlags = await tg.Mutation.templatePrepend(
 			`-mtune=generic -pipe`,
 			" ",
 		);
-		pushOrSet(env, "CFLAGS", defaultCFlags);
-		pushOrSet(env, "CXXFLAGS", defaultCFlags);
+		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
 	if (extraCFlags) {
 		let extraCFlags = await tg.Mutation.templatePrepend(
 			`-Wp,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection -flto=auto`,
 			" ",
 		);
-		pushOrSet(env, "CFLAGS", extraCFlags);
-		pushOrSet(env, "CXXFLAGS", extraCFlags);
+		cflags = tg`${cflags} ${extraCFlags}`;
 
-		if (host.environment === "gnu") {
-			let cc1Specs = tg.file(`
-*cc1_options:
-+ %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+// 		if (host.environment === "gnu") {
+// 			let cc1Specs = tg.file(`
+// *cc1_options:
+// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
 
-*cpp_options:
-+ %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
-		`);
-			let ldSpecs = tg.file(`
-*self_spec:
-+ %{!static:%{!shared:%{!r:-pie}}}
-		`);
-			let extraCxxFlags = await tg.Mutation.templatePrepend(
-				`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
-				" ",
-			);
-			pushOrSet(env, "CXXFLAGS", extraCxxFlags);
-		}
+// *cpp_options:
+// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+// 		`);
+// 			let ldSpecs = tg.file(`
+// *self_spec:
+// + %{!static:%{!shared:%{!r:-pie}}}
+// 		`);
+// 			let extraCxxFlags = await tg.Mutation.templatePrepend(
+// 				`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
+// 				" ",
+// 			);
+// 			pushOrSet(env, "CXXFLAGS", extraCxxFlags);
+// 		}
+			pushOrSet(env, "CFLAGS", cflags);
+			pushOrSet(env, "CXXFLAGS", cflags);
 	}
 
 	// LDFLAGS
@@ -256,7 +256,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	return await std.phases.target(
 		{
 			phases: defaultPhases,
-			env: std.env.object(env),
+			env:env,
 			target: { host: std.Triple.system(host) },
 		},
 		...(phases ?? []),

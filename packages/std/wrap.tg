@@ -1458,7 +1458,7 @@ let manifestMutationFromMutation = async (
 		return {
 			kind: "template_prepend",
 			template: await manifestTemplateFromArg(template),
-			separator: mutation.inner.separator,
+			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "template_append") {
 		let template = mutation.inner.template;
@@ -1469,7 +1469,7 @@ let manifestMutationFromMutation = async (
 		return {
 			kind: "template_append",
 			template: await manifestTemplateFromArg(template),
-			separator: mutation.inner.separator,
+			separator: mutation.inner.separator ?? ":",
 		};
 	} else if (mutation.inner.kind === "array_prepend") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));

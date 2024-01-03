@@ -536,9 +536,9 @@ enum InterpreterRequirement {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum LibraryPathOptimizationStrategy {
 	/// Do not optimize library paths.
+	#[default]
 	None,
 	/// Combine library paths into a single directory.
-	#[default]
 	Combine,
 	/// Filter library paths for needed libraries.
 	Filter,
