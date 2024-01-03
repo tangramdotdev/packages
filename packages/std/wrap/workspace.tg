@@ -109,6 +109,7 @@ export let rust = tg.target(
 
 		// Install the packages.
 		let script = tg`
+		env
 		for package in ${packages}/*/* ; do
 			sh $package/install.sh --prefix="$OUTPUT"
 			chmod -R +w "$OUTPUT"

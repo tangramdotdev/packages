@@ -74,6 +74,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 	let env = [
 		{
 			SDKROOT: await bootstrap.macOsSdk(),
+			WATERMARK: "2"
 		},
 		arg.env,
 	];

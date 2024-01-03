@@ -18,7 +18,7 @@ export let env = async (arg?: std.Triple.HostArg): Promise<std.env.Arg> => {
 			SDKROOT: sdkroot,
 		};
 	}
-	return std.env.object(toolchain, utils, { SHELL: shellExe });
+	return std.env.object(toolchain, utils, env);
 };
 
 export default env;

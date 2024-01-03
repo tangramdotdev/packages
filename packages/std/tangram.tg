@@ -58,6 +58,11 @@ import * as bootstrap from "./bootstrap.tg";
 export let testBootstrap = tg.target(async () => {
 	return await bootstrap.test();
 });
+export let testPlainBootstrapSdk = tg.target(async () => {
+	let bootstrapSdk = await bootstrap.sdk.env();
+	console.log("env", bootstrapSdk);
+	return bootstrapSdk;
+});
 
 import * as wrap from "./wrap.tg";
 export let testWrap = tg.target(async () => {
