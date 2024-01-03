@@ -525,11 +525,11 @@ export namespace wrap {
 		return result;
 	};
 
-	/** Merge mutations if possible. By default, it will not merge template or array mutations where one is a prepend and the other is an append. Set `combinePrependAndAppend` to `true` to merge these cases as well. */
+	/** Merge mutations if possible. By default, it will not merge template or array mutations where one is a prepend and the other is an append. Set `aggressive` to `true` to merge these cases as well. */
 	export let mergeMutations = async (
 		a: tg.Mutation,
 		b: tg.Mutation,
-		combinePrependAndAppend: boolean = false,
+		aggressive: boolean = true,
 	): Promise<Array<tg.Mutation>> => {
 		if (a.inner.kind === "unset" && b.inner.kind === "unset") {
 			return [b];
@@ -634,11 +634,11 @@ export namespace wrap {
 			a.inner.kind === "template_prepend" &&
 			b.inner.kind === "template_prepend"
 		) {
-			if (a.inner.separator === b.inner.separator) {
+			if (a.inner.separator === b.inner.separator || aggressive) {
 				return [
 					await tg.Mutation.templatePrepend(
 						tg.Template.join(
-							a.inner.separator,
+							a.inner.separator ?? b.inner.separator,
 							b.inner.template,
 							a.inner.template,
 						),
@@ -651,11 +651,11 @@ export namespace wrap {
 			a.inner.kind === "template_prepend" &&
 			b.inner.kind === "template_append"
 		) {
-			if (combinePrependAndAppend) {
+			if (aggressive) {
 				return [
 					await tg.Mutation.templatePrepend(
 						tg.Template.join(
-							a.inner.separator,
+							a.inner.separator ?? b.inner.separator,
 							b.inner.template,
 							a.inner.template,
 						),
@@ -688,11 +688,11 @@ export namespace wrap {
 			a.inner.kind === "template_append" &&
 			b.inner.kind === "template_prepend"
 		) {
-			if (combinePrependAndAppend) {
+			if (aggressive) {
 				return [
 					await tg.Mutation.templateAppend(
 						tg.Template.join(
-							b.inner.separator,
+							b.inner.separator ?? a.inner.separator,
 							b.inner.template,
 							a.inner.template,
 						),
@@ -706,11 +706,11 @@ export namespace wrap {
 			a.inner.kind === "template_append" &&
 			b.inner.kind === "template_append"
 		) {
-			if (a.inner.separator === b.inner.separator) {
+			if (a.inner.separator === b.inner.separator || aggressive) {
 				return [
 					await tg.Mutation.templateAppend(
 						tg.Template.join(
-							a.inner.separator,
+							a.inner.separator ?? b.inner.separator,
 							a.inner.template,
 							b.inner.template,
 						),
@@ -751,7 +751,7 @@ export namespace wrap {
 			a.inner.kind === "array_append" &&
 			b.inner.kind === "array_prepend"
 		) {
-			if (combinePrependAndAppend) {
+			if (aggressive) {
 				return [
 					await tg.Mutation.arrayAppend<tg.Value>(
 						b.inner.values.concat(a.inner.values),
@@ -783,7 +783,7 @@ export namespace wrap {
 			a.inner.kind === "array_prepend" &&
 			b.inner.kind === "array_append"
 		) {
-			if (combinePrependAndAppend) {
+			if (aggressive) {
 				return [
 					await tg.Mutation.arrayPrepend<tg.Value>(
 						a.inner.values.concat(b.inner.values),
@@ -1456,7 +1456,7 @@ let manifestMutationFromMutation = async (
 		return {
 			kind: "template_prepend",
 			template: await manifestTemplateFromArg(template),
-			separator: mutation.inner.separator ?? ":",
+			separator: mutation.inner.separator,
 		};
 	} else if (mutation.inner.kind === "template_append") {
 		let template = mutation.inner.template;
@@ -1467,7 +1467,7 @@ let manifestMutationFromMutation = async (
 		return {
 			kind: "template_append",
 			template: await manifestTemplateFromArg(template),
-			separator: mutation.inner.separator ?? ":",
+			separator: mutation.inner.separator,
 		};
 	} else if (mutation.inner.kind === "array_prepend") {
 		tg.assert(mutation.inner.values.every(valueIsTemplateLike));

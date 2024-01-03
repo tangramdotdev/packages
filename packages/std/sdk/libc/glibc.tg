@@ -109,7 +109,7 @@ export default tg.target(async (arg: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			env,
-			opt: "3",
+			opt: "2",
 			phases,
 			prefixPath: "/",
 			source: source_ ?? source(version),

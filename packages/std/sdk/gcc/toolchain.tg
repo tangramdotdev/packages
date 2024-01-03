@@ -100,7 +100,7 @@ type BuildSysrootArg = std.sdk.BuildEnvArg & {
 	target: std.Triple.Arg;
 };
 
-let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
+export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	let {
 		build: build_,
 		crossBinutils,

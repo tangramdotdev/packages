@@ -277,13 +277,15 @@ export let build = async (arg: BuildArg) => {
 		],
 	};
 
+	let buildType = "release";
+
 	let install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			mv $TARGET/$RUST_TARGET/release/tangram_env $OUTPUT/bin/env
-			mv $TARGET/$RUST_TARGET/release/tangram_cc $OUTPUT/bin/tgcc
-			mv $TARGET/$RUST_TARGET/release/tangram_linker $OUTPUT/bin/tgld
-			mv $TARGET/$RUST_TARGET/release/tangram_wrapper $OUTPUT/bin/wrapper
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_env $OUTPUT/bin/env
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_cc $OUTPUT/bin/tgcc
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_linker $OUTPUT/bin/tgld
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
 		`,
 	};
 
