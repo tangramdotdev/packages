@@ -6,13 +6,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.6.8",
+	version: "6.6.9",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:5036c434e11e4b36d8da3f489851f7f829cf785fa7f7887468537a9ea4572416";
+		"sha256:8ebc65af0cfc891ba63dce0546583da728434db0f5f6a54d979f25ec47f548b3";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${name}-${version}${unpackFormat}`;
 	let source = tg.Directory.expect(
@@ -74,7 +74,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 
 	let prepare = tg`cp -r ${sourceDir}/* . && chmod -R +w . && make mrproper`;
 	let build = {
-		body: `make ARCH=${karch} HOSTCC="\$CC" headers`,
+		body: `make -j"\$(nproc)" ARCH=${karch} HOSTCC="\$CC" headers`,
 		post: "find usr/include -type f ! -name '*.h' -delete",
 	};
 	let install = {

@@ -468,6 +468,8 @@ export namespace wrap {
 			);
 			return manifestMutationFromMutation(await tg.Mutation.set(ret));
 		} else {
+			console.log(".");
+			console.log("arg", arg);
 			return tg.unreachable();
 		}
 	};
@@ -529,7 +531,7 @@ export namespace wrap {
 	export let mergeMutations = async (
 		a: tg.Mutation,
 		b: tg.Mutation,
-		aggressive: boolean = true,
+		aggressive: boolean = false,
 	): Promise<Array<tg.Mutation>> => {
 		if (a.inner.kind === "unset" && b.inner.kind === "unset") {
 			return [b];

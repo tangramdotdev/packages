@@ -178,14 +178,14 @@ export let target = async (...args: tg.Args<Arg>) => {
 		pushOrSet(env, "CXXFLAGS", extraCFlags);
 
 		if (host.environment === "gnu") {
-		let cc1Specs = tg.file(`
+			let cc1Specs = tg.file(`
 *cc1_options:
 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
 
 *cpp_options:
 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
 		`);
-		let ldSpecs = tg.file(`
+			let ldSpecs = tg.file(`
 *self_spec:
 + %{!static:%{!shared:%{!r:-pie}}}
 		`);
@@ -207,7 +207,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	}
 	if (extraCFlags) {
 		let extraLdFlags = await tg.Mutation.templatePrepend(
-			tg`-Wl,-z,relro -Wl,-as-needed -Wl,-z,defs`,
+			tg`-Wl,-z,relro -Wl,-as-needed`,
 			" ",
 		);
 		pushOrSet(env, "LDFLAGS", extraLdFlags);
@@ -256,7 +256,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	return await std.phases.target(
 		{
 			phases: defaultPhases,
-			env,
+			env: std.env.object(env),
 			target: { host: std.Triple.system(host) },
 		},
 		...(phases ?? []),

@@ -51,13 +51,13 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ? std.triple(build_) : host;
 	let os = host.os;
 
-	let dependencies = [bootstrap.make.build(arg)];
+	let dependencies = [bootstrap.make.build({ ...rest, host })];
 	let attrArtifact;
 	if (os === "linux") {
-		attrArtifact = attr(arg);
+		attrArtifact = attr({ ...rest, build, host });
 		dependencies.push(attrArtifact);
 	} else if (os === "darwin") {
-		dependencies.push(libiconv(arg));
+		dependencies.push(libiconv({ ...rest, build, host }));
 	}
 	let env = [...dependencies, env_];
 	if (os === "linux") {

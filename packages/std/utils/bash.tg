@@ -80,4 +80,5 @@ export let test = tg.target(async () => {
 		binaries: ["bash"],
 		metadata,
 	});
+	return true;
 });
