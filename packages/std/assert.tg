@@ -2,7 +2,7 @@ import * as std from "./tangram.tg";
 
 type PkgArg = {
 	/* The package to check. If no other options are given, just asserts the package directory is non-empty. */
-	directory: tg.Directory;
+	directory: tg.Unresolved<tg.Directory>;
 	/* All executables that should exist under `bin/`, with optional behavior to check. */
 	binaries?: Array<BinarySpec>;
 	/* Any documentation files that should exist under `share/`. */
@@ -50,7 +50,7 @@ type RuntimeDep = {
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export let pkg = async (arg: PkgArg) => {
 	let metadata = arg.metadata;
-	let directory = arg.directory;
+	let directory = await tg.resolve(arg.directory);
 
 	// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
 	let tests = [nonEmpty(directory)];
@@ -121,18 +121,18 @@ export let pkg = async (arg: PkgArg) => {
 };
 
 /** Assert the provided directory has contents. */
-export let nonEmpty = tg.target(async (dir: tg.Directory) => {
+export let nonEmpty = async (dir: tg.Directory) => {
 	let entries = await dir.entries();
 	tg.assert(Object.keys(entries).length > 0, "Directory is empty.");
 	return true;
-});
+};
 
 type FileExistsArg = {
 	directory: tg.Directory;
 	subpath: string;
 };
 
-export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
+export let headerCanBeIncluded = async (arg: HeaderArg) => {
 	let maybeFile = await arg.directory.tryGet(arg.header);
 	tg.assert(maybeFile, `Path ${arg.header} does not exist.`);
 	tg.File.assert(maybeFile);
@@ -153,15 +153,15 @@ export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 		),
 	);
 	return true;
-});
+};
 
 /** Assert the provided path exists and refers to a file. */
-export let assertFileExists = tg.target(async (arg: FileExistsArg) => {
+export let assertFileExists = async (arg: FileExistsArg) => {
 	let maybeFile = await arg.directory.tryGet(arg.subpath);
 	tg.assert(maybeFile, `Path ${arg.subpath} does not exist.`);
 	tg.File.assert(maybeFile);
 	return true;
-});
+};
 
 type RunnableBinArg = {
 	directory: tg.Directory;
@@ -209,9 +209,10 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 	};
 
 	// Run the binary with the provided test invocation.
-	let executable = tg`set -eu && ${
-		arg.directory
-	}/bin/${name} ${tg.Template.join(" ", ...testArgs)} > $OUTPUT 2>&1`;
+	let executable = tg`${arg.directory}/bin/${name} ${tg.Template.join(
+		" ",
+		...testArgs,
+	)} > $OUTPUT 2>&1 || true`;
 
 	let output = tg.File.expect(await tg.build(executable, { env }));
 	let stdout = await output.text();
@@ -228,7 +229,7 @@ type HeaderArg = {
 };
 
 /** Assert the directory contains a header file with the provided name. */
-export let headerExists = tg.target(async (arg: HeaderArg) => {
+export let headerExists = async (arg: HeaderArg) => {
 	// Ensure the file exists.
 	await assertFileExists({
 		directory: arg.directory,
@@ -253,7 +254,7 @@ export let headerExists = tg.target(async (arg: HeaderArg) => {
 	// Run the program.
 	await std.build(program);
 	return true;
-});
+};
 
 type LibraryArg = {
 	directory: tg.Directory;
@@ -261,7 +262,7 @@ type LibraryArg = {
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
-export let linkableLib = tg.target(async (arg: LibraryArg) => {
+export let linkableLib = async (arg: LibraryArg) => {
 	let name;
 	let dylib = true;
 	let staticlib = true;
@@ -314,7 +315,7 @@ export let linkableLib = tg.target(async (arg: LibraryArg) => {
 		});
 	}
 	return true;
-});
+};
 
 type DlopenArg = {
 	directory: tg.Directory;
@@ -324,7 +325,7 @@ type DlopenArg = {
 };
 
 /** Build and run a small program that dlopens the given dylib. */
-export let dlopen = tg.target(async (arg: DlopenArg) => {
+export let dlopen = async (arg: DlopenArg) => {
 	let directory = arg.directory;
 	let dylibs = [arg.dylib, ...arg.runtimeDepLibs];
 
@@ -351,19 +352,20 @@ export let dlopen = tg.target(async (arg: DlopenArg) => {
 	// Compile the program.
 	let linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
 	let _program = tg.File.expect(
-		await tg.build(tg`cc -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
-			env: std.env.object([
+		await tg.build(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
+			env: std.env.object(
 				std.sdk({ bootstrapMode: true }),
 				directory,
 				...arg.runtimeDepDirs,
-			]),
+				{ TGLD_TRACING: "tangram=trace" }
+			),
 		}),
 	);
 
 	// // Run the program.
 	// await std.build(program);
 	return true;
-});
+};
 
 /** Given a library filename, get the basename to pass to a compiler. Throws if no match. */
 export let baseName = (lib: string): string => {

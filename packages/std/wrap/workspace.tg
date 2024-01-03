@@ -1,161 +1,326 @@
 import * as bootstrap from "../bootstrap.tg";
 import * as std from "../tangram.tg";
 
-type Arg = {
-	bootstrapMode?: boolean;
-	host?: std.Triple.Arg;
-	target?: std.Triple.Arg;
+type Arg = std.sdk.BuildEnvArg & {
+	release?: boolean;
 };
 
 /** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
 export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
-	let host = await std.Triple.host(arg);
-	let target = arg?.target ? std.triple(arg.target) : host;
+	let { build: build_, host: host_, release = true, sdk: sdkArg } = arg ?? {};
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let buildTriple = build_ ? std.triple(build_) : host;
 
 	// Get the source.
 	let source = await tg.directory({
-		"packages/packages/std/Cargo.toml": tg.include("../Cargo.toml"),
-		"packages/packages/std/Cargo.lock": tg.include("../Cargo.lock"),
-		"packages/packages/std/packages/env": tg.include("../packages/env"),
-		"packages/packages/std/packages/tgcc": tg.include("../packages/tgcc"),
-		"packages/packages/std/packages/tgld": tg.include("../packages/tgld"),
-		"packages/packages/std/packages/wrapper": tg.include("../packages/wrapper"),
+		"Cargo.toml": tg.include("../Cargo.toml"),
+		"Cargo.lock": tg.include("../Cargo.lock"),
+		"packages/env": tg.include("../packages/env"),
+		"packages/tgcc": tg.include("../packages/tgcc"),
+		"packages/tgld": tg.include("../packages/tgld"),
+		"packages/wrapper": tg.include("../packages/wrapper"),
 	});
 
-	let isCrossCompiling = !std.Triple.eq(host, target);
-
-	let result;
-	if (isCrossCompiling) {
-		return tg.unimplemented();
-	} else {
-		result = bootstrap.rust.build({ source, host });
-	}
-	return result;
+	return build({
+		release,
+		source,
+		...(await std.Triple.rotate({ build: buildTriple, host })),
+		sdkArg,
+	});
 });
 
-// type CrossWorkspaceArg = {
-// 	source: tg.Directory;
-// 	host: std.Triple.Arg;
-// 	target: std.Triple.Arg;
-// };
+export let env = async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/env"));
 
-// export let crossWorkspace = async (arg: CrossWorkspaceArg) => {
-// 	let source = arg.source;
-// 	let host = std.triple(arg.host);
-// 	let system = std.Triple.system(host);
-// 	let os = tg.System.os(system);
-// 	if (os !== "linux") {
-// 		return tg.unimplemented("Cross-compilation is only supported on Linux.");
-// 	}
+export let tgcc = async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/tgcc"));
 
-// 	host.environment = "musl";
-// 	host.vendor = undefined;
+export let tgld = async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/tgld"));
 
-// 	let target = std.triple(arg.target);
-// 	if (std.Triple.eq(host, target)) {
-// 		return tg.unreachable(
-// 			"Entered cross-compilation code, but host and target are the same.",
-// 		);
-// 	}
+export let wrapper = async (arg?: Arg) =>
+	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
-// 	// Get the toolchains.  We use musl for the host.
-// 	let nativeToolchain = bootstrap.toolchain({ host });
-// 	let crossToolchain = toolchain({ host, target });
+let version = "1.75.0";
 
-// 	// Get the Rust toolchain.
-// 	let rustToolchain = rust({ target });
+type ToolchainArg = {
+	target?: std.Triple.Arg;
+};
 
-// 	// Create the wrappers.
-// 	let certFile = tg`${caCertificates()}/cacert.pem`;
-// 	let additionalEnv: Record<string, tg.Template.Arg> = {};
-// 	let ldso = tg`lib/${interpreterName(host)}`;
-// 	let interpreter = tg`${nativeToolchain}/${ldso} --library-path ${nativeToolchain}/lib`;
-// 	let rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
-// 	let cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
+export let rust = tg.target(
+	async (arg?: ToolchainArg): Promise<tg.Directory> => {
+		let host = await std.Triple.host();
+		let target = std.triple(arg?.target ?? host);
+		let hostSystem = std.Triple.system(host);
+		let os = tg.System.os(hostSystem);
 
-// 	// Create the script.
-// 	let script = tg`
-// 		echo "#!/bin/sh -eu" > rustc.sh
-// 		echo '${rustc} $@' >> rustc.sh
-// 		chmod +x rustc.sh
-// 		TARGET=$PWD/target
-// 		mkdir -p "$TARGET"
+		// Download and parse the Rust manifest for the selected version.
+		let manifestFile = await tg.file(
+			await tg.download(
+				`https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
+				"unsafe",
+			),
+		);
+		tg.assert(tg.File.is(manifestFile));
+		let manifest = tg.encoding.toml.decode(
+			await manifestFile.text(),
+		) as RustupManifest;
 
-// 		export RUSTC=$(realpath ./rustc.sh)
-// 		env
-// 		${cargo} build \
-// 			--manifest-path ${source}/packages/packages/std/Cargo.toml \
-// 			--target-dir $TARGET \
-// 			--target $RUST_TARGET \
-// 			--release \
-// 			--all \
-// 			--locked
+		// On Linux, ensure we use a musl target for the host.
+		if (os === "linux") {
+			host.environment = "musl";
+			host.vendor = "unknown";
+			target.environment = "musl";
+			target.vendor = "unknown";
+		}
 
-// 		mkdir -p $OUTPUT/bin
-// 		mv $TARGET/$RUST_TARGET/release/tangram_env $OUTPUT/bin/env
-// 		mv $TARGET/$RUST_TARGET/release/tangram_linker $OUTPUT/bin/tgld
-// 		mv $TARGET/$RUST_TARGET/release/tangram_wrapper $OUTPUT/bin/wrapper
-// 	`;
+		// Install the full minimal profile for the host.
+		let hostTripleString = std.Triple.toString(host);
+		let packages = tg.directory();
+		for (let name of manifest.profiles["minimal"] ?? []) {
+			let pkg = manifest.pkg[name]?.target[hostTripleString];
+			if (pkg?.available) {
+				let artifact = std.download({
+					checksum: `sha256:${pkg.xz_hash}`,
+					unpackFormat: ".tar.xz" as const,
+					url: pkg.xz_url,
+				});
+				packages = tg.directory(packages, {
+					[name]: artifact,
+				});
+			}
+		}
 
-// 	let targetString = std.Triple.toString(target);
+		// If there is a target specified different from the host, install just the rust-std package for that target.
+		if (!std.Triple.eq(host, target)) {
+			let name = "rust-std";
+			let pkg = manifest.pkg[name]?.target[std.Triple.toString(target)];
+			if (pkg?.available) {
+				let artifact = std.download({
+					checksum: `sha256:${pkg.xz_hash}`,
+					unpackFormat: ".tar.xz" as const,
+					url: pkg.xz_url,
+				});
+				packages = tg.directory(packages, {
+					[name]: artifact,
+				});
+			}
+		}
 
-// 	let shellArtifact = bootstrap.shell({ host });
+		// Install the packages.
+		let script = tg`
+		env
+		for package in ${packages}/*/* ; do
+			sh $package/install.sh --prefix="$OUTPUT"
+			chmod -R +w "$OUTPUT"
+		done
+	`;
 
-// 	let output = await tg.run({
-// 		executable: tg`${shellArtifact}/bin/sh`,
-// 		args: ["-eu", "-c", script],
-// 		system,
-// 		unsafe: true,
-// 		network: true,
-// 		env: {
-// 			SSL_CERT_FILE: certFile,
-// 			CARGO_HTTP_CAINFO: certFile,
-// 			PATH: tg`${nativeToolchain}/bin:${crossToolchain}/bin:${shellArtifact}/bin:${bootstrap.utils(
-// 				{
-// 					host: system,
-// 				},
-// 			)}/bin`,
-// 			RUST_TARGET: std.Triple.toString(target),
-// 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-// 			RUSTC: tg`${rustToolchain}/bin/rustc`,
-// 			RUSTFLAGS: tg`--sysroot ${rustToolchain} -C target-feature=+crt-static`,
-// 			[`CARGO_TARGET_${tripleToEnvVar(
-// 				target,
-// 				true,
-// 			)}_LINKER`]: tg`${crossToolchain}/bin/${targetString}-gcc`,
-// 			[`AR_${tripleToEnvVar(
-// 				target,
-// 			)}`]: tg`${crossToolchain}/bin/${targetString}-ar`,
-// 			[`CC_${tripleToEnvVar(
-// 				target,
-// 			)}`]: tg`${crossToolchain}/bin/${targetString}-gcc`,
-// 			[`CXX_${tripleToEnvVar(
-// 				target,
-// 			)}`]: tg`${crossToolchain}/bin/${targetString}-g++`,
-// 			...additionalEnv,
-// 		},
-// 	});
-// 	tg.assert(tg.Directory.is(output));
+		let env = bootstrap.sdk.env(host);
 
-// 	return output;
-// };
-
-export let env = tg.target(async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/env")),
+		return tg.Directory.expect(
+			await std.phases.build({
+				host: hostSystem,
+				phases: { build: script },
+				env,
+			}),
+		);
+	},
 );
 
-export let tgcc = tg.target(async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/tgcc")),
-);
+type RustupManifest = {
+	"manifest-version": "2";
+	artifacts: {
+		[artifact: string]: {
+			target: {
+				[target: string]: Array<{
+					"hash-sha256": string;
+					url: string;
+				}>;
+			};
+		};
+	};
+	date: string;
+	pkg: {
+		[pkg: string]: {
+			git_commit_hash: string;
+			target: {
+				[target: string]:
+					| undefined
+					| { available: false }
+					| {
+							available: true;
+							hash: string;
+							url: string;
+							xz_hash: string;
+							xz_url: string;
+					  };
+			};
+			version: string;
+		};
+	};
+	profiles: {
+		[profile: string]: Array<string>;
+	};
+	renames: {
+		[alias: string]: {
+			to: string;
+		};
+	};
+};
 
+type BuildArg = {
+	release?: boolean;
+	source: tg.Directory;
+	host: std.Triple.Arg;
+	target?: std.Triple.Arg;
+	sdkArg?: tg.MaybeNestedArray<std.sdk.Arg>;
+};
 
-export let tgld = tg.target(async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/tgld")),
-);
+export let build = async (arg: BuildArg) => {
+	let release = arg.release ?? true;
+	let source = arg.source;
+	let host = std.triple(arg.host);
+	let target = arg.target ? std.triple(arg.target) : host;
+	let system = std.Triple.system(host);
+	let os = tg.System.os(system);
 
-export let wrapper = tg.target(async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/wrapper")),
-);
+	let sdkArg: std.sdk.Arg = { host, target};
+	if (host.arch === target.arch) {
+		sdkArg = { ...sdkArg, bootstrapMode: true };
+	}
+
+	// On Linux, ensure we use a musl target.
+	if (os === "linux") {
+		host.environment = "musl";
+		host.vendor = "unknown";
+		target.environment = "musl";
+		target.vendor = "unknown";
+	}
+
+	let isCross = !std.Triple.eq(host, target);
+
+	// Get the SDK, without proxying enabled.
+	let sdk = await std.sdk(sdkArg, arg.sdkArg, { proxy: false });
+	let { directory: toolchain } = await std.sdk.toolchainComponents({
+		env: sdk,
+	});
+
+	// Get the Rust toolchain.
+	let rustToolchain = await rust({ target });
+
+	// Set up common environemnt.
+	let certFile = tg`${std.caCertificates()}/cacert.pem`;
+	let prefix = ``;
+	if (isCross) {
+		prefix = `${std.Triple.toString(target)}-`;
+	}
+	let env: tg.Unresolved<Array<std.env.Arg>> = [
+		sdk,
+		rustToolchain,
+		{
+			SSL_CERT_FILE: certFile,
+			CARGO_HTTP_CAINFO: certFile,
+			RUST_TARGET: std.Triple.toString(target),
+			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+			RUSTFLAGS: `-C target-feature=+crt-static`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}gcc`,
+			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
+			[`CC_${tripleToEnvVar(target)}`]: `${prefix}gcc`,
+			[`CXX_${tripleToEnvVar(target)}`]: `${prefix}g++`,
+		},
+	];
+
+	// Set up platform-specific environment.
+	let interpreter = tg``;
+	let rustc = tg``;
+	let cargo = tg``;
+	if (os === "linux") {
+		let ldso = tg`lib/${bootstrap.interpreterName(host)}`;
+		interpreter = tg`${toolchain}/${ldso} --library-path ${toolchain}/lib`;
+		rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
+		cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
+	} else if (os === "darwin") {
+		rustc = tg`${rustToolchain}/bin/rustc`;
+		cargo = tg`${rustToolchain}/bin/cargo`;
+
+		let macOsSdk = bootstrap.macOsSdk();
+
+		// https://github.com/rust-lang/cc-rs/issues/810
+		let sdkroot = tg.directory({
+			"MacOSX.sdk": macOsSdk,
+		});
+
+		env.push({
+			SDKROOT: tg`${sdkroot}/MacOSX.sdk`,
+		});
+	}
+
+	// Define phases.
+	let prepare = tg`
+		export CARGO_HOME=$PWD/cargo_home
+		mkdir -p $CARGO_HOME
+
+		export TARGET=$PWD/target
+		mkdir -p "$TARGET"
+
+		echo "#!/usr/bin/env sh" > rustc.sh
+		echo 'set -eu' >> rustc.sh
+		echo '${rustc} $@' >> rustc.sh
+		chmod +x rustc.sh
+		export RUSTC=$PWD/rustc.sh
+		`;
+
+	let args = [
+			tg`--manifest-path ${source}/Cargo.toml`,
+			`--target-dir $TARGET`,
+			`--target $RUST_TARGET`,
+			`--all`,
+			`--locked`,
+		];
+		if (release) {
+			args.push(`--release`);
+		}
+
+	let build = {
+		command: tg`${cargo} build`,
+		args
+	};
+
+	let buildType = "release";
+
+	let install = {
+		pre: `mkdir -p $OUTPUT/bin`,
+		body: `
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_env $OUTPUT/bin/env
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_cc $OUTPUT/bin/tgcc
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_linker $OUTPUT/bin/tgld
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
+		`,
+	};
+
+	// Build and return.
+	return tg.Directory.expect(
+		await std.phases.build({
+			env,
+			phases: { prepare, build, install },
+			target: {
+				host: system,
+				checksum: "unsafe",
+			},
+		}),
+	);
+};
+
+let tripleToEnvVar = (triple: std.Triple, upcase?: boolean) => {
+	let tripleString = std.Triple.toString(triple);
+	let allCaps = upcase ?? false;
+	let result = tripleString.replace(/-/g, "_");
+	if (allCaps) {
+		result = result.toUpperCase();
+	}
+	return result;
+};
 
 export let test = tg.target(async () => {
 	// Detect the host triple.
@@ -167,7 +332,8 @@ export let test = tg.target(async () => {
 		hostArch === "x86_64" ? "aarch64" : "x86_64";
 
 	let nativeWorkspace = await workspace({
-		host: std.Triple.system(host),
+		host,
+		sdk: { bootstrapMode: true },
 	});
 
 	// Assert the native workspace was built for the host.
@@ -184,6 +350,7 @@ export let test = tg.target(async () => {
 	} else {
 		return tg.unreachable();
 	}
+	return nativeWorkspace;
 });
 
 export let testCross = tg.target(async () => {
@@ -201,10 +368,7 @@ export let testCross = tg.target(async () => {
 		environment: "gnu",
 	});
 
-	let crossWorkspace = await workspace({
-		host: std.Triple.system(host),
-		target: target,
-	});
+	let crossWorkspace = await workspace({ build: host, host: target, release: false });
 
 	// Assert the cross workspace was built for the target.
 	let crossWrapper = await crossWorkspace.get("bin/wrapper");

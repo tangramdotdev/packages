@@ -1,4 +1,0 @@
-/** This module contains "run" and "build" helpers for use while bootstrapping the `std.wrap()` function, during which we cannot use `std.run()`. */
-
-export { default as kernelHeaders } from "./prerequisites/kernel_headers.tg";
-export { default as musl } from "./prerequisites/musl.tg";

@@ -57,10 +57,14 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ? std.triple(build_) : host;
 	let os = build.os;
 
-	let additionalEnv = {};
+	let additionalEnv: std.env.Arg = {
+		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "none",
+		LDFLAGS: await tg.Mutation.templatePrepend("-lgcov --coverage", " "),
+	};
 	if (os === "darwin") {
 		additionalEnv = {
-			MACOSX_DEPLOYMENT_TARGET: "14.0",
+			...additionalEnv,
+			MACOSX_DEPLOYMENT_TARGET: "14.2",
 		};
 	}
 
@@ -81,7 +85,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			env,
-			phases: { phases: { configure } },
+			phases: { configure },
 			source: source_ ?? source(os),
 		},
 		autotools,
@@ -94,7 +98,7 @@ export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["python3"],
 		metadata,
 	});

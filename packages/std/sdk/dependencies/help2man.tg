@@ -57,6 +57,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let wrappedScript = std.wrap(tg.symlink({ artifact, path: "bin/help2man" }), {
 		interpreter: interpreter,
+		sdk: arg?.sdk,
 	});
 
 	return tg.directory({
@@ -68,7 +69,7 @@ export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["help2man"],
 		metadata,
 	});

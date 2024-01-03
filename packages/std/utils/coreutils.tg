@@ -41,25 +41,40 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
 		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.Triple.host(host_);
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let build = build_ ? std.triple(build_) : host;
 	let os = host.os;
 
-	let dependencies = [bootstrap.make.build(arg)];
+	let dependencies = [bootstrap.make.build({ ...rest, host })];
+	let attrArtifact;
 	if (os === "linux") {
-		dependencies.push(attr(arg));
+		attrArtifact = attr({ ...rest, build, host });
+		dependencies.push(attrArtifact);
 	} else if (os === "darwin") {
-		dependencies.push(libiconv(arg));
+		dependencies.push(libiconv({ ...rest, build, host }));
 	}
 	let env = [...dependencies, env_];
+	if (os === "linux") {
+		env.push({
+			CFLAGS: await tg.Mutation.templatePrepend("-static", " "),
+		});
+	}
 
 	let configure = {
-		args: ["--disable-dependency-tracking", "--disable-rpath"],
+		args: [
+			`--build=${std.Triple.toString(build)}`,
+			`--host=${std.Triple.toString(host)}`,
+			"--disable-dependency-tracking",
+			"--disable-libcap",
+			"--disable-nls",
+			"--disable-rpath",
+		],
 	};
 
 	let output = buildUtil(
@@ -174,5 +189,5 @@ export let test = tg.target(async () => {
 	console.log("actual", contents);
 	console.log("expected", expected);
 	tg.assert(contents === expected);
-	return true;
+	return coreutils;
 });

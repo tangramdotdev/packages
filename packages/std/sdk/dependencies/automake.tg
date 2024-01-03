@@ -98,6 +98,7 @@ export let build = tg.target(async (arg?: Arg) => {
 				),
 				AUTOMAKE_UNINSTALLED: "true",
 			},
+			sdk: arg?.sdk,
 		});
 
 		binDirectory = tg.directory(binDirectory, {
@@ -119,7 +120,7 @@ export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["autmake"],
 		metadata,
 	});

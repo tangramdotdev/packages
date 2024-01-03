@@ -95,7 +95,7 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let env = [
-		dependencies.env({ ...rest, host }),
+		dependencies.env({ host: build, sdk: rest.sdk }),
 		{
 			CPATH: tg.Mutation.unset(),
 			LIBRARY_PATH: tg.Mutation.unset(),
@@ -109,7 +109,7 @@ export default tg.target(async (arg: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			env,
-			opt: "3",
+			opt: "2",
 			phases,
 			prefixPath: "/",
 			source: source_ ?? source(version),

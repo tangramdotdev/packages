@@ -79,6 +79,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			MAGIC: tg.Mutation.setIfUnset(tg`${magic}/magic.mgc`),
 		},
 		libraryPaths: [tg.Directory.expect(await output.get("lib"))],
+		sdk: arg?.sdk,
 	});
 	return tg.directory(output, {
 		"bin/file": wrappedFile,
@@ -90,7 +91,7 @@ export default build;
 export let test = tg.target(async () => {
 	// TODO - test magic file wrapping.
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["file"],
 		metadata,
 	});

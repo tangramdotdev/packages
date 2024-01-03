@@ -496,7 +496,7 @@ fn render_value(
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) -> String {
 	match value {
-		tg::value::Data::Null(()) => String::new(),
+		tg::value::Data::Null => String::new(),
 		tg::value::Data::Bool(value) => {
 			if *value {
 				"true".to_owned()
@@ -521,15 +521,15 @@ fn render_value(
 fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Data {
 	match value {
 		tg::value::Data::Directory(id) => tg::symlink::Data {
-			artifact: Some(id.clone().try_into().unwrap()),
+			artifact: Some(id.clone().into()),
 			path: None,
 		},
 		tg::value::Data::File(id) => tg::symlink::Data {
-			artifact: Some(id.clone().try_into().unwrap()),
+			artifact: Some(id.clone().into()),
 			path: None,
 		},
 		tg::value::Data::Symlink(id) => tg::symlink::Data {
-			artifact: Some(id.clone().try_into().unwrap()),
+			artifact: Some(id.clone().into()),
 			path: None,
 		},
 		_ => {
@@ -553,18 +553,19 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
 
 fn setup_tracing() {
 	// Create the env layer.
-	let tracing_env_filter = std::env::var("TANGRAM_WRAPPER_TRACING").ok();
-	let env_layer = tracing_env_filter
-		.map(|env_filter| tracing_subscriber::filter::EnvFilter::try_new(env_filter).unwrap());
+	let targets_layer = std::env::var("TANGRAM_WRAPPER_TRACING")
+		.ok()
+		.and_then(|filter| filter.parse::<tracing_subscriber::filter::Targets>().ok());
 
 	// If tracing is enabled, create and initialize the subscriber.
-	if let Some(env_layer) = env_layer {
+	if let Some(targets_layer) = targets_layer {
 		let format_layer = tracing_subscriber::fmt::layer()
 			.compact()
+			.with_ansi(false)
 			.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW)
 			.with_writer(std::io::stderr);
 		let subscriber = tracing_subscriber::registry()
-			.with(env_layer)
+			.with(targets_layer)
 			.with(format_layer);
 		subscriber.init();
 	}

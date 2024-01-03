@@ -77,7 +77,9 @@ impl Environment {
 		for (key, value) in std::env::vars() {
 			match key.as_str() {
 				"TANGRAM_CC_ENABLE" => {
-					enable = value.parse().wrap_err("Failed to parse TANGRAM_CC_ENABLE.")?;
+					enable = value
+						.parse()
+						.wrap_err("Failed to parse TANGRAM_CC_ENABLE.")?;
 				},
 				"TANGRAM_RUNTIME" => {
 					runtime = Some(
@@ -94,7 +96,12 @@ impl Environment {
 		}
 		let runtime = runtime.wrap_err("Missing TANGRAM_RUNTIME.")?;
 		let cc = which_cc()?;
-		Ok(Self { enable, runtime, cc, env })
+		Ok(Self {
+			enable,
+			runtime,
+			cc,
+			env,
+		})
 	}
 }
 
@@ -254,7 +261,7 @@ impl Args {
 					}
 				},
 				// Anything starting with a '-' is an option. Check if we need to extract its value too.
-				option if option.starts_with("-") => {
+				option if option.starts_with('-') => {
 					cli_args.push(option.into());
 					if let Some(opt) = CC_OPTIONS_WITH_VALUE
 						.iter()
@@ -368,7 +375,7 @@ async fn main_inner() -> Result<()> {
 	// Create a build.
 	let id = target.id(tg).await?;
 	let build_id = tg
-		.get_or_create_build_for_target(None, id, 0, tg::build::Retry::Canceled)
+		.get_or_create_build(None, id, 0, tg::build::Retry::Canceled)
 		.await?;
 	tg.add_build_child(None, &environment.runtime.build, &build_id)
 		.await?;
@@ -433,7 +440,7 @@ async fn main_inner() -> Result<()> {
 
 // Find the C compiler by checking the TANGRAM_CC_CC compiler or searching PATH for cc.
 fn which_cc() -> Result<PathBuf> {
-	let compiler_name = std::env::args().nth(0).unwrap();
+	let compiler_name = std::env::args().next().unwrap();
 	if let Ok(cc) = std::env::var("TANGRAM_CC_COMPILER") {
 		return Ok(cc.into());
 	}
@@ -445,8 +452,7 @@ fn which_cc() -> Result<PathBuf> {
 			let path = path.join(&compiler_name);
 			path.exists().then_some(path)
 		})
-		.skip(1)
-		.next()
+		.nth(1)
 		.wrap_err("Could not find cc.")?;
 	Ok(cc)
 }
@@ -507,7 +513,7 @@ fn insert_into_source_tree(
 ) {
 	let parent = match subtrees
 		.iter_mut()
-		.find(|tree| &tree.component == &components[0])
+		.find(|tree| tree.component == components[0])
 	{
 		Some(parent) => parent,
 		None => {
@@ -589,7 +595,7 @@ async fn check_in_source_tree(
 			let template = tg::Template {
 				components: vec![
 					tg::template::Component::Artifact(artifact.clone()),
-					tg::template::Component::String(format!("/{}", subpath.to_string())),
+					tg::template::Component::String(format!("/{subpath}")),
 				],
 			};
 			(remap_target, template)

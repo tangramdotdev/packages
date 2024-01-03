@@ -79,10 +79,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		command: "$SHELL Configure",
 	};
 
-	let phases = await tg.resolve({
+	let phases = {
 		configure,
 		prepare,
-	});
+	};
 
 	let dependencies = [bison(arg), libffi(arg), m4(arg), make(arg), zlib(arg)];
 	let env = [std.utils.env(arg), ...dependencies, env_];
@@ -109,6 +109,7 @@ export let build = tg.target(async (arg?: Arg) => {
 					":",
 				),
 			},
+			sdk: rest.sdk,
 		},
 	);
 
@@ -136,6 +137,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		let wrappedScript = std.wrap(scriptArtifact, {
 			identity: "interpreter",
 			interpreter: wrappedPerl,
+			sdk: rest.sdk,
 		});
 
 		// Replace in the original artifact.
@@ -153,7 +155,7 @@ export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: build({ sdk: { bootstrapMode: true } }),
 		binaries: ["perl"],
 		metadata,
 	});

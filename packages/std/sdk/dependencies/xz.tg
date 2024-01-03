@@ -44,7 +44,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let additionalEnv = {};
 	if (build.os === "linux") {
-		additionalEnv = { LDFLAGS: tg.Mutation.templateAppend("-static", " ") };
+		additionalEnv = { CFLAGS: tg.Mutation.templatePrepend("-static", " ") };
 	}
 
 	let configure = {
@@ -81,11 +81,12 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
+	let xzArtifact = await build({ sdk: { bootstrapMode: true } });
 	await std.assert.pkg({
-		directory: await build({ sdk: { bootstrapMode: true } }),
+		directory: xzArtifact,
 		binaries: ["xz"],
 		libs: [{ name: "lzma", dylib: false, staticlib: true }],
 		metadata,
 	});
-	return true;
+	return xzArtifact;
 });

@@ -5,6 +5,8 @@ import * as dependencies from "./dependencies.tg";
 import { interpreterName } from "./libc.tg";
 import { defaultGlibcVersion } from "./libc/glibc.tg";
 
+export { toolchain } from "./gcc/toolchain.tg";
+
 export let metadata = {
 	name: "gcc",
 	version: "13.2.0",
@@ -29,7 +31,7 @@ type Arg = std.sdk.BuildEnvArg & {
 	variant: Variant;
 };
 
-type Variant =
+export type Variant =
 	| "stage1_bootstrap" // C only, no libraries.
 	| "stage1_limited" // C/C++ only, most libraries disabled, but inclded libgcc/libstdc++.
 	| "stage2_full"; // Everything enabled.
@@ -89,7 +91,10 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv: std.env.Arg = {};
+	let additionalEnv: std.env.Arg = {
+		// FIXME - same bug as everyone else, some libs get dropped.
+		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "none",
+	};
 
 	// On Musl hosts, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (host.environment === "musl") {
@@ -125,7 +130,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage1_limited") {
 		let stage1LimitedArgs = [
-			`--with-build-sysroot=$SYSROOT`,
+			"--with-build-sysroot=$SYSROOT",
 			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
@@ -146,14 +151,10 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-initfini-array",
 		];
 		additionalArgs.push(...stage2FullArgs);
-
-		let stage2Env = {
-			CC: `${targetString}-cc -static --static`,
-			CXX: `${targetString}-c++ -static --static`,
-		};
 		additionalEnv = {
 			...additionalEnv,
-			...stage2Env,
+			CC: `${targetString}-cc -static -fPIC`,
+			CXX: `${targetString}-c++ -static -fPIC`,
 		};
 	}
 
@@ -161,7 +162,11 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let phases = { prepare, configure };
 
-	let env = [dependencies.env({ ...rest, host }), additionalEnv, env_];
+	let env = [
+		dependencies.env({ host: build, sdk: rest.sdk }),
+		additionalEnv,
+		env_,
+	];
 
 	let result = await std.autotools.build(
 		{
@@ -169,7 +174,7 @@ export let build = tg.target(async (arg: Arg) => {
 			...std.Triple.rotate({ build, host }),
 			env,
 			phases,
-			opt: "3",
+			opt: "2",
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -194,9 +199,9 @@ export default build;
 
 export let gccSource = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.xz" as const;
+	let unpackFormat = ".tar.gz" as const;
 	let checksum =
-		"sha256:e275e76442a6067341a27f04c5c6b83d8613144004c0413528863dc6b5c743da";
+		"sha256:8cb4be3796651976f94b9356fa08d833524f62420d6292c5033a9a26af315078";
 	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${name}-${version}${unpackFormat}`;
 	let outer = tg.Directory.expect(
 		await std.download({ checksum, url, unpackFormat }),
@@ -307,7 +312,7 @@ async function getGccVersion(
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
 	let script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
-	let envObject = std.env.object([bootstrap.utils(), env]);
+	let envObject = std.env.object(bootstrap.utils(), env);
 	let result = tg.File.expect(await tg.build(script, { env: envObject }));
 	return (await result.text()).trim();
 }
