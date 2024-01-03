@@ -227,6 +227,7 @@ int main() {
 			{
 				env: await std.env.object(bootstrapSDK, {
 					TGLD_TRACING: "tangram=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
 					TANGRAM_WRAPPER_TRACING: "tangram=trace",
 				}),
 			},

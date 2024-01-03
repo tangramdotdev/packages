@@ -171,7 +171,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	}
 	if (extraCFlags) {
 		let extraCFlags = await tg.Mutation.templatePrepend(
-			tg`-Wp,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection -flto=auto`,
+			`-Wp,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection -flto=auto`,
 			" ",
 		);
 		pushOrSet(env, "CFLAGS", extraCFlags);

@@ -1,11 +1,13 @@
 import * as bootstrap from "../bootstrap.tg";
 import * as std from "../tangram.tg";
 
-type Arg = std.sdk.BuildEnvArg;
+type Arg = std.sdk.BuildEnvArg & {
+	release?: boolean;
+};
 
 /** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
 export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
-	let { build: build_, host: host_, sdk: sdkArg } = arg ?? {};
+	let { build: build_, host: host_, release = true, sdk: sdkArg } = arg ?? {};
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let buildTriple = build_ ? std.triple(build_) : host;
 
@@ -20,6 +22,7 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 	});
 
 	return build({
+		release,
 		source,
 		...(await std.Triple.rotate({ build: buildTriple, host })),
 		sdkArg,
@@ -166,6 +169,7 @@ type RustupManifest = {
 };
 
 type BuildArg = {
+	release?: boolean;
 	source: tg.Directory;
 	host: std.Triple.Arg;
 	target?: std.Triple.Arg;
@@ -173,6 +177,7 @@ type BuildArg = {
 };
 
 export let build = async (arg: BuildArg) => {
+	let release = arg.release ?? true;
 	let source = arg.source;
 	let host = std.triple(arg.host);
 	let target = arg.target ? std.triple(arg.target) : host;
@@ -265,16 +270,20 @@ export let build = async (arg: BuildArg) => {
 		export RUSTC=$PWD/rustc.sh
 		`;
 
-	let build = {
-		command: tg`${cargo} build`,
-		args: [
+	let args = [
 			tg`--manifest-path ${source}/Cargo.toml`,
 			`--target-dir $TARGET`,
 			`--target $RUST_TARGET`,
-			`--release`,
 			`--all`,
 			`--locked`,
-		],
+		];
+		if (release) {
+			args.push(`--release`);
+		}
+
+	let build = {
+		command: tg`${cargo} build`,
+		args
 	};
 
 	let buildType = "release";
@@ -358,7 +367,7 @@ export let testCross = tg.target(async () => {
 		environment: "gnu",
 	});
 
-	let crossWorkspace = await workspace({ build: host, host: target });
+	let crossWorkspace = await workspace({ build: host, host: target, release: false });
 
 	// Assert the cross workspace was built for the target.
 	let crossWrapper = await crossWorkspace.get("bin/wrapper");

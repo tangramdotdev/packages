@@ -59,7 +59,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let phases = { configure };
 
-	let env = [bootstrap.make.build(arg), env_];
+	let env = [bootstrap.make.build(arg), { TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "filter"},  env_];
 
 	let output = await buildUtil(
 		{
