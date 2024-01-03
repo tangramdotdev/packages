@@ -219,11 +219,12 @@ export let componentList = async (arg?: Arg) => {
 	let linuxComponents = (host: tg.System) => {
 		let hostString = host.replace("-", "_");
 		return [
-		`dash_${hostString}`,
-		`env_${hostString}`,
-		`toolchain_${hostString}`,
-		`utils_${hostString}`,
-	] };
+			`dash_${hostString}`,
+			`env_${hostString}`,
+			`toolchain_${hostString}`,
+			`utils_${hostString}`,
+		];
+	};
 	let darwinComponents = [
 		"dash_universal_darwin",
 		"sdk_12.1_universal_darwin",

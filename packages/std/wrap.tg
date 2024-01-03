@@ -158,7 +158,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-						  );
+							);
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -172,7 +172,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-					  );
+						);
 			}
 			if (arg.host !== undefined) {
 				object.host = std.triple(arg.host);
@@ -237,7 +237,10 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 
 	// Get the wrapper executable.
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let wrapper = await workspace.wrapper({ host, sdk: sdkArgs || { bootstrapMode: true } });
+	let wrapper = await workspace.wrapper({
+		host,
+		sdk: sdkArgs || { bootstrapMode: true },
+	});
 
 	// Write the manifest to the wrapper and return.
 	let output = await wrap.Manifest.write(wrapper, manifest);
@@ -458,7 +461,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-							  );
+								);
 						return [key, mutations];
 					}),
 				),
@@ -1117,7 +1120,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1149,7 +1152,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1170,7 +1173,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1202,7 +1205,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1223,7 +1226,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
 		let injectionLibrary = await injection.default({
@@ -1235,7 +1238,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -1645,7 +1648,7 @@ let valueFromManifestValue = async (
 	value: wrap.Manifest.Value,
 ): Promise<tg.Value> => {
 	if (value instanceof Array) {
-		return await Promise.all(value.value.map(valueFromManifestValue));
+		return await Promise.all(value.map(valueFromManifestValue));
 	} else if (value.kind === "null") {
 		undefined;
 	} else if (value.kind === "bool") {
@@ -1712,7 +1715,7 @@ let envMapFromMapValue = async (
 	value: wrap.Manifest.Value,
 ): Promise<wrap.Manifest.EnvMap> => {
 	tg.assert(
-		value.kind === "map",
+		!(value instanceof Array) && value.kind === "map",
 		"Malformed env, expected a map of mutations.",
 	);
 	let ret: wrap.Manifest.EnvMap = {};
@@ -1905,8 +1908,7 @@ function* manifestValueReferences(
 		for (let v of value) {
 			yield* manifestValueReferences(v);
 		}
-	}
-	if (value.kind === "directory") {
+	} else if (value.kind === "directory") {
 		yield tg.Artifact.withId(value.value);
 	} else if (value.kind === "file") {
 		yield tg.Artifact.withId(value.value);

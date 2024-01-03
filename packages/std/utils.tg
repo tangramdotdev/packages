@@ -24,9 +24,6 @@ export * as tar from "./utils/tar.tg";
 
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	// Ensure the bootstrap SDK exists.
-	await std.sdk({ bootstrapMode: true });
-
 	// Build bash and use it as the default shell.
 	let bashAritfact = await bash.build(arg);
 	let bashExecutable = tg.File.expect(await bashAritfact.get("bin/bash"));

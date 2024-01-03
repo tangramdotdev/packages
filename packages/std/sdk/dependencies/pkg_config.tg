@@ -17,7 +17,9 @@ export let source = tg.target(async () => {
 		version,
 		unpackFormat,
 	});
-	let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
+	// let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
+	// let url = `http://fresh-center.net/linux/misc/pkg-config-0.29.2.tar.gz`;
+	let url = "https://github.com/tangramdotdev/bootstrap/releases/download/v2023.12.14/pkg-config-0.29.2.tar.gz";
 	let checksum =
 		"sha256:6fc69c01688c9458a57eb9a1664c9aba372ccda420a02bf4429fe610e7e7d591";
 	let outer = tg.Directory.expect(
