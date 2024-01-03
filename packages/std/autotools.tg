@@ -62,7 +62,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	};
 
 	let {
-		defaultCFlags = false,
+		defaultCFlags = true,
 		doCheck = false,
 		extraCFlags = false,
 		host: host_,
@@ -158,22 +158,17 @@ export let target = async (...args: tg.Args<Arg>) => {
 	// // C/C++ flags.
 	let cflags = tg``;
 	if (opt) {
-		let optFlag = await tg.Mutation.templatePrepend(`-O${opt}`, " ");
+		let optFlag = `-O${opt}`;
 		cflags = tg`${cflags} ${optFlag}`;
 	}
 	if (defaultCFlags) {
-		let defaultCFlags = await tg.Mutation.templatePrepend(
-			`-mtune=generic -pipe`,
-			" ",
-		);
+		let defaultCFlags = `-mtune=generic -pipe`;
 		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
 	if (extraCFlags) {
-		let extraCFlags = await tg.Mutation.templatePrepend(
-			`-Wp,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection -flto=auto`,
-			" ",
-		);
+		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection -flto=auto`;
 		cflags = tg`${cflags} ${extraCFlags}`;
+	}
 
 // 		if (host.environment === "gnu") {
 // 			let cc1Specs = tg.file(`
@@ -193,9 +188,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 // 			);
 // 			pushOrSet(env, "CXXFLAGS", extraCxxFlags);
 // 		}
-			pushOrSet(env, "CFLAGS", cflags);
-			pushOrSet(env, "CXXFLAGS", cflags);
-	}
+			pushOrSet(env, "CFLAGS", await cflags);
+			pushOrSet(env, "CXXFLAGS", await cflags);
 
 	// LDFLAGS
 	if (stripExecutables === true) {

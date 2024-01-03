@@ -59,7 +59,7 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let buildTriple = build_ ? std.triple(build_) : host;
-	let target = host_ ? std.triple(target_) : host;
+	let target = target_ ? std.triple(target_) : host;
 
 	// Produce the binutils.
 	let crossBinutils = await binutils({
@@ -76,8 +76,7 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 			...rest,
 			build: buildTriple,
 			crossBinutils,
-			host,
-			target,
+			host: target,
 		}));
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
@@ -97,7 +96,6 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 
 type BuildSysrootArg = std.sdk.BuildEnvArg & {
 	crossBinutils: tg.Directory;
-	target: std.Triple.Arg;
 };
 
 export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
@@ -106,13 +104,12 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		crossBinutils,
 		env: env_,
 		host: host_,
-		target: target_,
 		...rest
 	} = arg ?? {};
 
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let buildTriple = build_ ? std.triple(build_) : host;
-	let target = target_ ? std.triple(target_) : host;
+	let target = host;
 
 	// Produce the linux headers.
 	let linuxHeaders = await tg.directory({
@@ -136,7 +133,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	});
 	console.log("bootstrapGCC", await bootstrapGCC.id());
 
-	// Produce a combined directory contianing the correct C library for the host and the Linux headers.
+	// Produce a combined directory containing the correct C library for the host and the Linux headers.
 	let sysroot = await constructSysroot({
 		...rest,
 		linuxHeaders,
