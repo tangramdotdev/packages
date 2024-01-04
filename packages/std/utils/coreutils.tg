@@ -60,11 +60,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		dependencies.push(libiconv({ ...rest, build, host }));
 	}
 	let env = [...dependencies, env_];
-	if (os === "linux") {
-		env.push({
-			CFLAGS: await tg.Mutation.templatePrepend("-static", " "),
-		});
-	}
 
 	let configure = {
 		args: [

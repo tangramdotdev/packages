@@ -10,7 +10,7 @@ use std::{
 use tangram_client as tg;
 use tangram_error::{return_error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeekExt};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;
@@ -220,22 +220,12 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	let tg = tg::client::Builder::with_runtime_json(&runtime_json)?.build();
 	tg.connect().await?;
 
-	// Open the output file.
-	let mut file = tokio::fs::File::open(&options.output_path)
-		.await
-		.wrap_err("Could not open output file")?;
-
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
 		is_executable,
 		interpreter,
 		needed_libraries: initial_needed_libraries,
-	} = analyze_executable(
-		file.try_clone()
-			.await
-			.wrap_err("Could not clone file handle")?,
-	)
-	.await?;
+	} = analyze_output_file(&options.output_path).await?;
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
 	// Unrender all library paths to symlinks.
@@ -252,12 +242,13 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 			options.library_path_optimization,
 			LibraryPathOptimizationStrategy::None
 		) {
-		file.rewind()
-			.await
-			.wrap_err("Could not seek to beginning of output file.")?;
-		let output_artifact = file_from_reader(&tg, file, is_executable).await?;
-		let output_artifact_id = output_artifact.id(&tg).await?;
-		tracing::trace!(?output_artifact_id, "Output artifact");
+		// Open the output file.
+		let reader = tokio::io::BufReader::new(
+			tokio::fs::File::open(&options.output_path)
+				.await
+				.wrap_err("Could not open output file")?,
+		);
+		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
 		Some(output_artifact)
 	} else {
 		None
@@ -536,9 +527,9 @@ enum InterpreterRequirement {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum LibraryPathOptimizationStrategy {
 	/// Do not optimize library paths.
-	#[default]
 	None,
 	/// Combine library paths into a single directory.
+	#[default]
 	Combine,
 	/// Filter library paths for needed libraries.
 	Filter,
@@ -714,7 +705,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 		return Ok(());
 	}
 
-	let reader = file.reader(tg).await?;
+	let reader = tokio::io::BufReader::new(file.reader(tg).await?);
 	let AnalyzeOutputFileOutput {
 		needed_libraries, ..
 	} = analyze_executable(reader).await?;
@@ -771,15 +762,15 @@ fn found_all_libraries<H: BuildHasher + Default>(
 }
 
 /// Analyze an output file.
-#[cfg(test)]
 async fn analyze_output_file(path: impl AsRef<std::path::Path>) -> Result<AnalyzeOutputFileOutput> {
-	let file = tokio::fs::File::open(&path).await.wrap_err_with(|| {
-		format!(
-			r#"Failed to open the output file at path "{}"."#,
-			path.as_ref().display()
-		)
-	})?;
-	analyze_executable(file).await
+	let reader =
+		tokio::io::BufReader::new(tokio::fs::File::open(&path).await.wrap_err_with(|| {
+			format!(
+				r#"Failed to open the output file at path "{}"."#,
+				path.as_ref().display()
+			)
+		})?);
+	analyze_executable(reader).await
 }
 
 /// Analyze an executable.
