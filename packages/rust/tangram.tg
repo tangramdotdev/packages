@@ -155,6 +155,7 @@ export type Arg = {
 	source: tg.Artifact;
 	target?: std.Triple;
 	proxy?: boolean;
+	useCargoVendor?: boolean;
 };
 
 export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
@@ -165,6 +166,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 		source: tg.Artifact;
 		target?: std.Triple;
 		proxy?: boolean;
+		useCargoVendor?: boolean;
 	};
 	let {
 		sdk: sdk_,
@@ -173,13 +175,16 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 		source,
 		target: target_,
 		proxy = false,
+		useCargoVendor = false,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
 			if (arg.env !== undefined) {
-				object.env = tg.Mutation.is(arg.env) ? arg.env : await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+				object.env = tg.Mutation.is(arg.env)
+					? arg.env
+					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
 			}
 			if (arg.sdk !== undefined) {
 				object.sdk = tg.Mutation.is(arg.sdk)
@@ -196,6 +201,9 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 			}
 			if (arg.proxy !== undefined) {
 				object.proxy = arg.proxy;
+			}
+			if (arg.useCargoVendor !== undefined) {
+				object.useCargoVendor = arg.useCargoVendor;
 			}
 			return object;
 		}
@@ -218,9 +226,8 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 	let targetTriple = std.Triple.toString(target);
 
 	// Download the dependencies using the cargo vendor.
-	let cargoLock = await (await tg.symlink(source, "Cargo.lock")).resolve();
-	tg.assert(tg.File.is(cargoLock));
-	let vendoredSources = await vendorDependencies(cargoLock);
+	tg.assert(source); // ???
+	let cargoConfig = vendoredSources({ source, useCargoVendor });
 
 	// Create the build script.
 	let buildScript = tg`
@@ -231,10 +238,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 		# Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
 
 		mkdir -p "$HOME/.cargo"
-		echo '[source.crates-io]'                >> "$HOME/.cargo/config"
-		echo 'replace-with = "vendored-sources"' >> "$HOME/.cargo/config"
-		echo '[source.vendored-sources]'         >> "$HOME/.cargo/config"
-		echo 'directory = "${vendoredSources}"'  >> "$HOME/.cargo/config"
+		echo '${cargoConfig}' >> "$HOME/.cargo/config"
 
 		echo "Cargo config:"
 		cat "$HOME/.cargo/config"
@@ -321,6 +325,62 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 	return tg.directory({
 		["bin"]: binDir,
 	});
+};
+
+export type VendoredSourcesArg = {
+	source: tg.Artifact;
+	useCargoVendor?: boolean;
+};
+
+let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
+	let { source, useCargoVendor = false } = arg;
+	if (useCargoVendor) {
+		// Run cargo vendor
+		let certFile = tg`${std.caCertificates()}/cacert.pem`;
+		let vendorScript = tg`
+			SOURCE="$(realpath ${source})"
+			mkdir -p "$OUTPUT/tg_vendor_dir"
+			cd "$OUTPUT"
+			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml tg_vendor_dir > "$OUTPUT/config"
+		`;
+		let rustArtifact = rust();
+		let sdk = std.sdk();
+		let result = await std.build(vendorScript, {
+			checksum: "unsafe",
+			env: std.env(sdk, {
+				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+				CARGO_HTTP_CAINFO: certFile,
+				PATH: tg`${rustArtifact}/bin`,
+				RUST_TARGET: "x86_64-linux-unknown-gnu",
+				SSL_CERT_FILE: certFile,
+			}),
+		});
+
+		// Get the output.
+		tg.assert(tg.Directory.is(result));
+		let vendoredSources = await result.get("tg_vendor_dir");
+		tg.assert(tg.Directory.is(vendoredSources));
+		let config = await result.get("config");
+		tg.assert(tg.File.is(config));
+
+		let text = await config.text();
+		let match = /tg_vendor_dir/g.exec(text);
+		tg.assert(match);
+		return tg`${text.substring(
+			0,
+			match.index,
+		)}${vendoredSources}${text.substring(match.index + match[0].length)}`;
+	} else {
+		let cargoLock = await (await tg.symlink(source, "Cargo.lock")).resolve();
+		tg.assert(tg.File.is(cargoLock));
+		let vendoredSources = vendorDependencies(cargoLock);
+		return tg`
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "${vendoredSources}"`;
+	}
 };
 
 // Implementation of `cargo vendor` in tg typescript.
