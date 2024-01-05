@@ -42,11 +42,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = await std.Triple.host(host_);
 	let build = build_ ? std.triple(build_) : host;
 
-	let additionalEnv = {};
-	if (build.os === "linux") {
-		additionalEnv = { CFLAGS: tg.Mutation.templatePrepend("-static", " ") };
-	}
-
 	let configure = {
 		args: [
 			"--disable-debug",
@@ -56,9 +51,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let env = [std.utils.env(arg), make(arg), additionalEnv, env_];
+	let env = [std.utils.env(arg), make(arg), env_];
 
-	let output = std.utils.buildUtil(
+	let output = await std.utils.buildUtil(
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
@@ -75,6 +70,15 @@ export let build = tg.target(async (arg?: Arg) => {
 		autotools,
 	);
 
+	let bins = ["lzmadec", "lzmainfo", "xz", "xzdec"];
+	for (let bin of bins) {
+		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
+		let wrappedBin = std.wrap(unwrappedBin, {
+			libraryPaths: [tg.symlink(tg`${output}/lib`)],
+			sdk: arg?.sdk,
+		});
+		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
+	}
 	return output;
 });
 
@@ -85,7 +89,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory: xzArtifact,
 		binaries: ["xz"],
-		libs: [{ name: "lzma", dylib: false, staticlib: true }],
+		libs: ["lzma"],
 		metadata,
 	});
 	return xzArtifact;
