@@ -72,6 +72,9 @@ export let env = tg.target(async (arg?: Arg) => {
 		]),
 	);
 
+	// Add perl.
+	dependencies.push(await perl(arg));
+
 	// Add packages with multiple dependenices on other packages in this module.
 	dependencies = dependencies.concat(
 		await Promise.all([
@@ -80,7 +83,6 @@ export let env = tg.target(async (arg?: Arg) => {
 			file(arg),
 			flex(arg),
 			help2man(arg),
-			perl(arg),
 			pkgconfig(arg),
 			python(arg),
 			texinfo(arg),

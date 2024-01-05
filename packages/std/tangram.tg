@@ -210,13 +210,21 @@ export let testGccSource = tg.target(async () => {
 	return await gcc.source();
 });
 
-import { testCanadianCross, testStage1 } from "./sdk/gcc/toolchain.tg";
+import {
+	testCanadianCross,
+	testCross,
+	testStage1,
+} from "./sdk/gcc/toolchain.tg";
 export let stage1 = tg.target(async () => {
 	await testStage1();
 	return true;
 });
 export let canadianCross = tg.target(async () => {
 	return testCanadianCross();
+});
+
+export let testCrossToolchain = tg.target(() => {
+	return testCross();
 });
 
 // SDK tests.
@@ -261,26 +269,38 @@ export let reproDroppedLibs = tg.target(async () => {
 
 	let traceEnv = {
 		TANGRAM_WRAPPER_TRACING: "tangram=trace",
-		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "resolve",
-		TGLD_TRACING: "tangram=trace"
+		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
+		TGLD_TRACING: "tangram=trace",
 	};
 
 	// Compile the library.
-	let dylib = tg.Directory.expect(await tg.build(tg`mkdir -p $OUTPUT/lib && cc -v -xc ${dylibSource} -shared -o $OUTPUT/lib/libhello.so.1 && cd $OUTPUT/lib && ln -s libhello.so.1 libhello.so`, {
-		env: await env.object(bootstrapSDK, traceEnv),
-	}));
+	let dylib = tg.Directory.expect(
+		await tg.build(
+			tg`mkdir -p $OUTPUT/lib && cc -v -xc ${dylibSource} -shared -o $OUTPUT/lib/libhello.so.1 && cd $OUTPUT/lib && ln -s libhello.so.1 libhello.so`,
+			{
+				env: await env.object(bootstrapSDK, traceEnv),
+			},
+		),
+	);
 
 	// Compile the driver.
-	let driver = tg.Directory.expect(await tg.build(tg`env && mkdir -p $OUTPUT/bin && cc -v -xc ${driverSource} -o $OUTPUT/bin/driver -lhello`, {
-		env: await env.object(bootstrapSDK, dylib, traceEnv),
-	}));
+	let driver = tg.Directory.expect(
+		await tg.build(
+			tg`env && mkdir -p $OUTPUT/bin && cc -v -xc ${driverSource} -o $OUTPUT/bin/driver -lhello`,
+			{
+				env: await env.object(bootstrapSDK, dylib, traceEnv),
+			},
+		),
+	);
 
 	// Run the driver.
-	let output = tg.File.expect(await tg.build(tg`driver > $OUTPUT`, {
-		env: await env.object(bootstrapSDK, driver, traceEnv),
-	}));
+	let output = tg.File.expect(
+		await tg.build(tg`driver > $OUTPUT`, {
+			env: await env.object(bootstrapSDK, driver, traceEnv),
+		}),
+	);
 	let text = await output.text();
 	tg.assert(text.includes("Hello, world!\n"));
 
-	return true;
+	return driver;
 });

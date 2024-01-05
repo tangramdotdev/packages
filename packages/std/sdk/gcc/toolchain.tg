@@ -6,6 +6,7 @@ import binutils from "../binutils.tg";
 import * as gcc from "../gcc.tg";
 import kernelHeaders from "../kernel_headers.tg";
 import { constructSysroot } from "../libc.tg";
+import * as proxy from "../proxy.tg";
 
 export type ToolchainArg = std.sdk.BuildEnvArg & {
 	target?: std.Triple.Arg;
@@ -27,10 +28,15 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	}
 
 	// If a cross-target was requested, build the components required using the native toolchain.
+	let nativeProxyEnv = await proxy.env({
+		env: nativeToolchain,
+		host,
+	});
+
 	let { env } = await crossToolchain({
 		...rest,
 		build: buildTriple,
-		env: nativeToolchain,
+		env: [nativeToolchain, nativeProxyEnv],
 		host,
 		sdk: { bootstrapMode: true },
 		target,
@@ -113,7 +119,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 
 	// Produce the linux headers.
 	let linuxHeaders = await tg.directory({
-		include: await kernelHeaders({ host: target }),
+		include: await kernelHeaders({ build: buildTriple, host: target }),
 	});
 	console.log("linuxHeaders", await linuxHeaders.id());
 
@@ -227,4 +233,13 @@ export let testStage1 = async () => {
 export let testCanadianCross = async () => {
 	let toolchainDir = await canadianCross();
 	return toolchainDir;
+};
+
+export let testCross = async () => {
+	let host = await std.Triple.host();
+	let hostArch = host.arch;
+	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = std.triple({ ...host, arch: targetArch });
+	let dir = await toolchain({ host, target });
+	return dir;
 };

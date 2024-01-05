@@ -62,10 +62,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		? `make && make clean && make LDFLAGS=-all-static`
 		: undefined;
 
-	let additionalEnv: std.env.Arg = {
-		// FIXME - with "filter", binutils builds but libzstd isn't available at runtime.
-		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "none",
-	};
+	let additionalEnv: std.env.Arg = {};
 	if (staticBuild) {
 		additionalEnv = {
 			...additionalEnv,
