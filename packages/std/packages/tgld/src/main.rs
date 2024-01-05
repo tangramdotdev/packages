@@ -705,12 +705,15 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 		return Ok(());
 	}
 
-	let reader = tokio::io::BufReader::new(file.reader(tg).await?);
-	let AnalyzeOutputFileOutput {
-		needed_libraries, ..
-	} = analyze_executable(reader).await?;
-	for library in &needed_libraries {
-		all_needed_libraries.entry(library.clone()).or_insert(None);
+	// Check for transitive dependencies if we've recurred beyond the initial file.
+	if depth > 0 {
+		let reader = tokio::io::BufReader::new(file.reader(tg).await?);
+		let AnalyzeOutputFileOutput {
+			needed_libraries, ..
+		} = analyze_executable(reader).await?;
+		for library in &needed_libraries {
+			all_needed_libraries.entry(library.clone()).or_insert(None);
+		}
 	}
 
 	for dir_id in library_paths {
