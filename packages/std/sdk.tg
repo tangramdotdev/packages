@@ -330,6 +330,7 @@ export namespace sdk {
 		// Determine actual flavor and locate cc and c++.
 		let cc;
 		let cxx;
+		let fortran;
 		if (flavor === "gcc") {
 			// Check if `gcc` is available.
 			let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
@@ -337,6 +338,11 @@ export namespace sdk {
 				// If so, try to find `g++`.
 				let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
 				tg.assert(gxx, `Found ${targetPrefix}gcc but not ${targetPrefix}g++.`);
+				let gfortran = await std.env.tryWhich({
+					env,
+					name: `${targetPrefix}gfortran`,
+				});
+				fortran = gfortran;
 				cc = gcc;
 				cxx = gxx;
 			} else {
@@ -366,9 +372,14 @@ export namespace sdk {
 				// If gcc is available, try to find g++.
 				let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
 				tg.assert(gxx, `Found ${targetPrefix}gcc but not ${targetPrefix}g++.`);
+				let gfortran = await std.env.tryWhich({
+					env,
+					name: `${targetPrefix}gfortran`,
+				});
 				flavor = "gcc";
 				cc = gcc;
 				cxx = gxx;
+				fortran = gfortran;
 			}
 		}
 
@@ -378,6 +389,9 @@ export namespace sdk {
 		tg.assert(directory, "Unable to find toolchain directory.");
 		cc = await tg.symlink(tg`${directory}/bin/${compiler}`);
 		cxx = await tg.symlink(tg`${directory}/bin/${cxxCompiler}`);
+		if (fortran) {
+			fortran = await tg.symlink(tg`${directory}/bin/${targetPrefix}gfortran`);
+		}
 
 		// Grab the linker from the same directory as the compiler, not just by using `Env.which`.
 		let linkerName =
@@ -406,6 +420,7 @@ export namespace sdk {
 		return {
 			cc,
 			cxx,
+			fortran,
 			directory,
 			flavor,
 			host,
@@ -426,6 +441,7 @@ export namespace sdk {
 	export type ToolchainComponents = {
 		cc: tg.Symlink;
 		cxx: tg.Symlink;
+		fortran?: tg.Symlink;
 		directory: tg.Directory;
 		flavor: "gcc" | "llvm";
 		host: std.Triple;
@@ -563,11 +579,25 @@ export namespace sdk {
 
 		// Set up test parameters.
 		let { lang, testProgram, expectedOutput } = arg.parameters;
-		let cmd = lang === "c" ? `${targetPrefix}cc` : `${targetPrefix}c++`;
+		let cmd;
+		if (lang === "c") {
+			cmd = `${targetPrefix}cc`;
+		} else if (lang === "c++") {
+			cmd = `${targetPrefix}c++`;
+		} else if (lang === "fortran") {
+			cmd = `${targetPrefix}gfortran`;
+		} else {
+			throw new Error(`Unexpected language ${lang}.`);
+		}
+		tg.assert(cmd);
 
 		// Compile the test source using the expected host system.
+		let langStr: string = lang;
+		if (lang === "fortran") {
+			langStr = "f95";
+		}
 		let compiledProgram = tg.File.expect(
-			await tg.build(tg`${cmd} -x${lang} ${testProgram} -o $OUTPUT`, {
+			await tg.build(tg`echo "testing ${lang}" && ${cmd} -v -x ${langStr} ${testProgram} -o $OUTPUT`, {
 				env: std.env.object(arg.sdk),
 				host: std.Triple.system(expectedHost),
 			}),
@@ -622,9 +652,6 @@ export namespace sdk {
 		if (arg?.bootstrapMode) {
 			// Just test for the "dash" shell and "ls", indicating there is a busybox or comparable alternative.
 			await std.env.assertProvides({ env, names: ["dash", "ls"] });
-
-			// The bootstrap SDK is not proxied. We're done.
-			return true;
 		} else {
 			// Test for the complete set.
 			await dependencies.assertProvides(env);
@@ -651,6 +678,14 @@ export namespace sdk {
 				// Test C++.
 				await assertProxiedCompiler({
 					parameters: testCxxParameters,
+					sdk: env,
+					host: expected.host,
+					target,
+				});
+
+				// Test Fortran.
+				await assertProxiedCompiler({
+					parameters: testFortranParameters,
 					sdk: env,
 					host: expected.host,
 					target,
@@ -788,19 +823,19 @@ let testCxxParameters: ProxyTestParameters = {
 `),
 };
 
-// let testFortranParameters: ProxyTestParameters = {
-// 	expectedOutput: "Hello, Fortran!",
-// 	lang: "fortran",
-// 	testProgram: tg.file(`
-// 	program hello
-// 		print *, "Hello, Fortran!"
-// 	end program hello
-// 	`),
-// };
+let testFortranParameters: ProxyTestParameters = {
+	expectedOutput: "Hello, Fortran!",
+	lang: "fortran",
+	testProgram: await tg.file(`
+	program hello
+		print *, "Hello, Fortran!"
+	end program hello
+	`),
+};
 
 type ProxyTestParameters = {
 	expectedOutput: string;
-	lang: "c" | "c++";
+	lang: "c" | "c++" | "fortran";
 	testProgram: tg.File;
 };
 

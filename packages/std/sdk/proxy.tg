@@ -30,7 +30,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let dirs = [];
 
-	let { cc, cxx, directory, flavor, host, ld, ldso, target } =
+	let { cc, cxx, fortran, directory, flavor, host, ld, ldso, target } =
 		await std.sdk.toolchainComponents({ env: arg.env, target: arg.target });
 
 	if (proxyLinker) {
@@ -59,9 +59,10 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 		let wrappedCC;
 		let wrappedCXX;
+		let wrappedGFortran;
 		switch (flavor) {
 			case "gcc": {
-				let { ccArgs, cxxArgs } = await wrapArgs({
+				let { ccArgs, cxxArgs, fortranArgs } = await wrapArgs({
 					host,
 					target,
 					toolchainDir: directory,
@@ -76,6 +77,13 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
 					sdk: arg.sdk,
 				});
+				if (fortran) {
+					wrappedGFortran = await std.wrap(fortran, {
+						identity: "wrapper",
+						args: [tg`-B${ldProxyDir}`, ...(fortranArgs ?? [])],
+						sdk: arg.sdk,
+					});
+				}
 
 				if (isCross) {
 					binDir = tg.directory({
@@ -86,6 +94,13 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 							[`${targetString}-g++`]: wrappedCXX,
 						},
 					});
+					if (fortran) {
+						binDir = tg.directory(binDir, {
+							bin: {
+								[`${targetString}-gfortran`]: wrappedGFortran,
+							}
+						});
+					}
 				} else {
 					binDir = tg.directory({
 						bin: {
@@ -99,6 +114,14 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 							[`${hostString}-g++`]: tg.symlink("g++"),
 						},
 					});
+					if (fortran) {
+						binDir = tg.directory(binDir, {
+							bin: {
+								gfortran: wrappedGFortran,
+								[`${hostString}-gfortran`]: tg.symlink("gfortran"),
+							}
+						});
+					}
 				}
 				break;
 			}

@@ -283,6 +283,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		tg`-B${toolchainDir}/lib/gcc/${targetString}/${gccVersion}`,
 		tg`-B${toolchainDir}/libexec/gcc/${targetString}/${gccVersion}`,
 	];
+	let fortranArgs = ccArgs;
 
 	let cxxToplevel = isCross
 		? tg`${toolchainDir}/${targetString}`
@@ -294,7 +295,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		tg`-isystem${cxxToplevel}/include/c++/${gccVersion}/${targetString}`,
 	];
 
-	return { ccArgs, cxxArgs };
+	return { ccArgs, cxxArgs, fortranArgs };
 };
 
 async function getGccVersion(
