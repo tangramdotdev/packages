@@ -4,6 +4,7 @@ import bison from "./bison.tg";
 import libffi from "./libffi.tg";
 import m4 from "./m4.tg";
 import make from "./make.tg";
+import pkgConfig from "./pkg_config.tg";
 import zlib from "./zlib.tg";
 
 export let metadata = {
@@ -53,13 +54,13 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
+
 	let host = await std.Triple.host(host_);
 	let build = build_ ? std.triple(build_) : host;
 	let os = build.os;
 
 	let additionalEnv: std.env.Arg = {
-		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "none",
-		LDFLAGS: await tg.Mutation.templatePrepend("-lgcov --coverage", " "),
+		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "resolve",
 	};
 	if (os === "darwin") {
 		additionalEnv = {
@@ -76,7 +77,14 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--enable-optimizations",
 		],
 	};
-	let dependencies = [bison(arg), libffi(arg), m4(arg), make(arg), zlib(arg)];
+	let dependencies = [
+		bison(arg),
+		libffi(arg),
+		m4(arg),
+		make(arg),
+		pkgConfig(arg),
+		zlib(arg),
+	];
 	let env = [std.utils.env(arg), ...dependencies, additionalEnv, env_];
 
 	// Build python.
