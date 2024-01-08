@@ -4,6 +4,7 @@ export { build } from "./build.tg";
 export { caCertificates } from "./certificates.tg";
 export { container } from "./container.tg";
 export * as directory from "./directory.tg";
+export { download } from "./download.tg";
 export { env } from "./env.tg";
 export * as file from "./file.tg";
 export { patch } from "./patch.tg";
@@ -12,8 +13,6 @@ export { sdk } from "./sdk.tg";
 export { triple, Triple } from "./triple.tg";
 export * as utils from "./utils.tg";
 export { default as wrap } from "./wrap.tg";
-
-export { download } from "tg:download" with { path: "../download" };
 
 export let metadata = {
 	name: "std",

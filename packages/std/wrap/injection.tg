@@ -86,6 +86,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 		...arg,
 		source,
 		additionalArgs: arm64Args,
+		isBootstrap: true,
 		env,
 	});
 
@@ -95,6 +96,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 		...arg,
 		source,
 		additionalArgs: amd64Args,
+		isBootstrap: true,
 		env,
 	});
 
@@ -123,7 +125,8 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let host = arg.host ? std.triple(arg.host) : await std.Triple.host();
 	let build = arg.build ? std.triple(arg.build) : host;
 	let isBootstrap = arg.isBootstrap ?? false;
-	let useTriplePrefix = !std.Triple.eq(build, host) && !isBootstrap;
+	let useTriplePrefix =
+		!std.Triple.eq(build, host) && !isBootstrap && !(build.os === "darwin");
 	let hostString = std.Triple.toString(host);
 
 	let additionalArgs = arg.additionalArgs ?? [];

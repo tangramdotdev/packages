@@ -160,7 +160,6 @@ export let canadianCross = tg.target(async (arg?: std.Triple.HostArg) => {
 
 	let sdk = { bootstrapMode: true };
 
-	await utils.env({ host: build, sdk });
 	await dependencies.env({ host: build, sdk });
 
 	// Create cross-toolchain from build to host.
