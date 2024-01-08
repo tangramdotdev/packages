@@ -1,3 +1,4 @@
+import * as bootstrap from "../bootstrap.tg";
 import * as std from "../tangram.tg";
 import * as dependencies from "./dependencies.tg";
 
@@ -20,6 +21,8 @@ export let source = tg.target(async (build: std.Triple.Arg) => {
 		checksum,
 	});
 
+	let utils = bootstrap.utils({ host: build });
+
 	// Work around an issue regarding libtool and sysroots. See: https://www.linuxfromscratch.org/lfs/view/stable/chapter06/binutils-pass2.html
 	let script = tg`
 		mkdir -p $OUTPUT
@@ -28,7 +31,9 @@ export let source = tg.target(async (build: std.Triple.Arg) => {
 		cd $OUTPUT
 		sed '6009s/$add_dir//' -i ltmain.sh
 	`;
-	let result = tg.Directory.expect(await std.build(script));
+	let result = tg.Directory.expect(
+		await tg.build(script, { env: std.env.object(utils) }),
+	);
 	return result;
 });
 

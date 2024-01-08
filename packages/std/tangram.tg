@@ -37,6 +37,9 @@ import * as injection from "./wrap/injection.tg";
 export let testCompileInjection = tg.target(async () => {
 	return await injection.test();
 });
+export let testCompileInjectionCross = tg.target(async () => {
+	return await injection.testCross();
+});
 
 import * as workspace from "./wrap/workspace.tg";
 
@@ -45,8 +48,10 @@ export let testEarlyRust = tg.target(async () => {
 });
 
 export let testWorkspace = tg.target(async () => {
-	let host = await Triple.host();
 	return await workspace.test();
+});
+export let testWorkspaceCross = tg.target(async () => {
+	return await workspace.testCross();
 });
 
 import * as proxy from "./sdk/proxy.tg";

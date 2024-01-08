@@ -5,7 +5,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 use tangram_client as tg;
-use tangram_error::{error, return_error, Result, WrapErr};
+use tangram_error::{error, Result, WrapErr};
 use tg::Handle;
 
 // Data read from environment variables.
@@ -312,10 +312,10 @@ async fn main_inner() -> Result<()> {
 			.args(std::env::args_os().skip(1))
 			.exec();
 
-		return_error!(
+		return Err(error!(
 			"Failed to invoke C compiler ({:#?}): {error}.",
 			environment.cc
-		);
+		));
 	}
 
 	let Args {
@@ -374,23 +374,23 @@ async fn main_inner() -> Result<()> {
 
 	// Create a build.
 	let id = target.id(tg).await?;
-	let build_id = tg
-		.get_or_create_build(
-			None,
-			id,
-			Some(environment.runtime.build),
-			0,
-			tg::build::Retry::Canceled,
-		)
-		.await?;
+	let parent = tg::Build::with_id(environment.runtime.build);
+	let build_options = tg::build::Options {
+		depth: 0,
+		parent: Some(parent),
+		remote: false,
+		retry: tg::build::Retry::Canceled,
+		user: None,
+	};
+	let build_id = tg.get_or_create_build(id, build_options).await?;
 	let build = tg::Build::with_id(build_id);
 
 	// Await the outcome.
 	let outcome = build.outcome(tg).await?;
 	let build_directory = match outcome {
-		tg::build::Outcome::Canceled => return_error!("Build was cancelled."),
-		tg::build::Outcome::Terminated => return_error!("Build was terminated."),
-		tg::build::Outcome::Failed(e) => return_error!("Build failed: {e}."),
+		tg::build::Outcome::Canceled => return Err(error!("Build was cancelled.")),
+		tg::build::Outcome::Terminated => return Err(error!("Build was terminated.")),
+		tg::build::Outcome::Failed(e) => return Err(error!("Build failed: {e}.")),
 		tg::build::Outcome::Succeeded(outcome) => outcome
 			.try_unwrap_directory()
 			.wrap_err("Expected build to create a directory.")?,
@@ -429,7 +429,7 @@ async fn main_inner() -> Result<()> {
 		std::env::current_dir().wrap_err("Failed to get current working directory.")?;
 	while !tangram_path.join(".tangram").exists() {
 		let Some(parent) = tangram_path.parent() else {
-			return_error!("Failed to find .tangram directory.");
+			return Err(error!("Failed to find .tangram directory."));
 		};
 		tangram_path = parent.into();
 	}
@@ -485,7 +485,7 @@ async fn create_remapping_table(
 
 		// Bail if the file does not exist.
 		if !path.exists() {
-			return_error!("Source file does not exist: {path:#?}.");
+			return Err(error!("Source file does not exist: {path:#?}."));
 		}
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.

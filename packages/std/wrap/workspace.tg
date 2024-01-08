@@ -1,4 +1,5 @@
 import * as bootstrap from "../bootstrap.tg";
+import * as gcc from "../sdk/gcc.tg";
 import * as std from "../tangram.tg";
 
 type Arg = std.sdk.BuildEnvArg & {
@@ -182,13 +183,12 @@ export let build = async (arg: BuildArg) => {
 	let source = arg.source;
 	let host = std.triple(arg.host);
 	let target = arg.target ? std.triple(arg.target) : host;
+	let targetString = std.Triple.toString(target);
 	let system = std.Triple.system(host);
 	let os = tg.System.os(system);
-
-	let sdkArg: std.sdk.Arg = { host, target};
-	if (host.arch === target.arch) {
-		sdkArg = { ...sdkArg, bootstrapMode: true };
-	}
+	let isBootstrap = std
+		.flatten([arg?.sdkArg])
+		.some((sdk) => sdk?.bootstrapMode);
 
 	// On Linux, ensure we use a musl target.
 	if (os === "linux") {
@@ -201,10 +201,19 @@ export let build = async (arg: BuildArg) => {
 	let isCross = !std.Triple.eq(host, target);
 
 	// Get the SDK, without proxying enabled.
+	let sdkArg: std.sdk.Arg = { host, target};
+	if (host.arch === target.arch) {
+		sdkArg = { ...sdkArg, bootstrapMode: true };
+	}
 	let sdk = await std.sdk(sdkArg, arg.sdkArg, { proxy: false });
-	let { directory: toolchain } = await std.sdk.toolchainComponents({
+	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
 		env: sdk,
 	});
+
+	let crossToolchain = await tg.directory();
+	if (isCross && !isBootstrap) {
+		crossToolchain = await gcc.toolchain({ host, target });
+	}
 
 	// Get the Rust toolchain.
 	let rustToolchain = await rust({ target });
@@ -212,11 +221,13 @@ export let build = async (arg: BuildArg) => {
 	// Set up common environemnt.
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
 	let prefix = ``;
-	if (isCross) {
-		prefix = `${std.Triple.toString(target)}-`;
+	if (isCross && !isBootstrap) {
+		prefix = `${targetString}-`;
 	}
+
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
 		sdk,
+		crossToolchain,
 		rustToolchain,
 		{
 			SSL_CERT_FILE: certFile,
@@ -237,7 +248,7 @@ export let build = async (arg: BuildArg) => {
 	let cargo = tg``;
 	if (os === "linux") {
 		let ldso = tg`lib/${bootstrap.interpreterName(host)}`;
-		interpreter = tg`${toolchain}/${ldso} --library-path ${toolchain}/lib`;
+		interpreter = tg`${buildToolchain}/${ldso} --library-path ${buildToolchain}/lib`;
 		rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
 		cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
 	} else if (os === "darwin") {
@@ -258,6 +269,7 @@ export let build = async (arg: BuildArg) => {
 
 	// Define phases.
 	let prepare = tg`
+		set +x
 		export CARGO_HOME=$PWD/cargo_home
 		mkdir -p $CARGO_HOME
 
@@ -272,19 +284,19 @@ export let build = async (arg: BuildArg) => {
 		`;
 
 	let args = [
-			tg`--manifest-path ${source}/Cargo.toml`,
-			`--target-dir $TARGET`,
-			`--target $RUST_TARGET`,
-			`--all`,
-			`--locked`,
-		];
-		if (release) {
-			args.push(`--release`);
-		}
+		tg`--manifest-path ${source}/Cargo.toml`,
+		`--target-dir $TARGET`,
+		`--target $RUST_TARGET`,
+		`--all`,
+		`--locked`,
+	];
+	if (release) {
+		args.push(`--release`);
+	}
 
 	let build = {
 		command: tg`${cargo} build`,
-		args
+		args,
 	};
 
 	let buildType = "release";
@@ -328,8 +340,6 @@ export let test = tg.target(async () => {
 
 	// Determine the target triple with differing architecture from the host.
 	let hostArch = host.arch;
-	let targetArch: std.Triple.Arch =
-		hostArch === "x86_64" ? "aarch64" : "x86_64";
 
 	let nativeWorkspace = await workspace({
 		host,
@@ -368,7 +378,11 @@ export let testCross = tg.target(async () => {
 		environment: "gnu",
 	});
 
-	let crossWorkspace = await workspace({ build: host, host: target, release: false });
+	let crossWorkspace = await workspace({
+		build: host,
+		host: target,
+		release: false,
+	});
 
 	// Assert the cross workspace was built for the target.
 	let crossWrapper = await crossWorkspace.get("bin/wrapper");

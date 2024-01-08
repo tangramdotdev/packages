@@ -8,7 +8,7 @@ use std::{
 	str::FromStr,
 };
 use tangram_client as tg;
-use tangram_error::{return_error, Result, WrapErr};
+use tangram_error::{error, Result, WrapErr};
 use tangram_wrapper::manifest::{self, Manifest};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing_subscriber::prelude::*;
@@ -546,7 +546,7 @@ impl std::str::FromStr for LibraryPathOptimizationStrategy {
 			"combine" => Ok(Self::Combine),
 			"filter" => Ok(Self::Filter),
 			"resolve" => Ok(Self::Resolve),
-			_ => return_error!("Invalid library path optimization strategy {s}."),
+			_ => Err(error!("Invalid library path optimization strategy {s}.")),
 		}
 	}
 }
@@ -584,7 +584,9 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 
 	if !matches!(strategy, LibraryPathOptimizationStrategy::Combine) {
-		return_error!("Invalid library path optimization strategy {strategy:?}.");
+		return Err(error!(
+			"Invalid library path optimization strategy {strategy:?}."
+		));
 	}
 
 	let mut entries = BTreeMap::new();
@@ -630,7 +632,7 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 				.artifact(tg)
 				.await?
 				.as_ref()
-				.ok_or(tangram_error::Error::with_message("Expected a directory."))?;
+				.ok_or(error!("Expected a directory."))?;
 			if let tg::Artifact::Directory(directory) = artifact {
 				if directory.entries(tg).await?.contains_key(library) {
 					found_libraries.insert(library.clone());
@@ -930,12 +932,10 @@ where
 				path: Some(s.strip_prefix('/').unwrap().to_owned()),
 			})
 		},
-		_ => {
-			return_error!(
-				"Expected a template with 1 or 2 components, got {:?}.",
-				components
-			)
-		},
+		_ => Err(error!(
+			"Expected a template with 1 or 2 components, got {:?}.",
+			components
+		)),
 	}
 }
 

@@ -2,7 +2,9 @@
 
 import * as bootstrap from "../../bootstrap.tg";
 import * as std from "../../tangram.tg";
+import * as utils from "../../utils.tg";
 import binutils from "../binutils.tg";
+import * as dependencies from "../dependencies.tg";
 import * as gcc from "../gcc.tg";
 import kernelHeaders from "../kernel_headers.tg";
 import { constructSysroot } from "../libc.tg";
@@ -40,7 +42,8 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		host,
 		sdk: { bootstrapMode: true },
 		target,
-		variant: "stage2_full",
+		// variant: "stage2_full",
+		variant: "stage1_limited",
 	});
 
 	return env;
@@ -156,6 +159,9 @@ export let canadianCross = tg.target(async (arg?: std.Triple.HostArg) => {
 	let build = bootstrap.toolchainTriple(host);
 
 	let sdk = { bootstrapMode: true };
+
+	await utils.env({ host: build, sdk });
+	await dependencies.env({ host: build, sdk });
 
 	// Create cross-toolchain from build to host.
 	let { env, sysroot } = await buildToHostCrossToolchain({ host });

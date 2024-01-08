@@ -1,3 +1,4 @@
+import * as bootstrap from "./bootstrap.tg";
 import * as std from "./tangram.tg";
 import * as bash from "./utils/bash.tg";
 import coreutils from "./utils/coreutils.tg";
@@ -24,6 +25,8 @@ export * as tar from "./utils/tar.tg";
 
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
+	await bootstrap.make.build(arg);
+
 	// Build bash and use it as the default shell.
 	let bashAritfact = await bash.build(arg);
 	let bashExecutable = tg.File.expect(await bashAritfact.get("bin/bash"));
