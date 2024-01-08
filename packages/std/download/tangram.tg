@@ -1,3 +1,7 @@
+export let metadata = {
+	name: "download",
+};
+
 export type Arg = {
 	checksum: tg.Checksum;
 	unpackFormat?: download.UnpackFormat;

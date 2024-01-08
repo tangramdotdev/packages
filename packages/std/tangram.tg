@@ -4,7 +4,7 @@ export { build } from "./build.tg";
 export { caCertificates } from "./certificates.tg";
 export { container } from "./container.tg";
 export * as directory from "./directory.tg";
-export { download } from "./download.tg";
+export { download } from "tg:download" with { path: "./download" };
 export { env } from "./env.tg";
 export * as file from "./file.tg";
 export { patch } from "./patch.tg";
