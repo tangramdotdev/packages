@@ -1,0 +1,71 @@
+import * as std from "../../tangram.tg.ts";
+import make from "./make.tg.ts";
+
+export let metadata = {
+	name: "zstd",
+	version: "1.5.5",
+};
+
+export let source = tg.target(() => {
+	let { name, version } = metadata;
+	let compressionFormat = ".zst" as const;
+	let checksum =
+		"sha256:ce264bca60eb2f0e99e4508cffd0d4d19dd362e84244d7fc941e79fa69ccf673";
+	let owner = "facebook";
+	let repo = name;
+	let tag = `v${version}`;
+	return std.download.fromGithub({
+		checksum,
+		compressionFormat,
+		owner,
+		repo,
+		tag,
+		release: true,
+		version,
+	});
+});
+
+type Arg = std.sdk.BuildEnvArg & {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	source?: tg.Directory;
+};
+
+export let build = tg.target(async (arg?: Arg) => {
+	let {
+		autotools = [],
+		build,
+		env: env_,
+		host,
+		source: source_,
+		...rest
+	} = arg ?? {};
+
+	let sourceDir = source_ ?? source();
+
+	let prepare = tg`cp -R ${sourceDir}/* . && chmod -R +w .`;
+	let install = tg`make install PREFIX=$OUTPUT`;
+	let phases = { prepare, install };
+
+	let env = [std.utils.env(arg), make(arg), env_];
+
+	let result = std.autotools.build({
+		...rest,
+		...std.Triple.rotate({ build, host }),
+		env,
+		phases: { phases, order: ["prepare", "build", "install"] },
+		prefixArg: "none",
+		source: sourceDir,
+	});
+
+	return result;
+});
+
+export default build;
+
+export let test = tg.target(async () => {
+	await std.assert.pkg({
+		directory: build({ sdk: { bootstrapMode: true } }),
+		libs: ["zstd"],
+	});
+	return true;
+});
