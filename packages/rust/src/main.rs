@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
-use tangram_error::{return_error, Result, WrapErr};
+use tangram_error::{error, Result, WrapErr};
 use tg::Handle;
 use tokio::io::AsyncWriteExt;
 
@@ -105,7 +105,7 @@ impl Args {
         let mut search_dir = cwd.clone();
         while !search_dir.join(".tangram").exists() {
             let Some(parent) = search_dir.parent() else {
-                return_error!("Missing tangram path.");
+                return Err(error!("Missing tangram path."));
             };
             search_dir = parent.into();
         }
@@ -148,7 +148,7 @@ async fn main_inner() -> Result<()> {
         let error = std::process::Command::new(std::env::args().nth(1).unwrap())
             .args(std::env::args().skip(2))
             .exec();
-        return_error!("exec failed: {error}.");
+        return Err(error!("exec failed: {error}."));
     }
 
     // Invoke rustc to get a list of output files.
@@ -246,11 +246,15 @@ async fn main_inner() -> Result<()> {
     let target_id = target.id(tg).await?;
 
     // Create the build and mark it as a child.
-    let build_id = tg
-        .get_or_create_build_for_target(None, &target_id, 1, tg::build::Retry::Failed)
-        .await?;
-    tg.add_build_child(None, &args.tangram_runtime.build, &build_id)
-        .await?;
+    let parent = tg::Build::with_id(args.tangram_runtime.build);
+    let build_options = tg::build::Options {
+        depth: 1,
+        parent: Some(parent),
+        remote: false,
+        retry: tg::build::Retry::Failed,
+        user: None,
+    };
+    let build_id = tg.get_or_create_build(target_id, build_options).await?;
 
     // Get the build outcome.
     let outcome = tg::Build::with_id(build_id)
@@ -260,9 +264,9 @@ async fn main_inner() -> Result<()> {
 
     // Get the output.
     let output = match outcome {
-        tg::build::Outcome::Canceled => return_error!("Build was cancelled."),
-        tg::build::Outcome::Terminated => return_error!("Build failed terminated."),
-        tg::build::Outcome::Failed(error) => return_error!("Build failed: {error}"),
+        tg::build::Outcome::Canceled => return Err(error!("Build was cancelled.")),
+        tg::build::Outcome::Terminated => return Err(error!("Build failed terminated.")),
+        tg::build::Outcome::Failed(error) => return Err(error!("Build failed: {error}")),
         tg::build::Outcome::Succeeded(success) => success
             .clone()
             .try_unwrap_directory()
@@ -336,10 +340,10 @@ fn get_outputs(args: &Args) -> Result<Vec<PathBuf>> {
     if !output.status.success() {
         let code = output.status.code().unwrap();
         let error = String::from_utf8_lossy(&output.stderr);
-        return_error!(
+        return Err(error!(
             "{:#?} exited with code {code}. stderr: {error}",
             &args.rustc
-        );
+        ));
     }
 
     let output_directory = args.rustc_output_directory.clone().unwrap_or(".".into());
@@ -368,7 +372,7 @@ const ARGS_WITH_VALUES: [&str; 32] = [
     "--edition",
     "--emit",
     "--error-format",
-    "--exlain",
+    "--explain",
     "--extern",
     "--forbid",
     "--force-warn",

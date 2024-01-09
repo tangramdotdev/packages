@@ -57,26 +57,18 @@ export let env = tg.target(async (arg?: Arg) => {
 	// Add `make` built against the standard utils.
 	dependencies.push(await make(arg));
 
-	// Add packages with only a handful of dependencies.
 	dependencies = dependencies.concat(
-		await Promise.all([
-			bc(arg),
-			bison(arg),
-			bzip2(arg),
-			gperf(arg),
-			m4(arg),
-			libffi(arg),
-			patch(arg),
-			xz(arg),
-			zlib(arg),
-			zstd(arg),
-		]),
+		await Promise.all([bc(arg), bison(arg), bzip2(arg), gperf(arg), m4(arg)]),
 	);
 
-	// Add perl.
-	dependencies.push(await perl(arg));
+	dependencies = dependencies.concat(
+		await Promise.all([libffi(arg), patch(arg), xz(arg), zlib(arg), zstd(arg)]),
+	);
 
-	// Add packages with multiple dependenices on other packages in this module.
+	dependencies = dependencies.concat(
+		await Promise.all([perl(arg), pkgconfig(arg), python(arg), texinfo(arg)]),
+	);
+
 	dependencies = dependencies.concat(
 		await Promise.all([
 			autoconf(arg),
@@ -84,9 +76,6 @@ export let env = tg.target(async (arg?: Arg) => {
 			file(arg),
 			flex(arg),
 			help2man(arg),
-			pkgconfig(arg),
-			python(arg),
-			texinfo(arg),
 		]),
 	);
 
