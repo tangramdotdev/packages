@@ -145,6 +145,8 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	// Produce a combined directory containing the correct C library for the host and the Linux headers.
 	let sysroot = await constructSysroot({
 		...rest,
+		build: buildTriple,
+		host,
 		linuxHeaders,
 		env: bootstrapGCC,
 		target,
