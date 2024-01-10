@@ -2,7 +2,7 @@ import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "nodejs",
-	version: "20.10.0",
+	version: "20.11.0",
 };
 
 type ToolchainArg = {
@@ -13,7 +13,7 @@ type ToolchainArg = {
 };
 
 // URLs taken from https://nodejs.org/dist/v${version}/.
-// Hashes taken from https://nodejs.org/dist/v${version}/SHASUM256.txt
+// Hashes taken from https://nodejs.org/dist/v${version}/SHASUM256.txt.asc
 let source = async (): Promise<tg.Directory> => {
 	// Known versions of NodeJS.
 	let version = metadata.version;
@@ -28,26 +28,23 @@ let source = async (): Promise<tg.Directory> => {
 	} = {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
-			checksum:
-				"sha256:21f19d1f9d2345c5a4ed416c21d89cec20fe4b0715255d49463a4d37e283b4c6",
+			checksum: "sha256:f6df68c6793244071f69023a9b43a0cf0b13d65cbe86d55925c28e4134d9aafb",
 			unpackFormat: ".tar.xz",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
-			checksum:
-				"sha256:3fe4ec5d70c8b4ffc1461dec83ab23fc70124e137c4cbbe1ccc9d6ae6ec04a7d",
+			checksum: "sha256:822780369d0ea309e7d218e41debbd1a03f8cdf354ebf8a4420e89f39cc2e612",
 			unpackFormat: ".tar.xz",
 		},
 		["aarch64-macos"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
-			checksum:
-				"sha256:39b3780ade080ea0b294f7b0df97e31d8fc19dce3452cd6f98f0576f64747df9",
+			checksum: "sha256:d4b4ab81ebf1f7aab09714f834992f27270ad0079600da00c8110f8950ca6c5a",
 			unpackFormat: ".tar.xz",
 		},
 		["x86_64-macos"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:2f3ed01243e4311476e2c0d8a361fd8b3909278935b09af83cc875e03df95e07",
+				"sha256:f18a7438723d48417f5e9be211a2f3c0520ffbf8e02703469e5153137ca0f328",
 			unpackFormat: ".tar.xz",
 		},
 	};
