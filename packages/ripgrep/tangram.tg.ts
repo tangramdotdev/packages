@@ -6,13 +6,13 @@ export let metadata = {
 	name: "ripgrep",
 	owner: "BurntSushi",
 	repo: "ripgrep",
-	version: "14.0.3",
+	version: "14.1.0",
 };
 
 export let source = tg.target(async () => {
 	let { owner, repo, version } = metadata;
 	let checksum =
-		"sha256:f5794364ddfda1e0411ab6cad6dd63abe3a6b421d658d9fee017540ea4c31a0e";
+		"sha256:33c6169596a6bbfdc81415910008f26e0809422fda2d849562637996553b2ab6";
 	return std.download.fromGithub({
 		checksum,
 		owner,
