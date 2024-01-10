@@ -2,7 +2,7 @@ export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
 export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
-export { container } from "./container.tg.ts";
+export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
 export { download } from "tg:download" with { path: "./download" };
 export { env } from "./env.tg.ts";
@@ -251,60 +251,12 @@ export let testDefaultSdk = tg.target(async () => {
 	return env;
 });
 
-import { env } from "./env.tg.ts";
-export let reproDroppedLibs = tg.target(async () => {
-	let bootstrapSDK = await sdk({ bootstrapMode: true });
+// Image tests.
 
-	// A small library providing a single function.
-	let dylibSource = tg.file(`
-		#include <stdio.h>
-		void hello() {
-			printf("Hello, world!\\n");
-		}
-	`);
-	// A probram that uses the library.
-	let driverSource = tg.file(`
-		void hello();
-		int main() {
-			hello();
-			return 0;
-		}
-	`);
-
-	let traceEnv = {
-		TANGRAM_WRAPPER_TRACING: "tangram=trace",
-		TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
-		TGLD_TRACING: "tangram=trace",
-	};
-
-	// Compile the library.
-	let dylib = tg.Directory.expect(
-		await tg.build(
-			tg`mkdir -p $OUTPUT/lib && cc -v -xc ${dylibSource} -shared -o $OUTPUT/lib/libhello.so.1 && cd $OUTPUT/lib && ln -s libhello.so.1 libhello.so`,
-			{
-				env: await env.object(bootstrapSDK, traceEnv),
-			},
-		),
-	);
-
-	// Compile the driver.
-	let driver = tg.Directory.expect(
-		await tg.build(
-			tg`env && mkdir -p $OUTPUT/bin && cc -v -xc ${driverSource} -o $OUTPUT/bin/driver -lhello`,
-			{
-				env: await env.object(bootstrapSDK, dylib, traceEnv),
-			},
-		),
-	);
-
-	// Run the driver.
-	let output = tg.File.expect(
-		await tg.build(tg`driver > $OUTPUT`, {
-			env: await env.object(bootstrapSDK, driver, traceEnv),
-		}),
-	);
-	let text = await output.text();
-	tg.assert(text.includes("Hello, world!\n"));
-
-	return driver;
+import * as image from "./image.tg.ts";
+export let testOciWrappedEntrypoint = tg.target(async () => {
+	return await image.testWrappedEntrypoint();
+});
+export let testOciBasicRootfs = tg.target(async () => {
+	return await image.testBasicRootfs();
 });
