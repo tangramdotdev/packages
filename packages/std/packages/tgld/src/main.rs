@@ -217,7 +217,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	// Create the tangram instance.
 	let runtime_json =
 		std::env::var("TANGRAM_RUNTIME").wrap_err("Failed to get TANGRAM_RUNTIME.")?;
-	let tg = tg::client::Builder::with_runtime_json(&runtime_json)?.build();
+	let tg = tg::Builder::with_runtime_json(&runtime_json)?.build();
 	tg.connect().await?;
 
 	// Analyze the output file.

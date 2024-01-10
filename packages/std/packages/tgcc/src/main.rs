@@ -327,7 +327,7 @@ async fn main_inner() -> Result<()> {
 	let output = output.unwrap();
 
 	// Create a client.
-	let client = tg::client::Builder::new(environment.runtime.addr).build();
+	let client = tg::Builder::new(environment.runtime.addr).build();
 	let tg = &client;
 
 	// Create the driver executable.
@@ -375,7 +375,7 @@ async fn main_inner() -> Result<()> {
 	// Create a build.
 	let id = target.id(tg).await?;
 	let parent = tg::Build::with_id(environment.runtime.build);
-	let build_options = tg::build::Options {
+	let build_options = tg::build::GetOrCreateOptions {
 		depth: 0,
 		parent: Some(parent),
 		remote: false,

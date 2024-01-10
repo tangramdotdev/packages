@@ -1734,7 +1734,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=5bc612d03956cdc17834d7008a1e08996e08620d#5bc612d03956cdc17834d7008a1e08996e08620d"
+source = "git+https://github.com/tangramdotdev/tangram?rev=505a47a7a6bc2b9d699615909d88ed7511e9e7ed#505a47a7a6bc2b9d699615909d88ed7511e9e7ed"
 dependencies = [
  "async-compression",
  "async-recursion",
@@ -1774,6 +1774,7 @@ dependencies = [
  "tangram_error",
  "tar",
  "tempfile",
+ "time",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
@@ -1799,7 +1800,7 @@ dependencies = [
 [[package]]
 name = "tangram_error"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=5bc612d03956cdc17834d7008a1e08996e08620d#5bc612d03956cdc17834d7008a1e08996e08620d"
+source = "git+https://github.com/tangramdotdev/tangram?rev=505a47a7a6bc2b9d699615909d88ed7511e9e7ed#505a47a7a6bc2b9d699615909d88ed7511e9e7ed"
 dependencies = [
  "serde",
  "thiserror",
