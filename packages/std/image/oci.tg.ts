@@ -120,14 +120,6 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 	let rootDir =
 		rootDirs !== undefined ? await tg.directory(...rootDirs) : undefined;
 
-	console.log("rootDir", rootDir ? await rootDir.id() : "undefined");
-	console.log(
-		"entrypointArtifact",
-		entrypointArtifact ? await entrypointArtifact.id() : "undefined",
-	);
-	console.log("entrypointString", entrypointString);
-	console.log("cmdString", cmdString);
-
 	// Verify that the arguments supplied are correct.
 	tg.assert(
 		rootDir || entrypointArtifact,
@@ -147,7 +139,6 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 			entrypointString = ["/entrypoint"];
 		}
 	}
-	console.log("layers", layers);
 
 	// Create the image configuration.
 	let config: ImageConfigV1 = {
@@ -161,7 +152,6 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 			Cmd: cmdString,
 		},
 	};
-	console.log("config", config);
 
 	return imageFromLayers(config, ...layers);
 };
@@ -279,15 +269,11 @@ export type Layer = {
 
 export let layer = tg.target(
 	async (directory: tg.Directory): Promise<Layer> => {
-		console.log("dir pre-bundle", await directory.id());
 		let bundle = directory.bundle();
-		console.log("dir post-bundle", await (await bundle).id());
-		let tar = await std.build(tg`tar -chf $OUTPUT -C ${bundle} .`);
+		let tar = await std.build(tg`tar -cf $OUTPUT -C ${bundle} .`);
 		tg.File.assert(tar);
-		console.log("tarball", await tar.id());
 		let bytes = await tar.bytes();
 		let diffId = tg.checksum("sha256", bytes);
-		console.log("checksum", diffId);
 		return { tar, diffId };
 	},
 );

@@ -1,5 +1,6 @@
 export let metadata = {
 	name: "download",
+	version: "0.0.0"
 };
 
 export type Arg = {

@@ -1734,7 +1734,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=505a47a7a6bc2b9d699615909d88ed7511e9e7ed#505a47a7a6bc2b9d699615909d88ed7511e9e7ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=61084aa9568c62ef8638f0c90a5c17c9673c7f86#61084aa9568c62ef8638f0c90a5c17c9673c7f86"
 dependencies = [
  "async-compression",
  "async-recursion",
@@ -1800,7 +1800,7 @@ dependencies = [
 [[package]]
 name = "tangram_error"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=505a47a7a6bc2b9d699615909d88ed7511e9e7ed#505a47a7a6bc2b9d699615909d88ed7511e9e7ed"
+source = "git+https://github.com/tangramdotdev/tangram?rev=61084aa9568c62ef8638f0c90a5c17c9673c7f86#61084aa9568c62ef8638f0c90a5c17c9673c7f86"
 dependencies = [
  "serde",
  "thiserror",

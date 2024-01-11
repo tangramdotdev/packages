@@ -16,6 +16,7 @@ export { default as wrap } from "./wrap.tg.ts";
 
 export let metadata = {
 	name: "std",
+	version: "0.0.0"
 };
 
 export let flatten = <T,>(value: tg.MaybeNestedArray<T>): Array<T> => {
@@ -72,7 +73,7 @@ import * as wrap from "./wrap.tg.ts";
 export let testWrap = tg.target(async () => {
 	let shell = await bootstrap.shell();
 	let exe = tg.File.expect(await shell.get("bin/dash"));
-	return await wrap.wrap(exe, { env: { HELLO: tg.Mutation.set(tg`hi`) } });
+	return await wrap.wrap(exe, { env: { HELLO: tg.Mutation.set(`hi`) } });
 });
 export let testMuslWrapper = tg.target(async () => {
 	return await wrap.testSingleArgObjectNoMutations();
@@ -237,7 +238,6 @@ import { toolchainTriple as bootstrapToolchainTriple } from "./bootstrap.tg.ts";
 import { sdk } from "./sdk.tg.ts";
 export let testBootstrapSdk = tg.target(async () => {
 	let env = await sdk({ bootstrapMode: true });
-	console.log("env", env);
 	let host = await Triple.host();
 	let detectedHost = bootstrapToolchainTriple(host);
 	await sdk.assertValid(env, { host: detectedHost, bootstrapMode: true });

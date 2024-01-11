@@ -531,7 +531,7 @@ export namespace sdk {
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		let output = tg.File.expect(
 			await tg.build(
-				tg`set -x && /usr/bin/env && ${cmd} -dumpmachine > $OUTPUT`,
+				tg`${cmd} -dumpmachine > $OUTPUT`,
 				{
 					env: std.env.object(env),
 					host: std.Triple.system(detectedHost),
