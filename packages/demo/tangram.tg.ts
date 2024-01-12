@@ -7,7 +7,7 @@ export let metadata = {
 	name: "demo",
 };
 
-export let image = tg.target(async () => std.image(env(), { cmd: ["sh"] }));
+export let image = tg.target(() => std.image(env(), { cmd: ["bash"] }));
 
 export let env = tg.target(() => std.env(...packages));
 
