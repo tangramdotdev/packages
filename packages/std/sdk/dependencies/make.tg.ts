@@ -50,11 +50,12 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let makeArtifact = await build({ sdk: { bootstrapMode: true } });
-	// await std.assert.pkg({
-	// 	directory: makeArtifact,
-	// 	binaries: ["make"],
-	// 	metadata,
-	// });
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let makeArtifact = await build({ host, sdk: { bootstrapMode: true } });
+	await std.assert.pkg({
+		directory: makeArtifact,
+		binaries: ["make"],
+		metadata,
+	});
 	return makeArtifact;
 });

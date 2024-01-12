@@ -88,3 +88,23 @@ export let testBasicRootfs = tg.target(async () => {
 
 	return imageFile;
 });
+
+export let testOciBasicEnv = tg.target(async () => {
+	let detectedHost = await std.Triple.host();
+	let host = bootstrap.toolchainTriple(detectedHost);
+	let utils = await std.utils.env({ host, sdk: { bootstrapMode: true } });
+	let basicEnv = await std.env(
+		utils,
+		{ NAME: "Tangram" },
+		{ bootstrapMode: true },
+	);
+	return basicEnv;
+});
+
+export let testBasicEnvImage = tg.target(async () => {
+	let basicEnv = await testOciBasicEnv();
+	let imageFile = await image(basicEnv, {
+		 cmd: ["bash"],
+	});
+	return imageFile;
+});

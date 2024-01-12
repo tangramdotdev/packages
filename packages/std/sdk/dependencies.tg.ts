@@ -114,7 +114,9 @@ export let assertProvides = async (env: std.env.Arg) => {
 	return true;
 };
 
+import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	await assertProvides(await env({ sdk: { bootstrapMode: true } }));
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	await assertProvides(await env({ host, sdk: { bootstrapMode: true } }));
 	return true;
 });

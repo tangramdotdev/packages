@@ -1,4 +1,5 @@
 import * as std from "./tangram.tg.ts";
+import { manifestReferences, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
 	/* The package to check. If no other options are given, just asserts the package directory is non-empty. */
@@ -223,6 +224,43 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 	return true;
 };
 
+export let assertFileReferences = async (
+	file: tg.File,
+	interpreterKind: "normal" | "ld-musl" | "ld-linux",
+) => {
+	// Ensure the interpreter is found in the manifest references.
+	let fileManifest = await wrap.Manifest.read(file);
+	tg.assert(fileManifest);
+	tg.assert(fileManifest.interpreter?.kind === interpreterKind);
+	let interpreter = fileManifest.interpreter;
+	let interpreterPath = interpreter.path;
+	let interpreterId = interpreterPath.artifact;
+	tg.assert(interpreterId);
+	let foundManifest = false;
+	for await (let reference of manifestReferences(fileManifest)) {
+		let referenceId = await reference.id();
+		if (referenceId === interpreterId) {
+			foundManifest = true;
+		}
+	}
+	tg.assert(
+		foundManifest,
+		"Could not find interpreter in manifest references.",
+	);
+
+	// Ensure the interpreter is found in the file references.
+	let fileReferences = await file.references();
+	tg.assert(fileReferences.length > 0, "No file references found.");
+	let foundFile = false;
+	for (let reference of fileReferences) {
+		let referenceId = await reference.id();
+		if (referenceId === interpreterId) {
+			foundFile = true;
+		}
+	}
+	tg.assert(foundFile, "Could not find interpreter in file references.");
+};
+
 type HeaderArg = {
 	directory: tg.Directory;
 	header: string;
@@ -357,7 +395,7 @@ export let dlopen = async (arg: DlopenArg) => {
 				std.sdk({ bootstrapMode: true }),
 				directory,
 				...arg.runtimeDepDirs,
-				{ TGLD_TRACING: "tangram=trace" }
+				{ TGLD_TRACING: "tangram=trace" },
 			),
 		}),
 	);

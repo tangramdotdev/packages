@@ -16,7 +16,7 @@ export { default as wrap } from "./wrap.tg.ts";
 
 export let metadata = {
 	name: "std",
-	version: "0.0.0"
+	version: "0.0.0",
 };
 
 export let flatten = <T,>(value: tg.MaybeNestedArray<T>): Array<T> => {
@@ -54,9 +54,16 @@ export let testWorkspaceCross = tg.target(async () => {
 	return await workspace.testCross();
 });
 
+import { assertFileReferences } from "./assert.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 export let testProxy = tg.target(async () => {
-	return await proxy.test();
+	let file = await proxy.test();
+	await assertFileReferences(file, "ld-musl");
+	let dir = await tg.directory({ proxyFile: file });
+	let roundTripFile = tg.File.expect(await dir.get("proxyFile"));
+	await assertFileReferences(roundTripFile, "ld-musl");
+
+	return roundTripFile;
 });
 
 import * as bootstrap from "./bootstrap.tg.ts";
@@ -69,14 +76,14 @@ export let testPlainBootstrapSdk = tg.target(async () => {
 	return bootstrapSdk;
 });
 
-import * as wrap from "./wrap.tg.ts";
+import { testSingleArgObjectNoMutations, wrap } from "./wrap.tg.ts";
 export let testWrap = tg.target(async () => {
 	let shell = await bootstrap.shell();
 	let exe = tg.File.expect(await shell.get("bin/dash"));
-	return await wrap.wrap(exe, { env: { HELLO: tg.Mutation.set(`hi`) } });
+	return await wrap(exe, { env: { HELLO: tg.Mutation.set(`hi`) } });
 });
 export let testMuslWrapper = tg.target(async () => {
-	return await wrap.testSingleArgObjectNoMutations();
+	return await testSingleArgObjectNoMutations();
 });
 
 import * as bootstrapMake from "./bootstrap/make.tg.ts";
@@ -91,8 +98,15 @@ export let testBootstrapMusl = tg.target(async () => {
 // std.utils tests
 
 import * as utils from "./utils.tg.ts";
+export let testUtilsPrerequisites = tg.target(async () => {
+	return await utils.prerequisites();
+});
+
 export let testUtilsBash = tg.target(async () => {
-	return await utils.bash.test();
+	let dir = await utils.bash.test();
+	let bashExe = tg.File.expect(await dir.get("bin/bash"));
+	await assertFileReferences(bashExe, "ld-musl");
+	return dir;
 });
 export let testUtilsCoreutils = tg.target(async () => {
 	return await utils.coreutils.test();
@@ -259,4 +273,20 @@ export let testOciWrappedEntrypoint = tg.target(async () => {
 });
 export let testOciBasicRootfs = tg.target(async () => {
 	return await image.testBasicRootfs();
+});
+export let testOciBasicEnv = tg.target(async () => {
+	return await image.testOciBasicEnv();
+});
+export let testOciBasicEnvImage = tg.target(async () => {
+	return await image.testBasicEnvImage();
+});
+
+import { env } from "./env.tg.ts";
+export let testEnvWithBash = tg.target(async () => {
+	let host = bootstrap.toolchainTriple(await Triple.host());
+	let bash = await utils.bash.build({ host, sdk: { bootstrapMode: true }});
+	let bashEnv = tg.File.expect(await env(bash, { bootstrapMode: true	}));
+	let bashEnvReferences = await bashEnv.references();
+	console.log("bashEnvReferences", bashEnvReferences);
+	return bashEnv;
 });

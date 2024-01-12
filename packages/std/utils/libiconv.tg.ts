@@ -1,6 +1,5 @@
-import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import { buildUtil } from "../utils.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "libiconv",
@@ -17,6 +16,7 @@ export let source = tg.target(() => {
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	source?: tg.Directory;
+	usePrerequisites?: boolean;
 };
 
 export let build = tg.target((arg?: Arg) => {
@@ -26,6 +26,7 @@ export let build = tg.target((arg?: Arg) => {
 		env: env_,
 		host,
 		source: source_,
+		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
 
@@ -33,7 +34,13 @@ export let build = tg.target((arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [bootstrap.make.build(), env_];
+	let dependencies: tg.Unresolved<std.env.Arg> = [];
+
+	if (usePrerequisites) {
+		dependencies.push(prerequisites({ host }));
+	}
+
+	let env = [...dependencies, env_];
 
 	let output = buildUtil(
 		{
@@ -51,9 +58,11 @@ export let build = tg.target((arg?: Arg) => {
 
 export default build;
 
+import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	await std.assert.pkg({
-		directory: build({ sdk: { bootstrapMode: true } }),
+		directory: build({ host, sdk: { bootstrapMode: true } }),
 		libs: [{ name: "iconv", staticlib: false }],
 	});
 	return true;

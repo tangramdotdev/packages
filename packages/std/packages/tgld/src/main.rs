@@ -66,7 +66,7 @@ async fn main_inner() -> Result<()> {
 #[derive(Debug)]
 struct Options {
 	/// Library path optimization strategy. Select `filter`, `combine`, or `none`. Defaults to `filter`.
-	library_path_optimization: LibraryPathOptimizationStrategy,
+	library_path_optimization: LibraryPathOptimizationLevel,
 
 	/// The path to the command that will be invoked.
 	command_path: PathBuf,
@@ -139,9 +139,9 @@ fn read_options() -> Options {
 	let injection_path = std::env::var("TANGRAM_LINKER_INJECTION_PATH").ok();
 
 	// Get the option to disable combining library paths. Enabled by default.
-	let mut library_optimization_strategy = std::env::var("TANGRAM_LINKER_LIBRARY_PATH_STRATEGY")
+	let mut library_optimization_strategy = std::env::var("TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL")
 		.ok()
-		.map_or(LibraryPathOptimizationStrategy::default(), |s| {
+		.map_or(LibraryPathOptimizationLevel::default(), |s| {
 			s.parse().unwrap_or_default()
 		});
 
@@ -159,12 +159,12 @@ fn read_options() -> Options {
 		// Pass through any arg that isn't a tangram arg.
 		if arg.starts_with("--tg") {
 			// Handle setting combined library paths. Will override the env var if set.
-			if arg.starts_with("--tg-library-path-strategy=") {
+			if arg.starts_with("--tg-library-path-opt-level=") {
 				let option = arg
-					.strip_prefix("--tg-library-path-strategy=")
+					.strip_prefix("--tg-library-path-opt-level=")
 					.expect("Invalid argument");
 				library_optimization_strategy =
-					LibraryPathOptimizationStrategy::from_str(option).unwrap_or_default();
+					LibraryPathOptimizationLevel::from_str(option).unwrap_or_default();
 			}
 		} else {
 			command_args.push(arg.clone());
@@ -240,7 +240,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	let output_artifact = if is_executable
 		|| !matches!(
 			options.library_path_optimization,
-			LibraryPathOptimizationStrategy::None
+			LibraryPathOptimizationLevel::None
 		) {
 		// Open the output file.
 		let reader = tokio::io::BufReader::new(
@@ -349,11 +349,11 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 			for library_path in &library_paths {
 				references.insert(library_path.clone().into());
 			}
-			tracing::trace!(?references);
 		}
 	}
 
 	// Set the xattrs of the output file.
+	tracing::trace!(?references, "Writing references");
 	let attributes = tg::file::Attributes {
 		references: references.into_iter().collect(),
 	};
@@ -525,28 +525,36 @@ enum InterpreterRequirement {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-enum LibraryPathOptimizationStrategy {
+enum LibraryPathOptimizationLevel {
 	/// Do not optimize library paths.
-	None,
+	None = 0,
+	/// Resolve any artifacts with subpaths to their innermost directory. The `Filter` and `Combine` strategies will also perform this optimization first.
+	Resolve = 1,
+	/// Filter library paths for needed libraries.
+	Filter = 2,
 	/// Combine library paths into a single directory.
 	#[default]
-	Combine,
-	/// Filter library paths for needed libraries.
-	Filter,
-	/// Resolve any artifacts with subpaths to their innermost directory. The `Filter` and `Combine` strategies will also perform this optimization first.
-	Resolve,
+	Combine = 3,
 }
 
-impl std::str::FromStr for LibraryPathOptimizationStrategy {
+impl std::str::FromStr for LibraryPathOptimizationLevel {
 	type Err = tangram_error::Error;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s.to_ascii_lowercase().as_str() {
-			"none" => Ok(Self::None),
-			"combine" => Ok(Self::Combine),
-			"filter" => Ok(Self::Filter),
-			"resolve" => Ok(Self::Resolve),
-			_ => Err(error!("Invalid library path optimization strategy {s}.")),
+			"none" | "0" => Ok(Self::None),
+			"resolve" | "1" => Ok(Self::Resolve),
+			"filter" | "2" => Ok(Self::Filter),
+			"combine" | "3" => Ok(Self::Combine),
+			_ => {
+				// If the string is a digit greater than 3, fall back to 3.
+				if let Ok(level) = s.parse::<usize>() {
+					if level > 3 {
+						return Ok(Self::Combine);
+					}
+				}
+				Err(error!("Invalid library path optimization strategy {s}."))
+			},
 		}
 	}
 }
@@ -557,11 +565,11 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	file: &Option<tg::File>,
 	library_paths: HashSet<tg::symlink::Id, H>,
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
-	strategy: LibraryPathOptimizationStrategy,
+	strategy: LibraryPathOptimizationLevel,
 	report_missing: bool,
 ) -> Result<HashSet<tg::symlink::Id, H>> {
 	if file.is_none()
-		|| matches!(strategy, LibraryPathOptimizationStrategy::None)
+		|| matches!(strategy, LibraryPathOptimizationLevel::None)
 		|| library_paths.is_empty()
 	{
 		return Ok(library_paths);
@@ -570,7 +578,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	// Resolve any artifacts with subpaths to their innermost directory.
 	let resolved_dirs: HashSet<tg::directory::Id, H> = resolve_paths(tg, &library_paths).await?;
 	tracing::trace!(?resolved_dirs, "post-resolve");
-	if matches!(strategy, LibraryPathOptimizationStrategy::Resolve) {
+	if matches!(strategy, LibraryPathOptimizationLevel::Resolve) {
 		return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;
 	}
 
@@ -578,12 +586,12 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let file = file.as_ref().unwrap();
 	find_transitive_needed_libraries(tg, file, &resolved_dirs, needed_libraries, 0).await?;
 	tracing::trace!(?needed_libraries, "post-find");
-	if matches!(strategy, LibraryPathOptimizationStrategy::Filter) {
+	if matches!(strategy, LibraryPathOptimizationLevel::Filter) {
 		let resolved_dirs = needed_libraries.values().flatten().cloned().collect();
 		return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;
 	}
 
-	if !matches!(strategy, LibraryPathOptimizationStrategy::Combine) {
+	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
 		return Err(error!(
 			"Invalid library path optimization strategy {strategy:?}."
 		));

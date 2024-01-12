@@ -468,8 +468,6 @@ export namespace wrap {
 			);
 			return manifestMutationFromMutation(await tg.Mutation.set(ret));
 		} else {
-			console.log(".");
-			console.log("arg", arg);
 			return tg.unreachable();
 		}
 	};
@@ -1032,17 +1030,21 @@ export namespace wrap {
 			newBytesPosition += 8;
 
 			// Collect the manifest references.
-			let arr = [];
+			let references_ = new Set<tg.Artifact.Id>();
 			for await (let reference of manifestReferences(manifest)) {
-				arr.push(reference);
+				references_.add(await reference.id());
 			}
-			let references = await Promise.all(arr);
+			let fileReferences = await file.references();
+			for (let reference of fileReferences) {
+				references_.add(await reference.id());
+			}
+			let references = [...references_].map((id) => tg.Artifact.withId(id));
 
 			// Create the file.
 			let newFile = tg.file({
 				contents: newBytes,
 				executable: true,
-				references: (await file.references()).concat(references),
+				references,
 			});
 
 			return newFile;
@@ -1397,6 +1399,22 @@ export let defaultShellInterpreter = async (
 	return bash;
 };
 
+let symlinkFromManifestSymlink = async (
+	symlink: wrap.Manifest.Symlink,
+): Promise<tg.Symlink> => {
+	if (symlink.artifact) {
+		let artifact = tg.Artifact.withId(symlink.artifact);
+		if (symlink.path) {
+			return tg.symlink({ artifact, path: symlink.path });
+		}
+		return tg.symlink({ artifact });
+	} else if (symlink.path) {
+		return tg.symlink({ path: symlink.path });
+	} else {
+		return tg.symlink();
+	}
+};
+
 let manifestSymlinkFromArg = async (
 	arg: string | tg.Template | tg.Artifact | wrap.Manifest.Template,
 ): Promise<wrap.Manifest.Symlink> => {
@@ -1413,7 +1431,6 @@ let manifestSymlinkFromArg = async (
 	} else if (tg.Artifact.is(arg)) {
 		return { artifact: await arg.id() };
 	} else {
-		console.log("Bad arg", arg);
 		return tg.unreachable();
 	}
 };
@@ -1769,8 +1786,37 @@ let isManifestTemplateComponent = (
 	);
 };
 
+let manifestTemplateIsSymlink = (template: wrap.Manifest.Template) => {
+	let components = template.components;
+	if (components.length === 1) {
+		return components[0]?.kind === "artifact";
+	} else if (components.length === 2) {
+		return (
+			components[0]?.kind === "artifact" && components[1]?.kind === "string"
+		);
+	} else {
+		return false;
+	}
+};
+
+let maybeSymlinkFromManifestTemplate = async (
+	template: wrap.Manifest.Template,
+): Promise<tg.Symlink | undefined> => {
+	if (manifestTemplateIsSymlink(template)) {
+		let artifactId = template.components[0]?.value;
+		if (!artifactId) {
+			return undefined;
+		}
+		let artifact = tg.Artifact.withId(artifactId);
+		let path = template.components[1]?.value.replace(":", "").substring(1);
+		return tg.symlink({ artifact, path });
+	} else {
+		return undefined;
+	}
+};
+
 /** Yield the artifacts referenced by a manifest. */
-async function* manifestReferences(
+export async function* manifestReferences(
 	manifest: wrap.Manifest,
 ): AsyncGenerator<tg.Artifact> {
 	// Get the references from the interpreter.
@@ -1846,9 +1892,9 @@ async function* manifestReferences(
 }
 
 /** Yield the artifacts prent in the manifest env. */
-function* manifestMutationReferences(
+async function* manifestMutationReferences(
 	mutation: wrap.Manifest.Mutation,
-): Generator<tg.Artifact> {
+): AsyncGenerator<tg.Artifact> {
 	switch (mutation.kind) {
 		case "unset":
 			break;
@@ -1870,9 +1916,9 @@ function* manifestMutationReferences(
 }
 
 /** Yield the artifacts references by an executable. */
-function* manifestExecutableReferences(
+async function* manifestExecutableReferences(
 	executable: wrap.Manifest.Executable,
-): Generator<tg.Artifact> {
+): AsyncGenerator<tg.Artifact> {
 	if (executable.kind === "path") {
 		yield* manifestSymlinkReferences(executable.value);
 	} else if (executable.kind === "content") {
@@ -1883,29 +1929,72 @@ function* manifestExecutableReferences(
 }
 
 /** Yield the artifact referenced by a symlink. */
-function* manifestSymlinkReferences(
+async function* manifestSymlinkReferences(
 	symlink: wrap.Manifest.Symlink,
-): Generator<tg.Artifact> {
-	if (symlink.artifact) {
-		yield tg.Artifact.withId(symlink.artifact);
-	}
+): AsyncGenerator<tg.Artifact> {
+	yield* symlinkReferences(await symlinkFromManifestSymlink(symlink));
 }
 
 /** Yield the artifacts referenced by a template. */
-function* manifestTemplateReferences(
+async function* manifestTemplateReferences(
 	template: wrap.Manifest.Template,
-): Generator<tg.Artifact> {
+): AsyncGenerator<tg.Artifact> {
 	for (let component of template.components) {
 		if (component.kind === "artifact") {
-			yield tg.Artifact.withId(component.value);
+			yield* artifactReferences(tg.Artifact.withId(component.value));
+		}
+	}
+}
+
+/** Yield the artifacts referenced by an artifact. */
+async function* artifactReferences(
+	artifact: tg.Artifact,
+): AsyncGenerator<tg.Artifact> {
+	if (tg.File.is(artifact)) {
+		yield* fileReferences(artifact);
+	} else if (tg.Directory.is(artifact)) {
+		yield* directoryReferences(artifact);
+	} else if (tg.Symlink.is(artifact)) {
+		yield* symlinkReferences(artifact);
+	} else {
+		return tg.unreachable();
+	}
+}
+
+/** Yield the artifacts referenced by a directory. */
+async function* directoryReferences(
+	directory: tg.Directory,
+): AsyncGenerator<tg.Artifact> {
+	yield directory;
+	for await (let [_, artifact] of directory) {
+		yield* artifactReferences(artifact);
+	}
+}
+
+/** Yield any references found from in a file */
+async function* fileReferences(file: tg.File): AsyncGenerator<tg.Artifact> {
+	yield file;
+	for (let reference of await file.references()) {
+		yield reference;
+	}
+}
+
+/** Yield any references found from resolving a symlink. */
+async function* symlinkReferences(
+	symlink: tg.Symlink,
+): AsyncGenerator<tg.Artifact> {
+	if (await symlink.artifact()) {
+		let artifact = await symlink.resolve();
+		if (artifact) {
+			yield* artifactReferences(artifact);
 		}
 	}
 }
 
 /** Yield the artifacts referenced by a value. */
-function* manifestValueReferences(
+async function* manifestValueReferences(
 	value: wrap.Manifest.Value,
-): Generator<tg.Artifact> {
+): AsyncGenerator<tg.Artifact> {
 	if (value instanceof Array) {
 		for (let v of value) {
 			yield* manifestValueReferences(v);

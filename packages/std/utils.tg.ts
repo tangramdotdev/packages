@@ -25,10 +25,12 @@ export * as tar from "./utils/tar.tg.ts";
 
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	await bootstrap.make.build(arg);
+	let { host: host_, ...rest } = arg ?? {};
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	await prerequisites({ host });
 
 	// Build bash and use it as the default shell.
-	let bashAritfact = await bash.build(arg);
+	let bashAritfact = await bash.build({ ...rest, host });
 	let bashExecutable = tg.File.expect(await bashAritfact.get("bin/bash"));
 	let env = {
 		CONFIG_SHELL: bashExecutable,
@@ -36,20 +38,66 @@ export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	};
 	let utils = await Promise.all([
 		bashAritfact,
-		coreutils({ ...arg, env }),
-		diffutils({ ...arg, env }),
-		findutils({ ...arg, env }),
-		gawk({ ...arg, env }),
-		grep({ ...arg, env }),
-		gzip({ ...arg, env }),
-		sed({ ...arg, env }),
-		tar({ ...arg, env }),
+		coreutils({ ...rest, env, host }),
+		diffutils({ ...rest, env, host }),
+		findutils({ ...rest, env, host }),
+		gawk({ ...rest, env, host }),
+		grep({ ...rest, env, host }),
+		gzip({ ...rest, env, host }),
+		sed({ ...rest, env, host }),
+		tar({ ...rest, env, host }),
 	]);
 
 	return std.env(...utils, env, { bootstrapMode: true });
 });
 
 export default env;
+
+/** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
+export let prerequisites = tg.target(async (arg?: std.Triple.HostArg) => {
+	let host = await std.Triple.host(arg);
+	let components: tg.Unresolved<std.env.Arg> = [];
+
+	// Add GNU make.
+	let makeArtifact = await bootstrap.make.build({ host });
+	components.push(makeArtifact);
+
+	// Add patched GNU coreutils.
+	let coreutilsArtifact = await coreutils({
+		env: makeArtifact,
+		host,
+		sdk: { bootstrapMode: true },
+		usePrerequisites: false,
+	});
+	components.push(coreutilsArtifact);
+
+	// On Linux, build musl and use it for the runtime libc.
+	if (host.os === "linux" && host.environment === "musl") {
+		let muslEnv = await muslRuntimeEnv(host);
+		components.push(muslEnv);
+	}
+
+	return std.env(...components, { bootstrapMode: true });
+});
+
+/** Build a fresh musl and use it as the runtime libc. */
+export let muslRuntimeEnv = async (arg?: std.Triple.HostArg) => {
+	let host = await std.Triple.host(arg);
+	if (host.os !== "linux") {
+		throw new Error("muslRuntimeEnv is only supported on Linux.");
+	}
+	let muslArtifact = await bootstrap.musl.build({ host });
+	let interpreter = tg.File.expect(
+		await muslArtifact.get(bootstrap.musl.interpreterPath(host)),
+	);
+	return std.env(
+		muslArtifact,
+		{
+			TANGRAM_LINKER_INTERPRETER_PATH: interpreter,
+		},
+		{ bootstrapMode: true },
+	);
+};
 
 type BuildUtilArg = std.autotools.Arg & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
@@ -121,7 +169,8 @@ export let assertProvides = async (env: std.env.Arg) => {
 };
 
 export let test = tg.target(async () => {
-	let utilsEnv = await env({ sdk: { bootstrapMode: true } });
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let utilsEnv = await env({ host, sdk: { bootstrapMode: true } });
 	await assertProvides(utilsEnv);
 	return true;
 });

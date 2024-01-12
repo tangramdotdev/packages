@@ -84,8 +84,10 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
+import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let xzArtifact = await build({ sdk: { bootstrapMode: true } });
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let xzArtifact = build({ host, sdk: { bootstrapMode: true } });
 	await std.assert.pkg({
 		directory: xzArtifact,
 		binaries: ["xz"],

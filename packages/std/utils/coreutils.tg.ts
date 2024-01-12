@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import { buildUtil } from "../utils.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import { macOsXattrCmds } from "./file_cmds.tg.ts";
 import libiconv from "./libiconv.tg.ts";
@@ -36,6 +36,7 @@ export let source = tg.target(async (os: tg.System.Os) => {
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	source?: tg.Directory;
+	usePrerequisites?: boolean;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
@@ -45,19 +46,28 @@ export let build = tg.target(async (arg?: Arg) => {
 		env: env_,
 		host: host_,
 		source: source_,
+		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 	let os = host.os;
 
-	let dependencies = [bootstrap.make.build({ ...rest, host })];
+	let dependencies: tg.Unresolved<std.env.Arg> = [];
+
+	// Add the prerequisites if requested.
+	if (usePrerequisites) {
+		dependencies.push(prerequisites({ host }));
+	}
+
 	let attrArtifact;
 	if (os === "linux") {
-		attrArtifact = attr({ ...rest, build, host });
+		attrArtifact = attr({ ...rest, build, env: env_, host, usePrerequisites });
 		dependencies.push(attrArtifact);
 	} else if (os === "darwin") {
-		dependencies.push(libiconv({ ...rest, build, host }));
+		dependencies.push(
+			libiconv({ ...rest, build, host, env: env_, usePrerequisites }),
+		);
 	}
 	let env = [...dependencies, env_];
 
@@ -98,7 +108,7 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = await std.Triple.host();
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	let system = std.Triple.system(host);
 	let os = tg.System.os(system);
 
