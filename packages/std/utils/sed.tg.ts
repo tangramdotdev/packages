@@ -1,6 +1,5 @@
-import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import { buildUtil } from "../utils.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "sed",
@@ -34,7 +33,7 @@ export let build = tg.target((arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [bootstrap.make.build(arg), env_];
+	let env = [prerequisites({ host }), env_];
 
 	let output = buildUtil(
 		{
@@ -52,9 +51,11 @@ export let build = tg.target((arg?: Arg) => {
 
 export default build;
 
+import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	await std.assert.pkg({
-		directory: build({ sdk: { bootstrapMode: true } }),
+		directory: build({ host, sdk: { bootstrapMode: true } }),
 		binaries: ["sed"],
 		metadata,
 	});

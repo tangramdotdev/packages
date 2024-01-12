@@ -118,10 +118,12 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
+import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	await std.assert.pkg({
-		directory: build({ sdk: { bootstrapMode: true } }),
-		binaries: ["autmake"],
+		directory: build({ host, sdk: { bootstrapMode: true } }),
+		binaries: ["automake"],
 		metadata,
 	});
 	return true;

@@ -1,6 +1,5 @@
-import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import { buildUtil } from "../utils.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 import libiconv from "./libiconv.tg.ts";
 
 export let metadata = {
@@ -37,7 +36,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	// Bug: https://savannah.gnu.org/bugs/?64441.
 	// Fix http://git.savannah.gnu.org/cgit/tar.git/commit/?id=8632df39
 	// Remove in next release.
-	let dependencies = [bootstrap.make.build(arg)];
+	let dependencies: tg.Unresolved<std.env.Arg> = [prerequisites({ host })];
 	let additionalEnv = {};
 	if (build.os === "darwin") {
 		dependencies.push(libiconv(arg));
@@ -68,9 +67,11 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
+import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	await std.assert.pkg({
-		directory: build({ sdk: { bootstrapMode: true } }),
+		directory: build({ host, sdk: { bootstrapMode: true } }),
 		binaries: ["tar"],
 		metadata,
 	});

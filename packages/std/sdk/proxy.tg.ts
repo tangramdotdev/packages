@@ -98,7 +98,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 						binDir = tg.directory(binDir, {
 							bin: {
 								[`${targetString}-gfortran`]: wrappedGFortran,
-							}
+							},
 						});
 					}
 				} else {
@@ -119,7 +119,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 							bin: {
 								gfortran: wrappedGFortran,
 								[`${hostString}-gfortran`]: tg.symlink("gfortran"),
-							}
+							},
 						});
 					}
 				}
@@ -220,11 +220,17 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	let output = await std.wrap(tgld, {
 		identity: "wrapper",
 		env: {
-			TANGRAM_LINKER_COMMAND_PATH: arg.linker,
-			TANGRAM_LINKER_INJECTION_PATH: injectionLibrary,
-			TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs,
-			TANGRAM_LINKER_INTERPRETER_PATH: arg.interpreter ?? "none",
-			TANGRAM_LINKER_WRAPPER_PATH: wrapper,
+			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<tg.File | tg.Symlink>(
+				arg.linker,
+			),
+			TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.setIfUnset(injectionLibrary),
+			TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs
+				? tg.Mutation.setIfUnset(arg.interpreterArgs)
+				: undefined,
+			TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
+				arg.interpreter ?? "none",
+			),
+			TANGRAM_LINKER_WRAPPER_PATH: tg.Mutation.setIfUnset(wrapper),
 		},
 		sdk: arg.sdk,
 	});
@@ -250,7 +256,7 @@ int main() {
 			{
 				env: await std.env.object(bootstrapSDK, {
 					TGLD_TRACING: "tangram=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_STRATEGY: "combine",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 					TANGRAM_WRAPPER_TRACING: "tangram=trace",
 				}),
 			},

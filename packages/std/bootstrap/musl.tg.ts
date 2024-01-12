@@ -35,14 +35,12 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	let host = await std.Triple.host(arg);
 	let hostSystem = std.Triple.system(host);
 
-	let prepare = "set -x && env";
-	let configure_ = { args: [`--enable-debug`, `--enable-optimize`] };
+	let configure = { args: [`--enable-debug`, `--enable-optimize=*`] };
 
-	let install = tg`make DESTDIR="$OUTPUT" install`;
+	let install = `make DESTDIR="$OUTPUT" install`;
 
 	let phases = {
-		prepare,
-		configure: configure_,
+		configure,
 		install,
 	};
 
@@ -64,7 +62,6 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	});
 
 	// The ld-musl symlink installed by default points to a broken absolute path. Use a relativesymlink instead.
-
 	result = await tg.directory(result, {
 		[`lib/${interpreterName(hostSystem)}`]: tg.symlink("libc.so"),
 	});

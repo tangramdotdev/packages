@@ -51,10 +51,11 @@ export let build = tg.target(async (arg?: std.Triple.HostArg) => {
 export default build;
 
 export let test = tg.target(async () => {
+	let directory = build();
 	await std.assert.pkg({
 		binaries: ["make"],
-		directory: build(),
+		directory,
 		metadata,
 	});
-	return true;
+	return directory;
 });

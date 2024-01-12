@@ -174,11 +174,10 @@ export let patchAutom4teCfg = tg.target(
 
 		let env = [arg?.env, std.sdk(arg?.sdk)];
 
-		let dir = tg.Directory.expect(
+		let patchedAutom4teCfg = tg.File.expect(
 			await tg.build(
 				tg`
-			mkdir -p $OUTPUT
-			cat <<'EOF' | tee $OUTPUT/autom4te.cfg
+			cat <<'EOF' | tee $OUTPUT
 			${contents}
 		`,
 				{ env: await std.env.object(env) },
@@ -186,16 +185,18 @@ export let patchAutom4teCfg = tg.target(
 		);
 
 		return tg.directory(autoconf, {
-			["share/autoconf/autom4te.cfg"]: dir.get("autom4te.cfg"),
+			["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
 		});
 	},
 );
 
 export default build;
 
+import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
+	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	await std.assert.pkg({
-		directory: build({ sdk: { bootstrapMode: true } }),
+		directory: build({ host, sdk: { bootstrapMode: true } }),
 		binaries: ["autoconf"],
 		metadata,
 	});
