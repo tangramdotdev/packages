@@ -284,4 +284,3 @@ export let testOciBasicEnv = tg.target(async () => {
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
 });
-//hi
