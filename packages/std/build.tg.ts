@@ -26,12 +26,13 @@ export async function build(
 	let executable = await std.wrap(...args);
 
 	// If the system was not set in the args, then get it from the executable or the host.
-	let host = await std.Triple.hostSystem();
+	let host = await std.Triple.host();
 	if (!system) {
-		let executableSystems = await std.file.executableSystems(executable);
-		system = executableSystems?.includes(host)
+		let executableTriples = await std.file.executableTriples(executable);
+		let hostSystem = executableTriples?.includes(host)
 			? host
-			: executableSystems?.at(0);
+			: executableTriples?.at(0);
+		system = std.Triple.system(hostSystem ?? host);
 	}
 	system = system ?? host;
 

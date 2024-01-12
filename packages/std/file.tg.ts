@@ -10,7 +10,7 @@ export type ElfExecutableMetadata = {
 	format: "elf";
 
 	/** The executable's architecture. */
-	arch: tg.System.Arch;
+	arch: std.Triple.Arch;
 
 	/** The executable's interpreter. */
 	interpreter?: string;
@@ -21,7 +21,7 @@ export type MachOExecutableMetadata = {
 	format: "mach-o";
 
 	/** The executable's architectures. */
-	arches: Array<tg.System.Arch>;
+	arches: Array<std.Triple.Arch>;
 };
 
 export type ShebangExecutableMetadata = {
@@ -56,11 +56,11 @@ export let executableMetadata = async (
 };
 
 /** Attempt to determine the systems an executable is able to run on. */
-export let executableSystems = async (
+export let executableTriples = async (
 	file: tg.File,
-): Promise<Array<tg.System> | undefined> => {
+): Promise<Array<std.Triple> | undefined> => {
 	let metadata = await executableMetadata(file);
-	let arches: Array<tg.System.Arch>;
+	let arches: Array<std.Triple.Arch>;
 	let os: tg.System.Os;
 	if (metadata.format === "elf") {
 		arches = [metadata.arch];
@@ -71,7 +71,7 @@ export let executableSystems = async (
 	} else {
 		return undefined;
 	}
-	return arches.map((arch) => tg.system({ arch, os }));
+	return arches.map((arch) => std.triple({ arch, os }));
 };
 
 type ExecutableKind = "elf" | "mach-o" | "shebang" | "unknown";
@@ -99,7 +99,7 @@ export let detectExecutableKind = (bytes: Uint8Array): ExecutableKind => {
 
 let elfExecutableMetadata = (
 	bytes: Uint8Array,
-): { arch: tg.System.Arch; interpreter: string | undefined } => {
+): { arch: std.Triple.Arch; interpreter: string | undefined } => {
 	let fileHeader = parseElfFileHeader(bytes);
 	let arch = fileHeader.arch;
 
@@ -127,7 +127,7 @@ let elfExecutableMetadata = (
 type ElfFileHeader = {
 	bits: 32 | 64;
 	isLittleEndian: boolean;
-	arch: tg.System.Arch;
+	arch: std.Triple.Arch;
 	programHeaderTableOffset: bigint;
 	programHeaderTableEntrySize: number;
 	programHeaderTableEntryCount: number;
@@ -169,8 +169,16 @@ let parseElfFileHeader = (bytes: Uint8Array): ElfFileHeader => {
 	}
 
 	let elfMachine = data.getUint8(0x12);
-	let arch: tg.System.Arch | undefined;
+	let arch: std.Triple.Arch | undefined;
 	switch (elfMachine) {
+		case 0x08: {
+			arch = "mips";
+			break;
+		}
+		case 0x28: {
+			arch = "arm";
+			break;
+		}
 		case 0x3e: {
 			arch = "x86_64";
 			break;
@@ -305,8 +313,8 @@ let MACHO_MAGIC_64_LE = [0xcf, 0xfa, 0xed, 0xfe];
 
 let machoExecutableMetadata = (
 	bytes: Uint8Array,
-): { arches: Array<tg.System.Arch> } => {
-	let arches: Set<tg.System.Arch> = new Set();
+): { arches: Array<std.Triple.Arch> } => {
+	let arches: Set<std.Triple.Arch> = new Set();
 	let data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
 	// Read the arches.

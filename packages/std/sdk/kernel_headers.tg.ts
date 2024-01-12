@@ -37,7 +37,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let buildTriple = build_ ? std.triple(build_) : host;
 
-	let system = std.Triple.system(host);
+	let system = std.Triple.system(buildTriple);
 
 	let sourceDir = source_ ?? source();
 
@@ -51,6 +51,8 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let karch = tripleArch.toString();
 	if (karch === "aarch64") {
 		karch = "arm64";
+	} else if (karch.includes("arm")) {
+		karch = "arm";
 	}
 
 	// The kernel headers always use the musl-based bootstrap toolchain.
@@ -85,7 +87,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 				env,
 				phases: { prepare, build, install },
 				order,
-				target: { host: std.Triple.system(host) },
+				target: { host: system },
 			},
 			phasesArg,
 		),

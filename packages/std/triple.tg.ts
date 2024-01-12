@@ -6,9 +6,9 @@ export type Triple = {
 };
 
 export namespace Triple {
-	export type Arch = "aarch64" | "x86_64";
+	export type Arch = "aarch64" | "arm" | "armv7l" | "mips" | "x86_64";
 
-	export let architectures = ["aarch64", "x86_64"];
+	export let architectures = ["aarch64", "arm", "armv7l", "mips", "x86_64"];
 
 	export namespace Arch {
 		export let is = (value: unknown): value is Arch => {
@@ -36,9 +36,9 @@ export namespace Triple {
 		};
 	}
 
-	export type Environment = "gnu" | "musl";
+	export type Environment = "gnu" | "gnueabihf" | "musl";
 
-	export let environments = ["gnu", "musl"];
+	export let environments = ["gnu", "gnueabihf", "musl"];
 
 	export namespace Environment {
 		export let is = (value: unknown): value is Environment => {
@@ -224,7 +224,20 @@ export namespace Triple {
 	};
 
 	export let system = (triple: Triple.Arg): tg.System => {
-		return tg.system(Triple.new_(triple));
+		let triple_ = Triple.new_(triple);
+		let suuportedArches = ["x86_64", "aarch64"];
+		if (!suuportedArches.includes(triple_.arch)) {
+			throw new Error(`Unsupported arch ${triple_.arch}`);
+		}
+		return tg.system({ arch: triple_.arch as tg.System.Arch, os: triple_.os });
+	};
+
+	export let trySystem = (triple: Triple.Arg): tg.System | undefined => {
+		try {
+			return Triple.system(triple);
+		} catch (error) {
+			return undefined;
+		}
 	};
 
 	export type HostArg =

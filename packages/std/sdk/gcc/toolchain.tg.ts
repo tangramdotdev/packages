@@ -2,7 +2,6 @@
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
-import * as utils from "../../utils.tg.ts";
 import binutils from "../binutils.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
 import * as gcc from "../gcc.tg.ts";
@@ -247,6 +246,13 @@ export let testCross = async () => {
 	let hostArch = host.arch;
 	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = std.triple({ ...host, arch: targetArch });
+	let dir = await toolchain({ host, target });
+	return dir;
+};
+
+export let testCrossRpi = async () => {
+	let host = await std.Triple.host();
+	let target = std.triple("armv7l-linux-gnueabihf");
 	let dir = await toolchain({ host, target });
 	return dir;
 };

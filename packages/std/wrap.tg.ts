@@ -1142,9 +1142,6 @@ let manifestInterpreterFromArg = async (
 			);
 		}
 		let arch = interpreterMetadata.arch;
-		if (arch === "js") {
-			throw new Error("Unexpected interpreter arch: js");
-		}
 		let injectionLibrary = await injection.default({
 			host: `${arch}-unknown-linux-gnu`,
 		});
@@ -1195,9 +1192,6 @@ let manifestInterpreterFromArg = async (
 			);
 		}
 		let arch = interpreterMetadata.arch;
-		if (arch === "js") {
-			throw new Error("Unexpected interpreter arch: js");
-		}
 		let injectionLibrary = await injection.default({
 			host: `${arch}-linux-musl`,
 		});
@@ -1296,7 +1290,7 @@ let manifestInterpreterFromExecutableArg = async (
 			return manifestInterpreterFromElf(metadata);
 		}
 		case "mach-o": {
-			let arch = metadata.arches[0];
+			let arch = metadata.arches[0] as tg.System.Arch;
 			tg.assert(arch);
 			let triple = std.Triple.defaultForSystem(
 				tg.system({ os: "darwin", arch }),

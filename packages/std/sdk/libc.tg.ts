@@ -29,7 +29,7 @@ export default libc;
 type LibcKind = "glibc" | "musl";
 
 let kindFromTriple = (triple: std.Triple): LibcKind => {
-	if (triple.environment === "gnu") {
+	if (triple.environment?.includes("gnu")) {
 		return "glibc";
 	} else if (triple.environment === "musl") {
 		return "musl";

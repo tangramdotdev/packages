@@ -232,6 +232,7 @@ export let testGccSource = tg.target(async () => {
 import {
 	testCanadianCross,
 	testCross,
+	testCrossRpi,
 	testStage1,
 } from "./sdk/gcc/toolchain.tg.ts";
 export let stage1 = tg.target(async () => {
@@ -244,6 +245,9 @@ export let canadianCross = tg.target(async () => {
 
 export let testCrossToolchain = tg.target(() => {
 	return testCross();
+});
+export let testCrossToolchainRpi = tg.target(() => {
+	return testCrossRpi();
 });
 
 // SDK tests.
@@ -280,13 +284,4 @@ export let testOciBasicEnv = tg.target(async () => {
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
 });
-
-import { env } from "./env.tg.ts";
-export let testEnvWithBash = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await Triple.host());
-	let bash = await utils.bash.build({ host, sdk: { bootstrapMode: true }});
-	let bashEnv = tg.File.expect(await env(bash, { bootstrapMode: true	}));
-	let bashEnvReferences = await bashEnv.references();
-	console.log("bashEnvReferences", bashEnvReferences);
-	return bashEnv;
-});
+//hi

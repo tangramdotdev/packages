@@ -517,15 +517,14 @@ export namespace sdk {
 			if (metadata.format !== "elf" && metadata.format !== "mach-o") {
 				throw new Error(`Unexpected compiler format ${metadata.format}.`);
 			}
-			let detectedArch: tg.System.Arch | undefined;
+			let detectedArch: std.Triple.Arch | undefined;
 			if (metadata.format === "elf") {
 				detectedArch = metadata.arch;
 			} else if (metadata.format === "mach-o") {
 				detectedArch = metadata.arches[0] ?? "aarch64";
 			}
-			let os: tg.System.Os = metadata.format === "elf" ? "linux" : "darwin";
-			let system = tg.system({ arch: detectedArch ?? "x86_64", os });
-			detectedHost = std.triple(system);
+			let os: std.Triple.Os = metadata.format === "elf" ? "linux" : "darwin";
+			detectedHost = std.triple({ arch: detectedArch ?? "x86_64", os });
 		}
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.

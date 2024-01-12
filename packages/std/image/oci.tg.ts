@@ -188,7 +188,6 @@ export let imageFromLayers = async (
 	};
 
 	// Add the layers as blobs.
-	let utils = bootstrap.utils();
 	let layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
 			let file = await std.build(tg`gzip -nc ${layer.tar} > $OUTPUT`);
@@ -235,7 +234,7 @@ export let imageFromLayers = async (
 	});
 
 	// Tar the result and return it.
-	let image = await std.build(tg`tar -chf $OUTPUT -C ${directory} .`);
+	let image = await std.build(tg`tar -cf $OUTPUT -C ${directory} .`);
 	tg.File.assert(image);
 	return image;
 };
