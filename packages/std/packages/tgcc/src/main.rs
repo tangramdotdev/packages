@@ -6,7 +6,7 @@ use std::{
 };
 use tangram_client as tg;
 use tangram_error::{error, Result, WrapErr};
-use tg::Handle;
+use tg::{build::GetOrCreateOutput, Handle};
 
 // Data read from environment variables.
 #[derive(Debug)]
@@ -374,15 +374,17 @@ async fn main_inner() -> Result<()> {
 
 	// Create a build.
 	let id = target.id(tg).await?;
-	let parent = tg::Build::with_id(environment.runtime.build);
-	let build_options = tg::build::GetOrCreateOptions {
+	let options = tg::build::Options {
 		depth: 0,
-		parent: Some(parent),
+		parent: Some(environment.runtime.build),
 		remote: false,
 		retry: tg::build::Retry::Canceled,
-		user: None,
 	};
-	let build_id = tg.get_or_create_build(id, build_options).await?;
+	let build_arg = tg::build::GetOrCreateArg {
+		target: id.clone(),
+		options,
+	};
+	let GetOrCreateOutput { id: build_id } = tg.get_or_create_build(None, build_arg).await?;
 	let build = tg::Build::with_id(build_id);
 
 	// Await the outcome.

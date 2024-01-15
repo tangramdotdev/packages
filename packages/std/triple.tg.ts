@@ -46,7 +46,7 @@ export namespace Triple {
 		};
 	}
 
-	export type Arg = tg.System | Triple | ArgString;
+	export type Arg = tg.System | Partial<Triple> | ArgString;
 
 	export namespace Arg {
 		export let is = (value: unknown): value is Arg => {
@@ -102,15 +102,38 @@ export namespace Triple {
 		};
 	}
 
-	export let new_ = (arg: unknown): Triple => {
-		tg.assert(Triple.Arg.is(arg));
-		if (tg.System.is(arg)) {
-			return Triple.defaultForSystem(arg);
-		} else if (typeof arg === "string") {
-			return Triple.fromString(arg);
-		} else {
-			return arg;
+	export let new_ = (...args: Array<unknown>): Triple => {
+		let ret: Partial<Triple> | undefined = undefined;
+		for (let arg of args) {
+			tg.assert(Triple.Arg.is(arg));
+			if (tg.System.is(arg)) {
+				return Triple.defaultForSystem(arg);
+			} else if (typeof arg === "string") {
+				return Triple.fromString(arg);
+			} else {
+				if (arg === undefined) {
+					continue;
+				}
+				if (ret === undefined) {
+					ret = {};
+				}
+				if (arg.arch !== undefined) {
+					ret.arch = arg.arch;
+				}
+				if (arg.vendor !== undefined) {
+					ret.vendor = arg.vendor;
+				}
+				if (arg.os !== undefined) {
+					ret.os = arg.os;
+				}
+				if (arg.environment !== undefined) {
+					ret.environment = arg.environment;
+				}
+			}
 		}
+		tg.assert(ret !== undefined);
+		tg.assert(Triple.is(ret));
+		return ret;
 	};
 
 	export let arrayIncludes = (
@@ -134,7 +157,9 @@ export namespace Triple {
 			typeof value === "object" &&
 			value !== null &&
 			"arch" in value &&
-			"os" in value
+			value.arch !== undefined &&
+			"os" in value &&
+			value.os !== undefined
 		);
 	};
 
