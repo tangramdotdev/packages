@@ -61,7 +61,7 @@ export let executableTriples = async (
 ): Promise<Array<std.Triple> | undefined> => {
 	let metadata = await executableMetadata(file);
 	let arches: Array<std.Triple.Arch>;
-	let os: tg.System.Os;
+	let os: std.Triple.Os;
 	if (metadata.format === "elf") {
 		arches = [metadata.arch];
 		os = "linux";

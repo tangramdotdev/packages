@@ -109,7 +109,7 @@ export let test = tg.target(async () => {
 
 	// test cross
 	let hostArch = host.arch;
-	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let targetArch: std.Triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = std.triple({ ...host, arch: targetArch });
 	await testKernelHeaders(host, target);
 

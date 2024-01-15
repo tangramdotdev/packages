@@ -1323,7 +1323,9 @@ let manifestInterpreterFromElf = async (
 		return undefined;
 	}
 
-	let libc = metadata.interpreter?.includes("ld-linux") ? "gnu" : "musl";
+	let libc: std.Triple.Environment = metadata.interpreter?.includes("ld-linux")
+		? "gnu"
+		: "musl";
 
 	// If host matches detected host AND libc is musl, set bootstrap mode.
 	let host = std.triple({

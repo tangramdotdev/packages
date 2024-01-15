@@ -11,6 +11,30 @@ export namespace Triple {
 	export let architectures = ["aarch64", "arm", "armv7l", "mips", "x86_64"];
 
 	export namespace Arch {
+		export let fromSystemArch = (systemArch: tg.System.Arch): Arch => {
+			switch (systemArch) {
+				case "aarch64": {
+					return "aarch64";
+				}
+				case "x86_64": {
+					return "x86_64";
+				}
+				default: {
+					throw new Error(`Unsupported system arch ${systemArch}`);
+				}
+			}
+		};
+
+		export let tryFromSystemArch = (
+			systemArch: tg.System.Arch,
+		): Arch | undefined => {
+			try {
+				return Arch.fromSystemArch(systemArch);
+			} catch (error) {
+				return undefined;
+			}
+		};
+
 		export let is = (value: unknown): value is Arch => {
 			return typeof value === "string" && architectures.includes(value);
 		};
@@ -46,12 +70,15 @@ export namespace Triple {
 		};
 	}
 
-	export type Arg = tg.System | Partial<Triple> | ArgString;
+	export type Arg = tg.System | Partial<Triple> | ArgString | undefined;
 
 	export namespace Arg {
 		export let is = (value: unknown): value is Arg => {
 			return (
-				tg.System.is(value) || Triple.is(value) || Triple.ArgString.is(value)
+				value === undefined ||
+				tg.System.is(value) ||
+				Triple.is(value) ||
+				Triple.ArgString.is(value)
 			);
 		};
 	}
@@ -102,10 +129,9 @@ export namespace Triple {
 		};
 	}
 
-	export let new_ = (...args: Array<unknown>): Triple => {
+	export let new_ = (...args: Array<Triple.Arg>): Triple => {
 		let ret: Partial<Triple> | undefined = undefined;
 		for (let arg of args) {
-			tg.assert(Triple.Arg.is(arg));
 			if (tg.System.is(arg)) {
 				return Triple.defaultForSystem(arg);
 			} else if (typeof arg === "string") {

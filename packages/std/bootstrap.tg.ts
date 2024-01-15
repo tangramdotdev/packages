@@ -57,7 +57,7 @@ export let gccVersion = "11.2.1";
 /** The build triple string of the bundled Linux toolchain. */
 export let toolchainTriple = (host: Triple.Arg) => {
 	let system = configureSystem(host);
-	let arch = tg.System.arch(system);
+	let arch = Triple.Arch.fromSystemArch(tg.System.arch(system));
 
 	let os = tg.System.os(system);
 	if (os === "linux") {

@@ -57,7 +57,11 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 					: await tg.Mutation.arrayAppend(arg.bootstrapMode);
 			}
 			if (arg.target !== undefined) {
-				targets.push(std.triple(arg.target));
+				if (tg.Mutation.is(arg.target)) {
+					object.targets = arg.target;
+				} else {
+					targets.push(arg.target);
+				}
 			}
 			if (arg.targets !== undefined) {
 				if (tg.Mutation.is(arg.targets)) {
@@ -87,7 +91,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	}
 
 	// Collect target array.
-	let targets = (targets_ ?? []).map(std.triple);
+	let targets = (targets_ ?? []).map((t) => std.triple(t));
 	if (targets.length === 0) {
 		targets = [host];
 	}
@@ -398,8 +402,8 @@ export namespace sdk {
 			os === "darwin"
 				? "ld"
 				: flavor === "gcc"
-				  ? `${targetPrefix}ld`
-				  : "ld.lld";
+					? `${targetPrefix}ld`
+					: "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		tg.assert(foundLd, `Unable to find ${linkerName}.`);
 		let ld = await tg.symlink(tg`${directory}/bin/${linkerName}`);
@@ -479,6 +483,7 @@ export namespace sdk {
 			predicate: (name) => name.endsWith("-cc"),
 		})) {
 			let tripleString = name.slice(0, -3);
+			tg.assert(std.Triple.ArgString.is(tripleString));
 			foundTargets.add(std.triple(tripleString));
 		}
 		return Array.from(foundTargets);
@@ -529,15 +534,13 @@ export namespace sdk {
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		let output = tg.File.expect(
-			await tg.build(
-				tg`${cmd} -dumpmachine > $OUTPUT`,
-				{
-					env: std.env.object(env),
-					host: std.Triple.system(detectedHost),
-				},
-			),
+			await tg.build(tg`${cmd} -dumpmachine > $OUTPUT`, {
+				env: std.env.object(env),
+				host: std.Triple.system(detectedHost),
+			}),
 		);
 		let host = (await output.text()).trim();
+		tg.assert(std.Triple.ArgString.is(host));
 		return std.triple(host);
 	};
 
@@ -550,7 +553,7 @@ export namespace sdk {
 			targets.push(std.triple(arg.target));
 		}
 		if (arg?.targets) {
-			targets = targets.concat(arg.targets.map(std.triple));
+			targets = targets.concat(arg.targets.map((t) => std.triple(t)));
 		}
 		// If empty, set to host.
 		if (targets.length === 0) {
@@ -596,10 +599,13 @@ export namespace sdk {
 			langStr = "f95";
 		}
 		let compiledProgram = tg.File.expect(
-			await tg.build(tg`echo "testing ${lang}" && ${cmd} -v -x ${langStr} ${testProgram} -o $OUTPUT`, {
-				env: std.env.object(arg.sdk),
-				host: std.Triple.system(expectedHost),
-			}),
+			await tg.build(
+				tg`echo "testing ${lang}" && ${cmd} -v -x ${langStr} ${testProgram} -o $OUTPUT`,
+				{
+					env: std.env.object(arg.sdk),
+					host: std.Triple.system(expectedHost),
+				},
+			),
 		);
 
 		// Assert the resulting program was compiled for the expected target.
@@ -622,7 +628,7 @@ export namespace sdk {
 			let testOutput = tg.File.expect(
 				await tg.build(tg`${compiledProgram} > $OUTPUT`, {
 					host: std.Triple.system(expectedHost),
-					env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" }
+					env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 				}),
 			);
 			let outputText = (await testOutput.text()).trim();

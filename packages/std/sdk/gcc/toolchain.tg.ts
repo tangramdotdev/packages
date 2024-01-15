@@ -244,7 +244,7 @@ export let testCanadianCross = async () => {
 export let testCross = async () => {
 	let host = await std.Triple.host();
 	let hostArch = host.arch;
-	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let targetArch: std.Triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = std.triple({ ...host, arch: targetArch });
 	let dir = await toolchain({ host, target });
 	return dir;
