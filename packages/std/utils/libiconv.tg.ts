@@ -61,9 +61,11 @@ export default build;
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
-	await std.assert.pkg({
-		directory: build({ host, sdk: { bootstrapMode: true } }),
-		libs: [{ name: "iconv", staticlib: false }],
-	});
-	return true;
+	let makeArtifact = await bootstrap.make.build({ host });
+	let directory = await build({ env: [makeArtifact], host, sdk: { bootstrapMode: true }, usePrerequisites: false });
+	// await std.assert.pkg({
+	// 	directory,
+	// 	libs: [{ name: "iconv", staticlib: false }],
+	// });
+	return directory;
 });

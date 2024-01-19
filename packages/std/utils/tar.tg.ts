@@ -32,7 +32,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = await std.Triple.host(host_);
 	let build = build_ ? std.triple(build_) : host;
 
-	// On macOS, libiconv is already in the env, but the -liconv flag is missing
 	// Bug: https://savannah.gnu.org/bugs/?64441.
 	// Fix http://git.savannah.gnu.org/cgit/tar.git/commit/?id=8632df39
 	// Remove in next release.
@@ -40,9 +39,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let additionalEnv = {};
 	if (build.os === "darwin") {
 		dependencies.push(libiconv(arg));
-		additionalEnv = {
-			LDFLAGS: "-liconv",
-		};
 	}
 
 	let configure = {

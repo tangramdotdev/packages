@@ -9,6 +9,7 @@ export let env = async (arg?: std.Triple.HostArg): Promise<std.env.Arg> => {
 	let utils = await prepareBootstrapUtils(bootstrapHost);
 	let shellExe = tg.File.expect(await utils.get("bin/dash"));
 	let env: tg.MutationMap<Record<string, tg.Template.Arg>> = {
+		CONFIG_SHELL: shellExe,
 		SHELL: shellExe,
 	};
 	if (host.os === "darwin") {

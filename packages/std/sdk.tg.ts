@@ -106,7 +106,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		let proxyEnv = await proxy.env({
 			...proxyArg,
 			env: bootstrapSDK,
-			sdk: { bootstrapMode },
+			sdk: { bootstrapMode: true },
 		});
 		let dependenciesEnv = await dependencies.env({
 			host,

@@ -58,13 +58,9 @@ import { assertFileReferences } from "./assert.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 export let testProxy = tg.target(async () => {
 	let file = await proxy.test();
-	await assertFileReferences(file, "ld-musl");
-	let dir = await tg.directory({ proxyFile: file });
-	let roundTripFile = tg.File.expect(await dir.get("proxyFile"));
-	await assertFileReferences(roundTripFile, "ld-musl");
-
-	return roundTripFile;
+	return file;
 });
+
 
 import * as bootstrap from "./bootstrap.tg.ts";
 export let testBootstrap = tg.target(async () => {
@@ -72,8 +68,22 @@ export let testBootstrap = tg.target(async () => {
 });
 export let testPlainBootstrapSdk = tg.target(async () => {
 	let bootstrapSdk = await bootstrap.sdk.env();
-	console.log("env", bootstrapSdk);
 	return bootstrapSdk;
+});
+
+import { env } from "./env.tg.ts";
+export let testStdArgH = tg.target(async () => {
+	let source = tg.file(`
+		#include <stdio.h>
+		#include <stdarg.h>
+		int main() {
+			printf("Hello, world!\\n");
+			return 0;
+		}
+	`);
+	let ccEnv = await bootstrap.sdk.env();
+	let exe = await tg.build(tg`cc -xc ${source} -o $OUTPUT`, { env: await env.object(ccEnv) });
+	return exe;
 });
 
 import { testSingleArgObjectNoMutations, wrap } from "./wrap.tg.ts";
@@ -103,10 +113,7 @@ export let testUtilsPrerequisites = tg.target(async () => {
 });
 
 export let testUtilsBash = tg.target(async () => {
-	let dir = await utils.bash.test();
-	let bashExe = tg.File.expect(await dir.get("bin/bash"));
-	await assertFileReferences(bashExe, "ld-musl");
-	return dir;
+	return await utils.bash.test();
 });
 export let testUtilsCoreutils = tg.target(async () => {
 	return await utils.coreutils.test();

@@ -126,8 +126,12 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 				break;
 			}
 			case "llvm": {
+				let clangArgs = [];
+				if (host.os === "darwin") {
+					clangArgs.push(tg`-resource-dir=${directory}/lib/clang/15.0.0`);
+				}
 				wrappedCC = std.wrap(cc, {
-					args: [tg`-B${ldProxyArtifact}`],
+					args: [tg`-B${ldProxyArtifact}`, ...clangArgs],
 					env: {
 						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 					},
