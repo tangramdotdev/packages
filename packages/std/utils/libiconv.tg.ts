@@ -19,16 +19,19 @@ type Arg = std.sdk.BuildEnvArg & {
 	usePrerequisites?: boolean;
 };
 
-export let build = tg.target((arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
+
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let build = build_ ? std.triple(build_) : host;
 
 	let configure = {
 		args: ["--disable-dependency-tracking"],

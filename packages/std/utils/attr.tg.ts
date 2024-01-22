@@ -32,7 +32,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
 		host: host_,
 		source: source_,
@@ -40,7 +40,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = await std.Triple.host(host_);
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let build = build_ ? std.triple(build_) : host;
 
 	if (host.os !== "linux") {
 		let hostString = std.Triple.toString(host);

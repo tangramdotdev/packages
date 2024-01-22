@@ -1,53 +1,65 @@
-// import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.tg.ts";
 
-// export let ncurses = async (arg?: std.sdk.BuildEnvArg) => {
-// 	// FIXME - the pkg-config files arent working properly, the fixup ln step fails.
+export let metadata = {
+	name: "ncurses",
+	version: "6.4",
+};
 
-// 	let configure = {
-// 		args: [
-// 			"--with-shared",
-// 			"--with-cxx-shared",
-// 			"--enable-pc-files",
-// 			"--without-debug",
-// 			"--without-ada",
-// 		],
-// 	};
+export let source = tg.target(() => {
+	let { name, version } = metadata;
+	let checksum =
+		"sha256:6931283d9ac87c5073f30b6290c4c75f21632bb4fc3603ac8100812bed248159";
+	return std.download.fromGnu({ name, version, checksum });
+});
 
-// 	let source = std.download.fromMetadata(metadata);
+type Arg = {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: std.Triple.Arg;
+	env?: std.env.Arg;
+	host?: std.Triple.Arg;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	source?: tg.Directory;
+};
 
-// 	let result = std.phases.autotools.build({
-// 		...arg,
-// 		phases: { configure },
-// 		source,
-// 	});
+export let ncurses = tg.target(async (arg?: Arg) => {
+	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
 
-// 	// Perform some post-processing in the output directory to handle wide-character libraries.
-// 	// TODO - do this with tangram instead of a shell script.
-// 	// let fixupScript = tg`
-// 	// 	cp -R ${result}/* $OUTPUT
-// 	// 	for lib in ncurses form panel menu ; do
-// 	// 	rm -vf                     $OUTPUT/lib/lib\${lib}.so
-// 	// 	echo "INPUT(-l\${lib}w)" > $OUTPUT/lib/lib\${lib}.so
-// 	// 	ln -sfv \${lib}w.pc        $OUTPUT/lib/pkgconfig/\${lib}.pc || true
-// 	// 	done
-// 	// 	rm -vf                     $OUTPUT/lib/libcursesw.so
-// 	// 	echo "INPUT(-lncursesw)" > $OUTPUT/lib/libcursesw.so
-// 	// 	ln -sfv libncurses.so      $OUTPUT/lib/libcurses.so
-// 	// `;
+	let configure = {
+		args: ["--with-shared", "--with-cxx-shared", "--enable-widec"],
+	};
+	let fixup = `
+				# watermark
+				chmod -R u+w \${OUTPUT}
+				for lib in ncurses form panel menu ; do
+					rm -vf                     \${OUTPUT}/lib/lib\${lib}.so
+					echo "INPUT(-l\${lib}w)" > \${OUTPUT}/lib/lib\${lib}.so
+				done
+				cd $OUTPUT
+				rm -vf                     \${OUTPUT}/lib/libcursesw.so
+				echo "INPUT(-lncursesw)" > \${OUTPUT}/lib/libcursesw.so
+				ln -sfv libncurses.so      \${OUTPUT}/lib/libcurses.so
+		`;
+	let phases = { configure, fixup };
 
-// 	return result;
-// };
+	return std.autotools.build(
+		{
+			...rest,
+			...std.Triple.rotate({ build, host }),
+			phases,
+			source: source_ ?? source(),
+		},
+		autotools,
+	);
+});
 
-// export default ncurses;
+export default ncurses;
 
-// export let source = () => {
-// 	return std.download.fromMetadata(metadata);
-// };
-
-// export let metadata = {
-// 	checksum:
-// 		"sha256:6931283d9ac87c5073f30b6290c4c75f21632bb4fc3603ac8100812bed248159",
-// 	name: "ncurses",
-// 	url: "gnu",
-// 	version: "6.4",
-// };
+export let test = tg.target(async () => {
+	let directory = ncurses();
+	await std.assert.pkg({
+		directory,
+		//libs: ["curses", "cursesw"],
+		metadata,
+	});
+	return directory;
+});

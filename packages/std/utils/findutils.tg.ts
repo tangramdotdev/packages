@@ -43,7 +43,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.Triple.host(host_);
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 	let os = build.os;
 
