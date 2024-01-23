@@ -68,7 +68,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		};
 	}
 
-	let prepare = "env";
 	let configure = {
 		args: [
 			"--disable-test-modules",
@@ -93,7 +92,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			env,
-			phases: { prepare, configure },
+			phases: { configure },
 			source: source_ ?? source(os),
 		},
 		autotools,

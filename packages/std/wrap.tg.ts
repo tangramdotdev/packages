@@ -1950,7 +1950,9 @@ async function* manifestTemplateReferences(
 ): AsyncGenerator<tg.Artifact> {
 	for (let component of template.components) {
 		if (component.kind === "artifact") {
-			yield* artifactReferences(tg.Artifact.withId(component.value));
+			let artifact = tg.Artifact.withId(component.value);
+			yield artifact;
+			yield* artifactReferences(artifact);
 		}
 	}
 }
@@ -1974,7 +1976,6 @@ async function* artifactReferences(
 async function* directoryReferences(
 	directory: tg.Directory,
 ): AsyncGenerator<tg.Artifact> {
-	yield directory;
 	for await (let [_, artifact] of directory) {
 		yield* artifactReferences(artifact);
 	}
