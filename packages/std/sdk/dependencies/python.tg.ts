@@ -1,11 +1,9 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
-import libffi from "./libffi.tg.ts";
 import m4 from "./m4.tg.ts";
 import make from "./make.tg.ts";
 import pkgConfig from "./pkg_config.tg.ts";
-import zlib from "./zlib.tg.ts";
 
 export let metadata = {
 	name: "Python",
@@ -35,6 +33,7 @@ export let source = tg.target(async (os: tg.System.Os) => {
 		let macosPatch = tg.File.expect(
 			await tg.include("./python_macos_arch.patch"),
 		);
+
 		source = await bootstrap.patch(source, macosPatch);
 	}
 	return source;
@@ -69,6 +68,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		};
 	}
 
+	let prepare = "env";
 	let configure = {
 		args: [
 			"--disable-test-modules",
@@ -79,12 +79,12 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 	let dependencies = [
 		bison(arg),
-		libffi(arg),
 		m4(arg),
 		make(arg),
 		pkgConfig(arg),
-		zlib(arg),
 	];
+
+
 	let env = [std.utils.env(arg), ...dependencies, additionalEnv, env_];
 
 	// Build python.
@@ -93,7 +93,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...std.Triple.rotate({ build, host }),
 			env,
-			phases: { configure },
+			phases: { prepare, configure },
 			source: source_ ?? source(os),
 		},
 		autotools,

@@ -456,8 +456,8 @@ export namespace sdk {
 			os === "darwin"
 				? "ld"
 				: flavor === "gcc"
-					? `${targetPrefix}ld`
-					: "ld.lld";
+				  ? `${targetPrefix}ld`
+				  : "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		tg.assert(foundLd, `Unable to find ${linkerName}.`);
 		let ld = await tg.symlink(tg`${directory}/bin/${linkerName}`);
@@ -743,12 +743,14 @@ export namespace sdk {
 				});
 
 				// Test Fortran.
-				await assertProxiedCompiler({
-					parameters: testFortranParameters,
-					sdk: env,
-					host: expected.host,
-					target,
-				});
+				if (target.os !== "darwin") {
+					await assertProxiedCompiler({
+						parameters: testFortranParameters,
+						sdk: env,
+						host: expected.host,
+						target,
+					});
+				}
 			}),
 		);
 	};

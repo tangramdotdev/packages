@@ -4,13 +4,13 @@ export let metadata = {
 	homepage: "https://zlib.net",
 	license: "https://zlib.net/zlib_license.html",
 	name: "zlib",
-	version: "1.3",
+	version: "1.3.1",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:8a9ba2898e1d0d774eca6ba5b4627a11e5588ba85c8851336eb38de4683050a7";
+		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://zlib.net/${name}-${version}${unpackFormat}`;
 	let download = tg.Directory.expect(

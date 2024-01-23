@@ -19,7 +19,8 @@ export let source = tg.target(async () => {
 	});
 	// let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
 	// let url = `http://fresh-center.net/linux/misc/pkg-config-0.29.2.tar.gz`;
-	let url = "https://github.com/tangramdotdev/bootstrap/releases/download/v2023.12.14/pkg-config-0.29.2.tar.gz";
+	let url =
+		"https://github.com/tangramdotdev/bootstrap/releases/download/v2023.12.14/pkg-config-0.29.2.tar.gz";
 	let checksum =
 		"sha256:6fc69c01688c9458a57eb9a1664c9aba372ccda420a02bf4429fe610e7e7d591";
 	let outer = tg.Directory.expect(
@@ -36,19 +37,35 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let build = build_ ? std.triple(build_) : host;
 
 	let configure = {
 		args: ["--with-internal-glib", "--disable-dependency-tracking"],
 	};
 
 	let phases = { configure };
-	let dependencies = [bison(arg), m4(arg), make(arg), zlib(arg)];
+	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
+		bison(arg),
+		m4(arg),
+		make(arg),
+		zlib(arg),
+	];
+	let additionalLibDirs = [];
+	if (build.os === "darwin") {
+		let libiconv = await std.utils.libiconv.build(arg);
+		dependencies.push(libiconv);
+		additionalLibDirs.push(tg.Directory.expect(await libiconv.get("lib")));
+		dependencies.push({
+			LDFLAGS: await tg.Mutation.templatePrepend(tg`-L${libiconv}/lib`, " "),
+		});
+	}
 	let env = [std.utils.env(arg), ...dependencies, env_];
 	let pkgConfigBuild = await std.utils.buildUtil(
 		{
@@ -69,6 +86,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		}),
 		{
 			args: ["--define-prefix"],
+			libraryPaths: additionalLibDirs,
 			sdk: arg?.sdk,
 		},
 	);

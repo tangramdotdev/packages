@@ -1567,6 +1567,8 @@ let mutateTemplate = async (
 		if (template?.components.length === 0) {
 			tg.assert(isTemplateArg(mutation.inner.value));
 			return tg.template(mutation.inner.value);
+		} else {
+			return template;
 		}
 	} else if (mutation.inner.kind === "unset") {
 		return tg.template();

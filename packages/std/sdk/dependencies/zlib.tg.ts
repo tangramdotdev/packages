@@ -3,7 +3,7 @@ import make from "./make.tg.ts";
 
 export let metadata = {
 	name: "zlib",
-	version: "1.3",
+	version: "1.3.1",
 };
 
 export let source = tg.target(async () => {
@@ -16,7 +16,7 @@ export let source = tg.target(async () => {
 	});
 
 	let checksum =
-		"sha256:8a9ba2898e1d0d774eca6ba5b4627a11e5588ba85c8851336eb38de4683050a7";
+		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
 	let url = `https://zlib.net/${packageArchive}`;
 	let outer = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),
@@ -59,9 +59,10 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let directory = build({ host, sdk: { bootstrapMode: true } });
 	await std.assert.pkg({
-		directory: build({ host, sdk: { bootstrapMode: true } }),
+		directory,
 		libs: ["z"],
 	});
-	return true;
+	return directory;
 });

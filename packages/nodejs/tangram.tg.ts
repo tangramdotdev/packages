@@ -36,12 +36,12 @@ let source = async (): Promise<tg.Directory> => {
 			checksum: "sha256:822780369d0ea309e7d218e41debbd1a03f8cdf354ebf8a4420e89f39cc2e612",
 			unpackFormat: ".tar.xz",
 		},
-		["aarch64-macos"]: {
+		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
-			checksum: "sha256:d4b4ab81ebf1f7aab09714f834992f27270ad0079600da00c8110f8950ca6c5a",
+			checksum: "sha256:f18a7438723d48417f5e9be211a2f3c0520ffbf8e02703469e5153137ca0f328",
 			unpackFormat: ".tar.xz",
 		},
-		["x86_64-macos"]: {
+		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
 				"sha256:f18a7438723d48417f5e9be211a2f3c0520ffbf8e02703469e5153137ca0f328",
