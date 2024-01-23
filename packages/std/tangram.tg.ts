@@ -54,13 +54,11 @@ export let testWorkspaceCross = tg.target(async () => {
 	return await workspace.testCross();
 });
 
-import { assertFileReferences } from "./assert.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 export let testProxy = tg.target(async () => {
 	let file = await proxy.test();
 	return file;
 });
-
 
 import * as bootstrap from "./bootstrap.tg.ts";
 export let testBootstrap = tg.target(async () => {
@@ -69,21 +67,6 @@ export let testBootstrap = tg.target(async () => {
 export let testPlainBootstrapSdk = tg.target(async () => {
 	let bootstrapSdk = await bootstrap.sdk.env();
 	return bootstrapSdk;
-});
-
-import { env } from "./env.tg.ts";
-export let testStdArgH = tg.target(async () => {
-	let source = tg.file(`
-		#include <stdio.h>
-		#include <stdarg.h>
-		int main() {
-			printf("Hello, world!\\n");
-			return 0;
-		}
-	`);
-	let ccEnv = await bootstrap.sdk.env();
-	let exe = await tg.build(tg`cc -xc ${source} -o $OUTPUT`, { env: await env.object(ccEnv) });
-	return exe;
 });
 
 import { testSingleArgObjectNoMutations, wrap } from "./wrap.tg.ts";
@@ -274,6 +257,32 @@ export let testDefaultSdk = tg.target(async () => {
 	let detectedHost = await Triple.host();
 	await sdk.assertValid(env, { host: detectedHost });
 	return env;
+});
+
+// Post-native SDK component tests.
+
+import * as ncurses from "./sdk/ncurses.tg.ts";
+export let testNcurses = tg.target(async () => {
+	return await ncurses.test();
+});
+
+import * as cmake from "./sdk/cmake.tg.ts";
+export let testCmake = tg.target(async () => {
+	return await cmake.test();
+});
+
+import * as ninja from "./sdk/ninja.tg.ts";
+export let testNinja = tg.target(async () => {
+	return await ninja.test();
+});
+
+import * as mold from "./sdk/mold.tg.ts";
+export let testMoldBuild = tg.target(async () => {
+	return await mold.test();
+});
+import { testMoldSdk } from "./sdk.tg.ts";
+export let testMold = tg.target(async () => {
+	return await testMoldSdk();
 });
 
 // Image tests.

@@ -11,6 +11,8 @@ export type Arg = std.sdk.BuildEnvArg & {
 	compiler?: boolean;
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
+	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
+	linkerExe?: tg.File | tg.Symlink;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
 	target?: std.Triple.Arg;
 };
@@ -28,6 +30,12 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		return;
 	}
 
+	if (!proxyLinker && arg.linkerExe !== undefined) {
+		throw new Error(
+			"Received a linkerExe argument, but linker is not being proxied",
+		);
+	}
+
 	let dirs = [];
 
 	let { cc, cxx, fortran, directory, flavor, host, ld, ldso, target } =
@@ -43,7 +51,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		// Construct the ld proxy.
 		let ldProxyArtifact = await ldProxy({
 			buildEnv: arg.env,
-			linker: ld,
+			linker: arg.linkerExe ?? ld,
 			interpreter: ldso,
 			host,
 			target,

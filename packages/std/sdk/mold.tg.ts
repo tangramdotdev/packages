@@ -2,15 +2,15 @@ import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 
 export let metadata = {
-	name: "ninja",
-	version: "1.11.1",
+	name: "mold",
+	version: "2.4.0",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:31747ae633213f1eda3842686f83c2aa1412e0f5691d1c14dbbcc67fe7400cea";
-	let owner = "ninja-build";
+		"sha256:be65f3d785d32ece7b3204ecaa57810847fdd25c232cf704cbfff2dafb1ac107";
+	let owner = "rui314";
 	let repo = name;
 	let tag = `v${version}`;
 	return std.download.fromGithub({
@@ -27,7 +27,7 @@ export type Arg = std.sdk.BuildEnvArg & {
 	source?: tg.Directory;
 };
 
-export let ninja = async (arg?: Arg) => {
+export let mold = async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -48,7 +48,6 @@ export let ninja = async (arg?: Arg) => {
 			...std.Triple.rotate({ build, host }),
 			phases: { configure },
 			source: source_ ?? source(),
-			useNinja: false,
 		},
 		autotools,
 	);
@@ -56,13 +55,13 @@ export let ninja = async (arg?: Arg) => {
 	return result;
 };
 
-export default ninja;
+export default mold;
 
 export let test = tg.target(async () => {
-	let directory = ninja();
+	let directory = mold();
 	await std.assert.pkg({
 		directory,
-		binaries: ["ninja"],
+		binaries: ["mold"],
 		metadata,
 	});
 	return directory;

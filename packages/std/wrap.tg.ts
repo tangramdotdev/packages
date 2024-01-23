@@ -158,7 +158,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-						  );
+							);
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -172,7 +172,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-					  );
+						);
 			}
 			if (arg.host !== undefined) {
 				object.host = std.triple(arg.host);
@@ -461,7 +461,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-							  );
+								);
 						return [key, mutations];
 					}),
 				),
@@ -819,27 +819,35 @@ export namespace wrap {
 	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */
 	export let tryUnwrap = async (
 		file: tg.File,
-	): Promise<tg.Template | tg.Symlink | undefined> => {
-		let manifest = await wrap.Manifest.read(file);
-		if (!manifest) {
+	): Promise<tg.File | tg.Template | undefined> => {
+		try {
+			return await unwrap(file);
+		} catch (_) {
 			return undefined;
-		}
-		if (manifest.executable.kind === "content") {
-			return templateFromManifestTemplate(manifest.executable.value);
-		} else {
-			return manifest.executable.value as tg.Symlink | tg.Template;
 		}
 	};
 
 	/** Unwrap a wrapped executable. Throws an error if the input was not a Tangram executable. */
-	export let unwrap = async (
-		file: tg.File,
-	): Promise<tg.Template | tg.Symlink> => {
-		let result = await tryUnwrap(file);
-		if (!result) {
-			throw new Error("File does not have a wrapper manifest.");
+	export let unwrap = async (file: tg.File): Promise<tg.File | tg.Template> => {
+		let manifest = await wrap.Manifest.read(file);
+		if (!manifest) {
+			throw new Error(
+				`Cannot unwrap ${await file.id()}: not a Tangram wrapper.`,
+			);
 		}
-		return result;
+		if (manifest.executable.kind === "content") {
+			return templateFromManifestTemplate(manifest.executable.value);
+		} else {
+			let symlink = await symlinkFromManifestSymlink(manifest.executable.value);
+			let resolved = await symlink.resolve();
+			if (tg.File.is(resolved)) {
+				return resolved;
+			} else {
+				throw new Error(
+					`Could not resolve executable symlink ${await symlink.id()} to a file.`,
+				);
+			}
+		}
 	};
 
 	export namespace Manifest {
@@ -1124,7 +1132,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1153,7 +1161,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1174,7 +1182,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1203,7 +1211,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1224,7 +1232,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
 		let injectionLibrary = await injection.default({
@@ -1236,7 +1244,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {

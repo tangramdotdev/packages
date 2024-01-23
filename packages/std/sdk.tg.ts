@@ -4,6 +4,7 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import { interpreterName } from "./sdk/libc.tg.ts";
+import mold, { metadata as moldMetadata } from "./sdk/mold.tg.ts";
 // import * as llvm from "./sdk/llvm.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 import * as std from "./tangram.tg.ts";
@@ -96,8 +97,10 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		targets = [host];
 	}
 
-	if (linker) {
-		return tg.unimplemented("Linker swapping is currently unsupported.");
+	if (linker && host.os === "darwin") {
+		return tg.unimplemented(
+			"Linker swapping is currently unsupported on macOS.",
+		);
 	}
 
 	if (host.os === "darwin") {
@@ -182,15 +185,18 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		// Collect environments to compose.
 		let envs: tg.Unresolved<Array<std.env.Arg>> = [];
 
-		// Add the host toolchain and full set of packages for the host.
+		// Add the host toolchain.
 		let hostToolchain = await gcc.toolchain({ host });
 		envs.push(hostToolchain);
+
 		let proxyEnv = await proxy.env({
 			...proxyArg,
 			env: hostToolchain,
 			host,
 		});
 		envs.push(proxyEnv);
+
+		// Add remaining dependencies.
 		let dependenciesEnv = await dependencies.env({
 			build: host,
 			host,
@@ -200,22 +206,70 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		envs.push(dependenciesEnv);
 
 		// Add any requested cross-compilers, without packages.
+		let crossEnvs = [];
 		for await (let target of targets) {
 			if (std.Triple.eq(host, target)) {
 				continue;
 			}
 			let crossToolchain = await gcc.toolchain({ host, target });
-			envs.push(crossToolchain);
+			crossEnvs.push(crossToolchain);
 			let proxyEnv = await proxy.env({
+				...proxyArg,
 				env: crossToolchain,
 				host,
 				target,
 			});
-			envs.push(proxyEnv);
+			crossEnvs.push(proxyEnv);
 		}
 
 		// Combine envs, preventing the utils from recompiling.
-		return std.env(...envs, { bootstrapMode: true });
+		let defaultSdk = await std.env(...envs, ...crossEnvs, {
+			bootstrapMode: true,
+		});
+		if (linker) {
+			// If an alternate linker was requested, use the default env to build a new proxy env with the alternate linker.
+			let linkerDir: tg.Directory | undefined = undefined;
+			let linkerExe: tg.File | tg.Symlink | undefined = undefined;
+			if (tg.Symlink.is(linker) || tg.File.is(linker)) {
+				linkerExe = linker;
+			} else {
+				switch (linker) {
+					case "lld": {
+						return tg.unimplemented("lld support is not yet implemented.");
+					}
+					case "mold": {
+						let moldArtifact = await mold({ host });
+						linkerDir = moldArtifact;
+						linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
+						break;
+					}
+					case "bfd": {
+						// The default SDK is already correct.
+						return defaultSdk;
+					}
+				}
+			}
+			let proxyEnv = await proxy.env({
+				...proxyArg,
+				env: hostToolchain,
+				host,
+				linkerExe,
+			});
+			let alternateLinkerEnvs = [
+				hostToolchain,
+				proxyEnv,
+				dependenciesEnv,
+				...crossEnvs,
+			];
+			if (tg.Directory.is(linkerDir)) {
+				alternateLinkerEnvs.push(linkerDir);
+			}
+			return std.env(...alternateLinkerEnvs, {
+				bootstrapMode: true,
+			});
+		} else {
+			return defaultSdk;
+		}
 	} else if (toolchain === "llvm") {
 		return tg.unimplemented();
 		// let hostSDK = await stage0.bootstrapSdk({ host });
@@ -709,7 +763,7 @@ export namespace sdk {
 		targets: Array<std.Triple>;
 	};
 
-	export type LinkerKind = "bfd" | "lld" | "mold" | tg.Symlink;
+	export type LinkerKind = "bfd" | "lld" | "mold" | tg.Symlink | tg.File;
 
 	export type ToolchainKind = "gcc" | "llvm" | std.env.Arg;
 }
@@ -850,6 +904,45 @@ type ProxyTestArg = {
 	host?: std.Triple.Arg;
 	target?: std.Triple.Arg;
 };
+
+export let testMoldSdk = tg.target(async () => {
+	let detectedHost = await std.Triple.host();
+	if (detectedHost.os !== "linux") {
+		throw new Error(`mold is only available on Linux`);
+	}
+
+	let sdkArg = { host: detectedHost, linker: "mold" as const };
+
+	let moldSdk = tg.File.expect(await sdk(sdkArg));
+
+	// Ensure that the SDK is valid.
+	await sdk.assertValid(moldSdk, sdkArg);
+
+	// Ensure that produced artifacts contain the `mold` ELF comment.
+	let source = tg.file(`
+		#include <stdio.h>
+		int main() {
+			printf("Hello, world!\\n");
+			return 0;
+		}
+	`);
+	let output = tg.File.expect(
+		await tg.build(tg`cc -v -xc ${source} -o $OUTPUT`, {
+			env: await std.env.object(moldSdk),
+		}),
+	);
+	let innerExe = tg.File.expect(await std.wrap.unwrap(output));
+	let elfComment = tg.File.expect(
+		await tg.build(tg`readelf -p .comment ${innerExe} | grep mold > $OUTPUT`, {
+			env: await std.env.object(moldSdk),
+		}),
+	);
+	let text = await elfComment.text();
+	tg.assert(text.includes("mold"));
+	tg.assert(text.includes(moldMetadata.version));
+
+	return output;
+});
 
 export let testLLVM = tg.target(async () => {
 	let env = await sdk({ toolchain: "llvm" });

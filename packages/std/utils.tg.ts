@@ -104,7 +104,7 @@ type BuildUtilArg = std.autotools.Arg & {
 	wrapBashScriptPaths?: Array<string>;
 };
 
-/** Build a util. This wrapps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag. */
+/** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag. */
 export let buildUtil = tg.target(
 	async (
 		arg: BuildUtilArg,
