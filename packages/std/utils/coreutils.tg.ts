@@ -184,9 +184,13 @@ export let test = tg.target(async () => {
 	// This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux.
 
 	// Run the script.
+	let platformSupportLib =
+		os === "darwin"
+			? libiconv({ sdk: { bootstrapMode: true } })
+			: attr({ sdk: { bootstrapMode: true } });
 	let output = tg.File.expect(
 		await tg.build(script, {
-			env: std.env.object([attr({ sdk: { bootstrapMode: true } }), coreutils]),
+			env: std.env.object(platformSupportLib, coreutils),
 		}),
 	);
 
