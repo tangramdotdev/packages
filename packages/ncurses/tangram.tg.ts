@@ -22,13 +22,15 @@ type Arg = {
 };
 
 export let ncurses = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+	let { autotools = [], build: build_, host: host_, source: source_, ...rest } = arg ?? {};
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let build = build_ ? std.triple(build_) : host;
 
 	let configure = {
 		args: ["--with-shared", "--with-cxx-shared", "--enable-widec"],
 	};
-	let fixup = `
-				# watermark
+	let install = tg.Mutation.set("make DESTDIR=${OUTPUT} install.includes install.libs"); // skip progs/terminfo data/man pages
+	let fixup = (host.os === "linux") ? `
 				chmod -R u+w \${OUTPUT}
 				for lib in ncurses form panel menu ; do
 					rm -vf                     \${OUTPUT}/lib/lib\${lib}.so
@@ -38,8 +40,8 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 				rm -vf                     \${OUTPUT}/lib/libcursesw.so
 				echo "INPUT(-lncursesw)" > \${OUTPUT}/lib/libcursesw.so
 				ln -sfv libncurses.so      \${OUTPUT}/lib/libcurses.so
-		`;
-	let phases = { configure, fixup };
+		` : "";
+	let phases = { configure, install, fixup };
 
 	return std.autotools.build(
 		{
