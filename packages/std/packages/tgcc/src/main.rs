@@ -6,7 +6,6 @@ use std::{
 };
 use tangram_client as tg;
 use tangram_error::{error, Result, WrapErr};
-use tg::{build::GetOrCreateOutput, Handle};
 
 // Data read from environment variables.
 #[derive(Debug)]
@@ -327,8 +326,7 @@ async fn main_inner() -> Result<()> {
 	let output = output.unwrap();
 
 	// Create a client.
-	let client = tg::Builder::new(environment.runtime.addr).build();
-	let tg = &client;
+	let tg = &tg::Client::with_runtime()?;
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
@@ -384,7 +382,8 @@ async fn main_inner() -> Result<()> {
 		target: id.clone(),
 		options,
 	};
-	let GetOrCreateOutput { id: build_id } = tg.get_or_create_build(None, build_arg).await?;
+	let tg::build::GetOrCreateOutput { id: build_id } =
+		tg.get_or_create_build(None, build_arg).await?;
 	let build = tg::Build::with_id(build_id);
 
 	// Await the outcome.
@@ -394,12 +393,14 @@ async fn main_inner() -> Result<()> {
 		tg::build::Outcome::Terminated => return Err(error!("Build was terminated.")),
 		tg::build::Outcome::Failed(e) => return Err(error!("Build failed: {e}.")),
 		tg::build::Outcome::Succeeded(outcome) => outcome
+			.try_unwrap_object()
+			.wrap_err("Expected build to create an object.")?
 			.try_unwrap_directory()
 			.wrap_err("Expected build to create a directory.")?,
 	};
 
 	// Dump stdout, stderr
-	let stdout = build_directory
+	let stdout: Vec<u8> = build_directory
 		.get(tg, &"stdout".parse().unwrap())
 		.await?
 		.try_unwrap_file()
@@ -409,7 +410,7 @@ async fn main_inner() -> Result<()> {
 	std::io::stdout()
 		.write_all(&stdout)
 		.wrap_err("Failed to dump stdout.")?;
-	let stderr = build_directory
+	let stderr: Vec<u8> = build_directory
 		.get(tg, &"stderr".parse().unwrap())
 		.await?
 		.try_unwrap_file()
