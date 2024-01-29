@@ -296,14 +296,17 @@ pub fn collect_references_from_value_data<H: BuildHasher>(
 	references: &mut HashSet<tg::artifact::Id, H>,
 ) {
 	match value {
-		tg::value::Data::Directory(id) => {
-			references.insert(id.clone().into());
-		},
-		tg::value::Data::File(id) => {
-			references.insert(id.clone().into());
-		},
-		tg::value::Data::Symlink(id) => {
-			references.insert(id.clone().into());
+		tg::value::Data::Object(id) => match id {
+			tg::object::Id::File(id) => {
+				references.insert(id.clone().into());
+			},
+			tg::object::Id::Symlink(id) => {
+				references.insert(id.clone().into());
+			},
+			tg::object::Id::Directory(id) => {
+				references.insert(id.clone().into());
+			},
+			_ => {},
 		},
 		tg::value::Data::Mutation(data) => {
 			collect_references_from_mutation_data(data, references);

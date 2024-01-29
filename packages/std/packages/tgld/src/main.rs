@@ -215,9 +215,7 @@ fn read_options() -> Options {
 #[allow(clippy::too_many_lines)]
 async fn create_wrapper(options: &Options) -> Result<()> {
 	// Create the tangram instance.
-	let runtime_json =
-		std::env::var("TANGRAM_RUNTIME").wrap_err("Failed to get TANGRAM_RUNTIME.")?;
-	let tg = tg::Builder::with_runtime_json(&runtime_json)?.build();
+	let tg = tg::Client::with_runtime()?;
 	tg.connect().await?;
 
 	// Analyze the output file.

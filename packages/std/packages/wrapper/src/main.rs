@@ -506,7 +506,7 @@ fn render_value(
 		},
 		tg::value::Data::Number(value) => value.to_string(),
 		tg::value::Data::String(value) => value.clone(),
-		tg::value::Data::Directory(_) | tg::value::Data::File(_) | tg::value::Data::Symlink(_) => {
+		tg::value::Data::Object(_) => {
 			let symlink = symlink_from_artifact_value_data(value);
 			render_symlink(&symlink, artifacts_directories)
 		},
@@ -519,24 +519,31 @@ fn render_value(
 }
 
 fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Data {
-	match value {
-		tg::value::Data::Directory(id) => tg::symlink::Data {
-			artifact: Some(id.clone().into()),
-			path: None,
-		},
-		tg::value::Data::File(id) => tg::symlink::Data {
-			artifact: Some(id.clone().into()),
-			path: None,
-		},
-		tg::value::Data::Symlink(id) => tg::symlink::Data {
-			artifact: Some(id.clone().into()),
-			path: None,
-		},
-		_ => {
-			tracing::error!(?value, "Malformed manifest. Expected an artifact value.");
-			std::process::exit(1);
-		},
+	if let tg::value::Data::Object(id) = value {
+		match id {
+			tg::object::Id::Directory(id) => {
+				return tg::symlink::Data {
+					artifact: Some(id.clone().into()),
+					path: None,
+				}
+			},
+			tg::object::Id::File(id) => {
+				return tg::symlink::Data {
+					artifact: Some(id.clone().into()),
+					path: None,
+				}
+			},
+			tg::object::Id::Symlink(id) => {
+				return tg::symlink::Data {
+					artifact: Some(id.clone().into()),
+					path: None,
+				}
+			},
+			_ => (),
+		}
 	}
+	tracing::error!(?value, "Malformed manifest. Expected an artifact value.");
+	std::process::exit(1);
 }
 
 fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
