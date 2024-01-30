@@ -247,11 +247,6 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 				.wrap_err("Could not open output file")?,
 		);
 		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
-		let checkout_arg = tg::artifact::CheckOutArg {
-			artifact: output_artifact.id(&tg).await?.clone().try_into().unwrap(),
-			path: None,
-		};
-		tg.check_out_artifact(checkout_arg).await?;
 		Some(output_artifact)
 	} else {
 		None
@@ -260,12 +255,11 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	let library_paths = if library_paths.is_empty() {
 		None
 	} else {
-		// Set the initially known needed libraries, filtering out libSystem on macOS.
+		// Set the initially known needed libraries.
 		let mut needed_libraries: HashMap<String, Option<tg::directory::Id>, Hasher> =
 			initial_needed_libraries
 				.iter()
 				.cloned()
-				.filter(|name| name != "/usr/lib/libSystem.B.dylib" && name != "self")
 				.map(|name| (name, None))
 				.collect();
 
@@ -528,7 +522,7 @@ enum InterpreterRequirement {
 	Path(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum LibraryPathOptimizationLevel {
 	/// Do not optimize library paths.
 	None = 0,
@@ -537,21 +531,8 @@ enum LibraryPathOptimizationLevel {
 	/// Filter library paths for needed libraries.
 	Filter = 2,
 	/// Combine library paths into a single directory.
+	#[default]
 	Combine = 3,
-}
-
-#[cfg(target_os = "linux")]
-impl Default for LibraryPathOptimizationLevel {
-	fn default() -> Self {
-		Self::Combine
-	}
-}
-
-#[cfg(not(target_os = "linux"))]
-impl Default for LibraryPathOptimizationLevel {
-	fn default() -> Self {
-		Self::Resolve
-	}
 }
 
 impl std::str::FromStr for LibraryPathOptimizationLevel {
@@ -957,21 +938,8 @@ where
 				path: Some(s.strip_prefix('/').unwrap().to_owned()),
 			})
 		},
-		// On darwin, the artifact path will be prefixed by an absolute path on the user's filesystem. We only care that there is a single artifact given, we can ignore the leading path.
-		[tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id)] => {
-			Ok(tg::symlink::Data {
-				artifact: Some(artifact_id.clone()),
-				path: None,
-			})
-		},
-		[tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
-			Ok(tg::symlink::Data {
-				artifact: Some(artifact_id.clone()),
-				path: Some(s.strip_prefix('/').unwrap().to_owned()),
-			})
-		},
 		_ => Err(error!(
-			"Expected a template with 1, 2, or 3 components, got {:?}.",
+			"Expected a template with 1 or 2 components, got {:?}.",
 			components
 		)),
 	}
