@@ -44,7 +44,8 @@ export let openssl = tg.target(async (arg?: Arg) => {
 	let sourceDir = source_ ?? source();
 
 	let prepare = tg`cp -R ${sourceDir}/* . && chmod -R u+w .`;
-	let configure = tg`perl ./Configure ${host.os}-${host.arch}`;
+	let osCompiler = (host.os === "darwin") ? (host.arch === "aarch64") ? `darwin64-arm64` : `darwin64-${host.arch}` : `${host.os}-${host.arch}`;
+	let configure = tg`perl ./Configure ${osCompiler}`;
 	// NOTE: The full `make install` consists of three steps. The final step installs documentation and take a disproportionately long time. We just build the first two steps to avoid this.
 	let install = {
 		args: tg.Mutation.set(["install_sw", "install_ssldirs"]),

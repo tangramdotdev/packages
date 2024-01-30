@@ -76,13 +76,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--enable-optimizations",
 		],
 	};
-	let dependencies = [
-		bison(arg),
-		m4(arg),
-		make(arg),
-		pkgConfig(arg),
-	];
-
+	let dependencies = [bison(arg), m4(arg), make(arg), pkgConfig(arg)];
 
 	let env = [std.utils.env(arg), ...dependencies, additionalEnv, env_];
 

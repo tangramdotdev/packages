@@ -71,10 +71,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	);
 
 	let bins = ["lzmadec", "lzmainfo", "xz", "xzdec"];
+	let libDir = tg.Directory.expect(await output.get("lib"));
 	for (let bin of bins) {
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
 		let wrappedBin = std.wrap(unwrappedBin, {
-			libraryPaths: [tg.symlink(tg`${output}/lib`)],
+			libraryPaths: [libDir],
 			sdk: arg?.sdk,
 		});
 		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
