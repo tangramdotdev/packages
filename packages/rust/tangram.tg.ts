@@ -74,10 +74,11 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	}
 
 	// Download each package, and add each one as a subdirectory. The subdirectory will be named with the package's name.
-	let packagesArtifact = await tg.directory({});
+	let packagesArtifact = await tg.directory();
 	for (let [name, pkg] of packages) {
 		let artifact = await std.download({
 			checksum: `sha256:${pkg.xz_hash}`,
+			unpackFormat: ".tar.xz" as const,
 			url: pkg.xz_url,
 		});
 		packagesArtifact = await tg.directory(packagesArtifact, {
@@ -94,15 +95,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	let rustInstall = await std.build(
 		tg`
 			set +x
-			mkdir packages
-			for package_tar in ${packagesArtifact}/* ; do
-				echo "Unpacking $package_tar"
-				package="packages/$(basename -s ".tar" "$package_tar")"
-				mkdir "$package"
-				tar -xf "$package_tar" -C "$package"
-			done
-
-			for package in packages/*/* ; do
+			for package in ${packagesArtifact}/*/* ; do
 				echo "Installing $package"
 				bash "$package/install.sh" --prefix="$OUTPUT"
 			done
@@ -129,13 +122,13 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	let artifact = tg.directory();
 
 	let zlibArtifact = await zlib(arg);
+	let rustLibdir = tg.Directory.expect(await rustInstall.get("lib"));
+	let zlibLibdir = tg.Directory.expect(await zlibArtifact.get("lib"));
 
 	for (let executable of executables) {
-		let wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
-			libraryPaths: [
-				tg.symlink(tg`${rustInstall}/lib`),
-				tg.symlink(tg`${zlibArtifact}/lib`),
-			],
+		let exe = tg.File.expect(await rustInstall.get(executable));
+		let wrapped = std.wrap(exe, {
+			libraryPaths: [rustLibdir, zlibLibdir],
 		});
 
 		artifact = tg.directory(artifact, {

@@ -54,30 +54,50 @@ export let env = tg.target(async (arg?: Arg) => {
 	// Add the standard utils.
 	dependencies.push(await std.utils.env(arg));
 
-	// Add `make` built against the standard utils.
+	// // Add `make` built against the standard utils.
+	// dependencies.push(await make(arg));
+
+	// dependencies = dependencies.concat(
+	// 	await Promise.all([bc(arg), bison(arg), bzip2(arg), gperf(arg), m4(arg)]),
+	// );
+
+	// dependencies = dependencies.concat(
+	// 	await Promise.all([libffi(arg), patch(arg), xz(arg), zlib(arg), zstd(arg)]),
+	// );
+
+	// dependencies = dependencies.concat(
+	// 	await Promise.all([perl(arg), pkgconfig(arg), python(arg), texinfo(arg)]),
+	// );
+
+	// dependencies = dependencies.concat(
+	// 	await Promise.all([
+	// 		autoconf(arg),
+	// 		automake(arg),
+	// 		file(arg),
+	// 		flex(arg),
+	// 		help2man(arg),
+	// 	]),
+	// );
 	dependencies.push(await make(arg));
-
-	dependencies = dependencies.concat(
-		await Promise.all([bc(arg), bison(arg), bzip2(arg), gperf(arg), m4(arg)]),
-	);
-
-	dependencies = dependencies.concat(
-		await Promise.all([libffi(arg), patch(arg), xz(arg), zlib(arg), zstd(arg)]),
-	);
-
-	dependencies = dependencies.concat(
-		await Promise.all([perl(arg), pkgconfig(arg), python(arg), texinfo(arg)]),
-	);
-
-	dependencies = dependencies.concat(
-		await Promise.all([
-			autoconf(arg),
-			automake(arg),
-			file(arg),
-			flex(arg),
-			help2man(arg),
-		]),
-	);
+	dependencies.push(await bc(arg));
+	dependencies.push(await bison(arg));
+	dependencies.push(await bzip2(arg));
+	dependencies.push(await gperf(arg));
+	dependencies.push(await m4(arg));
+	dependencies.push(await libffi(arg));
+	dependencies.push(await patch(arg));
+	dependencies.push(await xz(arg));
+	dependencies.push(await zlib(arg));
+	dependencies.push(await zstd(arg));
+	dependencies.push(await perl(arg));
+	dependencies.push(await pkgconfig(arg));
+	dependencies.push(await python(arg));
+	dependencies.push(await texinfo(arg));
+	dependencies.push(await autoconf(arg));
+	dependencies.push(await automake(arg));
+	dependencies.push(await file(arg));
+	dependencies.push(await flex(arg));
+	dependencies.push(await help2man(arg));
 
 	// The final env contains the standard utils and all packages from this module.
 	return std.env(...dependencies, { bootstrapMode: true });

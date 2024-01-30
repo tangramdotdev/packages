@@ -36,17 +36,27 @@ export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 		CONFIG_SHELL: bashExecutable,
 		SHELL: bashExecutable,
 	};
-	let utils = await Promise.all([
-		bashAritfact,
-		coreutils({ ...rest, env, host }),
-		diffutils({ ...rest, env, host }),
-		findutils({ ...rest, env, host }),
-		gawk({ ...rest, env, host }),
-		grep({ ...rest, env, host }),
-		gzip({ ...rest, env, host }),
-		sed({ ...rest, env, host }),
-		tar({ ...rest, env, host }),
-	]);
+	// let utils = await Promise.all([
+	// 	bashAritfact,
+	// 	coreutils({ ...rest, env, host }),
+	// 	diffutils({ ...rest, env, host }),
+	// 	findutils({ ...rest, env, host }),
+	// 	gawk({ ...rest, env, host }),
+	// 	grep({ ...rest, env, host }),
+	// 	gzip({ ...rest, env, host }),
+	// 	sed({ ...rest, env, host }),
+	// 	tar({ ...rest, env, host }),
+	// ]);
+	let utils = [];
+	utils.push(bashAritfact);
+	utils.push(await coreutils({ ...rest, env, host }));
+	utils.push(await diffutils({ ...rest, env, host }));
+	utils.push(await findutils({ ...rest, env, host }));
+	utils.push(await gawk({ ...rest, env, host }));
+	utils.push(await grep({ ...rest, env, host }));
+	utils.push(await gzip({ ...rest, env, host }));
+	utils.push(await sed({ ...rest, env, host }));
+	utils.push(await tar({ ...rest, env, host }));
 
 	return std.env(...utils, env, { bootstrapMode: true });
 });

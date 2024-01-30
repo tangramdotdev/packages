@@ -4,7 +4,15 @@ use tangram_client as tg;
 use tangram_wrapper::manifest::{DyLdInterpreter, Executable, Identity, Interpreter, Manifest};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
-fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() {
+	if let Err(e) = main_inner().await {
+		eprintln!("wrapper failed: {e}");
+		std::process::exit(1);
+	}
+}
+
+async fn main_inner() -> std::io::Result<()> {
 	// Setup tracing.
 	setup_tracing();
 
@@ -14,6 +22,9 @@ fn main() -> std::io::Result<()> {
 
 	// Read the manifest.
 	let manifest = Manifest::read(&wrapper_path)?.expect("Failed to read the manifest.");
+
+	// Check out all referenced artifacts.
+	check_out_artifacts(&manifest).await;
 
 	// If the `--tangram-print-manifest` arg is passed, then print the manifest and exit.
 	if std::env::args().any(|arg| arg == "--tangram-print-manifest") {
@@ -293,6 +304,23 @@ fn handle_interpreter(
 		Some(Interpreter::DyLd(_)) | None => None,
 	};
 	Ok(result)
+}
+
+async fn check_out_artifacts(manifest: &Manifest) {
+	// Create client.
+	let tg = tg::Client::with_runtime().unwrap();
+	tg.connect().await.unwrap();
+
+	let references = manifest.references();
+
+	// Check out all artifacts.
+	for artifact in &references {
+		let arg = tg::artifact::CheckOutArg {
+			artifact: artifact.clone(),
+			path: None,
+		};
+		tg.check_out_artifact(arg).await.unwrap();
+	}
 }
 
 fn set_dyld_environment(

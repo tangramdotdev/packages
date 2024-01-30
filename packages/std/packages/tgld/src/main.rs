@@ -247,6 +247,11 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 				.wrap_err("Could not open output file")?,
 		);
 		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
+		let checkout_arg = tg::artifact::CheckOutArg {
+			artifact: output_artifact.id(&tg).await?.clone().into(),
+			path: None,
+		};
+		tg.check_out_artifact(checkout_arg).await?;
 		Some(output_artifact)
 	} else {
 		None
@@ -928,18 +933,22 @@ where
 			artifact: None,
 			path: Some(s.to_owned()),
 		}),
-		[tg::template::component::Data::Artifact(id)] => Ok(tg::symlink::Data {
-			artifact: Some(id.clone()),
-			path: None,
-		}),
-		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
+		[tg::template::component::Data::Artifact(id)]
+		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
+			Ok(tg::symlink::Data {
+				artifact: Some(id.clone()),
+				path: None,
+			})
+		},
+		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
+		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data {
 				artifact: Some(artifact_id.clone()),
 				path: Some(s.strip_prefix('/').unwrap().to_owned()),
 			})
 		},
 		_ => Err(error!(
-			"Expected a template with 1 or 2 components, got {:?}.",
+			"Expected a template with 1-3 components, got {:?}.",
 			components
 		)),
 	}
