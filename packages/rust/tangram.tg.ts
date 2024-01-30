@@ -123,6 +123,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 
 	let zlibArtifact = await zlib(arg);
 	let rustLibdir = tg.Directory.expect(await rustInstall.get("lib"));
+	console.log("rust lib dir", await rustLibdir.id());
 	let zlibLibdir = tg.Directory.expect(await zlibArtifact.get("lib"));
 
 	for (let executable of executables) {
@@ -224,7 +225,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 
 	// Create the build script.
 	let buildScript = tg`
-		set -eu
+		set -eux
 		# Create the output directory
 		mkdir -p "$OUTPUT/target"
 
@@ -238,6 +239,8 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
 		echo ""
 
 		export CARGO_HOME=$HOME/.cargo
+
+		cargo --tangram-print-manifest
 
 		# Build.
 		TARGET_DIR="$(realpath "$OUTPUT/target")"
