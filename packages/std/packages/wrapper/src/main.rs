@@ -306,10 +306,13 @@ fn handle_interpreter(
 	Ok(result)
 }
 
+/// Attempt to internal checkouts of all referenced artifacts.
 async fn check_out_artifacts(manifest: &Manifest) {
 	// Create client.
 	let tg = tg::Client::with_runtime().unwrap();
-	tg.connect().await.unwrap();
+	if (tg.connect().await).is_err() {
+		return;
+	}
 
 	let references = manifest.references();
 
@@ -319,7 +322,9 @@ async fn check_out_artifacts(manifest: &Manifest) {
 			artifact: artifact.clone(),
 			path: None,
 		};
-		tg.check_out_artifact(arg).await.unwrap();
+		if (tg.check_out_artifact(arg).await).is_err() {
+			continue;
+		}
 	}
 }
 
