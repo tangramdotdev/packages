@@ -1848,7 +1848,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tangram_client",
- "tangram_error",
  "tokio",
  "tracing",
  "tracing-subscriber",

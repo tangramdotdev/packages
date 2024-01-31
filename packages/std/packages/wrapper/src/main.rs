@@ -306,7 +306,7 @@ fn handle_interpreter(
 	Ok(result)
 }
 
-/// Attempt to internal checkouts of all referenced artifacts.
+/// Attempt internal checkouts of all referenced artifacts.
 async fn check_out_artifacts(manifest: &Manifest) {
 	// Create client.
 	let tg = tg::Client::with_runtime().unwrap();
