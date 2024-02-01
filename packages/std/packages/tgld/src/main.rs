@@ -247,11 +247,6 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 				.wrap_err("Could not open output file")?,
 		);
 		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
-		let checkout_arg = tg::artifact::CheckOutArg {
-			artifact: output_artifact.id(&tg).await?.clone().into(),
-			path: None,
-		};
-		tg.check_out_artifact(checkout_arg).await?;
 		Some(output_artifact)
 	} else {
 		None
@@ -611,11 +606,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 	let directory = tg::Directory::new(entries);
 	let dir_id = directory.id(tg).await?;
-	let checkout_arg = tg::artifact::CheckOutArg {
-		artifact: dir_id.clone().into(),
-		path: None,
-	};
-	tg.check_out_artifact(checkout_arg).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
 	return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;

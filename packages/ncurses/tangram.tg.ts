@@ -29,7 +29,7 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: ["--with-shared", "--with-cxx-shared", "--enable-widec"],
 	};
-	let install = tg.Mutation.set("make DESTDIR=${OUTPUT} install.includes install.libs"); // skip progs/terminfo data/man pages
+	let install = host.os === "darwin" ? tg.Mutation.set("make DESTDIR=${OUTPUT} install.includes install.libs") : undefined; // skip progs/terminfo data/man pages on darwin
 	let fixup = (host.os === "linux") ? `
 				chmod -R u+w \${OUTPUT}
 				for lib in ncurses form panel menu ; do
