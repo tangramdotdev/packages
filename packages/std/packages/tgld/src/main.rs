@@ -928,18 +928,22 @@ where
 			artifact: None,
 			path: Some(s.to_owned()),
 		}),
-		[tg::template::component::Data::Artifact(id)] => Ok(tg::symlink::Data {
-			artifact: Some(id.clone()),
-			path: None,
-		}),
-		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
+		[tg::template::component::Data::Artifact(id)]
+		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
+			Ok(tg::symlink::Data {
+				artifact: Some(id.clone()),
+				path: None,
+			})
+		},
+		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
+		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data {
 				artifact: Some(artifact_id.clone()),
 				path: Some(s.strip_prefix('/').unwrap().to_owned()),
 			})
 		},
 		_ => Err(error!(
-			"Expected a template with 1 or 2 components, got {:?}.",
+			"Expected a template with 1-3 components, got {:?}.",
 			components
 		)),
 	}

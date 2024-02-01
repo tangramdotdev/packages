@@ -300,36 +300,3 @@ export let testOciBasicEnv = tg.target(async () => {
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
 });
-
-//// scratch
-
-import { env } from "./env.tg.ts";
-export let testDarwinLibdirWrap = tg.target(async () => {
-	let sdkEnv = await sdk({ bootstrapMode: true });
-	console.log("sdkEnv", sdkEnv);
-	let detectedHost = await Triple.host();
-
-	let dylibExt = (detectedHost.os === "darwin") ? "dylib" : "so";
-
-	// Define a sample dynamic library.
-	let dylibSource = tg.file(`
-		#include <stdio.h>
-		void hello() {
-			printf("Hello, world!\\n");
-		}
-	`);
-	let dylibDir = tg.Directory.expect(await tg.build(tg`mkdir $OUTPUT && cc -shared -fPIC -xc ${dylibSource} -o $OUTPUT/libhello.dylib`, { env: await env.object(sdkEnv, { TANGRAM_WRAPPER_TRACING: "tangram=trace", TGLD_TRACING: "tangram=trace" }) }));
-
-	// Define a sample executable that uses the dynamic library.
-	let exeSource = tg.file(`
-		#include <stdio.h>
-		void hello();
-		int main() {
-			hello();
-			return 0;
-		}
-	`);
-	let exe = tg.build(tg`cc -xc ${exeSource} -lhello -o $OUTPUT`, { env: await env.object(sdkEnv, { LIBRARY_PATH: tg`${dylibDir}`, TANGRAM_WRAPPER_TRACING: "tangram=trace", TGLD_TRACING: "tangram=trace" }) });
-
-	return exe;
-});

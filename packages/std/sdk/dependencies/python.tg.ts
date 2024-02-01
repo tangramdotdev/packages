@@ -66,6 +66,12 @@ export let build = tg.target(async (arg?: Arg) => {
 			...additionalEnv,
 			MACOSX_DEPLOYMENT_TARGET: "14.2",
 		};
+	} else if (os === "linux") {
+		additionalEnv = {
+			...additionalEnv,
+			// Note -required to support PGO with the default SDK..
+			LDFLAGS: await tg.Mutation.templatePrepend("-lgcov --coverage", " "),
+		};
 	}
 
 	let configure = {

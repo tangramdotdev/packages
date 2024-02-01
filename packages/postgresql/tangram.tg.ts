@@ -1,5 +1,5 @@
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import openssl from "tg:openssl" with { path: "../openssl" };
+// import openssl from "tg:openssl" with { path: "../openssl" };
 import readline from "tg:readline" with { path: "../readline" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
@@ -45,7 +45,8 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let env = [ncurses(arg), openssl(arg), readline(arg), zlib(arg), env_];
+	//let env = [ncurses(arg), openssl(arg), readline(arg), zlib(arg), env_];
+	let env = [ncurses(arg), readline(arg), zlib(arg), env_];
 
 	let sourceDir = source_ ?? source();
 

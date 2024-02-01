@@ -200,7 +200,7 @@ export let build = async (arg: BuildArg) => {
 	let isCross = !std.Triple.eq(host, target);
 
 	// Get the SDK, without proxying enabled.
-	let sdkArg: std.sdk.Arg = { host, target};
+	let sdkArg: std.sdk.Arg = { host, target };
 	if (host.arch === target.arch) {
 		sdkArg = { ...sdkArg, bootstrapMode: true };
 	}
