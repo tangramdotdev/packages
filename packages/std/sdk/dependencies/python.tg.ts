@@ -59,6 +59,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	let os = build.os;
 
 	let additionalEnv: std.env.Arg = {
+		// Note -required to support PGO with the default SDK..
+		LDFLAGS: await tg.Mutation.templatePrepend("-lgcov --coverage", " "),
 		TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "resolve",
 	};
 	if (os === "darwin") {
