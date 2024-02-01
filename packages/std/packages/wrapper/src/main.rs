@@ -308,24 +308,39 @@ fn handle_interpreter(
 
 /// Attempt internal checkouts of all referenced artifacts.
 async fn check_out_artifacts(manifest: &Manifest) {
-	// Create client.
-	let tg = tg::Client::with_runtime().unwrap();
+	// Attempt to create the client and connect, aborting if either fails.
+	let tg = match tg::Client::with_runtime() {
+		Ok(tg) => tg,
+		Err(e) => {
+			tracing::info!("Failed to create the Tangram client, skipping checkouts: {e}");
+			return;
+		},
+	};
 	if (tg.connect().await).is_err() {
+		tracing::info!("Failed to connect to the Tangram server, skipping checkouts.");
 		return;
 	}
 
-	let references = manifest.references();
-
-	// Check out all artifacts.
-	for artifact in &references {
-		let arg = tg::artifact::CheckOutArg {
-			artifact: artifact.clone(),
-			path: None,
-		};
-		if (tg.check_out_artifact(arg).await).is_err() {
-			continue;
-		}
-	}
+	// Attempt to check out all artifacts referenced by the manifest, warning but not aborting if any fail.
+	futures::future::join_all(
+		manifest
+			.references()
+			.iter()
+			.map(|artifact| {
+				let tg = tg.clone();
+				let arg = tg::artifact::CheckOutArg {
+					artifact: artifact.clone(),
+					path: None,
+				};
+				async move {
+					tg.check_out_artifact(arg).await.unwrap_or_else(|e| {
+						tracing::warn!("Failed to check out {artifact}: {e}");
+					});
+				}
+			})
+			.collect::<Vec<_>>(),
+	)
+	.await;
 }
 
 fn set_dyld_environment(

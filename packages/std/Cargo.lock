@@ -1843,6 +1843,7 @@ version = "0.0.0"
 dependencies = [
  "byteorder",
  "fnv",
+ "futures",
  "itertools",
  "libc",
  "serde",
