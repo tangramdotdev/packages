@@ -19,7 +19,6 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 		"packages/env": tg.include("../packages/env"),
 		"packages/tgcc": tg.include("../packages/tgcc"),
 		"packages/tgld": tg.include("../packages/tgld"),
-		"packages/vfs_test": tg.include("../packages/vfs_test"),
 		"packages/wrapper": tg.include("../packages/wrapper"),
 	});
 
@@ -309,7 +308,6 @@ export let build = async (arg: BuildArg) => {
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_env $OUTPUT/bin/env
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_cc $OUTPUT/bin/tgcc
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_linker $OUTPUT/bin/tgld
-			mv $TARGET/$RUST_TARGET/${buildType}/tangram_vfs_test $OUTPUT/bin/vfs_test
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
 		`,
 	};
@@ -394,44 +392,4 @@ export let testCross = tg.target(async () => {
 	tg.assert(crossMetadata.format === "elf");
 	tg.assert(crossMetadata.arch === targetArch);
 	return true;
-});
-
-export let testVfs = tg.target(async () => {
-	let host = await std.Triple.host();
-	let utils = bootstrap.utils({ host });
-	let vfsTestBin = await vfsTest({ host });
-	let env = {
-		TANGRAM_VFS_TEST_TRACING: "tangram=trace",
-	};
-
-	let scriptNoCheckout = tg`
-		set -eux
-		# watermark 1
-		id="$(${vfsTestBin} create | tee -a $OUTPUT)"
-		${vfsTestBin} consume "$id" | tee -a $OUTPUT
-	`;
-	let outputNoCheckout = tg.File.expect(
-		await tg.build(scriptNoCheckout, {
-			env: await std.env.object(utils, env),
-		}),
-	);
-	let noCheckoutText = await outputNoCheckout.text();
-	console.log("no checkout", noCheckoutText);
-
-	let scriptCheckout = tg`
-		# watermark 2
-		set -eux
-		id="$(${vfsTestBin} create --checkout | tee -a $OUTPUT)"
-		ls -l /.tangram/artifacts/\${id} | tee -a $OUTPUT
-		${vfsTestBin} consume "$id" | tee -a $OUTPUT
-	`;
-	let outputCheckout = tg.File.expect(
-		await tg.build(scriptCheckout, {
-			env: await std.env.object(utils, env),
-		}),
-	);
-	let checkoutText = await outputCheckout.text();
-	console.log("checkout", checkoutText);
-
-	return outputCheckout;
 });
