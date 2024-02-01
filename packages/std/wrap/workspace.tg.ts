@@ -39,9 +39,6 @@ export let tgcc = async (arg?: Arg) =>
 export let tgld = async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/tgld"));
 
-export let vfsTest = async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/vfs_test"));
-
 export let wrapper = async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
