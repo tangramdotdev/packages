@@ -23,10 +23,18 @@ export * as libiconv from "./utils/libiconv.tg.ts";
 export * as sed from "./utils/sed.tg.ts";
 export * as tar from "./utils/tar.tg.ts";
 
+type Arg = std.sdk.BuildEnvArg & {
+	parallel?: boolean;
+};
+
 /** A basic set of GNU system utilites. */
-export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	let { host: host_, ...rest } = arg ?? {};
+export let env = tg.target(async (arg?: Arg) => {
+	let { host: host_, parallel: parellel_, ...rest } = arg ?? {};
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
+
+	// On macOS, temporarily build in series.
+	let parallel = parellel_ ?? host.os !== "darwin";
+
 	await prerequisites({ host });
 
 	// Build bash and use it as the default shell.
@@ -36,27 +44,31 @@ export let env = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 		CONFIG_SHELL: bashExecutable,
 		SHELL: bashExecutable,
 	};
-	// let utils = await Promise.all([
-	// 	bashAritfact,
-	// 	coreutils({ ...rest, env, host }),
-	// 	diffutils({ ...rest, env, host }),
-	// 	findutils({ ...rest, env, host }),
-	// 	gawk({ ...rest, env, host }),
-	// 	grep({ ...rest, env, host }),
-	// 	gzip({ ...rest, env, host }),
-	// 	sed({ ...rest, env, host }),
-	// 	tar({ ...rest, env, host }),
-	// ]);
-	let utils = [];
-	utils.push(bashAritfact);
-	utils.push(await coreutils({ ...rest, env, host }));
-	utils.push(await diffutils({ ...rest, env, host }));
-	utils.push(await findutils({ ...rest, env, host }));
-	utils.push(await gawk({ ...rest, env, host }));
-	utils.push(await grep({ ...rest, env, host }));
-	utils.push(await gzip({ ...rest, env, host }));
-	utils.push(await sed({ ...rest, env, host }));
-	utils.push(await tar({ ...rest, env, host }));
+
+	let utils = [bashAritfact];
+	if (parallel) {
+		utils = utils.concat(
+			await Promise.all([
+				coreutils({ ...rest, env, host }),
+				diffutils({ ...rest, env, host }),
+				findutils({ ...rest, env, host }),
+				gawk({ ...rest, env, host }),
+				grep({ ...rest, env, host }),
+				gzip({ ...rest, env, host }),
+				sed({ ...rest, env, host }),
+				tar({ ...rest, env, host }),
+			]),
+		);
+	} else {
+		utils.push(await coreutils({ ...rest, env, host }));
+		utils.push(await diffutils({ ...rest, env, host }));
+		utils.push(await findutils({ ...rest, env, host }));
+		utils.push(await gawk({ ...rest, env, host }));
+		utils.push(await grep({ ...rest, env, host }));
+		utils.push(await gzip({ ...rest, env, host }));
+		utils.push(await sed({ ...rest, env, host }));
+		utils.push(await tar({ ...rest, env, host }));
+	}
 
 	return std.env(...utils, env, { bootstrapMode: true });
 });
