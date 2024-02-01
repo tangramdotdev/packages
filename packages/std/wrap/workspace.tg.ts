@@ -405,22 +405,31 @@ export let testVfs = tg.target(async () => {
 	};
 
 	let scriptNoCheckout = tg`
+		set -eux
+		# watermark 1
 		id="$(${vfsTestBin} create | tee -a $OUTPUT)"
 		${vfsTestBin} consume "$id" | tee -a $OUTPUT
 	`;
-	let outputNoCheckout = tg.File.expect(await tg.build(scriptNoCheckout, {
-		env: await std.env.object(utils, env),
-	}));
+	let outputNoCheckout = tg.File.expect(
+		await tg.build(scriptNoCheckout, {
+			env: await std.env.object(utils, env),
+		}),
+	);
 	let noCheckoutText = await outputNoCheckout.text();
 	console.log("no checkout", noCheckoutText);
 
 	let scriptCheckout = tg`
-		id="$(${vfsTestBin} create --checkout true | tee -a $OUTPUT)"
+		# watermark 2
+		set -eux
+		id="$(${vfsTestBin} create --checkout | tee -a $OUTPUT)"
+		ls -l /.tangram/artifacts/\${id} | tee -a $OUTPUT
 		${vfsTestBin} consume "$id" | tee -a $OUTPUT
 	`;
-	let outputCheckout = tg.File.expect(await tg.build(scriptCheckout, {
-		env: await std.env.object(utils, env),
-	}));
+	let outputCheckout = tg.File.expect(
+		await tg.build(scriptCheckout, {
+			env: await std.env.object(utils, env),
+		}),
+	);
 	let checkoutText = await outputCheckout.text();
 	console.log("checkout", checkoutText);
 

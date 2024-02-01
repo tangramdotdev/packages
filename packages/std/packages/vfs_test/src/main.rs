@@ -1,6 +1,9 @@
+use std::str::FromStr;
+
 use clap::Parser;
 use tangram_client as tg;
 use tangram_error::{Result, WrapErr};
+use tokio::io::AsyncReadExt;
 use tracing_subscriber::prelude::*;
 
 #[derive(Debug, clap::Parser)]
@@ -89,9 +92,16 @@ async fn create(tg: &dyn tg::Handle, args: CreateArgs) -> Result<()> {
 }
 
 /// Consume a Tangram artifact.
-async fn consume(tg: &dyn tg::Handle, args: ConsumeArgs) -> Result<()> {
-	let file = tg::File::with_id(args.id.try_into().wrap_err("Bad ID")?);
-	let contents = file.text(tg).await?;
+async fn consume(_tg: &dyn tg::Handle, args: ConsumeArgs) -> Result<()> {
+	let base_path = std::path::PathBuf::from_str("/.tangram/artifacts").unwrap();
+	let file_path = base_path.join(args.id.to_string());
+	let mut file = tokio::fs::File::open(file_path)
+		.await
+		.wrap_err("Could not open file")?;
+	let mut contents = String::new();
+	file.read_to_string(&mut contents)
+		.await
+		.wrap_err("Could not read file")?;
 	println!("{contents}");
 	Ok(())
 }
