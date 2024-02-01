@@ -1838,6 +1838,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tangram_vfs_test"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "tangram_client",
+ "tangram_error",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tangram_wrapper"
 version = "0.0.0"
 dependencies = [

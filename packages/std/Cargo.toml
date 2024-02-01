@@ -3,6 +3,7 @@ members = [
   "packages/env",
   "packages/tgcc",
   "packages/tgld",
+  "packages/vfs_test",
   "packages/wrapper",
 ]
 resolver = "2"
@@ -32,6 +33,7 @@ tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 xattr = "1"
 
 tangram_env = { path = "packages/env" }
+tangram_vfs_test = { path = "packages/vfs_test" }
 tangram_wrapper = { path = "packages/wrapper" }
 tgcc = { path = "packages/tgcc" }
 tgld = { path = "packages/tgld" }

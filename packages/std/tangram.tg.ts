@@ -333,3 +333,8 @@ export let testDarwinLibdirWrap = tg.target(async () => {
 
 	return exe;
 });
+
+import { testVfs as testVfs_ } from "./wrap/workspace.tg.ts";
+export let testVfs = tg.target(async () => {
+	return await testVfs_();
+});
