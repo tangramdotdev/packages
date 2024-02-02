@@ -1735,7 +1735,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=470b63313cc24691b68ffb961f0fdbcec9c2222c#470b63313cc24691b68ffb961f0fdbcec9c2222c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=8dd57690d9967ba13b71a36c1949063549798e51#8dd57690d9967ba13b71a36c1949063549798e51"
 dependencies = [
  "async-compression",
  "async-recursion",
@@ -1799,7 +1799,7 @@ dependencies = [
 [[package]]
 name = "tangram_error"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=470b63313cc24691b68ffb961f0fdbcec9c2222c#470b63313cc24691b68ffb961f0fdbcec9c2222c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=8dd57690d9967ba13b71a36c1949063549798e51#8dd57690d9967ba13b71a36c1949063549798e51"
 dependencies = [
  "serde",
  "thiserror",
@@ -1828,7 +1828,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=470b63313cc24691b68ffb961f0fdbcec9c2222c#470b63313cc24691b68ffb961f0fdbcec9c2222c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=8dd57690d9967ba13b71a36c1949063549798e51#8dd57690d9967ba13b71a36c1949063549798e51"
 dependencies = [
  "bytes",
  "futures",
@@ -1961,9 +1961,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.35.1"
+version = "1.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c89b4efa943be685f629b149f53829423f8f5531ea21249408e8e2f8671ec104"
+checksum = "61285f6515fa018fb2d1e46eb21223fff441ee8db5d0f1435e8ab4f5cdb80931"
 dependencies = [
  "backtrace",
  "bytes",
