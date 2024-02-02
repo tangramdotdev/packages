@@ -122,14 +122,13 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	let artifact = tg.directory();
 
 	let zlibArtifact = await zlib(arg);
-	let rustLibdir = tg.Directory.expect(await rustInstall.get("lib"));
-	console.log("rust lib dir", await rustLibdir.id());
-	let zlibLibdir = tg.Directory.expect(await zlibArtifact.get("lib"));
 
 	for (let executable of executables) {
-		let exe = tg.File.expect(await rustInstall.get(executable));
-		let wrapped = std.wrap(exe, {
-			libraryPaths: [rustLibdir, zlibLibdir],
+		let wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
+			libraryPaths: [
+				tg.symlink(tg`${rustInstall}/lib`),
+				tg.symlink(tg`${zlibArtifact}/lib`),
+			],
 		});
 
 		artifact = tg.directory(artifact, {
