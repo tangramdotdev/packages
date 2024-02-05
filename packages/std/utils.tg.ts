@@ -29,11 +29,11 @@ type Arg = std.sdk.BuildEnvArg & {
 
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: Arg) => {
-	let { host: host_, parallel: parellel_, ...rest } = arg ?? {};
+	let { host: host_, parallel: parallel_, ...rest } = arg ?? {};
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 
 	// On macOS, temporarily build in series.
-	let parallel = parellel_ ?? host.os !== "darwin";
+	let parallel = parallel_ ?? host.os !== "darwin";
 
 	await prerequisites({ host });
 

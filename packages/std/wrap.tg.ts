@@ -158,7 +158,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-							);
+						  );
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -172,7 +172,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-						);
+					  );
 			}
 			if (arg.host !== undefined) {
 				object.host = std.triple(arg.host);
@@ -461,7 +461,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-								);
+							  );
 						return [key, mutations];
 					}),
 				),
@@ -1132,7 +1132,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1161,7 +1161,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1182,7 +1182,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1211,7 +1211,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1232,7 +1232,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
 		let injectionLibrary = await injection.default({
@@ -1244,7 +1244,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -1950,9 +1950,7 @@ async function* manifestTemplateReferences(
 ): AsyncGenerator<tg.Artifact> {
 	for (let component of template.components) {
 		if (component.kind === "artifact") {
-			let artifact = tg.Artifact.withId(component.value);
-			yield artifact;
-			yield* artifactReferences(artifact);
+			yield* artifactReferences(tg.Artifact.withId(component.value));
 		}
 	}
 }
@@ -1976,6 +1974,7 @@ async function* artifactReferences(
 async function* directoryReferences(
 	directory: tg.Directory,
 ): AsyncGenerator<tg.Artifact> {
+	yield directory;
 	for await (let [_, artifact] of directory) {
 		yield* artifactReferences(artifact);
 	}
