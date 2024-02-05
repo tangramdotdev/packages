@@ -98,6 +98,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 			for package in ${packagesArtifact}/*/* ; do
 				echo "Installing $package"
 				bash "$package/install.sh" --prefix="$OUTPUT"
+				chmod -R +w "$OUTPUT"
 			done
 		`,
 		{ env: sdk },
