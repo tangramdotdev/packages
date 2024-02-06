@@ -10,19 +10,19 @@
 #include <string.h>
 #include <unistd.h>
 
-// Return the value of the "TANGRAM_INJECTION_IDENTITY_PATH" environment variable.
 static char* IDENTITY_PATH = NULL;
-static char* identity_path() {
-	if (IDENTITY_PATH == NULL) {
-		char* value = getenv("TANGRAM_INJECTION_IDENTITY_PATH");
-		if (value == NULL) {
-			fprintf(stderr, "Error: TANGRAM_INJECTION_IDENTITY_PATH is not set.\n");
-			exit(1);
-		}
-		IDENTITY_PATH = (char*)malloc(strlen(value) + 1);
-		strcpy(IDENTITY_PATH, value);
+
+__attribute__((constructor))
+void tangram_injection() {
+	// Set the identity path.
+	char* value = getenv("TANGRAM_INJECTION_IDENTITY_PATH");
+	if (value == NULL) {
+		fprintf(stderr, "Error: TANGRAM_INJECTION_IDENTITY_PATH is not set.\n");
+		exit(1);
 	}
-	return IDENTITY_PATH;
+	IDENTITY_PATH = (char*)malloc(strlen(value) + 1);
+	strcpy(IDENTITY_PATH, value);
+	unsetenv("TANGRAM_INJECTION_IDENTITY_PATH");
 }
 
 // Return true if `path` is "/proc/self/exe" or "/proc/$current_pid/exe".
@@ -54,7 +54,7 @@ static bool path_is_proc_self_exe(const char* path) {
  * Unlike `readlink`, the program will exit if an error is encountered. Any errors are assumed to be bugs in the implementation of this function.
  */
 ssize_t proc_self_exe_readlink(char* buf, size_t bufsiz) {
-	char* path = identity_path();
+	char* path = IDENTITY_PATH;
 	size_t path_length = strlen(path);
 	size_t copy_length = MIN(path_length, bufsiz);
 	memcpy(buf, path, copy_length);
@@ -132,7 +132,7 @@ int _real_open(const char* pathname, int flags, mode_t mode) {
 
 int open(const char* pathname, int flags, mode_t mode) {
 	if (path_is_proc_self_exe(pathname)) {
-		return _real_open(identity_path(), flags, mode);
+		return _real_open(IDENTITY_PATH, flags, mode);
 	}
 
 	return _real_open(pathname, flags, mode);
@@ -152,7 +152,7 @@ int _real_open64(const char* pathname, int flags, mode_t mode) {
 
 int open64(const char* pathname, int flags, mode_t mode) {
 	if (path_is_proc_self_exe(pathname)) {
-		return _real_open64(identity_path(), flags, mode);
+		return _real_open64(IDENTITY_PATH, flags, mode);
 	}
 
 	return _real_open64(pathname, flags, mode);
@@ -178,7 +178,7 @@ int _real_openat(int dirfd, const char* pathname, int flags, mode_t mode) {
 
 int openat(int dirfd, const char* pathname, int flags, mode_t mode) {
 	if (path_is_proc_self_exe(pathname)) {
-		return _real_openat(dirfd, identity_path(), flags, mode);
+		return _real_openat(dirfd, IDENTITY_PATH, flags, mode);
 	}
 
 	return _real_openat(dirfd, pathname, flags, mode);
@@ -204,7 +204,7 @@ int _real_openat64(int dirfd, const char* pathname, int flags, mode_t mode) {
 
 int openat64(int dirfd, const char* pathname, int flags, mode_t mode) {
 	if (path_is_proc_self_exe(pathname)) {
-		return _real_openat64(dirfd, identity_path(), flags, mode);
+		return _real_openat64(dirfd, IDENTITY_PATH, flags, mode);
 	}
 
 	return _real_openat64(dirfd, pathname, flags, mode);
