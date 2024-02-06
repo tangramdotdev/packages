@@ -69,7 +69,6 @@ export let openssl = tg.target(async (arg?: Arg) => {
 		},
 		autotools,
 	);
-	console.log("openssl", await openssl.id());
 
 	return tg.directory(openssl, {
 		["bin/openssl"]: std.wrap(
