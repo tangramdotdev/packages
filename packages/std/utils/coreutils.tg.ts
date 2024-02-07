@@ -42,6 +42,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -55,18 +56,31 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let dependencies: tg.Unresolved<std.env.Arg> = [];
 
-	// Add the prerequisites if requested.
-	if (usePrerequisites) {
+	if (bootstrapMode && usePrerequisites) {
 		dependencies.push(prerequisites({ host }));
 	}
 
 	let attrArtifact;
 	if (os === "linux") {
-		attrArtifact = attr({ ...rest, build, env: env_, host, usePrerequisites });
+		attrArtifact = attr({
+			...rest,
+			bootstrapMode,
+			build,
+			env: env_,
+			host,
+			usePrerequisites,
+		});
 		dependencies.push(attrArtifact);
 	} else if (os === "darwin") {
 		dependencies.push(
-			libiconv({ ...rest, build, host, env: env_, usePrerequisites }),
+			libiconv({
+				...rest,
+				bootstrapMode,
+				build,
+				env: env_,
+				host,
+				usePrerequisites,
+			}),
 		);
 	}
 	let env = [...dependencies, env_];
@@ -86,6 +100,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(os),
@@ -107,12 +122,15 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
+/** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	let system = std.Triple.system(host);
 	let os = tg.System.os(system);
+	let bootstrapMode = true;
+	let sdk = std.sdk({ bootstrapMode, host });
 
-	let coreutils = await build({ host, sdk: { bootstrapMode: true } });
+	let coreutils = await build({ host, bootstrapMode, env: sdk });
 
 	await std.assert.pkg({
 		binaries: ["cp", "mkdir", "mv", "ls", "rm"],
@@ -181,13 +199,11 @@ export let test = tg.target(async () => {
 		return tg.unreachable();
 	}
 
-	// This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux.
-
 	// Run the script.
 	let platformSupportLib =
 		os === "darwin"
-			? libiconv({ sdk: { bootstrapMode: true } })
-			: attr({ sdk: { bootstrapMode: true } });
+			? libiconv({ bootstrapMode, host, env: sdk })
+			: attr({ bootstrapMode, host, env: sdk });
 	let output = tg.File.expect(
 		await tg.build(script, {
 			env: std.env.object(platformSupportLib, coreutils),

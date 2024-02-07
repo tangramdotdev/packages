@@ -1,6 +1,9 @@
 import * as std from "./tangram.tg.ts";
 
 export type Arg = {
+	/** Should we provide an SDK automatically? If true, the toollchain must be provided explicitly. */
+	bootstrapMode?: boolean;
+
 	/** Should we add the default CFLAGS? Will compile with `-mtune=generic -pipe`. Default: true */
 	defaultCFlags?: boolean;
 
@@ -32,7 +35,7 @@ export type Arg = {
 	prefixPath?: tg.Template.Arg;
 
 	/** Arguments to use for the SDK, or `false` to disable completely. */
-	sdk?: boolean | tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source: tg.Directory;
@@ -46,6 +49,7 @@ export type Arg = {
 
 export let target = async (...args: tg.Args<Arg>) => {
 	type Apply = {
+		bootstrapMode: boolean;
 		defaultCFlags: boolean;
 		doCheck: boolean;
 		extraCFlags: boolean;
@@ -62,6 +66,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	};
 
 	let {
+		bootstrapMode = false,
 		defaultCFlags = true,
 		doCheck = false,
 		extraCFlags = false,
@@ -81,6 +86,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 		} else if (typeof arg === "object") {
 			let object: tg.MutationMap<Apply> = {};
 			let phasesArgs: Array<std.phases.Arg> = [];
+			if (arg.bootstrapMode !== undefined) {
+				object.bootstrapMode = arg.bootstrapMode;
+			}
 			if (arg.defaultCFlags !== undefined) {
 				object.defaultCFlags = arg.defaultCFlags;
 			}
@@ -207,9 +215,11 @@ export let target = async (...args: tg.Args<Arg>) => {
 		pushOrSet(env, "LDFLAGS", extraLdFlags);
 	}
 
-	// Set up the SDK, add it to the environment.
-	let sdk = await std.sdk({ host, target }, sdkArgs);
-	env = [sdk, env];
+	if (!bootstrapMode) {
+		// Set up the SDK, add it to the environment.
+		let sdk = await std.sdk({ host, target }, sdkArgs);
+		env = [sdk, env];
+	}
 
 	// Define default phases.
 	let configureArgs =

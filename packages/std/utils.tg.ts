@@ -29,45 +29,62 @@ type Arg = std.sdk.BuildEnvArg & {
 
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: Arg) => {
-	let { host: host_, parallel: parallel_, ...rest } = arg ?? {};
+	let {
+		bootstrapMode: bootstrapMode_,
+		env: env_,
+		host: host_,
+		parallel: parallel_,
+		...rest
+	} = arg ?? {};
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let bootstrapMode = bootstrapMode_ ?? false;
 
 	// On macOS, temporarily build in series.
 	let parallel = parallel_ ?? host.os !== "darwin";
 
-	await prerequisites({ host });
+	if (bootstrapMode) {
+		await prerequisites({ host });
+	}
 
 	// Build bash and use it as the default shell.
-	let bashAritfact = await bash.build({ ...rest, host });
-	let bashExecutable = tg.File.expect(await bashAritfact.get("bin/bash"));
-	let env = {
-		CONFIG_SHELL: bashExecutable,
-		SHELL: bashExecutable,
-	};
+	let bashArtifact = await bash.build({
+		...rest,
+		bootstrapMode,
+		env: env_,
+		host,
+	});
+	let bashExecutable = tg.File.expect(await bashArtifact.get("bin/bash"));
+	let env = [
+		{
+			CONFIG_SHELL: bashExecutable,
+			SHELL: bashExecutable,
+		},
+		env_,
+	];
 
-	let utils = [bashAritfact];
+	let utils = [bashArtifact];
 	if (parallel) {
 		utils = utils.concat(
 			await Promise.all([
-				coreutils({ ...rest, env, host }),
-				diffutils({ ...rest, env, host }),
-				findutils({ ...rest, env, host }),
-				gawk({ ...rest, env, host }),
-				grep({ ...rest, env, host }),
-				gzip({ ...rest, env, host }),
-				sed({ ...rest, env, host }),
-				tar({ ...rest, env, host }),
+				coreutils({ ...rest, bootstrapMode, env, host }),
+				diffutils({ ...rest, bootstrapMode, env, host }),
+				findutils({ ...rest, bootstrapMode, env, host }),
+				gawk({ ...rest, bootstrapMode, env, host }),
+				grep({ ...rest, bootstrapMode, env, host }),
+				gzip({ ...rest, bootstrapMode, env, host }),
+				sed({ ...rest, bootstrapMode, env, host }),
+				tar({ ...rest, bootstrapMode, env, host }),
 			]),
 		);
 	} else {
-		utils.push(await coreutils({ ...rest, env, host }));
-		utils.push(await diffutils({ ...rest, env, host }));
-		utils.push(await findutils({ ...rest, env, host }));
-		utils.push(await gawk({ ...rest, env, host }));
-		utils.push(await grep({ ...rest, env, host }));
-		utils.push(await gzip({ ...rest, env, host }));
-		utils.push(await sed({ ...rest, env, host }));
-		utils.push(await tar({ ...rest, env, host }));
+		utils.push(await coreutils({ ...rest, bootstrapMode, env, host }));
+		utils.push(await diffutils({ ...rest, bootstrapMode, env, host }));
+		utils.push(await findutils({ ...rest, bootstrapMode, env, host }));
+		utils.push(await gawk({ ...rest, bootstrapMode, env, host }));
+		utils.push(await grep({ ...rest, bootstrapMode, env, host }));
+		utils.push(await gzip({ ...rest, bootstrapMode, env, host }));
+		utils.push(await sed({ ...rest, bootstrapMode, env, host }));
+		utils.push(await tar({ ...rest, bootstrapMode, env, host }));
 	}
 
 	return std.env(...utils, env, { bootstrapMode: true });
@@ -85,10 +102,11 @@ export let prerequisites = tg.target(async (arg?: std.Triple.HostArg) => {
 	components.push(makeArtifact);
 
 	// Add patched GNU coreutils.
+	let bootstrapMode = true;
 	let coreutilsArtifact = await coreutils({
-		env: makeArtifact,
+		env: [std.sdk({ host, bootstrapMode }), makeArtifact],
 		host,
-		sdk: { bootstrapMode: true },
+		bootstrapMode,
 		usePrerequisites: false,
 	});
 	components.push(coreutilsArtifact);
@@ -192,7 +210,9 @@ export let assertProvides = async (env: std.env.Arg) => {
 
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
-	let utilsEnv = await env({ host, sdk: { bootstrapMode: true } });
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let utilsEnv = await env({ host, bootstrapMode, env: sdk });
 	await assertProvides(utilsEnv);
 	return true;
 });

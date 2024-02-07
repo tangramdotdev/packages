@@ -308,6 +308,7 @@ export namespace sdk {
 	};
 
 	export type BuildEnvArg = {
+		bootstrapMode?: boolean;
 		build?: std.Triple.Arg;
 		env?: std.env.Arg;
 		host?: std.Triple.Arg;

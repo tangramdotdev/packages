@@ -22,6 +22,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -36,12 +37,17 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [prerequisites({ host }), env_];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrapMode) {
+		env.push(prerequisites({ host }));
+	}
+	env.push(env_);
 
 	let output = buildUtil(
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(),
@@ -57,10 +63,13 @@ export default build;
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
-		directory: build({ host, sdk: { bootstrapMode: true } }),
+		directory,
 		binaries: ["sed"],
 		metadata,
 	});
-	return true;
+	return directory;
 });
