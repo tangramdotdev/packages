@@ -61,9 +61,12 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
-		directory: build({ host, sdk: { bootstrapMode: true } }),
+		directory,
 		libs: ["ffi"],
 	});
-	return true;
+	return directory;
 });

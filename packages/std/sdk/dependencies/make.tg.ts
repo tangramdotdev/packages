@@ -31,7 +31,9 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: ["--disable-dependency-tracking"],
 	};
-	let phases = { prepare: "set +e", configure, fixup: "mkdir -p $OUTPUT && cp config.log $OUTPUT/config.log" };
+	let phases = {
+		configure,
+	};
 
 	let env = [std.utils.env(arg), bootstrap.make.build(arg), env_];
 
@@ -51,7 +53,9 @@ export default build;
 
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
-	let makeArtifact = await build({ host, sdk: { bootstrapMode: true } });
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let makeArtifact = await build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
 		directory: makeArtifact,
 		binaries: ["make"],

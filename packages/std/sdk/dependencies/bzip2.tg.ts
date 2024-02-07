@@ -41,7 +41,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let sourceDir = source_ ?? source();
 
 	// Define phases.
-	let prepare = tg`set -x && cp -R ${sourceDir}/* .`;
+	let prepare = tg`cp -R ${sourceDir}/* .`;
 	let install = `make install PREFIX=$OUTPUT`;
 	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
 	let fixup = `
@@ -82,11 +82,14 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
-		directory: build({ host, sdk: { bootstrapMode: true } }),
+		directory,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
 		libs: [{ name: "bz2", dylib: false, staticlib: true }],
 		metadata,
 	});
-	return true;
+	return directory;
 });
