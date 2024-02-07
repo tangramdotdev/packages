@@ -172,7 +172,7 @@ export let patchAutom4teCfg = tg.target(
 			contents = tg`${contents}${newLine}\n`;
 		}
 
-		let env = [arg?.env, std.sdk(arg?.sdk)];
+		let env = [arg?.env, std.sdk({ bootstrapMode: arg?.bootstrapMode },arg?.sdk)];
 
 		let patchedAutom4teCfg = tg.File.expect(
 			await tg.build(
@@ -195,10 +195,13 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
-		directory: build({ host, sdk: { bootstrapMode: true } }),
+		directory,
 		binaries: ["autoconf"],
 		metadata,
 	});
-	return true;
+	return directory;
 });

@@ -57,7 +57,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let deps = [dependencies.env({ host: build, sdk: rest.sdk })];
+	let deps = [dependencies.env({ ...rest, env: env_, host: build })];
 	let env = [
 		...deps,
 		{

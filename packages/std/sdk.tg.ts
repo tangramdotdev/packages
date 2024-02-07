@@ -203,7 +203,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			build: host,
 			host,
 			env: envs,
-			sdk: { bootstrapMode: true },
+			bootstrapMode: true,
 		});
 		envs.push(dependenciesEnv);
 
@@ -308,6 +308,7 @@ export namespace sdk {
 	};
 
 	export type BuildEnvArg = {
+		bootstrapMode?: boolean;
 		build?: std.Triple.Arg;
 		env?: std.env.Arg;
 		host?: std.Triple.Arg;
@@ -458,8 +459,8 @@ export namespace sdk {
 			os === "darwin"
 				? "ld"
 				: flavor === "gcc"
-				  ? `${targetPrefix}ld`
-				  : "ld.lld";
+					? `${targetPrefix}ld`
+					: "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		tg.assert(foundLd, `Unable to find ${linkerName}.`);
 		let ld = await tg.symlink(tg`${directory}/bin/${linkerName}`);

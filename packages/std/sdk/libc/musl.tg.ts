@@ -67,7 +67,7 @@ export default tg.target(async (arg?: Arg) => {
 				`CROSS_COMPILE="${hostString}-"`,
 				`CC="${hostString}-gcc"`,
 				"--disable-gcc-wrapper",
-		  ]
+			]
 		: [];
 
 	if (libcc) {
@@ -90,9 +90,13 @@ export default tg.target(async (arg?: Arg) => {
 	};
 
 	let env = [
-		dependencies.env({ host: build, sdk: rest.sdk }),
-		{ CPATH: tg.Mutation.unset() },
 		env_,
+		dependencies.env({
+			...rest,
+			env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
+			host: build,
+		}),
+		{ CPATH: tg.Mutation.unset() },
 	];
 
 	let result = await std.autotools.build(

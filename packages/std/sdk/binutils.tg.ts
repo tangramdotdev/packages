@@ -76,7 +76,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		};
 	}
 	let env = [
-		dependencies.env({ host: build, sdk: rest.sdk }),
+		dependencies.env({ ...rest, env: env_, host: build }),
 		additionalEnv,
 		env_,
 	];

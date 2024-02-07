@@ -23,6 +23,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -33,7 +34,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 
-	let dependencies: tg.Unresolved<std.env.Arg> = [prerequisites({ host })];
+	let dependencies: tg.Unresolved<std.env.Arg> = [];
+	if (bootstrapMode) {
+		dependencies.push(prerequisites({ host }));
+	}
 	let additionalEnv = {};
 	if (build.os === "darwin") {
 		dependencies.push(libiconv({ ...rest, build, host }));
@@ -56,6 +60,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(),
@@ -71,10 +76,13 @@ export default build;
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
-		directory: build({ host, sdk: { bootstrapMode: true } }),
+		directory,
 		binaries: ["tar"],
 		metadata,
 	});
-	return true;
+	return directory;
 });

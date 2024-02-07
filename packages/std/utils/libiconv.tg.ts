@@ -22,6 +22,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -37,18 +38,17 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let dependencies: tg.Unresolved<std.env.Arg> = [];
-
-	if (usePrerequisites) {
-		dependencies.push(prerequisites({ host }));
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrapMode && usePrerequisites) {
+		env.push(prerequisites({ host }));
 	}
-
-	let env = [...dependencies, env_];
+	env.push(env_);
 
 	let output = buildUtil(
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(),
@@ -64,11 +64,12 @@ export default build;
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
-	let makeArtifact = await bootstrap.make.build({ host });
-	let directory = await build({ env: [makeArtifact], host, sdk: { bootstrapMode: true }, usePrerequisites: false });
-	// await std.assert.pkg({
-	// 	directory,
-	// 	libs: [{ name: "iconv", staticlib: false }],
-	// });
+	let bootstrapMode = true;
+	let sdk = std.sdk({ bootstrapMode, host });
+	let directory = build({ host, bootstrapMode, env: sdk });
+	await std.assert.pkg({
+		directory,
+		libs: [{ name: "iconv", staticlib: false }],
+	});
 	return directory;
 });

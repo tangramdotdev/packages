@@ -5,7 +5,9 @@ import * as std from "../tangram.tg.ts";
 export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	let host = await std.Triple.host(arg);
 	let build = arg?.build ? std.triple(arg.build) : host;
-	let isBootstrap = std.flatten([arg?.sdk]).some((sdk) => sdk?.bootstrapMode);
+	let isBootstrap =
+		arg?.bootstrapMode ||
+		std.flatten([arg?.sdk]).some((sdk) => sdk?.bootstrapMode);
 	let os = host.os;
 
 	// Get the source.
@@ -14,10 +16,9 @@ export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 
 	// Prepare sdk, making sure not to use any proxying.
 	let buildToolchain = await tg.directory();
-	if (std.flatten([arg?.sdk]).some((sdk) => sdk?.bootstrapMode)) {
-		let toolchain = await bootstrap.sdk.env();
+	if (isBootstrap) {
 		let { directory } = await std.sdk.toolchainComponents({
-			env: toolchain,
+			env: await bootstrap.sdk.env({ host }),
 		});
 		buildToolchain = directory;
 	} else {
@@ -164,7 +165,7 @@ export let test = tg.target(async () => {
 	let hostArch = detectedHost.arch;
 	let nativeInjection = await injection({
 		host: detectedHost,
-		sdk: { bootstrapMode: true },
+		bootstrapMode: true,
 	});
 
 	// Assert the native injection dylib was built for the build machine.

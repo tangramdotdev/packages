@@ -14,7 +14,10 @@ type Arg = std.sdk.BuildEnvArg & {
 export let source = tg.target(async (arg?: Arg) => {
 	let { name, version } = metadata;
 	let build = arg?.build ? std.triple(arg?.build) : await std.Triple.host();
-	let env = std.env.object(std.sdk({ host: build }, arg?.sdk), arg?.env);
+	let env = std.env.object(
+		std.sdk({ host: build, bootstrapMode: arg?.bootstrapMode }, arg?.sdk),
+		arg?.env,
+	);
 
 	let checksum =
 		"sha256:c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8";
@@ -40,6 +43,7 @@ export let source = tg.target(async (arg?: Arg) => {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -50,22 +54,21 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 
-	//let prepare = "set +e";
 	let configure = {
 		args: ["--without-bash-malloc"],
 	};
-	//let fixup = "mkdir -p $OUTPUT && cp config.log $OUTPUT";
 
-	let env = [
-		prerequisites({ host }),
-		// { TGLD_TRACING: "tangram=trace" },
-		env_,
-	];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrapMode) {
+		env.push(prerequisites({ host }));
+	}
+	env.push(env_);
 
 	let output = buildUtil(
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(arg),
@@ -85,10 +88,12 @@ export default build;
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
-	let directory = build({ host, sdk: { bootstrapMode: true } });
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
 		directory,
-		//binaries: ["bash"],
+		binaries: ["bash"],
 		metadata,
 	});
 	return directory;
