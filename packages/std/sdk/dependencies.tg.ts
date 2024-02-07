@@ -126,7 +126,7 @@ export let env = tg.target(async (arg?: Arg) => {
 	}
 
 	// The final env contains the standard utils and all packages from this module.
-	return std.env(...dependencies, { bootstrapMode: true });
+	return dependencies;
 });
 
 export default env;
@@ -165,6 +165,8 @@ export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
-	await assertProvides(await env({ host, bootstrapMode, env: sdk }));
+	let deps = await env({ host, bootstrapMode, env: sdk });
+	await assertProvides(deps);
+	await tg.build(tg`set -x && echo "hi" && which grep`, { env: await std.env.object(deps) });
 	return true;
 });

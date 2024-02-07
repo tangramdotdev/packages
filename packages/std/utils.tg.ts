@@ -54,15 +54,13 @@ export let env = tg.target(async (arg?: Arg) => {
 		host,
 	});
 	let bashExecutable = tg.File.expect(await bashArtifact.get("bin/bash"));
-	let env = [
-		{
-			CONFIG_SHELL: bashExecutable,
-			SHELL: bashExecutable,
-		},
-		env_,
-	];
+	let bashEnv = {
+		CONFIG_SHELL: bashExecutable,
+		SHELL: bashExecutable,
+	};
+	let env = [bashEnv, env_];
 
-	let utils = [bashArtifact];
+	let utils = [bashArtifact, bashEnv];
 	if (parallel) {
 		utils = utils.concat(
 			await Promise.all([
@@ -87,7 +85,7 @@ export let env = tg.target(async (arg?: Arg) => {
 		utils.push(await tar({ ...rest, bootstrapMode, env, host }));
 	}
 
-	return std.env(...utils, env, { bootstrapMode: true });
+	return utils;
 });
 
 export default env;

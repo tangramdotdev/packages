@@ -67,7 +67,7 @@ export default tg.target(async (arg: Arg) => {
 		additionalFlags.push("--enable-crypt");
 	}
 
-	let prepare = `mkdir -p $OUTPUT`;
+	let prepare = `mkdir -p $OUTPUT && env`;
 
 	let configure = {
 		args: [
@@ -95,19 +95,24 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let env = [
-		dependencies.env({ ...rest, env: env_, host: build }),
+		dependencies.env({
+			...rest,
+			env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
+			host: build,
+		}),
 		{
 			CPATH: tg.Mutation.unset(),
 			LIBRARY_PATH: tg.Mutation.unset(),
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},
-		env_,
+		env_
 	];
 
 	let result = await std.autotools.build(
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
+			bootstrapMode: true, // FIXME - shouldn't be necessary
 			env,
 			opt: "2",
 			phases,

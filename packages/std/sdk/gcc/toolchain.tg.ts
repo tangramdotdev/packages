@@ -106,7 +106,13 @@ type BuildSysrootArg = std.sdk.BuildEnvArg & {
 };
 
 export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
-	let { build: build_, crossBinutils, host: host_, ...rest } = arg ?? {};
+	let {
+		build: build_,
+		crossBinutils,
+		env,
+		host: host_,
+		...rest
+	} = arg ?? {};
 
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let buildTriple = build_ ? std.triple(build_) : host;
@@ -117,6 +123,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		include: await kernelHeaders({
 			...rest,
 			build: buildTriple,
+			env,
 			host: target,
 		}),
 	});
@@ -131,6 +138,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		...rest,
 		binutils: crossBinutils,
 		build: buildTriple,
+		env,
 		host: buildTriple,
 		sysroot: linuxHeadersSysroot,
 		target,

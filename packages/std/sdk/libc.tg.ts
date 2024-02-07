@@ -6,7 +6,7 @@ type LibCArg = std.sdk.BuildEnvArg & {
 	// /** Optionally point to a specific implementation of libcc. Only supported for musl, glibc requires libgcc. */
 	// libcc?: tg.File;
 	linuxHeaders: tg.Directory;
-	target?: std.Triple.Arg
+	target?: std.Triple.Arg;
 };
 
 /** Obtain the proper standard C library for the given host triple. */
