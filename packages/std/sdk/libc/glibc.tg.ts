@@ -105,14 +105,13 @@ export default tg.target(async (arg: Arg) => {
 			LIBRARY_PATH: tg.Mutation.unset(),
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},
-		env_
+		env_,
 	];
 
 	let result = await std.autotools.build(
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
-			bootstrapMode: true, // FIXME - shouldn't be necessary
 			env,
 			opt: "2",
 			phases,

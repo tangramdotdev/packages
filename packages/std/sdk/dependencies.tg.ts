@@ -167,6 +167,5 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let deps = await env({ host, bootstrapMode, env: sdk });
 	await assertProvides(deps);
-	await tg.build(tg`set -x && echo "hi" && which grep`, { env: await std.env.object(deps) });
 	return true;
 });
