@@ -172,7 +172,7 @@ export let patchAutom4teCfg = tg.target(
 			contents = tg`${contents}${newLine}\n`;
 		}
 
-		let env = [arg?.env, std.sdk(arg?.sdk)];
+		let env = [arg?.env, std.sdk({ bootstrapMode: arg?.bootstrapMode },arg?.sdk)];
 
 		let patchedAutom4teCfg = tg.File.expect(
 			await tg.build(

@@ -36,10 +36,10 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 
 	let { env } = await crossToolchain({
 		...rest,
+		bootstrapMode: true,
 		build: buildTriple,
 		env: [nativeToolchain, nativeProxyEnv],
 		host,
-		sdk: { bootstrapMode: true },
 		target,
 		// variant: "stage2_full",
 		variant: "stage1_limited",
@@ -159,9 +159,10 @@ export let canadianCross = tg.target(async (arg?: std.Triple.HostArg) => {
 	let target = host;
 	let build = bootstrap.toolchainTriple(host);
 
-	let sdk = { bootstrapMode: true };
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
 
-	await dependencies.env({ host: build, sdk });
+	await dependencies.env({ host: build, bootstrapMode, env: sdk });
 
 	// Create cross-toolchain from build to host.
 	let { env, sysroot } = await buildToHostCrossToolchain({ host });
@@ -169,9 +170,9 @@ export let canadianCross = tg.target(async (arg?: std.Triple.HostArg) => {
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
 		env,
+		bootstrapMode,
 		build,
 		host,
-		sdk,
 		staticBuild: true,
 		target,
 	});
@@ -196,10 +197,10 @@ export let canadianCross = tg.target(async (arg?: std.Triple.HostArg) => {
 
 	let fullGCC = await gcc.build({
 		binutils: nativeHostBinutils,
+		bootstrapMode,
 		build,
 		env,
 		host,
-		sdk,
 		sysroot,
 		target,
 		variant: "stage2_full",
@@ -214,13 +215,15 @@ export let buildToHostCrossToolchain = async (arg: std.Triple.HostArg) => {
 	let host = await std.Triple.host(arg);
 	let build = bootstrap.toolchainTriple(host);
 
-	let sdk = { bootstrapMode: true };
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
 
 	// Create cross-toolchain from build to host.
 	let { env, sysroot } = await crossToolchain({
+		bootstrapMode,
 		build,
+		env: sdk,
 		host: build,
-		sdk,
 		target: host,
 		variant: "stage1_limited",
 	});
@@ -244,7 +247,8 @@ export let testCanadianCross = async () => {
 export let testCross = async () => {
 	let host = await std.Triple.host();
 	let hostArch = host.arch;
-	let targetArch: std.Triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let targetArch: std.Triple.Arch =
+		hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = std.triple({ ...host, arch: targetArch });
 	let dir = await toolchain({ host, target });
 	return dir;
