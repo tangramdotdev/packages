@@ -6,13 +6,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.7.3",
+	version: "6.7.4",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:b7f08c652747574a3aa26e317d7a8f23ffab3fb645e1b1533b215dcfd5742b44";
+		"sha256:f68d9f5ffc0a24f850699b86c8aea8b8687de7384158d5ed3bede37de098d60c";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${name}-${version}${unpackFormat}`;
 	let source = tg.Directory.expect(
@@ -28,7 +28,9 @@ type Arg = std.sdk.BuildEnvArg & {
 
 export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let {
+		bootstrapMode,
 		build: build_,
+		env: env_,
 		host: host_,
 		phases: phasesArg = [],
 		source: source_,
@@ -55,24 +57,20 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		karch = "arm";
 	}
 
-	// The kernel headers always use the musl-based bootstrap toolchain.
-	let buildToolchain = await bootstrap.toolchain({ host: buildTriple });
-	let buildLibPath = tg`${buildToolchain}/lib`;
-	let ccFlags = tg`-Wl,-dynamic-linker,${buildLibPath}/${bootstrap.interpreterName(
-		buildTriple,
-	)} -Wl,-rpath,${buildLibPath}`;
-	let env = [
-		bootstrap.sdk.env({ host: buildTriple }),
-		bootstrap.make.build({ host: buildTriple }),
-		std.utils.env({ ...rest, host: buildTriple, sdk: { bootstrapMode: true } }),
-		{
-			CC: tg`gcc ${ccFlags}`,
-		},
-	];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrapMode) {
+		env = env.concat([
+			std.utils.env({ ...rest, bootstrapMode, env: env_, host: buildTriple }),
+			bootstrap.make.build({ host: buildTriple }),
+		]);
+	} else {
+		env.push(std.sdk({ host: buildTriple }, arg?.sdk));
+	}
+	env.push(env_);
 
 	let prepare = tg`cp -r ${sourceDir}/* . && chmod -R +w . && make mrproper`;
 	let build = {
-		body: `make -j"\$(nproc)" ARCH=${karch} HOSTCC="\$CC" headers`,
+		body: `make -j"\$(nproc)" ARCH=${karch} headers`,
 		post: "find usr/include -type f ! -name '*.h' -delete",
 	};
 	let install = {
@@ -99,7 +97,8 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 export default kernelHeaders;
 
 export let test = tg.target(async () => {
-	let host = await std.Triple.host();
+	let detectedHost = await std.Triple.host();
+	let host = bootstrap.toolchainTriple(detectedHost);
 	if (host.os !== "linux") {
 		return;
 	}
@@ -122,7 +121,14 @@ export let testKernelHeaders = async (
 	target?: std.Triple,
 ) => {
 	let target_ = target ?? host;
-	let headers = await kernelHeaders({ build: host, host: target_ });
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+	let headers = await kernelHeaders({
+		bootstrapMode,
+		build: host,
+		env: sdk,
+		host: target_,
+	});
 	let configFile = tg.File.expect(await headers.get("config/kernel.release"));
 	let configFileContents = (await configFile.text()).trim();
 	tg.assert(configFileContents === `${metadata.version}-default`);

@@ -57,7 +57,6 @@ type CrossToolchainArg = std.sdk.BuildEnvArg & {
 export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let {
 		build: build_,
-		env: env_,
 		host: host_,
 		sysroot: sysroot_,
 		target: target_,
@@ -107,13 +106,7 @@ type BuildSysrootArg = std.sdk.BuildEnvArg & {
 };
 
 export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
-	let {
-		build: build_,
-		crossBinutils,
-		env: env_,
-		host: host_,
-		...rest
-	} = arg ?? {};
+	let { build: build_, crossBinutils, host: host_, ...rest } = arg ?? {};
 
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let buildTriple = build_ ? std.triple(build_) : host;
@@ -121,7 +114,11 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 
 	// Produce the linux headers.
 	let linuxHeaders = await tg.directory({
-		include: await kernelHeaders({ build: buildTriple, host: target }),
+		include: await kernelHeaders({
+			...rest,
+			build: buildTriple,
+			host: target,
+		}),
 	});
 	console.log("linuxHeaders", await linuxHeaders.id());
 
