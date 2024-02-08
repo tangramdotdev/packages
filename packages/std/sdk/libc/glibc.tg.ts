@@ -102,6 +102,7 @@ export default tg.target(async (arg: Arg) => {
 		}),
 		{
 			CPATH: tg.Mutation.unset(),
+			MAKEFLAGS: "--output-sync --silent",
 			LIBRARY_PATH: tg.Mutation.unset(),
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},

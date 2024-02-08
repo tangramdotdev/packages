@@ -255,11 +255,12 @@ export let target = async (...args: tg.Args<Arg>) => {
 		defaultPhases.check = defaultCheck;
 	}
 
+	let system = std.Triple.system(host);
 	return await std.phases.target(
 		{
 			phases: defaultPhases,
-			env: env,
-			target: { host: std.Triple.system(host) },
+			env,
+			target: { env: { TANGRAM_HOST: system }, host: system },
 		},
 		...(phases ?? []),
 	);

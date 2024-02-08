@@ -6,13 +6,13 @@ import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "postgresql",
-	version: "16.1",
+	version: "16.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:ce3c4d85d19b0121fe0d3f8ef1fa601f71989e86f8a66f7dc3ad546dd5564fec";
+		"sha256:446e88294dbc2c9085ab4b7061a646fa604b4bec03521d5ea671c2e5ad9b2952";
 	let unpackFormat = ".tar.bz2" as const;
 	let url = `https://ftp.postgresql.org/pub/source/v${version}/${name}-${version}${unpackFormat}`;
 	let download = tg.Directory.expect(

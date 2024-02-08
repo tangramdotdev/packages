@@ -98,7 +98,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						value: await manifestTemplateFromArg(arg.executable),
 					};
 					if (!arg.interpreter) {
-						let defaultShell = await defaultShellInterpreter(arg.sdk);
+						let defaultShell = await defaultShellInterpreter();
 						object.interpreter = await manifestInterpreterFromArg(defaultShell);
 					}
 					if (!arg.identity) {
@@ -158,7 +158,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-						  );
+							);
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -172,7 +172,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-					  );
+						);
 			}
 			if (arg.host !== undefined) {
 				object.host = std.triple(arg.host);
@@ -461,7 +461,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-							  );
+								);
 						return [key, mutations];
 					}),
 				),
@@ -1132,7 +1132,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1161,7 +1161,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1182,7 +1182,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1211,7 +1211,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1232,7 +1232,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
 		let injectionLibrary = await injection.default({
@@ -1244,7 +1244,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -1385,18 +1385,13 @@ let manifestInterpreterFromElf = async (
 	}
 };
 
-export let defaultShellInterpreter = async (
-	sdkArg?: tg.MaybeNestedArray<std.sdk.Arg>,
-) => {
-	// If no args were passed, force bootstrap mode.
-	let sdk = sdkArg ?? { bootstrapMode: true };
-
-	// Provide bash for the detected host system. Don't assume an existing SDK.
-	let shellArtifact = await std.utils.bash.build({ sdk });
+export let defaultShellInterpreter = async () => {
+	// Provide bash for the detected host system.
+	let shellArtifact = await std.utils.bash.build();
 	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
 
 	//  Add the standard utils.
-	let env = await std.utils.env({ sdk });
+	let env = await std.utils.env();
 
 	let bash = wrap(shellExecutable, {
 		identity: "wrapper",

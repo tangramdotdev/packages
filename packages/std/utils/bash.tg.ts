@@ -61,6 +61,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let env: tg.Unresolved<Array<std.env.Arg>> = [];
 	if (bootstrapMode) {
 		env.push(prerequisites({ host }));
+		env.push(bootstrap.shell({ host }));
 	}
 	env.push(env_);
 

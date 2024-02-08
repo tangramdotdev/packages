@@ -95,7 +95,9 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv: std.env.Arg = {};
+	let additionalEnv: std.env.Arg = {
+		MAKEFLAGS: "--output-sync --silent"
+	};
 
 	// On Musl hosts, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (host.environment === "musl") {
@@ -164,7 +166,11 @@ export let build = tg.target(async (arg: Arg) => {
 	let phases = { prepare, configure };
 
 	let env = [
-		dependencies.env({ ...rest, env: env_, host: build }),
+		dependencies.env({
+			...rest,
+			env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
+			host: build,
+		}),
 		additionalEnv,
 		env_,
 	];

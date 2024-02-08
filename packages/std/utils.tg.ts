@@ -93,7 +93,7 @@ export default env;
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export let prerequisites = tg.target(async (arg?: std.Triple.HostArg) => {
 	let host = await std.Triple.host(arg);
-	let components: tg.Unresolved<std.env.Arg> = [];
+	let components: tg.Unresolved<std.env.Arg> = [bootstrap.utils({ host })];
 
 	// Add GNU make.
 	let makeArtifact = await bootstrap.make.build({ host });

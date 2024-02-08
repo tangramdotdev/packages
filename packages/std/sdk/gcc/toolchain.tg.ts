@@ -174,7 +174,7 @@ export let canadianCross = tg.target(async (arg?: std.Triple.HostArg) => {
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
-		env,
+		env: [env, sdk],
 		bootstrapMode,
 		build,
 		host,
@@ -204,7 +204,7 @@ export let canadianCross = tg.target(async (arg?: std.Triple.HostArg) => {
 		binutils: nativeHostBinutils,
 		bootstrapMode,
 		build,
-		env,
+		env: [env, sdk],
 		host,
 		sysroot,
 		target,

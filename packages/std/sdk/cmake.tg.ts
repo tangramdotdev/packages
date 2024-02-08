@@ -57,7 +57,13 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let deps = [dependencies.env({ ...rest, env: env_, host: build })];
+	let deps = [
+		dependencies.env({
+			...rest,
+			env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
+			host: build,
+		}),
+	];
 	let env = [
 		...deps,
 		{
@@ -115,7 +121,11 @@ export let build = tg.target(
 		// Obtain a statically linked `cmake` binary and add it to the env.
 		let bootstrapHost = bootstrap.toolchainTriple(host);
 		let dependencies = [
-			cmake({ host: bootstrapHost, sdk: { bootstrapMode: true } }),
+			cmake({
+				host: bootstrapHost,
+				bootstrapMode: true,
+				env: std.sdk({ host: bootstrapHost, bootstrapMode: true }),
+			}),
 		];
 		if (useNinja) {
 			dependencies.push(ninja({ host }));
