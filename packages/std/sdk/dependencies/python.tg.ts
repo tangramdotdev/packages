@@ -1,6 +1,7 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
+import bzip2 from "./bzip2.tg.ts";
 import m4 from "./m4.tg.ts";
 import make from "./make.tg.ts";
 import pkgConfig from "./pkg_config.tg.ts";
@@ -82,7 +83,13 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--enable-optimizations",
 		],
 	};
-	let dependencies = [bison(arg), m4(arg), make(arg), pkgConfig(arg)];
+	let dependencies = [
+		bison(arg),
+		bzip2(arg),
+		m4(arg),
+		make(arg),
+		pkgConfig(arg),
+	];
 
 	let env = [std.utils.env(arg), ...dependencies, additionalEnv, env_];
 

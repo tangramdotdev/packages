@@ -42,7 +42,10 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	// Define phases.
 	let prepare = tg`cp -R ${sourceDir}/* .`;
-	let install = `make install PREFIX=$OUTPUT`;
+	let buildPhase = `make -f Makefile-libbz2_so && make`;
+	let install = `make install PREFIX=$OUTPUT
+	cp libbz2.so.* $OUTPUT/lib
+	`;
 	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
 	let fixup = `
 		cd $OUTPUT/bin
@@ -53,10 +56,13 @@ export let build = tg.target(async (arg?: Arg) => {
 		ln -s bzgrep bzfgrep
 		rm bzless
 		ln -s bzmore bzless
+		cd $OUTPUT/lib
+		ln -s libbz2.so.1.0 libbz2.so
 	`;
 	let phases = {
 		prepare,
 		configure: tg.Mutation.unset(),
+		build: buildPhase,
 		install,
 		fixup,
 	};
@@ -88,7 +94,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libs: [{ name: "bz2", dylib: false, staticlib: true }],
+		libs: ["bz2"],
 		metadata,
 	});
 	return directory;

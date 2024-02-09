@@ -267,7 +267,6 @@ export type Layer = {
 	diffId: string;
 };
 
-import * as bootstrap from "../bootstrap.tg.ts";
 export let layer = tg.target(
 	async (directory: tg.Directory): Promise<Layer> => {
 		let bundle = directory.bundle();
