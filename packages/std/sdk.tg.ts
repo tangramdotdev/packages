@@ -4,8 +4,8 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import { interpreterName } from "./sdk/libc.tg.ts";
+import * as llvm from "./sdk/llvm.tg.ts";
 import mold, { metadata as moldMetadata } from "./sdk/mold.tg.ts";
-// import * as llvm from "./sdk/llvm.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 import * as std from "./tangram.tg.ts";
 
@@ -273,15 +273,23 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			return defaultSdk;
 		}
 	} else if (toolchain === "llvm") {
-		return tg.unimplemented();
-		// let hostSDK = await stage0.bootstrapSdk({ host });
-		// let clangToolchain = await llvm.toolchain({ env: hostSDK, host });
-		// let proxyEnv = await proxy({ env: clangToolchain });
-		// let utilsEnv = await utils.utils({
-		// 	env: [hostSDK, clangToolchain, proxyEnv],
-		// 	build: host,
-		// });
-		// return std.env(hostSDK, clangToolchain, utilsEnv);
+		let clangToolchain = await llvm.toolchain({ host });
+		let proxyEnv = await proxy.env({
+			...proxyArg,
+			env: clangToolchain,
+			host,
+			llvm: true,
+		});
+		console.log("llvm proxy env", proxyEnv);
+		let dependenciesEnv = await dependencies.env({
+			//env: [clangToolchain, proxyEnv],
+			build: host,
+			host,
+			//bootstrapMode: true,
+		});
+		return std.env(clangToolchain, proxyEnv, dependenciesEnv, {
+			bootstrapMode: true,
+		});
 	}
 
 	throw new Error(`Invalid SDK arg ${args}.`);
@@ -319,24 +327,18 @@ export namespace sdk {
 
 	type ProvidesToolchainArg = {
 		env: std.env.Arg;
+		llvm?: boolean;
 		target?: std.Triple.Arg;
 	};
 
-	let requiredComponents = [
-		"ar",
-		"as",
-		"c++",
-		"cc",
-		"ld",
-		"nm",
-		"objdump",
-		"ranlib",
-		"strip",
-	] as const;
+	let requiredCompilerComponents = ["c++", "cc", "ld"] as const;
+	let requiredLLVMCompilerComponents = ["clang++", "clang", "ld.lld"];
+
+	let requiredUtils = ["ar", "as", "nm", "objdump", "ranlib", "strip"] as const;
 
 	/** Assert that an env provides an toolchain. */
 	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
-		let { env, target } = arg;
+		let { env, llvm = false, target } = arg;
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
 		if (target) {
@@ -345,10 +347,24 @@ export namespace sdk {
 				targetPrefix = `${std.Triple.toString(std.triple(target))}-`;
 			}
 		}
+		let llvmPrefix = llvm ? "llvm-" : "";
 		await std.env.assertProvides({
 			env,
-			names: requiredComponents.map((name) => `${targetPrefix}${name}`),
+			names: requiredUtils.map((name) => `${targetPrefix}${llvmPrefix}${name}`),
 		});
+		if (llvm) {
+			await std.env.assertProvides({
+				env,
+				names: requiredLLVMCompilerComponents,
+			});
+		} else {
+			await std.env.assertProvides({
+				env,
+				names: requiredCompilerComponents.map(
+					(name) => `${targetPrefix}${name}`,
+				),
+			});
+		}
 		return true;
 	};
 
@@ -357,7 +373,6 @@ export namespace sdk {
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
 		let { env, target } = arg;
-		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
 		if (target) {
 			let os = std.triple(target).os;
@@ -365,20 +380,29 @@ export namespace sdk {
 				targetPrefix = `${std.Triple.toString(std.triple(target))}-`;
 			}
 		}
-		return std.env.provides({
-			env,
-			names: requiredComponents.map((name) => `${targetPrefix}${name}`),
-		});
+		if (arg.llvm) {
+			return std.env.provides({
+				env,
+				names: requiredLLVMCompilerComponents,
+			});
+		} else {
+			return std.env.provides({
+				env,
+				names: requiredCompilerComponents.map(
+					(name) => `${targetPrefix}${name}`,
+				),
+			});
+		}
 	};
 
 	/** Locate the C and C++ compilers, linker, and ld.so from a toolchain. */
 	export let toolchainComponents = async (
 		arg?: ToolchainEnvArg,
 	): Promise<ToolchainComponents> => {
-		let { env, target: targetTriple } = arg ?? {};
+		let { env, llvm = false, target: targetTriple } = arg ?? {};
 		// Make sure we have a toolchain.
-		await sdk.assertProvidesToolchain({ env, target: targetTriple });
-		let host = await getHost({ env });
+		await sdk.assertProvidesToolchain({ env, llvm, target: targetTriple });
+		let host = await getHost({ env, llvm });
 		let os = host.os;
 		let target = targetTriple ? std.triple(targetTriple) : host;
 		let isCross = !std.Triple.eq(host, target);
@@ -472,7 +496,7 @@ export namespace sdk {
 			let ldsoPath = isCross ? `${targetString}/lib` : "lib";
 			libDir = tg.Directory.expect(await directory.tryGet(ldsoPath));
 			let foundLdso = await libDir.tryGet(interpreterName(target));
-			tg.assert(foundLdso, "Unable to find ld.so.");
+			tg.assert(foundLdso);
 			ldso = tg.File.expect(foundLdso);
 		} else {
 			libDir = tg.Directory.expect(await directory.tryGet("lib"));
@@ -495,6 +519,7 @@ export namespace sdk {
 	type ToolchainEnvArg = {
 		/** The environment to ascertain the host from. */
 		env?: std.env.Arg;
+		llvm?: boolean;
 		/** If the environment is a cross-compiler, what target should we use to look for prefixes? */
 		target?: std.Triple.Arg;
 	};
@@ -562,8 +587,9 @@ export namespace sdk {
 		let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
 		let targetPrefix = target ? `${targetString}-` : "";
 		if (!foundCC) {
-			foundCC = await std.env.tryWhich({ env, name: `${targetPrefix}cc` });
-			cmd = `${targetPrefix}cc`;
+			let name = arg?.llvm ? "clang" : `${targetPrefix}cc`;
+			foundCC = await std.env.tryWhich({ env, name });
+			cmd = name;
 		}
 
 		// If we couldn't locate a file or symlink at either CC or `cc` in $PATH, we can't determine the host.
@@ -657,7 +683,9 @@ export namespace sdk {
 		}
 		let compiledProgram = tg.File.expect(
 			await tg.build(
-				tg`echo "testing ${lang}" && ${cmd} -v -x ${langStr} ${testProgram} -o $OUTPUT`,
+				tg`echo "testing ${lang}"
+				set -x
+				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
 				{
 					env: std.env.object(arg.sdk),
 					host: std.Triple.system(expectedHost),
@@ -699,7 +727,7 @@ export namespace sdk {
 		let expected = await resolveHostAndTarget(arg);
 
 		// Check that the env provides a host toolchain.
-		await sdk.assertProvidesToolchain({ env });
+		await sdk.assertProvidesToolchain({ env, llvm: arg?.toolchain === "llvm" });
 
 		// Assert we can determine a host and it matches the expected.
 		let actualHost = await sdk.getHost({ env });
@@ -721,7 +749,7 @@ export namespace sdk {
 
 		// Assert it can compile and wrap for all requested targets.
 		let allTargets =
-			actualHost.os === "linux"
+			actualHost.os === "linux" && arg?.toolchain !== "llvm"
 				? await sdk.supportedTargets(env)
 				: [actualHost];
 		await Promise.all(
@@ -746,7 +774,7 @@ export namespace sdk {
 				});
 
 				// Test Fortran.
-				if (target.os !== "darwin") {
+				if (target.os !== "darwin" && arg?.toolchain !== "llvm") {
 					await assertProxiedCompiler({
 						parameters: testFortranParameters,
 						sdk: env,
@@ -949,9 +977,9 @@ export let testMoldSdk = tg.target(async () => {
 	return output;
 });
 
-export let testLLVM = tg.target(async () => {
+export let testLLVMSdk = tg.target(async () => {
 	let env = await sdk({ toolchain: "llvm" });
-	await sdk.assertValid(env);
+	await sdk.assertValid(env, { toolchain: "llvm" });
 	return true;
 });
 

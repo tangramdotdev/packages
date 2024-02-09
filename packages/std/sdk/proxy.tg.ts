@@ -9,6 +9,8 @@ import { wrapArgs } from "./gcc.tg.ts";
 export type Arg = std.sdk.BuildEnvArg & {
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
+	/** Should we expect an LLVM toolchain? */
+	llvm?: boolean;
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
@@ -25,6 +27,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let proxyCompiler = arg.compiler ?? false;
 	let proxyLinker = arg.linker ?? true;
+	let llvm = arg.llvm ?? false;
 
 	if (!proxyCompiler && !proxyLinker) {
 		return;
@@ -38,8 +41,24 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let dirs = [];
 
-	let { cc, cxx, fortran, directory, flavor, host, ld, ldso, target } =
-		await std.sdk.toolchainComponents({ env: arg.env, target: arg.target });
+	let {
+		cc: cc_,
+		cxx: cxx_,
+		fortran,
+		directory,
+		flavor,
+		host,
+		ld,
+		ldso,
+		target,
+	} = await std.sdk.toolchainComponents({
+		env: arg.env,
+		llvm,
+		target: arg.target,
+	});
+
+	let cc: tg.File | tg.Symlink = cc_;
+	let cxx: tg.File | tg.Symlink = cxx_;
 
 	if (proxyLinker) {
 		let hostString = std.Triple.toString(host);
@@ -51,15 +70,21 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		// Construct the ld proxy.
 		let ldProxyArtifact = await ldProxy({
 			buildEnv: arg.env,
-			linker: arg.linkerExe ?? ld,
+			linker: arg.linkerExe ?? llvm ? await tg`${directory}/bin/ld.lld` : ld,
 			interpreter: ldso,
 			host,
 			target,
 			sdk: arg.sdk,
 		});
 
+		//let linkerName = llvm ? "ld.lld" : "ld";
+		let linkerName = "ld";
+		if (llvm) {
+			cc = tg.File.expect(await directory.get("bin/clang-17"));
+			cxx = cc;
+		}
 		let ldProxyDir = tg.directory({
-			ld: ldProxyArtifact,
+			[linkerName]: ldProxyArtifact,
 		});
 
 		// Construct wrappers that always pass the ld proxy.
@@ -134,25 +159,43 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 				break;
 			}
 			case "llvm": {
-				let clangArgs = [];
+				//let clangArgs: tg.Unresolved<tg.Template.Arg> = ["-fuse-ld=lld"];
+				let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
+				let clangxxArgs = [...clangArgs];
+				let env = {};
 				if (host.os === "darwin") {
 					clangArgs.push(tg`-resource-dir=${directory}/lib/clang/15.0.0`);
+					env = {
+						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
+					};
+				} else {
+					clangxxArgs.push(tg`-lunwind`);
+					clangxxArgs.push(tg`-L${directory}/lib/${targetString}`);
+					clangxxArgs.push(tg`-isystem${directory}/include/c++/v1`);
+					clangxxArgs.push(
+						tg`-isystem${directory}/include/${targetString}/c++/v1`,
+					);
+					clangxxArgs.push(tg`-resource-dir=${directory}/lib/clang/17`);
+					clangArgs.push(tg`-resource-dir=${directory}/lib/clang/17`);
 				}
 				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
-					env: {
-						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
-					},
+					env,
+					sdk: arg.sdk,
 				});
-				wrappedCXX = wrappedCC;
+				wrappedCXX = std.wrap(cxx, {
+					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
+					env,
+					sdk: arg.sdk,
+				});
 				binDir = tg.directory({
 					bin: {
 						clang: wrappedCC,
 						"clang++": wrappedCXX,
 						cc: tg.symlink("clang"),
-						"c++": tg.symlink("clang"),
+						"c++": tg.symlink("clang++"),
 						gcc: tg.symlink("clang"),
-						"g++": tg.symlink("clang"),
+						"g++": tg.symlink("clang++"),
 					},
 				});
 			}
@@ -201,7 +244,7 @@ export let ccProxy = async (arg: CcProxyArg) => {
 type LdProxyArg = {
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	buildEnv?: std.env.Arg;
-	linker: tg.File | tg.Symlink;
+	linker: tg.File | tg.Symlink | tg.Template;
 	interpreter?: tg.File;
 	interpreterArgs?: Array<tg.Template.Arg>;
 	host: std.Triple.Arg;
@@ -232,9 +275,9 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	let output = await std.wrap(tgld, {
 		identity: "wrapper",
 		env: {
-			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<tg.File | tg.Symlink>(
-				arg.linker,
-			),
+			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
+				tg.File | tg.Symlink | tg.Template
+			>(arg.linker),
 			TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.setIfUnset(injectionLibrary),
 			TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs
 				? tg.Mutation.setIfUnset(arg.interpreterArgs)

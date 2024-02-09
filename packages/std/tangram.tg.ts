@@ -285,6 +285,23 @@ export let testMold = tg.target(async () => {
 	return await testMoldSdk();
 });
 
+import * as git from "./sdk/git.tg.ts";
+export let testGit = tg.target(async () => {
+	return await git.test();
+});
+
+import * as llvm from "./sdk/llvm.tg.ts";
+export let llvmSource = tg.target(async () => {
+	return await llvm.source();
+});
+export let testLlvmToolchain = tg.target(async () => {
+	return await llvm.test();
+});
+import { testLLVMSdk } from "./sdk.tg.ts";
+export let testLlvm = tg.target(async () => {
+	return await testLLVMSdk();
+});
+
 // Image tests.
 
 import * as image from "./image.tg.ts";

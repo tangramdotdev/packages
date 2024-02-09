@@ -1,249 +1,238 @@
-// import * as bootstrap from "../bootstrap.tg.ts";
-// import { sdk } from "../sdk.tg.ts";
-// import * as std from "../tangram.tg.ts";
-// import { bootstrapSdk } from "./canadian_cross/stage0.tg.ts";
-// import { buildCmakeComponent } from "./cmake.tg.ts";
-// import cmake from "./cmake.tg.ts";
-// import { kernelHeaders } from "./kernel_headers.tg.ts";
-// import { constructSysroot, interpreterName } from "./libc.tg.ts";
-// import compilerRT from "./llvm/compiler_rt.tg.ts";
-// import llvm from "./llvm/llvm.tg.ts";
-// import ninja from "./ninja.tg.ts";
-// import { buildWithUtils, libffi } from "./utils.tg.ts";
-// import zlib from "./utils/zlib.tg.ts";
+import * as bootstrap from "../bootstrap.tg.ts";
+import * as std from "../tangram.tg.ts";
+import * as cmake from "./cmake.tg.ts";
+import * as dependencies from "./dependencies.tg.ts";
+import * as gcc from "./gcc.tg.ts";
+import { buildSysroot } from "./gcc/toolchain.tg.ts";
+import git from "./git.tg.ts";
+import { interpreterName } from "./libc.tg.ts";
+import ncurses from "./ncurses.tg.ts";
 
-// let version = "17.0.3";
+export let metadata = {
+	name: "llvm",
+	version: "17.0.6",
+};
 
-// let metadata = {
-// 	checksum:
-// 		"sha256:dcba3eb486973dce45b6edfe618f3f29b703ae7e6ef9df65182fb50fb6fe4235",
-// 	name: "llvm",
-// 	owner: "llvm",
-// 	repo: "llvm-project",
-// 	tag: `llvmorg-${version}`,
-// 	url: "github",
-// 	version,
-// };
+export let source = async () => {
+	let { name, version } = metadata;
+	let checksum =
+		"sha256:58a8818c60e6627064f312dbf46c02d9949956558340938b71cf731ad8bc0813";
+	let owner = name;
+	let repo = "llvm-project";
+	let tag = `llvmorg-${version}`;
+	let unpackFormat = ".tar.xz" as const;
+	let url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${repo}-${version}.src${unpackFormat}`;
+	let outer = tg.Directory.expect(
+		await std.download({ checksum, url, unpackFormat }),
+	);
+	return std.directory.unwrap(outer);
+	// return std.download.fromGithub({ checksum, owner, repo, tag, version });
+};
 
-// export type LLVMArg = {
-// 	build?: any;
-// 	env?: any;
-// 	hostArg?: std.Triple.Arg;
-// 	/** If experiencing OOM issues, set false to not link in parallel. */
-// 	parallelLink?: boolean;
-// };
+export type LLVMArg = std.sdk.BuildEnvArg & {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	source?: tg.Directory;
+};
 
-// export let toolchain = async (arg?: LLVMArg) => {
-// 	// NOTE- "target" is ignored. All LLVM toolchains are multi-target. The SDK constructor will use this field to create convenience wrappers, but we do not use this value to produce the toolchain itself.
-// 	let { build, env } = tg.unimplemented();
-// 	let host = std.triple(arg?.hostArg ?? (await std.Triple.host()));
+export let toolchain = async (arg?: LLVMArg) => {
+	let {
+		autotools = [],
+		build: build_,
+		env: env_,
+		host: host_,
+		source: source_,
+		...rest
+	} = arg ?? {};
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let hostString = std.Triple.toString(host);
+	let build = build_ ? std.triple(build_) : host;
 
-// 	let directory = await bootstrap.toolchain({ host });
+	if (host.os !== "linux") {
+		throw new Error("LLVM toolchain must be built for Linux");
+	}
 
-// 	let cmakeArtifact = await cmake({ env, host });
-// 	console.log("cmake", cmakeArtifact);
-// 	let ninjaArtifact = await ninja({ env: [env, cmakeArtifact], host });
-// 	console.log("ninja", ninjaArtifact);
+	let sourceDir = source_ ?? source();
 
-// 	if (host.os !== "linux") {
-// 		throw new Error("LLVM toolchain must be built for Linux");
-// 	}
+	let sysroot = await buildSysroot({
+		host,
+	});
+	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
+	sysroot = tg.Directory.expect(await sysroot.get(std.Triple.toString(host)));
+	console.log("llvm sysroot", sysroot);
 
-// 	let llvmSource = std.download.fromMetadata(metadata);
+	let gccToolchain = gcc.toolchain(std.Triple.rotate({ build, host }));
 
-// 	// Produce the linux headers.
-// 	let linuxHeaders = await kernelHeaders({
-// 		env,
-// 		target: host,
-// 	});
-// 	console.log("linuxHeaders", linuxHeaders);
+	let deps: tg.Unresolved<std.env.Arg> = [
+		git({ host }),
+		ncurses({ host }),
+		gccToolchain,
+		dependencies.env({ host: build }),
+	];
 
-// 	// Produce a combined directory contianing the correct C library for the host and the Linux headers.
-// 	let sysroot = await constructSysroot({
-// 		linuxHeaders,
-// 		env,
-// 		target: host,
-// 	});
-// 	console.log("hostSysroot", sysroot);
+	let env = [
+		...deps,
+		{
+			CC: tg`gcc --sysroot=${sysroot}`,
+			CXX: tg`g++ --sysroot=${sysroot}`,
+			LDFLAGS: tg.Mutation.templatePrepend(
+				tg`-Wl,-dynamic-linker,${sysroot}/lib/${interpreterName(
+					host,
+				)} -Wl,-rpath,${sysroot}/lib:${gccToolchain}/lib`,
+				" ",
+			),
+		},
+		env_,
+	];
 
-// 	let script = tg`
-// 		export CMAKE_INCLUDE_PATH=$(echo "$CPATH" | tr ':' ';')
-// 		export CMAKE_LIBRARY_PATH=$(echo "$LIBRARY_PATH" | tr ':' ';')
-// 		cmake \
-// 			-G Ninja \
-// 			-DLLVM_ENABLE_PROJECTS="clang;lld" \
-// 			-DCMAKE_BUILD_TYPE=Release \
-// 			-DDEFAULT_SYSROOT=${sysroot} \
-// 			-DCLANG_ENABLE_BOOTSTRAP=On \
-// 			-DGCC_INSTALL_PREFIX=${directory} \
-// 			-DCLANG_BOOTSTRAP_PASSTHROUGH="CMAKE_INSTALL_PREFIX;CMAKE_INCLUDE_PATH;CMAKE_LIBRARY_PATH;DEFAULT_SYSROOT;GCC_INSTALL_PREFIX" \
-// 			-DLLVM_PARALLEL_LINK_JOBS=1 \
-// 			-DCMAKE_INSTALL_PREFIX=$OUTPUT \
-// 		${llvmSource}/llvm
-// 		ninja stage2
-// 		ninja stage2-install
-// 	`;
+	// FIXME - flang fails because of the test_big_endian bug.
 
-// 	let llvmArtifact = tg.Directory.expect(
-// 		await build_({
-// 			script,
-// 			env: [env, ninjaArtifact, cmakeArtifact],
-// 			host: build,
-// 		}),
-// 	);
+	let configureLlvm = {
+		args: [
+			"-S",
+			tg`${sourceDir}/llvm`,
+			"-DCMAKE_BUILD_TYPE=Release",
+			"-DCMAKE_INSTALL_LIBDIR=lib",
+			//"-DCMAKE_SKIP_RPATH=True",
+			"-DCLANG_ENABLE_BOOTSTRAP=ON",
+			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
+			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
+			"-DLIBCXX_USE_COMPILER_RT=YES",
+			"-DLIBCXXABI_USE_COMPILER_RT=YES",
+			"-DLIBCXXABI_USE_LLVM_UNWINDER=YES",
+			"-DBOOTSTRAP_CMAKE_BUILD_TYPE=Release",
+			"-DBOOTSTRAP_CLANG_DEFAULT_CXX_STDLIB=libc++",
+			"-DBOOTSTRAP_CLANG_DEFAULT_RTLIB=compiler-rt",
+			"-DBOOTSTRAP_LIBCXX_USE_COMPILER_RT=YES",
+			"-DBOOTSTRAP_LIBCXXABI_USE_COMPILER_RT=YES",
+			"-DBOOTSTRAP_LIBCXXABI_USE_LLVM_UNWINDER=YES",
+			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
+			"-DLIBUNWIND_USE_COMPILER_RT=YES",
+			"-DBOOTSTRAP_LIBUNWIND_USE_COMPILER_RT=YES",
+			//"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
+			"-DLLVM_ENABLE_PROJECTS='clang;lld'",
+			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
+			"-DLLVM_ENABLE_TERMINFO=OFF",
+			"-DLLVM_ENABLE_LIBXML2=OFF",
+			"-DLLVM_ENABLE_RTTI=ON",
+			"-DLLVM_ENABLE_EH=ON",
+			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
+			"-DLLVM_TARGETS_TO_BUILD='X86;AArch64'",
+			tg`-DGCC_INSTALL_PREFIX=${gccToolchain}`,
+			tg`-DDEFAULT_SYSROOT=${sysroot}`,
+		],
+	};
 
-// 	// Produce the compiler builtins.
-// 	// let compilerRTArtifact = await compilerRT(arg);
-// 	// console.log("compiler-rt", compilerRTArtifact);
+	let llvmArtifact = await cmake.build(
+		{
+			...rest,
+			...std.Triple.rotate({ build, host }),
+			bootstrapMode: true,
+			env,
+			phases: { configure: configureLlvm },
+			source: sourceDir,
+		},
+		autotools,
+	);
+	console.log("llvmArtifact with compiler RT", await llvmArtifact.id());
 
-// 	// let llvmArtifact = await llvm(arg);
-// 	// console.log("llvm", llvmArtifact);
+	llvmArtifact = await tg.directory(llvmArtifact, sysroot);
+	console.log("llvmArtifact with sysroot", await llvmArtifact.id());
 
-// 	// // First, nest compilerRT inside clang.
-// 	// let clangInternal = tg.Directory.expect(
-// 	// 	await llvmArtifact.get("lib/clang/16"),
-// 	// );
-// 	// clangInternal = await tg.directory(clangInternal, compilerRTArtifact);
-// 	// llvmArtifact = await tg.directory(llvmArtifact, {
-// 	// 	"lib/clang/16": clangInternal,
-// 	// });
+	let binutils = [
+		"ar",
+		"as",
+		"cxxfilt",
+		"nm",
+		"mt",
+		"objcopy",
+		"objdump",
+		"ranlib",
+		"strings",
+		"strip",
+	];
+	for (let util of binutils) {
+		llvmArtifact = await tg.directory(llvmArtifact, {
+			[`bin/${util}`]: tg.symlink(`llvm-${util}`),
+		});
+	}
+	console.log("llvmArtifact with binutils symlinks", await llvmArtifact.id());
 
-// 	return llvmArtifact;
-// };
+	return llvmArtifact;
+};
 
-// /** Obtain the complete source for the entire LLVM suite. */
-// export let llvmMetaSource = () => {
-// 	return std.download.fromMetadata(metadata);
-// };
+export let test = async () => {
+	// Build a triple for the detected host.
+	let host = await std.Triple.host();
 
-// export type LLVMBuildArg = Omit<std.sdk.BuildEnvArg, "source"> & {
-// 	componentName?: string;
-// 	/* Note- the source is optional here so we can fall back to the LLVM meta source bundle. */
-// 	source?: tg.Directory;
-// };
+	let os = tg.System.os(std.Triple.system(host));
 
-// /* Special case of buildCmakeComponent that handles configuration common to all LLVM components. */
-// // TARGET_CANDIDATE
-// export let buildLLVMComponent = async (arg: LLVMBuildArg) => {
-// 	return tg.unimplemented();
-// 	// let componentName = resolved.componentName ?? ".";
-// 	// let source = resolved.source ?? llvmMetaSource();
-// 	// let configureCommand =
-// 	// 	resolved.configureCommand ?? tg`cmake -S ${source}/${componentName}`;
-// 	// let configureArgs = [
-// 	// 	"-G",
-// 	// 	"Ninja",
-// 	// 	"-DCMAKE_BUILD_TYPE=Release",
-// 	// 	"-DCMAKE_INSTALL_LIBDIR=lib",
-// 	// 	...(resolved.configureArgs ?? []),
-// 	// ];
+	let libDir = host.environment === "musl" ? "lib" : "lib64";
+	let expectedInterpreter =
+		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
 
-// 	// let opt = resolved.opt ?? "3";
+	let fullLlvmPlusClang = await toolchain({ host });
 
-// 	// // Translate CPATH and LIBRARY_PATH to CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH.
-// 	// // FIXME - do this with typescript/env?
-// 	// let preScript = tg`
-// 	// 	${resolved.preScript ?? ""}
-// 	// 	export CMAKE_INCLUDE_PATH=$(echo "$CPATH" | tr ':' ';')
-// 	// 	export CMAKE_LIBRARY_PATH=$(echo "$LIBRARY_PATH" | tr ':' ';')
-// 	// `;
+	let testCSource = tg.file(`
+		#include <stdio.h>
+		int main() {
+			printf("Hello, world!\\n");
+			return 0;
+		}
+	`);
+	let cScript = tg`
+		set -x && clang -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
+	`;
+	let cOut = tg.File.expect(
+		await std.build(cScript, {
+			env: fullLlvmPlusClang,
+			host,
+		}),
+	);
 
-// 	// let result = buildCmakeComponent({
-// 	// 	...arg,
-// 	// 	configureArgs,
-// 	// 	configureCommand,
-// 	// 	opt,
-// 	// 	preScript,
-// 	// 	source,
-// 	// });
-// 	// return result;
-// };
+	let cMetadata = await std.file.executableMetadata(cOut);
+	if (os === "linux") {
+		tg.assert(cMetadata.format === "elf");
+		tg.assert(cMetadata.interpreter === expectedInterpreter);
+		tg.assert(cMetadata.arch === host.arch);
+	} else if (os === "darwin") {
+		tg.assert(cMetadata.format === "mach-o");
+	}
 
-// // export let defaultBuildSDK = async (host: std.Triple.Arg) => {
-// // 	let base = await bootstrapSdk({ host });
-// // 	let cmakeArtifact = await cmake({ host });
-// // 	// let libFFI = await libffi({ host });
-// // 	// let ninjaArtifact = await ninja({ host });
-// // 	return std.env(base, cmakeArtifact);
-// // };
+	let testCXXSource = tg.file(`
+		#include <iostream>
+		int main() {
+			std::cout << "Hello, world!" << std::endl;
+			return 0;
+		}
+	`);
+	let cxxScript = tg`
+		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -lunwind -o $OUTPUT
+	`;
+	let hostString = std.Triple.toString(host);
+	let cxxOut = tg.File.expect(
+		await std.build(cxxScript, {
+			env: [
+				fullLlvmPlusClang,
+				{
+					LD_LIBRARY_PATH: tg.Mutation.templatePrepend(
+						tg`${fullLlvmPlusClang}/lib/${hostString}`,
+						":",
+					),
+				},
+			],
+			host,
+		}),
+	);
 
-// export let proxyEnv = tg.target(async () => {
-// 	return tg.unimplemented();
-// });
+	let cxxMetadata = await std.file.executableMetadata(cxxOut);
+	if (os === "linux") {
+		tg.assert(cxxMetadata.format === "elf");
+		tg.assert(cxxMetadata.interpreter === expectedInterpreter);
+		tg.assert(cxxMetadata.arch === host.arch);
+	} else if (os === "darwin") {
+		tg.assert(cxxMetadata.format === "mach-o");
+	}
 
-// export let test = async () => {
-// 	// Build a triple for the detected host.
-// 	let host = await std.Triple.host();
-
-// 	let os = tg.System.os(std.Triple.system(host));
-
-// 	let libDir = host.environment === "musl" ? "lib" : "lib64";
-// 	let expectedInterpreter =
-// 		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
-
-// 	let fullLlvmPlusClang = await toolchain({ hostArg: host });
-
-// 	let testCSource = tg.file(`
-// 		#include <stdio.h>
-// 		int main() {
-// 			printf("Hello, world!\\n");
-// 			return 0;
-// 		}
-// 	`);
-// 	let cScript = tg`
-// 		clang -xc ${testCSource} -rtlib=compiler-rt -fuse-ld=lld -o $OUTPUT
-// 	`;
-// 	let cOut = tg.File.expect(
-// 		await buildWithUtils({
-// 			env: [
-// 				fullLlvmPlusClang,
-// 				{
-// 					LD: tg`$OUTPUT/bin/ld.lld`,
-// 				},
-// 			],
-// 			script: cScript,
-// 			host,
-// 		}),
-// 	);
-
-// 	let cMetadata = await std.file.executableMetadata(cOut);
-// 	if (os === "linux") {
-// 		tg.assert(cMetadata.format === "elf");
-// 		tg.assert(cMetadata.interpreter === expectedInterpreter);
-// 		tg.assert(cMetadata.arch === host.arch);
-// 	} else if (os === "darwin") {
-// 		tg.assert(cMetadata.format === "mach-o");
-// 	}
-
-// 	let testCXXSource = tg.file(`
-// 		#include <iostream>
-// 		int main() {
-// 			std::cout << "Hello, world!" << std::endl;
-// 			return 0;
-// 		}
-// 	`);
-// 	let cxxScript = tg`
-// 		clang++ -xc++ ${testCXXSource} -I${fullLlvmPlusClang}/include/c++/v1 -rtlib=compiler-rt -fuse-ld=lld -o $OUTPUT
-// 	`;
-// 	let cxxOut = tg.File.expect(
-// 		await buildWithUtils({
-// 			env: [
-// 				fullLlvmPlusClang,
-// 				{
-// 					LD: tg`$OUTPUT/bin/ld.lld`,
-// 				},
-// 			],
-// 			script: cxxScript,
-// 			host,
-// 		}),
-// 	);
-
-// 	let cxxMetadata = await std.file.executableMetadata(cxxOut);
-// 	if (os === "linux") {
-// 		tg.assert(cxxMetadata.format === "elf");
-// 		tg.assert(cxxMetadata.interpreter === expectedInterpreter);
-// 		tg.assert(cxxMetadata.arch === host.arch);
-// 	} else if (os === "darwin") {
-// 		tg.assert(cxxMetadata.format === "mach-o");
-// 	}
-// };
+	return fullLlvmPlusClang;
+};
