@@ -152,7 +152,7 @@ export type Arg = {
 	useCargoVendor?: boolean;
 };
 
-export let build = async (...args: tg.Args<Arg>): Promise<tg.Artifact> => {
+export let build = async (...args: tg.Args<Arg>) => {
 	type Apply = {
 		env?: Array<std.env.Arg>;
 		sdk?: Array<std.sdk.Arg>;

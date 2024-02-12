@@ -26,6 +26,7 @@ type Arg = {
 	build?: std.Triple.Arg;
 	env?: std.env.Arg;
 	rust?: tg.MaybeNestedArray<rust.Arg>;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 	host?: std.Triple.Arg;
 };
@@ -57,10 +58,12 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 export default ripgrep;
 
 export let test = tg.target(async () => {
-	await tg.build(tg`
-		echo "Checking that we can run ripgrep."
-		${ripgrep()}/bin/rg --version
-	`);
+	let directory = ripgrep();
+	await std.assert.pkg({
+		directory,
+		binaries: ["rg"],
+		metadata,
+	});
 
 	// // On Linux, test cross-compiling.
 	// let host = await std.Triple.host();
@@ -86,5 +89,5 @@ export let test = tg.target(async () => {
 	// 	tg.assert(metadata.format === "elf");
 	// 	tg.assert(metadata.arch === targetArch);
 	// }
-	return true;
+	return directory;
 });
