@@ -70,7 +70,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		// Construct the ld proxy.
 		let ldProxyArtifact = await ldProxy({
 			buildEnv: arg.env,
-			linker: arg.linkerExe ?? llvm ? await tg`${directory}/bin/ld.lld` : ld,
+			linker: arg.linkerExe ?? (llvm ? await tg`${directory}/bin/ld.lld` : ld),
 			interpreter: ldso,
 			host,
 			target,

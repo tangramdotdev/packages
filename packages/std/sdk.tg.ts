@@ -282,10 +282,10 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		});
 		console.log("llvm proxy env", proxyEnv);
 		let dependenciesEnv = await dependencies.env({
-			//env: [clangToolchain, proxyEnv],
+			env: [clangToolchain, proxyEnv],
 			build: host,
 			host,
-			//bootstrapMode: true,
+			bootstrapMode: true,
 		});
 		return std.env(clangToolchain, proxyEnv, dependenciesEnv, {
 			bootstrapMode: true,

@@ -84,15 +84,12 @@ export let toolchain = async (arg?: LLVMArg) => {
 		env_,
 	];
 
-	// FIXME - flang fails because of the test_big_endian bug.
-
 	let configureLlvm = {
 		args: [
 			"-S",
 			tg`${sourceDir}/llvm`,
 			"-DCMAKE_BUILD_TYPE=Release",
 			"-DCMAKE_INSTALL_LIBDIR=lib",
-			//"-DCMAKE_SKIP_RPATH=True",
 			"-DCLANG_ENABLE_BOOTSTRAP=ON",
 			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
 			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
@@ -108,8 +105,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
 			"-DLIBUNWIND_USE_COMPILER_RT=YES",
 			"-DBOOTSTRAP_LIBUNWIND_USE_COMPILER_RT=YES",
-			//"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
-			"-DLLVM_ENABLE_PROJECTS='clang;lld'",
+			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_ENABLE_TERMINFO=OFF",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
@@ -117,7 +113,6 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_EH=ON",
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
-			"-DLLVM_TARGETS_TO_BUILD='X86;AArch64'",
 			tg`-DGCC_INSTALL_PREFIX=${gccToolchain}`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 		],

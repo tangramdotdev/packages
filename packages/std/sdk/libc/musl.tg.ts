@@ -89,15 +89,17 @@ export default tg.target(async (arg?: Arg) => {
 		install,
 	};
 
-	let env = [
-		env_,
-		dependencies.env({
-			...rest,
-			env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
-			host: build,
-		}),
-		{ CPATH: tg.Mutation.unset() },
-	];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (rest.bootstrapMode) {
+		env.push(
+			dependencies.env({
+				...rest,
+				env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
+				host: build,
+			}),
+		);
+	}
+	env.push({ CPATH: tg.Mutation.unset() });
 
 	let result = await std.autotools.build(
 		{

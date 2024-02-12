@@ -55,7 +55,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ? std.triple(build_) : host;
 
 	let configure = {
-		args: ["--without-bash-malloc"],
+		args: ["--without-bash-malloc", "--disable-nls"],
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [];

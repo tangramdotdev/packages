@@ -2,8 +2,8 @@ import * as std from "../../tangram.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
 
 // Define supported versions.
-type GlibcVersion = "2.37" | "2.38";
-export let defaultGlibcVersion: GlibcVersion = "2.38";
+type GlibcVersion = "2.37" | "2.38" | "2.39";
+export let defaultGlibcVersion: GlibcVersion = "2.39";
 
 export let metadata = {
 	name: "glibc",
@@ -57,14 +57,17 @@ export default tg.target(async (arg: Arg) => {
 
 	let additionalFlags = [];
 
-	// The 2.38 release has some new configuration to manage.
+	// The 2.38 includes the deprecated libcrypt, which is disabled by default. We opt-in to enable it.
 	if (version === "2.38") {
+		// libcrypt is now disabled by default, with a note that applications should prepare to migrate to new libcrypt providers like libxcrypt. GCC still expects libcrypt, so we opt-in. This may change in future iterations.
+		additionalFlags.push("--enable-crypt");
+	}
+
+	if (version === "2.38" || version === "2.39") {
 		// This flag is not available in previous versions. The `-DFORTIFY_SOURCE` macro was already available to users of glibc. This flag additionally uses this macro to build libc itself. It's used to detect buffer overflows at compile time.
 		if (host.environment === "gnu") {
 			additionalFlags.push("--enable-fortify-source");
 		}
-		// libcrypt is now disabled by default, with a note that applications should prepare to migrate to new libcrypt providers like libxcrypt. GCC still expects libcrypt, so we opt-in. This may change in future iterations.
-		additionalFlags.push("--enable-crypt");
 	}
 
 	let prepare = `mkdir -p $OUTPUT && env`;
@@ -94,12 +97,18 @@ export default tg.target(async (arg: Arg) => {
 		install,
 	};
 
-	let env = [
-		dependencies.env({
-			...rest,
-			env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
-			host: build,
-		}),
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (rest.bootstrapMode) {
+		env.push(
+			dependencies.env({
+				...rest,
+				env: std.sdk({ host: build, bootstrapMode: true }),
+				host: build,
+			}),
+		);
+	}
+
+	env = env.concat([
 		{
 			CPATH: tg.Mutation.unset(),
 			MAKEFLAGS: "--output-sync --silent",
@@ -107,7 +116,7 @@ export default tg.target(async (arg: Arg) => {
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},
 		env_,
-	];
+	]);
 
 	let result = await std.autotools.build(
 		{
@@ -186,4 +195,8 @@ let checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 		"2.38",
 		"sha256:fb82998998b2b29965467bc1b69d152e9c307d2cf301c9eafb4555b770ef3fd2",
 	],
+	[
+		"2.39",
+		"sha256:f77bd47cf8170c57365ae7bf86696c118adb3b120d3259c64c502d3dc1e2d926"
+	]
 ]);

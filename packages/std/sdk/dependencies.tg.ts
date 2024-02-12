@@ -12,6 +12,7 @@ import flex from "./dependencies/flex.tg.ts";
 import gperf from "./dependencies/gperf.tg.ts";
 import help2man from "./dependencies/help2man.tg.ts";
 import libffi from "./dependencies/libffi.tg.ts";
+import libxcrypt from "./dependencies/libxcrypt.tg.ts";
 import m4 from "./dependencies/m4.tg.ts";
 import make from "./dependencies/make.tg.ts";
 import patch from "./dependencies/patch.tg.ts";
@@ -33,7 +34,7 @@ export * as flex from "./dependencies/flex.tg.ts";
 export * as gperf from "./dependencies/gperf.tg.ts";
 export * as help2man from "./dependencies/help2man.tg.ts";
 export * as libffi from "./dependencies/libffi.tg.ts";
-
+export * as libxcrypt from "./dependencies/libxcrypt.tg.ts";
 export * as m4 from "./dependencies/m4.tg.ts";
 export * as make from "./dependencies/make.tg.ts";
 export * as patch from "./dependencies/patch.tg.ts";
@@ -88,8 +89,8 @@ export let env = tg.target(async (arg?: Arg) => {
 			await Promise.all([
 				perl({ ...rest, host }),
 				pkgconfig({ ...rest, host }),
-				python({ ...rest, host }),
 				texinfo({ ...rest, host }),
+				libxcrypt({ ...rest, host }),
 			]),
 		);
 
@@ -100,6 +101,7 @@ export let env = tg.target(async (arg?: Arg) => {
 				file({ ...rest, host }),
 				flex({ ...rest, host }),
 				help2man({ ...rest, host }),
+				python({ ...rest, host }),
 			]),
 		);
 	} else {
@@ -116,6 +118,7 @@ export let env = tg.target(async (arg?: Arg) => {
 		dependencies.push(await zstd({ ...rest, host }));
 		dependencies.push(await perl({ ...rest, host }));
 		dependencies.push(await pkgconfig({ ...rest, host }));
+		dependencies.push(await libxcrypt({ ...rest, host }));
 		dependencies.push(await python({ ...rest, host }));
 		dependencies.push(await texinfo({ ...rest, host }));
 		dependencies.push(await autoconf({ ...rest, host }));

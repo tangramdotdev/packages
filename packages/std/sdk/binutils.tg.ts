@@ -4,7 +4,7 @@ import * as dependencies from "./dependencies.tg.ts";
 
 export let metadata = {
 	name: "binutils",
-	version: "2.41",
+	version: "2.42",
 };
 
 export let source = tg.target(async (build: std.Triple.Arg) => {
@@ -12,7 +12,7 @@ export let source = tg.target(async (build: std.Triple.Arg) => {
 
 	let compressionFormat = ".xz" as const;
 	let checksum =
-		"sha256:ae9a5789e23459e59606e6714723f2d3ffc31c03174191ef0d015bdf06007450";
+		"sha256:f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800";
 
 	let unpatchedSource = std.download.fromGnu({
 		name,
@@ -75,15 +75,17 @@ export let build = tg.target(async (arg?: Arg) => {
 			CXX: await tg`${targetString}-c++ -static-libstdc++ -fPIC`,
 		};
 	}
-	let env = [
-		dependencies.env({
-			...rest,
-			env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
-			host: build,
-		}),
-		additionalEnv,
-		env_,
-	];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (rest.bootstrapMode) {
+		env.push(
+			dependencies.env({
+				...rest,
+				env: std.sdk({ host: build, bootstrapMode: true }),
+				host: build,
+			}),
+		);
+	}
+	env = env.concat([additionalEnv, env_]);
 
 	// Collect configuration.
 	let configure = {

@@ -168,6 +168,9 @@ export let testDepsHelp2man = tg.target(async () => {
 export let testDepsLibffi = tg.target(async () => {
 	return await dependencies.libffi.test();
 });
+export let testDepsLibXCrypt = tg.target(async () => {
+	return await dependencies.libxcrypt.test();
+});
 export let testDepsm4 = tg.target(async () => {
 	return await dependencies.m4.test();
 });

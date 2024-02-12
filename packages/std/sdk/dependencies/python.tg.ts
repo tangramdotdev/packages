@@ -2,13 +2,14 @@ import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
 import bzip2 from "./bzip2.tg.ts";
+import libxcrypt from "./libxcrypt.tg.ts";
 import m4 from "./m4.tg.ts";
 import make from "./make.tg.ts";
 import pkgConfig from "./pkg_config.tg.ts";
 
 export let metadata = {
 	name: "Python",
-	version: "3.12.1",
+	version: "3.12.2",
 };
 
 export let source = tg.target(async (os: tg.System.Os) => {
@@ -22,7 +23,7 @@ export let source = tg.target(async (os: tg.System.Os) => {
 	});
 
 	let checksum =
-		"sha256:8dfb8f426fcd226657f9e2bd5f1e96e53264965176fa17d32658e873591aeb21";
+		"sha256:be28112dac813d2053545c14bf13a16401a21877f1a69eb6ea5d84c4a0f3d870";
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
 	let source = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),
@@ -65,7 +66,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	if (os === "darwin") {
 		additionalEnv = {
 			...additionalEnv,
-			MACOSX_DEPLOYMENT_TARGET: "14.2",
+			MACOSX_DEPLOYMENT_TARGET: "14.3",
 		};
 	} else if (os === "linux") {
 		additionalEnv = {
@@ -86,6 +87,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let dependencies = [
 		bison(arg),
 		bzip2(arg),
+		libxcrypt(arg),
 		m4(arg),
 		make(arg),
 		pkgConfig(arg),
