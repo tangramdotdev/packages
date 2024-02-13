@@ -2,19 +2,20 @@ import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
 import m4 from "./m4.tg.ts";
 import make from "./make.tg.ts";
+import ncurses from "./ncurses.tg.ts";
 import perl from "./perl.tg.ts";
 import zlib from "./zlib.tg.ts";
 
 export let metadata = {
 	name: "texinfo",
-	version: "7.0.3",
+	version: "7.1",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
-		"sha256:74b420d09d7f528e84f97aa330f0dd69a98a6053e7a4e01767eed115038807bf";
+		"sha256:deeec9f19f159e046fdf8ad22231981806dac332cc372f1c763504ad82b30953";
 	return std.download.fromGnu({ name, version, compressionFormat, checksum });
 });
 
@@ -33,7 +34,14 @@ export let build = tg.target((arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let dependencies = [bison(arg), m4(arg), make(arg), perl(arg), zlib(arg)];
+	let dependencies = [
+		bison(arg),
+		m4(arg),
+		make(arg),
+		ncurses(arg),
+		perl(arg),
+		zlib(arg),
+	];
 	let env = [std.utils.env(arg), ...dependencies, env_];
 
 	return std.utils.buildUtil(
@@ -54,7 +62,11 @@ export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let directory = build({
+		host,
+		bootstrapMode,
+		env: [sdk, { WATERMARK: "1" }],
+	});
 	await std.assert.pkg({
 		directory,
 		binaries: ["makeinfo", "texi2any"],

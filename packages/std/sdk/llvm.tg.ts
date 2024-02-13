@@ -6,7 +6,6 @@ import * as gcc from "./gcc.tg.ts";
 import { buildSysroot } from "./gcc/toolchain.tg.ts";
 import git from "./git.tg.ts";
 import { interpreterName } from "./libc.tg.ts";
-import ncurses from "./ncurses.tg.ts";
 
 export let metadata = {
 	name: "llvm",
@@ -64,7 +63,6 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 	let deps: tg.Unresolved<std.env.Arg> = [
 		git({ host }),
-		ncurses({ host }),
 		gccToolchain,
 		dependencies.env({ host: build }),
 	];
@@ -107,7 +105,6 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DBOOTSTRAP_LIBUNWIND_USE_COMPILER_RT=YES",
 			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
-			"-DLLVM_ENABLE_TERMINFO=OFF",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_EH=ON",

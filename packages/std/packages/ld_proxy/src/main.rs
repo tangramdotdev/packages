@@ -146,7 +146,7 @@ fn read_options() -> Options {
 		});
 
 	// Get the tracing level if set.
-	let tracing_level = std::env::var("TGLD_TRACING").ok();
+	let tracing_level = std::env::var("TANGRAM_LD_PROXY_TRACING").ok();
 
 	// Get an iterator over the arguments.
 	let mut args = std::env::args();

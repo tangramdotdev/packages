@@ -310,7 +310,7 @@ int main() {
 				cc -v -xc ${helloSource} -o $OUTPUT`,
 			{
 				env: await std.env.object(bootstrapSDK, {
-					TGLD_TRACING: "tangram=trace",
+					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 					TANGRAM_WRAPPER_TRACING: "tangram=trace",
 				}),

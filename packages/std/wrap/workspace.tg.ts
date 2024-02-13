@@ -17,8 +17,8 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 		"Cargo.toml": tg.include("../Cargo.toml"),
 		"Cargo.lock": tg.include("../Cargo.lock"),
 		"packages/env": tg.include("../packages/env"),
-		"packages/tgcc": tg.include("../packages/tgcc"),
-		"packages/tgld": tg.include("../packages/tgld"),
+		"packages/cc_proxy": tg.include("../packages/cc_proxy"),
+		"packages/ld_proxy": tg.include("../packages/ld_proxy"),
 		"packages/wrapper": tg.include("../packages/wrapper"),
 	});
 
@@ -34,10 +34,10 @@ export let env = async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/env"));
 
 export let tgcc = async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/tgcc"));
+	tg.File.expect(await (await workspace(arg)).get("bin/cc_proxy"));
 
 export let tgld = async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/tgld"));
+	tg.File.expect(await (await workspace(arg)).get("bin/ld_proxy"));
 
 export let wrapper = async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
@@ -303,8 +303,8 @@ export let build = async (arg: BuildArg) => {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_env $OUTPUT/bin/env
-			mv $TARGET/$RUST_TARGET/${buildType}/tangram_cc $OUTPUT/bin/tgcc
-			mv $TARGET/$RUST_TARGET/${buildType}/tangram_linker $OUTPUT/bin/tgld
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_cc_proxy $OUTPUT/bin/cc_proxy
+			mv $TARGET/$RUST_TARGET/${buildType}/tangram_ld_proxy $OUTPUT/bin/ld_proxy
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
 		`,
 	};

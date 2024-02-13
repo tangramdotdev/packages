@@ -395,7 +395,7 @@ export let dlopen = async (arg: DlopenArg) => {
 				std.sdk({ bootstrapMode: true }),
 				directory,
 				...arg.runtimeDepDirs,
-				{ TGLD_TRACING: "tangram=trace" },
+				{ TANGRAM_LD_PROXY_TRACING: "tangram=trace" },
 			),
 		}),
 	);

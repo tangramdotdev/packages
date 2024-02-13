@@ -177,6 +177,9 @@ export let testDepsm4 = tg.target(async () => {
 export let testDepsMake = tg.target(async () => {
 	return await dependencies.make.test();
 });
+export let testDepsNcurses = tg.target(async () => {
+	return await dependencies.ncurses.test();
+});
 export let testDepsPatch = tg.target(async () => {
 	return await dependencies.patch.test();
 });
@@ -264,11 +267,6 @@ export let testDefaultSdk = tg.target(async () => {
 
 // Post-native SDK component tests.
 
-import * as ncurses from "./sdk/ncurses.tg.ts";
-export let testNcurses = tg.target(async () => {
-	return await ncurses.test();
-});
-
 import * as cmake from "./sdk/cmake.tg.ts";
 export let testCmake = tg.target(async () => {
 	return await cmake.test();
@@ -283,9 +281,12 @@ import * as mold from "./sdk/mold.tg.ts";
 export let testMoldBuild = tg.target(async () => {
 	return await mold.test();
 });
-import { testMoldSdk } from "./sdk.tg.ts";
+import { testMoldSdk, testMuslSdk } from "./sdk.tg.ts";
 export let testMold = tg.target(async () => {
 	return await testMoldSdk();
+});
+export let testMusl = tg.target(async () => {
+	return await testMuslSdk();
 });
 
 import * as git from "./sdk/git.tg.ts";

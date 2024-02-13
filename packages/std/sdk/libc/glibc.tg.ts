@@ -70,8 +70,6 @@ export default tg.target(async (arg: Arg) => {
 		}
 	}
 
-	let prepare = `mkdir -p $OUTPUT && env`;
-
 	let configure = {
 		args: [
 			"--disable-nls",
@@ -92,7 +90,6 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let phases = {
-		prepare,
 		configure,
 		install,
 	};
@@ -197,6 +194,6 @@ let checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 	],
 	[
 		"2.39",
-		"sha256:f77bd47cf8170c57365ae7bf86696c118adb3b120d3259c64c502d3dc1e2d926"
-	]
+		"sha256:f77bd47cf8170c57365ae7bf86696c118adb3b120d3259c64c502d3dc1e2d926",
+	],
 ]);

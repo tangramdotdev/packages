@@ -15,6 +15,7 @@ import libffi from "./dependencies/libffi.tg.ts";
 import libxcrypt from "./dependencies/libxcrypt.tg.ts";
 import m4 from "./dependencies/m4.tg.ts";
 import make from "./dependencies/make.tg.ts";
+import ncurses from "./dependencies/ncurses.tg.ts";
 import patch from "./dependencies/patch.tg.ts";
 import perl from "./dependencies/perl.tg.ts";
 import pkgconfig from "./dependencies/pkg_config.tg.ts";
@@ -37,6 +38,7 @@ export * as libffi from "./dependencies/libffi.tg.ts";
 export * as libxcrypt from "./dependencies/libxcrypt.tg.ts";
 export * as m4 from "./dependencies/m4.tg.ts";
 export * as make from "./dependencies/make.tg.ts";
+export * as ncurses from "./dependencies/ncurses.tg.ts";
 export * as patch from "./dependencies/patch.tg.ts";
 export * as perl from "./dependencies/perl.tg.ts";
 export * as pkgconfig from "./dependencies/pkg_config.tg.ts";
@@ -89,6 +91,7 @@ export let env = tg.target(async (arg?: Arg) => {
 			await Promise.all([
 				perl({ ...rest, host }),
 				pkgconfig({ ...rest, host }),
+				ncurses({ ...rest, host }),
 				texinfo({ ...rest, host }),
 				libxcrypt({ ...rest, host }),
 			]),
@@ -118,6 +121,7 @@ export let env = tg.target(async (arg?: Arg) => {
 		dependencies.push(await zstd({ ...rest, host }));
 		dependencies.push(await perl({ ...rest, host }));
 		dependencies.push(await pkgconfig({ ...rest, host }));
+		dependencies.push(await ncurses({ ...rest, host }));
 		dependencies.push(await libxcrypt({ ...rest, host }));
 		dependencies.push(await python({ ...rest, host }));
 		dependencies.push(await texinfo({ ...rest, host }));
@@ -151,6 +155,7 @@ export let assertProvides = async (env: std.env.Arg) => {
 		"pkg-config",
 		"python3",
 		"texi2any", // texinfo
+		"tic", // ncurses
 		"xz",
 		"yacc", // bison
 	];

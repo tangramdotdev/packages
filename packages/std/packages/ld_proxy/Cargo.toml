@@ -1,5 +1,5 @@
 [package]
-name = "tangram_linker"
+name = "tangram_ld_proxy"
 version = "0.0.0"
 edition = "2021"
 

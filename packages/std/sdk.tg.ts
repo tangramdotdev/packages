@@ -4,6 +4,7 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import { interpreterName } from "./sdk/libc.tg.ts";
+import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
 import mold, { metadata as moldMetadata } from "./sdk/mold.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
@@ -699,6 +700,18 @@ export namespace sdk {
 		if (metadata.format === "elf") {
 			let actualArch = metadata.arch;
 			tg.assert(expectedArch === actualArch);
+
+			// Ensure the correct libc was used.
+			let unwrappedExe = tg.File.expect(await std.wrap.unwrap(compiledProgram));
+			let unwrappedMetadata = await std.file.executableMetadata(unwrappedExe);
+			tg.assert(unwrappedMetadata.format === "elf");
+			let expectedInterpreter = libc.interpreterName(expectedHost);
+			let actualInterpreter = unwrappedMetadata.interpreter;
+			tg.assert(actualInterpreter, "File should have been dynamically linked.");
+			tg.assert(
+				actualInterpreter.includes(expectedInterpreter),
+				`Expected interpreter named ${expectedInterpreter} but got ${actualInterpreter}.`,
+			);
 		} else if (metadata.format === "mach-o") {
 			tg.assert(metadata.arches.includes(expectedArch));
 		} else {
@@ -977,10 +990,22 @@ export let testMoldSdk = tg.target(async () => {
 	return output;
 });
 
+export let testMuslSdk = tg.target(async () => {
+	let host = await std.Triple.host();
+	if (host.os !== "linux") {
+		throw new Error(`musl is only available on Linux`);
+	}
+	let muslHost = std.triple({ ...host, environment: "musl" });
+	let sdkArg = { host: muslHost };
+	let env = await sdk(sdkArg);
+	await sdk.assertValid(env, sdkArg);
+	return env;
+});
+
 export let testLLVMSdk = tg.target(async () => {
 	let env = await sdk({ toolchain: "llvm" });
 	await sdk.assertValid(env, { toolchain: "llvm" });
-	return true;
+	return env;
 });
 
 function* cartesianProduct<T>(...sets: T[][]): Generator<T[], void, undefined> {

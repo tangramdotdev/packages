@@ -1,5 +1,5 @@
 [package]
-name = "tangram_cc"
+name = "tangram_cc_proxy"
 version = "0.0.0"
 edition = "2021"
 

@@ -20,7 +20,7 @@ fn main_inner() -> std::io::Result<()> {
 	tracing::trace!(?wrapper_path);
 
 	// Read the manifest.
-	let manifest = Manifest::read(&wrapper_path)?.expect("Failed to read the manifest.");
+	let manifest = Manifest::read(&wrapper_path)?.expect("Malformed manifest.");
 
 	// If the `--tangram-print-manifest` arg is passed, then print the manifest and exit.
 	if std::env::args().any(|arg| arg == "--tangram-print-manifest") {

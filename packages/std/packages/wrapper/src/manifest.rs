@@ -184,6 +184,11 @@ impl Manifest {
 		file.read_exact(&mut magic_number)?;
 		file.seek(std::io::SeekFrom::Current(-8))?;
 		if magic_number != MAGIC_NUMBER {
+			tracing::info!(
+				"Magic number mismatch.  Recognized: {:?}, Read: {:?}",
+				MAGIC_NUMBER,
+				magic_number
+			);
 			return Ok(None);
 		};
 
@@ -192,6 +197,11 @@ impl Manifest {
 		let version = file.read_u64::<byteorder::LittleEndian>()?;
 		file.seek(std::io::SeekFrom::Current(-8))?;
 		if version != VERSION {
+			tracing::info!(
+				"Version mismatch.  Recognized: {:?}, Read: {:?}",
+				VERSION,
+				version
+			);
 			return Ok(None);
 		}
 

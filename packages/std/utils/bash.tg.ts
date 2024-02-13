@@ -54,8 +54,13 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 
+
+	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
+	if (!bootstrapMode) {
+		configureArgs.push("--with-curses");
+	}
 	let configure = {
-		args: ["--without-bash-malloc", "--disable-nls"],
+		args: configureArgs,
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [];
