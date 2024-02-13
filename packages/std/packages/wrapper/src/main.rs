@@ -210,12 +210,18 @@ fn handle_interpreter(
 			interpreter_args.push("--inhibit-cache".to_owned());
 
 			// Render the interpreter library path and the library paths.
-			let library_path = interpreter
+			let mut library_path = interpreter
 				.library_paths
 				.iter()
 				.flatten()
 				.map(|path| render_symlink(path, artifacts_directories))
 				.join(":");
+
+			// Prepend any paths found in LD_LIBRARY_PATH.
+			if let Ok(ld_library_path) = std::env::var("LD_LIBRARY_PATH") {
+				library_path = format!("{ld_library_path}:{library_path}");
+			}
+
 			tracing::trace!(?library_path);
 			interpreter_args.push("--library-path".to_owned());
 			interpreter_args.push(library_path);
@@ -259,12 +265,18 @@ fn handle_interpreter(
 			let mut interpreter_args = vec![];
 
 			// Render the interpreter library path and the library paths.
-			let library_path = interpreter
+			let mut library_path = interpreter
 				.library_paths
 				.iter()
 				.flatten()
 				.map(|path| render_symlink(path, artifacts_directories))
 				.join(":");
+
+			// Prepend any paths found in LD_LIBRARY_PATH.
+			if let Ok(ld_library_path) = std::env::var("LD_LIBRARY_PATH") {
+				library_path = format!("{ld_library_path}:{library_path}");
+			}
+
 			tracing::trace!(?library_path);
 			interpreter_args.push("--library-path".to_owned());
 			interpreter_args.push(library_path);
@@ -308,15 +320,22 @@ fn set_dyld_environment(
 ) {
 	// Set `TANGRAM_INJECTION_DYLD_LIBRARY_PATH`.
 	if let Some(library_paths) = &interpreter.library_paths {
+		let mut user_library_path = None;
 		if let Ok(dyld_library_path) = std::env::var("DYLD_LIBRARY_PATH") {
-			std::env::set_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH", dyld_library_path);
+			std::env::set_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH", &dyld_library_path);
+			user_library_path = Some(dyld_library_path);
 		} else {
 			std::env::remove_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH");
 		}
-		let library_path = library_paths
+		let manifest_library_path = library_paths
 			.iter()
 			.map(|path| render_symlink(path, artifacts_directories))
 			.join(":");
+		let library_path = if let Some(dyld_library_path) = user_library_path {
+			format!("{dyld_library_path}:{manifest_library_path}")
+		} else {
+			manifest_library_path
+		};
 		std::env::set_var("DYLD_LIBRARY_PATH", library_path);
 	}
 

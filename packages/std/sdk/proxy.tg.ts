@@ -319,7 +319,9 @@ int main() {
 	);
 	let result = tg.File.expect(
 		await tg.build(tg`${output} > $OUTPUT`, {
-			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+			env: {
+				TANGRAM_WRAPPER_TRACING: "tangram=trace",
+			},
 		}),
 	);
 	let text = await result.text();
