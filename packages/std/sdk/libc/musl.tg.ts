@@ -20,6 +20,7 @@ export let source = tg.target(async () => {
 	let source = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),
 	);
+	source = await std.directory.unwrap(source);
 
 	let patch = tg.File.expect(await tg.include("musl_permission.patch"));
 	source = await std.patch(source, patch);
@@ -29,9 +30,6 @@ export let source = tg.target(async () => {
 
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	// buildToolchain: tg.Directory;
-	// /* Optionally only build the C startup files and headers. */
-	// csuOnly?: boolean;
 	/* Optionally point to a specific implementation of libcc. */
 	libcc?: tg.File;
 	source?: tg.Directory;
@@ -53,6 +51,7 @@ export default tg.target(async (arg?: Arg) => {
 	let build = build_ ? std.triple(build_) : host;
 	let target = target_ ? std.triple(target_) : host;
 	let hostTriple = std.triple(target ?? host);
+	let buildString = std.Triple.toString(build);
 	let hostString = std.Triple.toString(hostTriple);
 
 	// NOTE - for musl and other libcs, `host` is the system this libc will produce binaries for.
@@ -60,7 +59,12 @@ export default tg.target(async (arg?: Arg) => {
 
 	let isCrossCompiling = !std.Triple.eq(hostTriple, host);
 
-	let commonFlags = [`--enable-debug`, `--enable-optimize`];
+	let commonFlags = [
+		`--enable-debug`,
+		`--enable-optimize=*`,
+		`--build=${buildString}`,
+		`--host=${hostString}`,
+	];
 
 	let additionalFlags: Array<string | tg.Template> = isCrossCompiling
 		? [
@@ -75,14 +79,12 @@ export default tg.target(async (arg?: Arg) => {
 	}
 
 	let configure = {
-		args: [
-			// This is because we plan to put it in a sysroot.
-			...commonFlags,
-			...additionalFlags,
-		],
+		args: [...commonFlags, ...additionalFlags],
 	};
 
-	let install = tg`make DESTDIR="$OUTPUT/${hostString}" install`;
+	let install = {
+		args: [`DESTDIR="$OUTPUT/${hostString}"`],
+	};
 
 	let phases = {
 		configure,
@@ -99,7 +101,7 @@ export default tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
-	env.push({ CPATH: tg.Mutation.unset() });
+	env = env.concat([{ CPATH: tg.Mutation.unset() }, env_]);
 
 	let result = await std.autotools.build(
 		{

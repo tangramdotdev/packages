@@ -10,6 +10,7 @@ export let patch = async (
 		await std.build(
 			tg`
 				cp -R ${source} $OUTPUT
+				chmod -R u+w $OUTPUT
 				cat ${patchFiles} | patch -p1 -d $OUTPUT`,
 			{ env: gnuPatch() },
 		),

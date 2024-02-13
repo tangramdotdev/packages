@@ -85,8 +85,7 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let install = {
-		command: tg`make DESTDIR="$OUTPUT/${hostString}" install`,
-		args: tg.Mutation.unset(),
+		args: [`DESTDIR="$OUTPUT/${hostString}"`],
 	};
 
 	let phases = {

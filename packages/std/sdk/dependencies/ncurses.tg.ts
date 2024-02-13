@@ -35,6 +35,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 
+	let prepare = `export CC="cc $LDFLAGS"`;
+
 	let configure = {
 		args: [
 			"--with-shared",
@@ -61,7 +63,7 @@ export let build = tg.target(async (arg?: Arg) => {
 				echo "INPUT(-lncursesw)" > \${OUTPUT}/lib/libcursesw.so
 				ln -sfv libncurses.so      \${OUTPUT}/lib/libcurses.so
 		`;
-	let phases = { configure, fixup };
+	let phases = { prepare, configure, fixup };
 
 	// Locate toolchain interpreter and libdir.
 	let muslArtifact = await bootstrap.musl.build({ host });

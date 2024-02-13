@@ -37,7 +37,9 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 
 	let configure = { args: [`--enable-debug`, `--enable-optimize=*`] };
 
-	let install = `make DESTDIR="$OUTPUT" install`;
+	let install = {
+		args: [`DESTDIR="$OUTPUT"`],
+	};
 
 	let phases = {
 		configure,
