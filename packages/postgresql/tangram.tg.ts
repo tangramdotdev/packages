@@ -45,7 +45,16 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let env = [ncurses(arg), openssl(arg), readline(arg), zlib(arg), env_];
+	let env = [
+		ncurses(arg),
+		openssl(arg),
+		readline(arg),
+		zlib(arg),
+		{
+			LDFLAGS: tg.Mutation.templatePrepend(`-ltinfo`, ` `)
+		},
+		env_
+	];
 
 	let sourceDir = source_ ?? source();
 
@@ -83,11 +92,11 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 export default postgresql;
 
 export let test = tg.target(async () => {
-	return std.build(
-		tg`
-		echo "Checking to see if we can run psql." | tee $OUTPUT
-		psql --version | tee -a $OUTPUT
-	`,
-		{ env: postgresql() },
-	);
+	let directory = postgresql();
+	await std.assert.pkg({
+		directory,
+		binaries: ["psql"],
+		metadata
+	});
+	return directory;
 });

@@ -23,12 +23,15 @@ type Arg = {
 };
 
 export let readline = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+	let { autotools = [], build, env: env_, host, source: source_, ...rest } = arg ?? {};
+
+	let env = [ncurses(arg), env_];
 
 	return std.autotools.build(
 		{
 			...rest,
 			...std.Triple.rotate({ build, host }),
+			env,
 			source: source_ ?? source(),
 		},
 		autotools,

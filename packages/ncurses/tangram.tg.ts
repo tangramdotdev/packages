@@ -33,19 +33,28 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	let build = build_ ? std.triple(build_) : host;
 
 	let configure = {
-		args: ["--with-shared", "--with-cxx-shared", "--enable-widec"],
+		args: [
+			"--with-shared",
+			"--with-cxx-shared",
+			"--enable-widec",
+			"--without-debug",
+			"--with-termlib",
+			"--enable-pc-files",
+			`--with-pkg-config-libdir="$OUTPUT/lib/pkgconfig"`,
+			"--enable-symlinks",
+			"--disable-home-terminfo",
+			"--disable-rpath-hack",
+			"--without-manpages",
+			]
 	};
-	let install =
-		host.os === "darwin"
-			? tg.Mutation.set("make DESTDIR=${OUTPUT} install.includes install.libs")
-			: undefined; // skip progs/terminfo data/man pages on darwin
 	let fixup =
 		host.os === "linux"
 			? `
 				chmod -R u+w \${OUTPUT}
-				for lib in ncurses form panel menu ; do
+				for lib in ncurses form panel menu tinfo ; do
 					rm -vf                     \${OUTPUT}/lib/lib\${lib}.so
 					echo "INPUT(-l\${lib}w)" > \${OUTPUT}/lib/lib\${lib}.so
+					ln -sfv \${lib}w.pc        \${OUTPUT}/lib/pkgconfig/\${lib}.pc
 				done
 				cd $OUTPUT
 				rm -vf                     \${OUTPUT}/lib/libcursesw.so
@@ -53,7 +62,7 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 				ln -sfv libncurses.so      \${OUTPUT}/lib/libcurses.so
 		`
 			: "";
-	let phases = { configure, install, fixup };
+	let phases = { configure, fixup };
 
 	return std.autotools.build(
 		{
@@ -81,7 +90,7 @@ export let test = tg.target(async () => {
 			set -x
 			env
 			echo "Checking if we can link against libcurses."
-			cc -v ${source}/main.c -o $OUTPUT -lncurses
+			cc -v ${source}/main.c -o $OUTPUT -lncurses -ltinfo
 		`,
 		{ env: [std.sdk(), ncurses()] },
 	);
