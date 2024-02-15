@@ -54,11 +54,13 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 
-
 	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
-	if (!bootstrapMode) {
+
+	// If not in bootstrap mode or if the provided env has ncurses in the library path, use it instead of termcap.
+	if (!bootstrapMode || (await providesNcurses(env_))) {
 		configureArgs.push("--with-curses");
 	}
+
 	let configure = {
 		args: configureArgs,
 	};
@@ -90,6 +92,20 @@ export let build = tg.target(async (arg?: Arg) => {
 });
 
 export default build;
+
+let providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
+	for await (let [_, dir] of std.env.dirsInVar({
+		env,
+		key: "LIBRARY_PATH",
+	})) {
+		for await (let [name, _] of dir) {
+			if (name.includes("libncurses")) {
+				return true;
+			}
+		}
+	}
+	return false;
+};
 
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {

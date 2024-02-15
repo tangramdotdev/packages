@@ -3,7 +3,6 @@
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
-import { interpreterName } from "./sdk/libc.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
 import mold, { metadata as moldMetadata } from "./sdk/mold.tg.ts";
@@ -283,7 +282,19 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		});
 		console.log("llvm proxy env", proxyEnv);
 		let dependenciesEnv = await dependencies.env({
-			env: [clangToolchain, proxyEnv],
+			env: [
+				clangToolchain,
+				proxyEnv,
+				{
+					CC: "clang",
+					CXX: "clang++",
+					CFLAGS: tg.Mutation.templatePrepend(
+						"-Wno-error=implicit-function-declaration -Wno-error=int-conversion",
+						" ",
+					),
+					CXXFLAGS: tg.Mutation.templatePrepend("-std=c++14", " "),
+				},
+			],
 			build: host,
 			host,
 			bootstrapMode: true,
@@ -496,7 +507,8 @@ export namespace sdk {
 		if (os !== "darwin") {
 			let ldsoPath = isCross ? `${targetString}/lib` : "lib";
 			libDir = tg.Directory.expect(await directory.tryGet(ldsoPath));
-			let foundLdso = await libDir.tryGet(interpreterName(target));
+			let interpreterName = libc.interpreterName(target);
+			let foundLdso = await libDir.tryGet(interpreterName);
 			tg.assert(foundLdso);
 			ldso = tg.File.expect(foundLdso);
 		} else {

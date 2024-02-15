@@ -99,9 +99,11 @@ export let build = tg.target(async (arg: Arg) => {
 		MAKEFLAGS: "--output-sync --silent",
 	};
 
-	// On Musl hosts, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
-	if (host.environment === "musl") {
+	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
+	if (target.environment === "musl") {
 		additionalArgs.push("--disable-libsanitizer");
+		additionalArgs.push("--disable-libitm");
+		additionalArgs.push("--disable-libvtv");
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
@@ -137,7 +139,6 @@ export let build = tg.target(async (arg: Arg) => {
 			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
-			"--disable-libquadmath",
 			"--disable-libvtv",
 			"--disable-werror",
 			"--enable-default-ssp",

@@ -50,7 +50,6 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 	let configure = "sed -i 's@\\(ln -s -f \\)$(PREFIX)/bin/@\\1@' Makefile";
 
 	// Only build the shared library on Linux.
-	// TODO: support cross compilation.
 	let buildCommand =
 		os === "linux"
 			? `make -f Makefile-libbz2_so && make clean && make`

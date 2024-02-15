@@ -2,72 +2,79 @@ import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "go",
-	version: "1.21.5",
+	version: "1.22.0",
 };
 
 // See https://go.dev/dl.
 let RELEASES = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:841cced7ecda9b2014f139f5bab5ae31785f35399f236b8b3e75dff2a2978d96",
+			"sha256:6a63fef0e050146f275bf02a0896badfe77c11b6f05499bb647e7bd613a45a10",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:e2bc0b3e4b64111ec117295c088bde5f00eeed1567999ff77bc859d7df70078e",
+			"sha256:f6c8a87aa03b92c4b0bf3d558e28ea03006eb29db78917daec5cfb6ec1046265",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
-	["aarch64-macos"]: {
+	["aarch64-darwin"]: {
 		checksum:
-			"sha256:8c294f1c6287d630485919c05b1f620cc26398735c1e1babe65797b93292a874",
+			"sha256:bf8e388b09134164717cd52d3285a4ab3b68691b80515212da0e9f56f518fb1e",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
-	["x86_64-macos"]: {
+	["x86_64-darwin"]: {
 		checksum:
-			"sha256:4fddd8f73c6151c96556cbb7bb6b473396f52385e874503e9204264aa39aa422",
+			"sha256:ebca81df938d2d1047cc992be6c6c759543cf309d401b86af38a6aed3d4090f4",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
 
-export let go = tg.target(async (): Promise<tg.Directory> => {
-	let target = await std.Triple.hostSystem();
-	tg.assert(
-		target in RELEASES,
-		`${target} is not supported in the Go toolchain.`,
-	);
+type ToolchainArg = {
+	host?: std.Triple.Arg;
+};
 
-	let { checksum, url } = RELEASES[target as keyof typeof RELEASES];
+export let toolchain = tg.target(
+	async (arg?: ToolchainArg): Promise<tg.Directory> => {
+		let host = arg?.host ? std.triple(arg.host) : await std.Triple.host();
+		let system = std.Triple.system(host);
+		tg.assert(
+			system in RELEASES,
+			`${system} is not supported in the Go toolchain.`,
+		);
 
-	let unpackFormat = ".tar.gz" as const;
+		let { checksum, url } = RELEASES[system as keyof typeof RELEASES];
 
-	// Download the Go toolchain from `go.dev`.
-	let downloaded = await std.download({
-		checksum,
-		unpackFormat,
-		url,
-	});
+		let unpackFormat = ".tar.gz" as const;
 
-	tg.assert(tg.Directory.is(downloaded));
-	let go = await downloaded.get("go");
-	tg.assert(tg.Directory.is(go));
-
-	let artifact = tg.directory();
-	for (let bin of ["bin/go", "bin/gofmt"]) {
-		let file = await go.get(bin);
-		tg.assert(tg.File.is(file));
-		artifact = tg.directory(artifact, {
-			[bin]: std.wrap(file, {
-				env: {
-					GOROOT: go,
-				},
-			}),
+		// Download the Go toolchain from `go.dev`.
+		let downloaded = await std.download({
+			checksum,
+			unpackFormat,
+			url,
 		});
-	}
 
-	return artifact;
-});
+		tg.assert(tg.Directory.is(downloaded));
+		let go = await downloaded.get("go");
+		tg.assert(tg.Directory.is(go));
 
-export default go;
+		let artifact = tg.directory();
+		for (let bin of ["bin/go", "bin/gofmt"]) {
+			let file = await go.get(bin);
+			tg.assert(tg.File.is(file));
+			artifact = tg.directory(artifact, {
+				[bin]: std.wrap(file, {
+					env: {
+						GOROOT: go,
+					},
+				}),
+			});
+		}
+
+		return artifact;
+	},
+);
+
+export default toolchain;
 
 export type Arg = {
 	/**
@@ -106,18 +113,21 @@ export type Arg = {
 	 */
 	env?: std.env.Arg;
 
+	/** Should cgo be enabled? Default: true. */
 	cgo?: boolean;
 
-	build?: std.Triple.Arg;
-
+	/** The machine that will run the compilation. */
 	host?: std.Triple.Arg;
 
+	/** The machine the produced artifacts will run on. */
+	target?: std.Triple.Arg;
+
+	/** Any required SDK customization. */
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 };
 
 export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 	type Apply = {
-		build: std.Triple.Arg;
 		cgo: boolean;
 		env: Array<std.env.Arg>;
 		generate: boolean | { command: tg.Template.Arg };
@@ -125,11 +135,11 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		install: { command: tg.Template.Arg };
 		sdkArgs: Array<std.sdk.Arg>;
 		source: tg.Directory;
+		target: std.Triple.Arg;
 		vendor: boolean | { command: tg.Template.Arg };
 	};
 
 	let {
-		build: build_,
 		cgo,
 		env: env_,
 		generate,
@@ -137,6 +147,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		install,
 		sdkArgs,
 		source,
+		target: target_,
 		vendor: vendor_,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
@@ -158,11 +169,11 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			if (arg.install !== undefined) {
 				object.install = arg.install;
 			}
-			if (arg.build !== undefined) {
-				object.host = arg.host;
-			}
 			if (arg.host !== undefined) {
 				object.host = arg.host;
+			}
+			if (arg.target !== undefined) {
+				object.target = arg.target;
 			}
 			if (arg.env !== undefined) {
 				object.env = tg.Mutation.is(arg.env)
@@ -177,11 +188,12 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			return object;
 		}
 	});
-	let host = await std.Triple.host(host_);
-	let build = build_ ? std.triple(build_) : host;
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let system = std.Triple.system(host);
+	let target = target_ ? std.triple(target_) : host;
 	tg.assert(source, "Must provide a source directory.");
 
-	let sdk = std.sdk(std.Triple.rotate({ build, host }), sdkArgs);
+	let sdk = std.sdk({ host, target }, sdkArgs);
 
 	// Check if the build has a vendor dir, then determine whether or not we're going to be vendoring dependencies.
 	let willVendor =
@@ -223,11 +235,16 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 	}
 
 	// Build the vendored source code without internet access.
-	let goArtifact = go();
+	let goArtifact = toolchain({ host });
 
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
 	let cgoEnabled = cgo ? "1" : "0";
-	let env = [sdk, goArtifact, { CGO_ENABLED: cgoEnabled, SSL_CERT_FILE: certFile }];
+	let env = std.env(
+		sdk,
+		goArtifact,
+		{ CGO_ENABLED: cgoEnabled, SSL_CERT_FILE: certFile, TANGRAM_HOST: system },
+		env_,
+	);
 
 	let output = await std.build(
 		tg`
@@ -288,7 +305,6 @@ export let vendor = async ({
 	command: optionalCommand,
 	source,
 }: VendorArgs): Promise<tg.Directory> => {
-	// TODO: Prune down the artifact to just `go.mod` and `go.sum`. Somehow make this work, where this target will hit cache for changed source code using the same dependencies. This is tricky, because Go will only vendor the dependencies that are used by actual source code. Perhaps we could generate a dummy `main.go` that just imports everything in `go.mod`?
 	let pruned = source;
 
 	let command = optionalCommand ?? tg`go mod vendor -v`;
@@ -306,7 +322,7 @@ export let vendor = async ({
 			`,
 		{
 			env: [
-				go(),
+				toolchain(),
 				{
 					SSL_CERT_DIR: std.caCertificates(),
 				},
@@ -358,6 +374,6 @@ export let test = tg.target(() => {
 				go run main.go
 				go run ./subcommand.go
 			`,
-		{ env: [std.sdk(), go()] },
+		{ env: [std.sdk(), toolchain()] },
 	);
 });

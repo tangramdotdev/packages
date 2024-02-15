@@ -12,7 +12,7 @@ export { requirements };
 /** Package metadata for python */
 export let metadata = {
 	name: "Python",
-	version: "3.12.1",
+	version: "3.12.2",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -25,7 +25,7 @@ export let versionString = () => {
 export let source = tg.target(async (): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:8dfb8f426fcd226657f9e2bd5f1e96e53264965176fa17d32658e873591aeb21";
+		"sha256:be28112dac813d2053545c14bf13a16401a21877f1a69eb6ea5d84c4a0f3d870";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://www.python.org/ftp/python/${version}/${name}-${version}${unpackFormat}`;
 
@@ -190,9 +190,6 @@ export type Arg = {
 	/** The source directory. */
 	source: tg.Directory;
 
-	/** If set, the source directory will be installed as a source distribution via pip. */
-	// sdist?: boolean, TODO
-
 	/** Optional overides to the python environment. */
 	python?: ToolchainArg;
 };
@@ -260,7 +257,6 @@ export let build = async (...args: tg.Args<Arg>) => {
 		python({ ...pythonArg, build: buildTriple, host }),
 		{
 			["lib/python3/site-packages"]: {
-				// TODO: verify this convention is strong enough to use.
 				[name]: tg.symlink(tg`${source}/${name}`),
 			},
 		},
@@ -316,7 +312,6 @@ export let generateScripts = (
 	let consoleScripts = project.console_scripts;
 
 	// Validate the pyproject.toml, which requires only one entry for entry-points, scripts, or console_scripts.
-	// TODO: gui_scripts?
 	if (
 		(scripts && entrypoints) ||
 		(scripts && consoleScripts) ||
@@ -330,7 +325,6 @@ export let generateScripts = (
 	let bin = tg.directory();
 	for (let [name, reference] of Object.entries(targets)) {
 		// The syntax for an entrypoint is <import specifier>:<attribute>.
-		// TODO: parse full syntax for entry point specifiers, including groups.
 		let [object, attribute] = reference.split(":");
 
 		// Generate a python script that will run.

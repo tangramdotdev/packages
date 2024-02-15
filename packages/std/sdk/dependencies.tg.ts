@@ -155,7 +155,6 @@ export let assertProvides = async (env: std.env.Arg) => {
 		"pkg-config",
 		"python3",
 		"texi2any", // texinfo
-		"tic", // ncurses
 		"xz",
 		"yacc", // bison
 	];

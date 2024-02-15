@@ -89,12 +89,10 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	// Obtain an SDK.  If cross-targets were specified, use a cross-compiling SDK.
 	let sdk = await std.sdk({ host, targets }, arg?.sdk);
 	tg.assert(tg.File.is(sdk));
-	console.log("rust sdk", await sdk.id());
 
 	// Install each package.
 	let rustInstall = await std.build(
 		tg`
-			set +x
 			for package in ${packagesArtifact}/*/* ; do
 				echo "Installing $package"
 				bash "$package/install.sh" --prefix="$OUTPUT"
@@ -108,7 +106,6 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 		tg.Directory.is(rustInstall),
 		`Expected rust installation to be a directory.`,
 	);
-	console.log("rust install", await rustInstall.id());
 
 	// Wrap the Rust binaries.
 	let executables = [
@@ -144,31 +141,34 @@ export default rust;
 
 export type Arg = {
 	env?: std.env.Arg;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	features?: Array<string>;
-	source: tg.Artifact;
-	target?: std.Triple;
+	host?: std.Triple.Arg;
 	proxy?: boolean;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	source: tg.Artifact;
+	target?: std.Triple.Arg;
 	useCargoVendor?: boolean;
 };
 
 export let build = async (...args: tg.Args<Arg>) => {
 	type Apply = {
-		env?: Array<std.env.Arg>;
-		sdk?: Array<std.sdk.Arg>;
-		features?: Array<string>;
+		env: Array<std.env.Arg>;
+		features: Array<string>;
+		host: std.Triple.Arg;
+		proxy: boolean;
+		sdk: Array<std.sdk.Arg>;
 		source: tg.Artifact;
-		target?: std.Triple;
-		proxy?: boolean;
-		useCargoVendor?: boolean;
+		target: std.Triple.Arg;
+		useCargoVendor: boolean;
 	};
 	let {
-		sdk: sdk_,
 		env,
 		features = [],
+		host: host_,
+		proxy = false,
+		sdk: sdk_,
 		source,
 		target: target_,
-		proxy = false,
 		useCargoVendor = false,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
@@ -203,24 +203,22 @@ export let build = async (...args: tg.Args<Arg>) => {
 		}
 	});
 
-	let inferredHost = await std.Triple.host();
-	let target = target_ ?? inferredHost;
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let target = target_ ? std.triple(target_) : host;
 
 	// Check if we're cross-compiling.
-	let crossCompiling = !std.Triple.eq(target, inferredHost);
+	let crossCompiling = !std.Triple.eq(target, host);
 
 	// Obtain handles to the SDK and Rust artifacts.
 	// NOTE - pulls an SDK assuming the selected target is the intended host.
-	let sdk = crossCompiling
-		? std.sdk({ host: inferredHost, target }, sdk_ ?? [])
-		: std.sdk(sdk_ ?? []);
-	let rustArtifact = crossCompiling ? rust({ target }) : rust();
+	let sdk = std.sdk({ host, target }, sdk_ ?? []);
+	let rustArtifact = rust({ target });
 
 	// Compute some necessary metadata.
 	let targetTriple = std.Triple.toString(target);
 
 	// Download the dependencies using the cargo vendor.
-	tg.assert(source); // ???
+	tg.assert(source);
 	let cargoConfig = vendoredSources({ source, useCargoVendor });
 
 	// Create the build script.
@@ -278,8 +276,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 		};
 	}
 
-	let artifact = await std.build(
-		std.wrap(buildScript, {
+	let artifact = await std.build(buildScript, {
 			env: std.env(
 				sdk,
 				rustArtifact,
@@ -288,11 +285,11 @@ export let build = async (...args: tg.Args<Arg>) => {
 					CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 					...additionalEnv,
 				},
-				proxyEnv ?? [],
-				env ?? [],
+				proxyEnv,
+				{ TANGRAM_HOST: std.Triple.system(host) },
+				env,
 			),
-		}),
-	);
+		} );
 
 	// Ensure the output artifact matches the expected structure.
 	tg.assert(tg.Directory.is(artifact));
@@ -324,12 +321,15 @@ export let build = async (...args: tg.Args<Arg>) => {
 };
 
 export type VendoredSourcesArg = {
+	rustTarget?: std.Triple.Arg;
 	source: tg.Artifact;
 	useCargoVendor?: boolean;
 };
 
 let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
-	let { source, useCargoVendor = false } = arg;
+	let { rustTarget: rustTarget_, source, useCargoVendor = false } = arg;
+	let rustTarget = rustTarget_ ? std.triple(rustTarget_) : await std.Triple.host();
+	let rustTargetString = std.Triple.toString(rustTarget);
 	if (useCargoVendor) {
 		// Run cargo vendor
 		let certFile = tg`${std.caCertificates()}/cacert.pem`;
@@ -343,13 +343,13 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 		let sdk = std.sdk();
 		let result = await std.build(vendorScript, {
 			checksum: "unsafe",
-			env: std.env(sdk, {
+			env: [sdk, {
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 				CARGO_HTTP_CAINFO: certFile,
 				PATH: tg`${rustArtifact}/bin`,
-				RUST_TARGET: "x86_64-linux-unknown-gnu",
+				RUST_TARGET: rustTargetString,
 				SSL_CERT_FILE: certFile,
-			}),
+			}],
 		});
 
 		// Get the output.
@@ -403,7 +403,6 @@ export let vendorDependencies = tg.target(async (cargoLock: tg.File) => {
 			tg.assert(pkg.checksum);
 			let checksum = `sha256:${pkg.checksum}`;
 			let unpackFormat = ".tar.gz" as const;
-			// TODO: support different registries.
 			let url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
 			let artifact = await std.download({
 				checksum,

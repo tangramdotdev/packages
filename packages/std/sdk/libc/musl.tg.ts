@@ -123,8 +123,11 @@ export default tg.target(async (arg?: Arg) => {
 	return result;
 });
 
-export let interpreterPath = (triple: std.Triple.Arg) =>
-	`lib/${interpreterName(triple)}`;
+export let interpreterPath = (triple: std.Triple.Arg) => {
+	let triple_ = std.triple(triple);
+	let tripleString = std.Triple.toString(triple_);
+	return `${tripleString}/lib/${interpreterName(triple_)}`;
+};
 
 export let interpreterName = (triple: std.Triple.Arg) => {
 	let arch = std.triple(triple).arch;

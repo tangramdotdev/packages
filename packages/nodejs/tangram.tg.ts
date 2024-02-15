@@ -304,7 +304,6 @@ export let install = tg.target(
 		) as PackageLockJson;
 
 		// Install the packages specified by the package-lock.json.
-		// TODO: deduplicate installed packages as much as possible.
 		let downloads = await downloadPackages(packageLock);
 
 		return [

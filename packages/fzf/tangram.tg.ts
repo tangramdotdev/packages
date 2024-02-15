@@ -3,13 +3,13 @@ import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "fzf",
-	version: "0.44.1",
+	version: "0.46.1",
 };
 
 export let source = tg.target((): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:295f3aec9519f0cf2dce67a14e94d8a743d82c19520e5671f39c71c9ea04f90c";
+		"sha256:b0d640be3ae79980fdf461096f7d9d36d38ec752e25f8c4d2ca3ca6c041c2491";
 	return std.download.fromGithub({
 		checksum,
 		owner: "junegunn",
@@ -42,14 +42,15 @@ export let fzf = tg.target(async (arg?: Arg) => {
 });
 
 export let test = tg.target(async () => {
+	let directory = fzf();
 	await std.assert.pkg({
-		directory: await fzf(),
+		directory,
 		binaries: [
-			{ name: "fzf", testPredicate: (stdout) => stdout.includes("0.44") },
+			{ name: "fzf", testPredicate: (stdout) => stdout.includes("0.46") },
 		],
 		metadata,
 	});
-	return true;
+	return directory;
 });
 
 export default fzf;

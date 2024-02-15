@@ -1,7 +1,5 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
-import { buildSysroot } from "../gcc/toolchain.tg.ts";
-import { interpreterName } from "../libc/glibc.tg.ts";
 import make from "./make.tg.ts";
 import pkgconfig from "./pkg_config.tg.ts";
 
@@ -35,8 +33,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let build = build_ ? std.triple(build_) : host;
 
-	let prepare = `export CC="cc $LDFLAGS"`;
-
 	let configure = {
 		args: [
 			"--with-shared",
@@ -48,6 +44,8 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--enable-symlinks",
 			"--disable-home-terminfo",
 			"--disable-rpath-hack",
+			"--without-manpages",
+			"--without-progs",
 		],
 	};
 
@@ -63,27 +61,9 @@ export let build = tg.target(async (arg?: Arg) => {
 				echo "INPUT(-lncursesw)" > \${OUTPUT}/lib/libcursesw.so
 				ln -sfv libncurses.so      \${OUTPUT}/lib/libcurses.so
 		`;
-	let phases = { prepare, configure, fixup };
+	let phases = { configure, fixup };
 
-	// Locate toolchain interpreter and libdir.
-	let muslArtifact = await bootstrap.musl.build({ host });
-	let ldso = tg.File.expect(
-		await muslArtifact.get(bootstrap.musl.interpreterPath(host)),
-	);
-
-	let env = [
-		std.utils.env(arg),
-		make(arg),
-		pkgconfig(arg),
-		{
-			LDFLAGS: tg.Mutation.templatePrepend(
-				tg`-Wl,-dynamic-linker,${ldso} -Wl,-rpath,'\$$ORIGIN/../lib'`,
-				" ",
-			),
-			TANGRAM_LINKER_PASSTHROUGH: "1",
-		},
-		env_,
-	];
+	let env = [std.utils.env(arg), make(arg), pkgconfig(arg), env_];
 
 	return std.autotools.build(
 		{
@@ -104,23 +84,8 @@ export let test = tg.target(async () => {
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });
-	let binaries = [
-		"captoinfo",
-		"clear",
-		"infocmp",
-		"infotocap",
-		"reset",
-		"tabs",
-		"tic",
-		"toe",
-		"tput",
-		"tset",
-	].map((bin) => {
-		return { name: bin, testArgs: ["-V"] };
-	});
 	await std.assert.pkg({
 		directory,
-		binaries,
 		libs: ["ncursesw", "formw", "menuw", "panelw"],
 		metadata,
 	});

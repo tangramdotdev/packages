@@ -31,7 +31,6 @@ export let install = tg.target(
 
 		// For each download, install to a local directory.
 		for await (let [name, file] of downloads) {
-			// TODO: remove the gnarly hack that allows installs to fail.
 			let installed = await std.build(
 				tg`
 						cp "${file}" "${name}"
@@ -72,7 +71,6 @@ export let install = tg.target(
 		}
 
 		// Create the installed environment containing a "bin" and "site-packages" directory by merging the things installed from source and from pip.
-		// TODO: deduplicate site-packages created via installing from source.
 		let installed = await tg.directory({
 			["bin"]: installedBins,
 			["lib/python3/site-packages"]: installedSitePackages,
