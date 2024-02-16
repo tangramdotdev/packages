@@ -3,13 +3,13 @@ import make from "./make.tg.ts";
 
 export let metadata = {
 	name: "libffi",
-	version: "3.4.4",
+	version: "3.4.5",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:d66c56ad259a82cf2a9dfc408b32bf5da52371500b84745f7fb8b645712df676";
+		"sha256:96fff4e589e3b239d888d9aa44b3ff30693c2ba1617f953925a70ddebcc102b2";
 	let owner = name;
 	let repo = name;
 	let tag = `v${version}`;

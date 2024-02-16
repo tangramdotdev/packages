@@ -2,7 +2,7 @@ import * as std from "../tangram.tg.ts";
 
 let metadata = {
 	name: "git",
-	version: "2.43.0",
+	version: "2.43.2",
 };
 
 export let source = tg.target(async () => {
@@ -15,7 +15,7 @@ export let source = tg.target(async () => {
 	});
 	let url = `https://mirrors.edge.kernel.org/pub/software/scm/git/${packageArchive}`;
 	let checksum =
-		"sha256:5446603e73d911781d259e565750dcd277a42836c8e392cac91cf137aa9b76ec";
+		"sha256:f612c1abc63557d50ad3849863fc9109670139fc9901e574460ec76e0511adb9";
 	let outer = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),
 	);

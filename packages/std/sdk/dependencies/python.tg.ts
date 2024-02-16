@@ -72,13 +72,19 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let configure = {
 		args: [
-			`CC="$CC"`,
 			"--disable-test-modules",
 			"--without-readline",
 			"--with-ensurepip=no",
-			"--enable-optimizations",
 		],
 	};
+
+	// NOTE - the current llvm SDK does not support profiling required to enable PGO. For now, don't enable PGO if an explicit CC was passed.
+	let providedCc = await std.env.tryGetKey({ env: env_, key: "CC" });
+	if (providedCc) {
+		configure.args.push(`CC="$CC"`);
+	} else {
+		configure.args.push(`--enable-optimizations`);
+	}
 
 	let dependencies = [
 		bison(arg),

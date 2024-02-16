@@ -86,32 +86,35 @@ export let toolchain = async (arg?: LLVMArg) => {
 		args: [
 			"-S",
 			tg`${sourceDir}/llvm`,
-			"-DCMAKE_BUILD_TYPE=Release",
-			"-DCMAKE_INSTALL_LIBDIR=lib",
-			"-DCLANG_ENABLE_BOOTSTRAP=ON",
-			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
-			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
-			"-DLIBCXX_USE_COMPILER_RT=YES",
-			"-DLIBCXXABI_USE_COMPILER_RT=YES",
-			"-DLIBCXXABI_USE_LLVM_UNWINDER=YES",
-			"-DBOOTSTRAP_CMAKE_BUILD_TYPE=Release",
 			"-DBOOTSTRAP_CLANG_DEFAULT_CXX_STDLIB=libc++",
 			"-DBOOTSTRAP_CLANG_DEFAULT_RTLIB=compiler-rt",
+			"-DBOOTSTRAP_CMAKE_BUILD_TYPE=Release",
 			"-DBOOTSTRAP_LIBCXX_USE_COMPILER_RT=YES",
 			"-DBOOTSTRAP_LIBCXXABI_USE_COMPILER_RT=YES",
 			"-DBOOTSTRAP_LIBCXXABI_USE_LLVM_UNWINDER=YES",
-			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
-			"-DLIBUNWIND_USE_COMPILER_RT=YES",
 			"-DBOOTSTRAP_LIBUNWIND_USE_COMPILER_RT=YES",
-			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
-			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
-			"-DLLVM_ENABLE_LIBXML2=OFF",
-			"-DLLVM_ENABLE_RTTI=ON",
-			"-DLLVM_ENABLE_EH=ON",
-			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
-			tg`-DGCC_INSTALL_PREFIX=${gccToolchain}`,
+			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
+			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
+			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
+			"-DCLANG_ENABLE_BOOTSTRAP=ON",
+			"-DCMAKE_BUILD_TYPE=Release",
+			"-DCMAKE_INSTALL_LIBDIR=lib",
+			"-DCOMPILER_RT_BUILD_PROFILE=ON",
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
+			tg`-DGCC_INSTALL_PREFIX=${gccToolchain}`,
+			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
+			"-DLIBCXX_USE_COMPILER_RT=YES",
+			"-DLIBCXXABI_USE_COMPILER_RT=YES",
+			"-DLIBCXXABI_USE_LLVM_UNWINDER=YES",
+			"-DLIBUNWIND_USE_COMPILER_RT=YES",
+			"-DLLVM_ENABLE_EH=ON",
+			"-DLLVM_ENABLE_LIBXML2=OFF",
+			"-DLLVM_ENABLE_PIC=ON",
+			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
+			"-DLLVM_ENABLE_RTTI=ON",
+			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
+			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
+			"-DLLVM_PARALLEL_LINK_JOBS=1",
 		],
 	};
 
@@ -121,7 +124,9 @@ export let toolchain = async (arg?: LLVMArg) => {
 			...std.Triple.rotate({ build, host }),
 			bootstrapMode: true,
 			env,
-			phases: { configure: configureLlvm },
+			phases: {
+				configure: configureLlvm,
+			},
 			source: sourceDir,
 		},
 		autotools,
@@ -130,25 +135,6 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 	llvmArtifact = await tg.directory(llvmArtifact, sysroot);
 	console.log("llvmArtifact with sysroot", await llvmArtifact.id());
-
-	let binutils = [
-		"ar",
-		"as",
-		"cxxfilt",
-		"nm",
-		"mt",
-		"objcopy",
-		"objdump",
-		"ranlib",
-		"strings",
-		"strip",
-	];
-	for (let util of binutils) {
-		llvmArtifact = await tg.directory(llvmArtifact, {
-			[`bin/${util}`]: tg.symlink(`llvm-${util}`),
-		});
-	}
-	console.log("llvmArtifact with binutils symlinks", await llvmArtifact.id());
 
 	return llvmArtifact;
 };
@@ -199,7 +185,7 @@ export let test = async () => {
 		}
 	`);
 	let cxxScript = tg`
-		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -lunwind -o $OUTPUT
+		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`;
 	let hostString = std.Triple.toString(host);
 	let cxxOut = tg.File.expect(

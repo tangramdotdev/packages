@@ -169,7 +169,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 					};
 				} else {
-					clangxxArgs.push(tg`-lunwind`);
+					clangxxArgs.push(`-unwinder=libunwind`);
 					clangxxArgs.push(tg`-L${directory}/lib/${targetString}`);
 					clangxxArgs.push(tg`-isystem${directory}/include/c++/v1`);
 					clangxxArgs.push(
