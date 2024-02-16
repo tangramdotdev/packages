@@ -45,7 +45,7 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 			"--disable-home-terminfo",
 			"--disable-rpath-hack",
 			"--without-manpages",
-			]
+		],
 	};
 	let fixup =
 		host.os === "linux"

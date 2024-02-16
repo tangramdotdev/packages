@@ -51,9 +51,9 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		readline(arg),
 		zlib(arg),
 		{
-			LDFLAGS: tg.Mutation.templatePrepend(`-ltinfo`, ` `)
+			LDFLAGS: tg.Mutation.templatePrepend(`-ltinfo`, ` `),
 		},
-		env_
+		env_,
 	];
 
 	let sourceDir = source_ ?? source();
@@ -96,7 +96,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: ["psql"],
-		metadata
+		metadata,
 	});
 	return directory;
 });
