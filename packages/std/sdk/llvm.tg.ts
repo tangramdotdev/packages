@@ -110,7 +110,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_EH=ON",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
 			"-DLLVM_ENABLE_PIC=ON",
-			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
+			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb;libclc'",
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
@@ -136,7 +136,76 @@ export let toolchain = async (arg?: LLVMArg) => {
 	llvmArtifact = await tg.directory(llvmArtifact, sysroot);
 	console.log("llvmArtifact with sysroot", await llvmArtifact.id());
 
+	let compilerRtArtifact = await fullCompilerRt({
+		autotools,
+		build,
+		host,
+		llvm: llvmArtifact,
+	});
+	console.log("compilerRtArtifact", await compilerRtArtifact.id());
+
 	return llvmArtifact;
+};
+
+type CompilerRtArg = LLVMArg & {
+	llvm: tg.Directory;
+};
+
+export let fullCompilerRt = async (arg?: CompilerRtArg) => {
+	let {
+		autotools = [],
+		build: build_,
+		env: env_,
+		host: host_,
+		llvm,
+		source: source_,
+		...rest
+	} = arg ?? {};
+	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let hostString = std.Triple.toString(host);
+	let build = build_ ? std.triple(build_) : host;
+
+	if (host.os !== "linux") {
+		throw new Error("compiler-rt must be built for Linux");
+	}
+
+	let sourceDir = source_ ?? source();
+
+	let deps: tg.Unresolved<std.env.Arg> = [dependencies.env({ host: build })];
+	let env = [
+		...deps,
+		llvm,
+		{
+			CC: "clang -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind",
+			CXX: "clang++ fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind",
+			//LDFLAGS: tg`-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind -L${llvm}/lib/${hostString}`,
+			// LDFLAGS: tg`-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind`,
+		},
+		env_,
+	];
+
+	let configure = {
+		args: [
+			"-S",
+			tg`${sourceDir}/compiler-rt`,
+			"-DCMAKE_BUILD_TYPE=Release",
+			tg`-DLLVM_CMAKE_DIR=${sourceDir}/cmake/modules`,
+		],
+	};
+
+	let compilerRtArtifact = cmake.build(
+		{
+			...rest,
+			...std.Triple.rotate({ build, host }),
+			bootstrapMode: true,
+			env,
+			phases: { configure },
+			source: sourceDir,
+		},
+		autotools,
+	);
+
+	return compilerRtArtifact;
 };
 
 export let test = async () => {
