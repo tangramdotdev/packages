@@ -177,8 +177,8 @@ export let fullCompilerRt = async (arg?: CompilerRtArg) => {
 		llvm,
 		{
 			CC: "clang -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind",
-			CXX: "clang++ fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind",
-			//LDFLAGS: tg`-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind -L${llvm}/lib/${hostString}`,
+			CXX: "clang++ -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind -lunwind",
+			LIBRARY_PATH: tg.Mutation.templatePrepend(tg`${llvm}/lib/${hostString}`),
 			// LDFLAGS: tg`-fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind`,
 		},
 		env_,
