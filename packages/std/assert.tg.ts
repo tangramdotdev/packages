@@ -320,7 +320,7 @@ export let linkableLib = async (arg: LibraryArg) => {
 		}
 	}
 
-	let hostOs = tg.System.os(await std.Triple.hostSystem());
+	let hostOs = tg.Triple.os(await tg.Triple.host());
 	let dylibExtension = hostOs === "darwin" ? "dylib" : "so";
 
 	let dylibName = (name: string) => `lib${name}.${dylibExtension}`;

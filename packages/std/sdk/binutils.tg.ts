@@ -7,7 +7,7 @@ export let metadata = {
 	version: "2.42",
 };
 
-export let source = tg.target(async (build: std.Triple.Arg) => {
+export let source = tg.target(async (build: tg.Triple.Arg) => {
 	let { name, version } = metadata;
 
 	let compressionFormat = ".xz" as const;
@@ -41,7 +41,7 @@ type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	source?: tg.Directory;
 	staticBuild?: boolean;
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 /** Obtain the GNU binutils. */
@@ -56,13 +56,13 @@ export let build = tg.target(async (arg?: Arg) => {
 		target: target_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let build = build_ ? std.triple(build_) : host;
-	let target = target_ ? std.triple(target_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let build = build_ ? tg.triple(build_) : host;
+	let target = target_ ? tg.triple(target_) : host;
 
-	let buildString = std.Triple.toString(build);
-	let hostString = std.Triple.toString(host);
-	let targetString = std.Triple.toString(target);
+	let buildString = tg.Triple.toString(build);
+	let hostString = tg.Triple.toString(host);
+	let targetString = tg.Triple.toString(target);
 	let buildPhase = arg?.staticBuild
 		? `make && make clean && make LDFLAGS=-all-static`
 		: undefined;
@@ -110,7 +110,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = std.autotools.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			env,
 			// parallel: false,
 			phases,

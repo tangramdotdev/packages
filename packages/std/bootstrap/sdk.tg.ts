@@ -2,8 +2,8 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 
 /** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxying. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
-export let env = async (arg?: std.Triple.HostArg): Promise<std.env.Arg> => {
-	let host = await std.Triple.host(arg);
+export let env = async (arg?: tg.Triple.HostArg): Promise<std.env.Arg> => {
+	let host = await tg.Triple.host(arg);
 	let toolchain = await prepareBootstrapToolchain({ host });
 	let bootstrapHost = bootstrap.toolchainTriple(host);
 	let utils = await prepareBootstrapUtils(bootstrapHost);
@@ -25,13 +25,15 @@ export let env = async (arg?: std.Triple.HostArg): Promise<std.env.Arg> => {
 export default env;
 
 /** Get the bootstrap components as a single directory, for use before SDK. */
-export let prepareBootstrapToolchain = async (arg?: std.Triple.HostArg) => {
+export let prepareBootstrapToolchain = async (arg?: tg.Triple.HostArg) => {
 	// Detect the host triple if not provided.
-	let host = await std.Triple.host(arg);
+	let host = await tg.Triple.host(arg);
 
 	// Obtain the bootstrap toolchain and triple for the detected host to construct the env.
 	let bootstrapToolchain = await bootstrap.toolchain({ host });
-	let bootstrapTripleString = std.Triple.toString(bootstrap.toolchainTriple(host));
+	let bootstrapTripleString = tg.Triple.toString(
+		bootstrap.toolchainTriple(host),
+	);
 
 	if (host.os === "darwin") {
 		// Replace the Xcode-tied gcc and g++ entries with symlinks to clang and return.
@@ -66,8 +68,8 @@ export let prepareBootstrapToolchain = async (arg?: std.Triple.HostArg) => {
 };
 
 /** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */
-export let prepareBootstrapUtils = async (hostArg: std.Triple.Arg) => {
-	let host = std.triple(hostArg);
+export let prepareBootstrapUtils = async (hostArg: tg.Triple.Arg) => {
+	let host = tg.triple(hostArg);
 	let shell = await bootstrap.shell({ host });
 	let shellFile = tg.File.expect(await shell.get("bin/dash"));
 	let utils = bootstrap.utils({ host });
@@ -99,7 +101,7 @@ export let prefixBins = async (
 
 export let test = tg.target(async () => {
 	let sdk = await env();
-	let detectedHost = await std.Triple.host();
+	let detectedHost = await tg.Triple.host();
 	let expectedHost = bootstrap.toolchainTriple(detectedHost);
 	await std.sdk.assertValid(sdk, { host: expectedHost, bootstrapMode: true });
 	return sdk;

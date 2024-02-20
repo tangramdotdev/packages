@@ -13,7 +13,7 @@ type Arg = std.sdk.BuildEnvArg & {
 
 export let source = tg.target(async (arg?: Arg) => {
 	let { name, version } = metadata;
-	let build = arg?.build ? std.triple(arg?.build) : await std.Triple.host();
+	let build = arg?.build ? tg.triple(arg?.build) : await tg.Triple.host();
 	let env = std.env.object(
 		std.sdk({ host: build, bootstrapMode: arg?.bootstrapMode }, arg?.sdk),
 		arg?.env,
@@ -34,7 +34,7 @@ export let source = tg.target(async (arg?: Arg) => {
 		await std.phases.build({
 			env,
 			phases: { prepare, fixup },
-			host: std.Triple.system(build),
+			host: tg.Triple.archAndOs(build),
 		}),
 	);
 	return patchedSource;
@@ -51,8 +51,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let build = build_ ? std.triple(build_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let build = build_ ? tg.triple(build_) : host;
 
 	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
@@ -75,7 +75,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = buildUtil(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			bootstrapMode,
 			env,
 			phases: { configure },
@@ -109,7 +109,7 @@ let providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let host = bootstrap.toolchainTriple(await tg.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });

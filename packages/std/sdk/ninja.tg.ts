@@ -35,8 +35,8 @@ export let ninja = async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let build = build_ ? std.triple(build_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let build = build_ ? tg.triple(build_) : host;
 
 	let configure = {
 		args: ["-DCMAKE_BUILD_TYPE=Release"],
@@ -45,7 +45,7 @@ export let ninja = async (arg?: Arg) => {
 	let result = cmake.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			phases: { configure },
 			source: source_ ?? source(),
 			useNinja: false,

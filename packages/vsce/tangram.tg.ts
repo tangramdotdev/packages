@@ -24,7 +24,7 @@ export let source = tg.target(() => {
 
 export type Arg = {
 	env?: std.env.Arg;
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 	nodejs?: tg.MaybeNestedArray<node.Arg>;
 	source?: tg.Directory;
 };

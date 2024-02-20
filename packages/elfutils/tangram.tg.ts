@@ -29,9 +29,9 @@ export let source = tg.target(async () => {
 
 type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	build?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
 	env?: std.env.Arg;
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
@@ -45,8 +45,8 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.Triple.host(host_);
-	let build = build_ ? std.triple(build_) : host;
+	let host = await tg.Triple.host(host_);
+	let build = build_ ? tg.triple(build_) : host;
 
 	let configure = {
 		args: [
@@ -65,8 +65,8 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	if (!std.Triple.eq(build, host)) {
-		configure.args.push(`--host=${std.Triple.toString(host)}`);
+	if (!tg.Triple.eq(build, host)) {
+		configure.args.push(`--host=${tg.Triple.toString(host)}`);
 	}
 
 	let phases = { configure };
@@ -80,7 +80,7 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			env,
 			phases,
 			source: source_ ?? source(),

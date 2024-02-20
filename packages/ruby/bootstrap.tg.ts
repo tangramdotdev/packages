@@ -13,7 +13,7 @@ export let source = tg.target(async () => {
 });
 
 /** Returns an older version of Ruby that is only used to bootstrap it. */
-export let ruby = tg.target(async (host: std.Triple) => {
+export let ruby = tg.target(async (host: tg.Triple) => {
 	let build = await std.build(
 		tg`
 			${source()}/configure --prefix $OUTPUT

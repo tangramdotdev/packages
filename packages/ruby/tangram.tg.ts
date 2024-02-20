@@ -30,8 +30,8 @@ type Arg = {
 	env: std.env.Arg;
 	phases: tg.MaybeNestedArray<std.phases.Arg>;
 	source?: tg.Directory;
-	build?: std.Triple.Arg;
-	host?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
+	host?: tg.Triple.Arg;
 };
 
 export let ruby = async (...args: tg.Args<Arg>) => {
@@ -39,8 +39,8 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 		envs: std.env.Arg;
 		phases: tg.MaybeNestedArray<std.phases.Arg>;
 		source: tg.Directory;
-		build: std.Triple.Arg;
-		host: std.Triple.Arg;
+		build: tg.Triple.Arg;
+		host: tg.Triple.Arg;
 	};
 	let {
 		envs,
@@ -90,8 +90,8 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 	});
 
 	// Generate the host and target.
-	let host = await std.Triple.host(host_);
-	let build = build_ ? std.triple(build_) : host;
+	let host = await tg.Triple.host(host_);
+	let build = build_ ? tg.triple(build_) : host;
 
 	let env_ = [
 		libffi({ host }),
@@ -119,7 +119,7 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 				pre: "find ./bin -empty -delete",
 			},
 		},
-		...std.Triple.rotate({ build, host }),
+		...tg.Triple.rotate({ build, host }),
 	});
 
 	// Create the RUBYLIB environment variable.

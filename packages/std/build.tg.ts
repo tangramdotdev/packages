@@ -5,7 +5,7 @@ export async function build(
 	...args: tg.Args<build.Arg>
 ): Promise<tg.Artifact | undefined> {
 	type Apply = {
-		system: tg.System;
+		system: tg.Triple;
 		checksum: tg.Checksum;
 	};
 	let { system, checksum } = await tg.Args.apply<build.Arg, Apply>(
@@ -26,13 +26,13 @@ export async function build(
 	let executable = await std.wrap(...args);
 
 	// If the system was not set in the args, then get it from the executable or the host.
-	let host = await std.Triple.host();
+	let host = await tg.Triple.host();
 	if (!system) {
 		let executableTriples = await std.file.executableTriples(executable);
 		let hostSystem = executableTriples?.includes(host)
 			? host
 			: executableTriples?.at(0);
-		system = std.Triple.system(hostSystem ?? host);
+		system = tg.Triple.archAndOs(hostSystem ?? host);
 	}
 	system = system ?? host;
 
@@ -50,7 +50,7 @@ export namespace build {
 	export type Arg = string | tg.Template | tg.File | tg.Symlink | ArgObject;
 
 	export type ArgObject = std.wrap.ArgObject & {
-		system?: tg.System;
+		system?: tg.Triple;
 		unsafe?: boolean;
 		checksum?: tg.Checksum;
 		network?: boolean;

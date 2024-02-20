@@ -16,7 +16,7 @@ export type Arg = std.sdk.BuildEnvArg & {
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
 	linkerExe?: tg.File | tg.Symlink;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
@@ -61,10 +61,10 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	let cxx: tg.File | tg.Symlink = cxx_;
 
 	if (proxyLinker) {
-		let hostString = std.Triple.toString(host);
-		let targetString = std.Triple.toString(target);
+		let hostString = tg.Triple.toString(host);
+		let targetString = tg.Triple.toString(target);
 
-		let isCross = !std.Triple.eq(host, target);
+		let isCross = !tg.Triple.eq(host, target);
 		let targetPrefix = isCross ? `${targetString}-` : ``;
 
 		// Construct the ld proxy.
@@ -219,19 +219,19 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 export default env;
 
 type CcProxyArg = std.sdk.BuildEnvArg & {
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 export let ccProxy = async (arg: CcProxyArg) => {
-	let host = std.triple(arg.host);
-	let target = std.triple(arg.target ?? host);
+	let host = await tg.Triple.host(arg.host);
+	let target = arg.target ? tg.triple(arg.target) : host;
 	let tgcc = workspace.tgcc({
 		sdk: arg.sdk,
 		host: target,
 	});
 
-	let isCross = !std.Triple.eq(host, target);
-	let targetPrefix = isCross ? `${std.Triple.toString(target)}-` : ``;
+	let isCross = !tg.Triple.eq(host, target);
+	let targetPrefix = isCross ? `${tg.Triple.toString(target)}-` : ``;
 
 	return tg.directory({
 		[`bin/${targetPrefix}cc`]: tgcc,
@@ -247,14 +247,14 @@ type LdProxyArg = {
 	linker: tg.File | tg.Symlink | tg.Template;
 	interpreter?: tg.File;
 	interpreterArgs?: Array<tg.Template.Arg>;
-	host: std.Triple.Arg;
-	target?: std.Triple.Arg;
+	host: tg.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 export let ldProxy = async (arg: LdProxyArg) => {
 	// Prepare the Tangram tools.
-	let host = std.triple(arg.host);
-	let target = std.triple(arg.target ?? host);
+	let host = tg.triple(arg.host);
+	let target = tg.triple(arg.target ?? host);
 
 	// Obtain wrapper components.
 	let injectionLibrary = await injection({

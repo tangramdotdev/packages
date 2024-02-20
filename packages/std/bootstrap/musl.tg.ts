@@ -32,8 +32,8 @@ export let source = tg.target(async () => {
 });
 
 export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	let host = await std.Triple.host(arg);
-	let hostSystem = std.Triple.system(host);
+	let host = await tg.Triple.host(arg);
+	let hostSystem = tg.Triple.archAndOs(host);
 
 	let configure = { args: [`--enable-debug`, `--enable-optimize=*`] };
 
@@ -73,17 +73,17 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 
 export default build;
 
-export let interpreterPath = (system: std.Triple.Arg) =>
-	`lib/${interpreterName(system)}`;
+export let interpreterPath = (triple: tg.Triple.Arg) =>
+	`lib/${interpreterName(triple)}`;
 
-export let interpreterName = (system: std.Triple.Arg) => {
-	let arch = tg.System.arch(std.Triple.system(std.triple(system)));
+export let interpreterName = (triple: tg.Triple.Arg) => {
+	let arch = tg.Triple.arch(tg.Triple.archAndOs(tg.triple(triple)));
 	return `ld-musl-${arch}.so.1`;
 };
 
-export let linkerPath = (system: tg.System) => {
-	let triple = std.triple(system);
+export let linkerPath = (tripleArg: tg.Triple.Arg) => {
+	let triple = tg.triple(tripleArg);
 	triple.environment = "musl";
-	let tripleString = std.Triple.toString(triple);
+	let tripleString = tg.Triple.toString(triple);
 	return `${tripleString}/bin/ld`;
 };

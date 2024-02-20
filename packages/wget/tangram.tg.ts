@@ -19,9 +19,9 @@ export let source = tg.target(() => {
 
 type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	build?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
 	env?: std.env.Arg;
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
@@ -54,7 +54,7 @@ export let wget = tg.target(async (arg?: Arg) => {
 	let output = await std.autotools.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			env,
 			source: source_ ?? source(),
 		},

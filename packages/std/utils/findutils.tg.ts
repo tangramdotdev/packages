@@ -44,8 +44,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let build = build_ ? std.triple(build_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let build = build_ ? tg.triple(build_) : host;
 	let os = build.os;
 
 	let wrapBashScriptPaths: Array<string> | undefined =
@@ -64,7 +64,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = buildUtil(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			bootstrapMode,
 			env,
 			phases: { configure },
@@ -80,7 +80,7 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let host = bootstrap.toolchainTriple(await tg.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });

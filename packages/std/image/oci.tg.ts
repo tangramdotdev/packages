@@ -105,7 +105,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 			if (arg.system) {
 				object.system = tg.Mutation.is(arg.system)
 					? arg.system
-					: std.Triple.system(std.triple(arg.system));
+					: tg.Triple.archAndOs(tg.triple(arg.system));
 			}
 			return object;
 		} else {
@@ -114,7 +114,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 	});
 
 	// Fill in defaults.
-	let system = system_ ?? (await std.Triple.hostSystem());
+	let system = system_ ?? (await tg.Triple.hostSystem());
 
 	// Combine all root dirs.
 	let rootDir =

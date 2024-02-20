@@ -6,13 +6,13 @@ type LibCArg = std.sdk.BuildEnvArg & {
 	// /** Optionally point to a specific implementation of libcc. Only supported for musl, glibc requires libgcc. */
 	// libcc?: tg.File;
 	linuxHeaders: tg.Directory;
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 /** Obtain the proper standard C library for the given host triple. */
 export let libc = tg.target(async (arg: LibCArg) => {
-	let host = await std.Triple.host(arg);
-	let target = arg.target ? std.triple(arg.target) : host;
+	let host = await tg.Triple.host(arg);
+	let target = arg.target ? tg.triple(arg.target) : host;
 	// Libcs are built for a single target, which is referred to as the host in this context.
 	let kind = kindFromTriple(target);
 	if (kind === "glibc") {
@@ -28,7 +28,7 @@ export default libc;
 
 type LibcKind = "glibc" | "musl";
 
-let kindFromTriple = (triple: std.Triple): LibcKind => {
+let kindFromTriple = (triple: tg.Triple): LibcKind => {
 	if (triple.environment?.includes("gnu")) {
 		return "glibc";
 	} else if (triple.environment === "musl") {
@@ -39,9 +39,9 @@ let kindFromTriple = (triple: std.Triple): LibcKind => {
 };
 
 /** Get the name of the ld.so binary this libc provides. */
-export let interpreterName = (host: std.Triple.Arg) => {
-	let triple = std.triple(host);
-	let system = std.Triple.system(triple);
+export let interpreterName = (host: tg.Triple.Arg) => {
+	let triple = tg.triple(host);
+	let system = tg.Triple.archAndOs(triple);
 
 	let kind = kindFromTriple(triple);
 	if (kind === "glibc") {
@@ -55,12 +55,12 @@ export let interpreterName = (host: std.Triple.Arg) => {
 
 type LinkerFlagArg = {
 	toolchain: tg.Directory;
-	host?: std.Triple;
+	host?: tg.Triple;
 };
 
 /** Get a template to pass linker flags that point to this libc in the given toolchain directory for the interpreter and rpath. */
 export let linkerFlags = async (arg: LinkerFlagArg) => {
-	let host = await std.Triple.host(arg);
+	let host = await tg.Triple.host(arg);
 	let libPath = tg`${arg.toolchain}/lib`;
 	let interpreterPath = tg`${libPath}/${interpreterName(host)}`;
 	let flags = tg`-Wl,-dynamic-linker=${interpreterPath} -Wl,-rpath,${libPath}`;
@@ -69,9 +69,9 @@ export let linkerFlags = async (arg: LinkerFlagArg) => {
 
 /** Construct a sysroot containing the libc and the linux headers. */
 export let constructSysroot = async (arg: LibCArg) => {
-	let host = await std.Triple.host(arg);
-	let target = arg.target ? std.triple(arg.target) : host;
-	let hostString = std.Triple.toString(target ?? host);
+	let host = await tg.Triple.host(arg);
+	let target = arg.target ? tg.triple(arg.target) : host;
+	let hostString = tg.Triple.toString(target ?? host);
 	let cLibrary = await libc(arg);
 	let cLibInclude = tg.Directory.expect(
 		await cLibrary.get(`${hostString}/include`),

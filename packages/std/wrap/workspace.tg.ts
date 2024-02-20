@@ -9,8 +9,8 @@ type Arg = std.sdk.BuildEnvArg & {
 /** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
 export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 	let { build: build_, host: host_, release = true, sdk: sdkArg } = arg ?? {};
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let buildTriple = build_ ? std.triple(build_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let buildTriple = build_ ? tg.triple(build_) : host;
 
 	// Get the source.
 	let source = await tg.directory({
@@ -25,7 +25,7 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 	return build({
 		release,
 		source,
-		...(await std.Triple.rotate({ build: buildTriple, host })),
+		...(await tg.Triple.rotate({ build: buildTriple, host })),
 		sdkArg,
 	});
 });
@@ -45,15 +45,15 @@ export let wrapper = async (arg?: Arg) =>
 let version = "1.76.0";
 
 type ToolchainArg = {
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 export let rust = tg.target(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
-		let host = await std.Triple.host();
-		let target = std.triple(arg?.target ?? host);
-		let hostSystem = std.Triple.system(host);
-		let os = tg.System.os(hostSystem);
+		let host = await tg.Triple.host();
+		let target = tg.triple(arg?.target ?? host);
+		let hostSystem = tg.Triple.archAndOs(host);
+		let os = tg.Triple.os(hostSystem);
 
 		// Download and parse the Rust manifest for the selected version.
 		let manifestFile = await tg.file(
@@ -76,7 +76,7 @@ export let rust = tg.target(
 		}
 
 		// Install the full minimal profile for the host.
-		let hostTripleString = std.Triple.toString(host);
+		let hostTripleString = tg.Triple.toString(host);
 		let packages = tg.directory();
 		for (let name of manifest.profiles["minimal"] ?? []) {
 			let pkg = manifest.pkg[name]?.target[hostTripleString];
@@ -93,9 +93,9 @@ export let rust = tg.target(
 		}
 
 		// If there is a target specified different from the host, install just the rust-std package for that target.
-		if (!std.Triple.eq(host, target)) {
+		if (!tg.Triple.eq(host, target)) {
 			let name = "rust-std";
-			let pkg = manifest.pkg[name]?.target[std.Triple.toString(target)];
+			let pkg = manifest.pkg[name]?.target[tg.Triple.toString(target)];
 			if (pkg?.available) {
 				let artifact = std.download({
 					checksum: `sha256:${pkg.xz_hash}`,
@@ -172,19 +172,19 @@ type RustupManifest = {
 type BuildArg = {
 	release?: boolean;
 	source: tg.Directory;
-	host: std.Triple.Arg;
-	target?: std.Triple.Arg;
+	host: tg.Triple.Arg;
+	target?: tg.Triple.Arg;
 	sdkArg?: tg.MaybeNestedArray<std.sdk.Arg>;
 };
 
 export let build = async (arg: BuildArg) => {
 	let release = arg.release ?? true;
 	let source = arg.source;
-	let host = std.triple(arg.host);
-	let target = arg.target ? std.triple(arg.target) : host;
-	let targetString = std.Triple.toString(target);
-	let system = std.Triple.system(host);
-	let os = tg.System.os(system);
+	let host = tg.triple(arg.host);
+	let target = arg.target ? tg.triple(arg.target) : host;
+	let targetString = tg.Triple.toString(target);
+	let system = tg.Triple.archAndOs(host);
+	let os = tg.Triple.os(system);
 	let isBootstrap = std
 		.flatten([arg?.sdkArg])
 		.some((sdk) => sdk?.bootstrapMode);
@@ -197,7 +197,7 @@ export let build = async (arg: BuildArg) => {
 		target.vendor = "unknown";
 	}
 
-	let isCross = !std.Triple.eq(host, target);
+	let isCross = !tg.Triple.eq(host, target);
 
 	// Get the SDK, without proxying enabled.
 	let sdkArg: std.sdk.Arg = { host, target };
@@ -231,7 +231,7 @@ export let build = async (arg: BuildArg) => {
 		{
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
-			RUST_TARGET: std.Triple.toString(target),
+			RUST_TARGET: tg.Triple.toString(target),
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 			RUSTFLAGS: `-C target-feature=+crt-static`,
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}gcc`,
@@ -322,8 +322,8 @@ export let build = async (arg: BuildArg) => {
 	);
 };
 
-let tripleToEnvVar = (triple: std.Triple, upcase?: boolean) => {
-	let tripleString = std.Triple.toString(triple);
+let tripleToEnvVar = (triple: tg.Triple, upcase?: boolean) => {
+	let tripleString = tg.Triple.toString(triple);
 	let allCaps = upcase ?? false;
 	let result = tripleString.replace(/-/g, "_");
 	if (allCaps) {
@@ -334,10 +334,10 @@ let tripleToEnvVar = (triple: std.Triple, upcase?: boolean) => {
 
 export let test = tg.target(async () => {
 	// Detect the host triple.
-	let host = await std.Triple.host();
+	let host = await tg.Triple.host();
 
 	// Determine the target triple with differing architecture from the host.
-	let hostArch = host.arch;
+	let hostArch = host.arch as string;
 
 	let nativeWorkspace = await workspace({
 		host,
@@ -345,7 +345,7 @@ export let test = tg.target(async () => {
 	});
 
 	// Assert the native workspace was built for the host.
-	let os = tg.System.os(std.Triple.system(host));
+	let os = tg.Triple.os(tg.Triple.archAndOs(host));
 	let nativeWrapper = await nativeWorkspace.get("bin/wrapper");
 	tg.File.assert(nativeWrapper);
 	let nativeMetadata = await std.file.executableMetadata(nativeWrapper);
@@ -363,13 +363,12 @@ export let test = tg.target(async () => {
 
 export let testCross = tg.target(async () => {
 	// Detect the host triple.
-	let host = await std.Triple.host();
+	let host = await tg.Triple.host();
 
 	// Determine the target triple with differing architecture from the host.
 	let hostArch = host.arch;
-	let targetArch: std.Triple.Arch =
-		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = std.triple({
+	let targetArch: tg.Triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = tg.triple({
 		arch: targetArch,
 		vendor: "unknown",
 		os: "linux",

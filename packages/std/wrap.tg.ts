@@ -10,7 +10,7 @@ import * as workspace from "./wrap/workspace.tg.ts";
 /** Wrap an executable. */
 export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	type Apply = {
-		host: std.Triple.Arg;
+		host: tg.Triple.Arg;
 		identity: wrap.Identity;
 		interpreter?:
 			| tg.File
@@ -175,7 +175,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					  );
 			}
 			if (arg.host !== undefined) {
-				object.host = std.triple(arg.host);
+				object.host = tg.triple(arg.host);
 			}
 
 			return object;
@@ -236,7 +236,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	};
 
 	// Get the wrapper executable.
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let wrapper = await workspace.wrapper({
 		host,
 		sdk: sdkArgs || { bootstrapMode: true },
@@ -254,7 +254,7 @@ export namespace wrap {
 
 	export type ArgObject = {
 		/** The host system to produce a wrapper for. */
-		host?: std.Triple.Arg;
+		host?: tg.Triple.Arg;
 
 		/** The identity of the executable. The default is "executable". */
 		identity?: Identity;
@@ -1298,11 +1298,9 @@ let manifestInterpreterFromExecutableArg = async (
 			return manifestInterpreterFromElf(metadata);
 		}
 		case "mach-o": {
-			let arch = metadata.arches[0] as tg.System.Arch;
+			let arch = metadata.arches[0] as tg.Triple.Arch;
 			tg.assert(arch);
-			let triple = std.Triple.defaultForSystem(
-				tg.system({ os: "darwin", arch }),
-			);
+			let triple = tg.triple({ os: "darwin", arch });
 			return {
 				kind: "dyld",
 				libraryPaths: undefined,
@@ -1334,12 +1332,12 @@ let manifestInterpreterFromElf = async (
 		return undefined;
 	}
 
-	let libc: std.Triple.Environment = metadata.interpreter?.includes("ld-linux")
+	let libc: tg.Triple.Environment = metadata.interpreter?.includes("ld-linux")
 		? "gnu"
 		: "musl";
 
 	// If host matches detected host AND libc is musl, set bootstrap mode.
-	let host = std.triple({
+	let host = tg.triple({
 		os: "linux",
 		vendor: "unknown",
 		arch: metadata.arch,

@@ -33,7 +33,7 @@ export let env = tg.target(async (arg?: Arg) => {
 		host: host_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let bootstrapMode = bootstrapMode_ ?? false;
 
 	if (bootstrapMode) {
@@ -73,8 +73,8 @@ export let env = tg.target(async (arg?: Arg) => {
 export default env;
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
-export let prerequisites = tg.target(async (arg?: std.Triple.HostArg) => {
-	let host = await std.Triple.host(arg);
+export let prerequisites = tg.target(async (arg?: tg.Triple.HostArg) => {
+	let host = await tg.Triple.host(arg);
 	let components: tg.Unresolved<std.env.Arg> = [bootstrap.utils({ host })];
 
 	// Add GNU make.
@@ -101,8 +101,8 @@ export let prerequisites = tg.target(async (arg?: std.Triple.HostArg) => {
 });
 
 /** Build a fresh musl and use it as the runtime libc. */
-export let muslRuntimeEnv = async (arg?: std.Triple.HostArg) => {
-	let host = await std.Triple.host(arg);
+export let muslRuntimeEnv = async (arg?: tg.Triple.HostArg) => {
+	let host = await tg.Triple.host(arg);
 	if (host.os !== "linux") {
 		throw new Error("muslRuntimeEnv is only supported on Linux.");
 	}
@@ -189,7 +189,7 @@ export let assertProvides = async (env: std.env.Arg) => {
 };
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.Triple.host());
+	let host = bootstrap.toolchainTriple(await tg.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let utilsEnv = await env({ host, bootstrapMode, env: sdk });
