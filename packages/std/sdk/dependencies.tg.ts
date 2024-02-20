@@ -48,89 +48,61 @@ export * as xz from "./dependencies/xz.tg.ts";
 export * as zlib from "./dependencies/zlib.tg.ts";
 export * as zstd from "./dependencies/zstd.tg.ts";
 
-export type Arg = std.sdk.BuildEnvArg & {
-	parallel?: boolean;
-};
+export type Arg = std.sdk.BuildEnvArg;
 
 /** Obtain a directory containing all provided utils. */
 export let env = tg.target(async (arg?: Arg) => {
-	let { parallel: parallel_, host: host_, ...rest } = arg ?? {};
+	let { host: host_, ...rest } = arg ?? {};
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let parallel = parallel_ ?? host.os !== "darwin";
 
 	let dependencies = [];
 
 	// Add the standard utils.
 	dependencies.push(await std.utils.env({ ...rest, host }));
 
-	if (parallel) {
-		// Add `make` built against the standard utils.
-		dependencies.push(await make({ ...rest, host }));
+	// Add `make` built against the standard utils.
+	dependencies.push(await make({ ...rest, host }));
 
-		dependencies = dependencies.concat(
-			await Promise.all([
-				bc({ ...rest, host }),
-				bison({ ...rest, host }),
-				bzip2({ ...rest, host }),
-				gperf({ ...rest, host }),
-				m4({ ...rest, host }),
-			]),
-		);
+	dependencies = dependencies.concat(
+		await Promise.all([
+			bc({ ...rest, host }),
+			bison({ ...rest, host }),
+			bzip2({ ...rest, host }),
+			gperf({ ...rest, host }),
+			m4({ ...rest, host }),
+		]),
+	);
 
-		dependencies = dependencies.concat(
-			await Promise.all([
-				libffi({ ...rest, host }),
-				patch({ ...rest, host }),
-				xz({ ...rest, host }),
-				zlib({ ...rest, host }),
-				zstd({ ...rest, host }),
-			]),
-		);
+	dependencies = dependencies.concat(
+		await Promise.all([
+			libffi({ ...rest, host }),
+			patch({ ...rest, host }),
+			xz({ ...rest, host }),
+			zlib({ ...rest, host }),
+			zstd({ ...rest, host }),
+		]),
+	);
 
-		dependencies = dependencies.concat(
-			await Promise.all([
-				perl({ ...rest, host }),
-				pkgconfig({ ...rest, host }),
-				ncurses({ ...rest, host }),
-				texinfo({ ...rest, host }),
-				libxcrypt({ ...rest, host }),
-			]),
-		);
+	dependencies = dependencies.concat(
+		await Promise.all([
+			perl({ ...rest, host }),
+			pkgconfig({ ...rest, host }),
+			ncurses({ ...rest, host }),
+			texinfo({ ...rest, host }),
+			libxcrypt({ ...rest, host }),
+		]),
+	);
 
-		dependencies = dependencies.concat(
-			await Promise.all([
-				autoconf({ ...rest, host }),
-				automake({ ...rest, host }),
-				file({ ...rest, host }),
-				flex({ ...rest, host }),
-				help2man({ ...rest, host }),
-				python({ ...rest, host }),
-			]),
-		);
-	} else {
-		dependencies.push(await make({ ...rest, host }));
-		dependencies.push(await bc({ ...rest, host }));
-		dependencies.push(await bison({ ...rest, host }));
-		dependencies.push(await bzip2({ ...rest, host }));
-		dependencies.push(await gperf({ ...rest, host }));
-		dependencies.push(await m4({ ...rest, host }));
-		dependencies.push(await libffi({ ...rest, host }));
-		dependencies.push(await patch({ ...rest, host }));
-		dependencies.push(await xz({ ...rest, host }));
-		dependencies.push(await zlib({ ...rest, host }));
-		dependencies.push(await zstd({ ...rest, host }));
-		dependencies.push(await perl({ ...rest, host }));
-		dependencies.push(await pkgconfig({ ...rest, host }));
-		dependencies.push(await ncurses({ ...rest, host }));
-		dependencies.push(await libxcrypt({ ...rest, host }));
-		dependencies.push(await python({ ...rest, host }));
-		dependencies.push(await texinfo({ ...rest, host }));
-		dependencies.push(await autoconf({ ...rest, host }));
-		dependencies.push(await automake({ ...rest, host }));
-		dependencies.push(await file({ ...rest, host }));
-		dependencies.push(await flex({ ...rest, host }));
-		dependencies.push(await help2man({ ...rest, host }));
-	}
+	dependencies = dependencies.concat(
+		await Promise.all([
+			autoconf({ ...rest, host }),
+			automake({ ...rest, host }),
+			file({ ...rest, host }),
+			flex({ ...rest, host }),
+			help2man({ ...rest, host }),
+			python({ ...rest, host }),
+		]),
+	);
 
 	// The final env contains the standard utils and all packages from this module.
 	return dependencies;

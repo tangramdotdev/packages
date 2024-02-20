@@ -1,5 +1,4 @@
 import * as std from "../../tangram.tg.ts";
-// FIXME - try without these?
 import bison from "./bison.tg.ts";
 import m4 from "./m4.tg.ts";
 import make from "./make.tg.ts";
@@ -90,7 +89,6 @@ export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	// TODO - test magic file wrapping.
 	let host = bootstrap.toolchainTriple(await std.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });

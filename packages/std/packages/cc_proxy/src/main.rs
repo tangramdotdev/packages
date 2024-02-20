@@ -372,15 +372,11 @@ async fn main_inner() -> Result<()> {
 
 	// Create a build.
 	let id = target.id(tg).await?;
-	let options = tg::build::Options {
-		depth: 0,
+	let build_arg = tg::build::GetOrCreateArg {
 		parent: Some(environment.runtime.build),
 		remote: false,
 		retry: tg::build::Retry::Canceled,
-	};
-	let build_arg = tg::build::GetOrCreateArg {
 		target: id.clone(),
-		options,
 	};
 	let tg::build::GetOrCreateOutput { id: build_id } =
 		tg.get_or_create_build(None, build_arg).await?;

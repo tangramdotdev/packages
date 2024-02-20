@@ -23,9 +23,7 @@ export * as libiconv from "./utils/libiconv.tg.ts";
 export * as sed from "./utils/sed.tg.ts";
 export * as tar from "./utils/tar.tg.ts";
 
-type Arg = std.sdk.BuildEnvArg & {
-	parallel?: boolean;
-};
+type Arg = std.sdk.BuildEnvArg;
 
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: Arg) => {
@@ -33,14 +31,10 @@ export let env = tg.target(async (arg?: Arg) => {
 		bootstrapMode: bootstrapMode_,
 		env: env_,
 		host: host_,
-		parallel: parallel_,
 		...rest
 	} = arg ?? {};
 	let host = host_ ? std.triple(host_) : await std.Triple.host();
 	let bootstrapMode = bootstrapMode_ ?? false;
-
-	// On macOS, temporarily build in series.
-	let parallel = parallel_ ?? host.os !== "darwin";
 
 	if (bootstrapMode) {
 		await prerequisites({ host });
@@ -61,30 +55,18 @@ export let env = tg.target(async (arg?: Arg) => {
 	let env = [bashEnv, env_];
 
 	let utils = [bashArtifact, bashEnv];
-	if (parallel) {
-		utils = utils.concat(
-			await Promise.all([
-				coreutils({ ...rest, bootstrapMode, env, host }),
-				diffutils({ ...rest, bootstrapMode, env, host }),
-				findutils({ ...rest, bootstrapMode, env, host }),
-				gawk({ ...rest, bootstrapMode, env, host }),
-				grep({ ...rest, bootstrapMode, env, host }),
-				gzip({ ...rest, bootstrapMode, env, host }),
-				sed({ ...rest, bootstrapMode, env, host }),
-				tar({ ...rest, bootstrapMode, env, host }),
-			]),
-		);
-	} else {
-		utils.push(await coreutils({ ...rest, bootstrapMode, env, host }));
-		utils.push(await diffutils({ ...rest, bootstrapMode, env, host }));
-		utils.push(await findutils({ ...rest, bootstrapMode, env, host }));
-		utils.push(await gawk({ ...rest, bootstrapMode, env, host }));
-		utils.push(await grep({ ...rest, bootstrapMode, env, host }));
-		utils.push(await gzip({ ...rest, bootstrapMode, env, host }));
-		utils.push(await sed({ ...rest, bootstrapMode, env, host }));
-		utils.push(await tar({ ...rest, bootstrapMode, env, host }));
-	}
-
+	utils = utils.concat(
+	await Promise.all([
+		coreutils({ ...rest, bootstrapMode, env, host }),
+		diffutils({ ...rest, bootstrapMode, env, host }),
+		findutils({ ...rest, bootstrapMode, env, host }),
+		gawk({ ...rest, bootstrapMode, env, host }),
+		grep({ ...rest, bootstrapMode, env, host }),
+		gzip({ ...rest, bootstrapMode, env, host }),
+		sed({ ...rest, bootstrapMode, env, host }),
+		tar({ ...rest, bootstrapMode, env, host }),
+	]),
+);
 	return utils;
 });
 
