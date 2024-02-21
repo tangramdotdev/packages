@@ -38,7 +38,7 @@ type Arg = std.sdk.BuildEnvArg;
 
 /** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
 export let macOsXattrCmds = tg.target(async (arg?: Arg) => {
-	let build = arg?.build ? std.triple(arg.build) : await std.Triple.host(arg);
+	let build = arg?.build ? tg.triple(arg.build) : await tg.Triple.host(arg);
 	let os = build.os;
 
 	// Assert that the system is macOS.
@@ -84,7 +84,7 @@ type UtilArg = std.sdk.BuildEnvArg & {
 };
 
 export let compileUtil = async (arg: UtilArg) => {
-	let build = arg.build ? std.triple(arg.build) : await std.Triple.host(arg);
+	let build = arg.build ? tg.triple(arg.build) : await tg.Triple.host(arg);
 	let host = build;
 
 	// Grab args.
@@ -106,7 +106,7 @@ export let compileUtil = async (arg: UtilArg) => {
 
 	let util = tg.File.expect(
 		await tg.build(await tg.template(script), {
-			host: std.Triple.system(build),
+			host: tg.Triple.archAndOs(build),
 			env: std.env.object([
 				arg.env ?? {},
 				{

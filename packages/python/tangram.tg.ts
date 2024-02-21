@@ -53,10 +53,10 @@ type ToolchainArg = {
 	requirements?: requirements.Arg;
 
 	/** The system to build python upon. */
-	build?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
 
 	/** The system to use python. Currently must be the same as build. */
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 };
@@ -90,7 +90,7 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 	let output = await std.autotools.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			env,
 			phases,
 			source: source_ ?? (await source()),
@@ -181,8 +181,8 @@ let isPythonScript = (metadata: std.file.ExecutableMetadata): boolean => {
 };
 
 export type Arg = {
-	build?: std.Triple.Arg;
-	host?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
+	host?: tg.Triple.Arg;
 
 	/** An optional pyproject.toml. */
 	pyprojectToml?: tg.File;
@@ -196,8 +196,8 @@ export type Arg = {
 
 export let build = async (...args: tg.Args<Arg>) => {
 	type Apply = {
-		buildTriple?: std.Triple.Arg;
-		host?: std.Triple.Arg;
+		buildTriple?: tg.Triple.Arg;
+		host?: tg.Triple.Arg;
 		pythonArg?: Array<ToolchainArg>;
 		pyprojectToml: tg.File;
 		source: tg.Directory;
@@ -233,8 +233,8 @@ export let build = async (...args: tg.Args<Arg>) => {
 			return object;
 		}
 	});
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let buildTriple = buildTriple_ ? std.triple(buildTriple_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let buildTriple = buildTriple_ ? tg.triple(buildTriple_) : host;
 
 	tg.assert(source, "Must specify a source directory.");
 

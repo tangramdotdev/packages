@@ -3,8 +3,8 @@ import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
 
 export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	let host = await std.Triple.host(arg);
-	let build = arg?.build ? std.triple(arg.build) : host;
+	let host = await tg.Triple.host(arg);
+	let build = arg?.build ? tg.triple(arg.build) : host;
 	let isBootstrap =
 		arg?.bootstrapMode ||
 		std.flatten([arg?.sdk]).some((sdk) => sdk?.bootstrapMode);
@@ -22,7 +22,7 @@ export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 		});
 		buildToolchain = directory;
 	} else {
-		buildToolchain = await gcc.toolchain(std.Triple.rotate({ build, host }));
+		buildToolchain = await gcc.toolchain(tg.Triple.rotate({ build, host }));
 	}
 
 	let env = arg?.env;
@@ -59,12 +59,12 @@ export default injection;
 type MacOsInjectionArg = {
 	buildToolchain: tg.Directory;
 	env: std.env.Arg;
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 	source: tg.File;
 };
 
 export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
-	let host = await std.Triple.host(arg);
+	let host = await tg.Triple.host(arg);
 	let os = host.os;
 	if (os !== "darwin") {
 		throw new Error(`Unsupported OS ${os}`);
@@ -102,7 +102,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 	});
 
 	// Combine into universal dylib.
-	let system = std.Triple.system(host);
+	let system = tg.Triple.archAndOs(host);
 	let injection = tg.File.expect(
 		await tg.build(
 			tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
@@ -115,20 +115,20 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
 	isBootstrap?: boolean;
-	build?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
 	buildToolchain: tg.Directory;
 	env: std.env.Arg;
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 	source: tg.File;
 };
 
 export let dylib = async (arg: DylibArg): Promise<tg.File> => {
-	let host = arg.host ? std.triple(arg.host) : await std.Triple.host();
-	let build = arg.build ? std.triple(arg.build) : host;
+	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let build = arg.build ? tg.triple(arg.build) : host;
 	let isBootstrap = arg.isBootstrap ?? false;
 	let useTriplePrefix =
-		!std.Triple.eq(build, host) && !isBootstrap && !(build.os === "darwin");
-	let hostString = std.Triple.toString(host);
+		!tg.Triple.eq(build, host) && !isBootstrap && !(build.os === "darwin");
+	let hostString = tg.Triple.toString(host);
 
 	let additionalArgs = arg.additionalArgs ?? [];
 	if (host.os === "linux") {
@@ -141,7 +141,7 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let prefix = useTriplePrefix ? `${hostString}-` : "";
 	let executable = `${prefix}cc`;
 
-	let system = std.Triple.system(host);
+	let system = tg.Triple.archAndOs(host);
 	let env = std.env.object(arg.buildToolchain, arg.env);
 	let output = tg.File.expect(
 		await tg.build(
@@ -161,15 +161,15 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 };
 
 export let test = tg.target(async () => {
-	let detectedHost = await std.Triple.host();
-	let hostArch = detectedHost.arch;
+	let detectedHost = await tg.Triple.host();
+	let hostArch = detectedHost.arch as string;
 	let nativeInjection = await injection({
 		host: detectedHost,
 		bootstrapMode: true,
 	});
 
 	// Assert the native injection dylib was built for the build machine.
-	let os = tg.System.os(std.Triple.system(detectedHost));
+	let os = tg.Triple.os(tg.Triple.archAndOs(detectedHost));
 	let nativeMetadata = await std.file.executableMetadata(nativeInjection);
 	if (os === "linux") {
 		tg.assert(nativeMetadata.format === "elf");
@@ -183,16 +183,15 @@ export let test = tg.target(async () => {
 });
 
 export let testCross = tg.target(async () => {
-	let detectedHost = await std.Triple.host();
+	let detectedHost = await tg.Triple.host();
 	if (detectedHost.os === "darwin") {
 		console.log("Skipping cross test on darwin");
 		return true;
 	}
 
 	let hostArch = detectedHost.arch;
-	let targetArch: std.Triple.Arch =
-		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = std.triple({ ...detectedHost, arch: targetArch });
+	let targetArch: tg.Triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = tg.triple({ ...detectedHost, arch: targetArch });
 
 	let nativeInjection = await injection({
 		build: detectedHost,
@@ -200,7 +199,7 @@ export let testCross = tg.target(async () => {
 	});
 
 	// Assert theinjection dylib was built for the target machine.
-	let os = tg.System.os(std.Triple.system(detectedHost));
+	let os = tg.Triple.os(tg.Triple.archAndOs(detectedHost));
 	let nativeMetadata = await std.file.executableMetadata(nativeInjection);
 	if (os === "linux") {
 		tg.assert(nativeMetadata.format === "elf");

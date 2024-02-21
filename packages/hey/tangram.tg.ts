@@ -23,10 +23,10 @@ export let source = tg.target(() => {
 });
 
 export type Arg = {
-	build?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
 	env?: std.env.Arg;
 	go?: tg.MaybeNestedArray<go.Arg>;
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
@@ -36,7 +36,7 @@ export let hey = tg.target(async (arg?: Arg) => {
 	return go.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			source: source_ ?? source(),
 		},
 		goArg,

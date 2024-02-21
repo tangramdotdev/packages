@@ -17,7 +17,7 @@ export type Arg = {
 	env?: std.env.Arg;
 
 	/** The computer this build should get compiled on. */
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
@@ -44,7 +44,7 @@ export type Arg = {
 	stripExecutables?: boolean;
 
 	/** The computer this build produces executables for. */
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 export let target = async (...args: tg.Args<Arg>) => {
@@ -53,8 +53,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 		defaultCFlags: boolean;
 		doCheck: boolean;
 		extraCFlags: boolean;
-		host: std.Triple;
-		target: std.Triple;
+		host: tg.Triple;
+		target: tg.Triple;
 		opt: "1" | "2" | "3" | "s" | "z" | "fast";
 		parallel: boolean | number;
 		phases: Array<std.phases.Arg>;
@@ -104,7 +104,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 			if (arg.host !== undefined) {
 				object.host = tg.Mutation.is(arg.host)
 					? arg.host
-					: std.triple(arg.host);
+					: tg.triple(arg.host);
 			}
 			if (arg.opt !== undefined) {
 				object.opt = arg.opt;
@@ -143,7 +143,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 			if (arg.target !== undefined) {
 				object.target = tg.Mutation.is(arg.target)
 					? arg.target
-					: std.triple(arg.target);
+					: tg.triple(arg.target);
 			}
 			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
 			return object;
@@ -156,8 +156,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 	tg.assert(source !== undefined, `source must be defined`);
 
 	// Detect the host system from the environment.
-	let host = await std.Triple.host(host_);
-	let target = target_ ? std.triple(target_) : host;
+	let host = await tg.Triple.host(host_);
+	let target = target_ ? tg.triple(target_) : host;
 	let os = host.os;
 
 	// Set up env.
@@ -255,7 +255,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		defaultPhases.check = defaultCheck;
 	}
 
-	let system = std.Triple.system(host);
+	let system = tg.Triple.archAndOs(host);
 	return await std.phases.target(
 		{
 			phases: defaultPhases,

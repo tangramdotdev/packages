@@ -10,7 +10,7 @@ export let metadata = {
 	version: "9.4",
 };
 
-export let source = tg.target(async (os: tg.System.Os) => {
+export let source = tg.target(async (os: tg.Triple.Os) => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
@@ -50,9 +50,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let build = build_ ? std.triple(build_) : host;
-	let os = host.os;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let build = build_ ? tg.triple(build_) : host;
+	let os = tg.Triple.os(host);
 
 	let dependencies: tg.Unresolved<std.env.Arg> = [];
 
@@ -87,8 +87,8 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let configure = {
 		args: [
-			`--build=${std.Triple.toString(build)}`,
-			`--host=${std.Triple.toString(host)}`,
+			`--build=${tg.Triple.toString(build)}`,
+			`--host=${tg.Triple.toString(host)}`,
 			"--disable-dependency-tracking",
 			"--disable-libcap",
 			"--disable-nls",
@@ -99,7 +99,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = buildUtil(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			bootstrapMode,
 			env,
 			phases: { configure },
@@ -124,9 +124,9 @@ export default build;
 
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.Triple.host());
-	let system = std.Triple.system(host);
-	let os = tg.System.os(system);
+	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let system = tg.Triple.archAndOs(host);
+	let os = tg.Triple.os(system);
 	let bootstrapMode = true;
 	let sdk = std.sdk({ bootstrapMode, host });
 

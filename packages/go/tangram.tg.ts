@@ -30,13 +30,13 @@ let RELEASES = {
 };
 
 type ToolchainArg = {
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 };
 
 export let toolchain = tg.target(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
-		let host = arg?.host ? std.triple(arg.host) : await std.Triple.host();
-		let system = std.Triple.system(host);
+		let host = arg?.host ? tg.triple(arg.host) : await tg.Triple.host();
+		let system = tg.Triple.archAndOs(host);
 		tg.assert(
 			system in RELEASES,
 			`${system} is not supported in the Go toolchain.`,
@@ -117,10 +117,10 @@ export type Arg = {
 	cgo?: boolean;
 
 	/** The machine that will run the compilation. */
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 
 	/** The machine the produced artifacts will run on. */
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 
 	/** Any required SDK customization. */
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
@@ -131,11 +131,11 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		cgo: boolean;
 		env: Array<std.env.Arg>;
 		generate: boolean | { command: tg.Template.Arg };
-		host: std.Triple.Arg;
+		host: tg.Triple.Arg;
 		install: { command: tg.Template.Arg };
 		sdkArgs: Array<std.sdk.Arg>;
 		source: tg.Directory;
-		target: std.Triple.Arg;
+		target: tg.Triple.Arg;
 		vendor: boolean | { command: tg.Template.Arg };
 	};
 
@@ -188,9 +188,9 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			return object;
 		}
 	});
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let system = std.Triple.system(host);
-	let target = target_ ? std.triple(target_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let system = tg.Triple.archAndOs(host);
+	let target = target_ ? tg.triple(target_) : host;
 	tg.assert(source, "Must provide a source directory.");
 
 	let sdk = std.sdk({ host, target }, sdkArgs);

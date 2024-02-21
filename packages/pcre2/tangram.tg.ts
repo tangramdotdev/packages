@@ -24,9 +24,9 @@ export let source = tg.target(async () => {
 
 type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	build?: std.Triple.Arg;
+	build?: tg.Triple.Arg;
 	env?: std.env.Arg;
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
@@ -37,7 +37,7 @@ export let pcre2 = tg.target(async (arg?: Arg) => {
 	return std.autotools.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -54,7 +54,7 @@ export let test = tg.target(async () => {
 		`),
 	});
 
-	let host = await std.Triple.host();
+	let host = await tg.Triple.host();
 	let hostArch = host.arch;
 
 	let output = tg.File.expect(
@@ -71,12 +71,12 @@ export let test = tg.target(async () => {
 	tg.assert(metadata.arch === hostArch);
 
 	// // On Linux, test cross-compilation.
-	// let os = tg.System.os(std.Triple.system(host));
+	// let os = tg.Triple.os(tg.Triple.archAndOs(host));
 	// if (os === "linux") {
 	// 	// Determine the target triple with differing architecture from the host.
-	// 	let targetArch: std.Triple.Arch =
+	// 	let targetArch: tg.Triple.Arch =
 	// 		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	// 	let target = std.triple({
+	// 	let target = tg.triple({
 	// 		arch: targetArch,
 	// 		vendor: "unknown",
 	// 		os: "linux",
@@ -88,7 +88,7 @@ export let test = tg.target(async () => {
 	// 		await std.build(
 	// 			tg`
 	// 				echo "Checking if we can link against a cross-compiled libpcre2."
-	// 				${std.Triple.toString(target)}-cc ${source}/main.c -o $OUTPUT -L${pcre2({
+	// 				${tg.Triple.toString(target)}-cc ${source}/main.c -o $OUTPUT -L${pcre2({
 	// 					host,
 	// 				})}/lib -lpcre2-8
 	// 			`,

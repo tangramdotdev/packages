@@ -2,8 +2,8 @@ import * as std from "tg:std" with { path: "../std" };
 
 type Args = {
 	source?: tg.Artifact;
-	host?: std.Triple.Arg;
-	target?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 export let metadata = {
@@ -16,8 +16,8 @@ export let metadata = {
 export let source = tg.target(() => std.download.fromGnu(metadata));
 
 export let texinfo = tg.target(async (args?: Args) => {
-	let host = std.Triple.host({ host: args?.host });
-	let target = std.Triple.target({ host: args?.host, target: args?.target });
+	let host = tg.Triple.host({ host: args?.host });
+	let target = tg.Triple.target({ host: args?.host, target: args?.target });
 
 	let build = await autotools.build({
 		source: args?.source ?? source(),

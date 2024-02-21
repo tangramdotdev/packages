@@ -90,7 +90,7 @@ export let testBasicRootfs = tg.target(async () => {
 });
 
 export let testOciBasicEnv = tg.target(async () => {
-	let detectedHost = await std.Triple.host();
+	let detectedHost = await tg.Triple.host();
 	let host = bootstrap.toolchainTriple(detectedHost);
 	let utils = await std.utils.env({ host, sdk: { bootstrapMode: true } });
 	let basicEnv = await std.env(

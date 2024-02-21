@@ -29,7 +29,7 @@ type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	linuxHeaders: tg.Directory;
 	source?: tg.Directory;
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 	version?: GlibcVersion;
 };
 
@@ -45,13 +45,13 @@ export default tg.target(async (arg: Arg) => {
 		version = defaultGlibcVersion,
 		...rest
 	} = arg;
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let build = build_ ? std.triple(build_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let build = build_ ? tg.triple(build_) : host;
 	let target = target_ ?? host;
 
-	let hostTriple = std.triple(target ?? host);
-	let buildString = std.Triple.toString(build);
-	let hostString = std.Triple.toString(hostTriple);
+	let hostTriple = tg.triple(target ?? host);
+	let buildString = tg.Triple.toString(build);
+	let hostString = tg.Triple.toString(hostTriple);
 
 	// Resolve remaining arguments.
 
@@ -117,7 +117,7 @@ export default tg.target(async (arg: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			env,
 			opt: "2",
 			phases,
@@ -175,8 +175,8 @@ export let applySysrootFix = async (arg: SysrootFixArg) => {
 	return directory;
 };
 
-export let interpreterName = (system: tg.System) => {
-	let arch = tg.System.arch(system);
+export let interpreterName = (triple: tg.Triple.Arg) => {
+	let arch = tg.Triple.arch(tg.triple(triple));
 	let soVersion = arch === "x86_64" ? "2" : "1";
 	let soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;

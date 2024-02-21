@@ -28,8 +28,8 @@ export let source = tg.target(() => {
 
 export type Arg = {
 	source?: tg.Directory;
-	host?: std.Triple.Arg;
-	target?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
+	target?: tg.Triple.Arg;
 };
 
 // In order to bootstrap poetry, we need to have poetry. Internally, poetry works by bootstrapping with the most recent version published to pypi.org. To mock this, we use a known 'good' requirements.txt created with pip-compile to install a version of poetry from the pypi registry safely.
@@ -55,10 +55,10 @@ export type BuildArgs = {
 	lockfile: tg.File;
 
 	/** The host system to build upon. */
-	host?: std.Triple.Arg;
+	host?: tg.Triple.Arg;
 
 	/** The target system to compile for. */
-	target?: std.Triple.Arg;
+	target?: tg.Triple.Arg;
 
 	// TODO: groups, preferWheel vs sdist
 };

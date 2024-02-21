@@ -42,9 +42,9 @@ export let toolchain = async (arg?: LLVMArg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? std.triple(host_) : await std.Triple.host();
-	let hostString = std.Triple.toString(host);
-	let build = build_ ? std.triple(build_) : host;
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let hostString = tg.Triple.toString(host);
+	let build = build_ ? tg.triple(build_) : host;
 
 	if (host.os !== "linux") {
 		throw new Error("LLVM toolchain must be built for Linux");
@@ -56,10 +56,10 @@ export let toolchain = async (arg?: LLVMArg) => {
 		host,
 	});
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
-	sysroot = tg.Directory.expect(await sysroot.get(std.Triple.toString(host)));
+	sysroot = tg.Directory.expect(await sysroot.get(tg.Triple.toString(host)));
 	console.log("llvm sysroot", sysroot);
 
-	let gccToolchain = gcc.toolchain(std.Triple.rotate({ build, host }));
+	let gccToolchain = gcc.toolchain(tg.Triple.rotate({ build, host }));
 
 	let deps: tg.Unresolved<std.env.Arg> = [
 		git({ host }),
@@ -121,7 +121,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 	let llvmArtifact = await cmake.build(
 		{
 			...rest,
-			...std.Triple.rotate({ build, host }),
+			...tg.Triple.rotate({ build, host }),
 			bootstrapMode: true,
 			env,
 			phases: {
@@ -141,9 +141,9 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 export let test = async () => {
 	// Build a triple for the detected host.
-	let host = await std.Triple.host();
+	let host = await tg.Triple.host();
 
-	let os = tg.System.os(std.Triple.system(host));
+	let os = tg.Triple.os(tg.Triple.archAndOs(host));
 
 	let libDir = host.environment === "musl" ? "lib" : "lib64";
 	let expectedInterpreter =
@@ -187,7 +187,7 @@ export let test = async () => {
 	let cxxScript = tg`
 		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`;
-	let hostString = std.Triple.toString(host);
+	let hostString = tg.Triple.toString(host);
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
 			env: [
