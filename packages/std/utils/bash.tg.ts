@@ -34,7 +34,7 @@ export let source = tg.target(async (arg?: Arg) => {
 		await std.phases.build({
 			env,
 			phases: { prepare, fixup },
-			host: tg.Triple.archAndOs(build),
+			target: { host: tg.Triple.archAndOs(build) },
 		}),
 	);
 	return patchedSource;

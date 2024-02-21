@@ -69,10 +69,14 @@ export let rust = tg.target(
 
 		// On Linux, ensure we use a musl target for the host.
 		if (os === "linux") {
-			host.environment = "musl";
-			host.vendor = "unknown";
-			target.environment = "musl";
-			target.vendor = "unknown";
+			let hostArch = tg.Triple.arch(host);
+			tg.assert(hostArch);
+			host = tg.triple({
+				arch: hostArch,
+				vendor: "unknown",
+				os: "linux",
+				environment: "musl",
+			});
 		}
 
 		// Install the full minimal profile for the host.
@@ -120,7 +124,7 @@ export let rust = tg.target(
 
 		return tg.Directory.expect(
 			await std.phases.build({
-				host: hostSystem,
+				target: { host: hostSystem },
 				phases: { build: script },
 				env,
 			}),
@@ -181,21 +185,37 @@ export let build = async (arg: BuildArg) => {
 	let release = arg.release ?? true;
 	let source = arg.source;
 	let host = tg.triple(arg.host);
-	let target = arg.target ? tg.triple(arg.target) : host;
-	let targetString = tg.Triple.toString(target);
 	let system = tg.Triple.archAndOs(host);
 	let os = tg.Triple.os(system);
+	tg.assert(os);
+
+	let target = arg.target ? tg.triple(arg.target) : host;
+	let targetString = tg.Triple.toString(target);
+
+	// On Linux, ensure we use a musl host/target.
+	if (os === "linux") {
+		let hostArch = tg.Triple.arch(host);
+		tg.assert(hostArch);
+		host = tg.triple({
+			arch: hostArch,
+			vendor: "unknown",
+			os: "linux",
+			environment: "musl",
+		});
+
+		let targetArch = tg.Triple.arch(target);
+		tg.assert(targetArch);
+		target = tg.triple({
+			arch: targetArch,
+			vendor: "unknown",
+			os: "linux",
+			environment: "musl",
+		});
+	}
 	let isBootstrap = std
 		.flatten([arg?.sdkArg])
 		.some((sdk) => sdk?.bootstrapMode);
 
-	// On Linux, ensure we use a musl target.
-	if (os === "linux") {
-		host.environment = "musl";
-		host.vendor = "unknown";
-		target.environment = "musl";
-		target.vendor = "unknown";
-	}
 
 	let isCross = !tg.Triple.eq(host, target);
 

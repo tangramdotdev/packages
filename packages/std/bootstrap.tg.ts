@@ -13,7 +13,7 @@ export type Arg = {
 
 export let bootstrap = async (arg?: Arg) => {
 	let { component, host } = await configure(arg);
-	let hostString = host.toString();
+	let hostString = tg.Triple.toString(host);
 	if (tg.Triple.os(host) === "darwin") {
 		hostString = "universal_darwin";
 	} else {

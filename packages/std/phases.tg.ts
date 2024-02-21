@@ -257,7 +257,7 @@ export let mergeCommandArgs = async (
 									std
 										.flatten(arg.inner.value.args ?? [])
 										.map(maybeMutationToTemplate),
-							  );
+								);
 					}
 					return { command, args };
 				} else {
@@ -277,7 +277,7 @@ export let mergeCommandArgs = async (
 						? arg.inner.value.command
 						: await tg.Mutation.setIfUnset(
 								await tg.template(arg.inner.value.command),
-						  );
+							);
 					let args = undefined;
 					if (arg.inner.value.args !== undefined) {
 						args = tg.Mutation.is(arg.inner.value.args)
@@ -288,7 +288,7 @@ export let mergeCommandArgs = async (
 											.flatten(arg.inner.value.args ?? [])
 											.map(maybeMutationToTemplate),
 									),
-							  );
+								);
 					}
 					return { command, args };
 				} else {
@@ -326,7 +326,7 @@ export let mergeCommandArgs = async (
 							values: await Promise.all(
 								std.flatten(arg.args ?? []).map(maybeMutationToTemplate),
 							),
-					  });
+						});
 			}
 			return ret;
 		} else {

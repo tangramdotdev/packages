@@ -144,7 +144,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		// For each requested target not already present in a provided SDK, add a proxy.
 		let alreadyProxied: Array<tg.Triple> = [];
 		let newTargets = allCrossTargets.filter(
-			(target) => !tg.Triple.arrayIncludes(alreadyProxied, target),
+			(target) =>
+				!alreadyProxied.some((triple) => tg.Triple.eq(triple, target)),
 		);
 
 		// Ensure the directory provides a toolchain configured with the correct host.
@@ -162,10 +163,14 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		env.push(directory);
 
 		for await (let requestedTarget of targets) {
-			if (tg.Triple.arrayIncludes(alreadyProxied, requestedTarget)) {
+			if (
+				alreadyProxied.some((triple) => tg.Triple.eq(triple, requestedTarget))
+			) {
 				continue;
 			}
-			if (!tg.Triple.arrayIncludes(allCrossTargets, requestedTarget)) {
+			if (
+				!allCrossTargets.some((triple) => tg.Triple.eq(triple, requestedTarget))
+			) {
 				let targetString = tg.Triple.toString(requestedTarget);
 				throw new Error(
 					`Provided toolchain does not provide a ${hostString} -> ${targetString} toolchain.`,
@@ -555,15 +560,12 @@ export namespace sdk {
 		arg: ToolchainEnvArg,
 	): Promise<boolean> => {
 		let target = arg.target ? tg.triple(arg.target) : await tg.Triple.host();
-		if (
-			(await tg.Triple.host()).os === "darwin" &&
-			tg.triple(arg.target).os === "darwin"
-		) {
+		if ((await tg.Triple.host()).os === "darwin" && target.os === "darwin") {
 			return true;
 		}
 
 		let allTargets = await supportedTargets(arg.env);
-		return tg.Triple.arrayIncludes(allTargets, target);
+		return allTargets.some((t) => tg.Triple.eq(t, target));
 	};
 
 	/** Retreive the full range of targets an SDK supports. */
@@ -578,7 +580,6 @@ export namespace sdk {
 			predicate: (name) => name.endsWith("-cc"),
 		})) {
 			let tripleString = name.slice(0, -3);
-			tg.assert(tg.Triple.ArgString.is(tripleString));
 			foundTargets.add(tg.triple(tripleString));
 		}
 		return Array.from(foundTargets);
@@ -636,7 +637,6 @@ export namespace sdk {
 			}),
 		);
 		let host = (await output.text()).trim();
-		tg.assert(tg.Triple.ArgString.is(host));
 		return tg.triple(host);
 	};
 
@@ -725,7 +725,7 @@ export namespace sdk {
 				`Expected interpreter named ${expectedInterpreter} but got ${actualInterpreter}.`,
 			);
 		} else if (metadata.format === "mach-o") {
-			tg.assert(metadata.arches.includes(expectedArch));
+			tg.assert(metadata.arches.includes(expectedArch as string));
 		} else {
 			throw new Error(`Unexpected executable format ${metadata.format}.`);
 		}
@@ -780,7 +780,7 @@ export namespace sdk {
 		await Promise.all(
 			expected.targets.map(async (target) => {
 				// Make sure we found this target in the env.
-				tg.assert(tg.Triple.arrayIncludes(allTargets, target));
+				tg.assert(allTargets.some((t) => tg.Triple.eq(t, target)));
 
 				// Test C.
 				await assertProxiedCompiler({
@@ -1059,9 +1059,7 @@ export let generateAllOptions = () => {
 		}
 		let libc_ = os === "darwin" ? "" : `-${libc}`;
 		let vendor = os === "darwin" ? "apple" : "unknown";
-		let target = tg.triple(
-			`${arch}-${os}-${vendor}-${libc_}` as tg.Triple.ArgString,
-		);
+		let target = tg.triple(`${arch}-${os}-${vendor}-${libc_}`);
 		results.push({ target, linker: linker as sdk.LinkerKind });
 	}
 	return results;

@@ -7,7 +7,7 @@ export let metadata = {
 	version: "4.9.0",
 };
 
-export let source = tg.target(async (os: tg.System.Os) => {
+export let source = tg.target(async (os: tg.Triple.Os) => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
@@ -47,6 +47,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 	let os = build.os;
+	tg.assert(os);
 
 	let wrapBashScriptPaths: Array<string> | undefined =
 		os === "linux" ? ["bin/updatedb"] : undefined;

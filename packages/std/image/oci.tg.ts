@@ -18,7 +18,7 @@ import * as std from "../tangram.tg.ts";
 
 export type Arg = (ExecutableArg | RootFsArg) & {
 	/** The image should target a specific system. If not provided, will detect the host. */
-	system?: tg.System;
+	system?: tg.Triple.Arg;
 };
 
 type ExecutableArg = {
@@ -43,7 +43,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 		entrypointArtifact: tg.File;
 		entrypointString: Array<string>;
 		rootDir: Array<tg.Directory>;
-		system: tg.System;
+		system: tg.Triple.Arg;
 	};
 	let {
 		cmdString,
@@ -114,7 +114,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 	});
 
 	// Fill in defaults.
-	let system = system_ ?? (await tg.Triple.hostSystem());
+	let system = await tg.Triple.host(system_);
 
 	// Combine all root dirs.
 	let rootDir =
@@ -287,8 +287,8 @@ export type Platform = {
 	features?: Array<string>;
 };
 
-export let platform = (system: tg.System): Platform => {
-	switch (system) {
+export let platform = (system: tg.Triple.Arg): Platform => {
+	switch (tg.Triple.toString(tg.triple(system))) {
 		case "x86_64-linux":
 			return {
 				architecture: "amd64",
