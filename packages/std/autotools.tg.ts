@@ -4,6 +4,9 @@ export type Arg = {
 	/** Should we provide an SDK automatically? If true, the toollchain must be provided explicitly. */
 	bootstrapMode?: boolean;
 
+	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
+	debug?: boolean;
+
 	/** Should we add the default CFLAGS? Will compile with `-mtune=generic -pipe`. Default: true */
 	defaultCFlags?: boolean;
 
@@ -50,6 +53,7 @@ export type Arg = {
 export let target = async (...args: tg.Args<Arg>) => {
 	type Apply = {
 		bootstrapMode: boolean;
+		debug: boolean;
 		defaultCFlags: boolean;
 		doCheck: boolean;
 		extraCFlags: boolean;
@@ -67,6 +71,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 
 	let {
 		bootstrapMode = false,
+		debug = false,
 		defaultCFlags = true,
 		doCheck = false,
 		extraCFlags = false,
@@ -89,6 +94,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 			if (arg.bootstrapMode !== undefined) {
 				object.bootstrapMode = arg.bootstrapMode;
 			}
+			if (arg.debug !== undefined) {
+				object.debug = arg.debug;
+			}
 			if (arg.defaultCFlags !== undefined) {
 				object.defaultCFlags = arg.defaultCFlags;
 			}
@@ -102,9 +110,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 				phasesArgs.push({ env: arg.env });
 			}
 			if (arg.host !== undefined) {
-				object.host = tg.Mutation.is(arg.host)
-					? arg.host
-					: tg.triple(arg.host);
+				object.host = tg.Mutation.is(arg.host) ? arg.host : tg.triple(arg.host);
 			}
 			if (arg.opt !== undefined) {
 				object.opt = arg.opt;
@@ -247,6 +253,14 @@ export let target = async (...args: tg.Args<Arg>) => {
 		install: defaultInstall,
 	};
 
+	if (debug) {
+		let fixup = `mkdir -p $OUTPUT/.tangram_logs && cp config.log $OUTPUT/.tangram_logs/config.log`;
+		defaultPhases = {
+			fixup: { command: fixup },
+			...defaultPhases,
+		};
+	}
+
 	if (doCheck) {
 		let defaultCheck = {
 			command: `make`,
@@ -258,6 +272,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	let system = tg.Triple.archAndOs(host);
 	return await std.phases.target(
 		{
+			debug,
 			phases: defaultPhases,
 			env,
 			target: { env: { TANGRAM_HOST: system }, host: system },

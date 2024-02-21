@@ -5,6 +5,7 @@ import * as std from "./tangram.tg.ts";
 export type Arg = ArgObject | PhasesArg;
 
 export type ArgObject = {
+	debug?: boolean;
 	env?: std.env.Arg;
 	order?: Array<string>;
 	phases?: PhasesArg;
@@ -47,6 +48,7 @@ type CommandArgObject = {
 
 export let target = async (...args: tg.Args<Arg>) => {
 	type Apply = {
+		debug?: boolean;
 		env: std.env.Arg;
 		targetArgs: Array<tg.Target.Arg>;
 		order?: Array<string>;
@@ -54,6 +56,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	};
 
 	let {
+		debug = false,
 		env: env_,
 		order: order_,
 		phases: phases_,
@@ -67,6 +70,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 				object.targetArgs = tg.Mutation.is(arg.target)
 					? arg.target
 					: await tg.Mutation.arrayAppend<tg.Target.Arg>(arg.target);
+			}
+			if (arg.debug !== undefined) {
+				object.debug = arg.debug;
 			}
 			if (arg.env !== undefined) {
 				if (tg.Mutation.is(arg.env)) {
@@ -116,6 +122,17 @@ export let target = async (...args: tg.Args<Arg>) => {
 	let empty = tg`exec 0</dev/null`;
 	let order = order_ ?? defaultOrder();
 	let script = empty;
+	if (debug) {
+		script = tg`${empty}
+		set -x
+		set +e
+		mkdir -p $OUTPUT/.tangram_logs
+		echo "Running phases: ${order.join(", ")}\n"`;
+	} else {
+		script = tg`${empty}
+		set -eu
+		`;
+	}
 	if (phases !== undefined) {
 		script = order.reduce(async (ret, phaseName) => {
 			let phase = phases[phaseName];
@@ -129,11 +146,17 @@ export let target = async (...args: tg.Args<Arg>) => {
 			) {
 				return ret;
 			} else {
-				return tg`${ret}\n${phaseTemplate}`;
+				if (debug) {
+					ret = tg`${ret}
+					echo "Running ${phaseName}" | tee -a $OUTPUT/.tangram_logs/${phaseName}_phase.log
+					echo "${phaseTemplate}\n-----" | tee -a $OUTPUT/.tangram_logs/${phaseName}_phase.log
+					(${phaseTemplate}) | tee -a $OUTPUT/.tangram_logs/${phaseName}_phase.log`;
+				} else {
+					ret = tg`${ret}\n${phaseTemplate}`;
+				}
+				return ret;
 			}
-		}, empty);
-	} else {
-		script = empty;
+		}, script);
 	}
 
 	// Produce an env object for use with tg.target().

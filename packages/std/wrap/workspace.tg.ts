@@ -52,6 +52,7 @@ export let rust = tg.target(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		let host = await tg.Triple.host();
 		let target = tg.triple(arg?.target ?? host);
+		let hostArch = tg.Triple.arch(host);
 		let hostSystem = tg.Triple.archAndOs(host);
 		let os = tg.Triple.os(hostSystem);
 
@@ -69,13 +70,18 @@ export let rust = tg.target(
 
 		// On Linux, ensure we use a musl target for the host.
 		if (os === "linux") {
-			let hostArch = tg.Triple.arch(host);
-			tg.assert(hostArch);
 			host = tg.triple({
 				arch: hostArch,
 				vendor: "unknown",
 				os: "linux",
 				environment: "musl",
+			});
+		} else if (os === "darwin") {
+			// On macOS, ensure we use the ARCH-apple-darwin target.
+			host = tg.triple({
+				arch: hostArch,
+				vendor: "apple",
+				os: "darwin",
 			});
 		}
 
@@ -186,15 +192,15 @@ export let build = async (arg: BuildArg) => {
 	let source = arg.source;
 	let host = tg.triple(arg.host);
 	let system = tg.Triple.archAndOs(host);
+	let hostArch = tg.Triple.arch(host);
 	let os = tg.Triple.os(system);
 
 	let target = arg.target ? tg.triple(arg.target) : host;
 	let targetString = tg.Triple.toString(target);
+	let targetArch = tg.Triple.arch(target);
 
 	// On Linux, ensure we use a musl host/target.
 	if (os === "linux") {
-		let hostArch = tg.Triple.arch(host);
-		tg.assert(hostArch);
 		host = tg.triple({
 			arch: hostArch,
 			vendor: "unknown",
@@ -202,13 +208,24 @@ export let build = async (arg: BuildArg) => {
 			environment: "musl",
 		});
 
-		let targetArch = tg.Triple.arch(target);
-		tg.assert(targetArch);
 		target = tg.triple({
 			arch: targetArch,
 			vendor: "unknown",
 			os: "linux",
 			environment: "musl",
+		});
+	} else if (os === "darwin") {
+		// On macOS, ensure we use the ARCH-apple-darwin target.
+		host = tg.triple({
+			arch: hostArch,
+			vendor: "apple",
+			os: "darwin",
+		});
+
+		target = tg.triple({
+			arch: targetArch,
+			vendor: "apple",
+			os: "darwin",
 		});
 	}
 

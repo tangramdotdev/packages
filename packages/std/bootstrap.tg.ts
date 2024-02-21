@@ -167,8 +167,8 @@ export let patch = async (
 	);
 
 	let script = tg`
-		cp -R ${source} $OUTPUT
-		chmod -R u+w $OUTPUT
+		cp -R ${source} $OUTPUT | true
+		chmod -R +w $OUTPUT
 		cd $OUTPUT
 		${patchScript}
 	`;

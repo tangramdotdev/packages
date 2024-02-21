@@ -335,6 +335,7 @@ export namespace sdk {
 	export type BuildEnvArg = {
 		bootstrapMode?: boolean;
 		build?: tg.Triple.Arg;
+		debug?: boolean;
 		env?: std.env.Arg;
 		host?: tg.Triple.Arg;
 		sdk?: tg.MaybeNestedArray<std.sdk.Arg>;

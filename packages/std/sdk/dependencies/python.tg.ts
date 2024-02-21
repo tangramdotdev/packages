@@ -6,6 +6,7 @@ import libxcrypt from "./libxcrypt.tg.ts";
 import m4 from "./m4.tg.ts";
 import make from "./make.tg.ts";
 import pkgConfig from "./pkg_config.tg.ts";
+import zlib from "./zlib.tg.ts";
 
 export let metadata = {
 	name: "Python",
@@ -93,6 +94,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		m4(arg),
 		make(arg),
 		pkgConfig(arg),
+		zlib(arg),
 	];
 
 	let env = [std.utils.env(arg), ...dependencies, additionalEnv, env_];

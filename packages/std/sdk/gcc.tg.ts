@@ -13,18 +13,14 @@ export let metadata = {
 };
 
 /* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
-export let source = tg.target(async () => {
-	let gmpArtifact = await gmpSource();
-	let mpfrArtifact = await mpfrSource();
-	let islArtifact = await islSource();
-	let mpcArtifact = await mpcSource();
-	return tg.directory(gccSource(), {
-		gmp: gmpArtifact,
-		isl: islArtifact,
-		mpfr: mpfrArtifact,
-		mpc: mpcArtifact,
-	});
-});
+export let source = tg.target(() =>
+	tg.directory(gccSource(), {
+		gmp: gmpSource(),
+		isl: islSource(),
+		mpfr: mpfrSource(),
+		mpc: mpcSource(),
+	}),
+);
 
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;

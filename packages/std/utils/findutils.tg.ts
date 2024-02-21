@@ -20,7 +20,7 @@ export let source = tg.target(async (os: tg.Triple.Os) => {
 	});
 
 	// On macos, don't build locate/updatedb.
-	if (os === "darwin") {
+	if (os === "darwin" || os === "linux") {
 		let locatePatch = tg.File.expect(
 			await tg.include("findutils-disable-locate.diff"),
 		);
@@ -86,7 +86,7 @@ export let test = tg.target(async () => {
 	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
 		directory,
-		binaries: ["find", "locate", "xargs"],
+		binaries: ["find", "xargs"],
 		metadata,
 	});
 	return directory;
