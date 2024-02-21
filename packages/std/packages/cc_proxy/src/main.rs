@@ -361,7 +361,7 @@ async fn main_inner() -> Result<()> {
 
 	// Create the target.
 	let target = tg::Target::with_object(tg::target::Object {
-		host: tg::System::host().wrap_err("Failed to get tg::System::host().")?,
+		host: tg::Triple::host().wrap_err("Failed to get tg::Triple::host().")?,
 		executable,
 		lock: None,
 		name: Some("tangram_cc".into()),
@@ -386,7 +386,6 @@ async fn main_inner() -> Result<()> {
 	let outcome = build.outcome(tg).await?;
 	let build_directory = match outcome {
 		tg::build::Outcome::Canceled => return Err(error!("Build was cancelled.")),
-		tg::build::Outcome::Terminated => return Err(error!("Build was terminated.")),
 		tg::build::Outcome::Failed(e) => return Err(error!("Build failed: {e}.")),
 		tg::build::Outcome::Succeeded(outcome) => outcome
 			.try_unwrap_object()
