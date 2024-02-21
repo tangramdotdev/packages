@@ -58,7 +58,6 @@ export let gccVersion = "11.2.1";
 export let toolchainTriple = (host: tg.Triple.Arg) => {
 	let system = configureSystem(host);
 	let arch = tg.Triple.arch(system);
-	tg.assert(arch);
 
 	let os = tg.Triple.os(system);
 	if (os === "linux") {

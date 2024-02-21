@@ -58,8 +58,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let host = await tg.Triple.host(host_);
 	let build = build_ ? tg.triple(build_) : host;
-	let os = build.os;
-	tg.assert(os);
+	let os = tg.Triple.os(build);
 
 	let additionalEnv: std.env.Arg = {
 		TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "resolve",

@@ -187,7 +187,6 @@ export let build = async (arg: BuildArg) => {
 	let host = tg.triple(arg.host);
 	let system = tg.Triple.archAndOs(host);
 	let os = tg.Triple.os(system);
-	tg.assert(os);
 
 	let target = arg.target ? tg.triple(arg.target) : host;
 	let targetString = tg.Triple.toString(target);
@@ -212,10 +211,10 @@ export let build = async (arg: BuildArg) => {
 			environment: "musl",
 		});
 	}
+
 	let isBootstrap = std
 		.flatten([arg?.sdkArg])
 		.some((sdk) => sdk?.bootstrapMode);
-
 
 	let isCross = !tg.Triple.eq(host, target);
 

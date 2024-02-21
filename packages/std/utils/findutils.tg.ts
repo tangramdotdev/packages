@@ -46,8 +46,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let build = build_ ? tg.triple(build_) : host;
-	let os = build.os;
-	tg.assert(os);
+	let os = tg.Triple.os(build);
 
 	let wrapBashScriptPaths: Array<string> | undefined =
 		os === "linux" ? ["bin/updatedb"] : undefined;

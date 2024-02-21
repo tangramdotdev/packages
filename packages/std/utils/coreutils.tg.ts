@@ -52,8 +52,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let build = build_ ? tg.triple(build_) : host;
-	let os = host.os;
-	tg.assert(os);
+	let os = tg.Triple.os(host);
 
 	let dependencies: tg.Unresolved<std.env.Arg> = [];
 
