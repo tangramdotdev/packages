@@ -2,7 +2,6 @@ use itertools::Itertools;
 use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
 use tangram_error::{error, Result, WrapErr};
-use tg::Handle;
 use tokio::io::AsyncWriteExt;
 
 // Input arguments to the rustc proxy.
@@ -155,7 +154,7 @@ async fn main_inner() -> Result<()> {
     let output_files = get_outputs(&args)?;
 
     // Create a client.
-    let tg = tg::client::Builder::new(args.tangram_runtime.addr).build();
+    let tg = tg::Client::with_runtime()?;
     let tg = &tg;
 
     // Check in the source and output directories.
@@ -229,7 +228,7 @@ async fn main_inner() -> Result<()> {
     }
 
     // Create the target.
-    let host = tg::System::host()?;
+    let host = tg::Triple::host()?;
     let lock = None;
     let checksum = None;
     let name = Some("tangram_rustc".into());
@@ -246,15 +245,14 @@ async fn main_inner() -> Result<()> {
     let target_id = target.id(tg).await?;
 
     // Create the build and mark it as a child.
-    let parent = tg::Build::with_id(args.tangram_runtime.build);
-    let build_options = tg::build::Options {
-        depth: 1,
-        parent: Some(parent),
+    let build_options = tg::build::GetOrCreateArg {
+        parent: Some(args.tangram_runtime.build),
         remote: false,
         retry: tg::build::Retry::Failed,
-        user: None,
+        target: target_id.clone(),
     };
-    let build_id = tg.get_or_create_build(target_id, build_options).await?;
+    let tg::build::GetOrCreateOutput { id: build_id } =
+        tg.get_or_create_build(None, build_options).await?;
 
     // Get the build outcome.
     let outcome = tg::Build::with_id(build_id)
@@ -265,10 +263,10 @@ async fn main_inner() -> Result<()> {
     // Get the output.
     let output = match outcome {
         tg::build::Outcome::Canceled => return Err(error!("Build was cancelled.")),
-        tg::build::Outcome::Terminated => return Err(error!("Build failed terminated.")),
         tg::build::Outcome::Failed(error) => return Err(error!("Build failed: {error}")),
         tg::build::Outcome::Succeeded(success) => success
-            .clone()
+            .try_unwrap_object()
+            .wrap_err("Expected the build outcome to be an object.")?
             .try_unwrap_directory()
             .wrap_err("Expected the build output to be a directory.")?,
     };

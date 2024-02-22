@@ -286,7 +286,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 				...additionalEnv,
 			},
 			proxyEnv,
-			{ TANGRAM_HOST: tg.Triple.archAndOs(host) },
+			{ TANGRAM_HOST: tg.Triple.toString(tg.Triple.archAndOs(host)) },
 			env,
 		),
 	});
@@ -524,11 +524,11 @@ let tripleToEnvVar = (triple: tg.Triple, upcase?: boolean) => {
 
 export let test = tg.target(async () => {
 	let tests = [testHost()];
-	let os = tg.Triple.os(await tg.Triple.hostSystem());
+	let os = tg.Triple.os(await tg.Triple.host());
 	if (os === "linux") {
 		tests.push(testCross());
 	}
-	await tg.resolve(tests);
+	await Promise.all(tests);
 	return true;
 });
 

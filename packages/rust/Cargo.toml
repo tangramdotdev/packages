@@ -9,8 +9,8 @@ futures = "0.3"
 itertools = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "5bc612d03956cdc17834d7008a1e08996e08620d" }
-tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "5bc612d03956cdc17834d7008a1e08996e08620d" }
+tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "d2aef670b12d307add48e94a6b6920d1bb6f52e2" }
+tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "d2aef670b12d307add48e94a6b6920d1bb6f52e2" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
