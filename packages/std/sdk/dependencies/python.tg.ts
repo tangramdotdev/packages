@@ -97,7 +97,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		zlib(arg),
 	];
 
-	let env = [std.utils.env(arg), ...dependencies, additionalEnv, env_];
+	let env = [env_, std.utils.env(arg), ...dependencies, additionalEnv];
 
 	// Build python.
 	let result = std.autotools.build(

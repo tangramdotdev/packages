@@ -20,7 +20,7 @@ export let source = tg.target(async (os: tg.Triple.Os) => {
 	});
 
 	// On macos, don't build locate/updatedb.
-	if (os === "darwin" || os === "linux") {
+	if (os === "darwin") {
 		let locatePatch = tg.File.expect(
 			await tg.include("findutils-disable-locate.diff"),
 		);

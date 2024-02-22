@@ -88,8 +88,13 @@ export let env = tg.target(async (arg?: Arg) => {
 			perl({ ...rest, host }),
 			pkgconfig({ ...rest, host }),
 			ncurses({ ...rest, host }),
-			texinfo({ ...rest, host }),
+		]),
+	);
+
+	dependencies = dependencies.concat(
+		await Promise.all([
 			libxcrypt({ ...rest, host }),
+			texinfo({ ...rest, host }),
 		]),
 	);
 

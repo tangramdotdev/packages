@@ -42,10 +42,11 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--enable-pc-files",
 			`--with-pkg-config-libdir="$OUTPUT/lib/pkgconfig"`,
 			"--enable-symlinks",
+			"--disable-database",
 			"--disable-home-terminfo",
 			"--disable-rpath-hack",
+			"--enable-termcap",
 			"--without-manpages",
-			"--without-progs",
 		],
 	};
 

@@ -164,7 +164,17 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 });
 
 export let canadianCross = tg.target(async (arg?: tg.Triple.HostArg) => {
-	let host = await tg.Triple.host(arg);
+	let systemHost = await tg.Triple.host(arg);
+
+	let host = tg.Triple.normalized(
+		tg.triple({
+			arch: tg.Triple.arch(systemHost),
+			os: tg.Triple.os(systemHost),
+			environment: tg.Triple.environment(systemHost) ?? "gnu",
+		}),
+	);
+	tg.assert(host, "Expected the detected host to normalize correctly");
+
 	let target = host;
 	let build = bootstrap.toolchainTriple(host);
 
@@ -200,7 +210,7 @@ export let canadianCross = tg.target(async (arg?: tg.Triple.HostArg) => {
 			"strip",
 			"strings",
 		],
-		tg.Triple.toString(host) + "-",
+		host + "-",
 	);
 	console.log("stage2 binutils", await nativeHostBinutils.id());
 

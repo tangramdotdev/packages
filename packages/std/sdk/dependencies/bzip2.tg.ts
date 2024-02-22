@@ -43,9 +43,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	// Define phases.
 	let prepare = tg`cp -R ${sourceDir}/* .`;
 	let buildPhase = `make -f Makefile-libbz2_so && make`;
-	let install = `make install PREFIX=$OUTPUT
-	cp libbz2.so.* $OUTPUT/lib
-	`;
+	let install = tg.Mutation.set(`make install PREFIX=$OUTPUT && cp libbz2.so.* $OUTPUT/lib`);
 	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
 	let fixup = `
 		cd $OUTPUT/bin
@@ -67,7 +65,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		fixup,
 	};
 
-	let env = [std.utils.env(arg), make(arg), env_];
+	let env = [env_, std.utils.env(arg), make(arg)];
 
 	let output = std.utils.buildUtil(
 		{

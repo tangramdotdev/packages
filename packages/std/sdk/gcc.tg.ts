@@ -80,6 +80,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Prepare output.
 	let prepare = tg`
+		set +e
 		mkdir -p $OUTPUT
 		chmod -R u+w $OUTPUT
 		cp -R ${arg.binutils}/* $OUTPUT
