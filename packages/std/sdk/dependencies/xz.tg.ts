@@ -51,7 +51,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let env = [std.utils.env(arg), make(arg), { MAKEFLAGS: "--silent" }, env_];
+	let env = [env_, std.utils.env(arg), make(arg), { MAKEFLAGS: "--silent" }];
 
 	let output = await std.utils.buildUtil(
 		{

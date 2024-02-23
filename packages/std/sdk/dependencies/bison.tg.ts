@@ -40,7 +40,7 @@ export let build = tg.target((arg?: Arg) => {
 	};
 
 	let dependencies = [m4(arg), make(arg)];
-	let env = [std.utils.env(arg), ...dependencies, env_];
+	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	let output = std.utils.buildUtil(
 		{

@@ -51,7 +51,6 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 		bootstrap.make.build(arg),
 		{
 			CPATH: tg.Mutation.unset(),
-			MAKEFLAGS: "--output-sync --silent",
 		},
 	];
 

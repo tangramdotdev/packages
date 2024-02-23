@@ -54,7 +54,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	// Define environment.
 	let ccCommand = build.os == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
-	let env = [std.utils.env(arg), make(arg), { CC: ccCommand }, env_];
+	let env = [env_, std.utils.env(arg), make(arg), { CC: ccCommand }];
 
 	let output = std.utils.buildUtil(
 		{

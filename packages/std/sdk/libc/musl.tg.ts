@@ -91,7 +91,7 @@ export default tg.target(async (arg?: Arg) => {
 		install,
 	};
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (rest.bootstrapMode) {
 		env.push(
 			dependencies.env({
@@ -101,7 +101,7 @@ export default tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
-	env = env.concat([{ CPATH: tg.Mutation.unset() }, env_]);
+	env = env.concat([{ CPATH: tg.Mutation.unset() }]);
 
 	let result = await std.autotools.build(
 		{

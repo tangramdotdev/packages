@@ -80,7 +80,6 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Prepare output.
 	let prepare = tg`
-		set +e
 		mkdir -p $OUTPUT
 		chmod -R u+w $OUTPUT
 		cp -R ${arg.binutils}/* $OUTPUT
@@ -92,9 +91,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv: std.env.Arg = {
-		MAKEFLAGS: "--output-sync --silent",
-	};
+	let additionalEnv: std.env.Arg = {};
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (target.environment === "musl") {
@@ -163,7 +160,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let phases = { prepare, configure };
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (rest.bootstrapMode) {
 		env.push(
 			dependencies.env({
@@ -173,7 +170,7 @@ export let build = tg.target(async (arg: Arg) => {
 			}),
 		);
 	}
-	env = env.concat([additionalEnv, env_]);
+	env = env.concat([additionalEnv]);
 
 	let result = await std.autotools.build(
 		{

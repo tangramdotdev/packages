@@ -47,7 +47,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let phases = { configure };
 
 	let dependencies = [make(arg), perl(arg)];
-	let env = [std.utils.env(arg), ...dependencies, env_];
+	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	return std.autotools.build(
 		{

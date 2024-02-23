@@ -105,13 +105,12 @@ export default tg.target(async (arg: Arg) => {
 	}
 
 	env = env.concat([
+		env_,
 		{
 			CPATH: tg.Mutation.unset(),
-			MAKEFLAGS: "--output-sync --silent",
 			LIBRARY_PATH: tg.Mutation.unset(),
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},
-		env_,
 	]);
 
 	let result = await std.autotools.build(

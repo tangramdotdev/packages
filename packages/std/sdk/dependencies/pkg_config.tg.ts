@@ -66,7 +66,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			LDFLAGS: await tg.Mutation.templatePrepend(tg`-L${libiconv}/lib`, " "),
 		});
 	}
-	let env = [std.utils.env(arg), ...dependencies, env_];
+	let env = [env_, std.utils.env(arg), ...dependencies];
 	let pkgConfigBuild = await std.utils.buildUtil(
 		{
 			...rest,

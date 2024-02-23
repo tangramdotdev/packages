@@ -39,7 +39,7 @@ export let build = tg.target((arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let env = [std.utils.env(arg), make(arg), env_];
+	let env = [env_, std.utils.env(arg), make(arg)];
 
 	let output = std.utils.buildUtil(
 		{

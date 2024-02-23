@@ -46,7 +46,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let install = tg`make install PREFIX=$OUTPUT`;
 	let phases = { prepare, install };
 
-	let env = [std.utils.env(arg), make(arg), env_];
+	let env = [env_, std.utils.env(arg), make(arg)];
 
 	let result = std.autotools.build({
 		...rest,

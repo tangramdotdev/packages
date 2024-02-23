@@ -35,7 +35,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let perlArtifact = await perl(arg);
 	let dependencies = [make(arg), perlArtifact, bison(arg), m4(arg), zlib(arg)];
-	let env = [std.utils.env(arg), ...dependencies, env_];
+	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	let autoconf = await std.utils.buildUtil(
 		{

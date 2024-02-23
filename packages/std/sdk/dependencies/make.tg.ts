@@ -35,7 +35,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		configure,
 	};
 
-	let env = [std.utils.env(arg), bootstrap.make.build(arg), env_];
+	let env = [env_, std.utils.env(arg), bootstrap.make.build(arg)];
 
 	return std.utils.buildUtil(
 		{

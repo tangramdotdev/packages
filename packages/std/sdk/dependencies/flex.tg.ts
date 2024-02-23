@@ -45,7 +45,7 @@ export let build = tg.target((arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 	let dependencies = [bison(arg), m4(arg), make(arg), zlib(arg)];
-	let env = [std.utils.env(arg), ...dependencies, env_];
+	let env = [env_, std.utils.env(arg), ...dependencies];
 	let output = std.utils.buildUtil(
 		{
 			...rest,

@@ -75,7 +75,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			CXX: await tg`${targetString}-c++ -static-libstdc++ -fPIC`,
 		};
 	}
-	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (rest.bootstrapMode) {
 		env.push(
 			dependencies.env({
@@ -85,7 +85,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
-	env = env.concat([additionalEnv, env_]);
+	env = env.concat([additionalEnv]);
 
 	// Collect configuration.
 	let configure = {
