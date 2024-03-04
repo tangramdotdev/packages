@@ -787,7 +787,13 @@ export namespace sdk {
 		await Promise.all(
 			expected.targets.map(async (target) => {
 				// Make sure we found this target in the env.
-				tg.assert(allTargets.some((t) => tg.Triple.eq(t, target)));
+				tg.assert(
+					allTargets.some(
+						(t) =>
+							tg.Triple.arch(t) === tg.Triple.arch(target) &&
+							tg.Triple.os(t) === tg.Triple.os(target),
+					),
+				);
 
 				// Test C.
 				await assertProxiedCompiler({

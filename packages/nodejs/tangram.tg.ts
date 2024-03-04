@@ -17,7 +17,7 @@ type ToolchainArg = {
 let source = async (): Promise<tg.Directory> => {
 	// Known versions of NodeJS.
 	let version = metadata.version;
-	let target = await tg.Triple.hostSystem();
+	let target = await tg.Triple.host();
 
 	let releases: {
 		[key: string]: {
@@ -50,9 +50,10 @@ let source = async (): Promise<tg.Directory> => {
 	};
 
 	// Get the NodeJS release.
-	tg.assert(target in releases, `Unsupported target system: ${target}.`);
+	let targetString = tg.Triple.toString(target);
+	tg.assert(targetString in releases, `Unsupported target system: ${targetString}.`);
 
-	let release = releases[target];
+	let release = releases[targetString];
 	tg.assert(release, "Unsupported target");
 	let { url, checksum, unpackFormat } = release;
 
