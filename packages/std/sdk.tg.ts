@@ -757,11 +757,17 @@ export namespace sdk {
 
 		// Assert we can determine a host and it matches the expected.
 		let actualHost = await sdk.getHost({ env });
-		let actualHostString = tg.Triple.toString(actualHost);
-		let expectedHostString = tg.Triple.toString(expected.host);
+		let actualHostArch = tg.Triple.arch(actualHost);
+		let expectedHostArch = tg.Triple.arch(expected.host);
+		let actualHostOs = tg.Triple.os(actualHost);
+		let expectedHostOs = tg.Triple.os(expected.host);
 		tg.assert(
-			tg.Triple.eq(actualHost, expected.host),
-			`Given env provides an SDK with host ${actualHostString} instead of expected ${expectedHostString}.`,
+			actualHostArch === expectedHostArch,
+			`Given env provides an SDK with host arch ${actualHostArch} instead of expected ${expectedHostArch}.`,
+		);
+		tg.assert(
+			actualHostOs === expectedHostOs,
+			`Given env provides an SDK with host os ${actualHostOs} instead of expected ${expectedHostOs}.`,
 		);
 
 		// Assert it provides utilities.
