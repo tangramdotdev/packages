@@ -1,0 +1,12 @@
+diff -Naur perl-5.38.2/hints/darwin.sh perl-5.38.2_patched/hints/darwin.sh
+--- perl-5.38.2/hints/darwin.sh	2023-11-28 06:57:28
++++ perl-5.38.2_patched/hints/darwin.sh	2023-12-10 14:22:17
+@@ -130,7 +130,7 @@
+ 
+ # Avoid Apple's cpp precompiler, better for extensions
+ if [ "X`echo | ${cc} -no-cpp-precomp -E - 2>&1 >/dev/null`" = "X" ]; then
+-    cppflags="${cppflags} -no-cpp-precomp"
++    #cppflags="${cppflags} -no-cpp-precomp"
+ 
+     # This is necessary because perl's build system doesn't
+     # apply cppflags to cc compile lines as it should.
