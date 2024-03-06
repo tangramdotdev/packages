@@ -1,5 +1,6 @@
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import openssl from "tg:openssl" with { path: "../openssl" };
+import perl from "tg:perl" with { path: "../perl" };
 import readline from "tg:readline" with { path: "../readline" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
@@ -48,6 +49,7 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 	let env = [
 		ncurses(arg),
 		openssl(arg),
+		perl(arg),
 		readline(arg),
 		zlib(arg),
 		{
