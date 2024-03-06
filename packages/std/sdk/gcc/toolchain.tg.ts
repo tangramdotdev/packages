@@ -201,7 +201,7 @@ export let canadianCross = tg.target(async (arg?: tg.Triple.HostArg) => {
 			"strip",
 			"strings",
 		],
-		host + "-",
+		tg.Triple.toString(host) + "-",
 	);
 	console.log("stage2 binutils", await nativeHostBinutils.id());
 

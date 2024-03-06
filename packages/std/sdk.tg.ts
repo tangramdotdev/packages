@@ -75,14 +75,11 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			return object;
 		}
 	});
-	let incomingHost = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let proxyArg = proxyArg_ ?? { compiler: false, linker: true };
 
 	// If we're in bootstrap mode, stop here and return the bootstrap SDK.
 	let bootstrapMode = (bootstrapMode_ ?? []).some((mode) => mode);
-	let host = bootstrapMode
-		? bootstrap.toolchainTriple(incomingHost)
-		: sdk.normalizeTriple(incomingHost);
 	if (bootstrapMode) {
 		let bootstrapSDK = bootstrap.sdk.env({ host });
 		let proxyEnv = proxy.env({
@@ -390,29 +387,6 @@ export namespace sdk {
 		return true;
 	};
 
-	/** Produce the canonical version of the triple used by the toolchain. */
-	export let normalizeTriple = (triple: tg.Triple): tg.Triple => {
-		let normalized = tg.Triple.normalized(triple);
-		tg.assert(normalized, "Expected the detected host to normalize correctly");
-		let base = tg.triple(normalized);
-		if (base.os === "darwin") {
-			return tg.triple({
-				arch: base.arch,
-				vendor: "apple",
-				os: base.os,
-			});
-		} else if (base.os === "linux") {
-			return tg.triple({
-				arch: base.arch,
-				vendor: base.vendor,
-				os: base.os,
-				environment: tg.Triple.environment(base) ?? "gnu",
-			});
-		} else {
-			throw new Error(`Unsupported OS: ${base.os}`);
-		}
-	};
-
 	/** Determine whether an env provides an toolchain. */
 	export let providesToolchain = (
 		arg: ProvidesToolchainArg,
@@ -538,14 +512,9 @@ export namespace sdk {
 		let ldso;
 		let libDir;
 		if (os !== "darwin") {
-			let normalizedTarget = tg.Triple.normalized(target);
-			tg.assert(
-				normalizedTarget,
-				"Expected the target to normalize correctly.",
-			);
-			let ldsoPath = isCross ? `${normalizedTarget}/lib` : "lib";
+			let ldsoPath = isCross ? `${targetString}/lib` : "lib";
 			libDir = tg.Directory.expect(await directory.tryGet(ldsoPath));
-			let interpreterName = libc.interpreterName(normalizedTarget);
+			let interpreterName = libc.interpreterName(targetString);
 			let foundLdso = await libDir.tryGet(interpreterName);
 			tg.assert(foundLdso);
 			ldso = tg.File.expect(foundLdso);

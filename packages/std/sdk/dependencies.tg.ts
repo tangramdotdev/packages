@@ -57,13 +57,8 @@ export let env = tg.target(async (arg?: Arg) => {
 			bc({ ...rest, host }),
 			bison({ ...rest, host }),
 			gperf({ ...rest, host }),
-			m4({ ...rest, host }),
-		]),
-	);
-
-	dependencies = dependencies.concat(
-		await Promise.all([
 			libffi({ ...rest, host }),
+			m4({ ...rest, host }),
 			zlib({ ...rest, host }),
 			zstd({ ...rest, host }),
 		]),
