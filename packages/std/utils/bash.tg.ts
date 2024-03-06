@@ -56,8 +56,8 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
-	// If not in bootstrap mode or if the provided env has ncurses in the library path, use it instead of termcap.
-	if (!bootstrapMode || (await providesNcurses(env_))) {
+	// If the provided env has ncurses in the library path, use it instead of termcap.
+	if (await providesNcurses(env_)) {
 		configureArgs.push("--with-curses");
 	}
 
