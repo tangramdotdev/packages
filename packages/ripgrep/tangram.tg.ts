@@ -50,6 +50,7 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 			env,
 			features: ["pcre2"],
 			source: source_ ?? source(),
+			useCargoVendor: true,
 		},
 		rustArgs,
 	);
@@ -58,7 +59,7 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 export default ripgrep;
 
 export let test = tg.target(async () => {
-	let directory = ripgrep({ rust: { useCargoVendor: true }});
+	let directory = ripgrep();
 	await std.assert.pkg({
 		directory,
 		binaries: ["rg"],
