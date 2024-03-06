@@ -3,7 +3,6 @@ import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
 import libffi from "./libffi.tg.ts";
 import m4 from "./m4.tg.ts";
-import make from "./make.tg.ts";
 import zlib from "./zlib.tg.ts";
 
 export let metadata = {
@@ -84,7 +83,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		prepare,
 	};
 
-	let dependencies = [bison(arg), libffi(arg), m4(arg), make(arg), zlib(arg)];
+	let dependencies = [bison(arg), libffi(arg), m4(arg), zlib(arg)];
 	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	let perlArtifact = await std.utils.buildUtil(

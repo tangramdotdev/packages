@@ -1,5 +1,4 @@
 import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
 
 export let metadata = {
 	name: "libffi",
@@ -42,7 +41,7 @@ export let build = tg.target((arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [env_, std.utils.env(arg), make(arg)];
+	let env = [env_, std.utils.env(arg)];
 
 	return std.utils.buildUtil(
 		{

@@ -1,7 +1,6 @@
 import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
 import m4 from "./m4.tg.ts";
-import make from "./make.tg.ts";
 import zlib from "./zlib.tg.ts";
 
 export let metadata = {
@@ -54,7 +53,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
 		bison(arg),
 		m4(arg),
-		make(arg),
 		zlib(arg),
 	];
 	let additionalLibDirs = [];

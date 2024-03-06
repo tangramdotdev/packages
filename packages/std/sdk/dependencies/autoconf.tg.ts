@@ -1,7 +1,6 @@
 import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
 import m4 from "./m4.tg.ts";
-import make from "./make.tg.ts";
 import perl from "./perl.tg.ts";
 import zlib from "./zlib.tg.ts";
 
@@ -34,7 +33,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 
 	let perlArtifact = await perl(arg);
-	let dependencies = [make(arg), perlArtifact, bison(arg), m4(arg), zlib(arg)];
+	let dependencies = [perlArtifact, bison(arg), m4(arg), zlib(arg)];
 	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	let autoconf = await std.utils.buildUtil(
@@ -172,7 +171,10 @@ export let patchAutom4teCfg = tg.target(
 			contents = tg`${contents}${newLine}\n`;
 		}
 
-		let env = [arg?.env, std.sdk({ bootstrapMode: arg?.bootstrapMode },arg?.sdk)];
+		let env = [
+			arg?.env,
+			std.sdk({ bootstrapMode: arg?.bootstrapMode }, arg?.sdk),
+		];
 
 		let patchedAutom4teCfg = tg.File.expect(
 			await tg.build(

@@ -1,6 +1,5 @@
 import * as std from "../../tangram.tg.ts";
 import m4 from "./m4.tg.ts";
-import make from "./make.tg.ts";
 
 export let metadata = {
 	name: "bison",
@@ -39,7 +38,7 @@ export let build = tg.target((arg?: Arg) => {
 		],
 	};
 
-	let dependencies = [m4(arg), make(arg)];
+	let dependencies = [m4(arg)];
 	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	let output = std.utils.buildUtil(

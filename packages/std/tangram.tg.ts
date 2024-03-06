@@ -105,6 +105,9 @@ export let testUtilsLibiconv = tg.target(async () => {
 export let testUtilsAttr = tg.target(async () => {
 	return await utils.attr.test();
 });
+export let testUtilsBzip2 = tg.target(async () => {
+	return await utils.bzip2.test();
+});
 export let testUtilsDiffutils = tg.target(async () => {
 	return await utils.diffutils.test();
 });
@@ -120,11 +123,20 @@ export let testUtilsGrep = tg.target(async () => {
 export let testUtilsGzip = tg.target(async () => {
 	return await utils.gzip.test();
 });
+export let testUtilsMake = tg.target(async () => {
+	return await utils.make.test();
+});
+export let testUtilsPatch = tg.target(async () => {
+	return await utils.patch.test();
+});
 export let testUtilsSed = tg.target(async () => {
 	return await utils.sed.test();
 });
 export let testUtilsTar = tg.target(async () => {
 	return await utils.tar.test();
+});
+export let testUtilsXz = tg.target(async () => {
+	return await utils.xz.test();
 });
 export let testUtils = tg.target(async () => {
 	return await utils.test();
@@ -148,9 +160,6 @@ export let testDepsBc = tg.target(async () => {
 export let testDepsBison = tg.target(async () => {
 	return await dependencies.bison.test();
 });
-export let testDepsBzip2 = tg.target(async () => {
-	return await dependencies.bzip2.test();
-});
 export let testDepsFile = tg.target(async () => {
 	return await dependencies.file.test();
 });
@@ -172,14 +181,8 @@ export let testDepsLibXCrypt = tg.target(async () => {
 export let testDepsm4 = tg.target(async () => {
 	return await dependencies.m4.test();
 });
-export let testDepsMake = tg.target(async () => {
-	return await dependencies.make.test();
-});
 export let testDepsNcurses = tg.target(async () => {
 	return await dependencies.ncurses.test();
-});
-export let testDepsPatch = tg.target(async () => {
-	return await dependencies.patch.test();
 });
 export let testDepsPerl = tg.target(async () => {
 	return await dependencies.perl.test();
@@ -192,9 +195,6 @@ export let testDepsPython = tg.target(async () => {
 });
 export let testDepsTexinfo = tg.target(async () => {
 	return await dependencies.texinfo.test();
-});
-export let testDepsXz = tg.target(async () => {
-	return await dependencies.xz.test();
 });
 export let testDepsZlib = tg.target(async () => {
 	return await dependencies.zlib.test();

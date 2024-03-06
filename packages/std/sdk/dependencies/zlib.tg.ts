@@ -1,5 +1,4 @@
 import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
 
 export let metadata = {
 	name: "zlib",
@@ -39,7 +38,7 @@ export let build = tg.target((arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let env = [env_, std.utils.env(arg), make(arg)];
+	let env = [env_, std.utils.env(arg)];
 
 	let output = std.utils.buildUtil(
 		{

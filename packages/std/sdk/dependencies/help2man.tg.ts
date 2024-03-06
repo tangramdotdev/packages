@@ -2,7 +2,6 @@ import * as std from "../../tangram.tg.ts";
 import autoconf from "./autoconf.tg.ts";
 import bison from "./bison.tg.ts";
 import m4 from "./m4.tg.ts";
-import make from "./make.tg.ts";
 import perl from "./perl.tg.ts";
 import zlib from "./zlib.tg.ts";
 
@@ -40,7 +39,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		autoconf(arg),
 		bison(arg),
 		m4(arg),
-		make(arg),
 		perlArtifact,
 		zlib(arg),
 	];

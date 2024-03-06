@@ -1,5 +1,6 @@
-import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
+import * as bootstrap from "../bootstrap.tg.ts";
+import * as std from "../tangram.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "patch",
@@ -22,6 +23,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target((arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build,
 		env: env_,
 		host,
@@ -33,12 +35,17 @@ export let build = tg.target((arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [env_, std.utils.env(arg), make(arg)];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrapMode) {
+		env.push(prerequisites({ host }));
+	}
+	env.push(env_);
 
-	let output = std.utils.buildUtil(
+	let output = buildUtil(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(),
@@ -51,7 +58,6 @@ export let build = tg.target((arg?: Arg) => {
 
 export default build;
 
-import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await tg.Triple.host());
 	let bootstrapMode = true;

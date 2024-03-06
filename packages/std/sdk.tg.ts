@@ -115,12 +115,12 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			sdk: { bootstrapMode: true },
 		});
 		console.log("proxyEnv", proxyEnv);
-		let dependenciesEnv = await dependencies.env({
+		let utilsEnv = await std.utils.env({
 			host,
 			sdk: { bootstrapMode: true },
 		});
-		console.log("dependenciesEnv", dependenciesEnv);
-		return std.env(bootstrapSDK, proxyEnv, dependenciesEnv, {
+		console.log("utilsEnv", utilsEnv);
+		return std.env(bootstrapSDK, proxyEnv, utilsEnv, {
 			bootstrapMode: true,
 		});
 	}
@@ -189,7 +189,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			);
 		}
 		// Build the utils using the proxied host toolchain and add them to the env.
-		env.push(dependencies.env({ env }));
+		env.push(std.utils.env({ env }));
 		return std.env(...env, { bootstrapMode: true });
 	} else if (toolchain === "gcc") {
 		// Collect environments to compose.
@@ -207,13 +207,13 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		envs.push(proxyEnv);
 
 		// Add remaining dependencies.
-		let dependenciesEnv = await dependencies.env({
+		let utilsEnv = await std.utils.env({
 			build: host,
 			host,
 			env: envs,
 			bootstrapMode: true,
 		});
-		envs.push(dependenciesEnv);
+		envs.push(utilsEnv);
 
 		// Add any requested cross-compilers, without packages.
 		let crossEnvs = [];
@@ -268,7 +268,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			let alternateLinkerEnvs = [
 				hostToolchain,
 				proxyEnv,
-				dependenciesEnv,
+				utilsEnv,
 				...crossEnvs,
 			];
 			if (tg.Directory.is(linkerDir)) {
@@ -289,7 +289,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			llvm: true,
 		});
 		console.log("llvm proxy env", proxyEnv);
-		let dependenciesEnv = await dependencies.env({
+		// TODO - can you ditch any of these flags?
+		let utilsEnv = await std.utils.env({
 			env: [
 				clangToolchain,
 				proxyEnv,
@@ -307,7 +308,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			host,
 			bootstrapMode: true,
 		});
-		return std.env(clangToolchain, proxyEnv, dependenciesEnv, {
+		return std.env(clangToolchain, proxyEnv, utilsEnv, {
 			bootstrapMode: true,
 		});
 	}

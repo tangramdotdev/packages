@@ -3,7 +3,6 @@ import autoconf from "./autoconf.tg.ts";
 import bison from "./bison.tg.ts";
 import help2man from "./help2man.tg.ts";
 import m4 from "./m4.tg.ts";
-import make from "./make.tg.ts";
 import perl from "./perl.tg.ts";
 import pkgconfig from "./pkg_config.tg.ts";
 import zlib from "./zlib.tg.ts";
@@ -51,7 +50,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		bison(arg),
 		help2man(arg),
 		m4(arg),
-		make(arg),
 		pkgconfig(arg),
 		perlArtifact,
 		zlib(arg),
