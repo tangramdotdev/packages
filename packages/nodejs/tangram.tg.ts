@@ -29,7 +29,7 @@ let source = async (): Promise<tg.Directory> => {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
-				"sha256:",
+				"sha256:c957f29eb4e341903520caf362534f0acd1db7be79c502ae8e283994eed07fe1",
 			unpackFormat: ".tar.xz",
 		},
 		["x86_64-linux"]: {
