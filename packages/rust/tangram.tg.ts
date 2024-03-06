@@ -21,7 +21,9 @@ type ToolchainArg = {
 
 export let rust = tg.target(async (arg?: ToolchainArg) => {
 	// Determine the list of target triples to support other than the inferred host.
-	let host = await tg.Triple.host();
+	let detectedHost = await tg.Triple.host();
+	let host = rustTriple(detectedHost);
+	console.log("rust host", tg.Triple.toString(host));
 	let targets = [];
 	if (arg?.target && !tg.Triple.eq(arg.target, host)) {
 		targets.push(arg.target);
@@ -145,7 +147,7 @@ export type Arg = {
 	host?: tg.Triple.Arg;
 	proxy?: boolean;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
-	source: tg.Artifact;
+	source?: tg.Artifact;
 	target?: tg.Triple.Arg;
 	useCargoVendor?: boolean;
 };
@@ -203,8 +205,9 @@ export let build = async (...args: tg.Args<Arg>) => {
 		}
 	});
 
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let target = target_ ? tg.triple(target_) : host;
+	let host = rustTriple(host_ ? tg.triple(host_) : await tg.Triple.host());
+	let target = target_ ? rustTriple(tg.triple(target_)) : host;
+	console.log("building for", tg.Triple.toString(target));
 
 	// Check if we're cross-compiling.
 	let crossCompiling = !tg.Triple.eq(target, host);
@@ -218,7 +221,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	let targetTriple = tg.Triple.toString(target);
 
 	// Download the dependencies using the cargo vendor.
-	tg.assert(source);
+	tg.assert(source, "Must provide a source directory.");
 	let cargoConfig = vendoredSources({ source, useCargoVendor });
 
 	// Create the build script.
@@ -510,6 +513,28 @@ type RustupManifestV2 = {
 			to: string;
 		};
 	};
+};
+
+let rustTriple = (triple: tg.Triple): tg.Triple => {
+	let normalized = tg.Triple.normalized(triple);
+	tg.assert(normalized, `Could not convert triple to Rust triple: ${tg.Triple.toString(triple)}`);
+	let base = tg.triple(normalized);
+	if (base.os === "darwin") {
+		return tg.triple({
+			arch: base.arch,
+			vendor: "apple",
+			os: base.os
+		});
+	} else if (base.os === "linux") {
+		return tg.triple({
+			arch: base.arch,
+			vendor: base.vendor,
+			os: base.os,
+			environment: base.environment ?? "gnu"
+		});
+	} else {
+		throw new Error(`Unsupported OS: ${base.os}`);
+	}
 };
 
 let tripleToEnvVar = (triple: tg.Triple, upcase?: boolean) => {

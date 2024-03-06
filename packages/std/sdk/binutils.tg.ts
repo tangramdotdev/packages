@@ -112,7 +112,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...tg.Triple.rotate({ build, host }),
 			env,
-			// parallel: false,
 			phases,
 			source: source_ ?? source(build),
 		},

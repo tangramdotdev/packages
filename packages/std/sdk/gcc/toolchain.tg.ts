@@ -164,16 +164,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 });
 
 export let canadianCross = tg.target(async (arg?: tg.Triple.HostArg) => {
-	let systemHost = await tg.Triple.host(arg);
-
-	let host = tg.Triple.normalized(
-		tg.triple({
-			arch: tg.Triple.arch(systemHost),
-			os: tg.Triple.os(systemHost),
-			environment: tg.Triple.environment(systemHost) ?? "gnu",
-		}),
-	);
-	tg.assert(host, "Expected the detected host to normalize correctly");
+	let host = await tg.Triple.host(arg);
 
 	let target = host;
 	let build = bootstrap.toolchainTriple(host);

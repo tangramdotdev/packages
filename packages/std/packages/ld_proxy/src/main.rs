@@ -86,6 +86,9 @@ struct Options {
 	/// The library paths.
 	library_paths: Vec<String>,
 
+	/// The maximum number of transitive library path searches to perform during optimization. Defaults to 16.
+	max_depth: usize,
+
 	/// The output path.
 	output_path: PathBuf,
 
@@ -135,6 +138,11 @@ fn read_options() -> Options {
 				.collect_vec()
 		});
 
+	// Get the max depth.
+	let mut max_depth = std::env::var("TANGRAM_LINKER_MAX_DEPTH")
+		.ok()
+		.map_or(MAX_DEPTH, |s| s.parse().unwrap_or(MAX_DEPTH));
+
 	// Get the injection path.
 	let injection_path = std::env::var("TANGRAM_LINKER_INJECTION_PATH").ok();
 
@@ -157,14 +165,21 @@ fn read_options() -> Options {
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
 		// Pass through any arg that isn't a tangram arg.
-		if arg.starts_with("--tg") {
+		if arg.starts_with("--tg-") {
 			// Handle setting combined library paths. Will override the env var if set.
 			if arg.starts_with("--tg-library-path-opt-level=") {
-				let option = arg
-					.strip_prefix("--tg-library-path-opt-level=")
-					.expect("Invalid argument");
+				let option = arg.strip_prefix("--tg-library-path-opt-level=").unwrap();
 				library_optimization_strategy =
 					LibraryPathOptimizationLevel::from_str(option).unwrap_or_default();
+			} else if arg.starts_with("--tg-max-depth=") {
+				let option = arg.strip_prefix("--tg-max-depth=").unwrap();
+				if let Ok(max_depth_arg) = option.parse() {
+					max_depth = max_depth_arg;
+				} else {
+					tracing::warn!("Invalid max depth argument {option}. Using default.");
+				}
+			} else {
+				command_args.push(arg.clone());
 			}
 		} else {
 			command_args.push(arg.clone());
@@ -205,6 +220,7 @@ fn read_options() -> Options {
 		interpreter_args,
 		injection_path,
 		library_paths,
+		max_depth,
 		output_path,
 		passthrough,
 		tracing_level,
@@ -247,6 +263,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 				.wrap_err("Could not open output file")?,
 		);
 		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
+
 		Some(output_artifact)
 	} else {
 		None
@@ -291,6 +308,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 			&mut needed_libraries,
 			options.library_path_optimization,
 			report_missing,
+			options.max_depth,
 		)
 		.await?;
 
@@ -391,7 +409,7 @@ async fn create_manifest<H: BuildHasher>(
 						.expect("Failed to read the interpreter file name")
 						.to_str()
 						.expect("Invalid interpreter file name")
-						.contains("ld-linux")
+						.starts_with("ld-linux")
 				};
 
 				Some((path.clone(), is_musl))
@@ -565,6 +583,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
 	strategy: LibraryPathOptimizationLevel,
 	report_missing: bool,
+	max_depth: usize,
 ) -> Result<HashSet<tg::symlink::Id, H>> {
 	if file.is_none()
 		|| matches!(strategy, LibraryPathOptimizationLevel::None)
@@ -582,7 +601,8 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
 	let file = file.as_ref().unwrap();
-	find_transitive_needed_libraries(tg, file, &resolved_dirs, needed_libraries, 0).await?;
+	find_transitive_needed_libraries(tg, file, &resolved_dirs, needed_libraries, max_depth, 0)
+		.await?;
 	tracing::trace!(?needed_libraries, "post-find");
 	if matches!(strategy, LibraryPathOptimizationLevel::Filter) {
 		let resolved_dirs = needed_libraries.values().flatten().cloned().collect();
@@ -703,13 +723,11 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	file: &tg::File,
 	library_paths: &HashSet<tg::directory::Id, H>,
 	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
+	max_depth: usize,
 	depth: usize,
 ) -> Result<()> {
 	// Check if we're done.
-	if all_needed_libraries.is_empty()
-		|| found_all_libraries(all_needed_libraries)
-		|| depth == MAX_DEPTH
-	{
+	if found_all_libraries(all_needed_libraries) || depth == max_depth {
 		return Ok(());
 	}
 
@@ -752,6 +770,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 					&found_library,
 					library_paths,
 					all_needed_libraries,
+					max_depth,
 					depth + 1,
 				)
 				.await?;
@@ -769,7 +788,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 fn found_all_libraries<H: BuildHasher + Default>(
 	all_needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 ) -> bool {
-	all_needed_libraries.values().all(Option::is_some)
+	all_needed_libraries.is_empty() || all_needed_libraries.values().all(Option::is_some)
 }
 
 /// Analyze an output file.

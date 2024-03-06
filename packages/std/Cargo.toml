@@ -16,7 +16,7 @@ missing_safety_doc = "allow"
 [workspace.dependencies]
 async-recursion = "1"
 byteorder = "1"
-clap = { version = "4.2.1", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 fnv = "1"
 futures = "0.3"
 goblin = "0.8"
@@ -24,9 +24,14 @@ itertools = "0.12"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "d2aef670b12d307add48e94a6b6920d1bb6f52e2" }
-tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "d2aef670b12d307add48e94a6b6920d1bb6f52e2" }
-tokio = { version = "1", default-features = false, features = ["rt", "macros", "fs", "parking_lot"] }
+tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "c25e82a406c8c18340849ce900bde3044c42747e" }
+tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "c25e82a406c8c18340849ce900bde3044c42747e" }
+tokio = { version = "1", default-features = false, features = [
+  "rt",
+  "macros",
+  "fs",
+  "parking_lot",
+] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 xattr = "1"

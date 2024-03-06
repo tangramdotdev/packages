@@ -75,11 +75,14 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			return object;
 		}
 	});
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let incomingHost = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let proxyArg = proxyArg_ ?? { compiler: false, linker: true };
 
 	// If we're in bootstrap mode, stop here and return the bootstrap SDK.
 	let bootstrapMode = (bootstrapMode_ ?? []).some((mode) => mode);
+	let host = bootstrapMode
+		? bootstrap.toolchainTriple(incomingHost)
+		: sdk.normalizeTriple(incomingHost);
 	if (bootstrapMode) {
 		let bootstrapSDK = bootstrap.sdk.env({ host });
 		let proxyEnv = proxy.env({
@@ -386,6 +389,29 @@ export namespace sdk {
 		return true;
 	};
 
+	/** Produce the canonical version of the triple used by the toolchain. */
+	export let normalizeTriple = (triple: tg.Triple): tg.Triple => {
+		let normalized = tg.Triple.normalized(triple);
+		tg.assert(normalized, "Expected the detected host to normalize correctly");
+		let base = tg.triple(normalized);
+		if (base.os === "darwin") {
+			return tg.triple({
+				arch: base.arch,
+				vendor: "apple",
+				os: base.os,
+			});
+		} else if (base.os === "linux") {
+			return tg.triple({
+				arch: base.arch,
+				vendor: base.vendor,
+				os: base.os,
+				environment: tg.Triple.environment(base) ?? "gnu",
+			});
+		} else {
+			throw new Error(`Unsupported OS: ${base.os}`);
+		}
+	};
+
 	/** Determine whether an env provides an toolchain. */
 	export let providesToolchain = (
 		arg: ProvidesToolchainArg,
@@ -511,9 +537,14 @@ export namespace sdk {
 		let ldso;
 		let libDir;
 		if (os !== "darwin") {
-			let ldsoPath = isCross ? `${targetString}/lib` : "lib";
+			let normalizedTarget = tg.Triple.normalized(target);
+			tg.assert(
+				normalizedTarget,
+				"Expected the target to normalize correctly.",
+			);
+			let ldsoPath = isCross ? `${normalizedTarget}/lib` : "lib";
 			libDir = tg.Directory.expect(await directory.tryGet(ldsoPath));
-			let interpreterName = libc.interpreterName(target);
+			let interpreterName = libc.interpreterName(normalizedTarget);
 			let foundLdso = await libDir.tryGet(interpreterName);
 			tg.assert(foundLdso);
 			ldso = tg.File.expect(foundLdso);
@@ -769,6 +800,13 @@ export namespace sdk {
 			actualHostOs === expectedHostOs,
 			`Given env provides an SDK with host os ${actualHostOs} instead of expected ${expectedHostOs}.`,
 		);
+		if (expected.host.environment) {
+			let actualHostEnvironment = tg.Triple.environment(actualHost);
+			tg.assert(
+				actualHostEnvironment === expected.host.environment,
+				`Given env provides an SDK with host environment ${actualHostEnvironment} instead of expected ${expected.host.environment}.`,
+			);
+		}
 
 		// Assert it provides utilities.
 		if (arg?.bootstrapMode) {
@@ -848,44 +886,25 @@ type ValidateCrossTargetArg = {
 let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
 	let host = arg.host;
 	let target = arg.target;
-	let validTargets = new Set<tg.Triple>();
-	let table = compatibilityTable();
-	for (let validHost of table.keys()) {
-		if (tg.Triple.eq(host, validHost)) {
-			validTargets = table.get(validHost) ?? new Set();
-			break;
-		}
+
+	// All triples can compile for themselves.
+	if (tg.Triple.eq(host, target)) {
+		return true;
 	}
-	for (let validTarget of validTargets.values()) {
-		if (tg.Triple.eq(validTarget, target)) {
-			return true;
-		}
+
+	// The default darwin toolchain supports cross-compiling to other darwin architectures.
+	if (host.os === "darwin" && target.os === "darwin") {
+		return true;
 	}
+
+	// Linux supports cross compiling to other linux architectures.
+	if (host.os === "linux" && target.os === "linux") {
+		return true;
+	}
+
+	// Otherwise, we don't support cross-compiling.
 	return false;
 };
-
-/** Each triple can cross-compile to zero or more target triples.  All triples are assumed to be able to compile to themselves. */
-let compatibilityTable = (): Map<tg.Triple, Set<tg.Triple>> =>
-	new Map([
-		[tg.triple(`aarch64-apple-darwin`), new Set([])],
-		[tg.triple(`x86_64-apple-darwin`), new Set([])],
-		[
-			tg.triple(`aarch64-unknown-linux-gnu`),
-			new Set([tg.triple(`x86_64-unknown-linux-gnu`)]),
-		],
-		[
-			tg.triple(`aarch64-unknown-linux-musl`),
-			new Set([tg.triple(`x86_64-unknown-linux-musl`)]),
-		],
-		[
-			tg.triple(`x86_64-unknown-linux-gnu`),
-			new Set([tg.triple(`aarch64-unknown-linux-gnu`)]),
-		],
-		[
-			tg.triple(`x86_64-unknown-linux-musl`),
-			new Set([tg.triple(`aarch64-unknown-linux-musl`)]),
-		],
-	]);
 
 /** Merge all lib and lib64 directories into a single lib directory, leaving a symlink. */
 export let mergeLibDirs = async (dir: tg.Directory) => {

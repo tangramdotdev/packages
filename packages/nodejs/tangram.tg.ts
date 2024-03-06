@@ -2,7 +2,7 @@ import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "nodejs",
-	version: "20.11.0",
+	version: "20.11.1",
 };
 
 type ToolchainArg = {
@@ -28,30 +28,36 @@ let source = async (): Promise<tg.Directory> => {
 	} = {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
-			checksum: "sha256:f6df68c6793244071f69023a9b43a0cf0b13d65cbe86d55925c28e4134d9aafb",
+			checksum:
+				"sha256:",
 			unpackFormat: ".tar.xz",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
-			checksum: "sha256:822780369d0ea309e7d218e41debbd1a03f8cdf354ebf8a4420e89f39cc2e612",
+			checksum:
+				"sha256:d8dab549b09672b03356aa2257699f3de3b58c96e74eb26a8b495fbdc9cf6fbe",
 			unpackFormat: ".tar.xz",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
-			checksum: "sha256:f18a7438723d48417f5e9be211a2f3c0520ffbf8e02703469e5153137ca0f328",
+			checksum:
+				"sha256:fd771bf3881733bfc0622128918ae6baf2ed1178146538a53c30ac2f7006af5b",
 			unpackFormat: ".tar.xz",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:f18a7438723d48417f5e9be211a2f3c0520ffbf8e02703469e5153137ca0f328",
+				"sha256:ed69f1f300beb75fb4cad45d96aacd141c3ddca03b6d77c76b42cb258202363d",
 			unpackFormat: ".tar.xz",
 		},
 	};
 
 	// Get the NodeJS release.
 	let targetString = tg.Triple.toString(target);
-	tg.assert(targetString in releases, `Unsupported target system: ${targetString}.`);
+	tg.assert(
+		targetString in releases,
+		`Unsupported target system: ${targetString}.`,
+	);
 
 	let release = releases[targetString];
 	tg.assert(release, "Unsupported target");

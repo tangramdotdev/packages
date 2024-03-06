@@ -126,8 +126,11 @@ export let target = async (...args: tg.Args<Arg>) => {
 		script = tg`${empty}
 		set -x
 		set +e
-		mkdir -p $OUTPUT/.tangram_logs
-		echo "Running phases: ${order.join(", ")}\n"`;
+		export LOGDIR=$OUTPUT/.tangram_logs
+		mkdir -p "$LOGDIR"
+		export buildlog=$LOGDIR/build.log
+		start=$(date +%s)
+		echo "Running phases: ${order.join(", ")}\n" | tee "$buildlog"`;
 	} else {
 		script = tg`${empty}
 		set -eu
@@ -148,15 +151,31 @@ export let target = async (...args: tg.Args<Arg>) => {
 			} else {
 				if (debug) {
 					ret = tg`${ret}
-					echo "Running ${phaseName}" | tee -a $OUTPUT/.tangram_logs/${phaseName}_phase.log
-					echo "${phaseTemplate}\n-----" | tee -a $OUTPUT/.tangram_logs/${phaseName}_phase.log
-					(${phaseTemplate}) | tee -a $OUTPUT/.tangram_logs/${phaseName}_phase.log`;
+					${phaseName}_start=$(date +%s)
+					${phaseName}_log=$LOGDIR/${phaseName}_phase.log
+					echo "Running ${phaseName} phase:" | tee -a "$buildlog"
+					echo "${phaseTemplate}" | tee -a "$buildlog"
+					echo "${phaseTemplate}" | tee "$${phaseName}_log"
+					echo "----------------------------------------" | tee -a "$${phaseName}_log"
+					(${phaseTemplate}) 2>&1 | tee -a "$${phaseName}_log"
+					${phaseName}_end=$(date +%s)
+					${phaseName}_duration=$(( ${phaseName}_end - ${phaseName}_start ))
+					echo "${phaseName} phase completed in $${phaseName}_duration seconds" | tee -a "$buildlog"
+					echo "----------------------------------------" | tee -a "$buildlog"
+					`;
 				} else {
 					ret = tg`${ret}\n${phaseTemplate}`;
 				}
 				return ret;
 			}
 		}, script);
+	}
+	if (debug) {
+		script = tg`${script}
+		end=$(date +%s)
+		duration=$(( end - start ))
+		echo "Build completed in $duration seconds" | tee -a "$buildlog"
+		`;
 	}
 
 	// Produce an env object for use with tg.target().

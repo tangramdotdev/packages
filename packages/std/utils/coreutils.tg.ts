@@ -87,8 +87,6 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let configure = {
 		args: [
-			`--build=${tg.Triple.toString(build)}`,
-			`--host=${tg.Triple.toString(host)}`,
 			"--disable-dependency-tracking",
 			"--disable-libcap",
 			"--disable-nls",
