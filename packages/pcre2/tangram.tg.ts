@@ -2,13 +2,13 @@ import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "pcre2",
-	version: "10.42",
+	version: "10.43",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:c33b418e3b936ee3153de2c61cc638e7e4fe3156022a5c77d0711bcbb9d64f1f";
+		"sha256:889d16be5abb8d05400b33c25e151638b8d4bac0e2d9c76e9d6923118ae8a34e";
 	let owner = "PCRE2Project";
 	let repo = name;
 	let tag = `pcre2-${version}`;
