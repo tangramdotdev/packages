@@ -1,3 +1,4 @@
+import m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -26,7 +27,14 @@ type Arg = {
 };
 
 export let bison = tg.target((arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+	let {
+		autotools = [],
+		build,
+		env: env_,
+		host,
+		source: source_,
+		...rest
+	} = arg ?? {};
 
 	let configure = {
 		args: [
@@ -38,10 +46,13 @@ export let bison = tg.target((arg?: Arg) => {
 	};
 	let phases = { configure };
 
+	let env = [m4(arg), env_];
+
 	return std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			env,
 			phases,
 			source: source_ ?? source(),
 		},
@@ -51,12 +62,12 @@ export let bison = tg.target((arg?: Arg) => {
 
 export default bison;
 
-export let test = tg.target(() => {
-	return std.build(
-		`
-		echo "Checking that we can run bison." | tee $OUTPUT
-		bison --version | tee -a $OUTPUT
-	`,
-		{ env: bison() },
-	);
+export let test = tg.target(async () => {
+	let directory = bison();
+	await std.assert.pkg({
+		directory,
+		binaries: ["bison"],
+		metadata,
+	});
+	return directory;
 });
