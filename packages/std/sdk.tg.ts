@@ -815,7 +815,7 @@ export namespace sdk {
 			await std.env.assertProvides({ env, names: ["dash", "ls"] });
 		} else {
 			// Test for the complete set.
-			await dependencies.assertProvides(env);
+			await std.utils.assertProvides(env);
 		}
 
 		// Assert it can compile and wrap for all requested targets.
