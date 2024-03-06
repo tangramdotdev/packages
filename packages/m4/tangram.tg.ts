@@ -24,10 +24,15 @@ type Arg = {
 export let m4 = tg.target(async (arg?: Arg) => {
 	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
 
+	let configure = {
+		args: ["--disable-dependency-tracking"],
+	};
+
 	return std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			phases: { configure },
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -37,8 +42,11 @@ export let m4 = tg.target(async (arg?: Arg) => {
 export default m4;
 
 export let test = tg.target(async () => {
-	return std.build(tg`
-		echo "Checking that we can run m4."
-		${m4()}/bin/m4 --version
-	`);
+	let directory = m4();
+	await std.assert.pkg({
+		directory,
+		binaries: ["m4"],
+		metadata,
+	});
+	return directory;
 });
