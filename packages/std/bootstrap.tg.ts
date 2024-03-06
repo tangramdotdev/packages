@@ -61,9 +61,9 @@ export let toolchainTriple = (host: tg.Triple.Arg) => {
 
 	let os = tg.Triple.os(system);
 	if (os === "linux") {
-		return tg.Triple.new_(`${arch}-linux-musl`);
+		return tg.triple(`${arch}-linux-musl`);
 	} else if (os === "darwin") {
-		return tg.Triple.new_(`${arch}-apple-darwin`);
+		return tg.triple(`${arch}-apple-darwin`);
 	} else {
 		return tg.unreachable();
 	}

@@ -254,7 +254,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	};
 
 	if (debug) {
-		let fixup = `mkdir -p $OUTPUT/.tangram_logs && cp config.log $OUTPUT/.tangram_logs/config.log`;
+		let fixup = `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`;
 		defaultPhases = {
 			fixup: { command: fixup },
 			...defaultPhases,

@@ -1,5 +1,4 @@
 import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
 
 export let metadata = {
 	name: "bc",
@@ -54,7 +53,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	// Define environment.
 	let ccCommand = build.os == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
-	let env = [env_, std.utils.env(arg), make(arg), { CC: ccCommand }];
+	let env = [env_, std.utils.env(arg), { CC: ccCommand }];
 
 	let output = std.utils.buildUtil(
 		{

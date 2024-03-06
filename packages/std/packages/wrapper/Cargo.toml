@@ -8,9 +8,9 @@ workspace = true
 
 [dependencies]
 byteorder = { workspace = true }
-fnv = { workspace = true }
 itertools = { workspace = true }
 libc = { workspace = true }
+fnv = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

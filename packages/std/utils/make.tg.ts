@@ -1,5 +1,6 @@
-import * as bootstrap from "../../bootstrap.tg.ts";
-import * as std from "../../tangram.tg.ts";
+import * as bootstrap from "../bootstrap.tg.ts";
+import * as std from "../tangram.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "make",
@@ -21,6 +22,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build,
 		env: env_,
 		host,
@@ -35,12 +37,17 @@ export let build = tg.target(async (arg?: Arg) => {
 		configure,
 	};
 
-	let env = [env_, std.utils.env(arg), bootstrap.make.build(arg)];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrapMode) {
+		env.push(prerequisites({ host }));
+	}
+	env.push(env_);
 
-	return std.utils.buildUtil(
+	return buildUtil(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases,
 			source: source_ ?? source(),

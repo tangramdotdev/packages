@@ -1,5 +1,6 @@
-import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
+import * as bootstrap from "../bootstrap.tg.ts";
+import * as std from "../tangram.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "bzip2",
@@ -31,6 +32,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build,
 		env: env_,
 		host,
@@ -43,7 +45,9 @@ export let build = tg.target(async (arg?: Arg) => {
 	// Define phases.
 	let prepare = tg`cp -R ${sourceDir}/* .`;
 	let buildPhase = `make -f Makefile-libbz2_so && make`;
-	let install = tg.Mutation.set(`make install PREFIX=$OUTPUT && cp libbz2.so.* $OUTPUT/lib`);
+	let install = tg.Mutation.set(
+		`make install PREFIX=$OUTPUT && cp libbz2.so.* $OUTPUT/lib`,
+	);
 	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
 	let fixup = `
 		cd $OUTPUT/bin
@@ -65,12 +69,17 @@ export let build = tg.target(async (arg?: Arg) => {
 		fixup,
 	};
 
-	let env = [env_, std.utils.env(arg), make(arg)];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrapMode) {
+		env.push(prerequisites({ host }));
+	}
+	env.push(env_);
 
-	let output = std.utils.buildUtil(
+	let output = buildUtil(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases,
 			source: sourceDir,
@@ -83,7 +92,6 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await tg.Triple.host());
 	let bootstrapMode = true;

@@ -1,5 +1,4 @@
 import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
 import perl from "./perl.tg.ts";
 
 export let metadata = {
@@ -46,7 +45,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [make(arg), perl(arg)];
+	let dependencies = [perl(arg)];
 	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	return std.autotools.build(

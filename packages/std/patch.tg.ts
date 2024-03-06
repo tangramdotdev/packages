@@ -1,4 +1,3 @@
-import gnuPatch from "./sdk/dependencies/patch.tg.ts";
 import * as std from "./tangram.tg.ts";
 
 export let patch = async (
@@ -12,7 +11,6 @@ export let patch = async (
 				cp -R ${source} $OUTPUT
 				chmod -R u+w $OUTPUT
 				cat ${patchFiles} | patch -p1 -d $OUTPUT`,
-			{ env: gnuPatch() },
 		),
 	);
 };

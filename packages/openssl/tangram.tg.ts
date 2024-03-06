@@ -1,3 +1,4 @@
+import perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -35,6 +36,7 @@ export let openssl = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build,
+		env: env_,
 		host: host_,
 		source: source_,
 		...rest
@@ -60,10 +62,13 @@ export let openssl = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { prepare, configure, install };
 
+	let env = [perl(arg), env_];
+
 	let openssl = await std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			env,
 			phases,
 			source: sourceDir,
 		},

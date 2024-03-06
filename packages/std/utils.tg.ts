@@ -1,16 +1,21 @@
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.tg.ts";
 import * as bash from "./utils/bash.tg.ts";
+import bzip2 from "./utils/bzip2.tg.ts";
 import coreutils from "./utils/coreutils.tg.ts";
 import diffutils from "./utils/diffutils.tg.ts";
 import findutils from "./utils/findutils.tg.ts";
 import gawk from "./utils/gawk.tg.ts";
 import grep from "./utils/grep.tg.ts";
 import gzip from "./utils/gzip.tg.ts";
+import make from "./utils/make.tg.ts";
+import patch from "./utils/patch.tg.ts";
 import sed from "./utils/sed.tg.ts";
 import tar from "./utils/tar.tg.ts";
+import xz from "./utils/xz.tg.ts";
 
 export * as attr from "./utils/attr.tg.ts";
+export * as bzip2 from "./utils/bzip2.tg.ts";
 export * as bash from "./utils/bash.tg.ts";
 export * as coreutils from "./utils/coreutils.tg.ts";
 export * as diffutils from "./utils/diffutils.tg.ts";
@@ -20,8 +25,11 @@ export * as gawk from "./utils/gawk.tg.ts";
 export * as grep from "./utils/grep.tg.ts";
 export * as gzip from "./utils/gzip.tg.ts";
 export * as libiconv from "./utils/libiconv.tg.ts";
+export * as make from "./utils/make.tg.ts";
+export * as patch from "./utils/patch.tg.ts";
 export * as sed from "./utils/sed.tg.ts";
 export * as tar from "./utils/tar.tg.ts";
+export * as xz from "./utils/xz.tg.ts";
 
 type Arg = std.sdk.BuildEnvArg;
 
@@ -56,17 +64,21 @@ export let env = tg.target(async (arg?: Arg) => {
 
 	let utils = [bashArtifact, bashEnv];
 	utils = utils.concat(
-	await Promise.all([
-		coreutils({ ...rest, bootstrapMode, env, host }),
-		diffutils({ ...rest, bootstrapMode, env, host }),
-		findutils({ ...rest, bootstrapMode, env, host }),
-		gawk({ ...rest, bootstrapMode, env, host }),
-		grep({ ...rest, bootstrapMode, env, host }),
-		gzip({ ...rest, bootstrapMode, env, host }),
-		sed({ ...rest, bootstrapMode, env, host }),
-		tar({ ...rest, bootstrapMode, env, host }),
-	]),
-);
+		await Promise.all([
+			bzip2({ ...rest, bootstrapMode, env, host }),
+			coreutils({ ...rest, bootstrapMode, env, host }),
+			diffutils({ ...rest, bootstrapMode, env, host }),
+			findutils({ ...rest, bootstrapMode, env, host }),
+			gawk({ ...rest, bootstrapMode, env, host }),
+			grep({ ...rest, bootstrapMode, env, host }),
+			gzip({ ...rest, bootstrapMode, env, host }),
+			make({ ...rest, bootstrapMode, env, host }),
+			patch({ ...rest, bootstrapMode, env, host }),
+			sed({ ...rest, bootstrapMode, env, host }),
+			tar({ ...rest, bootstrapMode, env, host }),
+			xz({ ...rest, bootstrapMode, env, host }),
+		]),
+	);
 	return utils;
 });
 
@@ -175,14 +187,18 @@ export let changeShebang = async (scriptFile: tg.File) => {
 export let assertProvides = async (env: std.env.Arg) => {
 	let names = [
 		"bash",
+		"bzip2",
 		"ls", // coreutils
 		"diff", // diffutils
 		"find", // findutils
 		"gawk",
 		"grep",
 		"gzip",
+		"make",
+		"patch",
 		"sed",
 		"tar",
+		"xz",
 	];
 	await std.env.assertProvides({ env, names });
 	return true;

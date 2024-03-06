@@ -1,5 +1,4 @@
 import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
 
 export let metadata = {
 	name: "zstd",
@@ -46,7 +45,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let install = tg`make install PREFIX=$OUTPUT`;
 	let phases = { prepare, install };
 
-	let env = [env_, std.utils.env(arg), make(arg)];
+	let env = [env_, std.utils.env(arg)];
 
 	let result = std.autotools.build({
 		...rest,

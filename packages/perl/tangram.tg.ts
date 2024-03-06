@@ -1,9 +1,8 @@
-import * as bootstrap from "../../bootstrap.tg.ts";
-import * as std from "../../tangram.tg.ts";
-import bison from "./bison.tg.ts";
-import libffi from "./libffi.tg.ts";
-import m4 from "./m4.tg.ts";
-import zlib from "./zlib.tg.ts";
+import bison from "tg:bison" with { path: "../bison" };
+import libffi from "tg:libffi" with { path: "../libffi" };
+import m4 from "tg:m4" with { path: "../m4" };
+import * as std from "tg:std" with { path: "../std" };
+import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "perl",
@@ -46,15 +45,19 @@ export let source = tg.target(async () => {
 	);
 	patches.push(cppPrecompPatch);
 
-	return bootstrap.patch(source, ...(await Promise.all(patches)));
+	return std.patch(source, ...(await Promise.all(patches)));
 });
 
-type Arg = std.sdk.BuildEnvArg & {
+type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: tg.Triple.Arg;
+	env?: std.env.Arg;
+	host?: tg.Triple.Arg;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
+export let perl = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build,
@@ -84,9 +87,9 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 
 	let dependencies = [bison(arg), libffi(arg), m4(arg), zlib(arg)];
-	let env = [env_, std.utils.env(arg), ...dependencies];
+	let env = [...dependencies, env_];
 
-	let perlArtifact = await std.utils.buildUtil(
+	let perlArtifact = await std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
@@ -150,13 +153,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default build;
+export default perl;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let directory = perl();
 	await std.assert.pkg({
 		directory,
 		binaries: ["perl"],

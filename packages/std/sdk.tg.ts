@@ -112,12 +112,12 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			sdk: { bootstrapMode: true },
 		});
 		console.log("proxyEnv", proxyEnv);
-		let dependenciesEnv = await dependencies.env({
+		let utilsEnv = await std.utils.env({
 			host,
 			sdk: { bootstrapMode: true },
 		});
-		console.log("dependenciesEnv", dependenciesEnv);
-		return std.env(bootstrapSDK, proxyEnv, dependenciesEnv, {
+		console.log("utilsEnv", utilsEnv);
+		return std.env(bootstrapSDK, proxyEnv, utilsEnv, {
 			bootstrapMode: true,
 		});
 	}
@@ -186,7 +186,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			);
 		}
 		// Build the utils using the proxied host toolchain and add them to the env.
-		env.push(dependencies.env({ env }));
+		env.push(std.utils.env({ env }));
 		return std.env(...env, { bootstrapMode: true });
 	} else if (toolchain === "gcc") {
 		// Collect environments to compose.
@@ -204,13 +204,13 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		envs.push(proxyEnv);
 
 		// Add remaining dependencies.
-		let dependenciesEnv = await dependencies.env({
+		let utilsEnv = await std.utils.env({
 			build: host,
 			host,
 			env: envs,
 			bootstrapMode: true,
 		});
-		envs.push(dependenciesEnv);
+		envs.push(utilsEnv);
 
 		// Add any requested cross-compilers, without packages.
 		let crossEnvs = [];
@@ -265,7 +265,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			let alternateLinkerEnvs = [
 				hostToolchain,
 				proxyEnv,
-				dependenciesEnv,
+				utilsEnv,
 				...crossEnvs,
 			];
 			if (tg.Directory.is(linkerDir)) {
@@ -286,7 +286,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			llvm: true,
 		});
 		console.log("llvm proxy env", proxyEnv);
-		let dependenciesEnv = await dependencies.env({
+		// TODO - can you ditch any of these flags?
+		let utilsEnv = await std.utils.env({
 			env: [
 				clangToolchain,
 				proxyEnv,
@@ -304,7 +305,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			host,
 			bootstrapMode: true,
 		});
-		return std.env(clangToolchain, proxyEnv, dependenciesEnv, {
+		return std.env(clangToolchain, proxyEnv, utilsEnv, {
 			bootstrapMode: true,
 		});
 	}
@@ -513,7 +514,7 @@ export namespace sdk {
 		if (os !== "darwin") {
 			let ldsoPath = isCross ? `${targetString}/lib` : "lib";
 			libDir = tg.Directory.expect(await directory.tryGet(ldsoPath));
-			let interpreterName = libc.interpreterName(target);
+			let interpreterName = libc.interpreterName(targetString);
 			let foundLdso = await libDir.tryGet(interpreterName);
 			tg.assert(foundLdso);
 			ldso = tg.File.expect(foundLdso);
@@ -769,6 +770,13 @@ export namespace sdk {
 			actualHostOs === expectedHostOs,
 			`Given env provides an SDK with host os ${actualHostOs} instead of expected ${expectedHostOs}.`,
 		);
+		if (expected.host.environment) {
+			let actualHostEnvironment = tg.Triple.environment(actualHost);
+			tg.assert(
+				actualHostEnvironment === expected.host.environment,
+				`Given env provides an SDK with host environment ${actualHostEnvironment} instead of expected ${expected.host.environment}.`,
+			);
+		}
 
 		// Assert it provides utilities.
 		if (arg?.bootstrapMode) {
@@ -776,7 +784,7 @@ export namespace sdk {
 			await std.env.assertProvides({ env, names: ["dash", "ls"] });
 		} else {
 			// Test for the complete set.
-			await dependencies.assertProvides(env);
+			await std.utils.assertProvides(env);
 		}
 
 		// Assert it can compile and wrap for all requested targets.
@@ -848,44 +856,25 @@ type ValidateCrossTargetArg = {
 let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
 	let host = arg.host;
 	let target = arg.target;
-	let validTargets = new Set<tg.Triple>();
-	let table = compatibilityTable();
-	for (let validHost of table.keys()) {
-		if (tg.Triple.eq(host, validHost)) {
-			validTargets = table.get(validHost) ?? new Set();
-			break;
-		}
+
+	// All triples can compile for themselves.
+	if (tg.Triple.eq(host, target)) {
+		return true;
 	}
-	for (let validTarget of validTargets.values()) {
-		if (tg.Triple.eq(validTarget, target)) {
-			return true;
-		}
+
+	// The default darwin toolchain supports cross-compiling to other darwin architectures.
+	if (host.os === "darwin" && target.os === "darwin") {
+		return true;
 	}
+
+	// Linux supports cross compiling to other linux architectures.
+	if (host.os === "linux" && target.os === "linux") {
+		return true;
+	}
+
+	// Otherwise, we don't support cross-compiling.
 	return false;
 };
-
-/** Each triple can cross-compile to zero or more target triples.  All triples are assumed to be able to compile to themselves. */
-let compatibilityTable = (): Map<tg.Triple, Set<tg.Triple>> =>
-	new Map([
-		[tg.triple(`aarch64-apple-darwin`), new Set([])],
-		[tg.triple(`x86_64-apple-darwin`), new Set([])],
-		[
-			tg.triple(`aarch64-unknown-linux-gnu`),
-			new Set([tg.triple(`x86_64-unknown-linux-gnu`)]),
-		],
-		[
-			tg.triple(`aarch64-unknown-linux-musl`),
-			new Set([tg.triple(`x86_64-unknown-linux-musl`)]),
-		],
-		[
-			tg.triple(`x86_64-unknown-linux-gnu`),
-			new Set([tg.triple(`aarch64-unknown-linux-gnu`)]),
-		],
-		[
-			tg.triple(`x86_64-unknown-linux-musl`),
-			new Set([tg.triple(`aarch64-unknown-linux-musl`)]),
-		],
-	]);
 
 /** Merge all lib and lib64 directories into a single lib directory, leaving a symlink. */
 export let mergeLibDirs = async (dir: tg.Directory) => {

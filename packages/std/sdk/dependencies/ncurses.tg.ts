@@ -1,6 +1,5 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
-import make from "./make.tg.ts";
 import pkgconfig from "./pkg_config.tg.ts";
 
 export let metadata = {
@@ -64,7 +63,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		`;
 	let phases = { configure, fixup };
 
-	let env = [env_, std.utils.env(arg), make(arg), pkgconfig(arg)];
+	let env = [env_, std.utils.env(arg), pkgconfig(arg)];
 
 	return std.autotools.build(
 		{
