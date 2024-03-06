@@ -39,7 +39,6 @@ export let zlib = tg.target((arg?: Arg) => {
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
-			phases: { phases: { prepare: "echo 'hi!!' && env" } },
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -50,13 +49,11 @@ export default zlib;
 
 export let test = tg.target(async () => {
 	let zlibArtifact = await zlib();
+	console.log("zlib", await zlibArtifact.id());
+	await std.assert.pkg({
+		directory: zlibArtifact,
+		docs: ["man/man3/zlib.3"],
+		pkgConfigName: "zlib",
+	});
 	return zlibArtifact;
-	// await std.assert.pkg({
-	// 	directory: zlibArtifact,
-	// 	docs: ["man/man3/zlib.3"],
-	// 	headers: ["zconf.h", "zlib.h"],
-	// 	libs: ["z"],
-	// 	pkgConfigName: "zlib",
-	// });
-	// return true;
 });
