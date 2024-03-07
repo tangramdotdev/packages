@@ -76,15 +76,13 @@ export let build = tg.target(async (arg?: Arg) => {
 		};
 	}
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	if (rest.bootstrapMode) {
-		env.push(
-			dependencies.env({
-				...rest,
-				env: std.sdk({ host: build, bootstrapMode: true }),
-				host: build,
-			}),
-		);
-	}
+	env.push(
+		dependencies.env({
+			...rest,
+			env: std.sdk({ host: build, bootstrapMode: true }),
+			host: build,
+		}),
+	);
 	env = env.concat([additionalEnv]);
 
 	// Collect configuration.

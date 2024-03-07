@@ -94,15 +94,14 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [];
-	if (rest.bootstrapMode) {
-		env.push(
-			dependencies.env({
-				...rest,
-				env: std.sdk({ host: build, bootstrapMode: true }),
-				host: build,
-			}),
-		);
-	}
+	env.push(
+		dependencies.env({
+			...rest,
+			bootstrapMode: true,
+			env: std.sdk({ host: build, bootstrapMode: true }),
+			host: build,
+		}),
+	);
 
 	env = env.concat([
 		env_,

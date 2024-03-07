@@ -13,11 +13,14 @@ export type Arg = {
 	/** Should we run the check phase? Default: false */
 	doCheck?: boolean;
 
-	/** Should we add the extra set of CFLAGS? Will compile with `-Wp,-D_FORTIFY_SOURCE=3 -Wl,-z,relro -Wl,-as-needed -z defs -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -flto=auto -fPIE/-pie` Default: true*/
-	extraCFlags?: boolean;
+	/** Should we add the extra set of harderning CFLAGS? Default: true*/
+	hardeningCFlags?: boolean;
 
 	/** Any environment to add to the target. */
 	env?: std.env.Arg;
+
+	/** Use full RELRO? Will use partial if disabled.  May cause long start-up times in large programs. Default: true. */
+	fullRelro?: boolean;
 
 	/** The computer this build should get compiled on. */
 	host?: tg.Triple.Arg;
@@ -56,7 +59,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 		debug: boolean;
 		defaultCFlags: boolean;
 		doCheck: boolean;
-		extraCFlags: boolean;
+		fullRelro: boolean;
+		hardeningCFlags: boolean;
 		host: tg.Triple;
 		target: tg.Triple;
 		opt: "1" | "2" | "3" | "s" | "z" | "fast";
@@ -74,7 +78,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 		debug = false,
 		defaultCFlags = true,
 		doCheck = false,
-		extraCFlags = false,
+		hardeningCFlags = true,
+		fullRelro = true,
 		host: host_,
 		target: target_,
 		opt = 2,
@@ -100,14 +105,17 @@ export let target = async (...args: tg.Args<Arg>) => {
 			if (arg.defaultCFlags !== undefined) {
 				object.defaultCFlags = arg.defaultCFlags;
 			}
-			if (arg.extraCFlags !== undefined) {
-				object.extraCFlags = arg.extraCFlags;
+			if (arg.hardeningCFlags !== undefined) {
+				object.hardeningCFlags = arg.hardeningCFlags;
 			}
 			if (arg.doCheck !== undefined) {
 				object.doCheck = arg.doCheck;
 			}
 			if (arg.env !== undefined) {
 				phasesArgs.push({ env: arg.env });
+			}
+			if (arg.fullRelro !== undefined) {
+				object.fullRelro = arg.fullRelro;
 			}
 			if (arg.host !== undefined) {
 				object.host = tg.Mutation.is(arg.host) ? arg.host : tg.triple(arg.host);
@@ -179,29 +187,29 @@ export let target = async (...args: tg.Args<Arg>) => {
 		let defaultCFlags = `-mtune=generic -pipe`;
 		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
-	if (extraCFlags) {
-		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection -flto=auto`;
+	if (hardeningCFlags) {
+		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection`;
 		cflags = tg`${cflags} ${extraCFlags}`;
 	}
 
-	// 		if (host.environment === "gnu") {
-	// 			let cc1Specs = tg.file(`
-	// *cc1_options:
-	// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+	if (!host.environment || host.environment === "gnu") {
+		let cc1Specs = tg.file(`
+	 *cc1_options:
+	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
 
-	// *cpp_options:
-	// + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
-	// 		`);
-	// 			let ldSpecs = tg.file(`
-	// *self_spec:
-	// + %{!static:%{!shared:%{!r:-pie}}}
-	// 		`);
-	// 			let extraCxxFlags = await tg.Mutation.templatePrepend(
-	// 				`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
-	// 				" ",
-	// 			);
-	// 			pushOrSet(env, "CXXFLAGS", extraCxxFlags);
-	// 		}
+	 *cpp_options:
+	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+	 		`);
+		let ldSpecs = tg.file(`
+	 *self_spec:
+	 + %{!static:%{!shared:%{!r:-pie}}}
+	 		`);
+		let extraCxxFlags = await tg.Mutation.templatePrepend(
+			`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
+			" ",
+		);
+		pushOrSet(env, "CXXFLAGS", extraCxxFlags);
+	}
 	pushOrSet(env, "CFLAGS", await cflags);
 	pushOrSet(env, "CXXFLAGS", await cflags);
 
@@ -213,9 +221,10 @@ export let target = async (...args: tg.Args<Arg>) => {
 		);
 		pushOrSet(env, "LDFLAGS", stripFlag);
 	}
-	if (extraCFlags) {
+	if (hardeningCFlags) {
+		let fullRelroString = fullRelro ? ",-z,now" : "";
 		let extraLdFlags = await tg.Mutation.templatePrepend(
-			tg`-Wl,-z,relro -Wl,-as-needed`,
+			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
 			" ",
 		);
 		pushOrSet(env, "LDFLAGS", extraLdFlags);

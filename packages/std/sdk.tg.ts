@@ -285,27 +285,17 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			host,
 			llvm: true,
 		});
-		console.log("llvm proxy env", proxyEnv);
-		// TODO - can you ditch any of these flags?
+		let clangEnv = {
+			CC: "clang",
+			CXX: "clang++",
+		};
 		let utilsEnv = await std.utils.env({
-			env: [
-				clangToolchain,
-				proxyEnv,
-				{
-					CC: "clang",
-					CXX: "clang++",
-					CFLAGS: tg.Mutation.templatePrepend(
-						"-Wno-error=implicit-function-declaration -Wno-error=int-conversion",
-						" ",
-					),
-					CXXFLAGS: tg.Mutation.templatePrepend("-std=c++14", " "),
-				},
-			],
+			env: [clangToolchain, proxyEnv, clangEnv],
 			build: host,
 			host,
 			bootstrapMode: true,
 		});
-		return std.env(clangToolchain, proxyEnv, utilsEnv, {
+		return std.env(clangToolchain, proxyEnv, utilsEnv, clangEnv, {
 			bootstrapMode: true,
 		});
 	}

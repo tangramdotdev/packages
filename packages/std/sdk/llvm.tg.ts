@@ -3,19 +3,20 @@ import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import * as gcc from "./gcc.tg.ts";
-import { buildSysroot } from "./gcc/toolchain.tg.ts";
 import git from "./git.tg.ts";
+import kernelHeaders from "./kernel_headers.tg.ts";
+import * as libc from "./libc.tg.ts";
 import { interpreterName } from "./libc.tg.ts";
 
 export let metadata = {
 	name: "llvm",
-	version: "17.0.6",
+	version: "18.1.0",
 };
 
 export let source = async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:58a8818c60e6627064f312dbf46c02d9949956558340938b71cf731ad8bc0813";
+		"sha256:758a048046ac5024f86c868bb17c631500eed8f8d2677ae6a72ab7ad01602277";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -43,7 +44,6 @@ export let toolchain = async (arg?: LLVMArg) => {
 		...rest
 	} = arg ?? {};
 	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let hostString = tg.Triple.toString(host);
 	let build = build_ ? tg.triple(build_) : host;
 
 	if (host.os !== "linux") {
@@ -52,12 +52,16 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 	let sourceDir = source_ ?? source();
 
-	let sysroot = await buildSysroot({
+	let linuxHeaders = await tg.directory({
+		include: await kernelHeaders({ host }),
+	});
+	let sysroot = await libc.constructSysroot({
 		host,
+		linuxHeaders,
 	});
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
 	sysroot = tg.Directory.expect(await sysroot.get(tg.Triple.toString(host)));
-	console.log("llvm sysroot", sysroot);
+	console.log("llvm sysroot", await sysroot.id());
 
 	let gccToolchain = gcc.toolchain(tg.Triple.rotate({ build, host }));
 

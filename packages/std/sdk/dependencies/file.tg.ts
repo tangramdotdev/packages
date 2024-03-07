@@ -50,7 +50,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--disable-silent-rules",
 			"--disable-xzlib",
 			"--disable-zlib",
-			"--enable-static",
 		],
 	};
 	let dependencies = [bison(arg), m4(arg), zlib(arg)];
@@ -61,6 +60,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...tg.Triple.rotate({ build, host }),
 			env,
+			hardeningCFlags: false,
 			phases: { configure },
 			source: source_ ?? source(),
 		},

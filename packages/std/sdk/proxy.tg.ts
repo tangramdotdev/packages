@@ -80,7 +80,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		//let linkerName = llvm ? "ld.lld" : "ld";
 		let linkerName = "ld";
 		if (llvm) {
-			cc = tg.File.expect(await directory.get("bin/clang-17"));
+			cc = tg.File.expect(await directory.get("bin/clang-18"));
 			cxx = cc;
 		}
 		let ldProxyDir = tg.directory({
@@ -169,14 +169,15 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 					};
 				} else {
+					// TODO - refacotr this to match gccArgs, move this all into the LLVm module.
 					clangxxArgs.push(tg`-unwindlib=libunwind`);
 					clangxxArgs.push(tg`-L${directory}/lib/${targetString}`);
 					clangxxArgs.push(tg`-isystem${directory}/include/c++/v1`);
 					clangxxArgs.push(
 						tg`-isystem${directory}/include/${targetString}/c++/v1`,
 					);
-					clangxxArgs.push(tg`-resource-dir=${directory}/lib/clang/17`);
-					clangArgs.push(tg`-resource-dir=${directory}/lib/clang/17`);
+					clangxxArgs.push(tg`-resource-dir=${directory}/lib/clang/18`);
+					clangArgs.push(tg`-resource-dir=${directory}/lib/clang/18`);
 				}
 				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],

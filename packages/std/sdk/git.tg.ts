@@ -1,4 +1,5 @@
 import * as std from "../tangram.tg.ts";
+import zlib from "./dependencies/zlib.tg.ts";
 
 let metadata = {
 	name: "git",
@@ -59,10 +60,13 @@ export let git = async (arg?: Arg) => {
 		install,
 	};
 
+	let env = [env_, zlib(arg)];
+
 	let result = std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			env,
 			phases,
 			source: sourceDir,
 		},

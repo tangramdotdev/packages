@@ -70,6 +70,11 @@ export let build = tg.target(async (arg?: Arg) => {
 		env.push(prerequisites({ host }));
 		env.push(bootstrap.shell({ host }));
 	}
+	if ((await std.env.tryGetKey({ env: env_, key: "CC" }))?.components[0] === "clang" ) {
+		env.push({
+			CFLAGS: "-Wno-implicit-function-declaration",
+		});
+	}
 	env.push(env_);
 
 	let output = buildUtil(

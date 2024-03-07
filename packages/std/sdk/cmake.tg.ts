@@ -77,6 +77,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		...rest,
 		...tg.Triple.rotate({ build, host }),
 		env,
+		hardeningCFlags: false,
 		phases: { prepare, configure },
 		source: sourceDir,
 	});

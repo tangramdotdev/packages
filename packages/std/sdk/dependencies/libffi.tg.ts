@@ -38,7 +38,11 @@ export let build = tg.target((arg?: Arg) => {
 	} = arg ?? {};
 
 	let configure = {
-		args: ["--disable-dependency-tracking"],
+		args: [
+			"--disable-dependency-tracking",
+			"--disable-multi-os-directory",
+			"--enable-portable-binary",
+		],
 	};
 
 	let env = [env_, std.utils.env(arg)];

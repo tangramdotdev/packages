@@ -319,3 +319,7 @@ export let testOciBasicEnv = tg.target(async () => {
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
 });
+
+export let components = tg.target(async () => {
+	return sdk.toolchainComponents({ env: await bootstrap.sdk.env() });
+});
