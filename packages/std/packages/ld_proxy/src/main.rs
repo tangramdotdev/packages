@@ -233,7 +233,6 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 	// Create the tangram instance.
 	let tg = tg::Client::with_env()?;
 	tg.connect().await?;
-	tracing::debug!("{:?}", tg.health().await?);
 
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
