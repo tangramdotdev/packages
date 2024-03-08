@@ -1,6 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
+import * as tangram from "tg:tangram" with { path: "../../../../tangram" };
 
 type Arg = std.sdk.BuildEnvArg & {
 	release?: boolean;
@@ -14,12 +15,17 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 
 	// Get the source.
 	let source = await tg.directory({
-		"Cargo.toml": tg.include("../Cargo.toml"),
-		"Cargo.lock": tg.include("../Cargo.lock"),
-		"packages/env": tg.include("../packages/env"),
-		"packages/cc_proxy": tg.include("../packages/cc_proxy"),
-		"packages/ld_proxy": tg.include("../packages/ld_proxy"),
-		"packages/wrapper": tg.include("../packages/wrapper"),
+		"packages/packages/std/Cargo.toml": tg.include("../Cargo.toml"),
+		"packages/packages/std/Cargo.lock": tg.include("../Cargo.lock"),
+		"packages/packages/std/packages/env": tg.include("../packages/env"),
+		"packages/packages/std/packages/cc_proxy": tg.include(
+			"../packages/cc_proxy",
+		),
+		"packages/packages/std/packages/ld_proxy": tg.include(
+			"../packages/ld_proxy",
+		),
+		"packages/packages/std/packages/wrapper": tg.include("../packages/wrapper"),
+		tangram: tangram.source(),
 	});
 
 	return build({
@@ -188,7 +194,7 @@ type BuildArg = {
 };
 
 export let build = async (arg: BuildArg) => {
-	let release = arg.release ?? true;
+	let release = arg.release ?? false; // FIXME should be true
 	let source = arg.source;
 	let host = tg.triple(arg.host);
 	let system = tg.Triple.archAndOs(host);
@@ -318,7 +324,7 @@ export let build = async (arg: BuildArg) => {
 		`;
 
 	let args = [
-		tg`--manifest-path ${source}/Cargo.toml`,
+		tg`--manifest-path ${source}/packages/packages/std/Cargo.toml`,
 		`--target-dir $TARGET`,
 		`--target $RUST_TARGET`,
 		`--all`,
