@@ -188,7 +188,10 @@ export let target = async (...args: tg.Args<Arg>) => {
 		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
 	if (hardeningCFlags) {
-		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection`;
+		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
+		if (os === "linux") {
+			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
+		}
 		cflags = tg`${cflags} ${extraCFlags}`;
 	}
 
@@ -221,7 +224,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		);
 		pushOrSet(env, "LDFLAGS", stripFlag);
 	}
-	if (hardeningCFlags) {
+	if (os === "linux" && hardeningCFlags) {
 		let fullRelroString = fullRelro ? ",-z,now" : "";
 		let extraLdFlags = await tg.Mutation.templatePrepend(
 			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
