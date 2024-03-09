@@ -13,9 +13,6 @@ struct Environment {
 	// The value of TANGRAM_CC_ENABLE
 	enable: bool,
 
-	// The contents of TANGRAM_RUNTIME.
-	runtime: tg::Runtime,
-
 	// The path to the C compiler.
 	cc: PathBuf,
 
@@ -71,7 +68,6 @@ impl Environment {
 	// Parse the runtime environment.
 	fn parse() -> Result<Self> {
 		let mut env = BTreeMap::new();
-		let mut runtime = None;
 		let mut enable = false;
 		for (key, value) in std::env::vars() {
 			match key.as_str() {
@@ -80,12 +76,6 @@ impl Environment {
 						.parse()
 						.wrap_err("Failed to parse TANGRAM_CC_ENABLE.")?;
 				},
-				"TANGRAM_RUNTIME" => {
-					runtime = Some(
-						serde_json::from_str(&value)
-							.wrap_err("Failed to parse TANGRAM_RUNTIME.")?,
-					);
-				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => continue,
 				_ => {
 					let value = tg::Template::unrender(&value)?;
@@ -93,14 +83,8 @@ impl Environment {
 				},
 			}
 		}
-		let runtime = runtime.wrap_err("Missing TANGRAM_RUNTIME.")?;
 		let cc = which_cc()?;
-		Ok(Self {
-			enable,
-			runtime,
-			cc,
-			env,
-		})
+		Ok(Self { enable, cc, env })
 	}
 }
 
@@ -326,7 +310,7 @@ async fn main_inner() -> Result<()> {
 	let output = output.unwrap();
 
 	// Create a client.
-	let tg = &tg::Client::with_runtime()?;
+	let tg = &tg::Client::with_env()?;
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
@@ -373,7 +357,7 @@ async fn main_inner() -> Result<()> {
 	// Create a build.
 	let id = target.id(tg).await?;
 	let build_arg = tg::build::GetOrCreateArg {
-		parent: Some(environment.runtime.build),
+		parent: None,
 		remote: false,
 		retry: tg::build::Retry::Canceled,
 		target: id.clone(),
@@ -610,7 +594,7 @@ const DRIVER_SH: &str = include_str!("driver.sh");
 
 // Environment variables that must be filtered out before invoking the driver target.
 const BLACKLISTED_ENV_VARS: [&str; 6] = [
-	"TANGRAM_RUNTIME",
+	"TANGRAM_ADDRESS",
 	"TANGRAM_CC_TRACING",
 	"TANGRAM_CC_COMPILER",
 	"TANGRAM_HOST",

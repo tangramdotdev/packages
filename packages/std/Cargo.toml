@@ -1,7 +1,7 @@
 [workspace]
 members = [
-  "packages/env",
   "packages/cc_proxy",
+  "packages/env",
   "packages/ld_proxy",
   "packages/wrapper",
 ]
@@ -24,8 +24,9 @@ itertools = "0.12"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "0051d14a60053cf348dbef93ef9ddf963c147cdc" }
-tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "0051d14a60053cf348dbef93ef9ddf963c147cdc" }
+tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "eff3faefcd5d9ab09c41bdecba1870c258dc552e" }
+tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "eff3faefcd5d9ab09c41bdecba1870c258dc552e" }
+
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "macros",
