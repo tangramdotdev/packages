@@ -24,10 +24,15 @@ export let source = tg.target(async (os: tg.Triple.Os) => {
 
 	// Apply xattr patch on Linux.
 	if (os === "linux") {
-		let patch = tg.File.expect(
+		let patches = [];
+		patches.push(tg.File.expect(
 			await tg.include("coreutils-always-preserve-xattrs.patch"),
-		);
-		source = await bootstrap.patch(source, patch);
+		));
+		// NOTE - fix taken from upstream project, remove patch in next release: https://git.savannah.gnu.org/gitweb/?p=gnulib.git;a=commit;h=67c298c36f6
+		patches.push(tg.File.expect(
+			await tg.include("coreutils-posixtm-checked-integer-add-explicit-cast-clang-18.patch"),
+		));
+		source = await bootstrap.patch(source, ...patches);
 	}
 
 	return source;
