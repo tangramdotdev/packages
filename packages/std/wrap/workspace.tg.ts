@@ -16,7 +16,6 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 	let source = await tg.directory({
 		"Cargo.toml": tg.include("../Cargo.toml"),
 		"Cargo.lock": tg.include("../Cargo.lock"),
-		"packages/env": tg.include("../packages/env"),
 		"packages/cc_proxy": tg.include("../packages/cc_proxy"),
 		"packages/ld_proxy": tg.include("../packages/ld_proxy"),
 		"packages/wrapper": tg.include("../packages/wrapper"),
@@ -29,9 +28,6 @@ export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 		sdkArg,
 	});
 });
-
-export let env = async (arg?: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/env"));
 
 export let tgcc = async (arg?: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/cc_proxy"));
@@ -338,7 +334,6 @@ export let build = async (arg: BuildArg) => {
 	let install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			mv $TARGET/$RUST_TARGET/${buildType}/tangram_env $OUTPUT/bin/env
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_cc_proxy $OUTPUT/bin/cc_proxy
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_ld_proxy $OUTPUT/bin/ld_proxy
 			mv $TARGET/$RUST_TARGET/${buildType}/tangram_wrapper $OUTPUT/bin/wrapper

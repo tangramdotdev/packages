@@ -1,6 +1,6 @@
 import * as std from "./tangram.tg.ts";
+import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
-import * as workspace from "./wrap/workspace.tg.ts";
 
 export async function env(...args: tg.Args<env.Arg>) {
 	// Check if any arg sets bootstrapMode. If so, omit the std utils.
@@ -33,8 +33,7 @@ export async function env(...args: tg.Args<env.Arg>) {
 		wrapEnv.push(await std.utils.env());
 	}
 
-	return std.wrap(workspace.env({ sdk: { bootstrapMode } }), {
-		identity: "wrapper",
+	return std.wrap(gnuEnv(), {
 		env: wrapEnv,
 		sdk: { bootstrapMode },
 	});

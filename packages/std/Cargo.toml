@@ -1,10 +1,5 @@
 [workspace]
-members = [
-  "packages/cc_proxy",
-  "packages/env",
-  "packages/ld_proxy",
-  "packages/wrapper",
-]
+members = ["packages/cc_proxy", "packages/ld_proxy", "packages/wrapper"]
 resolver = "2"
 
 [workspace.lints.clippy]
@@ -24,9 +19,8 @@ itertools = "0.12"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "eff3faefcd5d9ab09c41bdecba1870c258dc552e" }
-tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "eff3faefcd5d9ab09c41bdecba1870c258dc552e" }
-
+tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "ab1d86be29611c8a23c8d70673a13b3a12419330" }
+tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "ab1d86be29611c8a23c8d70673a13b3a12419330" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "macros",
@@ -37,7 +31,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 xattr = "1"
 
-tangram_env = { path = "packages/env" }
 tangram_wrapper = { path = "packages/wrapper" }
 tangram_cc_proxy = { path = "packages/cc_proxy" }
 tangram_ld_proxy = { path = "packages/ld_proxy" }
