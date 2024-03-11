@@ -65,7 +65,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: configureArgs,
 	};
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode) {
 		env.push(prerequisites({ host }));
 		env.push(bootstrap.shell({ host }));
@@ -75,7 +75,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			CFLAGS: "-Wno-implicit-function-declaration",
 		});
 	}
-	env.push(env_);
 
 	let output = buildUtil(
 		{

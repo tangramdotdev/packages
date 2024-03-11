@@ -23,7 +23,6 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	// Determine the list of target triples to support other than the inferred host.
 	let detectedHost = await tg.Triple.host();
 	let host = rustTriple(detectedHost);
-	console.log("rust host", tg.Triple.toString(host));
 	let targets = [];
 	if (arg?.target && !tg.Triple.eq(arg.target, host)) {
 		targets.push(arg.target);
@@ -207,7 +206,6 @@ export let build = async (...args: tg.Args<Arg>) => {
 
 	let host = rustTriple(host_ ? tg.triple(host_) : await tg.Triple.host());
 	let target = target_ ? rustTriple(tg.triple(target_)) : host;
-	console.log("building for", tg.Triple.toString(target));
 
 	// Check if we're cross-compiling.
 	let crossCompiling = !tg.Triple.eq(target, host);
@@ -264,8 +262,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
 		additionalEnv = {
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]:
-				tg`${targetTriple}-cc`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`${targetTriple}-cc`,
 			[`AR_${tripleToEnvVar(target)}`]: tg`${targetTriple}-ar`,
 			[`CC_${tripleToEnvVar(target)}`]: tg`${targetTriple}-cc`,
 			[`CXX_${tripleToEnvVar(target)}`]: tg`${targetTriple}-c++`,
@@ -517,20 +514,23 @@ type RustupManifestV2 = {
 
 let rustTriple = (triple: tg.Triple): tg.Triple => {
 	let normalized = tg.Triple.normalized(triple);
-	tg.assert(normalized, `Could not convert triple to Rust triple: ${tg.Triple.toString(triple)}`);
+	tg.assert(
+		normalized,
+		`Could not convert triple to Rust triple: ${tg.Triple.toString(triple)}`,
+	);
 	let base = tg.triple(normalized);
 	if (base.os === "darwin") {
 		return tg.triple({
 			arch: base.arch,
 			vendor: "apple",
-			os: base.os
+			os: base.os,
 		});
 	} else if (base.os === "linux") {
 		return tg.triple({
 			arch: base.arch,
 			vendor: base.vendor,
 			os: base.os,
-			environment: base.environment ?? "gnu"
+			environment: base.environment ?? "gnu",
 		});
 	} else {
 		throw new Error(`Unsupported OS: ${base.os}`);
@@ -559,7 +559,6 @@ export let test = tg.target(async () => {
 
 export let testHost = tg.target(async () => {
 	let rustArtifact = await rust();
-	console.log("rustArtifact", await rustArtifact.id());
 
 	let script = tg`
 		${rustArtifact}/bin/rustc --version

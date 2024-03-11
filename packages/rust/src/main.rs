@@ -33,9 +33,6 @@ struct Args {
 
     // The location of the nearest .tangram directory.
     tangram_path: PathBuf,
-
-    // The value of TANGRAM_RUNTIME.
-    tangram_runtime: tg::Runtime,
 }
 
 impl Args {
@@ -110,12 +107,6 @@ impl Args {
         }
         let tangram_path = search_dir.join(".tangram");
 
-        // Get the tangram runtime from the environment.
-        let tangram_runtime =
-            std::env::var("TANGRAM_RUNTIME").wrap_err("Missing TANGRAM_RUNTIME")?;
-        let tangram_runtime: tg::Runtime =
-            serde_json::from_str(&tangram_runtime).wrap_err("Failed to parse tangram_runtime.")?;
-
         Ok(Self {
             rustc,
             stdin,
@@ -126,7 +117,6 @@ impl Args {
             cargo_out_directory,
             rustc_args,
             tangram_path,
-            tangram_runtime,
         })
     }
 }
@@ -154,7 +144,7 @@ async fn main_inner() -> Result<()> {
     let output_files = get_outputs(&args)?;
 
     // Create a client.
-    let tg = tg::Client::with_runtime()?;
+    let tg = tg::Client::with_env()?;
     let tg = &tg;
 
     // Check in the source and output directories.
@@ -246,7 +236,7 @@ async fn main_inner() -> Result<()> {
 
     // Create the build and mark it as a child.
     let build_options = tg::build::GetOrCreateArg {
-        parent: Some(args.tangram_runtime.build),
+        parent: None,
         remote: false,
         retry: tg::build::Retry::Failed,
         target: target_id.clone(),
@@ -394,7 +384,7 @@ const ARGS_WITH_VALUES: [&str; 32] = [
 
 // Environment variables that must be filtered out before invoking the driver target.
 const BLACKLISTED_ENV_VARS: [&str; 5] = [
-    "TANGRAM_RUNTIME",
+    "TANGRAM_ADDRESS",
     "TANGRAM_RUSTC_TRACING",
     "TANGRAM_HOST",
     "HOME",

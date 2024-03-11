@@ -4,14 +4,14 @@ import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "xz",
-	version: "5.4.5",
+	version: "5.6.1",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
-		"sha256:da9dec6c12cf2ecf269c31ab65b5de18e8e52b96f35d5bcd08c12b43e6878803";
+		"sha256:f334777310ca3ae9ba07206d78ed286a655aa3f44eec27854f740c26b2cd2ed0";
 	let owner = "tukaani-project";
 	let repo = name;
 	let tag = `v${version}`;
@@ -53,11 +53,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let env: tg.Unresolved<std.env.Arg> = [env_, { MAKEFLAGS: "--silent" }];
+	let env: tg.Unresolved<std.env.Arg> = [env_];
 	if (bootstrapMode) {
 		env.push(prerequisites({ host }));
 	}
-	env.push(env_);
 
 	let output = await buildUtil(
 		{

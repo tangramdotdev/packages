@@ -125,19 +125,17 @@ export default tg.target(async (arg: Arg) => {
 		autotools,
 	);
 
-	// Fix libc.so
+	// Fix libc.so.
 	result = await applySysrootFix({
 		directory: result,
 		filePath: `${hostString}/lib/libc.so`,
 	});
 
-	// Fix libm.so on x86_64.
-	if (host.arch === "x86_64") {
-		result = await applySysrootFix({
-			directory: result,
-			filePath: `${hostString}/lib/libm.so`,
-		});
-	}
+	// Fix libm.so.
+	result = await applySysrootFix({
+		directory: result,
+		filePath: `${hostString}/lib/libm.so`,
+	});
 
 	return result;
 });

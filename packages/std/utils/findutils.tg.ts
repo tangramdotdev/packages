@@ -55,11 +55,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode) {
 		env.push(prerequisites({ host }));
 	}
-	env.push(env_);
 
 	let output = buildUtil(
 		{

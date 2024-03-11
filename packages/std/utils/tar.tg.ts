@@ -54,7 +54,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [...dependencies, additionalEnv, env_];
+	let env = [env_, ...dependencies, additionalEnv];
 
 	let output = buildUtil(
 		{

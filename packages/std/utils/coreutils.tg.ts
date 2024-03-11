@@ -83,7 +83,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
-	let env = [...dependencies, env_];
+	let env = [env_, ...dependencies];
 
 	let configure = {
 		args: [
