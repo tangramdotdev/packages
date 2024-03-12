@@ -635,7 +635,7 @@ export namespace sdk {
 	export let resolveHostAndTarget = async (
 		arg?: HostAndTargetsOptions,
 	): Promise<HostAndTargets> => {
-		let host = await tg.Triple.host(arg);
+		let host = arg?.host ? tg.triple(arg.host) : await tg.Triple.host();
 		let targets = [];
 		if (arg?.target) {
 			targets.push(tg.triple(arg.target));
@@ -822,7 +822,8 @@ export namespace sdk {
 		);
 	};
 
-	export type HostAndTargetsOptions = tg.Triple.HostArg & {
+	export type HostAndTargetsOptions = {
+		host?: tg.Triple.Arg;
 		target?: tg.Triple.Arg;
 		targets?: Array<tg.Triple.Arg>;
 	};

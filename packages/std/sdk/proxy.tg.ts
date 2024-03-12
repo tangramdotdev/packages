@@ -2,7 +2,8 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 import { injection } from "../wrap/injection.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
-import { wrapArgs } from "./gcc.tg.ts";
+import * as gcc from "./gcc.tg.ts";
+import * as llvmToolchain from "./llvm.tg.ts";
 
 /** This module provides the Tangram proxy tools, which are used in conjunction with compilers and linkers to produce Tangram-ready artifacts. */
 
@@ -77,10 +78,9 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 			sdk: arg.sdk,
 		});
 
-		//let linkerName = llvm ? "ld.lld" : "ld";
 		let linkerName = "ld";
 		if (llvm) {
-			cc = tg.File.expect(await directory.get("bin/clang-18"));
+			cc = tg.File.expect(await directory.get(`bin/clang-${llvmToolchain.llvmMajorVersion()}`));
 			cxx = cc;
 		}
 		let ldProxyDir = tg.directory({
@@ -95,7 +95,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let wrappedGFortran;
 		switch (flavor) {
 			case "gcc": {
-				let { ccArgs, cxxArgs, fortranArgs } = await wrapArgs({
+				let { ccArgs, cxxArgs, fortranArgs } = await gcc.wrapArgs({
 					host,
 					target,
 					toolchainDir: directory,
@@ -159,26 +159,11 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 				break;
 			}
 			case "llvm": {
-				//let clangArgs: tg.Unresolved<tg.Template.Arg> = ["-fuse-ld=lld"];
-				let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
-				let clangxxArgs = [...clangArgs];
-				let env = {};
-				if (host.os === "darwin") {
-					clangArgs.push(tg`-resource-dir=${directory}/lib/clang/15.0.0`);
-					env = {
-						SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
-					};
-				} else {
-					// TODO - refacotr this to match gccArgs, move this all into the LLVm module.
-					clangxxArgs.push(tg`-unwindlib=libunwind`);
-					clangxxArgs.push(tg`-L${directory}/lib/${targetString}`);
-					clangxxArgs.push(tg`-isystem${directory}/include/c++/v1`);
-					clangxxArgs.push(
-						tg`-isystem${directory}/include/${targetString}/c++/v1`,
-					);
-					clangxxArgs.push(tg`-resource-dir=${directory}/lib/clang/18`);
-					clangArgs.push(tg`-resource-dir=${directory}/lib/clang/18`);
-				}
+				let { clangArgs, clangxxArgs, env } = await llvmToolchain.wrapArgs({
+					host,
+					target,
+					toolchainDir: directory,
+				});
 				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
 					env,

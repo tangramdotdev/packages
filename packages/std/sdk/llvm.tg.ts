@@ -10,13 +10,13 @@ import { interpreterName } from "./libc.tg.ts";
 
 export let metadata = {
 	name: "llvm",
-	version: "18.1.0",
+	version: "18.1.1",
 };
 
 export let source = async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:758a048046ac5024f86c868bb17c631500eed8f8d2677ae6a72ab7ad01602277";
+		"sha256:8f34c6206be84b186b4b31f47e1b52758fa38348565953fad453d177ef34c0ad";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -26,7 +26,6 @@ export let source = async () => {
 		await std.download({ checksum, url, unpackFormat }),
 	);
 	return std.directory.unwrap(outer);
-	// return std.download.fromGithub({ checksum, owner, repo, tag, version });
 };
 
 export type LLVMArg = std.sdk.BuildEnvArg & {
@@ -141,6 +140,46 @@ export let toolchain = async (arg?: LLVMArg) => {
 	console.log("llvmArtifact with sysroot", await llvmArtifact.id());
 
 	return llvmArtifact;
+};
+
+export let llvmMajorVersion = () => {
+	return metadata.version.split(".")[0];
+};
+
+type WrapArgsArg = {
+	host: tg.Triple;
+	target?: tg.Triple;
+	toolchainDir: tg.Directory;
+};
+
+/** Produce the flags and environment required to properly proxy this toolchain. */
+export let wrapArgs = async (arg: WrapArgsArg) => {
+	let { host, target, toolchainDir } = arg;
+	let target_ = target ?? host;
+	let targetString = tg.Triple.toString(target_);
+	let version = llvmMajorVersion();
+
+	let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
+	let clangxxArgs = [...clangArgs];
+	let env = {};
+	if (host.os === "darwin") {
+		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
+		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/15.0.0`);
+		env = {
+			SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
+		};
+	} else {
+		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
+		clangxxArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
+		clangxxArgs.push(tg`-unwindlib=libunwind`);
+		clangxxArgs.push(tg`-L${toolchainDir}/lib/${targetString}`);
+		clangxxArgs.push(tg`-isystem${toolchainDir}/include/c++/v1`);
+		clangxxArgs.push(
+			tg`-isystem${toolchainDir}/include/${targetString}/c++/v1`,
+		);
+	}
+
+	return { clangArgs, clangxxArgs, env };
 };
 
 export let test = async () => {

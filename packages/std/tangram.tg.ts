@@ -99,6 +99,9 @@ export let testUtilsBash = tg.target(async () => {
 export let testUtilsCoreutils = tg.target(async () => {
 	return await utils.coreutils.test();
 });
+export let testStaticGnuEnv = tg.target(async () => {
+	return await utils.coreutils.gnuEnv();
+});
 export let testUtilsLibiconv = tg.target(async () => {
 	return await utils.libiconv.test();
 });
@@ -318,10 +321,4 @@ export let testOciBasicEnv = tg.target(async () => {
 });
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
-});
-
-
-import { env } from "./env.tg.ts";
-export let basicEnv = tg.target(async () => {
-	return await env({ HELLO: tg.Mutation.set(`hi`) }, { bootstrapMode: true });
 });

@@ -26,6 +26,7 @@ export let source = tg.target(async () => {
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	source?: tg.Directory;
+	staticBuild?: boolean;
 	usePrerequisites?: boolean;
 };
 
@@ -37,6 +38,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		env: env_,
 		host: host_,
 		source: source_,
+		staticBuild = false,
 		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
@@ -59,12 +61,19 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--with-pic",
 		],
 	};
+	if (staticBuild) {
+		configure.args.push("--enable-static");
+		configure.args.push("--disable-shared");
+	}
 
 	let phases = { configure };
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode && usePrerequisites) {
 		env.push(prerequisites({ host }));
+	}
+	if (staticBuild) {
+		env.push({ CC: "gcc -static" });
 	}
 
 	let output = await buildUtil(
@@ -74,6 +83,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			bootstrapMode,
 			env,
 			phases,
+			opt: staticBuild ? "s" : undefined,
 			source: source_ ?? source(),
 		},
 		autotools,

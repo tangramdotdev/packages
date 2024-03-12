@@ -47,6 +47,7 @@ export let source = tg.target(async (os: tg.Triple.Os) => {
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	source?: tg.Directory;
+	staticBuild?: boolean;
 	usePrerequisites?: boolean;
 };
 
@@ -58,6 +59,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		env: env_,
 		host: host_,
 		source: source_,
+		staticBuild = false,
 		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
@@ -79,6 +81,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			build,
 			env: env_,
 			host,
+			staticBuild,
 			usePrerequisites,
 		});
 		dependencies.push(attrArtifact);
@@ -95,6 +98,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		);
 	}
 	let env = [env_, ...dependencies];
+	if (staticBuild) {
+		env.push({ CC: "gcc -static" });
+	}
 
 	let configure = {
 		args: [
@@ -104,6 +110,10 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--disable-rpath",
 		],
 	};
+	if (staticBuild) {
+		configure.args.push("--enable-static");
+		configure.args.push("--disable-shared");
+	}
 
 	let output = buildUtil(
 		{
@@ -112,6 +122,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			bootstrapMode,
 			env,
 			phases: { configure },
+			opt: staticBuild ? "s" : undefined,
 			source: source_ ?? source(os),
 		},
 		autotools,
@@ -141,6 +152,7 @@ export let gnuEnv = tg.target(async () => {
 		host,
 		bootstrapMode,
 		env: [sdk, make],
+		staticBuild: true,
 		usePrerequisites: false,
 	});
 	let exe = tg.File.expect(await directory.get("bin/env"));
