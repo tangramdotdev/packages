@@ -83,7 +83,7 @@ export let openssl = tg.target(async (arg?: Arg) => {
 				libraryPaths: [tg.symlink(tg`${openssl}/lib`)],
 			},
 		),
-		["share/pkgconfig"]: tg.symlink("../../lib/pkgconfig"),
+		["share/pkgconfig"]: tg.symlink("../lib/pkgconfig"),
 	});
 });
 
