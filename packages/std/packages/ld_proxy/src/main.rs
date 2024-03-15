@@ -36,7 +36,7 @@ async fn main_inner() -> Result<()> {
 	let status = std::process::Command::new(&options.command_path)
 		.args(&options.command_args)
 		.status()
-		.map_err(|error| error!(source = error, "Failed to run the command"))?;
+		.map_err(|error| error!(source = error, "failed to run the command"))?;
 
 	// If the command did not exit successfully, then exit with its code.
 	if !status.success() {
@@ -337,15 +337,15 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 			.ok_or(error!("TANGRAM_LINKER_WRAPPER_PATH must be set"))?;
 		std::fs::remove_file(&options.output_path).ok();
 		std::fs::copy(wrapper_path, &options.output_path)
-			.map_err(|error| error!(source = error, "Failed to copy the wrapper file"))?;
+			.map_err(|error| error!(source = error, "failed to copy the wrapper file"))?;
 
 		// Set the permissions of the wrapper file so we can write the manifest to the end.
 		let mut perms = std::fs::metadata(&options.output_path)
-			.expect("Failed to get the wrapper file metadata.")
+			.expect("failed to get the wrapper file metadata")
 			.permissions();
 		perms.set_mode(0o755);
 		std::fs::set_permissions(&options.output_path, perms)
-			.expect("Failed to set the wrapper file permissions");
+			.expect("failed to set the wrapper file permissions");
 
 		let manifest =
 			create_manifest(&tg, output_artifact_id, options, interpreter, library_paths).await?;
@@ -569,7 +569,7 @@ impl std::str::FromStr for LibraryPathOptimizationLevel {
 						return Ok(Self::Combine);
 					}
 				}
-				Err(error!("Invalid library path optimization strategy {s}."))
+				Err(error!("invalid library path optimization strategy {s}"))
 			},
 		}
 	}
@@ -611,7 +611,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 
 	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
 		return Err(error!(
-			"Invalid library path optimization strategy {strategy:?}."
+			"invalid library path optimization strategy {strategy:?}"
 		));
 	}
 
@@ -658,7 +658,7 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 				.artifact(tg)
 				.await?
 				.as_ref()
-				.ok_or(error!("Expected a directory."))?;
+				.ok_or(error!("expected a directory"))?;
 			if let tg::Artifact::Directory(directory) = artifact {
 				if directory.entries(tg).await?.contains_key(library) {
 					found_libraries.insert(library.clone());
@@ -758,7 +758,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				.try_get(
 					tg,
 					&tg::Path::from_str(&library_name)
-						.map_err(|error| error!(source = error, "Could not create path"))?,
+						.map_err(|error| error!(source = error, "could not create path"))?,
 				)
 				.await
 			{
@@ -798,7 +798,7 @@ async fn analyze_output_file(path: impl AsRef<std::path::Path>) -> Result<Analyz
 		tokio::io::BufReader::new(tokio::fs::File::open(&path).await.map_err(|error| {
 			error!(
 				source = error,
-				r#"Failed to open the output file at path "{}"."#,
+				r#"failed to open the output file at path "{}""#,
 				path.as_ref().display()
 			)
 		})?);
@@ -812,11 +812,11 @@ async fn analyze_executable(mut reader: impl AsyncRead + Unpin) -> Result<Analyz
 	reader
 		.read_to_end(&mut bytes)
 		.await
-		.map_err(|error| error!(source = error, "Failed to read the output file"))?;
+		.map_err(|error| error!(source = error, "failed to read the output file"))?;
 
 	// Parse the object and analyze it.
 	let object = goblin::Object::parse(&bytes)
-		.map_err(|error| error!(source = error, "Failed to parse output file as an object"))?;
+		.map_err(|error| error!(source = error, "failed to parse output file as an object"))?;
 	let result = match object {
 		// Handle an archive file.
 		goblin::Object::Archive(_) => AnalyzeOutputFileOutput {
@@ -916,7 +916,7 @@ async fn file_from_reader(
 ) -> Result<tg::File> {
 	let blob = tg::Blob::with_reader(tg, reader)
 		.await
-		.map_err(|error| error!(source = error, "Could not create blob"))?;
+		.map_err(|error| error!(source = error, "could not create blob"))?;
 	let file = tg::File::builder(blob).executable(is_executable).build();
 	Ok(file)
 }
@@ -964,7 +964,7 @@ where
 			})
 		},
 		_ => Err(error!(
-			"Expected a template with 1-3 components, got {:?}.",
+			"expected a template with 1-3 components, got {:?}",
 			components
 		)),
 	}

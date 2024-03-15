@@ -296,7 +296,7 @@ async fn main_inner() -> Result<()> {
 			.exec();
 
 		return Err(error!(
-			"Failed to invoke C compiler ({:#?}): {error}.",
+			"failed to invoke C compiler ({:#?}): {error}",
 			environment.cc
 		));
 	}
@@ -346,7 +346,7 @@ async fn main_inner() -> Result<()> {
 	// Create the target.
 	let target = tg::Target::with_object(tg::target::Object {
 		host: tg::Triple::host()
-			.map_err(|error| error!(source = error, "Failed to get tg::Triple::host()"))?,
+			.map_err(|error| error!(source = error, "failed to get tg::Triple::host()"))?,
 		executable,
 		lock: None,
 		name: Some("tangram_cc".into()),
@@ -370,13 +370,13 @@ async fn main_inner() -> Result<()> {
 	// Await the outcome.
 	let outcome = build.outcome(tg).await?;
 	let build_directory = match outcome {
-		tg::build::Outcome::Canceled => return Err(error!("Build was cancelled.")),
-		tg::build::Outcome::Failed(e) => return Err(error!("Build failed: {e}.")),
+		tg::build::Outcome::Canceled => return Err(error!("build was cancelled")),
+		tg::build::Outcome::Failed(e) => return Err(error!("build failed: {e}")),
 		tg::build::Outcome::Succeeded(outcome) => outcome
 			.try_unwrap_object()
-			.map_err(|error| error!(source = error, "Expected build to create an object"))?
+			.map_err(|error| error!(source = error, "expected build to create an object"))?
 			.try_unwrap_directory()
-			.map_err(|error| error!(source = error, "Expected build to create a directory"))?,
+			.map_err(|error| error!(source = error, "expected build to create a directory"))?,
 	};
 
 	// Dump stdout, stderr
@@ -389,7 +389,7 @@ async fn main_inner() -> Result<()> {
 		.await?;
 	std::io::stdout()
 		.write_all(&stdout)
-		.map_err(|error| error!(source = error, "Failed to dump stdout"))?;
+		.map_err(|error| error!(source = error, "failed to dump stdout"))?;
 	let stderr: Vec<u8> = build_directory
 		.get(tg, &"stderr".parse().unwrap())
 		.await?
@@ -399,20 +399,20 @@ async fn main_inner() -> Result<()> {
 		.await?;
 	std::io::stderr()
 		.write_all(&stderr)
-		.map_err(|error| error!(source = error, "Failed to dump stdout"))?;
+		.map_err(|error| error!(source = error, "failed to dump stdout"))?;
 
 	// Copy the output file to the destination.
 	let output_file = build_directory
 		.get(tg, &"output".parse().unwrap())
 		.await
-		.map_err(|error| error!(source = error, "cc failed. No output"))?;
+		.map_err(|error| error!(source = error, "cc failed: no output"))?;
 
 	// Verify we did everything correctly.
 	let mut tangram_path = std::env::current_dir()
-		.map_err(|error| error!(source = error, "Failed to get current working directory"))?;
+		.map_err(|error| error!(source = error, "failed to get current working directory"))?;
 	while !tangram_path.join(".tangram").exists() {
 		let Some(parent) = tangram_path.parent() else {
-			return Err(error!("Failed to find .tangram directory."));
+			return Err(error!("failed to find .tangram directory."));
 		};
 		tangram_path = parent.into();
 	}
@@ -421,7 +421,7 @@ async fn main_inner() -> Result<()> {
 		.join(output_file.id(tg).await?.to_string());
 	eprintln!("Copying {artifact_path:#?} to {output:#?}");
 	std::fs::copy(artifact_path, output)
-		.map_err(|error| error!(source = error, "Failed to copy file"))?;
+		.map_err(|error| error!(source = error, "failed to copy file"))?;
 
 	Ok(())
 }
@@ -441,7 +441,7 @@ fn which_cc() -> Result<PathBuf> {
 			path.exists().then_some(path)
 		})
 		.nth(1)
-		.ok_or(error!("Could not find cc"))?;
+		.ok_or(error!("could not find cc"))?;
 	Ok(cc)
 }
 
@@ -465,7 +465,7 @@ async fn create_remapping_table(
 		let path: &Path = remap_target.value.as_ref();
 		let path = path
 			.canonicalize()
-			.map_err(|error| error!(source = error, "Failed to canonicalize path"))?;
+			.map_err(|error| error!(source = error, "failed to canonicalize path"))?;
 
 		// Bail if the file does not exist.
 		if !path.exists() {
@@ -483,7 +483,7 @@ async fn create_remapping_table(
 		let path: tg::Path = path.try_into().map_err(|error| {
 			error!(
 				source = error,
-				"Failed to convert std::fs::PathBuf to tg::Path"
+				"failed to convert std::fs::PathBuf to tg::Path"
 			)
 		})?;
 		insert_into_source_tree(&mut subtrees, path.components(), remap_target);
@@ -574,7 +574,7 @@ async fn check_in_source_tree(
 					.map_err(|error| {
 						error!(
 							source = error,
-							"Failed to add {subpath}, {artifact} to directory."
+							"failed to add {subpath}, {artifact} to directory"
 						)
 					})?
 			}
