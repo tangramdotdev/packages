@@ -2,40 +2,52 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
 
-type Arg = std.sdk.BuildEnvArg & {
+type Arg = {
+	buildToolchain: std.env.Arg;
+	build?: tg.Triple.Arg;
+	host?: tg.Triple.Arg;
 	release?: boolean;
+	source?: tg.Directory;
 };
 
 /** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
-export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
-	let { build: build_, host: host_, release = true, sdk: sdkArg } = arg ?? {};
+export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
+	let {
+		build: build_,
+		buildToolchain,
+		host: host_,
+		release = true,
+		source: source_,
+	} = arg ?? {};
 	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let buildTriple = build_ ? tg.triple(build_) : host;
 
 	// Get the source.
-	let source = await tg.directory({
-		"Cargo.toml": tg.include("../Cargo.toml"),
-		"Cargo.lock": tg.include("../Cargo.lock"),
-		"packages/cc_proxy": tg.include("../packages/cc_proxy"),
-		"packages/ld_proxy": tg.include("../packages/ld_proxy"),
-		"packages/wrapper": tg.include("../packages/wrapper"),
-	});
+	let source = source_
+		? source_
+		: await tg.directory({
+				"Cargo.toml": tg.include("../Cargo.toml"),
+				"Cargo.lock": tg.include("../Cargo.lock"),
+				"packages/cc_proxy": tg.include("../packages/cc_proxy"),
+				"packages/ld_proxy": tg.include("../packages/ld_proxy"),
+				"packages/wrapper": tg.include("../packages/wrapper"),
+			});
 
 	return build({
+		...(await tg.Triple.rotate({ build: buildTriple, host })),
+		buildToolchain,
 		release,
 		source,
-		...(await tg.Triple.rotate({ build: buildTriple, host })),
-		sdkArg,
 	});
 });
 
-export let tgcc = async (arg?: Arg) =>
+export let tgcc = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/cc_proxy"));
 
-export let tgld = async (arg?: Arg) =>
+export let tgld = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/ld_proxy"));
 
-export let wrapper = async (arg?: Arg) =>
+export let wrapper = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
 let version = "1.76.0";
@@ -46,11 +58,9 @@ type ToolchainArg = {
 
 export let rust = tg.target(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
-		let host = await tg.Triple.host();
-		let target = tg.triple(arg?.target ?? host);
-		let hostArch = tg.Triple.arch(host);
+		let host = standardizeTriple(await tg.Triple.host());
+		let target = standardizeTriple(arg?.target ?? host);
 		let hostSystem = tg.Triple.archAndOs(host);
-		let os = tg.Triple.os(hostSystem);
 
 		// Download and parse the Rust manifest for the selected version.
 		let manifestFile = await tg.file(
@@ -63,23 +73,6 @@ export let rust = tg.target(
 		let manifest = tg.encoding.toml.decode(
 			await manifestFile.text(),
 		) as RustupManifest;
-
-		// On Linux, ensure we use a musl target for the host.
-		if (os === "linux") {
-			host = tg.triple({
-				arch: hostArch,
-				vendor: "unknown",
-				os: "linux",
-				environment: "musl",
-			});
-		} else if (os === "darwin") {
-			// On macOS, ensure we use the ARCH-apple-darwin target.
-			host = tg.triple({
-				arch: hostArch,
-				vendor: "apple",
-				os: "darwin",
-			});
-		}
 
 		// Install the full minimal profile for the host.
 		let hostTripleString = tg.Triple.toString(host);
@@ -176,91 +169,57 @@ type RustupManifest = {
 };
 
 type BuildArg = {
+	buildToolchain?: std.env.Arg;
+	host?: tg.Triple.Arg;
 	release?: boolean;
 	source: tg.Directory;
-	host: tg.Triple.Arg;
 	target?: tg.Triple.Arg;
-	sdkArg?: tg.MaybeNestedArray<std.sdk.Arg>;
 };
 
 export let build = async (arg: BuildArg) => {
 	let release = arg.release ?? true;
 	let source = arg.source;
-	let host = tg.triple(arg.host);
+	let host = standardizeTriple(
+		arg.host ? tg.triple(arg.host) : await tg.Triple.host(),
+	);
+	let target = standardizeTriple(arg.target ? tg.triple(arg.target) : host);
 	let system = tg.Triple.archAndOs(host);
-	let hostArch = tg.Triple.arch(host);
 	let os = tg.Triple.os(system);
 
-	let target = arg.target ? tg.triple(arg.target) : host;
 	let targetString = tg.Triple.toString(target);
-	let targetArch = tg.Triple.arch(target);
-
-	// On Linux, ensure we use a musl host/target.
-	if (os === "linux") {
-		host = tg.triple({
-			arch: hostArch,
-			vendor: "unknown",
-			os: "linux",
-			environment: "musl",
-		});
-
-		target = tg.triple({
-			arch: targetArch,
-			vendor: "unknown",
-			os: "linux",
-			environment: "musl",
-		});
-	} else if (os === "darwin") {
-		// On macOS, ensure we use the ARCH-apple-darwin target.
-		host = tg.triple({
-			arch: hostArch,
-			vendor: "apple",
-			os: "darwin",
-		});
-
-		target = tg.triple({
-			arch: targetArch,
-			vendor: "apple",
-			os: "darwin",
-		});
-	}
-
-	let isBootstrap = std
-		.flatten([arg?.sdkArg])
-		.some((sdk) => sdk?.bootstrapMode);
 
 	let isCross = !tg.Triple.eq(host, target);
 
-	// Get the SDK, without proxying enabled.
-	let sdkArg: std.sdk.Arg = { host, target };
-	if (host.arch === target.arch) {
-		sdkArg = { ...sdkArg, bootstrapMode: true };
-	}
-	let sdk = await std.sdk(sdkArg, arg.sdkArg, { proxy: false });
-	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
-		env: sdk,
+	// Get the toolchain directory.
+	let { directory, ldso, libDir } = await std.sdk.toolchainComponents({
+		bootstrapMode: true,
+		env: arg.buildToolchain,
+		host,
+		target,
 	});
-
-	let crossToolchain = await tg.directory();
-	if (isCross && !isBootstrap) {
-		crossToolchain = await gcc.toolchain({ host, target });
-	}
+	let buildToolchain = isCross ? directory : bootstrap.sdk.env(host);
 
 	// Get the Rust toolchain.
 	let rustToolchain = await rust({ target });
 
+	// Use the bootstrap utils to avoid unnecessary rebuilds;
+	let shell = bootstrap.shell({ host });
+	let utils = bootstrap.utils({ host });
+
 	// Set up common environemnt.
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
 	let prefix = ``;
-	if (isCross && !isBootstrap) {
+	if (isCross) {
 		prefix = `${targetString}-`;
 	}
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
-		sdk,
-		crossToolchain,
+		buildToolchain,
 		rustToolchain,
+		shell,
+		utils,
 		{
+			SHELL: tg`${shell}/bin/sh`,
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
 			RUST_TARGET: tg.Triple.toString(target),
@@ -278,8 +237,7 @@ export let build = async (arg: BuildArg) => {
 	let rustc = tg``;
 	let cargo = tg``;
 	if (os === "linux") {
-		let ldso = tg`lib/${bootstrap.interpreterName(host)}`;
-		interpreter = tg`${buildToolchain}/${ldso} --library-path ${buildToolchain}/lib`;
+		interpreter = tg`${ldso} --library-path ${libDir}`;
 		rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
 		cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
 	} else if (os === "darwin") {
@@ -322,6 +280,8 @@ export let build = async (arg: BuildArg) => {
 	];
 	if (release) {
 		args.push(`--release`);
+	} else {
+		args.push(`--features tracing`);
 	}
 
 	let build = {
@@ -329,14 +289,14 @@ export let build = async (arg: BuildArg) => {
 		args,
 	};
 
-	let buildType = "release";
+	let buildType = release ? "/release" : "/debug";
 
 	let install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			mv $TARGET/$RUST_TARGET/${buildType}/tangram_cc_proxy $OUTPUT/bin/cc_proxy
-			mv $TARGET/$RUST_TARGET/${buildType}/tangram_ld_proxy $OUTPUT/bin/ld_proxy
-			mv $TARGET/$RUST_TARGET/${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
+			mv $TARGET/$RUST_TARGET${buildType}/tangram_cc_proxy $OUTPUT/bin/cc_proxy
+			mv $TARGET/$RUST_TARGET${buildType}/tangram_ld_proxy $OUTPUT/bin/ld_proxy
+			mv $TARGET/$RUST_TARGET${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
 		`,
 	};
 
@@ -351,6 +311,30 @@ export let build = async (arg: BuildArg) => {
 			},
 		}),
 	);
+};
+
+/* Ensure the passed triples are what we expect, musl on linxu and standard for macOS. */
+let standardizeTriple = (tripleArg: tg.Triple.Arg): tg.Triple => {
+	let triple = tg.triple(tripleArg);
+	let hostArch = tg.Triple.arch(triple);
+	let os = tg.Triple.os(triple);
+
+	if (os === "darwin") {
+		return tg.triple({
+			arch: hostArch,
+			vendor: "apple",
+			os: "darwin",
+		});
+	} else if (os === "linux") {
+		return tg.triple({
+			arch: hostArch,
+			vendor: "unknown",
+			os: "linux",
+			environment: "musl",
+		});
+	} else {
+		return tg.unreachable();
+	}
 };
 
 let tripleToEnvVar = (triple: tg.Triple, upcase?: boolean) => {
@@ -368,11 +352,14 @@ export let test = tg.target(async () => {
 	let host = await tg.Triple.host();
 
 	// Determine the target triple with differing architecture from the host.
-	let hostArch = host.arch as string;
+	let hostArch = tg.Triple.arch(host);
+	tg.assert(hostArch);
+
+	let buildToolchain = bootstrap.sdk.env(host);
 
 	let nativeWorkspace = await workspace({
+		buildToolchain,
 		host,
-		sdk: { bootstrapMode: true },
 	});
 
 	// Assert the native workspace was built for the host.
@@ -405,8 +392,10 @@ export let testCross = tg.target(async () => {
 		os: "linux",
 		environment: "gnu",
 	});
+	let buildToolchain = gcc.toolchain({ host, target });
 
 	let crossWorkspace = await workspace({
+		buildToolchain,
 		build: host,
 		host: target,
 		release: false,

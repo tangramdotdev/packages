@@ -11,11 +11,6 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let unpackFormat = ".tar.gz" as const;
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		unpackFormat,
-	});
 	// let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
 	// let url = `http://fresh-center.net/linux/misc/pkg-config-0.29.2.tar.gz`;
 	let url =
@@ -84,8 +79,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		}),
 		{
 			args: ["--define-prefix"],
+			buildToolchain: env_,
 			libraryPaths: additionalLibDirs,
-			sdk: arg?.sdk,
 		},
 	);
 

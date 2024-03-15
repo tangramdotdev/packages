@@ -73,11 +73,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	});
 	let rawFile = tg.File.expect(await output.get("bin/file"));
 	let wrappedFile = std.wrap(rawFile, {
+		buildToolchain: env_,
 		env: {
 			MAGIC: tg.Mutation.setIfUnset(tg`${magic}/magic.mgc`),
 		},
 		libraryPaths: [tg.Directory.expect(await output.get("lib"))],
-		sdk: arg?.sdk,
 	});
 	return tg.directory(output, {
 		"bin/file": wrappedFile,

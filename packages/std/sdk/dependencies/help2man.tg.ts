@@ -54,8 +54,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	);
 
 	let wrappedScript = std.wrap(tg.symlink({ artifact, path: "bin/help2man" }), {
+		buildToolchain: env_,
 		interpreter: interpreter,
-		sdk: arg?.sdk,
 	});
 
 	return tg.directory({

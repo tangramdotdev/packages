@@ -101,6 +101,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let wrappedPerl = await std.wrap(
 		tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
 		{
+			buildToolchain: env_,
 			identity: "wrapper",
 			env: {
 				PERL5LIB: tg.Mutation.templateAppend(
@@ -108,7 +109,6 @@ export let build = tg.target(async (arg?: Arg) => {
 					":",
 				),
 			},
-			sdk: rest.sdk,
 		},
 	);
 
@@ -134,9 +134,9 @@ export let build = tg.target(async (arg?: Arg) => {
 
 		// Wrap it.
 		let wrappedScript = std.wrap(scriptArtifact, {
+			buildToolchain: env_,
 			identity: "interpreter",
 			interpreter: wrappedPerl,
-			sdk: rest.sdk,
 		});
 
 		// Replace in the original artifact.

@@ -72,6 +72,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			await automake.get(`bin/${script}-${version}`),
 		);
 		let wrappedScript = std.wrap(executable, {
+			buildToolchain: env_,
 			interpreter: perlInterpreter,
 			env: {
 				PERL5LIB: tg.Mutation.templateAppend(
@@ -96,7 +97,6 @@ export let build = tg.target(async (arg?: Arg) => {
 				),
 				AUTOMAKE_UNINSTALLED: "true",
 			},
-			sdk: arg?.sdk,
 		});
 
 		binDirectory = tg.directory(binDirectory, {

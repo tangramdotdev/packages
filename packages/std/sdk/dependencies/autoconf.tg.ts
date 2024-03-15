@@ -74,6 +74,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			path: "bin/autom4te",
 		}),
 		{
+			buildToolchain: env_,
 			interpreter,
 			args: ["-B", await tg`${autoconf}/share/autoconf`],
 			env: {
@@ -89,7 +90,6 @@ export let build = tg.target(async (arg?: Arg) => {
 				),
 				AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 			},
-			sdk: arg?.sdk,
 		},
 	);
 
@@ -98,6 +98,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		let wrappedScript = await std.wrap(
 			tg.File.expect(await autoconf.get(`bin/${script}`)),
 			{
+				buildToolchain: env_,
 				interpreter,
 				env: {
 					AUTOM4TE: autom4te,
@@ -111,7 +112,6 @@ export let build = tg.target(async (arg?: Arg) => {
 						":",
 					),
 				},
-				sdk: arg?.sdk,
 			},
 		);
 
@@ -125,6 +125,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		let wrappedScript = await std.wrap(
 			tg.File.expect(await autoconf.get(`bin/${script}`)),
 			{
+				buildToolchain: env_,
 				env: {
 					trailer_m4: tg.Mutation.setIfUnset(
 						tg`${autoconf}/share/autoconf/autoconf/trailer.m4`,
@@ -140,7 +141,6 @@ export let build = tg.target(async (arg?: Arg) => {
 					),
 					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 				},
-				sdk: arg?.sdk,
 			},
 		);
 

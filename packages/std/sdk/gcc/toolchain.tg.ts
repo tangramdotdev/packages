@@ -16,8 +16,8 @@ export type ToolchainArg = std.sdk.BuildEnvArg & {
 /** Construct a complete binutils + libc + gcc toolchain. */
 export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	let { build: build_, host: host_, target: target_, ...rest } = arg;
-	let host = normalizeTriple(host_ ? tg.triple(host_) : await tg.Triple.host());
-	let target = normalizeTriple(target_ ? tg.triple(target_) : host);
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let target = target_ ? tg.triple(target_) : host;
 
 	let buildTriple = arg.bootstrapMode
 		? bootstrap.toolchainTriple(host)
@@ -35,7 +35,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 
 	// If a cross-target was requested, build the components required using the native toolchain.
 	let nativeProxyEnv = await proxy.env({
-		env: nativeToolchain,
+		buildToolchain: nativeToolchain,
 		host,
 	});
 
@@ -244,22 +244,6 @@ export let buildToHostCrossToolchain = async (arg: tg.Triple.HostArg) => {
 	});
 
 	return { env, sysroot };
-};
-
-/** Produce the canonical version of the triple used by the toolchain. */
-export let normalizeTriple = (triple: tg.Triple): tg.Triple => {
-	let normalized = tg.Triple.normalized(triple);
-	tg.assert(normalized, "Expected the detected host to normalize correctly");
-	let base = tg.triple(normalized);
-	if (base.os !== "linux") {
-		throw new Error(`Unsupported OS for building GCC: ${base.os}`);
-	}
-	return tg.triple({
-		arch: base.arch,
-		vendor: base.vendor,
-		os: base.os,
-		environment: tg.Triple.environment(base) ?? "gnu",
-	});
 };
 
 export let testStage1 = async () => {

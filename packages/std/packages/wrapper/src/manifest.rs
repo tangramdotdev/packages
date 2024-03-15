@@ -1,9 +1,10 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
+#[cfg(feature = "tracing")]
+use std::os::unix::fs::PermissionsExt;
 use std::{
 	collections::HashSet,
 	hash::BuildHasher,
 	io::{Read, Seek, Write},
-	os::unix::fs::PermissionsExt,
 	path::Path,
 };
 use tangram_client as tg;
@@ -141,14 +142,19 @@ pub enum Executable {
 impl Manifest {
 	/// Write a manifest to the end of a file.
 	pub fn write(&self, path: &Path) -> std::io::Result<()> {
+		#[cfg(feature = "tracing")]
 		tracing::debug!(?path, "Writing manifest");
 
-		let perms = std::fs::metadata(path)?.permissions();
-		let mode = perms.mode();
-		tracing::debug!("Mode: {mode:o}");
+		#[cfg(feature = "tracing")]
+		{
+			let perms = std::fs::metadata(path)?.permissions();
+			let mode = perms.mode();
+			tracing::debug!("Mode: {mode:o}");
+		}
 
 		// Open the file.
 		let mut file = std::fs::OpenOptions::new().append(true).open(path)?;
+		#[cfg(feature = "tracing")]
 		tracing::debug!(?file);
 
 		// Serialize the manifest.
@@ -156,6 +162,7 @@ impl Manifest {
 
 		// Write the manifest.
 		file.write_all(manifest.as_bytes())?;
+		#[cfg(feature = "tracing")]
 		tracing::debug!("Wrote manifest");
 
 		// Write the length of the manifest.
@@ -173,6 +180,7 @@ impl Manifest {
 
 	/// Read a manifest from the end of a file.
 	pub fn read(path: &Path) -> std::io::Result<Option<Self>> {
+		#[cfg(feature = "tracing")]
 		tracing::debug!(?path, "Reading manifest");
 		// Open the file and seek to the end.
 		let mut file = std::fs::File::open(path)?;
@@ -184,6 +192,7 @@ impl Manifest {
 		file.read_exact(&mut magic_number)?;
 		file.seek(std::io::SeekFrom::Current(-8))?;
 		if magic_number != MAGIC_NUMBER {
+			#[cfg(feature = "tracing")]
 			tracing::info!(
 				"Magic number mismatch.  Recognized: {:?}, Read: {:?}",
 				MAGIC_NUMBER,
@@ -197,6 +206,7 @@ impl Manifest {
 		let version = file.read_u64::<byteorder::LittleEndian>()?;
 		file.seek(std::io::SeekFrom::Current(-8))?;
 		if version != VERSION {
+			#[cfg(feature = "tracing")]
 			tracing::info!(
 				"Version mismatch.  Recognized: {:?}, Read: {:?}",
 				VERSION,
@@ -215,6 +225,7 @@ impl Manifest {
 		let mut manifest = vec![0u8; usize::try_from(length).unwrap()];
 		file.read_exact(&mut manifest)?;
 		file.seek(std::io::SeekFrom::Current(-i64::try_from(length).unwrap()))?;
+		#[cfg(feature = "tracing")]
 		tracing::debug!(manifest = ?std::str::from_utf8(&manifest).unwrap());
 
 		// Deserialize the manifest.

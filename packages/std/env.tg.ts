@@ -29,13 +29,16 @@ export async function env(...args: tg.Args<env.Arg>) {
 	let wrapEnv = wrapEnv_ ?? [];
 
 	// Include the standard utils unless bootstrap mode is set.
+	let buildToolchain = undefined;
 	if (!bootstrapMode) {
 		wrapEnv.push(await std.utils.env());
+	} else {
+		buildToolchain = await std.sdk({ bootstrapMode });
 	}
 
 	return std.wrap(gnuEnv(), {
+		buildToolchain,
 		env: wrapEnv,
-		sdk: { bootstrapMode },
 	});
 }
 

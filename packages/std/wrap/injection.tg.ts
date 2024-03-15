@@ -2,30 +2,32 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
 
-export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	let host = await tg.Triple.host(arg);
-	let build = arg?.build ? tg.triple(arg.build) : host;
-	let isBootstrap =
-		arg?.bootstrapMode ||
-		std.flatten([arg?.sdk]).some((sdk) => sdk?.bootstrapMode);
+type Arg = {
+	build?: tg.Triple.Arg;
+	buildToolchain: std.env.Arg;
+	env?: std.env.Arg;
+	host?: tg.Triple.Arg;
+	source?: tg.Directory;
+};
+
+export let injection = tg.target(async (arg: Arg) => {
+	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let build = arg.build ? tg.triple(arg.build) : host;
 	let os = host.os;
 
 	// Get the source.
-	let sourceDir = tg.Directory.expect(await tg.include("injection/"));
+	let sourceDir = arg?.source
+		? arg.source
+		: tg.Directory.expect(await tg.include("injection/"));
 	let source = tg.File.expect(await sourceDir.get(`${os}/lib.c`));
 
-	// Prepare sdk, making sure not to use any proxying.
-	let buildToolchain = await tg.directory();
-	if (isBootstrap) {
-		let { directory } = await std.sdk.toolchainComponents({
-			env: await bootstrap.sdk.env({ host }),
-		});
-		buildToolchain = directory;
-	} else {
-		buildToolchain = await gcc.toolchain(tg.Triple.rotate({ build, host }));
-	}
+	// Get the build toolchain.
+	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
+		env: arg.buildToolchain,
+	});
 
-	let env = arg?.env;
+	// Get any additional env.
+	let env = arg.env;
 
 	// Select the correct toolchain and options for the given triple.
 	let additionalArgs: Array<string | tg.Template> = [];
@@ -36,7 +38,6 @@ export let injection = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 			buildToolchain,
 			env,
 			host,
-			isBootstrap,
 			source,
 			additionalArgs,
 		});
@@ -58,7 +59,7 @@ export default injection;
 
 type MacOsInjectionArg = {
 	buildToolchain: tg.Directory;
-	env: std.env.Arg;
+	env?: std.env.Arg;
 	host?: tg.Triple.Arg;
 	source: tg.File;
 };
@@ -87,7 +88,6 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 		...arg,
 		source,
 		additionalArgs: arm64Args,
-		isBootstrap: true,
 		env,
 	});
 
@@ -97,7 +97,6 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 		...arg,
 		source,
 		additionalArgs: amd64Args,
-		isBootstrap: true,
 		env,
 	});
 
@@ -114,10 +113,9 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
-	isBootstrap?: boolean;
 	build?: tg.Triple.Arg;
 	buildToolchain: tg.Directory;
-	env: std.env.Arg;
+	env?: std.env.Arg;
 	host?: tg.Triple.Arg;
 	source: tg.File;
 };
@@ -125,9 +123,7 @@ type DylibArg = {
 export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
 	let build = arg.build ? tg.triple(arg.build) : host;
-	let isBootstrap = arg.isBootstrap ?? false;
-	let useTriplePrefix =
-		!tg.Triple.eq(build, host) && !isBootstrap && !(build.os === "darwin");
+	let useTriplePrefix = !tg.Triple.eq(build, host) && !(build.os === "darwin");
 	let hostString = tg.Triple.toString(host);
 
 	let additionalArgs = arg.additionalArgs ?? [];
@@ -136,21 +132,31 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 			? tg`${arg.buildToolchain}/${hostString}`
 			: tg`${arg.buildToolchain}`;
 		additionalArgs.push(await tg`--sysroot=${subpath}`);
+		additionalArgs.push("-fstack-clash-protection");
 	}
 
 	let prefix = useTriplePrefix ? `${hostString}-` : "";
 	let executable = `${prefix}cc`;
 
 	let system = tg.Triple.archAndOs(host);
-	let env = std.env.object(arg.buildToolchain, arg.env);
+	let env = std.env.object(arg.buildToolchain);
 	let output = tg.File.expect(
 		await tg.build(
 			tg`${executable} -xc ${
 				arg.source
-			} -o $OUTPUT -shared  -fPIC -ldl -Os ${tg.Template.join(
-				" ",
-				...additionalArgs,
-			)}`,
+			} -o $OUTPUT                                   \
+				-shared                                      \
+				-fPIC                                        \
+				-ldl                                         \
+				-Os                                          \
+				-mtune=generic                               \
+				-pipe                                        \
+				-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3    \
+				-fasynchronous-unwind-tables                 \
+				-fno-omit-frame-pointer                      \
+				-mno-omit-leaf-frame-pointer                 \
+				-fstack-protector-strong                     \
+				${tg.Template.join(" ", ...additionalArgs)}`,
 			{
 				host: system,
 				env,
@@ -162,10 +168,12 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 
 export let test = tg.target(async () => {
 	let detectedHost = await tg.Triple.host();
-	let hostArch = detectedHost.arch as string;
+	let hostArch = detectedHost.arch;
+	tg.assert(hostArch);
+	let buildToolchain = bootstrap.sdk.env();
 	let nativeInjection = await injection({
 		host: detectedHost,
-		bootstrapMode: true,
+		buildToolchain,
 	});
 
 	// Assert the native injection dylib was built for the build machine.
@@ -180,6 +188,7 @@ export let test = tg.target(async () => {
 	} else {
 		return tg.unreachable();
 	}
+	return nativeInjection;
 });
 
 export let testCross = tg.target(async () => {
@@ -192,9 +201,11 @@ export let testCross = tg.target(async () => {
 	let hostArch = detectedHost.arch;
 	let targetArch: tg.Triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = tg.triple({ ...detectedHost, arch: targetArch });
+	let buildToolchain = gcc.toolchain({ host: detectedHost, target });
 
 	let nativeInjection = await injection({
 		build: detectedHost,
+		buildToolchain,
 		host: target,
 	});
 

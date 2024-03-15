@@ -73,6 +73,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		dependencies.push(prerequisites({ host }));
 	}
 
+	console.log("coreutils a");
+
 	let attrArtifact;
 	if (os === "linux") {
 		attrArtifact = attr({
@@ -97,6 +99,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
+	console.log("coreutils b");
 	let env = [env_, ...dependencies];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
@@ -104,6 +107,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let configure = {
 		args: [
+			"--disable-acl",
 			"--disable-dependency-tracking",
 			"--disable-libcap",
 			"--disable-nls",
@@ -113,7 +117,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let output = buildUtil(
+	let output = await buildUtil(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
@@ -125,10 +129,11 @@ export let build = tg.target(async (arg?: Arg) => {
 		},
 		autotools,
 	);
+	console.log("coreutils c");
 
 	// On macOS, replace `install` with the Apple Open Source version that correctly handles xattrs.
 	if (os === "darwin") {
-		output = tg.directory(
+		output = await tg.directory(
 			output,
 			{ "bin/install": undefined },
 			macOsXattrCmds(arg),
