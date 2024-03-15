@@ -191,20 +191,15 @@ export let build = async (arg: BuildArg) => {
 	let isCross = !tg.Triple.eq(host, target);
 
 	// Get the toolchain directory.
-	let { directory, ldso, libDir } = await std.sdk.toolchainComponents({
+	let { ldso, libDir } = await std.sdk.toolchainComponents({
 		bootstrapMode: true,
 		env: arg.buildToolchain,
 		host,
 		target,
 	});
-	let buildToolchain = isCross ? directory : bootstrap.sdk.env(host);
 
 	// Get the Rust toolchain.
 	let rustToolchain = await rust({ target });
-
-	// Use the bootstrap utils to avoid unnecessary rebuilds;
-	let shell = bootstrap.shell({ host });
-	let utils = bootstrap.utils({ host });
 
 	// Set up common environemnt.
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
@@ -214,12 +209,9 @@ export let build = async (arg: BuildArg) => {
 	}
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
-		buildToolchain,
+		arg.buildToolchain,
 		rustToolchain,
-		shell,
-		utils,
 		{
-			SHELL: tg`${shell}/bin/sh`,
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
 			RUST_TARGET: tg.Triple.toString(target),

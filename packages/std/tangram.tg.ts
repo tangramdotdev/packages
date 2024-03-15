@@ -90,7 +90,9 @@ export let testBootstrapMusl = tg.target(async () => {
 
 import * as utils from "./utils.tg.ts";
 export let testUtilsPrerequisites = tg.target(async () => {
-	return await utils.prerequisites();
+	return await utils.prerequisites({
+		host: bootstrap.toolchainTriple(await tg.Triple.host()),
+	});
 });
 
 export let testUtilsBash = tg.target(async () => {

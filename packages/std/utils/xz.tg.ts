@@ -81,7 +81,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	for (let bin of bins) {
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
 		let wrappedBin = std.wrap(unwrappedBin, {
-		 	buildToolchain: bootstrapMode ? env : undefined,
+		 	buildToolchain: bootstrapMode ? env_ : undefined,
 			libraryPaths: [libDir],
 		});
 		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
