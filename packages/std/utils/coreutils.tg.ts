@@ -108,12 +108,10 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--disable-libcap",
 			"--disable-nls",
 			"--disable-rpath",
+			"--enable-single-binary=symlinks",
+			"--enable-single-binary-exceptions=env",
 		],
 	};
-	if (staticBuild) {
-		configure.args.push("--enable-static");
-		configure.args.push("--disable-shared");
-	}
 
 	let output = buildUtil(
 		{

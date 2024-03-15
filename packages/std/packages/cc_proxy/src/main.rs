@@ -5,7 +5,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 use tangram_client as tg;
-use tangram_error::{error, Result, WrapErr};
+use tangram_error::{error, Result};
 
 // Data read from environment variables.
 #[derive(Debug)]
@@ -72,9 +72,9 @@ impl Environment {
 		for (key, value) in std::env::vars() {
 			match key.as_str() {
 				"TANGRAM_CC_ENABLE" => {
-					enable = value
-						.parse()
-						.wrap_err("Failed to parse TANGRAM_CC_ENABLE.")?;
+					enable = value.parse().map_err(|error| {
+						error!(source = error, "Failed to parse TANGRAM_CC_ENABLE")
+					})?;
 				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => continue,
 				_ => {
@@ -345,7 +345,8 @@ async fn main_inner() -> Result<()> {
 
 	// Create the target.
 	let target = tg::Target::with_object(tg::target::Object {
-		host: tg::Triple::host().wrap_err("Failed to get tg::Triple::host().")?,
+		host: tg::Triple::host()
+			.map_err(|error| error!(source = error, "Failed to get tg::Triple::host()"))?,
 		executable,
 		lock: None,
 		name: Some("tangram_cc".into()),
@@ -373,9 +374,9 @@ async fn main_inner() -> Result<()> {
 		tg::build::Outcome::Failed(e) => return Err(error!("Build failed: {e}.")),
 		tg::build::Outcome::Succeeded(outcome) => outcome
 			.try_unwrap_object()
-			.wrap_err("Expected build to create an object.")?
+			.map_err(|error| error!(source = error, "Expected build to create an object"))?
 			.try_unwrap_directory()
-			.wrap_err("Expected build to create a directory.")?,
+			.map_err(|error| error!(source = error, "Expected build to create a directory"))?,
 	};
 
 	// Dump stdout, stderr
@@ -388,7 +389,7 @@ async fn main_inner() -> Result<()> {
 		.await?;
 	std::io::stdout()
 		.write_all(&stdout)
-		.wrap_err("Failed to dump stdout.")?;
+		.map_err(|error| error!(source = error, "Failed to dump stdout"))?;
 	let stderr: Vec<u8> = build_directory
 		.get(tg, &"stderr".parse().unwrap())
 		.await?
@@ -398,17 +399,17 @@ async fn main_inner() -> Result<()> {
 		.await?;
 	std::io::stderr()
 		.write_all(&stderr)
-		.wrap_err("Failed to dump stdout.")?;
+		.map_err(|error| error!(source = error, "Failed to dump stdout"))?;
 
 	// Copy the output file to the destination.
 	let output_file = build_directory
 		.get(tg, &"output".parse().unwrap())
 		.await
-		.wrap_err("cc failed. No output.")?;
+		.map_err(|error| error!(source = error, "cc failed. No output"))?;
 
 	// Verify we did everything correctly.
-	let mut tangram_path =
-		std::env::current_dir().wrap_err("Failed to get current working directory.")?;
+	let mut tangram_path = std::env::current_dir()
+		.map_err(|error| error!(source = error, "Failed to get current working directory"))?;
 	while !tangram_path.join(".tangram").exists() {
 		let Some(parent) = tangram_path.parent() else {
 			return Err(error!("Failed to find .tangram directory."));
@@ -419,7 +420,8 @@ async fn main_inner() -> Result<()> {
 		.join(".tangram/artifacts")
 		.join(output_file.id(tg).await?.to_string());
 	eprintln!("Copying {artifact_path:#?} to {output:#?}");
-	std::fs::copy(artifact_path, output).wrap_err("Failed to copy file.")?;
+	std::fs::copy(artifact_path, output)
+		.map_err(|error| error!(source = error, "Failed to copy file"))?;
 
 	Ok(())
 }
@@ -430,7 +432,7 @@ fn which_cc() -> Result<PathBuf> {
 	if let Ok(cc) = std::env::var("TANGRAM_CC_COMPILER") {
 		return Ok(cc.into());
 	}
-	let path = std::env::var("PATH").wrap_err("PATH is not set.")?;
+	let path = std::env::var("PATH").map_err(|error| error!(source = error, "PATH is not set"))?;
 	let cc = path
 		.split(':')
 		.filter_map(|path| {
@@ -439,7 +441,7 @@ fn which_cc() -> Result<PathBuf> {
 			path.exists().then_some(path)
 		})
 		.nth(1)
-		.wrap_err("Could not find cc.")?;
+		.ok_or(error!("Could not find cc"))?;
 	Ok(cc)
 }
 
@@ -463,7 +465,7 @@ async fn create_remapping_table(
 		let path: &Path = remap_target.value.as_ref();
 		let path = path
 			.canonicalize()
-			.wrap_err("Failed to canonicalize path.")?;
+			.map_err(|error| error!(source = error, "Failed to canonicalize path"))?;
 
 		// Bail if the file does not exist.
 		if !path.exists() {
@@ -478,9 +480,12 @@ async fn create_remapping_table(
 		}
 
 		// Add to the file trees.
-		let path: tg::Path = path
-			.try_into()
-			.wrap_err("Failed to convert std::fs::PathBuf to tg::Path.")?;
+		let path: tg::Path = path.try_into().map_err(|error| {
+			error!(
+				source = error,
+				"Failed to convert std::fs::PathBuf to tg::Path"
+			)
+		})?;
 		insert_into_source_tree(&mut subtrees, path.components(), remap_target);
 	}
 
@@ -566,7 +571,12 @@ async fn check_in_source_tree(
 				builder = builder
 					.add(tg, &subpath, artifact.clone())
 					.await
-					.wrap_err_with(|| error!("Failed to add {subpath}, {artifact} to directory."))?
+					.map_err(|error| {
+						error!(
+							source = error,
+							"Failed to add {subpath}, {artifact} to directory."
+						)
+					})?
 			}
 		}
 	}

@@ -8,7 +8,7 @@ use std::{
 	str::FromStr,
 };
 use tangram_client as tg;
-use tangram_error::{error, Result, WrapErr};
+use tangram_error::{error, Result};
 use tangram_wrapper::manifest::{self, Manifest};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing_subscriber::prelude::*;
@@ -36,7 +36,7 @@ async fn main_inner() -> Result<()> {
 	let status = std::process::Command::new(&options.command_path)
 		.args(&options.command_args)
 		.status()
-		.wrap_err("Failed to run the command")?;
+		.map_err(|error| error!(source = error, "Failed to run the command"))?;
 
 	// If the command did not exit successfully, then exit with its code.
 	if !status.success() {
@@ -260,7 +260,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		let reader = tokio::io::BufReader::new(
 			tokio::fs::File::open(&options.output_path)
 				.await
-				.wrap_err("Could not open output file")?,
+				.map_err(|error| error!(source = error, "Could not open output file"))?,
 		);
 		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
 
@@ -334,10 +334,10 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		let wrapper_path = options
 			.wrapper_path
 			.as_ref()
-			.wrap_err("TANGRAM_LINKER_WRAPPER_PATH must be set.")?;
+			.ok_or(error!("TANGRAM_LINKER_WRAPPER_PATH must be set"))?;
 		std::fs::remove_file(&options.output_path).ok();
 		std::fs::copy(wrapper_path, &options.output_path)
-			.wrap_err("Failed to copy the wrapper file.")?;
+			.map_err(|error| error!(source = error, "Failed to copy the wrapper file"))?;
 
 		// Set the permissions of the wrapper file so we can write the manifest to the end.
 		let mut perms = std::fs::metadata(&options.output_path)
@@ -345,7 +345,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 			.permissions();
 		perms.set_mode(0o755);
 		std::fs::set_permissions(&options.output_path, perms)
-			.expect("Failed to set the wrapper file permissions.");
+			.expect("Failed to set the wrapper file permissions");
 
 		let manifest =
 			create_manifest(&tg, output_artifact_id, options, interpreter, library_paths).await?;
@@ -354,7 +354,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		// Write the manifest.
 		manifest
 			.write(&options.output_path)
-			.expect("Failed to write the manifest.");
+			.expect("Failed to write the manifest");
 
 		// Get the manifest's references.
 		references = manifest.references();
@@ -374,7 +374,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		references: references.into_iter().collect(),
 	};
 	let attributes =
-		serde_json::to_string(&attributes).expect("Failed to serialize the attributes.");
+		serde_json::to_string(&attributes).expect("Failed to serialize the attributes");
 	xattr::set(&options.output_path, "user.tangram", attributes.as_bytes())
 		.expect("Failed to write the attributes.");
 
@@ -757,7 +757,8 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			if let Ok(Some(tg::artifact::Artifact::File(found_library))) = directory
 				.try_get(
 					tg,
-					&tg::Path::from_str(&library_name).wrap_err("Could not create path")?,
+					&tg::Path::from_str(&library_name)
+						.map_err(|error| error!(source = error, "Could not create path"))?,
 				)
 				.await
 			{
@@ -794,8 +795,9 @@ fn found_all_libraries<H: BuildHasher + Default>(
 /// Analyze an output file.
 async fn analyze_output_file(path: impl AsRef<std::path::Path>) -> Result<AnalyzeOutputFileOutput> {
 	let reader =
-		tokio::io::BufReader::new(tokio::fs::File::open(&path).await.wrap_err_with(|| {
-			format!(
+		tokio::io::BufReader::new(tokio::fs::File::open(&path).await.map_err(|error| {
+			error!(
+				source = error,
 				r#"Failed to open the output file at path "{}"."#,
 				path.as_ref().display()
 			)
@@ -810,11 +812,11 @@ async fn analyze_executable(mut reader: impl AsyncRead + Unpin) -> Result<Analyz
 	reader
 		.read_to_end(&mut bytes)
 		.await
-		.wrap_err("Failed to read the output file.")?;
+		.map_err(|error| error!(source = error, "Failed to read the output file"))?;
 
 	// Parse the object and analyze it.
-	let object =
-		goblin::Object::parse(&bytes).wrap_err("Failed to parse output file as an object.")?;
+	let object = goblin::Object::parse(&bytes)
+		.map_err(|error| error!(source = error, "Failed to parse output file as an object"))?;
 	let result = match object {
 		// Handle an archive file.
 		goblin::Object::Archive(_) => AnalyzeOutputFileOutput {
@@ -914,7 +916,7 @@ async fn file_from_reader(
 ) -> Result<tg::File> {
 	let blob = tg::Blob::with_reader(tg, reader)
 		.await
-		.wrap_err("Could not create blob")?;
+		.map_err(|error| error!(source = error, "Could not create blob"))?;
 	let file = tg::File::builder(blob).executable(is_executable).build();
 	Ok(file)
 }
