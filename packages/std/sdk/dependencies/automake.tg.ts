@@ -71,8 +71,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		let executable = tg.File.expect(
 			await automake.get(`bin/${script}-${version}`),
 		);
-		let wrappedScript = std.wrap(executable, {
+		let wrappedScript = std.wrap({
 			buildToolchain: env_,
+			executable,
 			interpreter: perlInterpreter,
 			env: {
 				PERL5LIB: tg.Mutation.templateAppend(

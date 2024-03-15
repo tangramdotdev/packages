@@ -72,17 +72,15 @@ export let build = tg.target(async (arg?: Arg) => {
 	);
 
 	// Bundle the resulting binary with the `--define-prefix` flag.
-	let wrappedBin = std.wrap(
-		tg.symlink({
+	let wrappedBin = std.wrap({
+		args: ["--define-prefix"],
+		executable: tg.symlink({
 			artifact: pkgConfigBuild,
 			path: "bin/pkg-config",
 		}),
-		{
-			args: ["--define-prefix"],
-			buildToolchain: env_,
-			libraryPaths: additionalLibDirs,
-		},
-	);
+		buildToolchain: env_,
+		libraryPaths: additionalLibDirs,
+	});
 
 	return tg.directory(pkgConfigBuild, {
 		["bin/pkg-config"]: wrappedBin,

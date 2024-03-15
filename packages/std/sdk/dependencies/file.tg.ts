@@ -72,8 +72,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		"magic.mgc": tg.File.expect(await output.get("share/misc/magic.mgc")),
 	});
 	let rawFile = tg.File.expect(await output.get("bin/file"));
-	let wrappedFile = std.wrap(rawFile, {
+	let wrappedFile = std.wrap({
 		buildToolchain: env_,
+		executable: rawFile,
 		env: {
 			MAGIC: tg.Mutation.setIfUnset(tg`${magic}/magic.mgc`),
 		},

@@ -98,19 +98,17 @@ export let build = tg.target(async (arg?: Arg) => {
 		autotools,
 	);
 
-	let wrappedPerl = await std.wrap(
-		tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
-		{
-			buildToolchain: env_,
-			identity: "wrapper",
-			env: {
-				PERL5LIB: tg.Mutation.templateAppend(
-					tg`${perlArtifact}/lib/perl5/${metadata.version}`,
-					":",
-				),
-			},
+	let wrappedPerl = await std.wrap({
+		buildToolchain: env_,
+		executable: tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
+		identity: "wrapper",
+		env: {
+			PERL5LIB: tg.Mutation.templateAppend(
+				tg`${perlArtifact}/lib/perl5/${metadata.version}`,
+				":",
+			),
 		},
-	);
+	});
 
 	let scripts = [];
 	let binDir = tg.Directory.expect(await perlArtifact.get("bin"));
@@ -133,8 +131,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		);
 
 		// Wrap it.
-		let wrappedScript = std.wrap(scriptArtifact, {
+		let wrappedScript = std.wrap({
 			buildToolchain: env_,
+			executable: scriptArtifact,
 			identity: "interpreter",
 			interpreter: wrappedPerl,
 		});

@@ -68,52 +68,42 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let binDirectory = tg.directory();
 
-	let autom4te = await std.wrap(
-		tg.symlink({
+	let autom4te = await std.wrap({
+		buildToolchain: env_,
+		executable: tg.symlink({
 			artifact: autoconf,
 			path: "bin/autom4te",
 		}),
-		{
+		interpreter,
+		args: ["-B", await tg`${autoconf}/share/autoconf`],
+		env: {
+			autom4te_perllibdir: tg`${autoconf}/share/autoconf`,
+			AC_MACRODIR: tg.Mutation.templateAppend(
+				tg`${autoconf}/share/autoconf`,
+				":",
+			),
+			M4PATH: tg.Mutation.templateAppend(tg`${autoconf}/share/autoconf`, ":"),
+			PERL5LIB: tg.Mutation.templateAppend(tg`${autoconf}/share/autoconf`, ":"),
+			AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
+		},
+	});
+
+	binDirectory = tg.directory(binDirectory, { ["autom4te"]: autom4te });
+	for (let script of perlScripts) {
+		let wrappedScript = await std.wrap({
 			buildToolchain: env_,
+			executable: tg.File.expect(await autoconf.get(`bin/${script}`)),
 			interpreter,
-			args: ["-B", await tg`${autoconf}/share/autoconf`],
 			env: {
-				autom4te_perllibdir: tg`${autoconf}/share/autoconf`,
-				AC_MACRODIR: tg.Mutation.templateAppend(
-					tg`${autoconf}/share/autoconf`,
-					":",
-				),
+				AUTOM4TE: autom4te,
 				M4PATH: tg.Mutation.templateAppend(tg`${autoconf}/share/autoconf`, ":"),
+				AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 				PERL5LIB: tg.Mutation.templateAppend(
 					tg`${autoconf}/share/autoconf`,
 					":",
 				),
-				AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 			},
-		},
-	);
-
-	binDirectory = tg.directory(binDirectory, { ["autom4te"]: autom4te });
-	for (let script of perlScripts) {
-		let wrappedScript = await std.wrap(
-			tg.File.expect(await autoconf.get(`bin/${script}`)),
-			{
-				buildToolchain: env_,
-				interpreter,
-				env: {
-					AUTOM4TE: autom4te,
-					M4PATH: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
-					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
-					PERL5LIB: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
-				},
-			},
-		);
+		});
 
 		binDirectory = tg.directory(binDirectory, {
 			[script]: wrappedScript,
@@ -122,27 +112,22 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	// Bundle the shell scripts.
 	for (let script of shellSripts) {
-		let wrappedScript = await std.wrap(
-			tg.File.expect(await autoconf.get(`bin/${script}`)),
-			{
-				buildToolchain: env_,
-				env: {
-					trailer_m4: tg.Mutation.setIfUnset(
-						tg`${autoconf}/share/autoconf/autoconf/trailer.m4`,
-					),
-					AUTOM4TE: tg`${autoconf}/bin/autom4te`,
-					M4PATH: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
-					PERL5LIB: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
-					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
-				},
+		let wrappedScript = await std.wrap({
+			buildToolchain: env_,
+			executable: tg.File.expect(await autoconf.get(`bin/${script}`)),
+			env: {
+				trailer_m4: tg.Mutation.setIfUnset(
+					tg`${autoconf}/share/autoconf/autoconf/trailer.m4`,
+				),
+				AUTOM4TE: tg`${autoconf}/bin/autom4te`,
+				M4PATH: tg.Mutation.templateAppend(tg`${autoconf}/share/autoconf`, ":"),
+				PERL5LIB: tg.Mutation.templateAppend(
+					tg`${autoconf}/share/autoconf`,
+					":",
+				),
+				AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 			},
-		);
+		});
 
 		binDirectory = tg.directory(binDirectory, {
 			[script]: wrappedScript,
