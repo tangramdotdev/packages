@@ -89,8 +89,6 @@ export let prerequisites = tg.target(async (arg?: tg.Triple.HostArg) => {
 	let makeArtifact = await bootstrap.make.build({ host });
 	components.push(makeArtifact);
 
-	console.log("prereq a");
-
 	// Add patched GNU coreutils.
 	let bootstrapMode = true;
 	let coreutilsArtifact = await coreutils({
@@ -100,8 +98,6 @@ export let prerequisites = tg.target(async (arg?: tg.Triple.HostArg) => {
 		usePrerequisites: false,
 	});
 	components.push(coreutilsArtifact);
-
-	console.log("prereq b");
 
 	// On Linux, build musl and use it for the runtime libc.
 	if (host.os === "linux" && host.environment === "musl") {

@@ -73,8 +73,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		dependencies.push(prerequisites({ host }));
 	}
 
-	console.log("coreutils a");
-
 	let attrArtifact;
 	if (os === "linux") {
 		attrArtifact = attr({
@@ -99,7 +97,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
-	console.log("coreutils b");
 	let env = [env_, ...dependencies];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
@@ -129,7 +126,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		},
 		autotools,
 	);
-	console.log("coreutils c");
 
 	// On macOS, replace `install` with the Apple Open Source version that correctly handles xattrs.
 	if (os === "darwin") {
