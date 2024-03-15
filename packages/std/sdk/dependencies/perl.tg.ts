@@ -97,6 +97,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		},
 		autotools,
 	);
+	console.log("perlArtifact", await perlArtifact.id());
 
 	let wrappedPerl = await std.wrap({
 		buildToolchain: env_,
@@ -109,6 +110,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			),
 		},
 	});
+	console.log("wrappedPerl", await wrappedPerl.id());
 
 	let scripts = [];
 	let binDir = tg.Directory.expect(await perlArtifact.get("bin"));
@@ -131,12 +133,14 @@ export let build = tg.target(async (arg?: Arg) => {
 		);
 
 		// Wrap it.
-		let wrappedScript = std.wrap({
+		console.log("wrapping", script, await scriptArtifact.id());
+		let wrappedScript = await std.wrap({
 			buildToolchain: env_,
 			executable: scriptArtifact,
 			identity: "interpreter",
 			interpreter: wrappedPerl,
 		});
+		console.log("wrappedScript", await wrappedScript.id());
 
 		// Replace in the original artifact.
 		perlArtifact = await tg.directory(perlArtifact, {

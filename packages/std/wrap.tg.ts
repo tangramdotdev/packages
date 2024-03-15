@@ -195,8 +195,15 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 
 	let identity = identity_ ?? "executable";
 
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let buildToolchain = buildToolchain_
+		? buildToolchain_
+		: host.os === "linux"
+			? await gcc.toolchain({ host })
+			: await bootstrap.sdk.env({ host });
+
 	let manifestInterpreter = interpreter
-		? await manifestInterpreterFromArg(interpreter)
+		? await manifestInterpreterFromArg(interpreter, buildToolchain_)
 		: undefined;
 
 	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
@@ -242,12 +249,6 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	};
 
 	// Get the wrapper executable.
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let buildToolchain = buildToolchain_
-		? buildToolchain_
-		: host.os === "linux"
-			? await gcc.toolchain({ host })
-			: await bootstrap.sdk.env({ host });
 	let wrapper = await workspace.wrapper({
 		buildToolchain,
 		host,
@@ -1126,7 +1127,10 @@ let manifestInterpreterFromArg = async (
 
 	// If the arg is an executable, then wrap it and create a normal interpreter.
 	if (tg.File.is(arg) || tg.Symlink.is(arg)) {
-		let interpreter = await std.wrap(arg);
+		let interpreter = await std.wrap({
+			buildToolchain: buildToolchainArg,
+			executable: arg,
+		});
 		let path = await manifestSymlinkFromArg(interpreter);
 		return {
 			kind: "normal",
@@ -1349,6 +1353,7 @@ let manifestInterpreterFromExecutableArg = async (
 			if (metadata.interpreter === undefined) {
 				return manifestInterpreterFromArg(
 					await defaultShellInterpreter(buildToolchainArg),
+					buildToolchainArg,
 				);
 			} else {
 				return undefined;
@@ -1432,7 +1437,9 @@ export let defaultShellInterpreter = async (
 	//  Add the standard utils.
 	let env = await std.utils.env(buildArg);
 
-	let bash = wrap(shellExecutable, {
+	let bash = wrap({
+		buildToolchain: buildToolchainArg,
+		executable: shellExecutable,
 		identity: "wrapper",
 		args: ["-euo", "pipefail"],
 		env,
