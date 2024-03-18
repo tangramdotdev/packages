@@ -106,7 +106,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		executable: unwrappedPerl,
 		identity: "wrapper",
 		env: {
-			PERL5LIB: tg.Mutation.templateAppend(
+			PERL5LIB: tg.Mutation.templatePrepend(
 				tg`${perlArtifact}/lib/perl5/${metadata.version}`,
 				":",
 			),
