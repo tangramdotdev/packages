@@ -152,7 +152,6 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 				-mtune=generic                               \
 				-pipe                                        \
 				-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3    \
-				-fasynchronous-unwind-tables                 \
 				-fno-omit-frame-pointer                      \
 				-mno-omit-leaf-frame-pointer                 \
 				-fstack-protector-strong                     \

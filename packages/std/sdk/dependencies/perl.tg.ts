@@ -99,9 +99,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	);
 	console.log("perlArtifact", await perlArtifact.id());
 
+	let unwrappedPerl = tg.File.expect(await perlArtifact.get("bin/perl"));
+
 	let wrappedPerl = await std.wrap({
 		buildToolchain: env_,
-		executable: tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
+		executable: unwrappedPerl,
 		identity: "wrapper",
 		env: {
 			PERL5LIB: tg.Mutation.templateAppend(
@@ -159,7 +161,8 @@ export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await tg.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let directory = await build({ host, bootstrapMode, env: sdk });
+	console.log("directory", await directory.id());
 	await std.assert.pkg({
 		directory,
 		binaries: ["perl"],
