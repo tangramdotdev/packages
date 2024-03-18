@@ -41,15 +41,15 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let sourceDir = source_ ?? source();
 
-	let prepare = tg`cp -R ${sourceDir}/* . && chmod -R +w .`;
 	let install = tg`make install PREFIX=$OUTPUT`;
-	let phases = { prepare, install };
+	let phases = { install };
 
 	let env = [env_, std.utils.env(arg)];
 
 	let result = std.autotools.build({
 		...rest,
 		...tg.Triple.rotate({ build, host }),
+		buildInTree: true,
 		env,
 		phases: { phases, order: ["prepare", "build", "install"] },
 		prefixArg: "none",

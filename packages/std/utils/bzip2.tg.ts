@@ -43,7 +43,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let sourceDir = source_ ?? source();
 
 	// Define phases.
-	let prepare = tg`cp -R ${sourceDir}/* .`;
 	let buildPhase = `make -f Makefile-libbz2_so && make`;
 	let install = tg.Mutation.set(
 		`make install PREFIX=$OUTPUT && cp libbz2.so.* $OUTPUT/lib`,
@@ -62,7 +61,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		ln -s libbz2.so.1.0 libbz2.so
 	`;
 	let phases = {
-		prepare,
 		configure: tg.Mutation.unset(),
 		build: buildPhase,
 		install,
@@ -79,6 +77,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...tg.Triple.rotate({ build, host }),
 			bootstrapMode,
+			buildInTree: true,
 			env,
 			phases,
 			source: sourceDir,

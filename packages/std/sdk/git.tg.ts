@@ -42,19 +42,15 @@ export let git = async (arg?: Arg) => {
 
 	let sourceDir = source_ ?? source();
 
-	let prepare = tg`cp -RT ${sourceDir} . && chmod -R u+w .`;
-
 	let buildPhase = `make NO_GETTEXT=1 -j "$(nproc)"`;
 
 	let configure = {
 		args: ["--with-openssl=NO", "--without-tcltk"],
-		command: `./configure`,
 	};
 
 	let install = `make NO_GETTEXT=1 install`;
 
 	let phases = {
-		prepare,
 		build: buildPhase,
 		configure,
 		install,
@@ -66,6 +62,7 @@ export let git = async (arg?: Arg) => {
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			buildInTree: true,
 			env,
 			phases,
 			source: sourceDir,

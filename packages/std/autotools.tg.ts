@@ -4,6 +4,9 @@ export type Arg = {
 	/** Should we provide an SDK automatically? If true, the toollchain must be provided explicitly. */
 	bootstrapMode?: boolean;
 
+	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
+	buildInTree?: boolean;
+
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
 	debug?: boolean;
 
@@ -56,6 +59,7 @@ export type Arg = {
 export let target = async (...args: tg.Args<Arg>) => {
 	type Apply = {
 		bootstrapMode: boolean;
+		buildInTree: boolean;
 		debug: boolean;
 		defaultCFlags: boolean;
 		doCheck: boolean;
@@ -75,6 +79,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 
 	let {
 		bootstrapMode = false,
+		buildInTree = false,
 		debug = false,
 		defaultCFlags = true,
 		doCheck = false,
@@ -98,6 +103,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 			let phasesArgs: Array<std.phases.Arg> = [];
 			if (arg.bootstrapMode !== undefined) {
 				object.bootstrapMode = arg.bootstrapMode;
+			}
+			if (arg.buildInTree !== undefined) {
+				object.buildInTree = arg.buildInTree;
 			}
 			if (arg.debug !== undefined) {
 				object.debug = arg.debug;
@@ -242,8 +250,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 	// Define default phases.
 	let configureArgs =
 		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : undefined;
+	let defaultConfigurePath = buildInTree ? "." : source;
 	let defaultConfigure = {
-		command: tg`${source}/configure`,
+		command: tg`${defaultConfigurePath}/configure`,
 		args: configureArgs,
 	};
 
@@ -265,12 +274,18 @@ export let target = async (...args: tg.Args<Arg>) => {
 		install: defaultInstall,
 	};
 
-	if (debug) {
-		let fixup = `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`;
-		defaultPhases = {
-			fixup: { command: fixup },
-			...defaultPhases,
+	if (buildInTree) {
+		let defaultPrepare = {
+			command: tg`cp -RaT ${source}/. . && chmod -R u+w .`,
 		};
+		defaultPhases.prepare = defaultPrepare;
+	}
+
+	if (debug) {
+		let defaultFixup = {
+			command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
+		};
+		defaultPhases.fixup = defaultFixup;
 	}
 
 	if (doCheck) {

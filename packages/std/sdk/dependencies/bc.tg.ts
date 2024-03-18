@@ -45,9 +45,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let sourceDir = source_ ?? source();
 
 	// Define phases
-	let prepare = tg`cp -R ${sourceDir}/* . && chmod -R u+w .`;
 	let configure = {
-		command: "./configure",
 		args: ["--disable-nls", "--disable-man-pages", "--opt=3"],
 	};
 
@@ -59,9 +57,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			buildInTree: true,
 			env,
 			opt: "3",
-			phases: { prepare, configure },
+			phases: { configure },
 			source: sourceDir,
 		},
 		autotools,
