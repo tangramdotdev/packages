@@ -1,44 +1,77 @@
+import * as bash from "tg:bash" with { path: "../bash" };
+import bison from "tg:bison" with { path: "../bison" };
+import m4 from "tg:m4" with { path: "../m4" };
+import ncurses from "tg:ncurses" with { path: "../ncurses" };
+import perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
-
-type Args = {
-	source?: tg.Artifact;
-	host?: tg.Triple.Arg;
-	target?: tg.Triple.Arg;
-};
+import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/texinfo/",
+	license: "GPL-3.0-or-later",
 	name: "texinfo",
-	version: "6.8",
-	checksum:
-		"sha256:8e09cf753ad1833695d2bac0f57dc3bd6bcbbfbf279450e1ba3bc2d7fb297d08",
+	repository: "https://git.savannah.gnu.org/git/texinfo.git",
+	version: "7.1",
 };
 
-export let source = tg.target(() => std.download.fromGnu(metadata));
+export let source = tg.target(() => {
+	let { name, version } = metadata;
+	let compressionFormat = ".xz" as const;
+	let checksum =
+		"sha256:deeec9f19f159e046fdf8ad22231981806dac332cc372f1c763504ad82b30953";
+	return std.download.fromGnu({ name, version, compressionFormat, checksum });
+});
 
-export let texinfo = tg.target(async (args?: Args) => {
-	let host = tg.Triple.host({ host: args?.host });
-	let target = tg.Triple.target({ host: args?.host, target: args?.target });
+type Arg = {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: tg.Triple.Arg;
+	env?: std.env.Arg;
+	host?: tg.Triple.Arg;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	source?: tg.Directory;
+};
 
-	let build = await autotools.build({
-		source: args?.source ?? source(),
-		copySource: true,
+export let texinfo = tg.target(async (arg?: Arg) => {
+	let {
+		autotools = [],
+		build,
+		env: env_,
 		host,
-		target,
-	});
+		source: source_,
+		...rest
+	} = arg ?? {};
 
-	let perl = tg.File.expect(
-		await (await autotools.perl.perl()).get("bin/perl"),
+	let perlArtifact = await perl(arg);
+	let dependencies = [
+		bison(arg),
+		m4(arg),
+		ncurses(arg),
+		perlArtifact,
+		zlib(arg),
+	];
+	let env = [...dependencies, env_];
+
+	let output = await std.autotools.build(
+		{
+			...rest,
+			...tg.Triple.rotate({ build, host }),
+			env,
+			source: source_ ?? source(),
+		},
+		autotools,
 	);
 
+	let interpreter = tg.File.expect(await perlArtifact.get("bin/perl"));
+
 	let binDir = tg.directory({
-		["bin/install-info"]: build.get("bin/install-info"),
+		["bin/install-info"]: output.get("bin/install-info"),
 		["bin/pod2texi"]: std.wrap({
-			executable: tg.File.expect(await build.get("bin/pod2texi")),
-			interpreter: perl,
+			executable: tg.File.expect(await output.get("bin/pod2texi")),
+			interpreter,
 		}),
 		["bin/texi2any"]: std.wrap({
-			executable: tg.File.expect(await build.get("bin/texi2any")),
-			interpreter: perl,
+			executable: tg.File.expect(await output.get("bin/texi2any")),
+			interpreter,
 		}),
 		["bin/makeinfo"]: tg.symlink("texi2any"),
 	});
@@ -46,30 +79,28 @@ export let texinfo = tg.target(async (args?: Args) => {
 	let shellScripts = ["pdftexi2dvi", "texi2dvi", "texi2pdf", "texindex"];
 
 	for (let script of shellScripts) {
-		let scriptFile = tg.File.expect(await build.get(`bin/${script}`));
+		let scriptFile = tg.File.expect(await output.get(`bin/${script}`));
 		binDir = tg.directory(binDir, {
-			[`bin/${script}`]: std.wrap(scriptFile),
+			[`bin/${script}`]: bash.wrapScript(scriptFile),
 		});
 	}
 
 	let perlLibPaths = [
-		tg`${build}/share/texinfo/lib/Text-Unidecode/lib`,
-		tg`${build}/share/texinfo/lib/Unicode-EastAsianWidth/lib`,
-		tg`${build}/share/texinfo/lib/libintl-perl/lib`,
-		tg`${build}/share/texinfo/Pod-Simple-Texinfo`,
-		tg`${build}/share/texinfo`,
+		tg`${output}/share/texinfo/lib/Text-Unidecode/lib`,
+		tg`${output}/share/texinfo/lib/Unicode-EastAsianWidth/lib`,
+		tg`${output}/share/texinfo/lib/libintl-perl/lib`,
+		tg`${output}/share/texinfo/Pod-Simple-Texinfo`,
+		tg`${output}/share/texinfo`,
 	];
 
 	return std.env(binDir, {
-		PERL5LIB: {
-			value: tg.Template.join(":", ...perlLibPaths),
-			kind: "append",
-			separator: ":",
-		},
-		TEXINDEX_SCRIPT: {
-			value: tg`${build}/share/texinfo/texindex.awk`,
-			kind: "set_if_unset",
-		},
+		PERL5LIB: tg.Mutation.templateAppend(
+			tg.Template.join(":", ...perlLibPaths),
+			":",
+		),
+		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
+			tg`${output}/share/texinfo/texindex.awk`,
+		),
 	});
 });
 
