@@ -43,7 +43,7 @@ export let acl = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 
 	let configure = {
-		args: ["--disable-dependency-tracking"],
+		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 	let phases = { configure };
 
