@@ -197,14 +197,16 @@ export let build = async (arg: BuildArg) => {
 
 	// Get the toolchain directory.
 	let bootstrapMode =
-		os === "darwin" ||
-		(os === "linux" && host_.vendor === undefined && host.arch === target.arch);
+		os === "darwin" || (os === "linux" && host.arch === target.arch);
 	let { ldso, libDir } = await std.sdk.toolchainComponents({
 		bootstrapMode,
 		env: arg.buildToolchain,
 		host: host_,
 		target: target_,
 	});
+	let buildToolchain = bootstrapMode
+		? bootstrap.sdk.env(host)
+		: arg.buildToolchain;
 
 	// Get the Rust toolchain.
 	let rustToolchain = await rust({ target });
@@ -217,7 +219,7 @@ export let build = async (arg: BuildArg) => {
 	}
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
-		arg.buildToolchain,
+		buildToolchain,
 		rustToolchain,
 		shellArtifact,
 		utilsArtifact,
