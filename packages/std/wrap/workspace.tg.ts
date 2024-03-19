@@ -272,10 +272,9 @@ export let build = async (arg: BuildArg) => {
 	];
 	if (release) {
 		args.push(`--release`);
-	}
-	//} else {
+	} else {
 		args.push(`--features tracing`);
-	//}
+	}
 
 	let build = {
 		command: tg`${cargo} build`,
