@@ -80,9 +80,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	let libDir = tg.Directory.expect(await output.get("lib"));
 	for (let bin of bins) {
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
-		let wrappedBin = std.wrap(unwrappedBin, {
+		let wrappedBin = std.wrap({
+		 	buildToolchain: bootstrapMode ? env_ : undefined,
+			executable: unwrappedBin,
 			libraryPaths: [libDir],
-			sdk: arg?.sdk,
 		});
 		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
 	}
@@ -97,6 +98,7 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let xzArtifact = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory: xzArtifact,
 		binaries: ["xz"],
 		libs: ["lzma"],

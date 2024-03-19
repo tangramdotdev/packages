@@ -63,6 +63,7 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let makeArtifact = await build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory: makeArtifact,
 		binaries: ["make"],
 		metadata,

@@ -7,7 +7,13 @@ import * as llvmToolchain from "./llvm.tg.ts";
 
 /** This module provides the Tangram proxy tools, which are used in conjunction with compilers and linkers to produce Tangram-ready artifacts. */
 
-export type Arg = std.sdk.BuildEnvArg & {
+export type Arg = {
+	/** Relax checks of build toolchain, assumes it's the bootstrap. */
+	bootstrapMode?: boolean;
+	/** The build environment to use to produce components. */
+	buildToolchain: std.env.Arg;
+	/** The target triple of the build machine. */
+	build?: tg.Triple.Arg;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
 	/** Should we expect an LLVM toolchain? */
@@ -17,7 +23,7 @@ export type Arg = std.sdk.BuildEnvArg & {
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
 	linkerExe?: tg.File | tg.Symlink;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
-	target?: tg.Triple.Arg;
+	host?: tg.Triple.Arg;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
@@ -26,9 +32,11 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		throw new Error("Cannot proxy an undefined env");
 	}
 
+	let bootstrapMode = arg.bootstrapMode ?? false;
 	let proxyCompiler = arg.compiler ?? false;
 	let proxyLinker = arg.linker ?? true;
 	let llvm = arg.llvm ?? false;
+	let buildToolchain = arg.buildToolchain;
 
 	if (!proxyCompiler && !proxyLinker) {
 		return;
@@ -42,20 +50,23 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let dirs = [];
 
+	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let build = arg.build ? tg.triple(arg.build) : host;
+
 	let {
 		cc: cc_,
 		cxx: cxx_,
 		fortran,
 		directory,
 		flavor,
-		host,
 		ld,
 		ldso,
-		target,
 	} = await std.sdk.toolchainComponents({
-		env: arg.env,
+		bootstrapMode,
+		env: buildToolchain,
 		llvm,
-		target: arg.target,
+		host,
+		target: host,
 	});
 
 	let cc: tg.File | tg.Symlink = cc_;
@@ -63,24 +74,24 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	if (proxyLinker) {
 		let hostString = tg.Triple.toString(host);
-		let targetString = tg.Triple.toString(target);
 
-		let isCross = !tg.Triple.eq(host, target);
-		let targetPrefix = isCross ? `${targetString}-` : ``;
+		let isCross = !tg.Triple.eq(build, host);
+		let prefix = isCross ? `${hostString}-` : ``;
 
 		// Construct the ld proxy.
 		let ldProxyArtifact = await ldProxy({
-			buildEnv: arg.env,
+			buildToolchain,
+			build,
 			linker: arg.linkerExe ?? (llvm ? await tg`${directory}/bin/ld.lld` : ld),
 			interpreter: ldso,
 			host,
-			target,
-			sdk: arg.sdk,
 		});
 
 		let linkerName = "ld";
 		if (llvm) {
-			cc = tg.File.expect(await directory.get(`bin/clang-${llvmToolchain.llvmMajorVersion()}`));
+			cc = tg.File.expect(
+				await directory.get(`bin/clang-${llvmToolchain.llvmMajorVersion()}`),
+			);
 			cxx = cc;
 		}
 		let ldProxyDir = tg.directory({
@@ -96,41 +107,41 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		switch (flavor) {
 			case "gcc": {
 				let { ccArgs, cxxArgs, fortranArgs } = await gcc.wrapArgs({
-					host,
-					target,
+					host: build,
+					target: host,
 					toolchainDir: directory,
 				});
 				wrappedCC = await std.wrap(cc, {
-					identity: "wrapper",
 					args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
-					sdk: arg.sdk,
+					buildToolchain,
+					identity: "wrapper",
 				});
 				wrappedCXX = await std.wrap(cxx, {
-					identity: "wrapper",
 					args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
-					sdk: arg.sdk,
+					buildToolchain,
+					identity: "wrapper",
 				});
 				if (fortran) {
 					wrappedGFortran = await std.wrap(fortran, {
-						identity: "wrapper",
 						args: [tg`-B${ldProxyDir}`, ...(fortranArgs ?? [])],
-						sdk: arg.sdk,
+						buildToolchain,
+						identity: "wrapper",
 					});
 				}
 
 				if (isCross) {
 					binDir = tg.directory({
 						bin: {
-							[`${targetString}-cc`]: tg.symlink(`${targetPrefix}gcc`),
-							[`${targetString}-c++`]: tg.symlink(`${targetPrefix}g++`),
-							[`${targetString}-gcc`]: wrappedCC,
-							[`${targetString}-g++`]: wrappedCXX,
+							[`${hostString}-cc`]: tg.symlink(`${prefix}gcc`),
+							[`${hostString}-c++`]: tg.symlink(`${prefix}g++`),
+							[`${hostString}-gcc`]: wrappedCC,
+							[`${hostString}-g++`]: wrappedCXX,
 						},
 					});
 					if (fortran) {
 						binDir = tg.directory(binDir, {
 							bin: {
-								[`${targetString}-gfortran`]: wrappedGFortran,
+								[`${hostString}-gfortran`]: wrappedGFortran,
 							},
 						});
 					}
@@ -160,19 +171,19 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 			}
 			case "llvm": {
 				let { clangArgs, clangxxArgs, env } = await llvmToolchain.wrapArgs({
-					host,
-					target,
+					host: build,
+					target: host,
 					toolchainDir: directory,
 				});
 				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
+					buildToolchain,
 					env,
-					sdk: arg.sdk,
 				});
 				wrappedCXX = std.wrap(cxx, {
 					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
+					buildToolchain,
 					env,
-					sdk: arg.sdk,
 				});
 				binDir = tg.directory({
 					bin: {
@@ -192,9 +203,9 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	if (proxyCompiler) {
 		dirs.push(
 			ccProxy({
+				build,
+				buildToolchain,
 				host,
-				target,
-				sdk: arg.sdk,
 			}),
 		);
 	}
@@ -204,62 +215,68 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 export default env;
 
-type CcProxyArg = std.sdk.BuildEnvArg & {
-	target?: tg.Triple.Arg;
+type CcProxyArg = {
+	buildToolchain: std.env.Arg;
+	build?: tg.Triple.Arg;
+	host?: tg.Triple.Arg;
 };
 
 export let ccProxy = async (arg: CcProxyArg) => {
-	let host = await tg.Triple.host(arg.host);
-	let target = arg.target ? tg.triple(arg.target) : host;
+	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let build = arg.build ? tg.triple(arg.build) : host;
+	let buildToolchain = arg.buildToolchain;
 	let tgcc = workspace.tgcc({
-		sdk: arg.sdk,
-		host: target,
+		buildToolchain,
+		build,
+		host,
 	});
 
-	let isCross = !tg.Triple.eq(host, target);
-	let targetPrefix = isCross ? `${tg.Triple.toString(target)}-` : ``;
+	let isCross = !tg.Triple.eq(build, host);
+	let prefix = isCross ? `${tg.Triple.toString(host)}-` : ``;
 
 	return tg.directory({
-		[`bin/${targetPrefix}cc`]: tgcc,
-		[`bin/${targetPrefix}gcc`]: tgcc,
-		[`bin/${targetPrefix}c++`]: tgcc,
-		[`bin/${targetPrefix}g++`]: tgcc,
+		[`bin/${prefix}cc`]: tgcc,
+		[`bin/${prefix}gcc`]: tgcc,
+		[`bin/${prefix}c++`]: tgcc,
+		[`bin/${prefix}g++`]: tgcc,
 	});
 };
 
 type LdProxyArg = {
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
-	buildEnv?: std.env.Arg;
-	linker: tg.File | tg.Symlink | tg.Template;
+	buildToolchain: std.env.Arg;
+	build?: tg.Triple.Arg;
 	interpreter?: tg.File;
 	interpreterArgs?: Array<tg.Template.Arg>;
-	host: tg.Triple.Arg;
-	target?: tg.Triple.Arg;
+	linker: tg.File | tg.Symlink | tg.Template;
+	host?: tg.Triple.Arg;
 };
 
 export let ldProxy = async (arg: LdProxyArg) => {
 	// Prepare the Tangram tools.
-	let host = tg.triple(arg.host);
-	let target = tg.triple(arg.target ?? host);
+	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let build = arg.build ? tg.triple(arg.build) : host;
+	let buildToolchain = arg.buildToolchain;
 
 	// Obtain wrapper components.
 	let injectionLibrary = await injection({
-		env: arg.buildEnv,
-		host: target,
-		sdk: arg.sdk,
+		buildToolchain,
+		build,
+		host,
 	});
 	let tgld = await workspace.tgld({
-		host: target,
-		sdk: arg.sdk,
+		buildToolchain,
+		build,
+		host,
 	});
 	let wrapper = await workspace.wrapper({
-		host: target,
-		sdk: arg.sdk,
+		buildToolchain,
+		build,
+		host,
 	});
 
 	// Create the linker proxy.
 	let output = await std.wrap(tgld, {
-		identity: "wrapper",
+		buildToolchain,
 		env: {
 			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
@@ -273,7 +290,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 			),
 			TANGRAM_LINKER_WRAPPER_PATH: tg.Mutation.setIfUnset(wrapper),
 		},
-		sdk: arg.sdk,
+		identity: "wrapper",
 	});
 
 	return output;

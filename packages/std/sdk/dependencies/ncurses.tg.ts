@@ -85,6 +85,7 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory,
 		libs: ["ncursesw", "formw", "menuw", "panelw"],
 		metadata,

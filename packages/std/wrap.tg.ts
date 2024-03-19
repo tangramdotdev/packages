@@ -10,22 +10,23 @@ import * as workspace from "./wrap/workspace.tg.ts";
 /** Wrap an executable. */
 export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	type Apply = {
+		buildToolchain: std.env.Arg;
 		host: tg.Triple.Arg;
 		identity: wrap.Identity;
-		interpreter?:
+		interpreter:
 			| tg.File
 			| tg.Symlink
 			| wrap.Interpreter
 			| wrap.Manifest.Interpreter
 			| undefined;
-		libraryPaths?: Array<string | tg.Artifact | tg.Template>;
+		libraryPaths: Array<string | tg.Artifact | tg.Template>;
 		executable: tg.File | tg.Symlink | wrap.Manifest.Executable;
 		env: Array<std.env.Arg>;
 		manifestArgs: Array<wrap.Manifest.Template>;
-		sdkArgs: Array<std.sdk.Arg>;
 	};
 
 	let {
+		buildToolchain: buildToolchain_,
 		host: host_,
 		identity: identity_,
 		libraryPaths,
@@ -33,7 +34,6 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 		executable: executable_,
 		env: env_,
 		manifestArgs,
-		sdkArgs,
 	} = await tg.Args.apply<wrap.Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
@@ -88,6 +88,9 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			};
 		} else if (isArgObject(arg)) {
 			let object: tg.MutationMap<Apply> = {};
+			if (arg.buildToolchain !== undefined) {
+				object.buildToolchain = arg.buildToolchain;
+			}
 			if (arg.executable !== undefined) {
 				if (
 					tg.Template.is(arg.executable) ||
@@ -98,8 +101,13 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						value: await manifestTemplateFromArg(arg.executable),
 					};
 					if (!arg.interpreter) {
-						let defaultShell = await defaultShellInterpreter();
-						object.interpreter = await manifestInterpreterFromArg(defaultShell);
+						let defaultShell = await defaultShellInterpreter(
+							object.buildToolchain,
+						);
+						object.interpreter = await manifestInterpreterFromArg(
+							defaultShell,
+							object.buildToolchain,
+						);
 					}
 					if (!arg.identity) {
 						object.identity = "executable";
@@ -131,7 +139,10 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					} else {
 						let executable = await manifestExecutableFromArg(file);
 						let manifestInterpreter =
-							await manifestInterpreterFromExecutableArg(file);
+							await manifestInterpreterFromExecutableArg(
+								file,
+								object.buildToolchain,
+							);
 						object.executable = executable;
 						if (manifestInterpreter) {
 							object.interpreter = manifestInterpreter;
@@ -147,18 +158,13 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			if (arg.identity !== undefined) {
 				object.identity = arg.identity ?? "executable";
 			}
-			if (arg.sdk !== undefined) {
-				object.sdkArgs = tg.Mutation.is(arg.sdk)
-					? arg.sdk
-					: await tg.Mutation.arrayAppend(arg.sdk);
-			}
 			if (arg.libraryPaths !== undefined) {
 				if (arg.libraryPaths !== undefined) {
 					object.libraryPaths = tg.Mutation.is(arg.libraryPaths)
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-						  );
+							);
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -172,7 +178,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-					  );
+						);
 			}
 			if (arg.host !== undefined) {
 				object.host = tg.triple(arg.host);
@@ -189,8 +195,15 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 
 	let identity = identity_ ?? "executable";
 
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let buildToolchain = buildToolchain_
+		? buildToolchain_
+		: host.os === "linux"
+			? await gcc.toolchain({ host })
+			: await bootstrap.sdk.env({ host });
+
 	let manifestInterpreter = interpreter
-		? await manifestInterpreterFromArg(interpreter)
+		? await manifestInterpreterFromArg(interpreter, buildToolchain_)
 		: undefined;
 
 	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
@@ -236,10 +249,9 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	};
 
 	// Get the wrapper executable.
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let wrapper = await workspace.wrapper({
+		buildToolchain,
 		host,
-		sdk: sdkArgs || { bootstrapMode: true },
 	});
 
 	// Write the manifest to the wrapper and return.
@@ -253,6 +265,18 @@ export namespace wrap {
 	export type Arg = string | tg.Template | tg.File | tg.Symlink | ArgObject;
 
 	export type ArgObject = {
+		/** Command line arguments to bind to the wrapper. If the executable is wrapped, they will be merged. */
+		args?: Array<tg.Template.Arg>;
+
+		/** The build toolchain to use to produce components. Will use the default for the system if not provided. */
+		buildToolchain?: std.env.Arg;
+
+		/** Environment variables to bind to the wrapper. If the executable is wrapped, they will be merged. */
+		env?: std.env.Arg;
+
+		/** The executable to wrap. */
+		executable?: tg.File | tg.Symlink;
+
 		/** The host system to produce a wrapper for. */
 		host?: tg.Triple.Arg;
 
@@ -264,18 +288,6 @@ export namespace wrap {
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
 		libraryPaths?: Array<tg.Directory | tg.Symlink>;
-
-		/** The executable to wrap. */
-		executable?: tg.File | tg.Symlink;
-
-		/** Environment variables to bind to the wrapper. If the executable is wrapped, they will be merged. */
-		env?: std.env.Arg;
-
-		/** Command line arguments to bind to the wrapper. If the executable is wrapped, they will be merged. */
-		args?: Array<tg.Template.Arg>;
-
-		/** Arguments for the SDK used to compile the wrapper and any other components used. */
-		sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	};
 
 	export type Identity = "wrapper" | "interpreter" | "executable";
@@ -461,7 +473,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-							  );
+								);
 						return [key, mutations];
 					}),
 				),
@@ -1107,6 +1119,7 @@ let isManifestExecutable = (arg: unknown): arg is wrap.Manifest.Executable => {
 
 let manifestInterpreterFromArg = async (
 	arg: tg.File | tg.Symlink | wrap.Interpreter | wrap.Manifest.Interpreter,
+	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Manifest.Interpreter> => {
 	if (isManifestInterpreter(arg)) {
 		return arg;
@@ -1114,7 +1127,10 @@ let manifestInterpreterFromArg = async (
 
 	// If the arg is an executable, then wrap it and create a normal interpreter.
 	if (tg.File.is(arg) || tg.Symlink.is(arg)) {
-		let interpreter = await std.wrap(arg);
+		let interpreter = await std.wrap({
+			buildToolchain: buildToolchainArg,
+			executable: arg,
+		});
 		let path = await manifestSymlinkFromArg(interpreter);
 		return {
 			kind: "normal",
@@ -1132,7 +1148,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1150,8 +1166,13 @@ let manifestInterpreterFromArg = async (
 			);
 		}
 		let arch = interpreterMetadata.arch;
+		let host = tg.triple(`${arch}-unknown-linux-gnu`);
+		let buildToolchain = buildToolchainArg
+			? buildToolchainArg
+			: gcc.toolchain({ host });
 		let injectionLibrary = await injection.default({
-			host: `${arch}-unknown-linux-gnu`,
+			buildToolchain,
+			host,
 		});
 
 		// Combine the injection with any additional preloads specified by the caller.
@@ -1161,7 +1182,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1182,7 +1203,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1200,8 +1221,13 @@ let manifestInterpreterFromArg = async (
 			);
 		}
 		let arch = interpreterMetadata.arch;
+		let host = tg.triple(`${arch}-linux-musl`);
+		let buildToolchain = buildToolchainArg
+			? buildToolchainArg
+			: gcc.toolchain({ host });
 		let injectionLibrary = await injection.default({
-			host: `${arch}-linux-musl`,
+			buildToolchain,
+			host,
 		});
 
 		// Combine the injection with any additional preloads specified by the caller.
@@ -1211,7 +1237,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1232,11 +1258,16 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
+		let host = await tg.Triple.host();
+		let buildToolchain = buildToolchainArg
+			? buildToolchainArg
+			: gcc.toolchain({ host });
 		let injectionLibrary = await injection.default({
-			host: `aarch64-apple-darwin`,
+			buildToolchain,
+			host,
 		});
 		let preloads = [await manifestSymlinkFromArg(injectionLibrary)];
 		let additionalPreloads = arg.preloads
@@ -1244,7 +1275,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -1281,6 +1312,7 @@ let isManifestInterpreter = (
 
 let manifestInterpreterFromExecutableArg = async (
 	arg: tg.File | tg.Symlink,
+	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Manifest.Interpreter | undefined> => {
 	// Resolve the arg to a file if it is a symlink.
 	if (tg.Symlink.is(arg)) {
@@ -1300,15 +1332,18 @@ let manifestInterpreterFromExecutableArg = async (
 		case "mach-o": {
 			let arch = metadata.arches[0] as tg.Triple.Arch;
 			tg.assert(arch);
-			let triple = tg.triple({ os: "darwin", arch });
+			let host = tg.triple({ os: "darwin", arch });
+			let buildToolchain = buildToolchainArg
+				? buildToolchainArg
+				: bootstrap.sdk.env(host);
 			return {
 				kind: "dyld",
 				libraryPaths: undefined,
 				preloads: [
 					await manifestSymlinkFromArg(
 						await injection.default({
-							host: triple,
-							sdk: { bootstrapMode: true },
+							buildToolchain,
+							host,
 						}),
 					),
 				],
@@ -1316,7 +1351,10 @@ let manifestInterpreterFromExecutableArg = async (
 		}
 		case "shebang": {
 			if (metadata.interpreter === undefined) {
-				return manifestInterpreterFromArg(await defaultShellInterpreter());
+				return manifestInterpreterFromArg(
+					await defaultShellInterpreter(buildToolchainArg),
+					buildToolchainArg,
+				);
 			} else {
 				return undefined;
 			}
@@ -1343,9 +1381,11 @@ let manifestInterpreterFromElf = async (
 		arch: metadata.arch,
 		environment: libc,
 	});
+	let buildToolchain =
+		libc === "musl" ? bootstrap.sdk.env(host) : gcc.toolchain({ host });
 
 	// Obtain injection library.
-	let injectionLib = await injection.default({ host });
+	let injectionLib = await injection.default({ buildToolchain, host });
 
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {
@@ -1383,15 +1423,23 @@ let manifestInterpreterFromElf = async (
 	}
 };
 
-export let defaultShellInterpreter = async () => {
+export let defaultShellInterpreter = async (
+	buildToolchainArg?: std.env.Arg,
+) => {
 	// Provide bash for the detected host system.
-	let shellArtifact = await std.utils.bash.build();
+	let buildArg = undefined;
+	if (buildToolchainArg) {
+		buildArg = { bootstrapMode: true, env: buildToolchainArg };
+	}
+	let shellArtifact = await std.utils.bash.build(buildArg);
 	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
 
 	//  Add the standard utils.
-	let env = await std.utils.env();
+	let env = await std.utils.env(buildArg);
 
-	let bash = wrap(shellExecutable, {
+	let bash = wrap({
+		buildToolchain: buildToolchainArg,
+		executable: shellExecutable,
 		identity: "wrapper",
 		args: ["-euo", "pipefail"],
 		env,

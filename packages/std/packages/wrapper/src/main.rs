@@ -2,6 +2,7 @@ use itertools::Itertools;
 use std::{collections::BTreeMap, ffi::OsStr, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
 use tangram_wrapper::manifest::{DyLdInterpreter, Executable, Identity, Interpreter, Manifest};
+#[cfg(feature = "tracing")]
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 fn main() {
@@ -13,10 +14,12 @@ fn main() {
 
 fn main_inner() -> std::io::Result<()> {
 	// Setup tracing.
+	#[cfg(feature = "tracing")]
 	setup_tracing();
 
 	// Get the wrapper path.
 	let wrapper_path = std::env::current_exe()?.canonicalize()?;
+	#[cfg(feature = "tracing")]
 	tracing::trace!(?wrapper_path);
 
 	// Read the manifest.
@@ -30,6 +33,7 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Get the artifacts directories.
 	let artifacts_directories = locate_artifacts_directories(&wrapper_path);
+	#[cfg(feature = "tracing")]
 	tracing::trace!(?artifacts_directories);
 
 	// Get arg0 from the invocation.
@@ -60,14 +64,18 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Create the command.
 	let mut command = if let Some((interpreter_path, interpreter_args)) = interpreter {
+		#[cfg(feature = "tracing")]
 		tracing::trace!(?interpreter_path);
+		#[cfg(feature = "tracing")]
 		tracing::trace!(?interpreter_args);
+		#[cfg(feature = "tracing")]
 		tracing::trace!(?executable_path);
 		let mut command = std::process::Command::new(interpreter_path);
 		command.args(interpreter_args);
 		command.arg(executable_path);
 		command
 	} else {
+		#[cfg(feature = "tracing")]
 		tracing::trace!(?executable_path);
 		std::process::Command::new(executable_path)
 	};
@@ -99,16 +107,19 @@ fn main_inner() -> std::io::Result<()> {
 			.iter()
 			.map(|arg| render_template(arg, &artifacts_directories))
 			.collect_vec();
+		#[cfg(feature = "tracing")]
 		tracing::trace!(?command_args);
 		command.args(command_args);
 	}
 
 	// Add the wrapper args.
 	let wrapper_args = std::env::args_os().skip(1).collect_vec();
+	#[cfg(feature = "tracing")]
 	tracing::trace!(?wrapper_args);
 	command.args(wrapper_args);
 
 	// Exec the command.
+	#[cfg(feature = "tracing")]
 	tracing::trace!(?command);
 	Err(command.exec())
 }
@@ -125,6 +136,7 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 		let temp_path = std::ffi::CString::new("/tmp/XXXXXX").unwrap();
 		let fd = libc::mkstemp(temp_path.as_ptr().cast_mut());
 		if fd == -1 {
+			#[cfg(feature = "tracing")]
 			tracing::error!(?temp_path, "Failed to create temporary file.");
 			return Err(std::io::Error::last_os_error());
 		}
@@ -132,6 +144,7 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 		// Unlink the temporary file.
 		let ret = libc::unlink(temp_path.as_ptr());
 		if ret == -1 {
+			#[cfg(feature = "tracing")]
 			tracing::error!(?temp_path, "Failed to unlink temporary file.");
 			return Err(std::io::Error::last_os_error());
 		}
@@ -142,6 +155,7 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 			let slice = &contents[written..];
 			let ret = libc::write(fd, slice.as_ptr().cast(), slice.len());
 			if ret == -1 {
+				#[cfg(feature = "tracing")]
 				tracing::error!(?temp_path, "Failed to write to temporary file.");
 				return Err(std::io::Error::last_os_error());
 			}
@@ -153,6 +167,7 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 		// Seek to the beginning of the temporary file.
 		let ret = libc::lseek(fd, 0, libc::SEEK_SET);
 		if ret == -1 {
+			#[cfg(feature = "tracing")]
 			tracing::error!(
 				?temp_path,
 				"Failed to seek to the beginning of the temporary file."
@@ -222,6 +237,7 @@ fn handle_interpreter(
 				library_path = format!("{ld_library_path}:{library_path}");
 			}
 
+			#[cfg(feature = "tracing")]
 			tracing::trace!(?library_path);
 			interpreter_args.push("--library-path".to_owned());
 			interpreter_args.push(library_path);
@@ -232,6 +248,7 @@ fn handle_interpreter(
 					.iter()
 					.map(|preload| render_symlink(preload, artifacts_directories))
 					.join(":");
+				#[cfg(feature = "tracing")]
 				tracing::trace!(?preload);
 				interpreter_args.push("--preload".to_owned());
 				interpreter_args.push(preload);
@@ -277,6 +294,7 @@ fn handle_interpreter(
 				library_path = format!("{ld_library_path}:{library_path}");
 			}
 
+			#[cfg(feature = "tracing")]
 			tracing::trace!(?library_path);
 			interpreter_args.push("--library-path".to_owned());
 			interpreter_args.push(library_path);
@@ -287,6 +305,7 @@ fn handle_interpreter(
 					.iter()
 					.map(|preload| render_symlink(preload, artifacts_directories))
 					.join(":");
+				#[cfg(feature = "tracing")]
 				tracing::trace!(?preload);
 				interpreter_args.push("--preload".to_owned());
 				interpreter_args.push(preload);
@@ -367,11 +386,13 @@ fn mutate_env(env: &tg::mutation::Data, artifacts_directories: &[impl AsRef<std:
 			if let tg::value::Data::Map(mutations) = *value.clone() {
 				apply_env(&mutations, artifacts_directories);
 			} else {
+				#[cfg(feature = "tracing")]
 				tracing::error!(?value, "Unexpected value found for env, expected a map.");
 				std::process::exit(1);
 			}
 		},
 		_ => {
+			#[cfg(feature = "tracing")]
 			tracing::error!(
 				?env,
 				"Unexpected mutation found for env, expected Set or Unset."
@@ -386,6 +407,7 @@ fn apply_env(
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) {
 	for (key, value) in env {
+		#[cfg(feature = "tracing")]
 		tracing::debug!(?key, ?value, "Setting env.");
 		apply_value_to_key(key, value, artifacts_directories);
 	}
@@ -414,6 +436,7 @@ fn apply_mutation_to_key(
 	mutation: &tg::mutation::Data,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) {
+	#[cfg(feature = "tracing")]
 	tracing::debug!(?key, ?mutation, "Applying mutation.");
 	match mutation {
 		tg::mutation::Data::Unset => {
@@ -538,6 +561,7 @@ fn render_value(
 		},
 		tg::value::Data::Template(template) => render_template(template, artifacts_directories),
 		_ => {
+			#[cfg(feature = "tracing")]
 			tracing::error!(?value, "Malformed manifest env value.");
 			std::process::exit(1)
 		},
@@ -568,6 +592,7 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 			_ => (),
 		}
 	}
+	#[cfg(feature = "tracing")]
 	tracing::error!(?value, "Malformed manifest. Expected an artifact value.");
 	std::process::exit(1);
 }
@@ -584,6 +609,7 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
 	tg::template::Data { components }
 }
 
+#[cfg(feature = "tracing")]
 fn setup_tracing() {
 	// Create the env layer.
 	let targets_layer = std::env::var("TANGRAM_WRAPPER_TRACING")

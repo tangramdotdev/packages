@@ -53,9 +53,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		autotools,
 	);
 
-	let wrappedScript = std.wrap(tg.symlink({ artifact, path: "bin/help2man" }), {
+	let wrappedScript = std.wrap({
+		buildToolchain: env_,
+		executable: tg.symlink({ artifact, path: "bin/help2man" }),
 		interpreter: interpreter,
-		sdk: arg?.sdk,
 	});
 
 	return tg.directory({
@@ -72,6 +73,7 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory,
 		binaries: ["help2man"],
 		metadata,

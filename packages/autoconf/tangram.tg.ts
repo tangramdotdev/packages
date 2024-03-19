@@ -96,7 +96,6 @@ export let build = tg.target(async (arg?: Arg) => {
 				),
 				AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 			},
-			sdk: arg?.sdk,
 		},
 	);
 
@@ -118,7 +117,6 @@ export let build = tg.target(async (arg?: Arg) => {
 						":",
 					),
 				},
-				sdk: arg?.sdk,
 			},
 		);
 
@@ -147,7 +145,6 @@ export let build = tg.target(async (arg?: Arg) => {
 					),
 					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 				},
-				sdk: arg?.sdk,
 			},
 		);
 

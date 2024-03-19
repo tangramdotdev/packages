@@ -98,19 +98,17 @@ export let build = tg.target(async (arg?: Arg) => {
 		autotools,
 	);
 
-	let wrappedPerl = await std.wrap(
-		tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
-		{
-			identity: "wrapper",
-			env: {
-				PERL5LIB: tg.Mutation.templateAppend(
-					tg`${perlArtifact}/lib/perl5/${metadata.version}`,
-					":",
-				),
-			},
-			sdk: rest.sdk,
+	let unwrappedPerl = tg.File.expect(await perlArtifact.get("bin/perl"));
+
+	let wrappedPerl = await std.wrap(unwrappedPerl, {
+		buildToolchain: env_,
+		env: {
+			PERL5LIB: tg.Mutation.templatePrepend(
+				tg`${perlArtifact}/lib/perl5/${metadata.version}`,
+				":",
+			),
 		},
-	);
+	});
 
 	let scripts = [];
 	let binDir = tg.Directory.expect(await perlArtifact.get("bin"));
@@ -133,10 +131,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		);
 
 		// Wrap it.
-		let wrappedScript = std.wrap(scriptArtifact, {
-			identity: "interpreter",
+		let wrappedScript = await std.wrap({
+			buildToolchain: env_,
+			executable: scriptArtifact,
 			interpreter: wrappedPerl,
-			sdk: rest.sdk,
 		});
 
 		// Replace in the original artifact.
@@ -156,8 +154,9 @@ export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await tg.Triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let directory = await build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory,
 		binaries: ["perl"],
 		metadata,

@@ -104,6 +104,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let configure = {
 		args: [
+			"--disable-acl",
 			"--disable-dependency-tracking",
 			"--disable-libcap",
 			"--disable-nls",
@@ -113,7 +114,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let output = buildUtil(
+	let output = await buildUtil(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
@@ -128,7 +129,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	// On macOS, replace `install` with the Apple Open Source version that correctly handles xattrs.
 	if (os === "darwin") {
-		output = tg.directory(
+		output = await tg.directory(
 			output,
 			{ "bin/install": undefined },
 			macOsXattrCmds(arg),
@@ -168,6 +169,7 @@ export let test = tg.target(async () => {
 	let coreutils = await build({ host, bootstrapMode, env: sdk });
 
 	await std.assert.pkg({
+		bootstrapMode,
 		binaries: ["cp", "mkdir", "mv", "ls", "rm"],
 		directory: coreutils,
 		metadata,

@@ -11,11 +11,6 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let unpackFormat = ".tar.gz" as const;
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		unpackFormat,
-	});
 	// let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
 	// let url = `http://fresh-center.net/linux/misc/pkg-config-0.29.2.tar.gz`;
 	let url =
@@ -77,17 +72,15 @@ export let build = tg.target(async (arg?: Arg) => {
 	);
 
 	// Bundle the resulting binary with the `--define-prefix` flag.
-	let wrappedBin = std.wrap(
-		tg.symlink({
+	let wrappedBin = std.wrap({
+		args: ["--define-prefix"],
+		executable: tg.symlink({
 			artifact: pkgConfigBuild,
 			path: "bin/pkg-config",
 		}),
-		{
-			args: ["--define-prefix"],
-			libraryPaths: additionalLibDirs,
-			sdk: arg?.sdk,
-		},
-	);
+		buildToolchain: env_,
+		libraryPaths: additionalLibDirs,
+	});
 
 	return tg.directory(pkgConfigBuild, {
 		["bin/pkg-config"]: wrappedBin,
@@ -126,6 +119,7 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory,
 		binaries: ["pkg-config"],
 		metadata,
