@@ -2,26 +2,28 @@ import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	name: "bc",
-	version: "6.6.0",
+	version: "6.7.5",
 };
 
-export let source = tg.target(() => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let owner = "gavinhoward";
-	let repo = name;
-	let tag = version;
-	let compressionFormat = ".xz" as const;
-	let checksum =
-		"sha256:309ef0faebf149376aa69446a496fac13c3ff483a100a51d9c67cea1a73b2906";
-	return std.download.fromGithub({
-		checksum,
-		compressionFormat,
-		owner,
-		repo,
-		tag,
-		release: true,
+	let unpackFormat = ".tar.xz" as const;
+	let packageName = std.download.packageArchive({
+		name,
 		version,
+		unpackFormat,
 	});
+	let checksum =
+		"sha256:c3e02c948d51f3ca9cdb23e011050d2d3a48226c581e0749ed7cbac413ce5461";
+	let url = `https://git.gavinhoward.com/gavin/${name}/releases/download/${version}/${packageName}`;
+	let outer = tg.Directory.expect(
+		await std.download({
+			url,
+			checksum,
+			unpackFormat,
+		}),
+	);
+	return std.directory.unwrap(outer);
 });
 
 type Arg = std.sdk.BuildEnvArg & {

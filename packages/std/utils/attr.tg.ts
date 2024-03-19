@@ -3,7 +3,7 @@ import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "attr",
-	version: "2.5.1",
+	version: "2.5.2",
 };
 
 export let source = tg.target(async () => {
@@ -15,7 +15,7 @@ export let source = tg.target(async () => {
 		unpackFormat,
 	});
 	let checksum =
-		"sha256:db448a626f9313a1a970d636767316a8da32aede70518b8050fa0de7947adc32";
+		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
 	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
 	let outer = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),
