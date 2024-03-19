@@ -1,7 +1,13 @@
+import acl from "tg:acl" with { path: "../acl" };
+import attr from "tg:attr" with { path: "../attr" };
+import libcap from "tg:libcap" with { path: "../libcap" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/coreutils/",
+	license: "GPL-3.0-or-later",
 	name: "coreutils",
+	repository: "http://git.savannah.gnu.org/gitweb/?p=coreutils.git",
 	version: "9.4",
 };
 
@@ -30,12 +36,23 @@ type Arg = {
 };
 
 export let coreutils = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+	let {
+		autotools = [],
+		build,
+		env: env_,
+		host,
+		source: source_,
+		...rest
+	} = arg ?? {};
+
+	let dependencies = [acl(arg), attr(arg), libcap(arg)];
+	let env = [...dependencies, env_];
 
 	return std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			env,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -44,14 +61,28 @@ export let coreutils = tg.target(async (arg?: Arg) => {
 
 export default coreutils;
 
-export let test = tg.target(() => {
-	return std.build(
-		tg`
-				echo "Checking that we can run coreutils." | tee $OUTPUT
-				cat --version | tee -a $OUTPUT
-				ls --version | tee -a $OUTPUT
-				rm --version | tee -a $OUTPUT
-			`,
-		{ env: coreutils() },
-	);
+export let test = tg.target(async () => {
+	let directory = coreutils();
+	await std.assert.pkg({
+		directory,
+		binaries: [
+			"cp",
+			"ls",
+			"mv",
+			"rm",
+			"shuf",
+			"sort",
+			"tail",
+			"tee",
+			"touch",
+			"true",
+			"uname",
+			"uniq",
+			"wc",
+			"whoami",
+			"yes",
+		],
+		metadata,
+	});
+	return directory;
 });
