@@ -1,29 +1,29 @@
-import help2man from "tg:help2man" with { path: "../help2man" };
-import m4 from "tg:m4" with { path: "../m4" };
+import perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
-import texinfo from "tg:texinfo" with { path: "../texinfo" };
 
 export let metadata = {
-	homepage: "https://github.com/westes/flex",
-	license: "https://github.com/westes/flex/tree/master?tab=License-1-ov-file",
-	name: "flex",
-	repository: "https://github.com/westes/flex",
-	version: "2.6.4",
+	homepage: "https://github.com/besser82/libxcrypt",
+	name: "libxcrypt",
+	license: "LGPL-2.1",
+	repository: "https://github.com/besser82/libxcrypt",
+	version: "4.4.36",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
-	let checksum =
-		"sha256:e87aae032bf07c26f85ac0ed3250998c37621d95f8bd748b31f15b33c45ee995";
-	let owner = "westes";
+	let owner = "besser82";
 	let repo = name;
 	let tag = `v${version}`;
+	let compressionFormat = ".xz" as const;
+	let checksum =
+		"sha256:e5e1f4caee0a01de2aee26e3138807d6d3ca2b8e67287966d1fefd65e1fd8943";
 	return std.download.fromGithub({
 		checksum,
+		compressionFormat,
 		owner,
+		release: true,
 		repo,
 		tag,
-		release: true,
 		version,
 	});
 });
@@ -37,7 +37,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let flex = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build,
@@ -47,7 +47,12 @@ export let flex = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let dependencies = [help2man(arg), m4(arg), texinfo(arg)];
+	let configure = {
+		args: ["--disable-dependency-tracking"],
+	};
+	let phases = { configure };
+
+	let dependencies = [perl(arg)];
 	let env = [...dependencies, env_];
 
 	return std.autotools.build(
@@ -55,20 +60,20 @@ export let flex = tg.target(async (arg?: Arg) => {
 			...rest,
 			...tg.Triple.rotate({ build, host }),
 			env,
+			phases,
 			source: source_ ?? source(),
 		},
 		autotools,
 	);
 });
 
-export default flex;
+export default build;
 
 export let test = tg.target(async () => {
-	let directory = flex();
+	let directory = build();
 	await std.assert.pkg({
 		directory,
-		binaries: ["flex"],
-		metadata,
+		libs: ["crypt"],
 	});
 	return directory;
 });

@@ -155,6 +155,19 @@ export let perl = tg.target(async (arg?: Arg) => {
 
 export default perl;
 
+/** Wrap a shebang'd perl script to use this package's bach as the interpreter.. */
+export let wrapScript = async (script: tg.File) => {
+	let scriptMetadata = await std.file.executableMetadata(script);
+	if (
+		scriptMetadata?.format !== "shebang" ||
+		!scriptMetadata.interpreter.includes("perl")
+	) {
+		throw new Error("Expected a shebang sh or bash script");
+	}
+	let interpreter = tg.File.expect(await (await perl()).get("bin/bash"));
+	return std.wrap(script, { interpreter, identity: "executable" });
+};
+
 export let test = tg.target(async () => {
 	let directory = perl();
 	await std.assert.pkg({

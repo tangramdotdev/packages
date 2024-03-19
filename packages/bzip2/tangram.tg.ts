@@ -1,7 +1,12 @@
+import * as bash from "tg:bash" with { path: "../bash" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://sourceware.org/bzip2/",
+	license:
+		"https://sourceware.org/git/?p=bzip2.git;a=blob;f=LICENSE;hb=6a8690fc8d26c815e798c588f796eabe9d684cf0",
 	name: "bzip2",
+	repository: "https://sourceware.org/git/bzip2.git",
 	version: "1.0.8",
 };
 
@@ -42,12 +47,8 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 	let host = await tg.Triple.host(host_);
 
 	let os = tg.Triple.os(tg.Triple.archAndOs(host));
-	let sharedObjectExt = os === "darwin" ? "dylib" : "so";
 
 	let sourceDir = source_ ?? source();
-
-	let prepare = tg`set -x && cp -R ${sourceDir}/* .`;
-	let configure = "sed -i 's@\\(ln -s -f \\)$(PREFIX)/bin/@\\1@' Makefile";
 
 	// Only build the shared library on Linux.
 	let buildCommand =
@@ -55,44 +56,67 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 			? `make -f Makefile-libbz2_so && make clean && make`
 			: `make CC="cc \${CFLAGS}"`;
 
+	let install = tg.Mutation.set(
+		`make install PREFIX=$OUTPUT && cp libbz2.so.* $OUTPUT/lib`,
+	);
+
 	let fixup =
 		os === "linux"
 			? `
-				cp -av libbz2.${sharedObjectExt}* $OUTPUT/lib
 				chmod -R u+w $OUTPUT
 				cd $OUTPUT/lib
-				ln -sv libbz2.${sharedObjectExt}.${metadata.version} libbz2.${sharedObjectExt}
+				ln -sv libbz2.so.${metadata.version} libbz2.so
+				cd $OUTPUT/bin
+				rm bzcmp
+				ln -s bzdiff bzcmp
+				rm bzegrep bzfgrep
+				ln -s bzgrep bzegrep
+				ln -s bzgrep bzfgrep
+				rm bzless
+				ln -s bzmore bzless
 			`
 			: "";
 
 	let phases = {
-		prepare,
 		build: buildCommand,
-		configure,
-		install: `make install PREFIX="$OUTPUT"`,
+		configure: tg.Mutation.unset(),
+		install,
 		fixup,
 	};
 
-	return std.autotools.build(
+	let output = await std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
+			buildInTree: true,
 			source: sourceDir,
-			prefixArg: undefined,
 			phases,
 		},
 		autotools,
 	);
+
+	// Wrap installed scripts.
+	let bashScripts = ["bzdiff", "bzgrep", "bzmore"];
+
+	for (let script of bashScripts) {
+		let file = tg.File.expect(await output.get(`bin/${script}`));
+		output = await tg.directory(output, {
+			[`bin/${script}`]: bash.wrapScript(file),
+		});
+	}
+
+	return output;
 });
 
 export default bzip2;
 
 export let test = tg.target(async () => {
+	let directory = bzip2();
 	await std.assert.pkg({
-		directory: await bzip2(),
+		directory,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libs: [{ name: "bz2", dylib: false, staticlib: true }],
+		libs: ["bz2"],
 		metadata,
 	});
-	return true;
+	return directory;
 });

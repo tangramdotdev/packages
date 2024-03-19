@@ -44,10 +44,6 @@ export let env = tg.target(async (arg?: Arg) => {
 	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 	let bootstrapMode = bootstrapMode_ ?? false;
 
-	if (bootstrapMode) {
-		await prerequisites({ host });
-	}
-
 	// Build bash and use it as the default shell.
 	let bashArtifact = await bash.build({
 		...rest,

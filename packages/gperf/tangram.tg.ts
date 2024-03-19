@@ -1,8 +1,11 @@
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/gperf/",
+	license: "GPL-3.0-or-later",
 	name: "gperf",
-	version: "3.11",
+	repository: "https://git.savannah.gnu.org/git/gperf.git",
+	version: "3.1",
 };
 
 export let source = tg.target(() => {
@@ -25,7 +28,7 @@ export let gperf = tg.target(async (arg?: Arg) => {
 	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
 
 	let configure = {
-		args: ["--disable-dependency-tracking", "--disable-documentation"],
+		args: ["--disable-dependency-tracking"],
 	};
 	let phases = { configure };
 
@@ -43,8 +46,11 @@ export let gperf = tg.target(async (arg?: Arg) => {
 export default gperf;
 
 export let test = tg.target(async () => {
-	return std.build(tg`
-		echo "Checking that we can run gperf."
-		${gperf()}/bin/gperf --version
-	`);
+	let directory = gperf();
+	await std.assert.pkg({
+		directory,
+		binaries: ["gperf"],
+		metadata,
+	});
+	return directory;
 });

@@ -1,7 +1,10 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://git.gavinhoward.com/gavin/bc",
 	name: "bc",
+	license: "BSD-2-Clause",
+	repository: "https://git.gavinhoward.com/gavin/bc",
 	version: "6.7.5",
 };
 
@@ -26,12 +29,16 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(outer);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
+type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: tg.Triple.Arg;
+	env?: std.env.Arg;
+	host?: tg.Triple.Arg;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
+export let bc = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -48,14 +55,14 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	// Define phases
 	let configure = {
-		args: ["--disable-nls", "--disable-man-pages", "--opt=3"],
+		args: ["--disable-nls", "--opt=3"],
 	};
 
 	// Define environment.
 	let ccCommand = build.os == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
-	let env = [env_, std.utils.env(arg), { CC: ccCommand }];
+	let env = [{ CC: tg.Mutation.setIfUnset(ccCommand) }, env_];
 
-	let output = std.utils.buildUtil(
+	let output = std.autotools.build(
 		{
 			...rest,
 			...tg.Triple.rotate({ build, host }),
@@ -71,14 +78,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	return output;
 });
 
-export default build;
+export default bc;
 
-import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let directory = bc();
 	await std.assert.pkg({
 		directory,
 		binaries: ["bc"],
