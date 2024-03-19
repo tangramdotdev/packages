@@ -82,8 +82,7 @@ export let wrapScript = async (script: tg.File) => {
 	let scriptMetadata = await std.file.executableMetadata(script);
 	if (
 		scriptMetadata?.format !== "shebang" ||
-		(scriptMetadata.interpreter !== "sh" &&
-			scriptMetadata.interpreter !== "bash")
+		!scriptMetadata.interpreter.includes("sh")
 	) {
 		throw new Error("Expected a shebang sh or bash script");
 	}
