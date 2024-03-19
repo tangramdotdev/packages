@@ -67,6 +67,7 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = await build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory,
 		binaries: ["cmp", "diff"],
 		metadata,

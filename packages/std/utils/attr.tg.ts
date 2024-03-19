@@ -120,6 +120,7 @@ export let test = tg.target(async () => {
 	let binaries = ["attr", "getfattr", "setfattr"].map(binTest);
 
 	await std.assert.pkg({
+		bootstrapMode,
 		binaries,
 		directory,
 		libs: ["attr"],

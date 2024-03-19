@@ -203,10 +203,10 @@ export let build = async (arg: BuildArg) => {
 
 	// Set up common environemnt.
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
-	//let prefix = ``;
-	//if (isCross) {
-	//	prefix = `${targetString}-`;
- //}
+	let prefix = ``;
+	if (isCross) {
+		prefix = `${targetString}-`;
+ }
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
 		arg.buildToolchain,
@@ -216,11 +216,11 @@ export let build = async (arg: BuildArg) => {
 			CARGO_HTTP_CAINFO: certFile,
 			RUST_TARGET: tg.Triple.toString(target),
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-			//RUSTFLAGS: `-C target-feature=+crt-static`, // cross only?
-			//[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}gcc`,
-			//[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
-			//[`CC_${tripleToEnvVar(target)}`]: `${prefix}gcc`,
-			//[`CXX_${tripleToEnvVar(target)}`]: `${prefix}g++`,
+			RUSTFLAGS: `-C target-feature=+crt-static`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}cc`,
+			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
+			[`CC_${tripleToEnvVar(target)}`]: `${prefix}cc`,
+			[`CXX_${tripleToEnvVar(target)}`]: `${prefix}c++`,
 		},
 	];
 

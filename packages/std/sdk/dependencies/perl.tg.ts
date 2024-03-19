@@ -164,6 +164,7 @@ export let test = tg.target(async () => {
 	let directory = await build({ host, bootstrapMode, env: sdk });
 	console.log("directory", await directory.id());
 	await std.assert.pkg({
+		bootstrapMode,
 		directory,
 		binaries: ["perl"],
 		metadata,

@@ -169,6 +169,7 @@ export let test = tg.target(async () => {
 	let coreutils = await build({ host, bootstrapMode, env: sdk });
 
 	await std.assert.pkg({
+		bootstrapMode,
 		binaries: ["cp", "mkdir", "mv", "ls", "rm"],
 		directory: coreutils,
 		metadata,

@@ -98,6 +98,7 @@ export let test = tg.target(async () => {
 	let sdk = std.sdk({ host, bootstrapMode });
 	let xzArtifact = build({ host, bootstrapMode, env: sdk });
 	await std.assert.pkg({
+		bootstrapMode,
 		directory: xzArtifact,
 		binaries: ["xz"],
 		libs: ["lzma"],

@@ -60,6 +60,7 @@ export let test = tg.target(async () => {
 		env: [sdk, { WATERMARK: "1" }],
 	});
 	await std.assert.pkg({
+		bootstrapMode,
 		directory,
 		binaries: ["makeinfo", "texi2any"],
 		metadata,
