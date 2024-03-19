@@ -542,9 +542,7 @@ export namespace sdk {
 				env,
 				key: "LIBRARY_PATH",
 			})) {
-				let ldsoPath = bootstrapMode
-					? bootstrap.interpreterName(host)
-					: libc.interpreterName(host);
+				let ldsoPath = libc.interpreterName(host);
 				let foundLdso = await dir.tryGet(ldsoPath);
 				if (foundLdso) {
 					ldso = tg.File.expect(foundLdso);

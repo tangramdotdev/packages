@@ -179,10 +179,10 @@ type BuildArg = {
 export let build = async (arg: BuildArg) => {
 	let release = arg.release ?? true;
 	let source = arg.source;
-	let host = standardizeTriple(
-		arg.host ? tg.triple(arg.host) : await tg.Triple.host(),
-	);
-	let target = standardizeTriple(arg.target ? tg.triple(arg.target) : host);
+	let host_ = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let host = standardizeTriple(host_);
+	let target_ = arg.target ? tg.triple(arg.target) : host;
+	let target = standardizeTriple(target_);
 	let system = tg.Triple.archAndOs(host);
 	let os = tg.Triple.os(system);
 
@@ -190,12 +190,20 @@ export let build = async (arg: BuildArg) => {
 
 	let isCross = !tg.Triple.eq(host, target);
 
+	// Use the bootstrap shell and utils.
+	let shellArtifact = await bootstrap.shell();
+	let shell = tg.File.expect(await shellArtifact.get("bin/sh"));
+	let utilsArtifact = await bootstrap.utils();
+
 	// Get the toolchain directory.
+	let bootstrapMode =
+		os === "darwin" ||
+		(os === "linux" && host_.vendor === undefined && host.arch === target.arch);
 	let { ldso, libDir } = await std.sdk.toolchainComponents({
-		bootstrapMode: true,
+		bootstrapMode,
 		env: arg.buildToolchain,
-		host,
-		target,
+		host: host_,
+		target: target_,
 	});
 
 	// Get the Rust toolchain.
@@ -211,7 +219,10 @@ export let build = async (arg: BuildArg) => {
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
 		arg.buildToolchain,
 		rustToolchain,
+		shellArtifact,
+		utilsArtifact,
 		{
+			SHELL: shell,
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
 			RUST_TARGET: tg.Triple.toString(target),
