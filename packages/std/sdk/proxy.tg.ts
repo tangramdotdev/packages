@@ -73,7 +73,6 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	let cxx: tg.File | tg.Symlink = cxx_;
 
 	if (proxyLinker) {
-		let buildString = tg.Triple.toString(build);
 		let hostString = tg.Triple.toString(host);
 
 		let isCross = !tg.Triple.eq(build, host);

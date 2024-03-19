@@ -399,17 +399,17 @@ async fn create_manifest<H: BuildHasher>(
 					.as_ref()
 					.expect("TANGRAM_LINKER_INTERPRETER_PATH must be set.");
 
-				// Check if this is a musl interpreter.  Follow the symlink, get the pathname.
+				// Check if this is a musl interpreter.
 				let is_musl = {
 					let canonical_interpreter = std::fs::canonicalize(path)
 						.expect("Failed to canonicalize the interpreter path.");
-					// Canonicalizing the musl interpreter will resolve to libc.so.  We check that the filename does NOT contain "ld-linux".
-					!canonical_interpreter
-						.file_name()
-						.expect("Failed to read the interpreter file name")
-						.to_str()
-						.expect("Invalid interpreter file name")
-						.starts_with("ld-linux")
+
+					// Check the help output for the string "musl".
+					let output = std::process::Command::new(canonical_interpreter)
+						.arg("--help")
+						.output()
+						.expect("Failed to run the interpreter help command.");
+					String::from_utf8_lossy(&output.stderr).contains("musl")
 				};
 
 				Some((path.clone(), is_musl))
