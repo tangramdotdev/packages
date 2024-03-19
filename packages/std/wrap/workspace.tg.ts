@@ -206,7 +206,7 @@ export let build = async (arg: BuildArg) => {
 	let prefix = ``;
 	if (isCross) {
 		prefix = `${targetString}-`;
- }
+	}
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
 		arg.buildToolchain,
@@ -272,9 +272,10 @@ export let build = async (arg: BuildArg) => {
 	];
 	if (release) {
 		args.push(`--release`);
-	} else {
-		args.push(`--features tracing`);
 	}
+	//} else {
+		args.push(`--features tracing`);
+	//}
 
 	let build = {
 		command: tg`${cargo} build`,
