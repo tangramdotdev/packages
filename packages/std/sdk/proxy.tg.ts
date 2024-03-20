@@ -275,7 +275,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// Create the linker proxy.
-	let output = await std.wrap(tgld, {
+	let output = await std.wrap({
 		buildToolchain,
 		env: {
 			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
@@ -290,6 +290,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 			),
 			TANGRAM_LINKER_WRAPPER_PATH: tg.Mutation.setIfUnset(wrapper),
 		},
+		executable: tgld,
 		identity: "wrapper",
 	});
 

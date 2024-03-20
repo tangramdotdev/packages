@@ -437,7 +437,7 @@ export namespace sdk {
 			llvm,
 			target: targetTriple,
 		});
-		let host = await getHost({ bootstrapMode, env, host: host_, llvm });
+		let host = await getHost({ env, host: host_, llvm });
 		let os = host.os;
 		let target = targetTriple ? tg.triple(targetTriple) : host;
 		let isCross = !tg.Triple.eq(host, target);
@@ -538,11 +538,11 @@ export namespace sdk {
 		let libDir;
 		if (os !== "darwin") {
 			// Go through LIBRARY_PATH to find the dynamic linker.
+			let ldsoPath = libc.interpreterName(host);
 			for await (let [_parent, dir] of std.env.dirsInVar({
 				env,
 				key: "LIBRARY_PATH",
 			})) {
-				let ldsoPath = libc.interpreterName(host);
 				let foundLdso = await dir.tryGet(ldsoPath);
 				if (foundLdso) {
 					ldso = tg.File.expect(foundLdso);
@@ -625,12 +625,8 @@ export namespace sdk {
 
 	/** Obtain the host system for the compilers provided by this env. Throws an error if no compiler is found. */
 	export let getHost = async (arg: ToolchainEnvArg): Promise<tg.Triple> => {
-		let { bootstrapMode, env, host: host_, target } = arg;
+		let { env, host: host_, target } = arg;
 		let detectedHost = host_ ? tg.triple(host_) : await tg.Triple.host();
-
-		if (bootstrapMode) {
-			return bootstrap.toolchainTriple(detectedHost);
-		}
 
 		if (detectedHost.os === "darwin") {
 			return detectedHost;
@@ -1086,60 +1082,69 @@ export let testLLVMSdk = tg.target(async () => {
 	return env;
 });
 
-function* cartesianProduct<T>(...sets: T[][]): Generator<T[], void, undefined> {
-	// Special case: no sets provided
-	if (sets.length === 0) {
-		yield [];
-	}
-	// Special case: one set provided
-	if (sets.length === 1) {
-		yield* (sets[0] ?? []).map((item) => [item]);
+export let testLLVMMoldSdk = tg.target(async () => {
+	let detectedHost = await tg.Triple.host();
+	if (detectedHost.os !== "linux") {
+		throw new Error(`mold is only available on Linux`);
 	}
 
-	// Recursive function to generate combinations
-	function* inner(head: T[], rest: T[][]): Generator<T[], void, undefined> {
-		if (rest.length === 0) {
-			yield head;
-			return;
+	let sdkArg = {
+		host: detectedHost,
+		linker: "mold" as const,
+		toolchain: "llvm" as const,
+	};
+
+	let moldSdk = tg.File.expect(await sdk(sdkArg));
+
+	// Ensure that the SDK is valid.
+	await sdk.assertValid(moldSdk, sdkArg);
+
+	// Ensure that produced artifacts contain the `mold` ELF comment.
+	let source = tg.file(`
+		#include <stdio.h>
+		int main() {
+			printf("Hello, world!\\n");
+			return 0;
 		}
-		for (let item of rest[0] ?? []) {
-			yield* inner([...head, item], rest.slice(1));
-		}
+	`);
+	let output = tg.File.expect(
+		await tg.build(tg`cc -v -xc ${source} -o $OUTPUT`, {
+			env: await std.env.object(moldSdk),
+		}),
+	);
+	let innerExe = tg.File.expect(await std.wrap.unwrap(output));
+	let elfComment = tg.File.expect(
+		await tg.build(tg`readelf -p .comment ${innerExe} | grep mold > $OUTPUT`, {
+			env: await std.env.object(moldSdk),
+		}),
+	);
+	let text = await elfComment.text();
+	tg.assert(text.includes("mold"));
+	tg.assert(text.includes(moldMetadata.version));
+
+	return output;
+});
+
+export let testExplicitGlibcVersionSdk = tg.target(async () => {
+	let host = await tg.Triple.host();
+	if (host.os !== "linux") {
+		throw new Error(`glibc is only available on Linux`);
 	}
+	let oldGlibcHost = tg.triple(`${host.arch}-linux-gnu2.37`);
+	let sdkArg = { host: oldGlibcHost };
+	let env = await sdk(sdkArg);
+	await sdk.assertValid(env, sdkArg);
+	return env;
+});
 
-	yield* inner([], sets);
-}
-
-export let generateAllOptions = () => {
-	let libcs = ["musl", "glibc"];
-	let arches = ["aarch64", "x86_64"];
-	let linkers = ["bfd", "lld", "mold"];
-	let oses = ["linux", "darwin"];
-
-	let results: Array<sdk.Arg> = [];
-
-	for (let combination of cartesianProduct(libcs, arches, linkers, oses)) {
-		let [libc, arch, linker, os] = combination;
-		if (!libc || !arch || !linker || !os) {
-			continue;
-		}
-		let libc_ = os === "darwin" ? "" : `-${libc}`;
-		let vendor = os === "darwin" ? "apple" : "unknown";
-		let target = tg.triple(`${arch}-${os}-${vendor}-${libc_}`);
-		results.push({ target, linker: linker as sdk.LinkerKind });
+export let testLLVMMuslSdk = tg.target(async () => {
+	let host = await tg.Triple.host();
+	if (host.os !== "linux") {
+		throw new Error(`musl is only available on Linux`);
 	}
-	return results;
-};
-
-type RunAllSdksArg = {
-	package: tg.Target;
-};
-
-export let runAllSdks = async (arg: RunAllSdksArg) => {
-	let options = generateAllOptions();
-	for await (let option of options) {
-		let env = await std.env.object(await sdk(option));
-		await tg.build(arg.package, { env });
-	}
-	return true;
-};
+	let muslHost = tg.triple({ ...host, environment: "musl" });
+	let sdkArg = { host: muslHost, toolchain: "llvm" as const };
+	let env = await sdk(sdkArg);
+	await sdk.assertValid(env, sdkArg);
+	return env;
+});

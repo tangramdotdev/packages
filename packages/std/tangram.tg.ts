@@ -284,12 +284,23 @@ import * as mold from "./sdk/mold.tg.ts";
 export let testMoldBuild = tg.target(async () => {
 	return await mold.test();
 });
-import { testMoldSdk, testMuslSdk } from "./sdk.tg.ts";
+
+import {
+	testExplicitGlibcVersionSdk,
+	testLLVMMoldSdk,
+	testLLVMMuslSdk,
+	testLLVMSdk,
+	testMoldSdk,
+	testMuslSdk,
+} from "./sdk.tg.ts";
 export let testMold = tg.target(async () => {
 	return await testMoldSdk();
 });
 export let testMusl = tg.target(async () => {
 	return await testMuslSdk();
+});
+export let testExplicitGlibcVersion = tg.target(async () => {
+	return await testExplicitGlibcVersionSdk();
 });
 
 import * as git from "./sdk/git.tg.ts";
@@ -304,9 +315,14 @@ export let llvmSource = tg.target(async () => {
 export let testLlvmToolchain = tg.target(async () => {
 	return await llvm.test();
 });
-import { testLLVMSdk } from "./sdk.tg.ts";
 export let testLlvm = tg.target(async () => {
 	return await testLLVMSdk();
+});
+export let testLlvmMold = tg.target(async () => {
+	return await testLLVMMoldSdk();
+});
+export let testLlvmMusl = tg.target(async () => {
+	return await testLLVMMuslSdk();
 });
 
 // Image tests.

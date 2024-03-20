@@ -188,35 +188,53 @@ export let build = async (arg: BuildArg) => {
 
 	let targetString = tg.Triple.toString(target);
 
-	let isCross = !tg.Triple.eq(host, target);
+	let isCross = host.arch !== target.arch;
+	let prefix = ``;
+	let suffix = tg``;
+	if (isCross) {
+		prefix = `${targetString}-`;
+	}
 
 	// Use the bootstrap shell and utils.
 	let shellArtifact = await bootstrap.shell();
 	let shell = tg.File.expect(await shellArtifact.get("bin/sh"));
 	let utilsArtifact = await bootstrap.utils();
 
-	// Get the toolchain directory.
+	// Get the appropriate toolchain directory.
+	let buildToolchain = arg.buildToolchain;
+	let setSysroot = false;
+	if (os === "linux") {
+		if (tg.Triple.environment(target_) === "musl") {
+			// If the incoming toolchain is musl-based, it hasn't yet been wrapped. We need to set --sysroot.
+			setSysroot = true;
+		} else {
+			// If the incoming toolchain is not musl-based, we need to pull in a musl-based toolchain.
+			if (!isCross) {
+				buildToolchain = await bootstrap.sdk.env(host_);
+			} else {
+				buildToolchain = await gcc.toolchain({ host, target });
+				setSysroot = true;
+			}
+		}
+	}
+
 	let bootstrapMode =
 		os === "darwin" || (os === "linux" && host.arch === target.arch);
-	let { ldso, libDir } = await std.sdk.toolchainComponents({
+	let { directory, ldso, libDir } = await std.sdk.toolchainComponents({
 		bootstrapMode,
-		env: arg.buildToolchain,
+		env: buildToolchain,
 		host: host_,
 		target: target_,
 	});
-	let buildToolchain = bootstrapMode
-		? bootstrap.sdk.env(host)
-		: arg.buildToolchain;
+	if (setSysroot) {
+		suffix = tg` --sysroot ${directory}`;
+	}
 
 	// Get the Rust toolchain.
 	let rustToolchain = await rust({ target });
 
 	// Set up common environemnt.
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
-	let prefix = ``;
-	if (isCross) {
-		prefix = `${targetString}-`;
-	}
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
 		buildToolchain,
@@ -232,8 +250,8 @@ export let build = async (arg: BuildArg) => {
 			RUSTFLAGS: `-C target-feature=+crt-static`,
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}cc`,
 			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
-			[`CC_${tripleToEnvVar(target)}`]: `${prefix}cc`,
-			[`CXX_${tripleToEnvVar(target)}`]: `${prefix}c++`,
+			[`CC_${tripleToEnvVar(target)}`]: tg`${prefix}cc${suffix}`,
+			[`CXX_${tripleToEnvVar(target)}`]: tg`${prefix}c++${suffix}`,
 		},
 	];
 

@@ -1,6 +1,7 @@
 /** This package takes a bootstrap C/C++ compiler and some utilities and canadian-crosses up a sizzling plate of farm-fresh GCC. The output of this package can then be used to build other compilers like LLVM. */
 
 import * as bootstrap from "../../bootstrap.tg.ts";
+import { normalizeTriple } from "../../sdk.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import binutils from "../binutils.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
@@ -16,14 +17,12 @@ export type ToolchainArg = std.sdk.BuildEnvArg & {
 /** Construct a complete binutils + libc + gcc toolchain. */
 export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	let { build: build_, host: host_, target: target_, ...rest } = arg;
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let target = target_ ? tg.triple(target_) : host;
+	let host = normalizeTriple(host_ ? tg.triple(host_) : await tg.Triple.host());
+	let target = normalizeTriple(target_ ? tg.triple(target_) : host);
 
 	let buildTriple = arg.bootstrapMode
 		? bootstrap.toolchainTriple(host)
-		: build_
-			? tg.triple(build_)
-			: host;
+		: normalizeTriple(build_ ? tg.triple(build_) : host);
 
 	// Always build a native toolchain.
 	let nativeToolchain = await canadianCross({ host });
@@ -47,7 +46,6 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		host,
 		target,
 		variant: "stage2_full",
-		//variant: "stage1_limited",
 	});
 
 	return env;
