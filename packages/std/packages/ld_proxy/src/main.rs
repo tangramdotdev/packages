@@ -21,7 +21,7 @@ const MAX_DEPTH: usize = 16;
 async fn main() {
 	if let Err(e) = main_inner().await {
 		eprintln!("linker proxy failed: {e}");
-		tracing::trace!("{}", e.trace());
+		tracing::trace!("{}", e.trace(&tangram_error::TraceOptions::default()));
 		std::process::exit(1);
 	}
 }
