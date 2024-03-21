@@ -50,7 +50,7 @@ export let tgld = async (arg: Arg) =>
 export let wrapper = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
-let version = "1.76.0";
+let version = "1.77.0";
 
 type ToolchainArg = {
 	target?: tg.Triple.Arg;
