@@ -45,9 +45,7 @@ export type Arg = std.sdk.BuildEnvArg;
 /** Obtain a directory containing all provided utils. */
 export let env = tg.target(async (arg?: Arg) => {
 	let { host: host_, ...rest } = arg ?? {};
-	let hostTriple = host_ ? tg.triple(host_) : await tg.Triple.host();
-	// Improve cache hits by only using the arch and os for child builds.
-	let host = tg.Triple.archAndOs(hostTriple);
+	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
 
 	let dependencies = [];
 

@@ -75,6 +75,7 @@ export let build = tg.target(async (arg: Arg) => {
 	let isCross = !tg.Triple.eq(host, target);
 	let targetPrefix = isCross ? `${targetString}-` : "";
 	let sysroot = isCross ? `$OUTPUT/${targetString}` : `$OUTPUT`;
+	//let sysroot = "$OUTPUT";
 	// The sysroot passed in the args is always nested in a directory named for the triple. If we're not cross-compiling, we need to reach inside this subdir.
 	let incomingSysroot = isCross ? sysroot_ : tg`${sysroot_}/${targetString}`;
 
@@ -151,12 +152,17 @@ export let build = tg.target(async (arg: Arg) => {
 		additionalArgs.push(...stage2FullArgs);
 		additionalEnv = {
 			...additionalEnv,
-			CC: `${targetString}-cc -static -fPIC`,
-			CXX: `${targetString}-c++ -static -fPIC`,
+			CC: `${hostString}-cc -static -fPIC`,
+			CXX: `${hostString}-c++ -static -fPIC`,
 		};
 	}
 
 	let configure = { args: [...commonArgs, ...additionalArgs] };
+	if (variant === "stage2_full") {
+		prepare = tg`${prepare}
+		ls $OUTPUT
+		env`;
+	}
 
 	let phases = { prepare, configure };
 
@@ -165,7 +171,7 @@ export let build = tg.target(async (arg: Arg) => {
 		env.push(
 			dependencies.env({
 				...rest,
-				env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
+				env: env_,
 				host: build,
 			}),
 		);

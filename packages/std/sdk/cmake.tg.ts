@@ -5,13 +5,13 @@ import ninja from "./ninja.tg.ts";
 
 export let metadata = {
 	name: "cmake",
-	version: "3.28.1",
+	version: "3.29.0",
 };
 
 export let source = tg.target(() => {
 	let { version } = metadata;
 	let checksum =
-		"sha256:15e94f83e647f7d620a140a7a5da76349fc47a1bfed66d0f5cdee8e7344079ad";
+		"sha256:a0669630aae7baa4a8228048bf30b622f9e9fd8ee8cedb941754e9e38686c778";
 	let owner = "Kitware";
 	let repo = "CMake";
 	let tag = `v${version}`;

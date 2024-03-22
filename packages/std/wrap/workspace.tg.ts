@@ -204,17 +204,11 @@ export let build = async (arg: BuildArg) => {
 	let buildToolchain = arg.buildToolchain;
 	let setSysroot = false;
 	if (os === "linux") {
-		if (tg.Triple.environment(target_) === "musl") {
-			// If the incoming toolchain is musl-based, it hasn't yet been wrapped. We need to set --sysroot.
-			setSysroot = true;
+		if (!isCross) {
+			buildToolchain = await bootstrap.sdk.env(host_);
 		} else {
-			// If the incoming toolchain is not musl-based, we need to pull in a musl-based toolchain.
-			if (!isCross) {
-				buildToolchain = await bootstrap.sdk.env(host_);
-			} else {
-				buildToolchain = await gcc.toolchain({ host, target });
-				setSysroot = true;
-			}
+			buildToolchain = await gcc.toolchain({ host, target });
+			setSysroot = true;
 		}
 	}
 

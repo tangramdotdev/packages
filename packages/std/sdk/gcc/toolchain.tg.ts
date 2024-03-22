@@ -16,13 +16,9 @@ export type ToolchainArg = std.sdk.BuildEnvArg & {
 
 /** Construct a complete binutils + libc + gcc toolchain. */
 export let toolchain = tg.target(async (arg: ToolchainArg) => {
-	let { build: build_, host: host_, target: target_, ...rest } = arg;
+	let { host: host_, target: target_, ...rest } = arg;
 	let host = normalizeTriple(host_ ? tg.triple(host_) : await tg.Triple.host());
 	let target = normalizeTriple(target_ ? tg.triple(target_) : host);
-
-	let buildTriple = arg.bootstrapMode
-		? bootstrap.toolchainTriple(host)
-		: normalizeTriple(build_ ? tg.triple(build_) : host);
 
 	// Always build a native toolchain.
 	let nativeToolchain = await canadianCross({ host });
@@ -35,13 +31,14 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	// If a cross-target was requested, build the components required using the native toolchain.
 	let nativeProxyEnv = await proxy.env({
 		buildToolchain: nativeToolchain,
+		build: host,
 		host,
 	});
 
 	let { env } = await crossToolchain({
 		...rest,
 		bootstrapMode: true,
-		build: buildTriple,
+		build: host, // We've produced a native toolchain, so we can use it to build the cross-toolchain.
 		env: [nativeToolchain, nativeProxyEnv],
 		host,
 		target,
@@ -162,7 +159,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		env: bootstrapGCC,
 		target,
 	});
-	console.log("hostSysroot", await sysroot.id());
+	console.log("sysroot", await sysroot.id());
 	return sysroot;
 });
 
