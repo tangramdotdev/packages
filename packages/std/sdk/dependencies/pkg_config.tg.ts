@@ -37,7 +37,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 
 	let configure = {
@@ -63,7 +63,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let pkgConfigBuild = await std.utils.buildUtil(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			source: source_ ?? source(),
@@ -114,7 +114,7 @@ export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });

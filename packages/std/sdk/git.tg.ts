@@ -37,7 +37,7 @@ export let git = async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 
 	let sourceDir = source_ ?? source();
@@ -61,7 +61,7 @@ export let git = async (arg?: Arg) => {
 	let result = std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			buildInTree: true,
 			env,
 			phases,

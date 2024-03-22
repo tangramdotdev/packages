@@ -27,7 +27,7 @@ type Arg = std.sdk.BuildEnvArg & {
 	binutils: tg.Directory;
 	source?: tg.Directory;
 	sysroot: tg.Directory;
-	target?: tg.Triple.Arg;
+	target?: string;
 	variant: Variant;
 };
 
@@ -51,13 +51,13 @@ export let build = tg.target(async (arg: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 	let target = target_ ? tg.triple(target_) : host;
 
-	let buildString = tg.Triple.toString(build);
-	let hostString = tg.Triple.toString(host);
-	let targetString = tg.Triple.toString(target);
+	let buildString = std.triple.toString(build);
+	let hostString = std.triple.toString(host);
+	let targetString = std.triple.toString(target);
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
@@ -72,7 +72,7 @@ export let build = tg.target(async (arg: Arg) => {
 	];
 
 	// Configure sysroot. If host != target, it will live in a target-prefixed subdirectory. If host == target, it will share the toplevel.
-	let isCross = !tg.Triple.eq(host, target);
+	let isCross = !std.triple.eq(host, target);
 	let targetPrefix = isCross ? `${targetString}-` : "";
 	let sysroot = isCross ? `$OUTPUT/${targetString}` : `$OUTPUT`;
 	//let sysroot = "$OUTPUT";
@@ -181,7 +181,7 @@ export let build = tg.target(async (arg: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			opt: "2",
@@ -264,20 +264,20 @@ export let mpfrSource = tg.target(async () => {
 
 export let libPath = "lib";
 
-export let linkerPath = (triple: tg.Triple.Arg) =>
-	`${tg.Triple.toString(tg.triple(triple))}/bin/ld`;
+export let linkerPath = (triple: string) =>
+	`${std.triple.toString(tg.triple(triple))}/bin/ld`;
 
-export let crossLinkerPath = (target: tg.Triple.Arg) =>
-	`${tg.Triple.toString(tg.triple(target))}/bin/ld`;
+export let crossLinkerPath = (target: string) =>
+	`${std.triple.toString(tg.triple(target))}/bin/ld`;
 
 export { interpreterName } from "./libc.tg.ts";
 
-export let interpreterPath = (host: tg.Triple.Arg) =>
+export let interpreterPath = (host: string) =>
 	`${libPath}/${interpreterName(host)}`;
 
 type WrapArgsArg = {
-	host: tg.Triple;
-	target?: tg.Triple;
+	host: string;
+	target?: string;
 	toolchainDir: tg.Directory;
 };
 
@@ -285,9 +285,9 @@ type WrapArgsArg = {
 export let wrapArgs = async (arg: WrapArgsArg) => {
 	let { host, target, toolchainDir } = arg;
 	let targetTriple = target ?? host;
-	let targetString = tg.Triple.toString(targetTriple);
+	let targetString = std.triple.toString(targetTriple);
 	let gccVersion = await getGccVersion(toolchainDir, host, target);
-	let isCross = !tg.Triple.eq(host, targetTriple);
+	let isCross = !std.triple.eq(host, targetTriple);
 
 	let sysroot = isCross ? tg`${toolchainDir}/${targetString}` : toolchainDir;
 
@@ -313,13 +313,13 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 
 async function getGccVersion(
 	env: std.env.Arg,
-	host: tg.Triple,
-	target?: tg.Triple,
+	host: std.triple,
+	target?: std.triple,
 ): Promise<string> {
 	let targetTriple = target ?? host;
-	let targetPrefix = tg.Triple.eq(host, targetTriple)
+	let targetPrefix = std.triple.eq(host, targetTriple)
 		? ``
-		: `${tg.Triple.toString(targetTriple)}-`;
+		: `${std.triple.toString(targetTriple)}-`;
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
 	let script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.

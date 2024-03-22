@@ -24,8 +24,8 @@ export let source = tg.target(() => {
 
 type Arg = {
 	source?: tg.Directory;
-	host?: tg.Triple.Arg;
-	target?: tg.Triple.Arg;
+	host?: string;
+	target?: string;
 };
 
 export let isort = tg.target(async (arg?: Arg) => {

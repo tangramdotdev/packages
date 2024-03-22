@@ -89,7 +89,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let perlArtifact = await std.utils.buildUtil(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			prefixArg: "-Dprefix=",
@@ -151,7 +151,7 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = await build({ host, bootstrapMode, env: sdk });

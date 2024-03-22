@@ -58,10 +58,10 @@ export let executableMetadata = async (
 /** Attempt to determine the systems an executable is able to run on. */
 export let executableTriples = async (
 	file: tg.File,
-): Promise<Array<tg.Triple> | undefined> => {
+): Promise<Array<std.triple> | undefined> => {
 	let metadata = await executableMetadata(file);
 	let arches: Array<string>;
-	let os: tg.Triple.Os;
+	let os: std.triple.Os;
 	if (metadata.format === "elf") {
 		arches = [metadata.arch];
 		os = "linux";
@@ -313,8 +313,8 @@ let MACHO_MAGIC_64_LE = [0xcf, 0xfa, 0xed, 0xfe];
 
 let machoExecutableMetadata = (
 	bytes: Uint8Array,
-): { arches: Array<tg.Triple.Arch> } => {
-	let arches: Set<tg.Triple.Arch> = new Set();
+): { arches: Array<std.triple.Arch> } => {
+	let arches: Set<std.triple.Arch> = new Set();
 	let data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
 	// Read the arches.

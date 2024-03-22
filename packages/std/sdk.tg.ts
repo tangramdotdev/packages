@@ -13,8 +13,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	type Apply = {
 		bootstrapMode: Array<boolean>;
 		proxyArg: Partial<proxy.Arg>;
-		host: tg.Triple.Arg;
-		targets: Array<tg.Triple.Arg>;
+		host: string;
+		targets: Array<string>;
 		toolchain: sdk.ToolchainKind;
 		linker: sdk.LinkerKind;
 	};
@@ -30,7 +30,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
-			let targets: Array<tg.Triple.Arg> = [];
+			let targets: Array<string> = [];
 			if (arg.host !== undefined) {
 				object.host = arg.host;
 			}
@@ -70,7 +70,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 					targets = targets.concat(arg.targets ?? []);
 				}
 			}
-			object.targets = await tg.Mutation.arrayAppend<tg.Triple.Arg>(targets);
+			object.targets = await tg.Mutation.arrayAppend<string>(targets);
 			return object;
 		}
 	});
@@ -79,8 +79,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	// If we're in bootstrap mode, stop here and return the bootstrap SDK.
 	let bootstrapMode = (bootstrapMode_ ?? []).some((mode) => mode);
 	let host = bootstrapMode
-		? bootstrap.toolchainTriple(await tg.Triple.host())
-		: normalizeTriple(host_ ? tg.triple(host_) : await tg.Triple.host());
+		? bootstrap.toolchainTriple(await std.triple.host())
+		: normalizeTriple(host_ ? tg.triple(host_) : await std.triple.host());
 	if (bootstrapMode) {
 		let bootstrapSDK = bootstrap.sdk.env({ host });
 		let proxyEnv = proxy.env({
@@ -124,9 +124,9 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 
 	let toolchain = toolchain_ ?? (host.vendor === "apple" ? "llvm" : "gcc");
 	for (let target of targets) {
-		if (!tg.Triple.eq(host, target)) {
-			let hostString = tg.Triple.toString(host);
-			let targetString = tg.Triple.toString(target);
+		if (!std.triple.eq(host, target)) {
+			let hostString = std.triple.toString(host);
+			let targetString = std.triple.toString(target);
 			tg.assert(
 				validateCrossTarget({ host, target }),
 				`Cross-compiling from ${hostString} to ${targetString} is not supported.`,
@@ -142,10 +142,10 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		let directory = toolchain;
 		let allCrossTargets = await sdk.supportedTargets(directory);
 		// For each requested target not already present in a provided SDK, add a proxy.
-		let alreadyProxied: Array<tg.Triple> = [];
+		let alreadyProxied: Array<std.triple> = [];
 		let newTargets = allCrossTargets.filter(
 			(target) =>
-				!alreadyProxied.some((triple) => tg.Triple.eq(triple, target)),
+				!alreadyProxied.some((triple) => std.triple.eq(triple, target)),
 		);
 
 		// Ensure the directory provides a toolchain configured with the correct host.
@@ -154,24 +154,26 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 			env: directory,
 			target: checkTarget,
 		});
-		let hostString = tg.Triple.toString(host);
-		let detectedHostString = tg.Triple.toString(detectedHost);
+		let hostString = std.triple.toString(host);
+		let detectedHostString = std.triple.toString(detectedHost);
 		tg.assert(
-			tg.Triple.eq(detectedHost, host),
+			std.triple.eq(detectedHost, host),
 			`Detected toolchain host ${detectedHostString} does not match requested host ${hostString}`,
 		);
 		env.push(directory);
 
 		for await (let requestedTarget of targets) {
 			if (
-				alreadyProxied.some((triple) => tg.Triple.eq(triple, requestedTarget))
+				alreadyProxied.some((triple) => std.triple.eq(triple, requestedTarget))
 			) {
 				continue;
 			}
 			if (
-				!allCrossTargets.some((triple) => tg.Triple.eq(triple, requestedTarget))
+				!allCrossTargets.some((triple) =>
+					std.triple.eq(triple, requestedTarget),
+				)
 			) {
-				let targetString = tg.Triple.toString(requestedTarget);
+				let targetString = std.triple.toString(requestedTarget);
 				throw new Error(
 					`Provided toolchain does not provide a ${hostString} -> ${targetString} toolchain.`,
 				);
@@ -216,7 +218,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		// Add any requested cross-compilers, without packages.
 		let crossEnvs = [];
 		for await (let target of targets) {
-			if (tg.Triple.eq(host, target)) {
+			if (std.triple.eq(host, target)) {
 				continue;
 			}
 			let crossToolchain = await gcc.toolchain({ host, target });
@@ -313,25 +315,25 @@ export namespace sdk {
 		/** Provide an env consisting only of bootstrap components and a linker proxy. Will not build additional utils or bootstrap GCC. */
 		bootstrapMode?: boolean;
 		/** The machine this SDK will compile on. */
-		host?: tg.Triple.Arg;
+		host?: string;
 		/** An alternate linker to use. */
 		linker?: LinkerKind;
 		/** Which components should get proxied. Use `true` or `false` as a shorthand for enabling or disabling all proxies. If not provided, the default behavior is to proxy the linker but not the compiler. */
 		proxy?: Partial<proxy.Arg> | boolean;
 		/** The machine this SDK produces executables for. */
-		target?: tg.Triple.Arg;
+		target?: string;
 		/** A list of machines this SDK can produce executables for. */
-		targets?: Array<tg.Triple.Arg>;
+		targets?: Array<string>;
 		/** Env containing the compiler. If not provided, will default to a native GCC toolchain. */
 		toolchain?: ToolchainKind;
 	};
 
 	export type BuildEnvArg = {
 		bootstrapMode?: boolean;
-		build?: tg.Triple.Arg;
+		build?: string;
 		debug?: boolean;
 		env?: std.env.Arg;
-		host?: tg.Triple.Arg;
+		host?: string;
 		sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	};
 
@@ -341,8 +343,8 @@ export namespace sdk {
 		bootstrapMode?: boolean;
 		env: std.env.Arg;
 		llvm?: boolean;
-		host?: tg.Triple.Arg;
-		target?: tg.Triple.Arg;
+		host?: string;
+		target?: string;
 	};
 
 	let requiredCompilerComponents = ["c++", "cc", "ld"] as const;
@@ -359,15 +361,15 @@ export namespace sdk {
 			llvm = false,
 			target: target_,
 		} = arg;
-		let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+		let host = host_ ? tg.triple(host_) : await std.triple.host();
 		let target = target_ ? tg.triple(target_) : host;
-		let isCross = !tg.Triple.eq(host, target);
+		let isCross = !std.triple.eq(host, target);
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
 		if (isCross && !bootstrapMode) {
 			let os = tg.triple(target).os;
 			if (os !== "darwin") {
-				targetPrefix = `${tg.Triple.toString(target)}-`;
+				targetPrefix = `${std.triple.toString(target)}-`;
 			}
 		}
 		let llvmPrefix = llvm ? "llvm-" : "";
@@ -400,7 +402,7 @@ export namespace sdk {
 		if (target) {
 			let os = tg.triple(target).os;
 			if (os !== "darwin") {
-				targetPrefix = `${tg.Triple.toString(tg.triple(target))}-`;
+				targetPrefix = `${std.triple.toString(tg.triple(target))}-`;
 			}
 		}
 		if (arg.llvm) {
@@ -440,8 +442,8 @@ export namespace sdk {
 		let host = await getHost({ env, host: host_, llvm });
 		let os = host.os;
 		let target = targetTriple ? tg.triple(targetTriple) : host;
-		let isCross = !tg.Triple.eq(host, target);
-		let targetString = tg.Triple.toString(target);
+		let isCross = !std.triple.eq(host, target);
+		let targetString = std.triple.toString(target);
 		let targetPrefix = isCross && !bootstrapMode ? `${targetString}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
@@ -518,8 +520,8 @@ export namespace sdk {
 			os === "darwin"
 				? "ld"
 				: flavor === "gcc"
-					? `${targetPrefix}ld`
-					: "ld.lld";
+				  ? `${targetPrefix}ld`
+				  : "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
 		if (foundLd) {
@@ -574,10 +576,10 @@ export namespace sdk {
 		bootstrapMode?: boolean;
 		/** The environment to ascertain the host from. */
 		env?: std.env.Arg;
-		host?: tg.Triple.Arg;
+		host?: string;
 		llvm?: boolean;
 		/** If the environment is a cross-compiler, what target should we use to look for prefixes? */
-		target?: tg.Triple.Arg;
+		target?: string;
 	};
 
 	export type ToolchainComponents = {
@@ -586,32 +588,32 @@ export namespace sdk {
 		fortran?: tg.Symlink;
 		directory: tg.Directory;
 		flavor: "gcc" | "llvm";
-		host: tg.Triple;
+		host: string;
 		ld: tg.Symlink;
 		ldso?: tg.File; // NOTE - not present on macOS.
 		libDir: tg.Directory;
-		target: tg.Triple;
+		target: string;
 	};
 
 	/** Determine whether an SDK supports compiling for a specific target. */
 	export let supportsTarget = async (
 		arg: ToolchainEnvArg,
 	): Promise<boolean> => {
-		let target = arg.target ? tg.triple(arg.target) : await tg.Triple.host();
-		if ((await tg.Triple.host()).os === "darwin" && target.os === "darwin") {
+		let target = arg.target ? tg.triple(arg.target) : await std.triple.host();
+		if ((await std.triple.host()).os === "darwin" && target.os === "darwin") {
 			return true;
 		}
 
 		let allTargets = await supportedTargets(arg.env);
-		return allTargets.some((t) => tg.Triple.eq(t, target));
+		return allTargets.some((t) => std.triple.eq(t, target));
 	};
 
 	/** Retreive the full range of targets an SDK supports. */
 	export let supportedTargets = async (
 		sdk: std.env.Arg,
-	): Promise<Array<tg.Triple>> => {
+	): Promise<Array<std.triple>> => {
 		// Collect all available `*cc` binaries.
-		let foundTargets: Set<tg.Triple> = new Set();
+		let foundTargets: Set<std.triple> = new Set();
 
 		for await (let [name, _] of std.env.binsInPath({
 			env: sdk,
@@ -624,16 +626,16 @@ export namespace sdk {
 	};
 
 	/** Obtain the host system for the compilers provided by this env. Throws an error if no compiler is found. */
-	export let getHost = async (arg: ToolchainEnvArg): Promise<tg.Triple> => {
+	export let getHost = async (arg: ToolchainEnvArg): Promise<std.triple> => {
 		let { env, host: host_, target } = arg;
-		let detectedHost = host_ ? tg.triple(host_) : await tg.Triple.host();
+		let detectedHost = host_ ? tg.triple(host_) : await std.triple.host();
 
 		if (detectedHost.os === "darwin") {
 			return detectedHost;
 		}
 
 		// Locate the C compiler using the CC variable if set, falling back to "cc" in PATH if not.
-		let targetString = target ? tg.Triple.toString(tg.triple(target)) : "";
+		let targetString = target ? std.triple.toString(tg.triple(target)) : "";
 		let ccEnvVar = target ? `CC_${targetString.replace(/-/g, "_")}` : "CC";
 		let cmd = `$${ccEnvVar}`;
 		let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
@@ -663,7 +665,7 @@ export namespace sdk {
 			} else if (metadata.format === "mach-o") {
 				detectedArch = metadata.arches[0] ?? "aarch64";
 			}
-			let os: tg.Triple.Os = metadata.format === "elf" ? "linux" : "darwin";
+			let os: std.triple.Os = metadata.format === "elf" ? "linux" : "darwin";
 			detectedHost = tg.triple({ arch: detectedArch ?? "x86_64", os });
 		}
 
@@ -671,7 +673,7 @@ export namespace sdk {
 		let output = tg.File.expect(
 			await tg.build(tg`${cmd} -dumpmachine > $OUTPUT`, {
 				env: std.env.object(env),
-				host: tg.Triple.archAndOs(detectedHost),
+				host: std.triple.archAndOs(detectedHost),
 			}),
 		);
 		let host = (await output.text()).trim();
@@ -681,7 +683,7 @@ export namespace sdk {
 	export let resolveHostAndTarget = async (
 		arg?: HostAndTargetsOptions,
 	): Promise<HostAndTargets> => {
-		let host = arg?.host ? tg.triple(arg.host) : await tg.Triple.host();
+		let host = arg?.host ? tg.triple(arg.host) : await std.triple.host();
 		let targets = [];
 		if (arg?.target) {
 			targets.push(tg.triple(arg.target));
@@ -710,8 +712,8 @@ export namespace sdk {
 		tg.assert(expectedTarget);
 
 		// Determine compiler target prefix, if any.
-		let isCross = !tg.Triple.eq(expectedHost, expectedTarget);
-		let targetPrefix = isCross ? `${tg.Triple.toString(expectedTarget)}-` : ``;
+		let isCross = !std.triple.eq(expectedHost, expectedTarget);
+		let targetPrefix = isCross ? `${std.triple.toString(expectedTarget)}-` : ``;
 
 		// Set up test parameters.
 		let { lang, testProgram, expectedOutput } = arg.parameters;
@@ -739,7 +741,7 @@ export namespace sdk {
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
 				{
 					env: std.env.object(arg.sdk),
-					host: tg.Triple.archAndOs(expectedHost),
+					host: std.triple.archAndOs(expectedHost),
 				},
 			),
 		);
@@ -775,7 +777,7 @@ export namespace sdk {
 		if (!isCross) {
 			let testOutput = tg.File.expect(
 				await tg.build(tg`${compiledProgram} > $OUTPUT`, {
-					host: tg.Triple.archAndOs(expectedHost),
+					host: std.triple.archAndOs(expectedHost),
 					env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 				}),
 			);
@@ -794,10 +796,10 @@ export namespace sdk {
 
 		// Assert we can determine a host and it matches the expected.
 		let actualHost = await sdk.getHost({ env });
-		let actualHostArch = tg.Triple.arch(actualHost);
-		let expectedHostArch = tg.Triple.arch(expected.host);
-		let actualHostOs = tg.Triple.os(actualHost);
-		let expectedHostOs = tg.Triple.os(expected.host);
+		let actualHostArch = std.triple.arch(actualHost);
+		let expectedHostArch = std.triple.arch(expected.host);
+		let actualHostOs = std.triple.os(actualHost);
+		let expectedHostOs = std.triple.os(expected.host);
 		tg.assert(
 			actualHostArch === expectedHostArch,
 			`Given env provides an SDK with host arch ${actualHostArch} instead of expected ${expectedHostArch}.`,
@@ -807,7 +809,7 @@ export namespace sdk {
 			`Given env provides an SDK with host os ${actualHostOs} instead of expected ${expectedHostOs}.`,
 		);
 		if (expected.host.environment) {
-			let actualHostEnvironment = tg.Triple.environment(actualHost);
+			let actualHostEnvironment = std.triple.environment(actualHost);
 			tg.assert(
 				actualHostEnvironment === expected.host.environment,
 				`Given env provides an SDK with host environment ${actualHostEnvironment} instead of expected ${expected.host.environment}.`,
@@ -834,8 +836,8 @@ export namespace sdk {
 				tg.assert(
 					allTargets.some(
 						(t) =>
-							tg.Triple.arch(t) === tg.Triple.arch(target) &&
-							tg.Triple.os(t) === tg.Triple.os(target),
+							std.triple.arch(t) === std.triple.arch(target) &&
+							std.triple.os(t) === std.triple.os(target),
 					),
 				);
 
@@ -869,14 +871,14 @@ export namespace sdk {
 	};
 
 	export type HostAndTargetsOptions = {
-		host?: tg.Triple.Arg;
-		target?: tg.Triple.Arg;
-		targets?: Array<tg.Triple.Arg>;
+		host?: string;
+		target?: string;
+		targets?: Array<string>;
 	};
 
 	export type HostAndTargets = {
-		host: tg.Triple;
-		targets: Array<tg.Triple>;
+		host: string;
+		targets: Array<std.triple>;
 	};
 
 	export type LinkerKind = "bfd" | "lld" | "mold" | tg.Symlink | tg.File;
@@ -886,8 +888,8 @@ export namespace sdk {
 
 /** Check whether Tangram supports building a cross compiler from the host to the target. */
 type ValidateCrossTargetArg = {
-	host: tg.Triple;
-	target: tg.Triple;
+	host: string;
+	target: string;
 };
 
 let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
@@ -895,7 +897,7 @@ let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
 	let target = arg.target;
 
 	// All triples can compile for themselves.
-	if (tg.Triple.eq(host, target)) {
+	if (std.triple.eq(host, target)) {
 		return true;
 	}
 
@@ -950,8 +952,8 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 };
 
 /** Produce the canonical version of the triple used by the toolchain. */
-export let normalizeTriple = (triple: tg.Triple): tg.Triple => {
-	let normalized = tg.Triple.normalized(triple);
+export let normalizeTriple = (triple: std.triple): std.triple => {
+	let normalized = std.triple.normalized(triple);
 	tg.assert(normalized, "Expected the detected host to normalize correctly");
 	let base = tg.triple(normalized);
 	if (base.os === "linux") {
@@ -959,7 +961,7 @@ export let normalizeTriple = (triple: tg.Triple): tg.Triple => {
 			arch: base.arch,
 			vendor: base.vendor,
 			os: base.os,
-			environment: tg.Triple.environment(base) ?? "gnu",
+			environment: std.triple.environment(base) ?? "gnu",
 		});
 	} else if (base.os === "darwin") {
 		return tg.triple({
@@ -1021,12 +1023,12 @@ type ProxyTestParameters = {
 type ProxyTestArg = {
 	parameters: ProxyTestParameters;
 	sdk: std.env.Arg;
-	host?: tg.Triple.Arg;
-	target?: tg.Triple.Arg;
+	host?: string;
+	target?: string;
 };
 
 export let testMoldSdk = tg.target(async () => {
-	let detectedHost = await tg.Triple.host();
+	let detectedHost = await std.triple.host();
 	if (detectedHost.os !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
@@ -1065,7 +1067,7 @@ export let testMoldSdk = tg.target(async () => {
 });
 
 export let testMuslSdk = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 	if (host.os !== "linux") {
 		throw new Error(`musl is only available on Linux`);
 	}
@@ -1083,7 +1085,7 @@ export let testLLVMSdk = tg.target(async () => {
 });
 
 export let testLLVMMoldSdk = tg.target(async () => {
-	let detectedHost = await tg.Triple.host();
+	let detectedHost = await std.triple.host();
 	if (detectedHost.os !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
@@ -1126,7 +1128,7 @@ export let testLLVMMoldSdk = tg.target(async () => {
 });
 
 export let testExplicitGlibcVersionSdk = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 	if (host.os !== "linux") {
 		throw new Error(`glibc is only available on Linux`);
 	}
@@ -1138,7 +1140,7 @@ export let testExplicitGlibcVersionSdk = tg.target(async () => {
 });
 
 export let testLLVMMuslSdk = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 	if (host.os !== "linux") {
 		throw new Error(`musl is only available on Linux`);
 	}

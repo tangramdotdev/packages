@@ -48,7 +48,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let result = std.autotools.build({
 		...rest,
-		...tg.Triple.rotate({ build, host }),
+		...std.triple.rotate({ build, host }),
 		buildInTree: true,
 		env,
 		phases: { phases, order: ["prepare", "build", "install"] },
@@ -63,7 +63,7 @@ export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });

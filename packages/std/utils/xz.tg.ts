@@ -41,7 +41,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await tg.Triple.host(host_);
+	let host = await std.triple.host(host_);
 	let build = build_ ? tg.triple(build_) : host;
 
 	let configure = {
@@ -61,7 +61,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = await buildUtil(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			bootstrapMode,
 			env,
 			phases: { configure },
@@ -81,7 +81,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	for (let bin of bins) {
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
 		let wrappedBin = std.wrap({
-		 	buildToolchain: bootstrapMode ? env_ : undefined,
+			buildToolchain: bootstrapMode ? env_ : undefined,
 			executable: unwrappedBin,
 			libraryPaths: [libDir],
 		});
@@ -93,7 +93,7 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let xzArtifact = build({ host, bootstrapMode, env: sdk });

@@ -33,7 +33,7 @@ type Arg = std.sdk.BuildEnvArg & {
 	/* Optionally point to a specific implementation of libcc. */
 	libcc?: tg.File;
 	source?: tg.Directory;
-	target?: tg.Triple.Arg;
+	target?: string;
 };
 
 export default tg.target(async (arg?: Arg) => {
@@ -47,17 +47,17 @@ export default tg.target(async (arg?: Arg) => {
 		target: target_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 	let target = target_ ? tg.triple(target_) : host;
 	let hostTriple = tg.triple(target ?? host);
-	let buildString = tg.Triple.toString(build);
-	let hostString = tg.Triple.toString(hostTriple);
+	let buildString = std.triple.toString(build);
+	let hostString = std.triple.toString(hostTriple);
 
 	// NOTE - for musl and other libcs, `host` is the system this libc will produce binaries for.
 	// For cross-compilers, this will be distinct from `build`, which is the system the compiler is built on.
 
-	let isCrossCompiling = !tg.Triple.eq(hostTriple, host);
+	let isCrossCompiling = !std.triple.eq(hostTriple, host);
 
 	let commonFlags = [
 		`--enable-debug`,
@@ -71,7 +71,7 @@ export default tg.target(async (arg?: Arg) => {
 				`CROSS_COMPILE="${hostString}-"`,
 				`CC="${hostString}-gcc"`,
 				"--disable-gcc-wrapper",
-			]
+		  ]
 		: [];
 
 	if (libcc) {
@@ -106,7 +106,7 @@ export default tg.target(async (arg?: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			prefixPath: "/", // It's going in a sysroot.
@@ -123,20 +123,20 @@ export default tg.target(async (arg?: Arg) => {
 	return result;
 });
 
-export let interpreterPath = (triple: tg.Triple.Arg) => {
+export let interpreterPath = (triple: string) => {
 	let triple_ = tg.triple(triple);
-	let tripleString = tg.Triple.toString(triple_);
+	let tripleString = std.triple.toString(triple_);
 	return `${tripleString}/lib/${interpreterName(triple_)}`;
 };
 
-export let interpreterName = (triple: tg.Triple.Arg) => {
+export let interpreterName = (triple: string) => {
 	let arch = tg.triple(triple).arch;
 	return `ld-musl-${arch}.so.1`;
 };
 
-export let linkerPath = (system: tg.Triple.Arg) => {
+export let linkerPath = (system: string) => {
 	let triple = tg.triple(system);
 	triple.environment = "musl";
-	let tripleString = tg.Triple.toString(triple);
+	let tripleString = std.triple.toString(triple);
 	return `${tripleString}/bin/ld`;
 };

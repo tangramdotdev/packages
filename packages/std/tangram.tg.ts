@@ -10,6 +10,7 @@ export * as file from "./file.tg.ts";
 export { patch } from "./patch.tg.ts";
 export * as phases from "./phases.tg.ts";
 export { sdk } from "./sdk.tg.ts";
+export * as triple from "./triple.tg.ts";
 export * as utils from "./utils.tg.ts";
 export { default as wrap } from "./wrap.tg.ts";
 
@@ -25,8 +26,9 @@ export let flatten = <T,>(value: tg.MaybeNestedArray<T>): Array<T> => {
 
 export let test = tg.target(() => testDefaultSdk());
 
+import { host as hostTriple } from "./triple.tg.ts";
 export let testHostSystem = tg.target(async () => {
-	return tg.Triple.host();
+	return hostTriple();
 });
 
 // std.wrap component tests
@@ -91,7 +93,7 @@ export let testBootstrapMusl = tg.target(async () => {
 import * as utils from "./utils.tg.ts";
 export let testUtilsPrerequisites = tg.target(async () => {
 	return await utils.prerequisites({
-		host: bootstrap.toolchainTriple(await tg.Triple.host()),
+		host: bootstrap.toolchainTriple(await hostTriple()),
 	});
 });
 
@@ -217,7 +219,7 @@ export let testKernelHeaders = tg.target(async () => {
 
 import * as binutils from "./sdk/binutils.tg.ts";
 export let testBinutilsSource = tg.target(async () => {
-	return await binutils.source(await tg.Triple.host());
+	return await binutils.source(await hostTriple());
 });
 export let testBinutils = tg.target(async () => {
 	return await binutils.test();
@@ -255,7 +257,7 @@ import { toolchainTriple as bootstrapToolchainTriple } from "./bootstrap.tg.ts";
 import { sdk } from "./sdk.tg.ts";
 export let testBootstrapSdk = tg.target(async () => {
 	let env = await sdk({ bootstrapMode: true });
-	let host = await tg.Triple.host();
+	let host = await hostTriple();
 	let detectedHost = bootstrapToolchainTriple(host);
 	await sdk.assertValid(env, { host: detectedHost, bootstrapMode: true });
 	return env;
@@ -263,7 +265,7 @@ export let testBootstrapSdk = tg.target(async () => {
 
 export let testDefaultSdk = tg.target(async () => {
 	let env = await sdk();
-	let detectedHost = await tg.Triple.host();
+	let detectedHost = await hostTriple();
 	await sdk.assertValid(env, { host: detectedHost });
 	return env;
 });

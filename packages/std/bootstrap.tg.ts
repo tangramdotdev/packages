@@ -1,4 +1,5 @@
 import { download } from "./tangram.tg.ts";
+import * as triple from "./triple.tg.ts";
 
 export * as make from "./bootstrap/make.tg.ts";
 export * as musl from "./bootstrap/musl.tg.ts";
@@ -8,18 +9,17 @@ export type Arg = {
 	/** Specify which component to provide. */
 	component?: string;
 	/** Optionally select a system different from the detected host. */
-	host?: tg.Triple.Arg;
+	host?: string;
 };
 
 export let bootstrap = async (arg?: Arg) => {
 	let { component, host } = await configure(arg);
-	let hostString = tg.Triple.toString(host);
-	if (tg.Triple.os(host) === "darwin") {
-		hostString = "universal_darwin";
+	if (triple.os(host) === "darwin") {
+		host = "universal_darwin";
 	} else {
-		hostString = hostString.replace("-", "_");
+		host = host.replace("-", "_");
 	}
-	let requestedComponentName = `${component}_${hostString}`;
+	let requestedComponentName = `${component}_${host}`;
 	if (!component) {
 		// Download all and aggregate.
 		let allComponents = await componentList({ host });
@@ -55,24 +55,24 @@ export let toolchain = (arg?: Arg) => {
 export let gccVersion = "11.2.1";
 
 /** The build triple string of the bundled Linux toolchain. */
-export let toolchainTriple = (host: tg.Triple.Arg) => {
+export let toolchainTriple = (host: string) => {
 	let system = configureSystem(host);
-	let arch = tg.Triple.arch(system);
+	let arch = triple.arch(system);
 
-	let os = tg.Triple.os(system);
+	let os = triple.os(system);
 	if (os === "linux") {
-		return tg.triple(`${arch}-linux-musl`);
+		return `${arch}-linux-musl`;
 	} else if (os === "darwin") {
-		return tg.triple(`${arch}-apple-darwin`);
+		return `${arch}-apple-darwin`;
 	} else {
 		return tg.unreachable();
 	}
 };
 
 /** Get the interpreter name for a given host. */
-export let interpreterName = (host: tg.Triple.Arg) => {
+export let interpreterName = (host: string) => {
 	let system = configureSystem(host);
-	switch (tg.Triple.toString(system)) {
+	switch (system) {
 		case "x86_64-linux": {
 			return "ld-musl-x86_64.so.1";
 		}
@@ -112,7 +112,7 @@ export let macOsSdk = (arg?: SdkArg) => {
 
 type Config = {
 	component?: string;
-	host: tg.Triple;
+	host: string;
 	remote: boolean;
 };
 
@@ -125,13 +125,13 @@ export let configure = async (arg?: Arg): Promise<Config> => {
 
 type ComponentArg = {
 	/** Optionally select a system different from the detected host. */
-	host?: tg.Triple.Arg;
+	host?: string;
 	/** Optionally download components from remote hosting instead of including local files. */
 	remote?: boolean;
 };
 
 type ComponentConfig = {
-	host: tg.Triple;
+	host: string;
 	remote: boolean;
 };
 
@@ -139,7 +139,7 @@ type ComponentConfig = {
 export let configureComponent = async (
 	arg?: ComponentArg,
 ): Promise<ComponentConfig> => {
-	let host = configureSystem(arg?.host ?? (await tg.Triple.host()));
+	let host = configureSystem(arg?.host ?? (await triple.host()));
 
 	if (arg?.remote === false) {
 		throw new Error("Local source is not yet implemented.");
@@ -149,9 +149,9 @@ export let configureComponent = async (
 	return { host, remote };
 };
 
-/** This package cannot access `std`. This helper allows users to pass `tg.Triple` objects for the host. */
-export let configureSystem = (arg: tg.Triple.Arg): tg.Triple => {
-	return tg.Triple.archAndOs(tg.Triple.new_(arg));
+/** This package cannot access `std`. This helper allows users to pass `triple` objects for the host. */
+export let configureSystem = (arg: string): string => {
+	return triple.archAndOs(arg);
 };
 
 /** Apply one or more patches to a directory using the bootstrap utils. */
@@ -159,7 +159,7 @@ export let patch = async (
 	source: tg.Directory,
 	...patches: Array<tg.File | tg.Symlink>
 ) => {
-	let host = await tg.Triple.host();
+	let host = await triple.host();
 
 	let patchScript = tg.Template.join(
 		"\n",
@@ -211,8 +211,8 @@ export let remoteComponent = tg.target(async (componentName: string) => {
 export let componentList = async (arg?: Arg) => {
 	let { host } = await configureComponent(arg);
 
-	let linuxComponents = (host: tg.Triple) => {
-		let hostString = tg.Triple.toString(host).replace("-", "_");
+	let linuxComponents = (host: string) => {
+		let hostString = host.replace("-", "_");
 		return [
 			`dash_${hostString}`,
 			`env_${hostString}`,
@@ -231,17 +231,17 @@ export let componentList = async (arg?: Arg) => {
 	];
 	let expectedComponents: { [key: string]: Array<string> } = {
 		["aarch64-darwin"]: darwinComponents,
-		["aarch64-linux"]: linuxComponents(tg.triple("aarch64-linux")),
+		["aarch64-linux"]: linuxComponents("aarch64-linux"),
 		["js"]: [],
 		["x86_64-darwin"]: darwinComponents,
-		["x86_64-linux"]: linuxComponents(tg.triple("x86_64-linux")),
+		["x86_64-linux"]: linuxComponents("x86_64-linux"),
 	};
 
-	return expectedComponents[tg.Triple.toString(host)];
+	return expectedComponents[host];
 };
 
 export let test = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await triple.host();
 	// Assert that all expected components exist and provide a non-empty `bin/` subdirectory.
 	let components = await componentList({ host });
 	tg.assert(components);

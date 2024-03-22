@@ -2,8 +2,8 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 
 /** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxying. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
-export let env = async (arg?: tg.Triple.HostArg): Promise<std.env.Arg> => {
-	let host = await tg.Triple.host(arg);
+export let env = async (arg?: string): Promise<std.env.Arg> => {
+	let host = await std.triple.host(arg);
 	let toolchain = await prepareBootstrapToolchain({ host });
 	let bootstrapHost = bootstrap.toolchainTriple(host);
 	let utils = await prepareBootstrapUtils(bootstrapHost);
@@ -25,13 +25,13 @@ export let env = async (arg?: tg.Triple.HostArg): Promise<std.env.Arg> => {
 export default env;
 
 /** Get the bootstrap components as a single directory, for use before SDK. */
-export let prepareBootstrapToolchain = async (arg?: tg.Triple.HostArg) => {
+export let prepareBootstrapToolchain = async (arg?: string) => {
 	// Detect the host triple if not provided.
-	let host = await tg.Triple.host(arg);
+	let host = arg?.host ?? await std.triple.host();
 
 	// Obtain the bootstrap toolchain and triple for the detected host to construct the env.
 	let bootstrapToolchain = await bootstrap.toolchain({ host });
-	let bootstrapTripleString = tg.Triple.toString(
+	let bootstrapTripleString = std.triple.toString(
 		bootstrap.toolchainTriple(host),
 	);
 
@@ -68,7 +68,7 @@ export let prepareBootstrapToolchain = async (arg?: tg.Triple.HostArg) => {
 };
 
 /** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */
-export let prepareBootstrapUtils = async (hostArg: tg.Triple.Arg) => {
+export let prepareBootstrapUtils = async (hostArg: string) => {
 	let host = tg.triple(hostArg);
 	let shell = await bootstrap.shell({ host });
 	let shellFile = tg.File.expect(await shell.get("bin/dash"));
@@ -101,7 +101,7 @@ export let prefixBins = async (
 
 export let test = tg.target(async () => {
 	let sdk = await env();
-	let detectedHost = await tg.Triple.host();
+	let detectedHost = await std.triple.host();
 	let expectedHost = bootstrap.toolchainTriple(detectedHost);
 	await std.sdk.assertValid(sdk, { host: expectedHost, bootstrapMode: true });
 	return sdk;

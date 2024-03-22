@@ -36,15 +36,15 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let buildTriple = build_ ? tg.triple(build_) : host;
 
-	let system = tg.Triple.archAndOs(buildTriple);
+	let system = std.triple.archAndOs(buildTriple);
 
 	let sourceDir = source_ ?? source();
 
 	tg.assert(
-		tg.Triple.os(system) === "linux",
+		std.triple.os(system) === "linux",
 		"The Linux kernel headers can only be built on Linux.",
 	);
 
@@ -98,7 +98,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 export default kernelHeaders;
 
 export let test = tg.target(async () => {
-	let detectedHost = await tg.Triple.host();
+	let detectedHost = await std.triple.host();
 	let host = bootstrap.toolchainTriple(detectedHost);
 	if (host.os !== "linux") {
 		return;
@@ -109,14 +109,18 @@ export let test = tg.target(async () => {
 
 	// test cross
 	let hostArch = host.arch;
-	let targetArch: tg.Triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let targetArch: std.triple.Arch =
+		hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = tg.triple({ ...host, arch: targetArch });
 	await testKernelHeaders(host, target);
 
 	return true;
 });
 
-export let testKernelHeaders = async (host: tg.Triple, target?: tg.Triple) => {
+export let testKernelHeaders = async (
+	host: std.triple,
+	target?: std.triple,
+) => {
 	let target_ = target ?? host;
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });

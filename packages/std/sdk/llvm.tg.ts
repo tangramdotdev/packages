@@ -42,7 +42,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 
 	if (host.os !== "linux") {
@@ -59,10 +59,10 @@ export let toolchain = async (arg?: LLVMArg) => {
 		linuxHeaders,
 	});
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
-	sysroot = tg.Directory.expect(await sysroot.get(tg.Triple.toString(host)));
+	sysroot = tg.Directory.expect(await sysroot.get(std.triple.toString(host)));
 	console.log("llvm sysroot", await sysroot.id());
 
-	let gccToolchain = gcc.toolchain(tg.Triple.rotate({ build, host }));
+	let gccToolchain = gcc.toolchain(std.triple.rotate({ build, host }));
 
 	let deps: tg.Unresolved<std.env.Arg> = [
 		git({ host }),
@@ -124,7 +124,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 	let llvmArtifact = await cmake.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			bootstrapMode: true,
 			env,
 			phases: {
@@ -147,8 +147,8 @@ export let llvmMajorVersion = () => {
 };
 
 type WrapArgsArg = {
-	host: tg.Triple;
-	target?: tg.Triple;
+	host: string;
+	target?: string;
 	toolchainDir: tg.Directory;
 };
 
@@ -156,7 +156,7 @@ type WrapArgsArg = {
 export let wrapArgs = async (arg: WrapArgsArg) => {
 	let { host, target, toolchainDir } = arg;
 	let target_ = target ?? host;
-	let targetString = tg.Triple.toString(target_);
+	let targetString = std.triple.toString(target_);
 	let version = llvmMajorVersion();
 
 	let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
@@ -184,9 +184,9 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 
 export let test = async () => {
 	// Build a triple for the detected host.
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 
-	let os = tg.Triple.os(tg.Triple.archAndOs(host));
+	let os = std.triple.os(std.triple.archAndOs(host));
 
 	let libDir = host.environment === "musl" ? "lib" : "lib64";
 	let expectedInterpreter =
@@ -230,7 +230,7 @@ export let test = async () => {
 	let cxxScript = tg`
 		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`;
-	let hostString = tg.Triple.toString(host);
+	let hostString = std.triple.toString(host);
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
 			env: [

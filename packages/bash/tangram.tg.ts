@@ -12,7 +12,7 @@ export let metadata = {
 
 export let source = tg.target(async (arg?: Arg) => {
 	let { name, version } = metadata;
-	let build = arg?.build ? tg.triple(arg?.build) : await tg.Triple.host();
+	let build = arg?.build ? tg.triple(arg?.build) : await std.triple.host();
 	let env = std.env.object([std.sdk({ host: build }, arg?.sdk), arg?.env]);
 
 	let checksum =
@@ -30,7 +30,7 @@ export let source = tg.target(async (arg?: Arg) => {
 	let patchedSource = tg.Directory.expect(
 		await tg.build(script, {
 			env,
-			host: tg.Triple.archAndOs(build),
+			host: std.triple.archAndOs(build),
 		}),
 	);
 	return patchedSource;
@@ -38,9 +38,9 @@ export let source = tg.target(async (arg?: Arg) => {
 
 type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	build?: tg.Triple.Arg;
+	build?: string;
 	env?: std.env.Arg;
-	host?: tg.Triple.Arg;
+	host?: string;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
@@ -66,7 +66,7 @@ export let bash = tg.target((arg?: Arg) => {
 	return std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			source: source_ ?? source(),

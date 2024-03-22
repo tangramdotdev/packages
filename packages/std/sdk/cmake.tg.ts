@@ -38,7 +38,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 
 	let sourceDir = source_ ?? source();
@@ -75,7 +75,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 
 	let result = std.autotools.build({
 		...rest,
-		...tg.Triple.rotate({ build, host }),
+		...std.triple.rotate({ build, host }),
 		env,
 		hardeningCFlags: false,
 		phases: { prepare, configure },
@@ -103,7 +103,7 @@ export let build = tg.target(
 			useNinja = true,
 			...rest
 		} = arg ?? {};
-		let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+		let host = host_ ? tg.triple(host_) : await std.triple.host();
 		let target = target_ ? tg.triple(target_) : host;
 
 		// Set up env vars to pass through the include and library paths.
@@ -166,7 +166,7 @@ export let build = tg.target(
 );
 
 export let test = tg.target(async () => {
-	let detectedHost = await tg.Triple.host();
+	let detectedHost = await std.triple.host();
 	let host = bootstrap.toolchainTriple(detectedHost);
 	let directory = cmake({ host, sdk: { bootstrapMode: true } });
 	await std.assert.pkg({

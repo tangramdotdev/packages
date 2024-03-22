@@ -13,7 +13,7 @@ export type Arg = {
 	/** The build environment to use to produce components. */
 	buildToolchain: std.env.Arg;
 	/** The target triple of the build machine. */
-	build?: tg.Triple.Arg;
+	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
 	/** Should we expect an LLVM toolchain? */
@@ -23,7 +23,7 @@ export type Arg = {
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
 	linkerExe?: tg.File | tg.Symlink;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
-	host?: tg.Triple.Arg;
+	host?: string;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
@@ -50,7 +50,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let dirs = [];
 
-	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let host = arg.host ? tg.triple(arg.host) : await std.triple.host();
 	let build = arg.build ? tg.triple(arg.build) : host;
 
 	let {
@@ -73,9 +73,9 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	let cxx: tg.File | tg.Symlink = cxx_;
 
 	if (proxyLinker) {
-		let hostString = tg.Triple.toString(host);
+		let hostString = std.triple.toString(host);
 
-		let isCross = !tg.Triple.eq(build, host);
+		let isCross = !std.triple.eq(build, host);
 		let prefix = isCross ? `${hostString}-` : ``;
 
 		// Construct the ld proxy.
@@ -217,12 +217,12 @@ export default env;
 
 type CcProxyArg = {
 	buildToolchain: std.env.Arg;
-	build?: tg.Triple.Arg;
-	host?: tg.Triple.Arg;
+	build?: string;
+	host?: string;
 };
 
 export let ccProxy = async (arg: CcProxyArg) => {
-	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let host = arg.host ? tg.triple(arg.host) : await std.triple.host();
 	let build = arg.build ? tg.triple(arg.build) : host;
 	let buildToolchain = arg.buildToolchain;
 	let tgcc = workspace.tgcc({
@@ -231,8 +231,8 @@ export let ccProxy = async (arg: CcProxyArg) => {
 		host,
 	});
 
-	let isCross = !tg.Triple.eq(build, host);
-	let prefix = isCross ? `${tg.Triple.toString(host)}-` : ``;
+	let isCross = !std.triple.eq(build, host);
+	let prefix = isCross ? `${std.triple.toString(host)}-` : ``;
 
 	return tg.directory({
 		[`bin/${prefix}cc`]: tgcc,
@@ -244,16 +244,16 @@ export let ccProxy = async (arg: CcProxyArg) => {
 
 type LdProxyArg = {
 	buildToolchain: std.env.Arg;
-	build?: tg.Triple.Arg;
+	build?: string;
 	interpreter?: tg.File;
 	interpreterArgs?: Array<tg.Template.Arg>;
 	linker: tg.File | tg.Symlink | tg.Template;
-	host?: tg.Triple.Arg;
+	host?: string;
 };
 
 export let ldProxy = async (arg: LdProxyArg) => {
 	// Prepare the Tangram tools.
-	let host = arg.host ? tg.triple(arg.host) : await tg.Triple.host();
+	let host = arg.host ? tg.triple(arg.host) : await std.triple.host();
 	let build = arg.build ? tg.triple(arg.build) : host;
 	let buildToolchain = arg.buildToolchain;
 

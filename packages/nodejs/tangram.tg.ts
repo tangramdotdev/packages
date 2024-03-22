@@ -8,8 +8,8 @@ export let metadata = {
 type ToolchainArg = {
 	/** An optional openssl.cnf file. Empty by default. */
 	opensslCnf?: tg.File | tg.Symlink;
-	host?: tg.Triple.Arg;
-	target?: tg.Triple.Arg;
+	host?: string;
+	target?: string;
 };
 
 // URLs taken from https://nodejs.org/dist/v${version}/.
@@ -17,7 +17,7 @@ type ToolchainArg = {
 let source = async (): Promise<tg.Directory> => {
 	// Known versions of NodeJS.
 	let version = metadata.version;
-	let target = await tg.Triple.host();
+	let target = await std.triple.host();
 
 	let releases: {
 		[key: string]: {
@@ -53,7 +53,7 @@ let source = async (): Promise<tg.Directory> => {
 	};
 
 	// Get the NodeJS release.
-	let targetString = tg.Triple.toString(target);
+	let targetString = std.triple.toString(target);
 	tg.assert(
 		targetString in releases,
 		`Unsupported target system: ${targetString}.`,
@@ -119,9 +119,9 @@ type PackageJson = {
 export default nodejs;
 
 export type Arg = {
-	build?: tg.Triple.Arg;
+	build?: string;
 	env?: std.env.Arg;
-	host?: tg.Triple.Arg;
+	host?: string;
 	packageLock?: tg.File;
 	phases?: tg.MaybeNestedArray<std.phases.Arg>;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
@@ -130,9 +130,9 @@ export type Arg = {
 
 export let build = async (...args: tg.Args<Arg>) => {
 	type Apply = {
-		build?: tg.Triple.Arg;
+		build?: string;
 		env: Array<std.env.Arg>;
-		host?: tg.Triple.Arg;
+		host?: string;
 		packageLock?: tg.File;
 		phases?: Array<std.phases.Arg>;
 		sdkArg: Array<std.sdk.Arg>;
@@ -183,7 +183,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	});
 	tg.assert(source, "Must provide a source");
 
-	let host = await tg.Triple.host(hostArg);
+	let host = await std.triple.host(hostArg);
 	let build = buildArg ?? host;
 
 	let node = nodejs({

@@ -45,7 +45,7 @@ export type Arg = std.sdk.BuildEnvArg;
 /** Obtain a directory containing all provided utils. */
 export let env = tg.target(async (arg?: Arg) => {
 	let { host: host_, ...rest } = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 
 	let dependencies = [];
 
@@ -123,7 +123,7 @@ export let assertProvides = async (env: std.env.Arg) => {
 
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let deps = await env({ host, bootstrapMode, env: sdk });

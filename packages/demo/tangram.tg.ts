@@ -8,9 +8,9 @@ export let metadata = {
 };
 
 type Arg = {
-	build?: tg.Triple.Arg;
+	build?: string;
 	env?: std.env.Arg;
-	host?: tg.Triple.Arg;
+	host?: string;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 };
 
@@ -39,7 +39,7 @@ export let test = tg.target(() => {
 });
 
 export let testGccMusl = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 	if (host.os !== "linux") {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
@@ -48,7 +48,7 @@ export let testGccMusl = tg.target(async () => {
 });
 
 export let testGccMold = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 	if (host.os !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
@@ -61,7 +61,7 @@ export let testLlvm = tg.target(async () => {
 });
 
 export let testLlvmMusl = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 	if (host.os !== "linux") {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
@@ -70,7 +70,7 @@ export let testLlvmMusl = tg.target(async () => {
 });
 
 export let testLlvmMold = tg.target(async () => {
-	let host = await tg.Triple.host();
+	let host = await std.triple.host();
 	if (host.os !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
@@ -78,12 +78,12 @@ export let testLlvmMold = tg.target(async () => {
 });
 
 export let testLinuxCross = tg.target(async () => {
-	let build = await tg.Triple.host();
+	let build = await std.triple.host();
 	if (build.os !== "linux") {
 		throw new Error("Linux cross-compilation is only available on Linux");
 	}
 	let detectedArch = build.arch;
-	let crossArch: tg.Triple.Arch =
+	let crossArch: std.triple.Arch =
 		detectedArch === "x86_64" ? "aarch64" : "x86_64";
 	let host = tg.triple({ ...build, arch: crossArch });
 
@@ -91,7 +91,7 @@ export let testLinuxCross = tg.target(async () => {
 });
 
 export let testLinuxToDarwinCross = tg.target(async () => {
-	let build = await tg.Triple.host();
+	let build = await std.triple.host();
 	if (build.os !== "linux") {
 		throw new Error("Linux cross-compilation is only available on Linux");
 	}

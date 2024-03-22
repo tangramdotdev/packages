@@ -13,7 +13,7 @@ type Arg = std.sdk.BuildEnvArg & {
 
 export let source = tg.target(async (arg?: Arg) => {
 	let { name, version } = metadata;
-	let build = arg?.build ? tg.triple(arg?.build) : await tg.Triple.host();
+	let build = arg?.build ? tg.triple(arg?.build) : await std.triple.host();
 	let env = std.env.object(
 		std.sdk({ host: build, bootstrapMode: arg?.bootstrapMode }, arg?.sdk),
 		arg?.env,
@@ -34,7 +34,7 @@ export let source = tg.target(async (arg?: Arg) => {
 		await std.phases.build({
 			env,
 			phases: { prepare, fixup },
-			target: { host: tg.Triple.archAndOs(build) },
+			target: { host: std.triple.archAndOs(build) },
 		}),
 	);
 	return patchedSource;
@@ -51,7 +51,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 
 	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
@@ -70,7 +70,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		env.push(prerequisites({ host }));
 		env.push(bootstrap.shell({ host }));
 	}
-	if ((await std.env.tryGetKey({ env: env_, key: "CC" }))?.components[0] === "clang" ) {
+	if (
+		(await std.env.tryGetKey({ env: env_, key: "CC" }))?.components[0] ===
+		"clang"
+	) {
 		env.push({
 			CFLAGS: "-Wno-implicit-function-declaration",
 		});
@@ -79,7 +82,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = buildUtil(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			bootstrapMode,
 			env,
 			phases: { configure },
@@ -113,7 +116,7 @@ let providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });

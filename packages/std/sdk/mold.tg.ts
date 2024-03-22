@@ -35,7 +35,7 @@ export let mold = async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
 
 	let configure = {
@@ -45,7 +45,7 @@ export let mold = async (arg?: Arg) => {
 	let result = cmake.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			phases: { configure },
 			source: source_ ?? source(),
 		},

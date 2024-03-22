@@ -10,7 +10,7 @@ export let metadata = {
 	version: "9.4",
 };
 
-export let source = tg.target(async (os: tg.Triple.Os) => {
+export let source = tg.target(async (os: std.triple.Os) => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
@@ -63,9 +63,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
 	let build = build_ ? tg.triple(build_) : host;
-	let os = tg.Triple.os(host);
+	let os = std.triple.os(host);
 
 	let dependencies: tg.Unresolved<std.env.Arg> = [];
 
@@ -117,7 +117,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = await buildUtil(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			bootstrapMode,
 			env,
 			phases: { configure },
@@ -143,7 +143,7 @@ export default build;
 
 /** Obtain just the `env` binary. */
 export let gnuEnv = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ bootstrapMode, host });
 	let make = await bootstrap.make.build({ host });
@@ -160,9 +160,9 @@ export let gnuEnv = tg.target(async () => {
 
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
-	let system = tg.Triple.archAndOs(host);
-	let os = tg.Triple.os(system);
+	let host = bootstrap.toolchainTriple(await std.triple.host());
+	let system = std.triple.archAndOs(host);
+	let os = std.triple.os(system);
 	let bootstrapMode = true;
 	let sdk = std.sdk({ bootstrapMode, host });
 

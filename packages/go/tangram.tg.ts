@@ -30,13 +30,13 @@ let RELEASES = {
 };
 
 type ToolchainArg = {
-	host?: tg.Triple.Arg;
+	host?: string;
 };
 
 export let toolchain = tg.target(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
-		let host = arg?.host ? tg.triple(arg.host) : await tg.Triple.host();
-		let system = tg.Triple.archAndOs(host);
+		let host = arg?.host ? tg.triple(arg.host) : await std.triple.host();
+		let system = std.triple.archAndOs(host);
 		tg.assert(
 			system in RELEASES,
 			`${system} is not supported in the Go toolchain.`,
@@ -117,10 +117,10 @@ export type Arg = {
 	cgo?: boolean;
 
 	/** The machine that will run the compilation. */
-	host?: tg.Triple.Arg;
+	host?: string;
 
 	/** The machine the produced artifacts will run on. */
-	target?: tg.Triple.Arg;
+	target?: string;
 
 	/** Any required SDK customization. */
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
@@ -131,11 +131,11 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		cgo: boolean;
 		env: Array<std.env.Arg>;
 		generate: boolean | { command: tg.Template.Arg };
-		host: tg.Triple.Arg;
+		host: string;
 		install: { command: tg.Template.Arg };
 		sdkArgs: Array<std.sdk.Arg>;
 		source: tg.Directory;
-		target: tg.Triple.Arg;
+		target: string;
 		vendor: boolean | { command: tg.Template.Arg };
 	};
 
@@ -188,8 +188,8 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			return object;
 		}
 	});
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let system = tg.Triple.archAndOs(host);
+	let host = host_ ? tg.triple(host_) : await std.triple.host();
+	let system = std.triple.archAndOs(host);
 	let target = target_ ? tg.triple(target_) : host;
 	tg.assert(source, "Must provide a source directory.");
 

@@ -15,7 +15,9 @@ export let source = tg.target(() => {
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-export let build = tg.target(async (arg?: tg.Triple.HostArg) => {
+export let build = tg.target(async (arg?: string) => {
+	let host = arg ?? await std.triple.host();
+
 	let configure = {
 		args: ["--disable-dependency-tracking"],
 	};
@@ -37,7 +39,7 @@ export let build = tg.target(async (arg?: tg.Triple.HostArg) => {
 	};
 
 	let output = std.autotools.build({
-		host: tg.Triple.host(arg),
+		host,
 		opt: "s",
 		phases,
 		prefixArg: "none",
