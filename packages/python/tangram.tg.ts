@@ -233,7 +233,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 			return object;
 		}
 	});
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
+	let host = host_ ?? await std.triple.host();
 	let buildTriple = buildTriple_ ? tg.triple(buildTriple_) : host;
 
 	tg.assert(source, "Must specify a source directory.");

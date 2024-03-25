@@ -29,8 +29,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? await std.triple.host();
+	let build = build_ ?? host;
 
 	let configure = {
 		args: [

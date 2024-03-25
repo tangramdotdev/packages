@@ -10,7 +10,7 @@ export let metadata = {
 	version: "9.4",
 };
 
-export let source = tg.target(async (os: std.triple.Os) => {
+export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
@@ -63,14 +63,14 @@ export let build = tg.target(async (arg?: Arg) => {
 		usePrerequisites = true,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
 	let dependencies: tg.Unresolved<std.env.Arg> = [];
 
 	if (bootstrapMode && usePrerequisites) {
-		dependencies.push(prerequisites({ host }));
+		dependencies.push(prerequisites(host));
 	}
 
 	let attrArtifact;
@@ -146,7 +146,7 @@ export let gnuEnv = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ bootstrapMode, host });
-	let make = await bootstrap.make.build({ host });
+	let make = await bootstrap.make.build(host);
 	let directory = await build({
 		host,
 		bootstrapMode,

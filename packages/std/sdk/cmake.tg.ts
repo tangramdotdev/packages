@@ -38,8 +38,8 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
@@ -103,8 +103,8 @@ export let build = tg.target(
 			useNinja = true,
 			...rest
 		} = arg ?? {};
-		let host = host_ ? tg.triple(host_) : await std.triple.host();
-		let target = target_ ? tg.triple(target_) : host;
+		let host = host_ ?? (await std.triple.host());
+		let target = target_ ?? host;
 
 		// Set up env vars to pass through the include and library paths.
 		let cmakeEnv = `

@@ -37,8 +37,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? await std.triple.host();
+	let build = build_ ?? host;
 
 	let configure = {
 		args: ["--with-internal-glib", "--disable-dependency-tracking"],
@@ -51,7 +51,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		zlib(arg),
 	];
 	let additionalLibDirs = [];
-	if (build.os === "darwin") {
+	if (std.triple.os(build) === "darwin") {
 		let libiconv = await std.utils.libiconv.build(arg);
 		dependencies.push(libiconv);
 		additionalLibDirs.push(tg.Directory.expect(await libiconv.get("lib")));

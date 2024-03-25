@@ -7,7 +7,7 @@ export let metadata = {
 	version: "4.9.0",
 };
 
-export let source = tg.target(async (os: std.triple.Os) => {
+export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
@@ -44,8 +44,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 	let os = std.triple.os(build);
 
 	let wrapBashScriptPaths: Array<string> | undefined =
@@ -57,7 +57,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode) {
-		env.push(prerequisites({ host }));
+		env.push(prerequisites(host));
 	}
 
 	let output = buildUtil(

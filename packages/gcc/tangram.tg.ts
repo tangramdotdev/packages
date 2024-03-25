@@ -33,13 +33,13 @@ export let build = tg.target(async (arg: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? await std.triple.host();
+	let build = build_ ?? host;
 	let target = target_ ? tg.triple(target_) : host;
 
-	let buildString = std.triple.toString(build);
-	let hostString = std.triple.toString(host);
-	let targetString = std.triple.toString(target);
+	let build = std.triple.toString(build);
+	let host = std.triple.toString(host);
+	let target = std.triple.toString(target);
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
@@ -49,9 +49,9 @@ export let build = tg.target(async (arg: Arg) => {
 		"--enable-default-ssp",
 		"--enable-default-pie",
 		"--enable-initfini-array",
-		`--build=${buildString}`,
-		`--host=${hostString}`,
-		`--target=${targetString}`,
+		`--build=${build}`,
+		`--host=${host}`,
+		`--target=${target}`,
 	];
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
@@ -98,7 +98,7 @@ export let build = tg.target(async (arg: Arg) => {
 	});
 	if (!isCross) {
 		result = await tg.directory(result, {
-			[`bin/${hostString}-cc`]: tg.symlink(`./${hostString}-gcc`),
+			[`bin/${host}-cc`]: tg.symlink(`./${host}-gcc`),
 		});
 	}
 

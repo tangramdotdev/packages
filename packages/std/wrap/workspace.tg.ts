@@ -19,8 +19,8 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 		release = true,
 		source: source_,
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let buildTriple = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let buildTriple = build_ ?? host;
 
 	// Get the source.
 	let source = source_
@@ -75,10 +75,9 @@ export let rust = tg.target(
 		) as RustupManifest;
 
 		// Install the full minimal profile for the host.
-		let hostTripleString = std.triple.toString(host);
 		let packages = tg.directory();
 		for (let name of manifest.profiles["minimal"] ?? []) {
-			let pkg = manifest.pkg[name]?.target[hostTripleString];
+			let pkg = manifest.pkg[name]?.target[host];
 			if (pkg?.available) {
 				let artifact = std.download({
 					checksum: `sha256:${pkg.xz_hash}`,
@@ -92,9 +91,9 @@ export let rust = tg.target(
 		}
 
 		// If there is a target specified different from the host, install just the rust-std package for that target.
-		if (!std.triple.eq(host, target)) {
+		if (host !== target) {
 			let name = "rust-std";
-			let pkg = manifest.pkg[name]?.target[std.triple.toString(target)];
+			let pkg = manifest.pkg[name]?.target[target];
 			if (pkg?.available) {
 				let artifact = std.download({
 					checksum: `sha256:${pkg.xz_hash}`,
@@ -179,20 +178,20 @@ type BuildArg = {
 export let build = async (arg: BuildArg) => {
 	let release = arg.release ?? true;
 	let source = arg.source;
-	let host_ = arg.host ? tg.triple(arg.host) : await std.triple.host();
+	let host_ = arg.host ?? (await std.triple.host());
 	let host = standardizeTriple(host_);
-	let target_ = arg.target ? tg.triple(arg.target) : host;
+	let target_ = arg.target ?? host;
 	let target = standardizeTriple(target_);
 	let system = std.triple.archAndOs(host);
 	let os = std.triple.os(system);
 
-	let targetString = std.triple.toString(target);
-
-	let isCross = host.arch !== target.arch;
+	let hostArch = std.triple.arch(host);
+	let targetArch = std.triple.arch(target);
+	let isCross = hostArch !== targetArch;
 	let prefix = ``;
 	let suffix = tg``;
 	if (isCross) {
-		prefix = `${targetString}-`;
+		prefix = `${target}-`;
 	}
 
 	// Use the bootstrap shell and utils.
@@ -213,7 +212,7 @@ export let build = async (arg: BuildArg) => {
 	}
 
 	let bootstrapMode =
-		os === "darwin" || (os === "linux" && host.arch === target.arch);
+		os === "darwin" || (os === "linux" && hostArch === targetArch);
 	let { directory, ldso, libDir } = await std.sdk.toolchainComponents({
 		bootstrapMode,
 		env: buildToolchain,
@@ -239,7 +238,7 @@ export let build = async (arg: BuildArg) => {
 			SHELL: shell,
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
-			RUST_TARGET: std.triple.toString(target),
+			RUST_TARGET: target,
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 			RUSTFLAGS: `-C target-feature=+crt-static`,
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}cc`,
@@ -331,22 +330,19 @@ export let build = async (arg: BuildArg) => {
 };
 
 /* Ensure the passed triples are what we expect, musl on linxu and standard for macOS. */
-let standardizeTriple = (tripleArg: string): std.triple => {
-	let triple = tg.triple(tripleArg);
-	let hostArch = std.triple.arch(triple);
-	let os = std.triple.os(triple);
+let standardizeTriple = (triple: string): string => {
+	let components = std.triple.components(triple);
+	let os = components.os;
 
 	if (os === "darwin") {
-		return tg.triple({
-			arch: hostArch,
+		return std.triple.create({
+			...components,
 			vendor: "apple",
-			os: "darwin",
 		});
 	} else if (os === "linux") {
-		return tg.triple({
-			arch: hostArch,
+		return std.triple.create({
+			...components,
 			vendor: "unknown",
-			os: "linux",
 			environment: "musl",
 		});
 	} else {
@@ -354,10 +350,9 @@ let standardizeTriple = (tripleArg: string): std.triple => {
 	}
 };
 
-let tripleToEnvVar = (triple: std.triple, upcase?: boolean) => {
-	let tripleString = std.triple.toString(triple);
+let tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	let allCaps = upcase ?? false;
-	let result = tripleString.replace(/-/g, "_");
+	let result = triple.replace(/-/g, "_");
 	if (allCaps) {
 		result = result.toUpperCase();
 	}
@@ -401,10 +396,9 @@ export let testCross = tg.target(async () => {
 	let host = await std.triple.host();
 
 	// Determine the target triple with differing architecture from the host.
-	let hostArch = host.arch;
-	let targetArch: std.triple.Arch =
-		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = tg.triple({
+	let hostArch = std.triple.arch(host);
+	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = std.triple.create({
 		arch: targetArch,
 		vendor: "unknown",
 		os: "linux",

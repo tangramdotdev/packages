@@ -105,7 +105,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 			if (arg.system) {
 				object.system = tg.Mutation.is(arg.system)
 					? arg.system
-					: std.triple.archAndOs(tg.triple(arg.system));
+					: std.triple.archAndOs(arg.system);
 			}
 			return object;
 		} else {
@@ -114,7 +114,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 	});
 
 	// Fill in defaults.
-	let system = await std.triple.host(system_);
+	let system = system_ ?? (await std.triple.host());
 
 	// Combine all root dirs.
 	let rootDir =
@@ -288,7 +288,7 @@ export type Platform = {
 };
 
 export let platform = (system: string): Platform => {
-	switch (std.triple.toString(tg.triple(system))) {
+	switch (std.triple.archAndOs(system)) {
 		case "x86_64-linux":
 			return {
 				architecture: "amd64",

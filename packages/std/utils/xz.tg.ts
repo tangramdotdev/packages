@@ -41,8 +41,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? await std.triple.host();
+	let build = build_ ?? host;
 
 	let configure = {
 		args: [
@@ -55,7 +55,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<std.env.Arg> = [env_];
 	if (bootstrapMode) {
-		env.push(prerequisites({ host }));
+		env.push(prerequisites(host));
 	}
 
 	let output = await buildUtil(

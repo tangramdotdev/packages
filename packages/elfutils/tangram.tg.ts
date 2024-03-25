@@ -46,7 +46,7 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 	let host = await std.triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
+	let build = build_ ?? host;
 
 	let configure = {
 		args: [

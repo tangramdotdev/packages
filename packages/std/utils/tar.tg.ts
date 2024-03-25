@@ -31,15 +31,15 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let dependencies: tg.Unresolved<std.env.Arg> = [];
 	if (bootstrapMode) {
-		dependencies.push(prerequisites({ host }));
+		dependencies.push(prerequisites(host));
 	}
 	let additionalEnv = {};
-	if (build.os === "darwin") {
+	if (std.triple.os(build) === "darwin") {
 		dependencies.push(libiconv({ ...rest, build, host }));
 		// Bug: https://savannah.gnu.org/bugs/?64441.
 		// Fix http://git.savannah.gnu.org/cgit/tar.git/commit/?id=8632df39

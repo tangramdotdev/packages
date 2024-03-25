@@ -37,7 +37,7 @@ export let build = tg.target((arg?: Arg) => {
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode) {
-		env.push(prerequisites({ host }));
+		env.push(prerequisites(host));
 	}
 
 	let output = buildUtil(

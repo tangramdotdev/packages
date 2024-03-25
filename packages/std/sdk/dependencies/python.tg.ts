@@ -11,7 +11,7 @@ export let metadata = {
 	version: "3.12.2",
 };
 
-export let source = tg.target(async (os: std.triple.Os) => {
+export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 
 	let unpackFormat = ".tar.xz" as const;
@@ -55,8 +55,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = await std.triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? await std.triple.host();
+	let build = build_ ?? host;
 	let os = std.triple.os(build);
 
 	let additionalEnv: std.env.Arg = {

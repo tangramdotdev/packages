@@ -3,17 +3,17 @@ import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
 
 type Arg = {
-	build?: std.triple.Arg;
+	build?: string;
 	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
-	host?: std.triple.Arg;
+	host?: string;
 	source?: tg.Directory;
 };
 
 export let injection = tg.target(async (arg: Arg) => {
-	let host = arg.host ? tg.triple(arg.host) : await std.triple.host();
-	let build = arg.build ? tg.triple(arg.build) : host;
-	let os = host.os;
+	let host = arg.host ?? (await std.triple.host());
+	let build = arg.build ?? host;
+	let os = std.triple.os(host);
 
 	// Get the source.
 	let sourceDir = arg?.source
@@ -60,13 +60,13 @@ export default injection;
 type MacOsInjectionArg = {
 	buildToolchain: tg.Directory;
 	env?: std.env.Arg;
-	host?: std.triple.Arg;
+	host?: string;
 	source: tg.File;
 };
 
 export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
-	let host = await std.triple.host(arg);
-	let os = host.os;
+	let host = arg.host ?? (await std.triple.host());
+	let os = std.triple.os(host);
 	if (os !== "darwin") {
 		throw new Error(`Unsupported OS ${os}`);
 	}
@@ -113,7 +113,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
-	build?: std.triple.Arg;
+	build?: string;
 	buildToolchain: tg.Directory;
 	env?: std.env.Arg;
 	host?: string;
@@ -121,30 +121,29 @@ type DylibArg = {
 };
 
 export let dylib = async (arg: DylibArg): Promise<tg.File> => {
-	let host = arg.host ? tg.triple(arg.host) : await std.triple.host();
-	let build = arg.build ? tg.triple(arg.build) : host;
-	let useTriplePrefix = !std.triple.eq(build, host) && !(build.os === "darwin");
-	let hostString = std.triple.toString(host);
+	let host = arg.host ?? (await std.triple.host());
+	let build = arg.build ?? host;
+	let useTriplePrefix = build !== host && !(std.triple.os(build) === "darwin");
 
 	let additionalArgs = arg.additionalArgs ?? [];
-	if (host.os === "linux") {
+	if (std.triple.os(host) === "linux") {
 		let subpath = useTriplePrefix
-			? tg`${arg.buildToolchain}/${hostString}`
+			? tg`${arg.buildToolchain}/${host}`
 			: tg`${arg.buildToolchain}`;
 		additionalArgs.push(await tg`--sysroot=${subpath}`);
 		additionalArgs.push("-fstack-clash-protection");
 	}
 
-	let prefix = useTriplePrefix ? `${hostString}-` : "";
+	let prefix = useTriplePrefix ? `${host}-` : "";
 	let executable = `${prefix}cc`;
 
 	let system = std.triple.archAndOs(host);
 	let env = std.env.object(arg.buildToolchain);
 	let output = tg.File.expect(
 		await tg.build(
-			tg`${executable} -xc ${
-				arg.source
-			} -o $OUTPUT                                   \
+			tg`${executable}                               \
+				-xc ${arg.source}                            \
+				-o $OUTPUT                                   \
 				-shared                                      \
 				-fPIC                                        \
 				-ldl                                         \
@@ -168,7 +167,7 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 
 export let test = tg.target(async () => {
 	let detectedHost = await std.triple.host();
-	let hostArch = detectedHost.arch;
+	let hostArch = std.triple.arch(detectedHost);
 	tg.assert(hostArch);
 	let buildToolchain = bootstrap.sdk.env();
 	let nativeInjection = await injection({
@@ -193,15 +192,14 @@ export let test = tg.target(async () => {
 
 export let testCross = tg.target(async () => {
 	let detectedHost = await std.triple.host();
-	if (detectedHost.os === "darwin") {
+	if (std.triple.os(detectedHost) === "darwin") {
 		console.log("Skipping cross test on darwin");
 		return true;
 	}
 
-	let hostArch = detectedHost.arch;
-	let targetArch: std.triple.Arch =
-		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = tg.triple({ ...detectedHost, arch: targetArch });
+	let hostArch = std.triple.arch(detectedHost);
+	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = std.triple.create(detectedHost, { arch: targetArch });
 	let buildToolchain = gcc.toolchain({ host: detectedHost, target });
 
 	let nativeInjection = await injection({

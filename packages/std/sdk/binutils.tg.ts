@@ -56,13 +56,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		target: target_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
-	let target = target_ ? tg.triple(target_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let target = target_ ?? host;
 
-	let buildString = std.triple.toString(build);
-	let hostString = std.triple.toString(host);
-	let targetString = std.triple.toString(target);
 	let buildPhase = arg?.staticBuild
 		? `make && make clean && make LDFLAGS=-all-static`
 		: undefined;
@@ -71,8 +68,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	if (staticBuild) {
 		additionalEnv = {
 			...additionalEnv,
-			CC: await tg`${targetString}-cc -static -fPIC`,
-			CXX: await tg`${targetString}-c++ -static-libstdc++ -fPIC`,
+			CC: await tg`${target}-cc -static -fPIC`,
+			CXX: await tg`${target}-c++ -static-libstdc++ -fPIC`,
 		};
 	}
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
@@ -93,9 +90,9 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--disable-nls",
 			"--disable-werror",
 			"--enable-gprofng=no",
-			`--build=${buildString}`,
-			`--host=${hostString}`,
-			`--target=${targetString}`,
+			`--build=${build}`,
+			`--host=${host}`,
+			`--target=${target}`,
 		],
 	};
 

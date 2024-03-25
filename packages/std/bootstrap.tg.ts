@@ -211,13 +211,13 @@ export let remoteComponent = tg.target(async (componentName: string) => {
 export let componentList = async (arg?: Arg) => {
 	let { host } = await configureComponent(arg);
 
-	let linuxComponents = (host: string) => {
-		let hostString = host.replace("-", "_");
+	let linuxComponents = (hostTriple: string) => {
+		let host = hostTriple.replace("-", "_");
 		return [
-			`dash_${hostString}`,
-			`env_${hostString}`,
-			`toolchain_${hostString}`,
-			`utils_${hostString}`,
+			`dash_${host}`,
+			`env_${host}`,
+			`toolchain_${host}`,
+			`utils_${host}`,
 		];
 	};
 	let darwinComponents = [

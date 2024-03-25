@@ -45,7 +45,7 @@ export type Arg = std.sdk.BuildEnvArg;
 /** Obtain a directory containing all provided utils. */
 export let env = tg.target(async (arg?: Arg) => {
 	let { host: host_, ...rest } = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 
 	let dependencies = [];
 

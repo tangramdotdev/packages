@@ -1,7 +1,7 @@
 /** This package takes a bootstrap C/C++ compiler and some utilities and canadian-crosses up a sizzling plate of farm-fresh GCC. The output of this package can then be used to build other compilers like LLVM. */
 
 import * as bootstrap from "../../bootstrap.tg.ts";
-import { normalizeTriple } from "../../sdk.tg.ts";
+import { canonicalTriple } from "../../sdk.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import binutils from "../binutils.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
@@ -17,16 +17,14 @@ export type ToolchainArg = std.sdk.BuildEnvArg & {
 /** Construct a complete binutils + libc + gcc toolchain. */
 export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	let { host: host_, target: target_, ...rest } = arg;
-	let host = normalizeTriple(
-		host_ ? tg.triple(host_) : await std.triple.host(),
-	);
-	let target = normalizeTriple(target_ ? tg.triple(target_) : host);
+	let host = canonicalTriple(host_ ?? (await std.triple.host()));
+	let target = canonicalTriple(target_ ?? host);
 
 	// Always build a native toolchain.
-	let nativeToolchain = await canadianCross({ host });
+	let nativeToolchain = await canadianCross(host);
 
 	// If only the native toolchain was requested, return it.
-	if (std.triple.eq(host, target)) {
+	if (host === target) {
 		return nativeToolchain;
 	}
 
@@ -66,9 +64,9 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let buildTriple = build_ ? tg.triple(build_) : host;
-	let target = target_ ? tg.triple(target_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let buildTriple = build_ ?? host;
+	let target = target_ ?? host;
 
 	// Produce the binutils.
 	let crossBinutils = await binutils({
@@ -116,8 +114,8 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let buildTriple = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let buildTriple = build_ ?? host;
 	let target = host;
 
 	let crossBinutils =
@@ -136,7 +134,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	console.log("linuxHeaders", await linuxHeaders.id());
 
 	let linuxHeadersSysroot = await tg.directory({
-		[std.triple.toString(target)]: linuxHeaders,
+		[target]: linuxHeaders,
 	});
 
 	// Produce the initial gcc required to build the standard C library.
@@ -165,8 +163,8 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	return sysroot;
 });
 
-export let canadianCross = tg.target(async (arg?: string) => {
-	let host = await std.triple.host(arg);
+export let canadianCross = tg.target(async (hostArg?: string) => {
+	let host = hostArg ?? (await std.triple.host());
 
 	let target = host;
 	let build = bootstrap.toolchainTriple(host);
@@ -177,7 +175,7 @@ export let canadianCross = tg.target(async (arg?: string) => {
 	await dependencies.env({ host: build, bootstrapMode, env: sdk });
 
 	// Create cross-toolchain from build to host.
-	let { env, sysroot } = await buildToHostCrossToolchain({ host });
+	let { env, sysroot } = await buildToHostCrossToolchain(host);
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
@@ -203,7 +201,7 @@ export let canadianCross = tg.target(async (arg?: string) => {
 			"strip",
 			"strings",
 		],
-		std.triple.toString(host) + "-",
+		host + "-",
 	);
 	console.log("stage2 binutils", await nativeHostBinutils.id());
 
@@ -223,8 +221,8 @@ export let canadianCross = tg.target(async (arg?: string) => {
 	return fullGCC;
 });
 
-export let buildToHostCrossToolchain = async (arg: string) => {
-	let host = await std.triple.host(arg);
+export let buildToHostCrossToolchain = async (hostArg?: string) => {
+	let host = hostArg ?? (await std.triple.host());
 	let build = bootstrap.toolchainTriple(host);
 
 	let bootstrapMode = true;
@@ -246,9 +244,9 @@ export let buildToHostCrossToolchain = async (arg: string) => {
 export let testStage1 = async () => {
 	let host = await std.triple.host();
 	let build = bootstrap.toolchainTriple(host);
-	let env = await buildToHostCrossToolchain({ host });
+	let env = await buildToHostCrossToolchain(host);
 	await std.sdk.assertValid(env, { host: build, target: host });
-	return true;
+	return env;
 };
 
 export let testCanadianCross = async () => {
@@ -258,17 +256,16 @@ export let testCanadianCross = async () => {
 
 export let testCross = async () => {
 	let host = await std.triple.host();
-	let hostArch = host.arch;
-	let targetArch: std.triple.Arch =
-		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = tg.triple({ ...host, arch: targetArch });
+	let hostArch = std.triple.arch(host);
+	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = std.triple.create(host, { arch: targetArch });
 	let dir = await toolchain({ host, target });
 	return dir;
 };
 
 export let testCrossRpi = async () => {
 	let host = await std.triple.host();
-	let target = tg.triple("armv7l-linux-gnueabihf");
+	let target = "armv7l-linux-gnueabihf";
 	let dir = await toolchain({ host, target });
 	return dir;
 };

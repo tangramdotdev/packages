@@ -41,8 +41,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = await std.triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
@@ -52,7 +52,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 
 	// Define environment.
-	let ccCommand = build.os == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
+	let ccCommand =
+		std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
 	let env = [env_, std.utils.env(arg), { CC: ccCommand }];
 
 	let output = std.utils.buildUtil(

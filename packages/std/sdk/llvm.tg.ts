@@ -42,10 +42,10 @@ export let toolchain = async (arg?: LLVMArg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
-	if (host.os !== "linux") {
+	if (std.triple.os(host) !== "linux") {
 		throw new Error("LLVM toolchain must be built for Linux");
 	}
 
@@ -59,7 +59,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 		linuxHeaders,
 	});
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
-	sysroot = tg.Directory.expect(await sysroot.get(std.triple.toString(host)));
+	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());
 
 	let gccToolchain = gcc.toolchain(std.triple.rotate({ build, host }));
@@ -154,15 +154,14 @@ type WrapArgsArg = {
 
 /** Produce the flags and environment required to properly proxy this toolchain. */
 export let wrapArgs = async (arg: WrapArgsArg) => {
-	let { host, target, toolchainDir } = arg;
-	let target_ = target ?? host;
-	let targetString = std.triple.toString(target_);
+	let { host, target: target_, toolchainDir } = arg;
+	let target = target_ ?? host;
 	let version = llvmMajorVersion();
 
 	let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
 	let clangxxArgs = [...clangArgs];
 	let env = {};
-	if (host.os === "darwin") {
+	if (std.triple.os(host) === "darwin") {
 		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/15.0.0`);
 		env = {
@@ -172,11 +171,9 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
 		clangxxArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
 		clangxxArgs.push(tg`-unwindlib=libunwind`);
-		clangxxArgs.push(tg`-L${toolchainDir}/lib/${targetString}`);
+		clangxxArgs.push(tg`-L${toolchainDir}/lib/${target}`);
 		clangxxArgs.push(tg`-isystem${toolchainDir}/include/c++/v1`);
-		clangxxArgs.push(
-			tg`-isystem${toolchainDir}/include/${targetString}/c++/v1`,
-		);
+		clangxxArgs.push(tg`-isystem${toolchainDir}/include/${target}/c++/v1`);
 	}
 
 	return { clangArgs, clangxxArgs, env };
@@ -185,10 +182,10 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 export let test = async () => {
 	// Build a triple for the detected host.
 	let host = await std.triple.host();
-
+	let hostArch = std.triple.arch(host);
 	let os = std.triple.os(std.triple.archAndOs(host));
 
-	let libDir = host.environment === "musl" ? "lib" : "lib64";
+	let libDir = std.triple.environment(host) === "musl" ? "lib" : "lib64";
 	let expectedInterpreter =
 		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
 
@@ -215,7 +212,7 @@ export let test = async () => {
 	if (os === "linux") {
 		tg.assert(cMetadata.format === "elf");
 		tg.assert(cMetadata.interpreter === expectedInterpreter);
-		tg.assert(cMetadata.arch === host.arch);
+		tg.assert(cMetadata.arch === hostArch);
 	} else if (os === "darwin") {
 		tg.assert(cMetadata.format === "mach-o");
 	}
@@ -230,14 +227,13 @@ export let test = async () => {
 	let cxxScript = tg`
 		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`;
-	let hostString = std.triple.toString(host);
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
 			env: [
 				fullLlvmPlusClang,
 				{
 					LD_LIBRARY_PATH: tg.Mutation.templatePrepend(
-						tg`${fullLlvmPlusClang}/lib/${hostString}`,
+						tg`${fullLlvmPlusClang}/lib/${host}`,
 						":",
 					),
 				},
@@ -250,7 +246,7 @@ export let test = async () => {
 	if (os === "linux") {
 		tg.assert(cxxMetadata.format === "elf");
 		tg.assert(cxxMetadata.interpreter === expectedInterpreter);
-		tg.assert(cxxMetadata.arch === host.arch);
+		tg.assert(cxxMetadata.arch === hostArch);
 	} else if (os === "darwin") {
 		tg.assert(cxxMetadata.format === "mach-o");
 	}

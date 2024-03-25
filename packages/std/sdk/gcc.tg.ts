@@ -51,33 +51,29 @@ export let build = tg.target(async (arg: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
-	let target = target_ ? tg.triple(target_) : host;
-
-	let buildString = std.triple.toString(build);
-	let hostString = std.triple.toString(host);
-	let targetString = std.triple.toString(target);
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let target = target_ ?? host;
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
-		`--build=${buildString}`,
-		`--host=${hostString}`,
-		`--target=${targetString}`,
+		`--build=${build}`,
+		`--host=${host}`,
+		`--target=${target}`,
 		"--with-native-system-header-dir=/include",
 		"--with-sysroot=$SYSROOT",
 	];
 
 	// Configure sysroot. If host != target, it will live in a target-prefixed subdirectory. If host == target, it will share the toplevel.
-	let isCross = !std.triple.eq(host, target);
-	let targetPrefix = isCross ? `${targetString}-` : "";
-	let sysroot = isCross ? `$OUTPUT/${targetString}` : `$OUTPUT`;
+	let isCross = host !== target;
+	let targetPrefix = isCross ? `${target}-` : "";
+	let sysroot = isCross ? `$OUTPUT/${target}` : `$OUTPUT`;
 	//let sysroot = "$OUTPUT";
 	// The sysroot passed in the args is always nested in a directory named for the triple. If we're not cross-compiling, we need to reach inside this subdir.
-	let incomingSysroot = isCross ? sysroot_ : tg`${sysroot_}/${targetString}`;
+	let incomingSysroot = isCross ? sysroot_ : tg`${sysroot_}/${target}`;
 
 	// Prepare output.
 	let prepare = tg`
@@ -95,14 +91,14 @@ export let build = tg.target(async (arg: Arg) => {
 	let additionalEnv: std.env.Arg = {};
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
-	if (target.environment === "musl") {
+	if (std.triple.environment(target) === "musl") {
 		additionalArgs.push("--disable-libsanitizer");
 		additionalArgs.push("--disable-libitm");
 		additionalArgs.push("--disable-libvtv");
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
-	if (host.environment === "gnu") {
+	if (std.triple.environment(host) === "gnu") {
 		additionalArgs.push("--enable-__cxa_atexit");
 	}
 
@@ -152,8 +148,8 @@ export let build = tg.target(async (arg: Arg) => {
 		additionalArgs.push(...stage2FullArgs);
 		additionalEnv = {
 			...additionalEnv,
-			CC: `${hostString}-cc -static -fPIC`,
-			CXX: `${hostString}-c++ -static -fPIC`,
+			CC: `${host}-cc -static -fPIC`,
+			CXX: `${host}-c++ -static -fPIC`,
 		};
 	}
 
@@ -198,7 +194,7 @@ export let build = tg.target(async (arg: Arg) => {
 	});
 	if (!isCross) {
 		result = await tg.directory(result, {
-			[`bin/${hostString}-cc`]: tg.symlink(`./${hostString}-gcc`),
+			[`bin/${host}-cc`]: tg.symlink(`./${host}-gcc`),
 		});
 	}
 
@@ -264,11 +260,9 @@ export let mpfrSource = tg.target(async () => {
 
 export let libPath = "lib";
 
-export let linkerPath = (triple: string) =>
-	`${std.triple.toString(tg.triple(triple))}/bin/ld`;
+export let linkerPath = (triple: string) => `${triple}/bin/ld`;
 
-export let crossLinkerPath = (target: string) =>
-	`${std.triple.toString(tg.triple(target))}/bin/ld`;
+export let crossLinkerPath = (target: string) => `${target}/bin/ld`;
 
 export { interpreterName } from "./libc.tg.ts";
 
@@ -285,27 +279,24 @@ type WrapArgsArg = {
 export let wrapArgs = async (arg: WrapArgsArg) => {
 	let { host, target, toolchainDir } = arg;
 	let targetTriple = target ?? host;
-	let targetString = std.triple.toString(targetTriple);
 	let gccVersion = await getGccVersion(toolchainDir, host, target);
-	let isCross = !std.triple.eq(host, targetTriple);
+	let isCross = host !== targetTriple;
 
-	let sysroot = isCross ? tg`${toolchainDir}/${targetString}` : toolchainDir;
+	let sysroot = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
 
 	let ccArgs = [
 		tg`--sysroot=${sysroot}`,
-		tg`-B${toolchainDir}/lib/gcc/${targetString}/${gccVersion}`,
-		tg`-B${toolchainDir}/libexec/gcc/${targetString}/${gccVersion}`,
+		tg`-B${toolchainDir}/lib/gcc/${target}/${gccVersion}`,
+		tg`-B${toolchainDir}/libexec/gcc/${target}/${gccVersion}`,
 	];
 	let fortranArgs = ccArgs;
 
-	let cxxToplevel = isCross
-		? tg`${toolchainDir}/${targetString}`
-		: toolchainDir;
+	let cxxToplevel = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
 
 	let cxxArgs = [
 		...ccArgs,
 		tg`-isystem${cxxToplevel}/include/c++/${gccVersion}`,
-		tg`-isystem${cxxToplevel}/include/c++/${gccVersion}/${targetString}`,
+		tg`-isystem${cxxToplevel}/include/c++/${gccVersion}/${target}`,
 	];
 
 	return { ccArgs, cxxArgs, fortranArgs };
@@ -313,13 +304,11 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 
 async function getGccVersion(
 	env: std.env.Arg,
-	host: std.triple,
-	target?: std.triple,
+	host: string,
+	target?: string,
 ): Promise<string> {
 	let targetTriple = target ?? host;
-	let targetPrefix = std.triple.eq(host, targetTriple)
-		? ``
-		: `${std.triple.toString(targetTriple)}-`;
+	let targetPrefix = host === targetTriple ? `` : `${targetTriple}-`;
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
 	let script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.

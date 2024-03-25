@@ -188,7 +188,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			return object;
 		}
 	});
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
+	let host = host_ ?? await std.triple.host();
 	let system = std.triple.archAndOs(host);
 	let target = target_ ? tg.triple(target_) : host;
 	tg.assert(source, "Must provide a source directory.");

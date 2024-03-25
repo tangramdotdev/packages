@@ -3,8 +3,15 @@ export type Components = {
 	vendor?: string;
 	os: string;
 	osVersion?: string;
-	enviroment?: string;
-	enviromentVersion?: string;
+	environment?: string;
+	environmentVersion?: string;
+};
+
+export type Arg = string | Partial<Components>;
+
+/** Construct a new triple string from a list of existing triples or component objects. Later arguments override fields from previous arguments. */
+export let create = (...args: Array<Arg>): string => {
+	return tg.unimplemented();
 };
 
 export let assert = (s: string): void => {
@@ -75,7 +82,7 @@ export let tryOsVersion = (s: string): string | undefined => {
 };
 
 export let environment = (s: string): string => {
-	let ret = components(s).enviroment;
+	let ret = components(s).environment;
 	if (!ret) {
 		throw new Error("enviroment is not defined");
 	}
@@ -83,11 +90,11 @@ export let environment = (s: string): string => {
 };
 
 export let tryEnvironment = (s: string): string | undefined => {
-	return tryComponents(s)?.enviroment;
+	return tryComponents(s)?.environment;
 };
 
 export let environmentVersion = (s: string): string => {
-	let ret = components(s).enviromentVersion;
+	let ret = components(s).environmentVersion;
 	if (!ret) {
 		throw new Error("enviromentVersion is not defined");
 	}
@@ -95,10 +102,12 @@ export let environmentVersion = (s: string): string => {
 };
 
 export let tryEnvironmentVersion = (s: string): string | undefined => {
-	return tryComponents(s)?.enviromentVersion;
+	return tryComponents(s)?.environmentVersion;
 };
 
 export let components = (s: string): Components => {
+	// TODO - is it worth it to keep a global map of seen strings -> components, to avoid repeated parsing? It's not worth a target, but might be worth this.
+
 	let ret = tryComponents(s);
 	if (!ret) {
 		throw new Error(`unable to parse triple components from string ${s}`);
@@ -117,5 +126,12 @@ export let fromComponents = (c: Components) => {
 
 export let normalize = (s: string): string => {
 	//return fromComponents(components(s));
+	return tg.unimplemented();
+};
+
+export let rotate = (arg: {
+	build?: string;
+	host?: string;
+}): { host: string; target: string } => {
 	return tg.unimplemented();
 };

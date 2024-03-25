@@ -13,7 +13,7 @@ type Arg = std.sdk.BuildEnvArg & {
 
 export let source = tg.target(async (arg?: Arg) => {
 	let { name, version } = metadata;
-	let build = arg?.build ? tg.triple(arg?.build) : await std.triple.host();
+	let build = arg?.build ?? (await std.triple.host());
 	let env = std.env.object(
 		std.sdk({ host: build, bootstrapMode: arg?.bootstrapMode }, arg?.sdk),
 		arg?.env,
@@ -51,8 +51,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await std.triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
@@ -67,7 +67,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode) {
-		env.push(prerequisites({ host }));
+		env.push(prerequisites(host));
 		env.push(bootstrap.shell({ host }));
 	}
 	if (

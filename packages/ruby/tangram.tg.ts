@@ -91,7 +91,7 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 
 	// Generate the host and target.
 	let host = await std.triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
+	let build = build_ ?? host;
 
 	let env_ = [
 		libffi({ host }),

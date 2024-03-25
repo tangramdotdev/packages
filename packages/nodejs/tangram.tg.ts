@@ -53,13 +53,13 @@ let source = async (): Promise<tg.Directory> => {
 	};
 
 	// Get the NodeJS release.
-	let targetString = std.triple.toString(target);
+	let target = std.triple.toString(target);
 	tg.assert(
-		targetString in releases,
-		`Unsupported target system: ${targetString}.`,
+		target in releases,
+		`Unsupported target system: ${target}.`,
 	);
 
-	let release = releases[targetString];
+	let release = releases[target];
 	tg.assert(release, "Unsupported target");
 	let { url, checksum, unpackFormat } = release;
 
