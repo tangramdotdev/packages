@@ -47,7 +47,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ?? await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let configure = {
@@ -61,7 +61,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 		zlib(arg),
 	];
 	let additionalLibDirs = [];
-	if (build.os === "darwin") {
+	if (std.triple.os(build) === "darwin") {
 		let libiconvArtifact = await libiconv(arg);
 		dependencies.push(libiconvArtifact);
 		additionalLibDirs.push(

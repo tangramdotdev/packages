@@ -3,6 +3,7 @@ import * as std from "tg:std" with { path: "../std" };
 import bzip2 from "tg:bzip2" with { path: "../bzip2" };
 import libffi from "tg:libffi" with { path: "../libffi" };
 import openssl from "tg:openssl" with { path: "../openssl" };
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import sqlite from "tg:sqlite" with { path: "../sqlite" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
@@ -11,7 +12,10 @@ export { requirements };
 
 /** Package metadata for python */
 export let metadata = {
+	homepage: "https://www.python.org/",
 	name: "Python",
+	license: "Python Software Foundation License",
+	repository: "https://github.com/python/cpython",
 	version: "3.12.2",
 };
 
@@ -66,14 +70,12 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
 
 	let env = [
-		bzip2({ host }),
-		libffi({ host }),
-		openssl({ host }),
-		sqlite({ host }),
-		zlib({ host }),
-		{
-			LDFLAGS: tg.Mutation.templateAppend("-lgcov --coverage", " "),
-		},
+		bzip2(arg),
+		libffi(arg),
+		openssl(arg),
+		pkgconfig(arg),
+		sqlite(arg),
+		zlib(arg),
 	];
 
 	let configure = {
@@ -233,8 +235,8 @@ export let build = async (...args: tg.Args<Arg>) => {
 			return object;
 		}
 	});
-	let host = host_ ?? await std.triple.host();
-	let buildTriple = buildTriple_ ? tg.triple(buildTriple_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let buildTriple = buildTriple_ ?? host;
 
 	tg.assert(source, "Must specify a source directory.");
 

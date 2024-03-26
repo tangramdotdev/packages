@@ -55,7 +55,7 @@ export let test = tg.target(async () => {
 	});
 
 	let host = await std.triple.host();
-	let hostArch = host.arch;
+	let hostArch = std.triple.arch(host);
 
 	let output = tg.File.expect(
 		await std.build(

@@ -3,13 +3,13 @@ import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "openssl",
-	version: "3.2.0",
+	version: "3.2.1",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:14c826f07c7e433706fb5c69fa9e25dab95684844b4c962a2cf1bf183eb4690e";
+		"sha256:83c7329fe52c850677d75e5d0b0ca245309b97e8ecbcfdc1dfdc4ab9fac35b39";
 	let unpackFormat = ".tar.gz" as const;
 	let url = `https://www.openssl.org/source/${name}-${version}${unpackFormat}`;
 	let download = tg.Directory.expect(
@@ -19,8 +19,7 @@ export let source = tg.target(async () => {
 			url,
 		}),
 	);
-	let source = await std.directory.unwrap(download);
-	return source;
+	return std.directory.unwrap(download);
 });
 
 type Arg = {
@@ -41,17 +40,18 @@ export let openssl = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.triple.host(host_);
+	let host = host_ ?? (await std.triple.host());
 
 	let sourceDir = source_ ?? source();
 
 	let prepare = tg`cp -R ${sourceDir}/* . && chmod -R u+w .`;
+	let { arch: hostArch, os: hostOs } = std.triple.components(host);
 	let osCompiler =
-		host.os === "darwin"
-			? host.arch === "aarch64"
+		hostOs === "darwin"
+			? hostArch === "aarch64"
 				? `darwin64-arm64`
-				: `darwin64-${host.arch}`
-			: `${host.os}-${host.arch}`;
+				: `darwin64-${hostArch}`
+			: `${hostOs}-${hostArch}`;
 	let configure = {
 		command: tg`perl ./Configure ${osCompiler}`,
 		args: ["--libdir=lib"],

@@ -53,7 +53,6 @@ let source = async (): Promise<tg.Directory> => {
 	};
 
 	// Get the NodeJS release.
-	let target = std.triple.toString(target);
 	tg.assert(
 		target in releases,
 		`Unsupported target system: ${target}.`,
@@ -183,7 +182,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	});
 	tg.assert(source, "Must provide a source");
 
-	let host = await std.triple.host(hostArg);
+	let host = hostArg ?? await std.triple.host();
 	let build = buildArg ?? host;
 
 	let node = nodejs({

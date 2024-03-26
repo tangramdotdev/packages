@@ -1,20 +1,20 @@
-import zlib from "tg:zlib" with { path: "../zlib" };
-// import curl from "tangram:../curl";
+import bzip2 from "tg:bzip2" with { path: "../bzip2" };
 import libarchive from "tg:libarchive" with { path: "../libarchive" };
-// import openssl from "tangram:../openssl"; // FIXME - this transitive dep should be automatic.
+import m4 from "tg:m4" with { path: "../m4" };
+import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
+import xz from "tg:xz" with { path: "../xz" };
+import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "elfutils",
-	version: "0.189",
-	checksum:
-		"sha256:39bd8f1a338e2b7cd4abc3ff11a0eddc6e690f69578a57478d8179b4148708c8",
+	version: "0.191",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:39bd8f1a338e2b7cd4abc3ff11a0eddc6e690f69578a57478d8179b4148708c8";
+		"sha256:df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871";
 	let unpackFormat = ".tar.bz2" as const;
 	let url = `https://sourceware.org/elfutils/ftp/${version}/${name}-${version}${unpackFormat}`;
 	let download = tg.Directory.expect(
@@ -45,7 +45,7 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.triple.host(host_);
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let configure = {
@@ -57,23 +57,26 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 			"--enable-install-elfh",
 			"--without-libiconv-prefix",
 			"--without-libintl-prefix",
-			// FIXME - bzlib tries to pull from utils, which just has a staticlib.
-			"--without-bzlib",
 			// FIXME - figure out how to get debuginfod to build
 			"--disable-debuginfod",
 			"--enable-libdebuginfod=dummy",
 		],
 	};
 
-	if (!std.triple.eq(build, host)) {
-		configure.args.push(`--host=${std.triple.toString(host)}`);
+	if (build !== host) {
+		configure.args.push(`--host=${host}`);
 	}
 
 	let phases = { configure };
 
 	let env = [
+		bzip2(arg),
+		libarchive(arg),
+		m4(arg),
+		openssl(arg),
+		xz(arg),
 		zlib(arg),
-		{ CFLAGS: tg.Mutation.templateAppend("-Wno-format-nonliteral -lz", " ") },
+		{ CFLAGS: tg.Mutation.templateAppend("-Wno-format-nonliteral -lz -lbz2 -llzma", " ") },
 		env_,
 	];
 

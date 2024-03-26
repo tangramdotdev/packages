@@ -3,14 +3,17 @@ import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
+	homepage: "https://www.sqlite.org/",
 	name: "sqlite",
-	version: "3.45.0",
+	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",
+	repository: "https://www.sqlite.org/src/",
+	version: "3.45.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:72887d57a1d8f89f52be38ef84a6353ce8c3ed55ada7864eb944abd9a495e436";
+		"sha256:bc9067442eedf3dd39989b5c5cfbfff37ae66cc9c99274e0c3052dc4d4a8f6ae";
 	let unpackFormat = ".tar.gz" as const;
 
 	let produceVersion = (version: string) => {
@@ -18,7 +21,7 @@ export let source = tg.target(async () => {
 		tg.assert(major);
 		tg.assert(minor);
 		tg.assert(patch);
-		return `${major}${minor.padEnd(3, '0')}${patch.padEnd(3, '0')}`;
+		return `${major}${minor.padEnd(3, "0")}${patch.padEnd(3, "0")}`;
 	};
 
 	let pkgName = `${name}-autoconf-${produceVersion(version)}`;
@@ -43,12 +46,16 @@ type Arg = {
 };
 
 export let sqlite = tg.target((arg?: Arg) => {
-	let { autotools = [], build, env: env_, host, source: source_, ...rest } = arg ?? {};
+	let {
+		autotools = [],
+		build,
+		env: env_,
+		host,
+		source: source_,
+		...rest
+	} = arg ?? {};
 
-	let dependencies = [
-		readline(arg),
-		zlib(arg),
-	];
+	let dependencies = [readline(arg), zlib(arg)];
 	let env = [...dependencies, env_];
 
 	return std.autotools.build(
@@ -69,7 +76,8 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: ["sqlite3"],
-		metadata
+		libs: ["sqlite3"],
+		metadata,
 	});
 	return directory;
 });

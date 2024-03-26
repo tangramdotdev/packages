@@ -44,7 +44,7 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.triple.host(host_);
+	let host = host_ ?? await std.triple.host();
 
 	let os = std.triple.os(std.triple.archAndOs(host));
 

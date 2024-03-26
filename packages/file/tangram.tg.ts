@@ -47,14 +47,11 @@ export let file = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.triple.host(host_);
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-silent-rules",
-		],
+		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 	};
 	let dependencies = [bison(arg), libseccomp(arg), m4(arg), zlib(arg)];
 	let env = [...dependencies, env_];

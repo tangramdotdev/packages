@@ -24,7 +24,7 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 
 type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	build?: std.triple.Arg;
+	build?: string;
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;

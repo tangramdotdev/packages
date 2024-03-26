@@ -29,7 +29,7 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ?? await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let configure = {
@@ -48,7 +48,7 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 		],
 	};
 	let fixup =
-		host.os === "linux"
+		std.triple.os(host) === "linux"
 			? `
 				chmod -R u+w \${OUTPUT}
 				for lib in ncurses form panel menu tinfo ; do

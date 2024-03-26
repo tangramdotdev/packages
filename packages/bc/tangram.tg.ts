@@ -48,7 +48,7 @@ export let bc = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = await std.triple.host(host_);
+	let host = host_ ?? await std.triple.host();
 	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
@@ -59,7 +59,7 @@ export let bc = tg.target(async (arg?: Arg) => {
 	};
 
 	// Define environment.
-	let ccCommand = build.os == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
+	let ccCommand = std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
 	let env = [{ CC: tg.Mutation.setIfUnset(ccCommand) }, env_];
 
 	let output = std.autotools.build(

@@ -1,7 +1,10 @@
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/libiconv/",
 	name: "libiconv",
+	license: "LGPL-2.1-or-later",
+	repository: "https://git.savannah.gnu.org/git/libiconv.git",
 	version: "1.17",
 };
 
@@ -24,7 +27,7 @@ type Arg = {
 export let libiconv = tg.target(async (arg?: Arg) => {
 	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
 
-	return std.autotools.build(
+	let output = await std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
@@ -32,6 +35,27 @@ export let libiconv = tg.target(async (arg?: Arg) => {
 		},
 		autotools,
 	);
+
+	let libDir = tg.Directory.expect(await output.get("lib"));
+	let unwrappedIconv = tg.File.expect(await output.get("bin/iconv"));
+	let wrappedIconv = await std.wrap(unwrappedIconv, {
+		libraryPaths: [libDir],
+	});
+	output = await tg.directory(output, {
+		["bin/iconv"]: wrappedIconv,
+	});
+	return output;
 });
 
 export default libiconv;
+
+export let test = tg.target(async () => {
+	let directory = libiconv();
+	await std.assert.pkg({
+		directory,
+		binaries: ["iconv"],
+		libs: ["charset", { name: "iconv", dylib: true, staticlib: false }],
+		metadata,
+	});
+	return directory;
+});

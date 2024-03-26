@@ -15,8 +15,8 @@ let PROFILE = "minimal" as const;
 
 type ToolchainArg = {
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
-	target?: string
-	targets?: Array<std.triple>;
+	target?: string;
+	targets?: Array<string>;
 };
 
 export let rust = tg.target(async (arg?: ToolchainArg) => {
@@ -24,12 +24,12 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	let detectedHost = await std.triple.host();
 	let host = rustTriple(detectedHost);
 	let targets = [];
-	if (arg?.target && !std.triple.eq(arg.target, host)) {
+	if (arg?.target && arg.target !== host) {
 		targets.push(arg.target);
 	}
 	if (arg?.targets) {
 		for (let target of arg?.targets) {
-			if (!std.triple.eq(target, host)) {
+			if (target !== host) {
 				targets.push(target);
 			}
 		}
@@ -47,15 +47,12 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 		await manifestArtifact.text(),
 	)) as RustupManifestV2;
 
-	// Get the system metadata.
-	let hostTripleString = std.triple.toString(host);
-
 	// Get all the available packages for the selected profile and target.
 	let packageNames = manifest.profiles[PROFILE];
 	tg.assert(Array.isArray(packageNames));
 	let packages = packageNames.flatMap((packageName) => {
 		let data = manifest.pkg[packageName];
-		let pkg = data?.target[hostTripleString];
+		let pkg = data?.target[host];
 		if (pkg?.available === true) {
 			return [[packageName, pkg]] as const;
 		} else {
@@ -66,11 +63,10 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	// Add any additionally requested rust-std targets.
 	for (let target of targets) {
 		let name = "rust-std";
-		let targetTripleString = std.triple.toString(target);
 		let data = manifest.pkg[name];
-		let pkg = data?.target[targetTripleString];
+		let pkg = data?.target[target];
 		if (pkg?.available === true) {
-			packages.push([`${name}-${targetTripleString}`, pkg]);
+			packages.push([`${name}-${target}`, pkg]);
 		}
 	}
 
@@ -204,19 +200,16 @@ export let build = async (...args: tg.Args<Arg>) => {
 		}
 	});
 
-	let host = rustTriple(host_ ? tg.triple(host_) : await std.triple.host());
-	let target = target_ ? rustTriple(tg.triple(target_)) : host;
+	let host = rustTriple(host_ ?? (await std.triple.host()));
+	let target = target_ ? rustTriple(target_) : host;
 
 	// Check if we're cross-compiling.
-	let crossCompiling = !std.triple.eq(target, host);
+	let crossCompiling = target !== host;
 
 	// Obtain handles to the SDK and Rust artifacts.
 	// NOTE - pulls an SDK assuming the selected target is the intended host.
 	let sdk = std.sdk({ host, target }, sdk_ ?? []);
 	let rustArtifact = rust({ target });
-
-	// Compute some necessary metadata.
-	let targetTriple = std.triple.toString(target);
 
 	// Download the dependencies using the cargo vendor.
 	tg.assert(source, "Must provide a source directory.");
@@ -262,10 +255,10 @@ export let build = async (...args: tg.Args<Arg>) => {
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
 		additionalEnv = {
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`${targetTriple}-cc`,
-			[`AR_${tripleToEnvVar(target)}`]: tg`${targetTriple}-ar`,
-			[`CC_${tripleToEnvVar(target)}`]: tg`${targetTriple}-cc`,
-			[`CXX_${tripleToEnvVar(target)}`]: tg`${targetTriple}-c++`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`${target}-cc`,
+			[`AR_${tripleToEnvVar(target)}`]: tg`${target}-ar`,
+			[`CC_${tripleToEnvVar(target)}`]: tg`${target}-cc`,
+			[`CXX_${tripleToEnvVar(target)}`]: tg`${target}-c++`,
 		};
 	}
 
@@ -281,12 +274,12 @@ export let build = async (...args: tg.Args<Arg>) => {
 			sdk,
 			rustArtifact,
 			{
-				RUST_TARGET: targetTriple,
+				RUST_TARGET: target,
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 				...additionalEnv,
 			},
 			proxyEnv,
-			{ TANGRAM_HOST: std.triple.toString(std.triple.archAndOs(host)) },
+			{ TANGRAM_HOST: std.triple.archAndOs(host) },
 			env,
 		),
 	});
@@ -295,7 +288,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	tg.assert(tg.Directory.is(artifact));
 
 	// Store a handle to the release directory containing Tangram bundles.
-	let releaseDir = await artifact.get(`target/${targetTriple}/release`);
+	let releaseDir = await artifact.get(`target/${target}/release`);
 	tg.assert(tg.Directory.is(releaseDir));
 
 	// Grab the bins from the release dir.
@@ -328,10 +321,7 @@ export type VendoredSourcesArg = {
 
 let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 	let { rustTarget: rustTarget_, source, useCargoVendor = false } = arg;
-	let rustTarget = rustTarget_
-		? tg.triple(rustTarget_)
-		: await std.triple.host();
-	let rustTargetString = std.triple.toString(rustTarget);
+	let rustTarget = rustTarget_ ?? (await std.triple.host());
 	if (useCargoVendor) {
 		// Run cargo vendor
 		let certFile = tg`${std.caCertificates()}/cacert.pem`;
@@ -351,7 +341,7 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 					CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 					CARGO_HTTP_CAINFO: certFile,
 					PATH: tg`${rustArtifact}/bin`,
-					RUST_TARGET: rustTargetString,
+					RUST_TARGET: rustTarget,
 					SSL_CERT_FILE: certFile,
 				},
 			],
@@ -512,35 +502,26 @@ type RustupManifestV2 = {
 	};
 };
 
-let rustTriple = (triple: std.triple): std.triple => {
-	let normalized = std.triple.normalized(triple);
-	tg.assert(
-		normalized,
-		`Could not convert triple to Rust triple: ${std.triple.toString(triple)}`,
-	);
-	let base = tg.triple(normalized);
-	if (base.os === "darwin") {
-		return tg.triple({
-			arch: base.arch,
+let rustTriple = (triple: string): string => {
+	let components = std.triple.components(std.triple.normalize(triple));
+	if (components.os === "darwin") {
+		return std.triple.create({
+			...components,
 			vendor: "apple",
-			os: base.os,
 		});
-	} else if (base.os === "linux") {
-		return tg.triple({
-			arch: base.arch,
-			vendor: base.vendor,
-			os: base.os,
-			environment: base.environment ?? "gnu",
+	} else if (components.os === "linux") {
+		return std.triple.create({
+			...components,
+			environment: components.environment ?? "gnu",
 		});
 	} else {
-		throw new Error(`Unsupported OS: ${base.os}`);
+		throw new Error(`Unsupported OS: ${components.os}`);
 	}
 };
 
-let tripleToEnvVar = (triple: std.triple, upcase?: boolean) => {
-	let tripleString = std.triple.toString(triple);
+let tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	let allCaps = upcase ?? false;
-	let result = tripleString.replace(/-/g, "_");
+	let result = triple.replace(/-/g, "_");
 	if (allCaps) {
 		result = result.toUpperCase();
 	}
@@ -574,9 +555,9 @@ export let testCross = tg.target(async () => {
 	let host = await std.triple.host();
 
 	// Determine the target triple with differing architecture from the host.
-	let hostArch = host.arch;
-	let targetArch: std.triple.Arch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = tg.triple({
+	let hostArch = std.triple.arch(host);
+	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let target = std.triple.create({
 		arch: targetArch,
 		vendor: "unknown",
 		os: "linux",

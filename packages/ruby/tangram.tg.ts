@@ -10,16 +10,20 @@ import zlib from "tg:zlib" with { path: "../zlib" };
 import * as bootstrap from "./bootstrap.tg.ts";
 
 export let metadata = {
+	homepage: "https://www.ruby-lang.org/",
 	name: "ruby",
-	version: "3.2.2",
+	license: "BSD-2-Clause",
+	repository: "https://git.ruby-lang.org/ruby.git",
+	version: "3.3.0",
 };
 
 export let source = tg.target(async () => {
 	let { version } = metadata;
 	let checksum =
-		"sha256:96c57558871a6748de5bc9f274e93f4b5aad06cd8f37befa0e8d94e7b8a423bc";
+		"sha256:96518814d9832bece92a85415a819d4893b307db5921ae1f0f751a9a89a56b7d";
 	let unpackFormat = ".tar.gz" as const;
-	let url = `https://cache.ruby-lang.org/pub/ruby/3.2/ruby-${version}${unpackFormat}`;
+	let majorMinor = version.split(".").slice(0, 2).join(".");
+	let url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${unpackFormat}`;
 	let outer = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),
 	);
@@ -90,7 +94,7 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 	});
 
 	// Generate the host and target.
-	let host = await std.triple.host(host_);
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let env_ = [
@@ -114,29 +118,28 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 				// Disable documentation.
 				args: ["--disable-install-doc"],
 			},
-			install: {
-				// The ruby build as configured will leave some empty files in the ./bin folder that we don't care about, however rbinstall will error when it finds them. Explicitly delete them.
-				pre: "find ./bin -empty -delete",
-			},
+			//install: tg.Mutation.set("find ./bin -empty -delete && make install"),
 		},
 		...std.triple.rotate({ build, host }),
 	});
 
 	// Create the RUBYLIB environment variable.
+	let { arch: hostArch, os: hostOs } = std.triple.components(host);
+	let version = metadata.version;
 	let libs = [
-		tg`${ruby}/lib/ruby/site_ruby/3.2.0`,
-		tg`${ruby}/lib/ruby/site_ruby/3.2.0/${host.arch}-${host.os}`,
+		tg`${ruby}/lib/ruby/site_ruby/${version}`,
+		tg`${ruby}/lib/ruby/site_ruby/${version}/${hostArch}-${hostOs}`,
 		tg`${ruby}/lib/ruby/site_ruby`,
-		tg`${ruby}/lib/ruby/vendor_ruby/3.2.0`,
-		tg`${ruby}/lib/ruby/vendor_ruby/3.2.0/${host.arch}-${host.os}`,
+		tg`${ruby}/lib/ruby/vendor_ruby/${version}`,
+		tg`${ruby}/lib/ruby/vendor_ruby/${version}/${hostArch}-${hostOs}`,
 		tg`${ruby}/lib/ruby/vendor_ruby`,
-		tg`${ruby}/lib/ruby/3.2.0`,
-		tg`${ruby}/lib/ruby/3.2.0/${host.arch}-${host.os}`,
+		tg`${ruby}/lib/ruby/${version}`,
+		tg`${ruby}/lib/ruby/${version}/${hostArch}-${hostOs}`,
 	];
 	let rubylib = tg.Template.join(":", ...(await Promise.all(libs)));
 
 	// Create the GEM_PATH, GEM_HOME environment variable.
-	let gems = [tg`${ruby}/lib/ruby/gems/3.2.0`];
+	let gems = [tg`${ruby}/lib/ruby/gems/${version}`];
 	let gemPath = tg.Template.join(":", ...(await Promise.all(gems)));
 
 	// Create the env used for wrapping ruby bins.

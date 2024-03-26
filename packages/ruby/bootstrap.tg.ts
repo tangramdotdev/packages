@@ -13,7 +13,7 @@ export let source = tg.target(async () => {
 });
 
 /** Returns an older version of Ruby that is only used to bootstrap it. */
-export let ruby = tg.target(async (host: std.triple) => {
+export let ruby = tg.target(async (host: string) => {
 	let build = await std.build(
 		tg`
 			${source()}/configure --prefix $OUTPUT
@@ -23,17 +23,18 @@ export let ruby = tg.target(async (host: std.triple) => {
 	);
 
 	tg.Directory.assert(build);
+	let { arch: hostArch, os: hostOs } = std.triple.components(host);
 	let rubylib = tg.Template.join(
 		":",
 		...(await Promise.all([
 			tg`${build}/lib/ruby/site_ruby/2.5.0`,
-			tg`${build}/lib/ruby/site_ruby/2.5.0/${host.arch}-${host.os}`,
+			tg`${build}/lib/ruby/site_ruby/2.5.0/${hostArch}-${hostOs}`,
 			tg`${build}/lib/ruby/site_ruby`,
 			tg`${build}/lib/ruby/vendor_ruby/2.5.0`,
-			tg`${build}/lib/ruby/vendor_ruby/2.5.0/${host.arch}-${host.os}`,
+			tg`${build}/lib/ruby/vendor_ruby/2.5.0/${hostArch}-${hostOs}`,
 			tg`${build}/lib/ruby/vendor_ruby`,
 			tg`${build}/lib/ruby/2.5.0`,
-			tg`${build}/lib/ruby/2.5.0/${host.arch}-${host.os}`,
+			tg`${build}/lib/ruby/2.5.0/${hostArch}-${hostOs}`,
 		])),
 	);
 	return tg.directory({

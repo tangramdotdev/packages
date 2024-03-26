@@ -2,29 +2,29 @@ import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "go",
-	version: "1.22.0",
+	version: "1.22.1",
 };
 
 // See https://go.dev/dl.
 let RELEASES = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:6a63fef0e050146f275bf02a0896badfe77c11b6f05499bb647e7bd613a45a10",
+			"sha256:e56685a245b6a0c592fc4a55f0b7803af5b3f827aaa29feab1f40e491acf35b8",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:f6c8a87aa03b92c4b0bf3d558e28ea03006eb29db78917daec5cfb6ec1046265",
+			"sha256:aab8e15785c997ae20f9c88422ee35d962c4562212bb0f879d052a35c8307c7f",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:bf8e388b09134164717cd52d3285a4ab3b68691b80515212da0e9f56f518fb1e",
+			"sha256:5f10b95e2678618f85ba9d87fbed506b3b87efc9d5a8cafda939055cb97949ba",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:ebca81df938d2d1047cc992be6c6c759543cf309d401b86af38a6aed3d4090f4",
+			"sha245:943e4f9f038239f9911c44366f52ab9202f6ee13610322a668fe42406fb3deef",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -35,7 +35,7 @@ type ToolchainArg = {
 
 export let toolchain = tg.target(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
-		let host = arg?.host ? tg.triple(arg.host) : await std.triple.host();
+		let host = arg?.host ?? (await std.triple.host());
 		let system = std.triple.archAndOs(host);
 		tg.assert(
 			system in RELEASES,
@@ -188,9 +188,9 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			return object;
 		}
 	});
-	let host = host_ ?? await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 	let system = std.triple.archAndOs(host);
-	let target = target_ ? tg.triple(target_) : host;
+	let target = target_ ?? host;
 	tg.assert(source, "Must provide a source directory.");
 
 	let sdk = std.sdk({ host, target }, sdkArgs);

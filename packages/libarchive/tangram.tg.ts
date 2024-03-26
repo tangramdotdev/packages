@@ -1,16 +1,19 @@
+import bzip2 from "tg:bzip2" with { path: "../bzip2" };
+import libiconv from "tg:libiconv" with { path: "../libiconv" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
+import xz from "tg:xz" with { path: "../xz" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "libarchive",
-	version: "3.6.2",
+	version: "3.7.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:9e2c1b80d5fbe59b61308fdfab6c79b5021d7ff4ff2489fb12daf0a96a83551d";
+		"sha256:04357661e6717b6941682cde02ad741ae4819c67a260593dfb2431861b251acb";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://www.libarchive.org/downloads/${name}-${version}${unpackFormat}`;
 	let download = tg.Directory.expect(
@@ -32,8 +35,6 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-// FIXME - configure looks for /usr/bin/file.
-
 export let libarchive = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
@@ -43,29 +44,20 @@ export let libarchive = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await std.triple.host(host_);
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-rpath",
-			"--with-pic",
-			// FIXME - provide bz2lib dylib, utils only has staticlib
-			"--without-bz2lib",
-			// FIXME - provide libiconv package.
-			"--without-libiconv",
-		],
+		args: ["--disable-dependency-tracking", "--disable-rpath", "--with-pic"],
 	};
 
-	if (!std.triple.eq(build, host)) {
-		configure.args.push(`--host=${std.triple.toString(host)}`);
+	if (build !== host) {
+		configure.args.push(`--host=${host}`);
 	}
 
 	let phases = { configure };
 
-	// FIXME - "-lz" should be automatic.
-	let env = [openssl(arg), zlib(arg), { CFLAGS: "-lz" }, env_];
+	let env = [bzip2(arg), libiconv(arg), openssl(arg), xz(arg), zlib(arg), env_];
 
 	return std.autotools.build(
 		{
@@ -80,6 +72,7 @@ export let libarchive = tg.target(async (arg?: Arg) => {
 });
 
 export default libarchive;
+
 export let test = tg.target(async () => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
@@ -90,9 +83,19 @@ export let test = tg.target(async () => {
 
 	return std.build(
 		tg`
-			echo "Checking if we can link against libarchivke."
-			cc ${source}/main.c -o $OUTPUT -larchive -lz
+			echo "Checking if we can link against libarchive."
+			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto -larchive -lz -lbz2 -liconv -llzma
 		`,
-		{ env: [std.sdk(), libarchive()] },
+		{
+			env: [
+				std.sdk(),
+				bzip2(),
+				libiconv(),
+				openssl(),
+				libarchive(),
+				xz(),
+				zlib(),
+			],
+		},
 	);
 });
