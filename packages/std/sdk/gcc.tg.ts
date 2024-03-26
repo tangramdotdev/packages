@@ -34,7 +34,8 @@ type Arg = std.sdk.BuildEnvArg & {
 export type Variant =
 	| "stage1_bootstrap" // C only, no libraries.
 	| "stage1_limited" // C/C++ only, most libraries disabled, but inclded libgcc/libstdc++.
-	| "stage2_full"; // Everything enabled.
+	| "stage2_full" // Everything enabled.
+	| "stage2_cross"; // Everything enabled, but with a build sysroot.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
 export let build = tg.target(async (arg: Arg) => {
@@ -153,12 +154,22 @@ export let build = tg.target(async (arg: Arg) => {
 		};
 	}
 
-	let configure = { args: [...commonArgs, ...additionalArgs] };
-	if (variant === "stage2_full") {
-		prepare = tg`${prepare}
-		ls $OUTPUT
-		env`;
+	if (variant === "stage2_cross") {
+		let stage2FullArgs = [
+			"--with-build-sysroot=$SYSROOT",
+			"--enable-default-ssp",
+			"--enable-default-pie",
+			"--enable-initfini-array",
+		];
+		additionalArgs.push(...stage2FullArgs);
+		additionalEnv = {
+			...additionalEnv,
+			CC: `${host}-cc -static -fPIC`,
+			CXX: `${host}-c++ -static -fPIC`,
+		};
 	}
+
+	let configure = { args: [...commonArgs, ...additionalArgs] };
 
 	let phases = { prepare, configure };
 
