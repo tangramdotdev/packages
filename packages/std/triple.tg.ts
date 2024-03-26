@@ -60,16 +60,12 @@ export let tryArch = (s: string): string | undefined => {
 	return tryComponents(s)?.arch;
 };
 
-/** Retrieve the vendor field from a triple string. Throws if unable to parse the input. */
-export let vendor = (s: string): string => {
-	let ret = components(s).vendor;
-	if (!ret) {
-		throw new Error("vendor is not defined");
-	}
-	return ret;
+/** Retrieve the vendor field from a triple string. Throws if unable to parse the input, returns `undefined` if no vendor is set. */
+export let vendor = (s: string): string | undefined => {
+	return components(s).vendor;
 };
 
-/** Retrieve the vendor field from a triple string. Returns `undefined` if unable to parse the input. */
+/** Retrieve the vendor field from a triple string. Returns `undefined` if unable to parse the input or if no vendor is set. */
 export let tryVendor = (s: string): string | undefined => {
 	return tryComponents(s)?.vendor;
 };
@@ -84,13 +80,9 @@ export let tryOs = (s: string): string | undefined => {
 	return tryComponents(s)?.os;
 };
 
-/** Retrieve the osVersion field from a triple string. Throws if unable to parse the input or the os version is not defined. */
-export let osVersion = (s: string): string => {
-	let ret = components(s).osVersion;
-	if (!ret) {
-		throw new Error("osVersion is not defined");
-	}
-	return ret;
+/** Retrieve the osVersion field from a triple string. Throws if unable to parse the input, returns `undefined` if the os version is not defined. */
+export let osVersion = (s: string): string | undefined => {
+	return components(s).osVersion;
 };
 
 /** Retrieve the osVersion field from a triple string. Returns `undefined` if unable to parse the input or the os version is not defined. */
@@ -98,13 +90,9 @@ export let tryOsVersion = (s: string): string | undefined => {
 	return tryComponents(s)?.osVersion;
 };
 
-/** Retrieve the environment field from a triple string. Throws if unable to parse the input or the environment is not defined. */
-export let environment = (s: string): string => {
-	let ret = components(s).environment;
-	if (!ret) {
-		throw new Error("enviroment is not defined");
-	}
-	return ret;
+/** Retrieve the environment field from a triple string. Throws if unable to parse the input, returns `undefined` if no environment is set. */
+export let environment = (s: string): string | undefined => {
+	return components(s).environment;
 };
 
 /** Retrieve the environment field from a triple string. Returns `undefined` if unable to parse the input or the environment is not defined. */
@@ -112,13 +100,9 @@ export let tryEnvironment = (s: string): string | undefined => {
 	return tryComponents(s)?.environment;
 };
 
-/** Retrieve the environmentVersion field from a triple string. Throws if unable to parse the input or the environment version is not defined. */
-export let environmentVersion = (s: string): string => {
-	let ret = components(s).environmentVersion;
-	if (!ret) {
-		throw new Error("enviromentVersion is not defined");
-	}
-	return ret;
+/** Retrieve the environmentVersion field from a triple string. Throws if unable to parse the input, returns undefined if the environment version is not defined. */
+export let environmentVersion = (s: string): string | undefined => {
+	return components(s).environmentVersion;
 };
 
 /** Retrieve the environmentVersion field from a triple string. Returns `undefined` if unable to parse the input or the environment version is not defined. */

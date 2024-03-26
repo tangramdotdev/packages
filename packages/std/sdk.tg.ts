@@ -804,7 +804,7 @@ export namespace sdk {
 			actualHostOs === expectedHostOs,
 			`Given env provides an SDK with host os ${actualHostOs} instead of expected ${expectedHostOs}.`,
 		);
-		let expectedHostEnvironment = std.triple.tryEnvironment(expected.host);
+		let expectedHostEnvironment = std.triple.environment(expected.host);
 		if (expectedHostEnvironment) {
 			let actualHostEnvironment = std.triple.environment(actualHost);
 			tg.assert(
