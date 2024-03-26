@@ -23,12 +23,12 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	build?: tg.Triple.Arg;
+	build?: string;
 	env?: std.env.Arg;
 	rust?: tg.MaybeNestedArray<rust.Arg>;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
-	host?: tg.Triple.Arg;
+	host?: string;
 };
 
 export let ripgrep = tg.target(async (arg?: Arg) => {
@@ -46,7 +46,7 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 	return rust.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			features: ["pcre2"],
 			source: source_ ?? source(),
@@ -66,12 +66,12 @@ export let test = tg.target(async () => {
 	});
 
 	// // On Linux, test cross-compiling.
-	// let host = await tg.Triple.host();
-	// let os = tg.Triple.os(tg.Triple.archAndOs(host));
+	// let host = await std.triple.host();
+	// let os = std.triple.os(std.triple.archAndOs(host));
 	// if (os === "linux") {
 	// 	// Determine the target triple with differing architecture from the host.
 	// 	let hostArch = host.arch;
-	// 	let targetArch: tg.Triple.Arch =
+	// 	let targetArch: std.triple.Arch =
 	// 		hostArch === "x86_64" ? "aarch64" : "x86_64";
 	// 	let target = tg.triple({
 	// 		arch: targetArch,

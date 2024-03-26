@@ -43,13 +43,12 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
-	if (host.os !== "linux") {
-		let hostString = tg.Triple.toString(host);
+	if (std.triple.os(host) !== "linux" || std.triple.os(build) !== "linux") {
 		throw new Error(
-			`Unsupported system: ${hostString}. The attr package is Linux-only.`,
+			`Unsupported system: ${host}. The attr package is Linux-only.`,
 		);
 	}
 
@@ -70,7 +69,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode && usePrerequisites) {
-		env.push(prerequisites({ host }));
+		env.push(prerequisites(host));
 	}
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
@@ -79,7 +78,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = await buildUtil(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			bootstrapMode,
 			env,
 			phases,
@@ -106,7 +105,7 @@ export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ bootstrapMode, host });
 	let directory = build({ host, bootstrapMode, env: sdk });

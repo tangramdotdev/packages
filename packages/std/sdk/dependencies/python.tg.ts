@@ -11,7 +11,7 @@ export let metadata = {
 	version: "3.12.2",
 };
 
-export let source = tg.target(async (os: tg.Triple.Os) => {
+export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 
 	let unpackFormat = ".tar.xz" as const;
@@ -55,9 +55,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = await tg.Triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
-	let os = tg.Triple.os(build);
+	let host = host_ ?? await std.triple.host();
+	let build = build_ ?? host;
+	let os = std.triple.os(build);
 
 	let additionalEnv: std.env.Arg = {
 		TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "resolve",
@@ -99,7 +99,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let result = std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases: { configure },
 			source: source_ ?? source(os),
@@ -113,7 +113,7 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });

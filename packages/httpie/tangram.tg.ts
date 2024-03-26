@@ -25,10 +25,10 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	build?: tg.Triple.Arg;
+	build?: string;
 	env?: std.env.Arg;
 	python?: tg.MaybeNestedArray<python.Arg>;
-	host?: tg.Triple.Arg;
+	host?: string;
 	source?: tg.Directory;
 };
 

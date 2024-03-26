@@ -345,8 +345,7 @@ async fn main_inner() -> Result<()> {
 
 	// Create the target.
 	let target = tg::Target::with_object(tg::target::Object {
-		host: tg::Triple::host()
-			.map_err(|error| error!(source = error, "failed to get tg::Triple::host()"))?,
+		host: host().to_string(),
 		executable,
 		lock: None,
 		name: Some("tangram_cc".into()),
@@ -598,6 +597,25 @@ async fn check_in_source_tree(
 		})
 		.collect();
 	Ok(templates)
+}
+
+fn host() -> &'static str {
+	#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+	{
+		"aarch64-darwin"
+	}
+	#[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+	{
+		"aarch64-linux"
+	}
+	#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+	{
+		"x86_64-darwin"
+	}
+	#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+	{
+		"x86_64-linux"
+	}
 }
 
 const DRIVER_SH: &str = include_str!("driver.sh");

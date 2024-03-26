@@ -32,8 +32,8 @@ export let source = tg.target(async () => {
 });
 
 export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	let host = await tg.Triple.host(arg);
-	let hostSystem = tg.Triple.archAndOs(host);
+	let host = arg?.host ?? await std.triple.host();
+	let hostSystem = std.triple.archAndOs(host);
 
 	let configure = { args: [`--enable-debug`, `--enable-optimize=*`] };
 
@@ -47,8 +47,8 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 	};
 
 	let env = [
-		bootstrap.sdk.env(arg),
-		bootstrap.make.build(arg),
+		bootstrap.sdk.env(host),
+		bootstrap.make.build(host),
 		{
 			CPATH: tg.Mutation.unset(),
 		},
@@ -73,17 +73,15 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 
 export default build;
 
-export let interpreterPath = (triple: tg.Triple.Arg) =>
+export let interpreterPath = (triple: string) =>
 	`lib/${interpreterName(triple)}`;
 
-export let interpreterName = (triple: tg.Triple.Arg) => {
-	let arch = tg.Triple.arch(tg.Triple.archAndOs(tg.triple(triple)));
+export let interpreterName = (triple: string) => {
+	let arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;
 };
 
-export let linkerPath = (tripleArg: tg.Triple.Arg) => {
-	let triple = tg.triple(tripleArg);
-	triple.environment = "musl";
-	let tripleString = tg.Triple.toString(triple);
-	return `${tripleString}/bin/ld`;
+export let linkerPath = (triple: string) => {
+	std.triple.assert(triple);
+	return `${triple}/bin/ld`;
 };

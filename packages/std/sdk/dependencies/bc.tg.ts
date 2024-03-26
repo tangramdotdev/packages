@@ -41,8 +41,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = await tg.Triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
@@ -52,13 +52,14 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 
 	// Define environment.
-	let ccCommand = build.os == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
+	let ccCommand =
+		std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
 	let env = [env_, std.utils.env(arg), { CC: ccCommand }];
 
 	let output = std.utils.buildUtil(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			buildInTree: true,
 			env,
 			opt: "3",
@@ -75,7 +76,7 @@ export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await tg.Triple.host());
+	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 	let directory = build({ host, bootstrapMode, env: sdk });

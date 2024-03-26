@@ -7,7 +7,7 @@ export let metadata = {
 	version: "2.42",
 };
 
-export let source = tg.target(async (build: tg.Triple.Arg) => {
+export let source = tg.target(async (build: string) => {
 	let { name, version } = metadata;
 
 	let compressionFormat = ".xz" as const;
@@ -41,7 +41,7 @@ type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	source?: tg.Directory;
 	staticBuild?: boolean;
-	target?: tg.Triple.Arg;
+	target?: string;
 };
 
 /** Obtain the GNU binutils. */
@@ -56,13 +56,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		target: target_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let build = build_ ? tg.triple(build_) : host;
-	let target = target_ ? tg.triple(target_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let target = target_ ?? host;
 
-	let buildString = tg.Triple.toString(build);
-	let hostString = tg.Triple.toString(host);
-	let targetString = tg.Triple.toString(target);
 	let buildPhase = arg?.staticBuild
 		? `make && make clean && make LDFLAGS=-all-static`
 		: undefined;
@@ -71,15 +68,15 @@ export let build = tg.target(async (arg?: Arg) => {
 	if (staticBuild) {
 		additionalEnv = {
 			...additionalEnv,
-			CC: await tg`${targetString}-cc -static -fPIC`,
-			CXX: await tg`${targetString}-c++ -static-libstdc++ -fPIC`,
+			CC: await tg`${target}-cc -static -fPIC`,
+			CXX: await tg`${target}-c++ -static-libstdc++ -fPIC`,
 		};
 	}
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	env.push(
 		dependencies.env({
 			...rest,
-			env: std.sdk({ host: build, bootstrapMode: true }),
+			env: env_,
 			host: build,
 		}),
 	);
@@ -93,9 +90,9 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--disable-nls",
 			"--disable-werror",
 			"--enable-gprofng=no",
-			`--build=${buildString}`,
-			`--host=${hostString}`,
-			`--target=${targetString}`,
+			`--build=${build}`,
+			`--host=${host}`,
+			`--target=${target}`,
 		],
 	};
 
@@ -108,7 +105,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let output = std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			source: source_ ?? source(build),

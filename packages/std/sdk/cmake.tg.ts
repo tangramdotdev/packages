@@ -5,13 +5,13 @@ import ninja from "./ninja.tg.ts";
 
 export let metadata = {
 	name: "cmake",
-	version: "3.28.1",
+	version: "3.29.0",
 };
 
 export let source = tg.target(() => {
 	let { version } = metadata;
 	let checksum =
-		"sha256:15e94f83e647f7d620a140a7a5da76349fc47a1bfed66d0f5cdee8e7344079ad";
+		"sha256:a0669630aae7baa4a8228048bf30b622f9e9fd8ee8cedb941754e9e38686c778";
 	let owner = "Kitware";
 	let repo = "CMake";
 	let tag = `v${version}`;
@@ -38,8 +38,8 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
@@ -75,7 +75,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 
 	let result = std.autotools.build({
 		...rest,
-		...tg.Triple.rotate({ build, host }),
+		...std.triple.rotate({ build, host }),
 		env,
 		hardeningCFlags: false,
 		phases: { prepare, configure },
@@ -103,8 +103,8 @@ export let build = tg.target(
 			useNinja = true,
 			...rest
 		} = arg ?? {};
-		let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-		let target = target_ ? tg.triple(target_) : host;
+		let host = host_ ?? (await std.triple.host());
+		let target = target_ ?? host;
 
 		// Set up env vars to pass through the include and library paths.
 		let cmakeEnv = `
@@ -166,7 +166,7 @@ export let build = tg.target(
 );
 
 export let test = tg.target(async () => {
-	let detectedHost = await tg.Triple.host();
+	let detectedHost = await std.triple.host();
 	let host = bootstrap.toolchainTriple(detectedHost);
 	let directory = cmake({ host, sdk: { bootstrapMode: true } });
 	await std.assert.pkg({

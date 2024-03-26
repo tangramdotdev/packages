@@ -29,7 +29,6 @@ type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	linuxHeaders: tg.Directory;
 	source?: tg.Directory;
-	target?: tg.Triple.Arg;
 	version?: GlibcVersion;
 };
 
@@ -41,19 +40,11 @@ export default tg.target(async (arg: Arg) => {
 		host: host_,
 		linuxHeaders,
 		source: source_,
-		target: target_,
 		version = defaultGlibcVersion,
 		...rest
 	} = arg;
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let build = build_ ? tg.triple(build_) : host;
-	let target = target_ ?? host;
-
-	let hostTriple = tg.triple(target ?? host);
-	let buildString = tg.Triple.toString(build);
-	let hostString = tg.Triple.toString(hostTriple);
-
-	// Resolve remaining arguments.
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let additionalFlags = [];
 
@@ -65,9 +56,7 @@ export default tg.target(async (arg: Arg) => {
 
 	if (version === "2.38" || version === "2.39") {
 		// This flag is not available in previous versions. The `-DFORTIFY_SOURCE` macro was already available to users of glibc. This flag additionally uses this macro to build libc itself. It's used to detect buffer overflows at compile time.
-		if (host.environment === "gnu") {
-			additionalFlags.push("--enable-fortify-source");
-		}
+		additionalFlags.push("--enable-fortify-source");
 	}
 
 	let configure = {
@@ -76,8 +65,8 @@ export default tg.target(async (arg: Arg) => {
 			"--disable-werror",
 			"--enable-kernel=4.14",
 			tg`--with-headers="${linuxHeaders}/include"`,
-			`--build=${buildString}`,
-			`--host=${hostString}`,
+			`--build=${build}`,
+			`--host=${host}`,
 			"libc_cv_slibdir=/lib",
 			"libc_cv_forced_unwind=yes",
 			...additionalFlags,
@@ -85,7 +74,7 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let install = {
-		args: [`DESTDIR="$OUTPUT/${hostString}"`],
+		args: [`DESTDIR="$OUTPUT/${host}"`],
 	};
 
 	let phases = {
@@ -115,7 +104,7 @@ export default tg.target(async (arg: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			opt: "2",
 			phases,
@@ -128,13 +117,13 @@ export default tg.target(async (arg: Arg) => {
 	// Fix libc.so.
 	result = await applySysrootFix({
 		directory: result,
-		filePath: `${hostString}/lib/libc.so`,
+		filePath: `${host}/lib/libc.so`,
 	});
 
 	// Fix libm.so.
 	result = await applySysrootFix({
 		directory: result,
-		filePath: `${hostString}/lib/libm.so`,
+		filePath: `${host}/lib/libm.so`,
 	});
 
 	return result;
@@ -171,8 +160,8 @@ export let applySysrootFix = async (arg: SysrootFixArg) => {
 	return directory;
 };
 
-export let interpreterName = (triple: tg.Triple.Arg) => {
-	let arch = tg.Triple.arch(tg.triple(triple));
+export let interpreterName = (triple: string) => {
+	let arch = std.triple.arch(triple);
 	let soVersion = arch === "x86_64" ? "2" : "1";
 	let soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;

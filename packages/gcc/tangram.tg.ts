@@ -18,7 +18,7 @@ export let source = tg.target(() =>
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	source?: tg.Directory;
-	target?: tg.Triple.Arg;
+	target?: string;
 };
 
 /* Produce a GCC toolchain. */
@@ -33,13 +33,13 @@ export let build = tg.target(async (arg: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
-	let build = build_ ? tg.triple(build_) : host;
+	let host = host_ ?? await std.triple.host();
+	let build = build_ ?? host;
 	let target = target_ ? tg.triple(target_) : host;
 
-	let buildString = tg.Triple.toString(build);
-	let hostString = tg.Triple.toString(host);
-	let targetString = tg.Triple.toString(target);
+	let build = std.triple.toString(build);
+	let host = std.triple.toString(host);
+	let target = std.triple.toString(target);
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
@@ -49,9 +49,9 @@ export let build = tg.target(async (arg: Arg) => {
 		"--enable-default-ssp",
 		"--enable-default-pie",
 		"--enable-initfini-array",
-		`--build=${buildString}`,
-		`--host=${hostString}`,
-		`--target=${targetString}`,
+		`--build=${build}`,
+		`--host=${host}`,
+		`--target=${target}`,
 	];
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
@@ -81,7 +81,7 @@ export let build = tg.target(async (arg: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			opt: "2",
@@ -98,7 +98,7 @@ export let build = tg.target(async (arg: Arg) => {
 	});
 	if (!isCross) {
 		result = await tg.directory(result, {
-			[`bin/${hostString}-cc`]: tg.symlink(`./${hostString}-gcc`),
+			[`bin/${host}-cc`]: tg.symlink(`./${host}-gcc`),
 		});
 	}
 

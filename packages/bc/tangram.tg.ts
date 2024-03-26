@@ -31,9 +31,9 @@ export let source = tg.target(async () => {
 
 type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	build?: tg.Triple.Arg;
+	build?: string;
 	env?: std.env.Arg;
-	host?: tg.Triple.Arg;
+	host?: string;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
@@ -48,8 +48,8 @@ export let bc = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = await tg.Triple.host(host_);
-	let build = build_ ? tg.triple(build_) : host;
+	let host = await std.triple.host(host_);
+	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
@@ -65,7 +65,7 @@ export let bc = tg.target(async (arg?: Arg) => {
 	let output = std.autotools.build(
 		{
 			...rest,
-			...tg.Triple.rotate({ build, host }),
+			...std.triple.rotate({ build, host }),
 			buildInTree: true,
 			env,
 			opt: "3",

@@ -26,7 +26,7 @@ export type Arg = {
 	fullRelro?: boolean;
 
 	/** The computer this build should get compiled on. */
-	host?: tg.Triple.Arg;
+	host?: string;
 
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
@@ -53,7 +53,7 @@ export type Arg = {
 	stripExecutables?: boolean;
 
 	/** The computer this build produces executables for. */
-	target?: tg.Triple.Arg;
+	target?: string;
 };
 
 export let target = async (...args: tg.Args<Arg>) => {
@@ -65,8 +65,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 		doCheck: boolean;
 		fullRelro: boolean;
 		hardeningCFlags: boolean;
-		host: tg.Triple;
-		target: tg.Triple;
+		host: string;
+		target: string;
 		opt: "1" | "2" | "3" | "s" | "z" | "fast";
 		parallel: boolean | number;
 		phases: Array<std.phases.Arg>;
@@ -126,7 +126,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 				object.fullRelro = arg.fullRelro;
 			}
 			if (arg.host !== undefined) {
-				object.host = tg.Mutation.is(arg.host) ? arg.host : tg.triple(arg.host);
+				object.host = arg.host;
 			}
 			if (arg.opt !== undefined) {
 				object.opt = arg.opt;
@@ -163,9 +163,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 				object.stripExecutables = arg.stripExecutables;
 			}
 			if (arg.target !== undefined) {
-				object.target = tg.Mutation.is(arg.target)
-					? arg.target
-					: tg.triple(arg.target);
+				object.target = arg.target;
 			}
 			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
 			return object;
@@ -178,9 +176,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 	tg.assert(source !== undefined, `source must be defined`);
 
 	// Detect the host system from the environment.
-	let host = await tg.Triple.host(host_);
-	let target = target_ ? tg.triple(target_) : host;
-	let os = host.os;
+	let host = await std.triple.host();
+	let target = target_ ?? host;
+	let os = std.triple.os(host);
 
 	// Set up env.
 	let env: std.env.Arg = {};
@@ -203,7 +201,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 		cflags = tg`${cflags} ${extraCFlags}`;
 	}
 
-	if (!host.environment || host.environment === "gnu") {
+	let environment = std.triple.environment(host);
+	if (!environment || environment === "gnu") {
 		let cc1Specs = tg.file(`
 	 *cc1_options:
 	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
@@ -296,7 +295,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		defaultPhases.check = defaultCheck;
 	}
 
-	let system = tg.Triple.archAndOs(host);
+	let system = std.triple.archAndOs(host);
 	return await std.phases.target(
 		{
 			debug,

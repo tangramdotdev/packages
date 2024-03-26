@@ -11,7 +11,7 @@ import * as workspace from "./wrap/workspace.tg.ts";
 export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	type Apply = {
 		buildToolchain: std.env.Arg;
-		host: tg.Triple.Arg;
+		host: string;
 		identity: wrap.Identity;
 		interpreter:
 			| tg.File
@@ -164,7 +164,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-							);
+						  );
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -178,10 +178,10 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-						);
+					  );
 			}
 			if (arg.host !== undefined) {
-				object.host = tg.triple(arg.host);
+				object.host = arg.host;
 			}
 
 			return object;
@@ -195,12 +195,13 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 
 	let identity = identity_ ?? "executable";
 
-	let host = host_ ? tg.triple(host_) : await tg.Triple.host();
+	let host = host_ ?? (await std.triple.host());
+	std.triple.assert(host);
 	let buildToolchain = buildToolchain_
 		? buildToolchain_
-		: host.os === "linux"
-			? await gcc.toolchain({ host })
-			: await bootstrap.sdk.env({ host });
+		: std.triple.os(host) === "linux"
+		  ? await gcc.toolchain({ host })
+		  : await bootstrap.sdk.env(host);
 
 	let manifestInterpreter = interpreter
 		? await manifestInterpreterFromArg(interpreter, buildToolchain_)
@@ -278,7 +279,7 @@ export namespace wrap {
 		executable?: tg.File | tg.Symlink;
 
 		/** The host system to produce a wrapper for. */
-		host?: tg.Triple.Arg;
+		host?: string;
 
 		/** The identity of the executable. The default is "executable". */
 		identity?: Identity;
@@ -473,7 +474,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-								);
+							  );
 						return [key, mutations];
 					}),
 				),
@@ -1148,7 +1149,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1166,7 +1167,7 @@ let manifestInterpreterFromArg = async (
 			);
 		}
 		let arch = interpreterMetadata.arch;
-		let host = tg.triple(`${arch}-unknown-linux-gnu`);
+		let host = `${arch}-unknown-linux-gnu`;
 		let buildToolchain = buildToolchainArg
 			? buildToolchainArg
 			: gcc.toolchain({ host });
@@ -1182,7 +1183,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1203,7 +1204,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1221,7 +1222,7 @@ let manifestInterpreterFromArg = async (
 			);
 		}
 		let arch = interpreterMetadata.arch;
-		let host = tg.triple(`${arch}-linux-musl`);
+		let host = `${arch}-linux-musl`;
 		let buildToolchain = buildToolchainArg
 			? buildToolchainArg
 			: gcc.toolchain({ host });
@@ -1237,7 +1238,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1258,10 +1259,10 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
-		let host = await tg.Triple.host();
+		let host = await std.triple.host();
 		let buildToolchain = buildToolchainArg
 			? buildToolchainArg
 			: gcc.toolchain({ host });
@@ -1275,7 +1276,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -1330,9 +1331,9 @@ let manifestInterpreterFromExecutableArg = async (
 			return manifestInterpreterFromElf(metadata);
 		}
 		case "mach-o": {
-			let arch = metadata.arches[0] as tg.Triple.Arch;
+			let arch = metadata.arches[0];
 			tg.assert(arch);
-			let host = tg.triple({ os: "darwin", arch });
+			let host = std.triple.create({ os: "darwin", arch });
 			let buildToolchain = buildToolchainArg
 				? buildToolchainArg
 				: bootstrap.sdk.env(host);
@@ -1370,17 +1371,18 @@ let manifestInterpreterFromElf = async (
 		return undefined;
 	}
 
-	let libc: tg.Triple.Environment = metadata.interpreter?.includes("ld-linux")
-		? "gnu"
-		: "musl";
+	// FIXME - this might be wrong. It could be a file ID pointing to ld-linux, which wouldn't show up in the filename.
+	let libc = metadata.interpreter?.includes("ld-linux") ? "gnu" : "musl";
 
-	// If host matches detected host AND libc is musl, set bootstrap mode.
-	let host = tg.triple({
+	let host = std.triple.create({
 		os: "linux",
 		vendor: "unknown",
 		arch: metadata.arch,
 		environment: libc,
 	});
+	// If the interpreter is ld-linux, use the host toolchain. Otherwise, use the bootstrap toolchain.
+	// FIXME - can we make this better, and prefer the host toolchain if it's available? Tricky when bootstrapping.
+	// This function should probably also get buildToolchain threaded through.
 	let buildToolchain =
 		libc === "musl" ? bootstrap.sdk.env(host) : gcc.toolchain({ host });
 
@@ -1407,7 +1409,7 @@ let manifestInterpreterFromElf = async (
 		};
 	} else if (metadata.interpreter?.includes("ld-musl")) {
 		// Handle an ld-musl interpreter.
-		host.environment = "musl";
+		host = std.triple.create(host, { environment: "musl" });
 		let muslArtifact = await bootstrap.musl.build({ host });
 		let libDir = tg.Directory.expect(await muslArtifact.get("lib"));
 		let ldso = tg.File.expect(await libDir.get(interpreterName(host)));
