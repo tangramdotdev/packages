@@ -333,6 +333,7 @@ export namespace sdk {
 	type ProvidesToolchainArg = {
 		bootstrapMode?: boolean;
 		env: std.env.Arg;
+		llvm?: boolean;
 		host?: string;
 		target?: string;
 	};
@@ -344,12 +345,15 @@ export namespace sdk {
 
 	/** Assert that an env provides an toolchain. */
 	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
-		let { bootstrapMode, env, host: host_, target: target_ } = arg;
-
-		let llvm = await std.env.provides({ env, names: ["clang"] });
-
-		let host = canonicalTriple(host_ ?? (await std.triple.host()));
-		let target = canonicalTriple(target_ ?? host);
+		let {
+			bootstrapMode,
+			env,
+			host: host_,
+			llvm = false,
+			target: target_,
+		} = arg;
+		let host = host_ ?? (await std.triple.host());
+		let target = target_ ?? host;
 		let isCross = host !== target;
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
@@ -381,7 +385,7 @@ export namespace sdk {
 	};
 
 	/** Determine whether an env provides an toolchain. */
-	export let providesToolchain = async (
+	export let providesToolchain = (
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
 		let { env, target } = arg;
@@ -392,8 +396,7 @@ export namespace sdk {
 				targetPrefix = `${target}-`;
 			}
 		}
-		let llvm = await std.env.provides({ env, names: ["clang"] });
-		if (llvm) {
+		if (arg.llvm) {
 			return std.env.provides({
 				env,
 				names: requiredLLVMCompilerComponents,
@@ -412,20 +415,25 @@ export namespace sdk {
 	export let toolchainComponents = async (
 		arg?: ToolchainEnvArg,
 	): Promise<ToolchainComponents> => {
-		let { bootstrapMode, env, host: host_, target: targetTriple } = arg ?? {};
-
+		let {
+			bootstrapMode,
+			env,
+			host: host_,
+			llvm = false,
+			target: targetTriple,
+		} = arg ?? {};
 		// Make sure we have a toolchain.
 		await sdk.assertProvidesToolchain({
 			bootstrapMode,
 			env,
 			host: host_,
+			llvm,
 			target: targetTriple,
 		});
-
-		let host = await getHost({ env, host: host_, target: targetTriple });
+		let host = await getHost({ env, host: host_, llvm });
 		let os = std.triple.os(host);
 		let target = targetTriple ?? host;
-		let isCross = (host_ ?? (await std.triple.host())) !== target;
+		let isCross = host !== target;
 		let targetPrefix = isCross && !bootstrapMode ? `${target}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
@@ -502,8 +510,8 @@ export namespace sdk {
 			os === "darwin"
 				? "ld"
 				: flavor === "gcc"
-					? `${targetPrefix}ld`
-					: "ld.lld";
+				  ? `${targetPrefix}ld`
+				  : "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
 		if (foundLd) {
@@ -521,23 +529,17 @@ export namespace sdk {
 		let ldso;
 		let libDir;
 		if (os !== "darwin") {
-			if (isCross) {
-				libDir = tg.Directory.expect(await directory.tryGet(`${target}/lib`));
-				let ldsoPath = libc.interpreterName(target);
-				ldso = tg.File.expect(await libDir.tryGet(ldsoPath));
-			} else {
-				// Go through LIBRARY_PATH to find the dynamic linker.
-				let ldsoPath = libc.interpreterName(host);
-				for await (let [_parent, dir] of std.env.dirsInVar({
-					env,
-					key: "LIBRARY_PATH",
-				})) {
-					let foundLdso = await dir.tryGet(ldsoPath);
-					if (foundLdso) {
-						ldso = tg.File.expect(foundLdso);
-						libDir = dir;
-						break;
-					}
+			// Go through LIBRARY_PATH to find the dynamic linker.
+			let ldsoPath = libc.interpreterName(host);
+			for await (let [_parent, dir] of std.env.dirsInVar({
+				env,
+				key: "LIBRARY_PATH",
+			})) {
+				let foundLdso = await dir.tryGet(ldsoPath);
+				if (foundLdso) {
+					ldso = tg.File.expect(foundLdso);
+					libDir = dir;
+					break;
 				}
 			}
 		} else {
@@ -565,6 +567,7 @@ export namespace sdk {
 		/** The environment to ascertain the host from. */
 		env?: std.env.Arg;
 		host?: string;
+		llvm?: boolean;
 		/** If the environment is a cross-compiler, what target should we use to look for prefixes? */
 		target?: string;
 	};
@@ -620,28 +623,21 @@ export namespace sdk {
 	export let getHost = async (arg: ToolchainEnvArg): Promise<string> => {
 		let { env, host: host_, target: target_ } = arg;
 		let detectedHost = host_ ?? (await std.triple.host());
-		let target = target_ ?? detectedHost;
-		let isCross = canonicalTriple(detectedHost) !== canonicalTriple(target);
 
 		if (std.triple.os(detectedHost) === "darwin") {
 			return detectedHost;
 		}
 
 		// Locate the C compiler using the CC variable if set, falling back to "cc" in PATH if not.
-		let targetString = isCross ? target : "";
-		let ccEnvVar = isCross ? `CC_${targetString.replace(/-/g, "_")}` : "CC";
+		let target = target_ ?? "";
+		let ccEnvVar = target ? `CC_${target.replace(/-/g, "_")}` : "CC";
 		let cmd = `$${ccEnvVar}`;
 		let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
-		let targetPrefix = isCross ? `${targetString}-` : "";
+		let targetPrefix = target ? `${target}-` : "";
 		if (!foundCC) {
-			let clangExists = await std.env.tryWhich({ env, name: "clang" });
-			if (clangExists) {
-				cmd = "clang";
-			} else {
-				let name = `${targetPrefix}cc`;
-				foundCC = await std.env.tryWhich({ env, name });
-				cmd = name;
-			}
+			let name = arg?.llvm ? "clang" : `${targetPrefix}cc`;
+			foundCC = await std.env.tryWhich({ env, name });
+			cmd = name;
 		}
 
 		// If we couldn't locate a file or symlink at either CC or `cc` in $PATH, we can't determine the host.
@@ -792,7 +788,7 @@ export namespace sdk {
 		let expected = await resolveHostAndTarget(arg);
 
 		// Check that the env provides a host toolchain.
-		await sdk.assertProvidesToolchain({ env });
+		await sdk.assertProvidesToolchain({ env, llvm: arg?.toolchain === "llvm" });
 
 		// Assert we can determine a host and it matches the expected.
 		let actualHost = await sdk.getHost({ env });

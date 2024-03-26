@@ -23,8 +23,6 @@ export let injection = tg.target(async (arg: Arg) => {
 
 	// Get the build toolchain.
 	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
-		host: build,
-		target: host,
 		env: arg.buildToolchain,
 	});
 
@@ -201,7 +199,7 @@ export let testCross = tg.target(async () => {
 
 	let hostArch = std.triple.arch(detectedHost);
 	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = `${targetArch}-unknown-linux-gnu`;
+	let target = std.triple.create(detectedHost, { arch: targetArch });
 	let buildToolchain = gcc.toolchain({ host: detectedHost, target });
 
 	let nativeInjection = await injection({
