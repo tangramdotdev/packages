@@ -26,9 +26,12 @@ export let flatten = <T,>(value: tg.MaybeNestedArray<T>): Array<T> => {
 
 export let test = tg.target(() => testDefaultSdk());
 
-import { host as hostTriple } from "./triple.tg.ts";
+import * as triple from "./triple.tg.ts";
 export let testHostSystem = tg.target(async () => {
-	return hostTriple();
+	return triple.host();
+});
+export let testTriple = tg.target(async () => {
+	return await triple.test();
 });
 
 // std.wrap component tests
@@ -92,7 +95,7 @@ export let testBootstrapMusl = tg.target(async () => {
 
 import * as utils from "./utils.tg.ts";
 export let testUtilsPrerequisites = tg.target(async () => {
-	return await utils.prerequisites(bootstrap.toolchainTriple(await hostTriple()));
+	return await utils.prerequisites(bootstrap.toolchainTriple(await triple.host()));
 });
 
 export let testUtilsBash = tg.target(async () => {
@@ -217,7 +220,7 @@ export let testKernelHeaders = tg.target(async () => {
 
 import * as binutils from "./sdk/binutils.tg.ts";
 export let testBinutilsSource = tg.target(async () => {
-	return await binutils.source(await hostTriple());
+	return await binutils.source(await triple.host());
 });
 export let testBinutils = tg.target(async () => {
 	return await binutils.test();
@@ -255,7 +258,7 @@ import { toolchainTriple as bootstrapToolchainTriple } from "./bootstrap.tg.ts";
 import { sdk } from "./sdk.tg.ts";
 export let testBootstrapSdk = tg.target(async () => {
 	let env = await sdk({ bootstrapMode: true });
-	let host = await hostTriple();
+	let host = await triple.host();
 	let detectedHost = bootstrapToolchainTriple(host);
 	await sdk.assertValid(env, { host: detectedHost, bootstrapMode: true });
 	return env;
@@ -263,7 +266,7 @@ export let testBootstrapSdk = tg.target(async () => {
 
 export let testDefaultSdk = tg.target(async () => {
 	let env = await sdk();
-	let detectedHost = await hostTriple();
+	let detectedHost = await triple.host();
 	await sdk.assertValid(env, { host: detectedHost });
 	return env;
 });
