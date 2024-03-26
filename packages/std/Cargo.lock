@@ -129,6 +129,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd56dd203fef61ac097dd65721a419ddccb106b2d2b70ba60a6b529f03961a51"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.55",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -583,6 +605,17 @@ checksum = "a258e46cdc063eb8519c00b9fc845fc47bcfca4130e2f08e88665ceda8474245"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "fastcdc"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a71061d097bfa9a5a4d2efdec57990d9a88745020b365191d37e48541a1628f2"
+dependencies = [
+ "async-stream",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -1431,9 +1464,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
+checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
 
 [[package]]
 name = "ring"
@@ -1764,7 +1797,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=07f25990f9d9d1310e8209fc63a27075dc184230#07f25990f9d9d1310e8209fc63a27075dc184230"
+source = "git+https://github.com/tangramdotdev/tangram?rev=fe0a36dc357b6d7383f03db5f42b53be098d005d#fe0a36dc357b6d7383f03db5f42b53be098d005d"
 dependencies = [
  "async-compression",
  "async-recursion",
@@ -1775,6 +1808,7 @@ dependencies = [
  "data-encoding-macro",
  "derive_more",
  "either",
+ "fastcdc",
  "fnv",
  "futures",
  "http",
@@ -1821,7 +1855,7 @@ dependencies = [
 [[package]]
 name = "tangram_error"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=07f25990f9d9d1310e8209fc63a27075dc184230#07f25990f9d9d1310e8209fc63a27075dc184230"
+source = "git+https://github.com/tangramdotdev/tangram?rev=fe0a36dc357b6d7383f03db5f42b53be098d005d#fe0a36dc357b6d7383f03db5f42b53be098d005d"
 dependencies = [
  "crossterm",
  "glob",
@@ -1853,7 +1887,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=07f25990f9d9d1310e8209fc63a27075dc184230#07f25990f9d9d1310e8209fc63a27075dc184230"
+source = "git+https://github.com/tangramdotdev/tangram?rev=fe0a36dc357b6d7383f03db5f42b53be098d005d#fe0a36dc357b6d7383f03db5f42b53be098d005d"
 dependencies = [
  "bytes",
  "crossbeam",
