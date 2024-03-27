@@ -132,7 +132,7 @@ fn clear_env() {
 fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 	let fd = unsafe {
 		// Create a temporary file.
-		let temp_path = c"/tmp/XXXXXX";
+		let temp_path = c"/tmp/XXXXXX".to_owned();
 		let fd = libc::mkstemp(temp_path.as_ptr().cast_mut());
 		if fd == -1 {
 			#[cfg(feature = "tracing")]
