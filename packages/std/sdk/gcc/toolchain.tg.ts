@@ -42,7 +42,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		env: [nativeToolchain, nativeProxyEnv],
 		host,
 		target,
-		variant: "stage2_full",
+		variant: "stage2_cross",
 	});
 
 	return env;

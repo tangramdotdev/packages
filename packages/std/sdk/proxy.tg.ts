@@ -64,7 +64,6 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	} = await std.sdk.toolchainComponents({
 		bootstrapMode,
 		env: buildToolchain,
-		llvm,
 		host,
 		target: host,
 	});

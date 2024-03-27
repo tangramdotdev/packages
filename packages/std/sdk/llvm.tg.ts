@@ -1,4 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
+import { canonicalTriple } from "../sdk.tg.ts";
 import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
@@ -10,13 +11,13 @@ import { interpreterName } from "./libc.tg.ts";
 
 export let metadata = {
 	name: "llvm",
-	version: "18.1.1",
+	version: "18.1.2",
 };
 
 export let source = async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:8f34c6206be84b186b4b31f47e1b52758fa38348565953fad453d177ef34c0ad";
+		"sha256:51073febd91d1f2c3b411d022695744bda322647e76e0b4eb1918229210c48d5";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -42,8 +43,8 @@ export let toolchain = async (arg?: LLVMArg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	let host = canonicalTriple(host_ ?? (await std.triple.host()));
+	let build = canonicalTriple(build_ ?? host);
 
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("LLVM toolchain must be built for Linux");
@@ -136,7 +137,11 @@ export let toolchain = async (arg?: LLVMArg) => {
 	);
 	console.log("llvmArtifact with compiler RT", await llvmArtifact.id());
 
-	llvmArtifact = await tg.directory(llvmArtifact, sysroot);
+	// Add sysroot and `cc`/`c++` symlinks.
+	llvmArtifact = await tg.directory(llvmArtifact, sysroot, {
+		"bin/cc": tg.symlink("clang"),
+		"bin/c++": tg.symlink("clang++"),
+	});
 	console.log("llvmArtifact with sysroot", await llvmArtifact.id());
 
 	return llvmArtifact;
@@ -225,7 +230,7 @@ export let test = async () => {
 		}
 	`);
 	let cxxScript = tg`
-		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
+		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -isystem${fullLlvmPlusClang}/include/c++/v1 -isystem${fullLlvmPlusClang}/include/${host}/c++/v1 -o $OUTPUT
 	`;
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {

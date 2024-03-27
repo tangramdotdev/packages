@@ -216,8 +216,8 @@ export let build = async (arg: BuildArg) => {
 	let { directory, ldso, libDir } = await std.sdk.toolchainComponents({
 		bootstrapMode,
 		env: buildToolchain,
-		host: host_,
-		target: target_,
+		host: isCross ? host : host_,
+		target: isCross ? target : target_,
 	});
 	if (setSysroot) {
 		suffix = tg` --sysroot ${directory}`;
