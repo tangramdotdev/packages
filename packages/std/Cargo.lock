@@ -1868,7 +1868,6 @@ dependencies = [
 name = "tangram_ld_proxy"
 version = "0.0.0"
 dependencies = [
- "async-recursion",
  "fnv",
  "futures",
  "goblin",
@@ -1905,10 +1904,7 @@ dependencies = [
 name = "tangram_wrapper"
 version = "0.0.0"
 dependencies = [
- "byteorder",
  "fnv",
- "futures",
- "itertools",
  "libc",
  "serde",
  "serde_json",

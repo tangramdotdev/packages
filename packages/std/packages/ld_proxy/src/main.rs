@@ -239,6 +239,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		is_executable,
 		interpreter,
 		needed_libraries: initial_needed_libraries,
+		..
 	} = analyze_output_file(&options.output_path).await?;
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
@@ -398,23 +399,15 @@ async fn create_manifest<H: BuildHasher>(
 					.interpreter_path
 					.as_ref()
 					.expect("TANGRAM_LINKER_INTERPRETER_PATH must be set.");
+				let interpreter_flavor = determine_interpreter_flavor(path).await?;
 
-				// Check if this is a musl interpreter.
-				let is_musl = {
-					let canonical_interpreter = std::fs::canonicalize(path)
-						.expect("Failed to canonicalize the interpreter path.");
-
-					// Check the help output for the string "musl".
-					let output = std::process::Command::new(canonical_interpreter)
-						.arg("--help")
-						.output()
-						.expect("Failed to run the interpreter help command.");
-					String::from_utf8_lossy(&output.stderr).contains("musl")
-				};
-
-				Some((path.clone(), is_musl))
+				Some((path.clone(), interpreter_flavor))
 			},
-			InterpreterRequirement::Path(path) => Some((path, false)),
+			InterpreterRequirement::Path(path) => {
+				let interpreter_flavor = determine_interpreter_flavor(&path).await?;
+
+				Some((path, interpreter_flavor))
+			},
 			InterpreterRequirement::None => None,
 		};
 
@@ -431,7 +424,7 @@ async fn create_manifest<H: BuildHasher>(
 			None
 		};
 
-		if let Some((path, is_musl)) = config {
+		if let Some((path, interpreter_flavor)) = config {
 			// Unrender the interpreter path.
 			let path = unrender(tg, &path);
 			let path = template_data_to_symlink_data(path).await?;
@@ -452,22 +445,23 @@ async fn create_manifest<H: BuildHasher>(
 				args = Some(futures::future::join_all(interpreter_args).await);
 			}
 
-			if is_musl {
-				Some(manifest::Interpreter::LdMusl(manifest::LdMuslInterpreter {
-					path,
-					library_paths,
-					preloads,
-					args,
-				}))
-			} else {
-				Some(manifest::Interpreter::LdLinux(
+			match interpreter_flavor {
+				LinuxInterpreterFlavor::Default => Some(manifest::Interpreter::LdLinux(
 					manifest::LdLinuxInterpreter {
 						path,
 						library_paths,
 						preloads,
 						args,
 					},
-				))
+				)),
+				LinuxInterpreterFlavor::Musl => {
+					Some(manifest::Interpreter::LdMusl(manifest::LdMuslInterpreter {
+						path,
+						library_paths,
+						preloads,
+						args,
+					}))
+				},
 			}
 		} else {
 			// There was no interpreter specified. We are likely a statically linked executable.
@@ -716,7 +710,6 @@ async fn store_dirs_as_symlinks<H: BuildHasher + Default>(
 	Ok(result)
 }
 
-#[async_recursion::async_recursion]
 #[tracing::instrument(skip(tg, file))]
 async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
 	tg: &dyn tg::Handle,
@@ -733,10 +726,9 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 
 	// Check for transitive dependencies if we've recurred beyond the initial file.
 	if depth > 0 {
-		let reader = tokio::io::BufReader::new(file.reader(tg).await?);
 		let AnalyzeOutputFileOutput {
 			needed_libraries, ..
-		} = analyze_executable(reader).await?;
+		} = analyze_executable(&file.bytes(tg).await?)?;
 		for library in &needed_libraries {
 			all_needed_libraries.entry(library.clone()).or_insert(None);
 		}
@@ -766,14 +758,14 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				*all_needed_libraries
 					.entry(library_name.clone())
 					.or_insert(None) = Some(dir_id.clone());
-				find_transitive_needed_libraries(
+				Box::pin(find_transitive_needed_libraries(
 					tg,
 					&found_library,
 					library_paths,
 					all_needed_libraries,
 					max_depth,
 					depth + 1,
-				)
+				))
 				.await?;
 				if found_all_libraries(all_needed_libraries) {
 					return Ok(());
@@ -794,28 +786,49 @@ fn found_all_libraries<H: BuildHasher + Default>(
 
 /// Analyze an output file.
 async fn analyze_output_file(path: impl AsRef<std::path::Path>) -> Result<AnalyzeOutputFileOutput> {
-	let reader =
-		tokio::io::BufReader::new(tokio::fs::File::open(&path).await.map_err(|error| {
-			error!(
-				source = error,
-				r#"failed to open the output file at path "{}""#,
-				path.as_ref().display()
-			)
-		})?);
-	analyze_executable(reader).await
+	let bytes = bytes_from_path(path).await?;
+	analyze_executable(&bytes)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LinuxInterpreterFlavor {
+	Default,
+	Musl,
+}
+
+/// Determine the flavor of the `ld-linux.so` executable at the given path, if it is one.
+async fn determine_interpreter_flavor(
+	path: impl AsRef<std::path::Path>,
+) -> Result<LinuxInterpreterFlavor> {
+	let path = path.as_ref();
+	let path = std::fs::canonicalize(path).map_err(|error| {
+		error!(
+			source = error,
+			"failed to canonicalize path {}",
+			path.display()
+		)
+	})?;
+
+	let bytes = bytes_from_path(path).await?;
+
+	let object = goblin::Object::parse(&bytes)
+		.map_err(|error| error!(source = error, "failed to parse output file as an object"))?;
+	if let goblin::Object::Elf(elf) = object {
+		let flavor = if elf.soname.is_some() && elf.soname.unwrap().starts_with("ld-linux") {
+			LinuxInterpreterFlavor::Default
+		} else {
+			LinuxInterpreterFlavor::Musl
+		};
+		Ok(flavor)
+	} else {
+		Err(error!("unsupported object type, expected elf file"))
+	}
 }
 
 /// Analyze an executable.
-async fn analyze_executable(mut reader: impl AsyncRead + Unpin) -> Result<AnalyzeOutputFileOutput> {
-	// Collect the bytes.
-	let mut bytes = Vec::new();
-	reader
-		.read_to_end(&mut bytes)
-		.await
-		.map_err(|error| error!(source = error, "failed to read the output file"))?;
-
+fn analyze_executable(bytes: &[u8]) -> Result<AnalyzeOutputFileOutput> {
 	// Parse the object and analyze it.
-	let object = goblin::Object::parse(&bytes)
+	let object = goblin::Object::parse(bytes)
 		.map_err(|error| error!(source = error, "failed to parse output file as an object"))?;
 	let result = match object {
 		// Handle an archive file.
@@ -907,6 +920,25 @@ async fn analyze_executable(mut reader: impl AsyncRead + Unpin) -> Result<Analyz
 	};
 
 	Ok(result)
+}
+
+async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
+	let mut reader =
+		tokio::io::BufReader::new(tokio::fs::File::open(&path).await.map_err(|error| {
+			error!(
+				source = error,
+				r#"failed to open the file at path "{}""#,
+				path.as_ref().display()
+			)
+		})?);
+
+	let mut bytes = Vec::new();
+	reader
+		.read_to_end(&mut bytes)
+		.await
+		.map_err(|error| error!(source = error, "failed to read the output file"))?;
+
+	Ok(bytes)
 }
 
 async fn file_from_reader(

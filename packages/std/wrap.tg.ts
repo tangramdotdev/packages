@@ -164,7 +164,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-						  );
+							);
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -178,7 +178,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-					  );
+						);
 			}
 			if (arg.host !== undefined) {
 				object.host = arg.host;
@@ -200,8 +200,8 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	let buildToolchain = buildToolchain_
 		? buildToolchain_
 		: std.triple.os(host) === "linux"
-		  ? await gcc.toolchain({ host })
-		  : await bootstrap.sdk.env(host);
+			? await gcc.toolchain({ host })
+			: await bootstrap.sdk.env(host);
 
 	let manifestInterpreter = interpreter
 		? await manifestInterpreterFromArg(interpreter, buildToolchain_)
@@ -474,7 +474,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-							  );
+								);
 						return [key, mutations];
 					}),
 				),
@@ -1014,17 +1014,14 @@ export namespace wrap {
 				tg.encoding.json.encode(manifest),
 			);
 
-			// Read the file.
-			let fileBytes = await file.bytes();
+			// Retrieve the file's blob.
+			let fileBlob = file.contents();
 
-			// Create a buffer for the new file.
-			let newBytesLength = fileBytes.length + manifestBytes.length + 8 + 8 + 8;
+			// Create a buffer for the manifest plus three 64-bit values (manifest length, version, magic number).
+			let newBytesLength = manifestBytes.length + 8 + 8 + 8;
 			let newBytesPosition = 0;
+			let littleEndian = true;
 			let newBytes = new Uint8Array(newBytesLength);
-
-			// Write the file contents.
-			newBytes.set(fileBytes, newBytesPosition);
-			newBytesPosition += fileBytes.length;
 
 			// Write the manifest.
 			newBytes.set(manifestBytes, newBytesPosition);
@@ -1034,7 +1031,7 @@ export namespace wrap {
 			new DataView(newBytes.buffer).setBigUint64(
 				newBytesPosition,
 				BigInt(manifestBytes.length),
-				true,
+				littleEndian,
 			);
 			newBytesPosition += 8;
 
@@ -1042,7 +1039,7 @@ export namespace wrap {
 			new DataView(newBytes.buffer).setBigUint64(
 				newBytesPosition,
 				BigInt(MANIFEST_VERSION),
-				true,
+				littleEndian,
 			);
 			newBytesPosition += 8;
 
@@ -1050,20 +1047,25 @@ export namespace wrap {
 			newBytes.set(MANIFEST_MAGIC_NUMBER, newBytesPosition);
 			newBytesPosition += 8;
 
+			// Create the blob.
+			let contents = tg.blob(fileBlob, newBytes);
+
 			// Collect the manifest references.
 			let references_ = new Set<tg.Artifact.Id>();
 			for await (let reference of manifestReferences(manifest)) {
 				references_.add(await reference.id());
 			}
 			let fileReferences = await file.references();
-			for (let reference of fileReferences) {
-				references_.add(await reference.id());
-			}
+			await Promise.all(
+				fileReferences.map(async (reference) => {
+					references_.add(await reference.id());
+				}),
+			);
 			let references = [...references_].map((id) => tg.Artifact.withId(id));
 
 			// Create the file.
 			let newFile = tg.file({
-				contents: newBytes,
+				contents,
 				executable: true,
 				references,
 			});
@@ -1149,7 +1151,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1183,7 +1185,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1204,7 +1206,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1238,7 +1240,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1259,7 +1261,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
 		let host = await std.triple.host();
@@ -1276,7 +1278,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -1371,7 +1373,6 @@ let manifestInterpreterFromElf = async (
 		return undefined;
 	}
 
-	// FIXME - this might be wrong. It could be a file ID pointing to ld-linux, which wouldn't show up in the filename.
 	let libc = metadata.interpreter?.includes("ld-linux") ? "gnu" : "musl";
 
 	let host = std.triple.create({
@@ -2147,46 +2148,46 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 	let executable = await argAndEnvDump();
 	let executableID = await executable.id();
 
-	let wrapper = await wrap(executable, {
+	let buildToolchain = await std.sdk({ bootstrapMode: true });
+
+	let wrapper = await wrap({
 		args: ["--arg1", "--arg2"],
+		buildToolchain,
 		env: {
 			HELLO: "WORLD",
 		},
+		executable,
 	});
-	// let wrapperID = await wrapper.id();
+	let wrapperID = await wrapper.id();
 
-	// // Check the manifest can be deserialized properly.
-	// let manifest = await wrap.Manifest.read(wrapper);
-	// tg.assert(manifest);
-	// tg.assert(manifest.identity === "executable");
-	// tg.assert(manifest.interpreter);
-	// tg.assert(manifest.interpreter.kind === "ld-musl");
-	// tg.assert(manifest.interpreter.preloads?.length === 1);
+	// Check the manifest can be deserialized properly.
+	let manifest = await wrap.Manifest.read(wrapper);
+	tg.assert(manifest);
+	tg.assert(manifest.identity === "executable");
+	tg.assert(manifest.interpreter);
+	tg.assert(manifest.interpreter.kind === "ld-musl");
+	tg.assert(manifest.interpreter.preloads?.length === 1);
 
-	// // Check the output matches the expected output.
-	// let output = tg.File.expect(
-	// 	await tg.build(tg`${wrapper} > $OUTPUT`, {
-	// 		env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
-	// 	}),
-	// );
-	// let text = await output.text();
-	// tg.assert(
-	// 	text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),
-	// 	"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
-	// );
-	// tg.assert(
-	// 	text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
-	// 	"Expected argv[0] to be set to the wrapper that was invoked",
-	// );
-	// tg.assert(
-	// 	text.includes("argv[1]: --arg1"),
-	// 	"Expected first arg to be --arg1",
-	// );
-	// tg.assert(
-	// 	text.includes("argv[2]: --arg2"),
-	// 	"Expected second arg to be --arg2",
-	// );
-	// tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
+	// Check the output matches the expected output.
+	let output = tg.File.expect(await tg.build(tg`${wrapper} > $OUTPUT`));
+	let text = await output.text();
+	tg.assert(
+		text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),
+		"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
+	);
+	tg.assert(
+		text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
+		"Expected argv[0] to be set to the wrapper that was invoked",
+	);
+	tg.assert(
+		text.includes("argv[1]: --arg1"),
+		"Expected first arg to be --arg1",
+	);
+	tg.assert(
+		text.includes("argv[2]: --arg2"),
+		"Expected second arg to be --arg2",
+	);
+	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
 
 	return wrapper;
 });

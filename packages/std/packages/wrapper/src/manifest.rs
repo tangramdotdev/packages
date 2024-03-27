@@ -1,4 +1,3 @@
-use byteorder::{ReadBytesExt, WriteBytesExt};
 #[cfg(feature = "tracing")]
 use std::os::unix::fs::PermissionsExt;
 use std::{
@@ -153,9 +152,10 @@ impl Manifest {
 		}
 
 		// Open the file.
-		let mut file = std::fs::OpenOptions::new().append(true).open(path)?;
+		let file = std::fs::OpenOptions::new().append(true).open(path)?;
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?file);
+		let mut file = std::io::BufWriter::new(file);
 
 		// Serialize the manifest.
 		let manifest = serde_json::to_string(self)?;
@@ -166,11 +166,10 @@ impl Manifest {
 		tracing::debug!("Wrote manifest");
 
 		// Write the length of the manifest.
-		let length = manifest.len() as u64;
-		file.write_u64::<byteorder::LittleEndian>(length)?;
+		file.write_all(&u64::try_from(manifest.len()).unwrap().to_le_bytes())?;
 
 		// Write the manifest version.
-		file.write_u64::<byteorder::LittleEndian>(VERSION)?;
+		file.write_all(&VERSION.to_le_bytes())?;
 
 		// Write the magic number.
 		file.write_all(MAGIC_NUMBER)?;
@@ -186,12 +185,14 @@ impl Manifest {
 		let mut file = std::fs::File::open(path)?;
 		file.seek(std::io::SeekFrom::End(0))?;
 
+		// Create a buffer to read 64-bit values.
+		let buf = &mut [0u8; 8];
+
 		// Read and verify the magic number.
 		file.seek(std::io::SeekFrom::Current(-8))?;
-		let mut magic_number = [0u8; MAGIC_NUMBER.len()];
-		file.read_exact(&mut magic_number)?;
+		file.read_exact(buf)?;
 		file.seek(std::io::SeekFrom::Current(-8))?;
-		if magic_number != MAGIC_NUMBER {
+		if buf != MAGIC_NUMBER {
 			#[cfg(feature = "tracing")]
 			tracing::info!(
 				"Magic number mismatch.  Recognized: {:?}, Read: {:?}",
@@ -203,7 +204,8 @@ impl Manifest {
 
 		// Read and verify the manifest version.
 		file.seek(std::io::SeekFrom::Current(-8))?;
-		let version = file.read_u64::<byteorder::LittleEndian>()?;
+		file.read_exact(buf)?;
+		let version = u64::from_le_bytes(*buf);
 		file.seek(std::io::SeekFrom::Current(-8))?;
 		if version != VERSION {
 			#[cfg(feature = "tracing")]
@@ -217,7 +219,8 @@ impl Manifest {
 
 		// Read the manifest length.
 		file.seek(std::io::SeekFrom::Current(-8))?;
-		let length = file.read_u64::<byteorder::LittleEndian>()?;
+		file.read_exact(buf)?;
+		let length = u64::from_le_bytes(*buf);
 		file.seek(std::io::SeekFrom::Current(-8))?;
 
 		// Read the manifest.

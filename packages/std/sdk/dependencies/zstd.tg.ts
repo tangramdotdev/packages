@@ -2,14 +2,14 @@ import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	name: "zstd",
-	version: "1.5.5",
+	version: "1.5.6",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let compressionFormat = ".zst" as const;
 	let checksum =
-		"sha256:ce264bca60eb2f0e99e4508cffd0d4d19dd362e84244d7fc941e79fa69ccf673";
+		"sha256:4aa8dd1c1115c0fd6b6b66c35c7f6ce7bd58cc1dfd3e4f175b45b39e84b14352";
 	let owner = "facebook";
 	let repo = name;
 	let tag = `v${version}`;

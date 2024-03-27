@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use std::{collections::BTreeMap, ffi::OsStr, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
 use tangram_wrapper::manifest::{DyLdInterpreter, Executable, Identity, Interpreter, Manifest};
@@ -106,14 +105,14 @@ fn main_inner() -> std::io::Result<()> {
 		let command_args = args
 			.iter()
 			.map(|arg| render_template(arg, &artifacts_directories))
-			.collect_vec();
+			.collect::<Vec<_>>();
 		#[cfg(feature = "tracing")]
 		tracing::trace!(?command_args);
 		command.args(command_args);
 	}
 
 	// Add the wrapper args.
-	let wrapper_args = std::env::args_os().skip(1).collect_vec();
+	let wrapper_args = std::env::args_os().skip(1).collect::<Vec<_>>();
 	#[cfg(feature = "tracing")]
 	tracing::trace!(?wrapper_args);
 	command.args(wrapper_args);
@@ -133,7 +132,7 @@ fn clear_env() {
 fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 	let fd = unsafe {
 		// Create a temporary file.
-		let temp_path = std::ffi::CString::new("/tmp/XXXXXX").unwrap();
+		let temp_path = c"/tmp/XXXXXX";
 		let fd = libc::mkstemp(temp_path.as_ptr().cast_mut());
 		if fd == -1 {
 			#[cfg(feature = "tracing")]
@@ -230,6 +229,7 @@ fn handle_interpreter(
 				.iter()
 				.flatten()
 				.map(|path| render_symlink(path, artifacts_directories))
+				.collect::<Vec<_>>()
 				.join(":");
 
 			// Prepend any paths found in LD_LIBRARY_PATH.
@@ -247,6 +247,7 @@ fn handle_interpreter(
 				let preload = preloads
 					.iter()
 					.map(|preload| render_symlink(preload, artifacts_directories))
+					.collect::<Vec<_>>()
 					.join(":");
 				#[cfg(feature = "tracing")]
 				tracing::trace!(?preload);
@@ -287,6 +288,7 @@ fn handle_interpreter(
 				.iter()
 				.flatten()
 				.map(|path| render_symlink(path, artifacts_directories))
+				.collect::<Vec<_>>()
 				.join(":");
 
 			// Prepend any paths found in LD_LIBRARY_PATH.
@@ -304,6 +306,7 @@ fn handle_interpreter(
 				let preload = preloads
 					.iter()
 					.map(|preload| render_symlink(preload, artifacts_directories))
+					.collect::<Vec<_>>()
 					.join(":");
 				#[cfg(feature = "tracing")]
 				tracing::trace!(?preload);
@@ -349,6 +352,7 @@ fn set_dyld_environment(
 		let manifest_library_path = library_paths
 			.iter()
 			.map(|path| render_symlink(path, artifacts_directories))
+			.collect::<Vec<_>>()
 			.join(":");
 		let library_path = if let Some(dyld_library_path) = user_library_path {
 			format!("{dyld_library_path}:{manifest_library_path}")
@@ -371,6 +375,7 @@ fn set_dyld_environment(
 		let insert_libraries = preloads
 			.iter()
 			.map(|path| render_symlink(path, artifacts_directories))
+			.collect::<Vec<_>>()
 			.join(":");
 		std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries);
 	}
@@ -454,7 +459,7 @@ fn apply_mutation_to_key(
 			let values = values
 				.iter()
 				.map(|arg| render_value(arg, artifacts_directories))
-				.collect_vec();
+				.collect::<Vec<_>>();
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
@@ -467,7 +472,7 @@ fn apply_mutation_to_key(
 			let values = values
 				.iter()
 				.map(|arg| render_value(arg, artifacts_directories))
-				.collect_vec();
+				.collect::<Vec<_>>();
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
@@ -529,7 +534,7 @@ fn render_template(
 				.expect("Invalid path.")
 				.to_owned(),
 		})
-		.join("")
+		.collect::<String>()
 }
 
 fn render_symlink(

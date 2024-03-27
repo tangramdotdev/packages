@@ -2,15 +2,24 @@
 members = ["packages/cc_proxy", "packages/ld_proxy", "packages/wrapper"]
 resolver = "2"
 
+[workspace.package]
+authors = ["Tangram <root@tangram.dev>"]
+description = "Userspace utilities for the Tangram standard library"
+edition = "2021"
+homepage = "https://www.tangram.dev"
+license = "MIT"
+publish = false
+repository = "https://github.com/tangramdotdev/packages"
+rust-version = "1.77.0"
+version = "0.0.0"
+
 [workspace.lints.clippy]
-pedantic = "warn"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 missing_safety_doc = "allow"
+pedantic = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-async-recursion = "1"
-byteorder = "1"
 clap = { version = "4", features = ["derive"] }
 fnv = "1"
 futures = "0.3"
