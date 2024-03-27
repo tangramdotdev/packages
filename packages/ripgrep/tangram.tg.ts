@@ -1,4 +1,5 @@
 import pcre2 from "tg:pcre2" with { path: "../pcre2" };
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as rust from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 
@@ -41,7 +42,7 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let env = [pcre2(arg), env_];
+	let env = [pkgconfig(arg), pcre2(arg), env_];
 
 	return rust.build(
 		{
