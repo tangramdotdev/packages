@@ -31,7 +31,7 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 				"packages/cc_proxy": tg.include("../packages/cc_proxy"),
 				"packages/ld_proxy": tg.include("../packages/ld_proxy"),
 				"packages/wrapper": tg.include("../packages/wrapper"),
-		  });
+			});
 
 	return build({
 		...(await std.triple.rotate({ build: buildTriple, host })),
@@ -50,7 +50,7 @@ export let tgld = async (arg: Arg) =>
 export let wrapper = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
-let version = "1.77.0";
+let version = "1.77.1";
 
 type ToolchainArg = {
 	target?: string;

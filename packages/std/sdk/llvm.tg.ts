@@ -63,28 +63,12 @@ export let toolchain = async (arg?: LLVMArg) => {
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());
 
-	let gccToolchain = gcc.toolchain(std.triple.rotate({ build, host }));
-
 	let deps: tg.Unresolved<std.env.Arg> = [
 		git({ host }),
-		gccToolchain,
 		dependencies.env({ host: build }),
 	];
 
-	let env = [
-		...deps,
-		{
-			CC: tg`gcc --sysroot=${sysroot}`,
-			CXX: tg`g++ --sysroot=${sysroot}`,
-			LDFLAGS: tg.Mutation.templatePrepend(
-				tg`-Wl,-dynamic-linker,${sysroot}/lib/${interpreterName(
-					host,
-				)} -Wl,-rpath,${sysroot}/lib:${gccToolchain}/lib`,
-				" ",
-			),
-		},
-		env_,
-	];
+	let env = [...deps, env_];
 
 	let configureLlvm = {
 		args: [
@@ -103,9 +87,9 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DCLANG_ENABLE_BOOTSTRAP=ON",
 			"-DCMAKE_BUILD_TYPE=Release",
 			"-DCMAKE_INSTALL_LIBDIR=lib",
+			"-DCMAKE_SKIP_INSTALL_RPATH=ON",
 			"-DCOMPILER_RT_BUILD_PROFILE=ON",
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
-			tg`-DGCC_INSTALL_PREFIX=${gccToolchain}`,
 			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
 			"-DLIBCXX_USE_COMPILER_RT=YES",
 			"-DLIBCXXABI_USE_COMPILER_RT=YES",
@@ -126,7 +110,6 @@ export let toolchain = async (arg?: LLVMArg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			bootstrapMode: true,
 			env,
 			phases: {
 				configure: configureLlvm,
