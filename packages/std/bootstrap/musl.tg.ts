@@ -6,7 +6,7 @@ export let metadata = {
 	license: "MIT",
 	name: "musl",
 	repository: "https://git.musl-libc.org/cgit/musl",
-	version: "1.2.4",
+	version: "1.2.5",
 };
 
 export let source = tg.target(async () => {
@@ -18,7 +18,7 @@ export let source = tg.target(async () => {
 		unpackFormat,
 	});
 	let checksum =
-		"sha256:7a35eae33d5372a7c0da1188de798726f68825513b7ae3ebe97aaaa52114f039";
+		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
 	let url = `https://musl.libc.org/releases/${packageArchive}`;
 	let source = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),

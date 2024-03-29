@@ -60,17 +60,37 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 	let target = target_ ?? host;
 
-	let buildPhase = arg?.staticBuild
-		? `make && make clean && make LDFLAGS=-all-static`
+	let buildPhase = staticBuild
+		? `make configure-host && make LDFLAGS=-all-static`
 		: undefined;
 
 	let additionalEnv: std.env.Arg = {};
+	let additionalArgs: Array<string> = [];
 	if (staticBuild) {
 		additionalEnv = {
 			...additionalEnv,
-			CC: await tg`${target}-cc -static -fPIC`,
+			CC: await tg`${target}-cc --static -fPIC`,
 			CXX: await tg`${target}-c++ -static-libstdc++ -fPIC`,
 		};
+		additionalArgs = [
+			"--enable-shared=no",
+			"--enable-static=yes",
+			"--enable-static-link",
+			"--disable-shared-plugins",
+			"--disable-dynamicplugin",
+			"--disable-tls",
+		];
+		if (std.triple.environment(target) === "musl") {
+			/*
+				Support musl >= 1.2.4 pending an upstream fix to binutils.
+				https://musl.libc.org/releases.html
+				"On the API level, the legacy "LFS64" ("large file support") interfaces, which were provided by macros remapping them to their standard names (#define stat64 stat and similar) have been deprecated and are no longer provided under the _GNU_SOURCE feature profile, only under explicit _LARGEFILE64_SOURCE. The latter will also be removed in a future version. Builds broken by this change can be fixed short-term by adding -D_LARGEFILE64_SOURCE to CFLAGS, but should be fixed to use the standard interfaces."
+			*/
+			additionalEnv = {
+				...additionalEnv,
+				CFLAGS: await tg.Mutation.templatePrepend("-D_LARGEFILE64_SOURCE", " "),
+			};
+		}
 	}
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	env.push(
@@ -93,6 +113,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			`--build=${build}`,
 			`--host=${host}`,
 			`--target=${target}`,
+			...additionalArgs,
 		],
 	};
 

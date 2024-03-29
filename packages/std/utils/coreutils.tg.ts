@@ -7,14 +7,14 @@ import libiconv from "./libiconv.tg.ts";
 
 export let metadata = {
 	name: "coreutils",
-	version: "9.4",
+	version: "9.5",
 };
 
 export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
-		"sha256:ea613a4cf44612326e917201bbbcdfbd301de21ffc3b59b6e5c07e040b275e52";
+		"sha256:cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a";
 	let source = await std.download.fromGnu({
 		name,
 		version,
@@ -28,14 +28,6 @@ export let source = tg.target(async (os: string) => {
 		patches.push(
 			tg.File.expect(
 				await tg.include("coreutils-always-preserve-xattrs.patch"),
-			),
-		);
-		// NOTE - fix taken from upstream project, remove patch in next release: https://git.savannah.gnu.org/gitweb/?p=gnulib.git;a=commit;h=67c298c36f6
-		patches.push(
-			tg.File.expect(
-				await tg.include(
-					"coreutils-posixtm-checked-integer-add-explicit-cast-clang-18.patch",
-				),
 			),
 		);
 		source = await bootstrap.patch(source, ...patches);

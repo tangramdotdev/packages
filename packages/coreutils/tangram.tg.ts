@@ -8,14 +8,14 @@ export let metadata = {
 	license: "GPL-3.0-or-later",
 	name: "coreutils",
 	repository: "http://git.savannah.gnu.org/gitweb/?p=coreutils.git",
-	version: "9.4",
+	version: "9.5",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
-		"sha256:ea613a4cf44612326e917201bbbcdfbd301de21ffc3b59b6e5c07e040b275e52";
+		"sha256:cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a";
 	let source = await std.download.fromGnu({
 		name,
 		version,

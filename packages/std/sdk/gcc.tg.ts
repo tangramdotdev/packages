@@ -58,6 +58,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
+		"--disable-bootstrap",
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
@@ -106,7 +107,6 @@ export let build = tg.target(async (arg: Arg) => {
 	if (variant === "stage1_bootstrap") {
 		// Set args.
 		let stage1BootstrapArgs = [
-			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libquadmath",
@@ -128,7 +128,6 @@ export let build = tg.target(async (arg: Arg) => {
 	if (variant === "stage1_limited") {
 		let stage1LimitedArgs = [
 			"--with-build-sysroot=$SYSROOT",
-			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libvtv",
