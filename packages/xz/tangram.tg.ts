@@ -3,28 +3,23 @@ import * as std from "tg:std" with { path: "../std" };
 export let metadata = {
 	homepage: "https://tukaani.org/xz/",
 	name: "xz",
-	license: "https://github.com/tukaani-project/xz?tab=License-1-ov-file",
-	repository: "https://github.com/tukaani-project/xz",
-	version: "5.6.1",
+	version: "5.4.6",
 };
 
-export let source = tg.target(() => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let compressionFormat = ".xz" as const;
+	let unpackFormat = ".tar.gz" as const;
 	let checksum =
-		"sha256:f334777310ca3ae9ba07206d78ed286a655aa3f44eec27854f740c26b2cd2ed0";
-	let owner = "tukaani-project";
-	let repo = name;
-	let tag = `v${version}`;
-	return std.download.fromGithub({
-		checksum,
-		compressionFormat,
-		owner,
-		repo,
-		tag,
-		release: true,
-		version,
-	});
+		"sha256:aeba3e03bf8140ddedf62a0a367158340520f6b384f75ca6045ccc6c0d43fd5c";
+	let url = `https://downloads.sourceforge.net/project/lzmautils/${name}-${version}${unpackFormat}`;
+	let outer = tg.Directory.expect(
+		await std.download({
+			url,
+			checksum,
+			unpackFormat,
+		}),
+	);
+	return std.directory.unwrap(outer);
 });
 
 type Arg = {
