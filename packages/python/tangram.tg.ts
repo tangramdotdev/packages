@@ -1,7 +1,10 @@
 import * as std from "tg:std" with { path: "../std" };
 
+import bison from "tg:bison" with { path: "../bison" };
 import bzip2 from "tg:bzip2" with { path: "../bzip2" };
 import libffi from "tg:libffi" with { path: "../libffi" };
+import libxcrypt from "tg:libxcrypt" with { path: "../libxcrypt" };
+import m4 from "tg:m4" with { path: "../m4" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import sqlite from "tg:sqlite" with { path: "../sqlite" };
@@ -45,10 +48,11 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 });
 
 type ToolchainArg = {
+ 	/** Optional autotools configuration. */
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 
-	/** Optional python source override. */
-	source?: tg.Directory;
+	/** Optional environment variables to set. */
+	env?: std.env.Arg;
 
 	/** Optional set of requirements, either as a requirements.txt file or as a string passed to pip install.
 	 *
@@ -62,20 +66,34 @@ type ToolchainArg = {
 	/** The system to use python. Currently must be the same as build. */
 	host?: string;
 
+	/** Optional sdk args to use. */
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+
+	/** Optional python source override. */
+	source?: tg.Directory;
 };
 
 /** Build and create a python environment. */
 export let python = tg.target(async (arg?: ToolchainArg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+	let { autotools = [], build, env: env_, host, source: source_, ...rest } = arg ?? {};
 
-	let env = [
+	let dependencies = [
+		bison(arg),
 		bzip2(arg),
 		libffi(arg),
+		libxcrypt(arg),
+		m4(arg),
 		openssl(arg),
 		pkgconfig(arg),
 		sqlite(arg),
 		zlib(arg),
+	];
+	let env = [
+		...dependencies,
+		{
+			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "resolve",
+		},
+		env_
 	];
 
 	let configure = {
@@ -84,6 +102,7 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 			"--enable-optimizations",
 			"--with-pkg-config=yes",
 			"--without-c-locale-coercion",
+			"--without-readline"
 		],
 	};
 
