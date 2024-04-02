@@ -6,13 +6,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.8.1",
+	version: "6.8.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:8d0c8936e3140a0fbdf511ad7a9f21121598f3656743898f47bb9052d37cff68";
+		"sha256:9ac322d85bcf98a04667d929f5c2666b15bd58c6c2d68dd512c72acbced07d04";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${name}-${version}${unpackFormat}`;
 	let source = tg.Directory.expect(
@@ -108,18 +108,14 @@ export let test = tg.target(async () => {
 
 	// test cross
 	let hostArch = std.triple.arch(host);
-	let targetArch =
-		hostArch === "x86_64" ? "aarch64" : "x86_64";
+	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = std.triple.create(host, { arch: targetArch });
 	await testKernelHeaders(host, target);
 
 	return true;
 });
 
-export let testKernelHeaders = async (
-	host: string,
-	target?: string,
-) => {
+export let testKernelHeaders = async (host: string, target?: string) => {
 	let target_ = target ?? host;
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });

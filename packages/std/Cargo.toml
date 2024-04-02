@@ -28,8 +28,8 @@ itertools = "0.12"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "6c84967a7bd8ae7e053c2687c9e4bc08d894638a" }
-tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "6c84967a7bd8ae7e053c2687c9e4bc08d894638a" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "191930296d2be7dc0bb7821a3e0298dccde0f7bc" }
+tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "191930296d2be7dc0bb7821a3e0298dccde0f7bc" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "macros",

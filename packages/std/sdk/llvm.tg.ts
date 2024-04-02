@@ -3,7 +3,6 @@ import { canonicalTriple } from "../sdk.tg.ts";
 import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
-import * as gcc from "./gcc.tg.ts";
 import git from "./git.tg.ts";
 import kernelHeaders from "./kernel_headers.tg.ts";
 import * as libc from "./libc.tg.ts";
@@ -65,8 +64,9 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 	let deps: tg.Unresolved<std.env.Arg> = [
 		git({ host }),
-		dependencies.env({ host: build }),
+		dependencies.python.build({ host }),
 	];
+	// FIXME - why no zlib? any library?
 
 	let env = [...deps, env_];
 
@@ -84,11 +84,12 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
 			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
 			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
-			"-DCLANG_ENABLE_BOOTSTRAP=ON",
+			//"-DCLANG_ENABLE_BOOTSTRAP=ON",
 			"-DCMAKE_BUILD_TYPE=Release",
 			"-DCMAKE_INSTALL_LIBDIR=lib",
 			"-DCMAKE_SKIP_INSTALL_RPATH=ON",
-			"-DCOMPILER_RT_BUILD_PROFILE=ON",
+			//"-DCOMPILER_RT_BUILD_PROFILE=ON",
+			"-DCOMPILER_RT_USE_LLVM_UNWINDER=ON",
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
 			"-DLIBCXX_USE_COMPILER_RT=YES",
@@ -103,6 +104,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			`-DLLVM_RUNTIME_TARGETS='${host}'`,
 		],
 	};
 
