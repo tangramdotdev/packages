@@ -1,9 +1,12 @@
+import icu from "tg:icu" with { path: "../icu" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import perl from "tg:perl" with { path: "../perl" };
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import readline from "tg:readline" with { path: "../readline" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
+import zstd from "tg:zstd" with { path: "../zstd" };
 
 export let metadata = {
 	name: "postgresql",
@@ -47,11 +50,14 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 
 	let env = [
+		icu(arg),
 		ncurses(arg),
 		openssl(arg),
 		perl(arg),
+		pkgconfig(arg),
 		readline(arg),
 		zlib(arg),
+		zstd(arg),
 		{
 			LDFLAGS: tg.Mutation.templatePrepend(`-ltinfo`, ` `),
 		},
@@ -60,18 +66,16 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 
 	let sourceDir = source_ ?? source();
 
-	// NOTE - when building out of tree, the configure script breaks when it can't find /bin/pwd. A patch would be a better solution than copying the source.
-	let prepare = tg`cp -R ${sourceDir}/* . && chmod -R u+w .`;
 	let configure = {
-		command: `./configure`,
-		args: ["--without-icu"],
+		args: ["--with-zstd"],
 	};
-	let phases = { prepare, configure };
+	let phases = { configure };
 
 	let output = await std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			buildInTree: true,
 			env,
 			hardeningCFlags: false,
 			phases,
