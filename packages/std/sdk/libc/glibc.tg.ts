@@ -82,24 +82,27 @@ export default tg.target(async (arg: Arg) => {
 		install,
 	};
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [];
-	env.push(
-		dependencies.env({
-			...rest,
-			bootstrapMode: true,
-			env: std.sdk({ host: build, bootstrapMode: true }),
-			host: build,
-		}),
-	);
-
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	let buildSdk = std.sdk({ host: build, bootstrapMode: true });
 	env = env.concat([
-		env_,
-		{
-			CPATH: tg.Mutation.unset(),
-			LIBRARY_PATH: tg.Mutation.unset(),
-			TANGRAM_LINKER_PASSTHROUGH: "1",
-		},
+		std.utils.env({ host: build, bootstrapMode: true, env: buildSdk }),
+		dependencies.bison.build({
+			host: build,
+			bootstrapMode: true,
+			env: buildSdk,
+		}),
+		dependencies.python.build({
+			host: build,
+			bootstrapMode: true,
+			env: buildSdk,
+		}),
 	]);
+
+	env.push({
+		CPATH: tg.Mutation.unset(),
+		LIBRARY_PATH: tg.Mutation.unset(),
+		TANGRAM_LINKER_PASSTHROUGH: "1",
+	});
 
 	let result = await std.autotools.build(
 		{

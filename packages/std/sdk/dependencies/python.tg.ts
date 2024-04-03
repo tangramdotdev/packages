@@ -1,10 +1,5 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
-import bison from "./bison.tg.ts";
-import libxcrypt from "./libxcrypt.tg.ts";
-import m4 from "./m4.tg.ts";
-import pkgConfig from "./pkg_config.tg.ts";
-import zlib from "./zlib.tg.ts";
 
 export let metadata = {
 	name: "Python",
@@ -55,7 +50,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ?? await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let os = std.triple.os(build);
 
@@ -65,15 +60,16 @@ export let build = tg.target(async (arg?: Arg) => {
 	if (os === "darwin") {
 		additionalEnv = {
 			...additionalEnv,
-			MACOSX_DEPLOYMENT_TARGET: "14.3",
+			MACOSX_DEPLOYMENT_TARGET: "14.4",
 		};
 	}
 
 	let configure = {
 		args: [
 			"--disable-test-modules",
-			"--without-readline",
 			"--with-ensurepip=no",
+			"--without-c-locale-coercion",
+			"--without-readline",
 		],
 	};
 
@@ -81,19 +77,13 @@ export let build = tg.target(async (arg?: Arg) => {
 	let providedCc = await std.env.tryGetKey({ env: env_, key: "CC" });
 	if (providedCc) {
 		configure.args.push(`CC="$CC"`);
-	} else {
-		configure.args.push(`--enable-optimizations`);
 	}
 
-	let dependencies = [
-		bison(arg),
-		libxcrypt(arg),
-		m4(arg),
-		pkgConfig(arg),
-		zlib(arg),
+	let env = [
+		env_,
+		std.utils.env({ ...rest, build, env: env_, host }),
+		additionalEnv,
 	];
-
-	let env = [env_, std.utils.env(arg), ...dependencies, additionalEnv];
 
 	// Build python.
 	let result = std.autotools.build(

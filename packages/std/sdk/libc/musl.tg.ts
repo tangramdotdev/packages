@@ -1,6 +1,5 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
-import * as dependencies from "../dependencies.tg.ts";
 
 export let metadata = {
 	name: "musl",
@@ -82,9 +81,9 @@ export default tg.target(async (arg?: Arg) => {
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (rest.bootstrapMode) {
 		env.push(
-			dependencies.env({
-				...rest,
-				env: std.sdk({ host: build, bootstrapMode: rest.bootstrapMode }),
+			std.utils.env({
+				bootstrapMode: true,
+				env: std.sdk({ host: build, bootstrapMode: true }),
 				host: build,
 			}),
 		);

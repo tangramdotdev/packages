@@ -1,14 +1,17 @@
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/gawk/",
 	name: "gawk",
-	version: "5.2.0",
+	license: "GPL-3.0-or-later",
+	repository: "https://git.savannah.gnu.org/git/gawk.git",
+	version: "5.3.0",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:ef5af4449cb0269faf3af24bf4c02273d455f0741bf3c50f86ddc09332d6cf56";
+		"sha256:ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b";
 	return std.download.fromGnu({ name, version, checksum });
 });
 

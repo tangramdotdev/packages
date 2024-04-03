@@ -1,6 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import * as dependencies from "./dependencies.tg.ts";
 
 export let metadata = {
 	name: "binutils",
@@ -48,6 +47,7 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
+		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -60,9 +60,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 	let target = target_ ?? host;
 
+	// NOTE: We could pull in `dependencies.texinfo` to avoid needing to set `MAKEINFO=true`, but we do not need the docs here and texinfo transitively adds more rebuilds than the other required dependencies, which would increase the total build time needlessly.
 	let buildPhase = staticBuild
-		? `make configure-host && make LDFLAGS=-all-static`
-		: undefined;
+		? `make MAKEINFO=true configure-host && make MAKEINFO=true LDFLAGS=-all-static`
+		: `make MAKEINFO=true`;
 
 	let additionalEnv: std.env.Arg = {};
 	let additionalArgs: Array<string> = [];
@@ -78,7 +79,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--enable-static-link",
 			"--disable-shared-plugins",
 			"--disable-dynamicplugin",
-			"--disable-tls",
 		];
 		if (std.triple.environment(target) === "musl") {
 			/*
@@ -92,15 +92,9 @@ export let build = tg.target(async (arg?: Arg) => {
 			};
 		}
 	}
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	env.push(
-		dependencies.env({
-			...rest,
-			env: env_,
-			host: build,
-		}),
-	);
-	env = env.concat([additionalEnv]);
+
+	let deps = [std.utils.env({ host: build, env: env_, bootstrapMode })];
+	let env = [env_, ...deps, additionalEnv];
 
 	// Collect configuration.
 	let configure = {
@@ -118,15 +112,16 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 
 	let phases = {
-		prepare: "set +x",
 		configure,
 		build: buildPhase,
+		install: tg.Mutation.set("make MAKEINFO=true install"),
 	};
 
 	let output = std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			bootstrapMode,
 			env,
 			phases,
 			source: source_ ?? source(build),
@@ -140,10 +135,55 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	await std.assert.pkg({
-		directory: build({ sdk: { bootstrapMode: true } }),
-		binaries: ["ar", "as", "ld", "nm", "objcopy", "objdump", "ranlib", "strip"],
-		metadata,
+	let host = bootstrap.toolchainTriple(await std.triple.host());
+	let bootstrapMode = true;
+	let sdk = std.sdk({ host, bootstrapMode });
+
+	let binaries = [
+		"ar",
+		"as",
+		"ld",
+		"nm",
+		"objcopy",
+		"objdump",
+		"ranlib",
+		"strip",
+	];
+
+	let tests = [];
+
+	// Test wrapped build.
+	let wrappedDirectory = build({
+		host,
+		bootstrapMode,
+		env: sdk,
 	});
-	return true;
+	tests.push(
+		std.assert.pkg({
+			bootstrapMode,
+			directory: wrappedDirectory,
+			binaries,
+			metadata,
+		}),
+	);
+
+	// Test static build.
+	let staticDirectory = build({
+		host,
+		bootstrapMode,
+		env: sdk,
+		staticBuild: true,
+	});
+	tests.push(
+		std.assert.pkg({
+			bootstrapMode,
+			directory: staticDirectory,
+			binaries,
+			metadata,
+		}),
+	);
+
+	await Promise.all(tests);
+
+	return wrappedDirectory;
 });

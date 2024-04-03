@@ -187,7 +187,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 
 		// Add the host toolchain.
 		let hostToolchain = await gcc.toolchain({ host });
-		envs.push(hostToolchain);
+		envs = envs.concat(hostToolchain);
 
 		let proxyEnv = await proxy.env({
 			...proxyArg,
@@ -502,7 +502,9 @@ export namespace sdk {
 			os === "darwin"
 				? "ld"
 				: flavor === "gcc"
-					? `${targetPrefix}ld`
+					? host !== target
+						? `${targetPrefix}ld`
+						: `ld`
 					: "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
@@ -512,7 +514,7 @@ export namespace sdk {
 			// If we couldn't find the linker, try to find it in the PATH.
 			let ldDir = await std.env.whichArtifact({ env, name: linkerName });
 			if (ldDir) {
-				ld = await tg.symlink(tg`${ldDir}/ld`);
+				ld = await tg.symlink(tg`${ldDir}/bin/${linkerName}`);
 			}
 		}
 		tg.assert(ld, `could not find ${linkerName}`);
@@ -545,6 +547,12 @@ export namespace sdk {
 		}
 		tg.assert(libDir, "could not find lib directory");
 
+		let sysroot_ = await std.env.tryGetArtifactByKey({
+			env,
+			key: `TANGRAM_SYSROOT_${target.replace(/-/g, "_").toUpperCase()}`,
+		});
+		let sysroot = sysroot_ ? tg.Directory.expect(sysroot_) : undefined;
+
 		return {
 			cc,
 			cxx,
@@ -555,6 +563,7 @@ export namespace sdk {
 			ld,
 			ldso,
 			libDir,
+			sysroot,
 			target,
 		};
 	};
@@ -579,6 +588,7 @@ export namespace sdk {
 		ld: tg.Symlink;
 		ldso?: tg.File; // NOTE - not present on macOS.
 		libDir: tg.Directory;
+		sysroot?: tg.Directory;
 		target: string;
 	};
 

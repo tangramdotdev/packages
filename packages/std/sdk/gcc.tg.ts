@@ -24,7 +24,6 @@ export let source = tg.target(() =>
 
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	binutils: tg.Directory;
 	source?: tg.Directory;
 	sysroot: tg.Directory;
 	target?: string;
@@ -34,19 +33,17 @@ type Arg = std.sdk.BuildEnvArg & {
 export type Variant =
 	| "stage1_bootstrap" // C only, no libraries.
 	| "stage1_limited" // C/C++ only, most libraries disabled, but inclded libgcc/libstdc++.
-	| "stage2_full" // Everything enabled.
-	| "stage2_cross"; // Everything enabled, but with a build sysroot.
+	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
 export let build = tg.target(async (arg: Arg) => {
 	let {
 		autotools = [],
-		binutils,
 		build: build_,
 		env: env_,
 		host: host_,
 		source: source_,
-		sysroot: sysroot_,
+		sysroot,
 		target: target_,
 		variant,
 		...rest
@@ -62,35 +59,23 @@ export let build = tg.target(async (arg: Arg) => {
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
+		"--enable-host-pie",
+		"--enable-host-bind-now",
 		`--build=${build}`,
 		`--host=${host}`,
 		`--target=${target}`,
 		"--with-native-system-header-dir=/include",
-		"--with-sysroot=$SYSROOT",
+		tg`--with-sysroot=${sysroot}/${target}`,
 	];
 
-	// Configure sysroot. If host != target, it will live in a target-prefixed subdirectory. If host == target, it will share the toplevel.
+	// Configure sysroot.
 	let isCross = host !== target;
 	let targetPrefix = isCross ? `${target}-` : "";
-	let sysroot = isCross ? `$OUTPUT/${target}` : `$OUTPUT`;
-	//let sysroot = "$OUTPUT";
-	// The sysroot passed in the args is always nested in a directory named for the triple. If we're not cross-compiling, we need to reach inside this subdir.
-	let incomingSysroot = isCross ? sysroot_ : tg`${sysroot_}/${target}`;
-
-	// Prepare output.
-	let prepare = tg`
-		mkdir -p $OUTPUT
-		chmod -R u+w $OUTPUT
-		cp -R ${arg.binutils}/* $OUTPUT
-		chmod -R u+w $OUTPUT
-		cp -R ${incomingSysroot}/* $OUTPUT
-		chmod -R u+w $OUTPUT
-		export SYSROOT="${sysroot}"
-	`;
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv: std.env.Arg = {};
+	let additionalEnv = {};
+	let debug = false;
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (std.triple.environment(target) === "musl") {
@@ -100,7 +85,8 @@ export let build = tg.target(async (arg: Arg) => {
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
-	if (std.triple.environment(host) === "gnu") {
+	let hostEnvironment = std.triple.environment(host);
+	if (hostEnvironment === "gnu") {
 		additionalArgs.push("--enable-__cxa_atexit");
 	}
 
@@ -120,14 +106,15 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-languages=c,c++",
 			"--with-newlib",
 			"--without-headers",
-			`--with-glibc-version=${defaultGlibcVersion}`,
 		];
+		if (hostEnvironment === "gnu") {
+			stage1BootstrapArgs.push(`--with-glibc-version=${defaultGlibcVersion}`);
+		}
 		additionalArgs.push(...stage1BootstrapArgs);
 	}
 
 	if (variant === "stage1_limited") {
 		let stage1LimitedArgs = [
-			"--with-build-sysroot=$SYSROOT",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libvtv",
@@ -137,6 +124,7 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-initfini-array",
 		];
 		additionalArgs.push(...stage1LimitedArgs);
+		debug = false;
 	}
 
 	if (variant === "stage2_full") {
@@ -153,41 +141,40 @@ export let build = tg.target(async (arg: Arg) => {
 		};
 	}
 
-	if (variant === "stage2_cross") {
-		let stage2FullArgs = [
-			"--with-build-sysroot=$SYSROOT",
-			"--enable-default-ssp",
-			"--enable-default-pie",
-			"--enable-initfini-array",
-		];
-		additionalArgs.push(...stage2FullArgs);
-		additionalEnv = {
-			...additionalEnv,
-			CC: `${host}-cc -static -fPIC`,
-			CXX: `${host}-c++ -static -fPIC`,
-		};
-	}
-
 	let configure = { args: [...commonArgs, ...additionalArgs] };
 
-	let phases = { prepare, configure };
+	let phases = { configure };
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (rest.bootstrapMode) {
-		env.push(
-			dependencies.env({
-				...rest,
-				env: env_,
+		let bootstrapMode = true;
+		let buildSdk = std.sdk({ host: build, bootstrapMode });
+		env = env.concat([
+			std.utils.env({ bootstrapMode, env: buildSdk, host: build }),
+			dependencies.perl.build({
+				bootstrapMode,
+				env: buildSdk,
 				host: build,
 			}),
-		);
+			dependencies.python.build({
+				bootstrapMode,
+				env: buildSdk,
+				host: build,
+			}),
+			dependencies.zstd.build({
+				bootstrapMode,
+				env: buildSdk,
+				host: build,
+			}),
+		]);
 	}
-	env = env.concat([additionalEnv]);
+	env.push(additionalEnv);
 
 	let result = await std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			debug,
 			env,
 			phases,
 			opt: "2",
@@ -222,7 +209,15 @@ export let gccSource = tg.target(async () => {
 	let outer = tg.Directory.expect(
 		await std.download({ checksum, url, unpackFormat }),
 	);
-	return std.directory.unwrap(outer);
+	let inner = await std.directory.unwrap(outer);
+	// https://github.com/crosstool-ng/crosstool-ng/blob/f064a63c6f65e7bbe5b974879502d8225f9fa1bf/packages/gcc/13.2.0/0011-libsanitizer-Remove-crypt-and-crypt_r-interceptors.patch
+	let libsanitizerPatch = tg.File.expect(
+		await tg.include(
+			"./gcc/libsanitizer-remove-crypt-and-cryptr-interceptors.patch",
+		),
+	);
+	inner = await bootstrap.patch(inner, libsanitizerPatch);
+	return inner;
 });
 
 export let gmpSource = tg.target(async () => {
@@ -282,17 +277,16 @@ export let interpreterPath = (host: string) =>
 type WrapArgsArg = {
 	host: string;
 	target?: string;
+	sysroot: tg.Directory;
 	toolchainDir: tg.Directory;
 };
 
 /** Produce the set of flags required to enable proxying a statically-linked toolchain dir. */
 export let wrapArgs = async (arg: WrapArgsArg) => {
-	let { host, target, toolchainDir } = arg;
+	let { host, sysroot, target, toolchainDir } = arg;
 	let targetTriple = target ?? host;
 	let gccVersion = await getGccVersion(toolchainDir, host, target);
 	let isCross = host !== targetTriple;
-
-	let sysroot = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
 
 	let ccArgs = [
 		tg`--sysroot=${sysroot}`,

@@ -16,10 +16,7 @@ export let bootstrap = async (arg?: Arg) => {
 	let { component, host } = await configure(arg);
 	if (triple.os(host) === "darwin") {
 		host = "universal_darwin";
-	} else {
-		host = host.replace("-", "_");
 	}
-	let requestedComponentName = `${component}_${host}`;
 	if (!component) {
 		// Download all and aggregate.
 		let allComponents = await componentList({ host });
@@ -33,6 +30,7 @@ export let bootstrap = async (arg?: Arg) => {
 		);
 		return tg.directory(dirObject);
 	}
+	let requestedComponentName = `${component}_${host.replace("-", "_")}`;
 	return remoteComponent(requestedComponentName);
 };
 
@@ -95,8 +93,8 @@ export let utils = (arg?: Arg) => {
 	return bootstrap({ ...config, component: "utils" });
 };
 
-export type SdkVersion = "12" | "12.1" | "12.3" | "13" | "13.3" | "14" | "14.2";
-export let LatestSdkVersion: SdkVersion = "14.2" as const;
+export type SdkVersion = "12" | "12.1" | "12.3" | "13" | "13.3" | "14" | "14.4";
+export let LatestSdkVersion: SdkVersion = "14.4" as const;
 
 type SdkArg = {
 	/** Specify the version of the macOS SDK to use. Omit this argument to use the latest version, or pass `"none"` to not include an SDK. */
@@ -192,20 +190,16 @@ export let patch = async (
 };
 
 /** Download a component tarball from the remote host. */
-export let remoteComponent = tg.target(async (componentName: string) => {
-	let version = "v2023.12.14";
-	let url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}.tar.zstd`;
+export let remoteComponent = async (componentName: string) => {
+	let version = "v2024.04.02";
+	let unpackFormat = ".tar.zst" as const;
+	let url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}${unpackFormat}`;
 	let checksum = checksums[componentName];
 	tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
 
 	// Download and extract the selected tarball.
-	let unpackFormat = ".tar.zst" as const;
-	let contents = tg.Directory.expect(
-		await download({ url, checksum, unpackFormat }),
-	);
-
-	return contents;
-});
+	return tg.Directory.expect(await download({ url, checksum, unpackFormat }));
+};
 
 /** Enumerate the full set of components for a host. */
 export let componentList = async (arg?: Arg) => {
@@ -225,7 +219,7 @@ export let componentList = async (arg?: Arg) => {
 		"sdk_12.1_universal_darwin",
 		"sdk_12.3_universal_darwin",
 		"sdk_13.3_universal_darwin",
-		"sdk_14.2_universal_darwin",
+		"sdk_14.4_universal_darwin",
 		"toolchain_universal_darwin",
 		"utils_universal_darwin",
 	];
@@ -267,33 +261,33 @@ export let test = tg.target(async () => {
 
 let checksums: Record<string, tg.Checksum> = {
 	"sdk_12.1_universal_darwin":
-		"sha256:9a7ec25421e58c0568ab0c10d86e89d0b2464a86ef942578278cf68a7e2d877d",
+		"sha256:bc053e15004a8aabfa236e515ed6deb9161906abb8a01862e9a72f529e0df83b",
 	"sdk_12.3_universal_darwin":
-		"sha256:394b4f35693f8261fa70eada0248708ff22a58ae39150824fa010804462a3024",
+		"sha256:16ab0c38c0817b805511b729c8ef070dc0e60e81b6a0c28600f004597b1e9297",
 	"sdk_13.3_universal_darwin":
-		"sha256:261d96948b8a166f7fe063f3d551cea251d4b654a29eb238ee4db97128908b8e",
-	"sdk_14.2_universal_darwin":
-		"sha256:0c6b05bcc0703d0b5dee32a1b22c15643b47351d2659e01f4cb077d94837dec9",
+		"sha256:95c16a2cda5a68451d1ed9464d3c3bb8d5f2d484406e12f714e24214de4e7871",
+	"sdk_14.4_universal_darwin":
+		"sha256:bdf2ff1a471c4a47c5676a116eaa9534c78912aee26999f3d8dd075d43c295b1",
 	dash_aarch64_linux:
-		"sha256:b9af1af51017b6def5a44dea2e80b374ab7d92b71bc296b7aaa2c6081f8ef86a",
+		"sha256:89a1cab57834f81cdb188d5f40b2e98aaff2a5bdae4e8a5d74ad0b2a7672d36b",
 	dash_universal_darwin:
-		"sha256:f47427cae8b36e1c65894911c4f2621e055d834190f19f507c28905c087d05ea",
+		"sha256:738409d7788da5a278cd58a43d6d0780be48a1a4d13ef6b87752472591ba5e41",
 	dash_x86_64_linux:
-		"sha256:a5230a7495324814bbb37202ed6f7eca9cc0f088c48451dbac9b2a8c9cca0b90",
+		"sha256:899adb46ccf4cddc7bfeb7e83a6b2953124035c350d6f00f339365e3b01b920e",
 	env_aarch64_linux:
-		"sha256:ef064e25dd0dc65c9b3f7118bdaf3b9e6674d50065f533518e1e0dbc1063f636",
+		"sha256:da4fed85cc4536de95b32f5a445e169381ca438e76decdbb4f117a1d115b0184",
 	env_x86_64_linux:
-		"sha256:bf15ef9d8c5d55dbf38435b07c59c6fac557c620ef15e82421301c644803b8dd",
+		"sha256:ea7b6f8ffa359519660847780a61665bb66748aee432dec8a35efb0855217b95",
 	toolchain_aarch64_linux:
-		"sha256:53023087f99196ed05ca5e8ca67fca6c0ecde572ef6fdf25525eccaa6d39312d",
+		"sha256:80dc8b9a596560959f074d18332143651132a147da9abbaf389b661d907c4d9e",
 	toolchain_universal_darwin:
-		"sha256:b4adbbff5c6ca67ec1bd68b0f424bb96d50aa3c59390c5a9542b3a00bf1607e2",
+		"sha256:6f2ea271a02d7306e15c01d6d97f56fea91e3115cc0be9fb1e3db24bd2d07051",
 	toolchain_x86_64_linux:
-		"sha256:270171f1403f7026dd5be9b5b711b174d3053eb45c3754d33fc18a5703a300e1",
+		"sha256:c70eb26d7664629a43c7a6fb91ef26578136e4da8a0d2b6e781c408616627551",
 	utils_aarch64_linux:
-		"sha256:5a11d2ecc3368ad8cf75852897bb4cc0668cc23f9bdf34a847ba4d5bfb5ea5fb",
+		"sha256:f28077625374178017850db30c19b051dfbc9dad618d0b76394d3729b2a8eb25",
 	utils_universal_darwin:
-		"sha256:ce1bb45c60d60fd4470a10ab97eba1cc137cf193afe6147d4e1c5257a5c7aa6b",
+		"sha256:ccce6e34dc673c540d976020c1a0fcc05aa21638df370b12852a2aea80bee345",
 	utils_x86_64_linux:
-		"sha256:82ab2d025870670cd9a317fd9b0ef58b81d9a6f14a0494597c4ee8a5bfe3b13a",
+		"sha256:96fb55fe25af716219cbf6247fd7345ab651ccc376e984f9279a37801c7f5dfe",
 };

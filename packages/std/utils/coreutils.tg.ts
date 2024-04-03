@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import { buildUtil, prerequisites } from "../utils.tg.ts";
+import { buildUtil, muslRuntimeEnv, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import { macOsXattrCmds } from "./file_cmds.tg.ts";
 import libiconv from "./libiconv.tg.ts";
@@ -139,10 +139,11 @@ export let gnuEnv = tg.target(async () => {
 	let bootstrapMode = true;
 	let sdk = std.sdk({ bootstrapMode, host });
 	let make = await bootstrap.make.build(host);
+	let muslEnv = muslRuntimeEnv(host);
 	let directory = await build({
 		host,
 		bootstrapMode,
-		env: [sdk, make],
+		env: [sdk, make, muslEnv],
 		staticBuild: true,
 		usePrerequisites: false,
 	});

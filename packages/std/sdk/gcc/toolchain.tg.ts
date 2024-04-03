@@ -4,7 +4,6 @@ import * as bootstrap from "../../bootstrap.tg.ts";
 import { canonicalTriple } from "../../sdk.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import binutils from "../binutils.tg.ts";
-import * as dependencies from "../dependencies.tg.ts";
 import * as gcc from "../gcc.tg.ts";
 import kernelHeaders from "../kernel_headers.tg.ts";
 import { constructSysroot } from "../libc.tg.ts";
@@ -35,17 +34,21 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		host,
 	});
 
-	let { env } = await crossToolchain({
+	let { env, sysroot } = await crossToolchain({
 		...rest,
 		bootstrapMode: true,
 		build: host, // We've produced a native toolchain, so we can use it to build the cross-toolchain.
 		env: [nativeToolchain, nativeProxyEnv],
 		host,
 		target,
-		variant: "stage2_cross",
+		variant: "stage2_full",
 	});
 
-	return env;
+	return [
+		...env,
+		sysroot,
+		{ [`TANGRAM_SYSROOT_${target.replace(/-/g, "_").toUpperCase()}`]: sysroot },
+	];
 });
 
 type CrossToolchainArg = std.sdk.BuildEnvArg & {
@@ -56,41 +59,53 @@ type CrossToolchainArg = std.sdk.BuildEnvArg & {
 
 export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let {
+		bootstrapMode,
 		build: build_,
+		env: env_,
 		host: host_,
 		sysroot: sysroot_,
 		target: target_,
 		variant = "stage2_full",
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let buildTriple = build_ ?? host;
 	let target = target_ ?? host;
 
-	// Produce the binutils.
-	let crossBinutils = await binutils({
-		...rest,
-		build: buildTriple,
-		host,
-		target,
-	});
+	// Produce the binutils for build and host.
+	let [buildBinutils, crossBinutils] = await Promise.all([
+		binutils({
+			bootstrapMode,
+			build: buildTriple,
+			env: env_,
+			host: buildTriple,
+			target: buildTriple,
+		}),
+		binutils({
+			bootstrapMode,
+			build: buildTriple,
+			env: env_,
+			host,
+			target,
+		}),
+	]);
+	console.log("buildBinutils", await buildBinutils.id());
 	console.log("crossBinutils", await crossBinutils.id());
 
 	let sysroot =
 		sysroot_ ??
 		(await buildSysroot({
-			...rest,
+			bootstrapMode,
 			build: buildTriple,
-			crossBinutils,
+			env: [env_, buildBinutils, crossBinutils],
 			host: target,
 		}));
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
 	let crossGCC = await gcc.build({
-		...rest,
-		binutils: crossBinutils,
+		bootstrapMode,
 		build: buildTriple,
+		env: [env_, buildBinutils, crossBinutils],
 		host,
 		sysroot,
 		target,
@@ -98,29 +113,15 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	});
 	console.log("cross gcc", await crossGCC.id());
 
-	return { env: crossGCC, sysroot };
+	return { env: [crossGCC, buildBinutils, crossBinutils], sysroot };
 });
 
-type BuildSysrootArg = std.sdk.BuildEnvArg & {
-	crossBinutils?: tg.Directory;
-};
-
-export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
-	let {
-		build: build_,
-		crossBinutils: crossBinutils_,
-		env,
-		host: host_,
-		...rest
-	} = arg ?? {};
+export let buildSysroot = tg.target(async (arg: std.sdk.BuildEnvArg) => {
+	let { build: build_, env, host: host_, ...rest } = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let buildTriple = build_ ?? host;
 	let target = host;
-
-	let crossBinutils =
-		crossBinutils_ ??
-		(await binutils({ ...rest, build: buildTriple, env, host, target }));
 
 	// Produce the linux headers.
 	let linuxHeaders = await tg.directory({
@@ -140,7 +141,6 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	// Produce the initial gcc required to build the standard C library.
 	let bootstrapGCC = await gcc.build({
 		...rest,
-		binutils: crossBinutils,
 		build: buildTriple,
 		env,
 		host: buildTriple,
@@ -156,8 +156,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		build: buildTriple,
 		host,
 		linuxHeaders,
-		env: bootstrapGCC,
-		target,
+		env: [env, bootstrapGCC],
 	});
 	console.log("sysroot", await sysroot.id());
 	return sysroot;
@@ -172,44 +171,24 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 
-	await dependencies.env({ host: build, bootstrapMode, env: sdk });
-
 	// Create cross-toolchain from build to host.
 	let { env, sysroot } = await buildToHostCrossToolchain(host);
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
-		env: [env, sdk],
+		env: [sdk, env],
 		bootstrapMode,
 		build,
 		host,
 		staticBuild: true,
 		target,
 	});
-	nativeHostBinutils = await bootstrap.sdk.prefixBins(
-		nativeHostBinutils,
-		[
-			"addr2line",
-			"ar",
-			"as",
-			"ld",
-			"nm",
-			"objcopy",
-			"objdump",
-			"ranlib",
-			"readelf",
-			"strip",
-			"strings",
-		],
-		host + "-",
-	);
 	console.log("stage2 binutils", await nativeHostBinutils.id());
 
 	let fullGCC = await gcc.build({
-		binutils: nativeHostBinutils,
 		bootstrapMode,
 		build,
-		env: [env, sdk],
+		env: [sdk, env, nativeHostBinutils],
 		host,
 		sysroot,
 		target,
@@ -217,8 +196,18 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	});
 	console.log("stage2 gcc", await fullGCC.id());
 
-	// Return just the directory.
-	return fullGCC;
+	// Pull the actual sysroot out of the triple-prefixed directory.
+	let sysrootInner = tg.Directory.expect(await sysroot.get(target));
+
+	return [
+		fullGCC,
+		sysrootInner,
+		nativeHostBinutils,
+		{
+			[`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]:
+				sysrootInner,
+		},
+	];
 });
 
 export let buildToHostCrossToolchain = async (hostArg?: string) => {
@@ -229,7 +218,7 @@ export let buildToHostCrossToolchain = async (hostArg?: string) => {
 	let sdk = std.sdk({ host, bootstrapMode });
 
 	// Create cross-toolchain from build to host.
-	let { env, sysroot } = await crossToolchain({
+	return crossToolchain({
 		bootstrapMode,
 		build,
 		env: sdk,
@@ -237,8 +226,6 @@ export let buildToHostCrossToolchain = async (hostArg?: string) => {
 		target: host,
 		variant: "stage1_limited",
 	});
-
-	return { env, sysroot };
 };
 
 export let testStage1 = async () => {

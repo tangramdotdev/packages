@@ -1695,7 +1695,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=6c84967a7bd8ae7e053c2687c9e4bc08d894638a#6c84967a7bd8ae7e053c2687c9e4bc08d894638a"
+source = "git+https://github.com/tangramdotdev/tangram?rev=191930296d2be7dc0bb7821a3e0298dccde0f7bc#191930296d2be7dc0bb7821a3e0298dccde0f7bc"
 dependencies = [
  "async-compression",
  "async-recursion",
@@ -1749,7 +1749,7 @@ dependencies = [
 [[package]]
 name = "tangram_error"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=6c84967a7bd8ae7e053c2687c9e4bc08d894638a#6c84967a7bd8ae7e053c2687c9e4bc08d894638a"
+source = "git+https://github.com/tangramdotdev/tangram?rev=191930296d2be7dc0bb7821a3e0298dccde0f7bc#191930296d2be7dc0bb7821a3e0298dccde0f7bc"
 dependencies = [
  "crossterm",
  "glob",
@@ -1780,7 +1780,7 @@ dependencies = [
 [[package]]
 name = "tangram_sse"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=6c84967a7bd8ae7e053c2687c9e4bc08d894638a#6c84967a7bd8ae7e053c2687c9e4bc08d894638a"
+source = "git+https://github.com/tangramdotdev/tangram?rev=191930296d2be7dc0bb7821a3e0298dccde0f7bc#191930296d2be7dc0bb7821a3e0298dccde0f7bc"
 dependencies = [
  "futures",
  "tokio",

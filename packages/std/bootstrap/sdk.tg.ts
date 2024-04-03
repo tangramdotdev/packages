@@ -19,7 +19,12 @@ export let env = async (hostArg?: string): Promise<std.env.Arg> => {
 			SDKROOT: sdkroot,
 		};
 	}
-	return std.env.object(toolchain, utils, env);
+	return std.env.object(
+		toolchain,
+		utils,
+		{ [`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]: toolchain },
+		env,
+	);
 };
 
 export default env;
@@ -41,24 +46,7 @@ export let prepareBootstrapToolchain = async (hostArg?: string) => {
 			["bin/g++"]: tg.symlink("clang++"),
 		});
 	} else if (os === "linux") {
-		// Add prefixed symlinks for the included binutils.
-		bootstrapToolchain = await prefixBins(
-			bootstrapToolchain,
-			[
-				"addr2line",
-				"ar",
-				"as",
-				"ld",
-				"nm",
-				"objcopy",
-				"objdump",
-				"ranlib",
-				"readelf",
-				"strip",
-				"strings",
-			],
-			bootstrapTriple + "-",
-		);
+		// Nothing to do.
 	} else {
 		throw new Error(`Unsupported host OS: ${os}.`);
 	}

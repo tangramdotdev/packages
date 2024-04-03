@@ -3,14 +3,14 @@ import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "gawk",
-	version: "5.2.2",
+	version: "5.3.0",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
-		"sha256:3c1fce1446b4cbee1cd273bd7ec64bc87d89f61537471cd3e05e33a965a250e9";
+		"sha256:ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b";
 	return std.download.fromGnu({ name, version, compressionFormat, checksum });
 });
 

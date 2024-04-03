@@ -83,7 +83,7 @@ export default env;
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export let prerequisites = tg.target(async (hostArg?: string) => {
 	let host = hostArg ?? (await std.triple.host());
-	let components: tg.Unresolved<std.env.Arg> = [bootstrap.utils({ host })];
+	let components: std.env.Arg = [await bootstrap.utils({ host })];
 
 	// Add GNU make.
 	let makeArtifact = await bootstrap.make.build(host);
@@ -108,7 +108,7 @@ export let prerequisites = tg.target(async (hostArg?: string) => {
 		components.push(muslEnv);
 	}
 
-	return std.env(...components, { bootstrapMode: true });
+	return components;
 });
 
 /** Build a fresh musl and use it as the runtime libc. */
@@ -121,13 +121,12 @@ export let muslRuntimeEnv = async (hostArg?: string) => {
 	let interpreter = tg.File.expect(
 		await muslArtifact.get(bootstrap.musl.interpreterPath(host)),
 	);
-	return std.env(
+	return [
 		muslArtifact,
 		{
 			TANGRAM_LINKER_INTERPRETER_PATH: interpreter,
 		},
-		{ bootstrapMode: true },
-	);
+	];
 };
 
 type BuildUtilArg = std.autotools.Arg & {
