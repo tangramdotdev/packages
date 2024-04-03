@@ -67,8 +67,9 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: [
 			"--disable-test-modules",
-			"--without-readline",
 			"--with-ensurepip=no",
+			"--without-c-locale-coercion",
+			"--without-readline",
 		],
 	};
 

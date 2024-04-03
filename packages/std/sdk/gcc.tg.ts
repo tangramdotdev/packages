@@ -24,7 +24,6 @@ export let source = tg.target(() =>
 
 type Arg = std.sdk.BuildEnvArg & {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	binutils: tg.Directory;
 	source?: tg.Directory;
 	sysroot: tg.Directory;
 	target?: string;
@@ -41,12 +40,11 @@ export type Variant =
 export let build = tg.target(async (arg: Arg) => {
 	let {
 		autotools = [],
-		binutils,
 		build: build_,
 		env: env_,
 		host: host_,
 		source: source_,
-		sysroot: sysroot_,
+		sysroot,
 		target: target_,
 		variant,
 		...rest
@@ -62,35 +60,22 @@ export let build = tg.target(async (arg: Arg) => {
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
+		"--enable-host-pie",
+		"--enable-host-bind-now",
 		`--build=${build}`,
 		`--host=${host}`,
 		`--target=${target}`,
 		"--with-native-system-header-dir=/include",
-		"--with-sysroot=$SYSROOT",
+		tg`--with-sysroot=${sysroot}/${target}`,
 	];
 
-	// Configure sysroot. If host != target, it will live in a target-prefixed subdirectory. If host == target, it will share the toplevel.
+	// Configure sysroot.
 	let isCross = host !== target;
 	let targetPrefix = isCross ? `${target}-` : "";
-	let sysroot = isCross ? `$OUTPUT/${target}` : `$OUTPUT`;
-	//let sysroot = "$OUTPUT";
-	// The sysroot passed in the args is always nested in a directory named for the triple. If we're not cross-compiling, we need to reach inside this subdir.
-	let incomingSysroot = isCross ? sysroot_ : tg`${sysroot_}/${target}`;
-
-	// Prepare output.
-	let prepare = tg`
-		mkdir -p $OUTPUT
-		chmod -R u+w $OUTPUT
-		cp -R ${arg.binutils}/* $OUTPUT
-		chmod -R u+w $OUTPUT
-		cp -R ${incomingSysroot}/* $OUTPUT
-		chmod -R u+w $OUTPUT
-		export SYSROOT="${sysroot}"
-	`;
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv: std.env.Arg = {};
+	let additionalEnv = {};
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (std.triple.environment(target) === "musl") {
@@ -100,7 +85,8 @@ export let build = tg.target(async (arg: Arg) => {
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
-	if (std.triple.environment(host) === "gnu") {
+	let hostEnvironment = std.triple.environment(host);
+	if (hostEnvironment === "gnu") {
 		additionalArgs.push("--enable-__cxa_atexit");
 	}
 
@@ -120,14 +106,15 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-languages=c,c++",
 			"--with-newlib",
 			"--without-headers",
-			`--with-glibc-version=${defaultGlibcVersion}`,
 		];
+		if (hostEnvironment === "gnu") {
+			stage1BootstrapArgs.push(`--with-glibc-version=${defaultGlibcVersion}`);
+		}
 		additionalArgs.push(...stage1BootstrapArgs);
 	}
 
 	if (variant === "stage1_limited") {
 		let stage1LimitedArgs = [
-			"--with-build-sysroot=$SYSROOT",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libvtv",
@@ -135,6 +122,7 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
+			"--enable-languages=c,c++,fortran",
 		];
 		additionalArgs.push(...stage1LimitedArgs);
 	}
@@ -155,7 +143,6 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage2_cross") {
 		let stage2FullArgs = [
-			"--with-build-sysroot=$SYSROOT",
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
@@ -170,31 +157,37 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let configure = { args: [...commonArgs, ...additionalArgs] };
 
-	let phases = { prepare, configure };
+	let phases = { configure };
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (rest.bootstrapMode) {
 		let bootstrapMode = true;
+		let buildSdk = std.sdk({ host: build, bootstrapMode });
 		env = env.concat([
-			std.utils.env({ bootstrapMode, env: env_, host: build }),
+			std.utils.env({ bootstrapMode, env: buildSdk, host: build }),
 			dependencies.perl.build({
 				bootstrapMode,
-				env: env_,
+				env: buildSdk,
 				host: build,
 			}),
 			dependencies.python.build({
 				bootstrapMode,
-				env: env_,
+				env: buildSdk,
+				host: build,
+			}),
+			dependencies.zstd.build({
+				bootstrapMode,
+				env: buildSdk,
 				host: build,
 			}),
 			dependencies.zstd.build({
 				bootstrapMode,
 				env: env_,
-				host: build,
+				host,
 			}),
 		]);
 	}
-	env = env.concat([additionalEnv]);
+	env.push(additionalEnv);
 
 	let result = await std.autotools.build(
 		{

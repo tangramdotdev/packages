@@ -4,7 +4,6 @@ import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import git from "./git.tg.ts";
-import kernelHeaders from "./kernel_headers.tg.ts";
 import * as libc from "./libc.tg.ts";
 import { interpreterName } from "./libc.tg.ts";
 
@@ -51,13 +50,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 	let sourceDir = source_ ?? source();
 
-	let linuxHeaders = await tg.directory({
-		include: await kernelHeaders({ host }),
-	});
-	let sysroot = await libc.constructSysroot({
-		host,
-		linuxHeaders,
-	});
+	let sysroot = await libc.constructSysroot({ host });
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());

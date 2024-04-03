@@ -4,7 +4,6 @@ import * as bootstrap from "../../bootstrap.tg.ts";
 import { canonicalTriple } from "../../sdk.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import binutils from "../binutils.tg.ts";
-import * as dependencies from "../dependencies.tg.ts";
 import * as gcc from "../gcc.tg.ts";
 import kernelHeaders from "../kernel_headers.tg.ts";
 import { constructSysroot } from "../libc.tg.ts";
@@ -56,41 +55,53 @@ type CrossToolchainArg = std.sdk.BuildEnvArg & {
 
 export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let {
+		bootstrapMode,
 		build: build_,
+		env: env_,
 		host: host_,
 		sysroot: sysroot_,
 		target: target_,
 		variant = "stage2_full",
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let buildTriple = build_ ?? host;
 	let target = target_ ?? host;
 
-	// Produce the binutils.
-	let crossBinutils = await binutils({
-		...rest,
-		build: buildTriple,
-		host,
-		target,
-	});
+	// Produce the binutils for build and host.
+	let [buildBinutils, crossBinutils] = await Promise.all([
+		binutils({
+			bootstrapMode,
+			build: buildTriple,
+			env: env_,
+			host: buildTriple,
+			target: buildTriple,
+		}),
+		binutils({
+			bootstrapMode,
+			build: buildTriple,
+			env: env_,
+			host,
+			target,
+		}),
+	]);
+	console.log("buildBinutils", await buildBinutils.id());
 	console.log("crossBinutils", await crossBinutils.id());
 
 	let sysroot =
 		sysroot_ ??
 		(await buildSysroot({
-			...rest,
+			bootstrapMode,
 			build: buildTriple,
-			crossBinutils,
+			env: [env_, buildBinutils, crossBinutils],
 			host: target,
 		}));
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
 	let crossGCC = await gcc.build({
-		...rest,
-		binutils: crossBinutils,
+		bootstrapMode,
 		build: buildTriple,
+		env: [env_, buildBinutils, crossBinutils],
 		host,
 		sysroot,
 		target,
@@ -101,26 +112,12 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	return { env: crossGCC, sysroot };
 });
 
-type BuildSysrootArg = std.sdk.BuildEnvArg & {
-	crossBinutils?: tg.Directory;
-};
-
-export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
-	let {
-		build: build_,
-		crossBinutils: crossBinutils_,
-		env,
-		host: host_,
-		...rest
-	} = arg ?? {};
+export let buildSysroot = tg.target(async (arg: std.sdk.BuildEnvArg) => {
+	let { build: build_, env, host: host_, ...rest } = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let buildTriple = build_ ?? host;
 	let target = host;
-
-	let crossBinutils =
-		crossBinutils_ ??
-		(await binutils({ ...rest, build: buildTriple, env, host, target }));
 
 	// Produce the linux headers.
 	let linuxHeaders = await tg.directory({
@@ -140,7 +137,6 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	// Produce the initial gcc required to build the standard C library.
 	let bootstrapGCC = await gcc.build({
 		...rest,
-		binutils: crossBinutils,
 		build: buildTriple,
 		env,
 		host: buildTriple,
@@ -156,8 +152,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		build: buildTriple,
 		host,
 		linuxHeaders,
-		env: bootstrapGCC,
-		target,
+		env: [env, bootstrapGCC],
 	});
 	console.log("sysroot", await sysroot.id());
 	return sysroot;
@@ -172,8 +167,6 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	let bootstrapMode = true;
 	let sdk = std.sdk({ host, bootstrapMode });
 
-	await dependencies.env({ host: build, bootstrapMode, env: sdk });
-
 	// Create cross-toolchain from build to host.
 	let { env, sysroot } = await buildToHostCrossToolchain(host);
 
@@ -181,7 +174,7 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	let nativeHostBinutils = await binutils({
 		env: [env, sdk],
 		bootstrapMode,
-		build,
+		build: host,
 		host,
 		staticBuild: true,
 		target,
@@ -206,10 +199,9 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	console.log("stage2 binutils", await nativeHostBinutils.id());
 
 	let fullGCC = await gcc.build({
-		binutils: nativeHostBinutils,
 		bootstrapMode,
 		build,
-		env: [env, sdk],
+		env: [env, sdk, nativeHostBinutils],
 		host,
 		sysroot,
 		target,

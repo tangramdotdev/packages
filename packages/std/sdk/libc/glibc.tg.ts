@@ -86,6 +86,11 @@ export default tg.target(async (arg: Arg) => {
 	let buildSdk = std.sdk({ host: build, bootstrapMode: true });
 	env = env.concat([
 		std.utils.env({ host: build, bootstrapMode: true, env: buildSdk }),
+		dependencies.bison.build({
+			host: build,
+			bootstrapMode: true,
+			env: buildSdk,
+		}),
 		dependencies.python.build({
 			host: build,
 			bootstrapMode: true,
@@ -111,6 +116,7 @@ export default tg.target(async (arg: Arg) => {
 		},
 		autotools,
 	);
+	console.log("glibc", await result.id());
 
 	// Fix libc.so.
 	result = await applySysrootFix({

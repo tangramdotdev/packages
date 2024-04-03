@@ -1,22 +1,23 @@
 import * as std from "../tangram.tg.ts";
+import kernelHeaders from "./kernel_headers.tg.ts";
 import * as glibc from "./libc/glibc.tg.ts";
 import * as musl from "./libc/musl.tg.ts";
 
 type LibCArg = std.sdk.BuildEnvArg & {
 	// /** Optionally point to a specific implementation of libcc. Only supported for musl, glibc requires libgcc. */
 	// libcc?: tg.File;
-	linuxHeaders: tg.Directory;
-	target?: string;
+	linuxHeaders?: tg.Directory;
 };
 
 /** Obtain the proper standard C library for the given host triple. */
 export let libc = tg.target(async (arg: LibCArg) => {
 	let host = arg.host ?? (await std.triple.host());
-	let target = arg.target ?? host;
 	// Libcs are built for a single target, which is referred to as the host in this context.
-	let kind = kindFromTriple(target);
+	let kind = kindFromTriple(host);
 	if (kind === "glibc") {
-		return glibc.default(arg);
+	let linuxHeaders =
+		arg.linuxHeaders ?? tg.Directory.expect(await kernelHeaders(arg));
+		return glibc.default({ ...arg, linuxHeaders });
 	} else if (kind === "musl") {
 		return musl.default(arg);
 	} else {
@@ -70,10 +71,12 @@ export let linkerFlags = async (arg: LinkerFlagArg) => {
 /** Construct a sysroot containing the libc and the linux headers. */
 export let constructSysroot = async (arg: LibCArg) => {
 	let host = arg.host ?? (await std.triple.host());
-	let cLibrary = await libc(arg);
+	let linuxHeaders =
+		arg.linuxHeaders ?? tg.Directory.expect(await kernelHeaders(arg));
+	let cLibrary = await libc({ ...arg, linuxHeaders });
 	let cLibInclude = tg.Directory.expect(await cLibrary.get(`${host}/include`));
 	let hostLinuxInclude = tg.Directory.expect(
-		await arg.linuxHeaders.get("include"),
+		await linuxHeaders.get("include"),
 	);
 	return tg.directory(cLibrary, {
 		[`${host}/include`]: tg.directory(cLibInclude, hostLinuxInclude),

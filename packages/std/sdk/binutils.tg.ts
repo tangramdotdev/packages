@@ -79,7 +79,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--enable-static-link",
 			"--disable-shared-plugins",
 			"--disable-dynamicplugin",
-			"--disable-tls",
 		];
 		if (std.triple.environment(target) === "musl") {
 			/*

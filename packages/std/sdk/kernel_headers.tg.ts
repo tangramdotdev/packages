@@ -57,16 +57,19 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		karch = "arm";
 	}
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (bootstrapMode) {
-		env = env.concat([
-			std.utils.env({ ...rest, bootstrapMode, env: env_, host: buildTriple }),
-			bootstrap.make.build(buildTriple),
-		]);
+		env.push(
+			std.utils.env({
+				...rest,
+				bootstrapMode,
+				env: std.sdk({ host: buildTriple, bootstrapMode }),
+				host: buildTriple,
+			}),
+		);
 	} else {
 		env.push(std.sdk({ host: buildTriple }, arg?.sdk));
 	}
-	env.push(env_);
 
 	let prepare = tg`cp -r ${sourceDir}/* . && chmod -R +w . && make mrproper`;
 	let build = {

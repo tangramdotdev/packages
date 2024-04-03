@@ -28,6 +28,12 @@ export type Arg = {
 	/** The computer this build should get compiled on. */
 	host?: string;
 
+	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
+	march?: string;
+
+	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
+	mtune?: string;
+
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
 
@@ -66,7 +72,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 		fullRelro: boolean;
 		hardeningCFlags: boolean;
 		host: string;
-		target: string;
+		march: string;
+		mtune: string;
 		opt: "1" | "2" | "3" | "s" | "z" | "fast";
 		parallel: boolean | number;
 		phases: Array<std.phases.Arg>;
@@ -75,6 +82,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		sdkArgs?: Array<std.sdk.Arg>;
 		source: tg.Directory;
 		stripExecutables: boolean;
+		target: string;
 	};
 
 	let {
@@ -83,10 +91,11 @@ export let target = async (...args: tg.Args<Arg>) => {
 		debug = false,
 		defaultCFlags = true,
 		doCheck = false,
-		hardeningCFlags = true,
 		fullRelro = true,
+		hardeningCFlags = true,
 		host: host_,
-		target: target_,
+		march,
+		mtune = "generic",
 		opt = 2,
 		parallel = true,
 		phases,
@@ -95,6 +104,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		sdkArgs,
 		source,
 		stripExecutables = true,
+		target: target_,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
@@ -130,6 +140,12 @@ export let target = async (...args: tg.Args<Arg>) => {
 			}
 			if (arg.opt !== undefined) {
 				object.opt = arg.opt;
+			}
+			if (arg.march !== undefined) {
+				object.march = arg.march;
+			}
+			if (arg.mtune !== undefined) {
+				object.mtune = arg.mtune;
 			}
 			if (arg.parallel !== undefined) {
 				object.parallel = arg.parallel;
@@ -176,7 +192,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	tg.assert(source !== undefined, `source must be defined`);
 
 	// Detect the host system from the environment.
-	let host = await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 	let target = target_ ?? host;
 	let os = std.triple.os(host);
 
@@ -190,7 +206,8 @@ export let target = async (...args: tg.Args<Arg>) => {
 		cflags = tg`${cflags} ${optFlag}`;
 	}
 	if (defaultCFlags) {
-		let defaultCFlags = `-mtune=generic -pipe`;
+		let mArchFlag = march ? `-march=${march} ` : "";
+		let defaultCFlags = `${mArchFlag}-mtune=${mtune} -pipe`;
 		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
 	if (hardeningCFlags) {
