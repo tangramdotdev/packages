@@ -116,7 +116,6 @@ export default tg.target(async (arg: Arg) => {
 		},
 		autotools,
 	);
-	console.log("glibc", await result.id());
 
 	// Fix libc.so.
 	result = await applySysrootFix({

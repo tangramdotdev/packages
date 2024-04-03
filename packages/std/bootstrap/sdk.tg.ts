@@ -41,24 +41,7 @@ export let prepareBootstrapToolchain = async (hostArg?: string) => {
 			["bin/g++"]: tg.symlink("clang++"),
 		});
 	} else if (os === "linux") {
-		// Add prefixed symlinks for the included binutils.
-		bootstrapToolchain = await prefixBins(
-			bootstrapToolchain,
-			[
-				"addr2line",
-				"ar",
-				"as",
-				"ld",
-				"nm",
-				"objcopy",
-				"objdump",
-				"ranlib",
-				"readelf",
-				"strip",
-				"strings",
-			],
-			bootstrapTriple + "-",
-		);
+		// Nothing to do.
 	} else {
 		throw new Error(`Unsupported host OS: ${os}.`);
 	}

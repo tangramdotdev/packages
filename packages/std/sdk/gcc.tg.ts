@@ -76,6 +76,7 @@ export let build = tg.target(async (arg: Arg) => {
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
 	let additionalEnv = {};
+	let debug = false;
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (std.triple.environment(target) === "musl") {
@@ -125,6 +126,7 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-languages=c,c++,fortran",
 		];
 		additionalArgs.push(...stage1LimitedArgs);
+		debug = false;
 	}
 
 	if (variant === "stage2_full") {
@@ -193,6 +195,7 @@ export let build = tg.target(async (arg: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			debug,
 			env,
 			phases,
 			opt: "2",
@@ -227,7 +230,15 @@ export let gccSource = tg.target(async () => {
 	let outer = tg.Directory.expect(
 		await std.download({ checksum, url, unpackFormat }),
 	);
-	return std.directory.unwrap(outer);
+	let inner = await std.directory.unwrap(outer);
+	// https://github.com/crosstool-ng/crosstool-ng/blob/f064a63c6f65e7bbe5b974879502d8225f9fa1bf/packages/gcc/13.2.0/0011-libsanitizer-Remove-crypt-and-crypt_r-interceptors.patch
+	let libsanitizerPatch = tg.File.expect(
+		await tg.include(
+			"./gcc/libsanitizer-remove-crypt-and-cryptr-interceptors.patch",
+		),
+	);
+	inner = await bootstrap.patch(inner, libsanitizerPatch);
+	return inner;
 });
 
 export let gmpSource = tg.target(async () => {
