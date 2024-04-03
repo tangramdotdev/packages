@@ -502,7 +502,9 @@ export namespace sdk {
 			os === "darwin"
 				? "ld"
 				: flavor === "gcc"
-					? `${targetPrefix}ld`
+					? host !== target
+						? `${targetPrefix}ld`
+						: `ld`
 					: "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
@@ -512,7 +514,7 @@ export namespace sdk {
 			// If we couldn't find the linker, try to find it in the PATH.
 			let ldDir = await std.env.whichArtifact({ env, name: linkerName });
 			if (ldDir) {
-				ld = await tg.symlink(tg`${ldDir}/ld`);
+				ld = await tg.symlink(tg`${ldDir}/bin/${linkerName}`);
 			}
 		}
 		tg.assert(ld, `could not find ${linkerName}`);
