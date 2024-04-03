@@ -109,7 +109,7 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	});
 	console.log("cross gcc", await crossGCC.id());
 
-	return { env: crossGCC, sysroot };
+	return { env: [crossGCC, buildBinutils, crossBinutils], sysroot };
 });
 
 export let buildSysroot = tg.target(async (arg: std.sdk.BuildEnvArg) => {
@@ -172,36 +172,19 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
-		env: [env, sdk],
+		env: [sdk, env],
 		bootstrapMode,
-		build: host,
+		build,
 		host,
-		staticBuild: true,
+		// staticBuild: true,
 		target,
 	});
-	nativeHostBinutils = await bootstrap.sdk.prefixBins(
-		nativeHostBinutils,
-		[
-			"addr2line",
-			"ar",
-			"as",
-			"ld",
-			"nm",
-			"objcopy",
-			"objdump",
-			"ranlib",
-			"readelf",
-			"strip",
-			"strings",
-		],
-		host + "-",
-	);
 	console.log("stage2 binutils", await nativeHostBinutils.id());
 
 	let fullGCC = await gcc.build({
 		bootstrapMode,
 		build,
-		env: [env, sdk, nativeHostBinutils],
+		env: [sdk, env, nativeHostBinutils],
 		host,
 		sysroot,
 		target,
@@ -221,7 +204,7 @@ export let buildToHostCrossToolchain = async (hostArg?: string) => {
 	let sdk = std.sdk({ host, bootstrapMode });
 
 	// Create cross-toolchain from build to host.
-	let { env, sysroot } = await crossToolchain({
+	return crossToolchain({
 		bootstrapMode,
 		build,
 		env: sdk,
@@ -229,8 +212,6 @@ export let buildToHostCrossToolchain = async (hostArg?: string) => {
 		target: host,
 		variant: "stage1_limited",
 	});
-
-	return { env, sysroot };
 };
 
 export let testStage1 = async () => {

@@ -93,7 +93,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		}
 	}
 
-	let deps = [std.utils.env({ host, env: env_, bootstrapMode })];
+	let deps = [std.utils.env({ host: build, env: env_, bootstrapMode })];
 	let env = [env_, ...deps, additionalEnv];
 
 	// Collect configuration.

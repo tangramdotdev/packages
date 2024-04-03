@@ -136,11 +136,6 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-initfini-array",
 		];
 		additionalArgs.push(...stage2FullArgs);
-		additionalEnv = {
-			...additionalEnv,
-			CC: `${host}-cc -static -fPIC`,
-			CXX: `${host}-c++ -static -fPIC`,
-		};
 	}
 
 	if (variant === "stage2_cross") {
@@ -181,11 +176,6 @@ export let build = tg.target(async (arg: Arg) => {
 				bootstrapMode,
 				env: buildSdk,
 				host: build,
-			}),
-			dependencies.zstd.build({
-				bootstrapMode,
-				env: env_,
-				host,
 			}),
 		]);
 	}
