@@ -1,7 +1,6 @@
 import * as std from "../../tangram.tg.ts";
 import bison from "./bison.tg.ts";
 import m4 from "./m4.tg.ts";
-import ncurses from "./ncurses.tg.ts";
 import perl from "./perl.tg.ts";
 import zlib from "./zlib.tg.ts";
 
@@ -33,7 +32,7 @@ export let build = tg.target((arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let dependencies = [bison(arg), m4(arg), ncurses(arg), perl(arg), zlib(arg)];
+	let dependencies = [bison(arg), m4(arg), perl(arg), zlib(arg)];
 	let env = [env_, std.utils.env(arg), ...dependencies];
 
 	return std.utils.buildUtil(

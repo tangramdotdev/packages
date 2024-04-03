@@ -174,13 +174,25 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (rest.bootstrapMode) {
-		env.push(
-			dependencies.env({
-				...rest,
+		let bootstrapMode = true;
+		env = env.concat([
+			std.utils.env({ bootstrapMode, env: env_, host: build }),
+			dependencies.perl.build({
+				bootstrapMode,
 				env: env_,
 				host: build,
 			}),
-		);
+			dependencies.python.build({
+				bootstrapMode,
+				env: env_,
+				host: build,
+			}),
+			dependencies.zstd.build({
+				bootstrapMode,
+				env: env_,
+				host: build,
+			}),
+		]);
 	}
 	env = env.concat([additionalEnv]);
 

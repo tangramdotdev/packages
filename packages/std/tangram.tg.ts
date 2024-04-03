@@ -95,7 +95,9 @@ export let testBootstrapMusl = tg.target(async () => {
 
 import * as utils from "./utils.tg.ts";
 export let testUtilsPrerequisites = tg.target(async () => {
-	return await utils.prerequisites(bootstrap.toolchainTriple(await triple.host()));
+	return await utils.prerequisites(
+		bootstrap.toolchainTriple(await triple.host()),
+	);
 });
 
 export let testUtilsBash = tg.target(async () => {
@@ -188,9 +190,6 @@ export let testDepsLibXCrypt = tg.target(async () => {
 });
 export let testDepsm4 = tg.target(async () => {
 	return await dependencies.m4.test();
-});
-export let testDepsNcurses = tg.target(async () => {
-	return await dependencies.ncurses.test();
 });
 export let testDepsPerl = tg.target(async () => {
 	return await dependencies.perl.test();

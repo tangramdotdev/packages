@@ -13,7 +13,6 @@ import help2man from "./dependencies/help2man.tg.ts";
 import libffi from "./dependencies/libffi.tg.ts";
 import libxcrypt from "./dependencies/libxcrypt.tg.ts";
 import m4 from "./dependencies/m4.tg.ts";
-import ncurses from "./dependencies/ncurses.tg.ts";
 import perl from "./dependencies/perl.tg.ts";
 import pkgconfig from "./dependencies/pkg_config.tg.ts";
 import python from "./dependencies/python.tg.ts";
@@ -32,7 +31,6 @@ export * as help2man from "./dependencies/help2man.tg.ts";
 export * as libffi from "./dependencies/libffi.tg.ts";
 export * as libxcrypt from "./dependencies/libxcrypt.tg.ts";
 export * as m4 from "./dependencies/m4.tg.ts";
-export * as ncurses from "./dependencies/ncurses.tg.ts";
 export * as perl from "./dependencies/perl.tg.ts";
 export * as pkgconfig from "./dependencies/pkg_config.tg.ts";
 export * as python from "./dependencies/python.tg.ts";
@@ -65,11 +63,7 @@ export let env = tg.target(async (arg?: Arg) => {
 	);
 
 	dependencies = dependencies.concat(
-		await Promise.all([
-			perl({ ...rest, host }),
-			pkgconfig({ ...rest, host }),
-			ncurses({ ...rest, host }),
-		]),
+		await Promise.all([perl({ ...rest, host }), pkgconfig({ ...rest, host })]),
 	);
 
 	dependencies = dependencies.concat(
