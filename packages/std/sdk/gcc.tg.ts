@@ -122,7 +122,6 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
-			"--enable-languages=c,c++,fortran",
 		];
 		additionalArgs.push(...stage1LimitedArgs);
 		debug = false;
@@ -135,6 +134,11 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-initfini-array",
 		];
 		additionalArgs.push(...stage2FullArgs);
+		additionalEnv = {
+			...additionalEnv,
+			CC: `${host}-cc -static -fPIC`,
+			CXX: `${host}-c++ -static -fPIC`,
+		};
 	}
 
 	let configure = { args: [...commonArgs, ...additionalArgs] };
@@ -273,17 +277,16 @@ export let interpreterPath = (host: string) =>
 type WrapArgsArg = {
 	host: string;
 	target?: string;
+	sysroot: tg.Directory;
 	toolchainDir: tg.Directory;
 };
 
 /** Produce the set of flags required to enable proxying a statically-linked toolchain dir. */
 export let wrapArgs = async (arg: WrapArgsArg) => {
-	let { host, target, toolchainDir } = arg;
+	let { host, sysroot, target, toolchainDir } = arg;
 	let targetTriple = target ?? host;
 	let gccVersion = await getGccVersion(toolchainDir, host, target);
 	let isCross = host !== targetTriple;
-
-	let sysroot = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
 
 	let ccArgs = [
 		tg`--sysroot=${sysroot}`,

@@ -22,11 +22,7 @@ export let injection = tg.target(async (arg: Arg) => {
 	let source = tg.File.expect(await sourceDir.get(`${os}/lib.c`));
 
 	// Get the build toolchain.
-	let { directory: buildToolchain } = await std.sdk.toolchainComponents({
-		host: build,
-		target: host,
-		env: arg.buildToolchain,
-	});
+	let buildToolchain = arg.buildToolchain;
 
 	// Get any additional env.
 	let env = arg.env;
@@ -60,7 +56,7 @@ export let injection = tg.target(async (arg: Arg) => {
 export default injection;
 
 type MacOsInjectionArg = {
-	buildToolchain: tg.Directory;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -116,7 +112,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
 	build?: string;
-	buildToolchain: tg.Directory;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -129,10 +125,6 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 
 	let additionalArgs = arg.additionalArgs ?? [];
 	if (std.triple.os(host) === "linux") {
-		let subpath = useTriplePrefix
-			? tg`${arg.buildToolchain}/${host}`
-			: tg`${arg.buildToolchain}`;
-		additionalArgs.push(await tg`--sysroot=${subpath}`);
 		additionalArgs.push("-fstack-clash-protection");
 	}
 
@@ -140,7 +132,7 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let executable = `${prefix}cc`;
 
 	let system = std.triple.archAndOs(host);
-	let env = std.env.object(arg.buildToolchain);
+	let env = std.env.object(arg.buildToolchain, arg.env);
 	let output = tg.File.expect(
 		await tg.build(
 			tg`${executable}                               \

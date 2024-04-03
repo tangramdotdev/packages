@@ -61,6 +61,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		flavor,
 		ld,
 		ldso,
+		sysroot
 	} = await std.sdk.toolchainComponents({
 		bootstrapMode,
 		env: buildToolchain,
@@ -103,8 +104,10 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let wrappedGFortran;
 		switch (flavor) {
 			case "gcc": {
+				tg.Directory.assert(sysroot);
 				let { ccArgs, cxxArgs, fortranArgs } = await gcc.wrapArgs({
 					host: build,
+					sysroot,
 					target: host,
 					toolchainDir: directory,
 				});

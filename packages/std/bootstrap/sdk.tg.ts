@@ -19,7 +19,12 @@ export let env = async (hostArg?: string): Promise<std.env.Arg> => {
 			SDKROOT: sdkroot,
 		};
 	}
-	return std.env.object(toolchain, utils, env);
+	return std.env.object(
+		toolchain,
+		utils,
+		{ [`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]: toolchain },
+		env,
+	);
 };
 
 export default env;

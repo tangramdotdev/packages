@@ -34,7 +34,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		host,
 	});
 
-	let { env } = await crossToolchain({
+	let { env, sysroot } = await crossToolchain({
 		...rest,
 		bootstrapMode: true,
 		build: host, // We've produced a native toolchain, so we can use it to build the cross-toolchain.
@@ -44,7 +44,11 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		variant: "stage2_full",
 	});
 
-	return env;
+	return [
+		...env,
+		sysroot,
+		{ [`TANGRAM_SYSROOT_${target.replace(/-/g, "_").toUpperCase()}`]: sysroot },
+	];
 });
 
 type CrossToolchainArg = std.sdk.BuildEnvArg & {
@@ -176,7 +180,7 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 		bootstrapMode,
 		build,
 		host,
-		// staticBuild: true,
+		staticBuild: true,
 		target,
 	});
 	console.log("stage2 binutils", await nativeHostBinutils.id());
@@ -192,8 +196,18 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	});
 	console.log("stage2 gcc", await fullGCC.id());
 
-	// Return just the directory.
-	return fullGCC;
+	// Pull the actual sysroot out of the triple-prefixed directory.
+	let sysrootInner = tg.Directory.expect(await sysroot.get(target));
+
+	return [
+		fullGCC,
+		sysrootInner,
+		nativeHostBinutils,
+		{
+			[`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]:
+				sysrootInner,
+		},
+	];
 });
 
 export let buildToHostCrossToolchain = async (hostArg?: string) => {
