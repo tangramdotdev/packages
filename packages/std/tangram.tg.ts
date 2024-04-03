@@ -155,38 +155,8 @@ export let testUtils = tg.target(async () => {
 // sdk dependencies tests
 
 import * as dependencies from "./sdk/dependencies.tg.ts";
-export let testDeps = tg.target(async () => {
-	return await dependencies.test();
-});
-export let testDepsAutoconf = tg.target(async () => {
-	return await dependencies.autoconf.test();
-});
-export let testDepsAutomake = tg.target(async () => {
-	return await dependencies.automake.test();
-});
-export let testDepsBc = tg.target(async () => {
-	return await dependencies.bc.test();
-});
 export let testDepsBison = tg.target(async () => {
 	return await dependencies.bison.test();
-});
-export let testDepsFile = tg.target(async () => {
-	return await dependencies.file.test();
-});
-export let testDepsFlex = tg.target(async () => {
-	return await dependencies.flex.test();
-});
-export let testDepsGperf = tg.target(async () => {
-	return await dependencies.gperf.test();
-});
-export let testDepsHelp2man = tg.target(async () => {
-	return await dependencies.help2man.test();
-});
-export let testDepsLibffi = tg.target(async () => {
-	return await dependencies.libffi.test();
-});
-export let testDepsLibXCrypt = tg.target(async () => {
-	return await dependencies.libxcrypt.test();
 });
 export let testDepsm4 = tg.target(async () => {
 	return await dependencies.m4.test();
@@ -194,14 +164,8 @@ export let testDepsm4 = tg.target(async () => {
 export let testDepsPerl = tg.target(async () => {
 	return await dependencies.perl.test();
 });
-export let testDepsPkgconfig = tg.target(async () => {
-	return await dependencies.pkgconfig.test();
-});
 export let testDepsPython = tg.target(async () => {
 	return await dependencies.python.test();
-});
-export let testDepsTexinfo = tg.target(async () => {
-	return await dependencies.texinfo.test();
 });
 export let testDepsZlib = tg.target(async () => {
 	return await dependencies.zlib.test();
