@@ -9,13 +9,13 @@ import { interpreterName } from "./libc.tg.ts";
 
 export let metadata = {
 	name: "llvm",
-	version: "18.1.2",
+	version: "18.1.3",
 };
 
 export let source = async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:51073febd91d1f2c3b411d022695744bda322647e76e0b4eb1918229210c48d5";
+		"sha256:2929f62d69dec0379e529eb632c40e15191e36f3bd58c2cb2df0413a0dc48651";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -56,10 +56,14 @@ export let toolchain = async (arg?: LLVMArg) => {
 	console.log("llvm sysroot", await sysroot.id());
 
 	let deps: tg.Unresolved<std.env.Arg> = [
-		git({ host }),
-		dependencies.python.build({ host }),
+		std.utils.env({ host: build }),
+		git({ host: build }),
+		dependencies.python.build({
+			host: build,
+			bootstrapMode: true,
+			env: std.sdk({ bootstrapMode: true, host: build }),
+		}),
 	];
-	// FIXME - why no zlib? any library?
 
 	let env = [...deps, env_];
 
@@ -77,12 +81,10 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
 			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
 			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
-			//"-DCLANG_ENABLE_BOOTSTRAP=ON",
 			"-DCMAKE_BUILD_TYPE=Release",
 			"-DCMAKE_INSTALL_LIBDIR=lib",
 			"-DCMAKE_SKIP_INSTALL_RPATH=ON",
-			//"-DCOMPILER_RT_BUILD_PROFILE=ON",
-			"-DCOMPILER_RT_USE_LLVM_UNWINDER=ON",
+			"-DCOMPILER_RT_BUILD_PROFILE=ON",
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
 			"-DLIBCXX_USE_COMPILER_RT=YES",
@@ -96,8 +98,8 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
+			"-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON",
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			`-DLLVM_RUNTIME_TARGETS='${host}'`,
 		],
 	};
 
@@ -113,16 +115,20 @@ export let toolchain = async (arg?: LLVMArg) => {
 		},
 		autotools,
 	);
-	console.log("llvmArtifact with compiler RT", await llvmArtifact.id());
 
 	// Add sysroot and `cc`/`c++` symlinks.
-	llvmArtifact = await tg.directory(llvmArtifact, sysroot, {
+	llvmArtifact = await tg.directory(llvmArtifact, {
 		"bin/cc": tg.symlink("clang"),
 		"bin/c++": tg.symlink("clang++"),
 	});
-	console.log("llvmArtifact with sysroot", await llvmArtifact.id());
+	console.log("llvmArtifact", await llvmArtifact.id());
 
-	return llvmArtifact;
+	return [
+		llvmArtifact,
+		{
+			[`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]: sysroot,
+		},
+	];
 };
 
 export let llvmMajorVersion = () => {
@@ -173,6 +179,9 @@ export let test = async () => {
 		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
 
 	let fullLlvmPlusClang = await toolchain({ host });
+	let { directory } = await std.sdk.toolchainComponents({
+		env: fullLlvmPlusClang,
+	});
 
 	let testCSource = tg.file(`
 		#include <stdio.h>
@@ -208,7 +217,7 @@ export let test = async () => {
 		}
 	`);
 	let cxxScript = tg`
-		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -isystem${fullLlvmPlusClang}/include/c++/v1 -isystem${fullLlvmPlusClang}/include/${host}/c++/v1 -o $OUTPUT
+		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -isystem${directory}/include/c++/v1 -isystem${directory}/include/${host}/c++/v1 -o $OUTPUT
 	`;
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
@@ -216,7 +225,7 @@ export let test = async () => {
 				fullLlvmPlusClang,
 				{
 					LD_LIBRARY_PATH: tg.Mutation.templatePrepend(
-						tg`${fullLlvmPlusClang}/lib/${host}`,
+						tg`${directory}/lib/${host}`,
 						":",
 					),
 				},

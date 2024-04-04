@@ -28,7 +28,7 @@ export type Arg = std.sdk.BuildEnvArg & {
 	source?: tg.Directory;
 };
 
-export let git = async (arg?: Arg) => {
+export let git = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -56,7 +56,11 @@ export let git = async (arg?: Arg) => {
 		install,
 	};
 
-	let env = [env_, zlib(arg)];
+	let env = [
+		env_,
+		std.utils.env({ ...rest, build, env: env_, host }),
+		zlib({ ...rest, build, env: env_, host }),
+	];
 
 	let result = std.autotools.build(
 		{
@@ -70,7 +74,7 @@ export let git = async (arg?: Arg) => {
 		autotools,
 	);
 	return result;
-};
+});
 
 export default git;
 

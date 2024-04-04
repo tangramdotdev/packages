@@ -1,6 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import * as dependencies from "./dependencies.tg.ts";
 import ninja from "./ninja.tg.ts";
 
 export let metadata = {
@@ -57,9 +56,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let deps = [
-		std.utils.env({ ...rest, build, env: env_, host }),
-	];
+	let deps = [std.utils.env({ ...rest, build, env: env_, host })];
 	let env = [
 		...deps,
 		{
@@ -104,8 +101,8 @@ export let build = tg.target(
 
 		// Set up env vars to pass through the include and library paths.
 		let cmakeEnv = `
-			export CMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ' ')"
-			export CMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ' ')"
+			export CMAKE_INCLUDE_PATH="$CPATH"
+			export CMAKE_LIBRARY_PATH="$LIBRARY_PATH"
 		`;
 
 		// Set up build phases.

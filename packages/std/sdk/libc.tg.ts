@@ -15,8 +15,8 @@ export let libc = tg.target(async (arg: LibCArg) => {
 	// Libcs are built for a single target, which is referred to as the host in this context.
 	let kind = kindFromTriple(host);
 	if (kind === "glibc") {
-	let linuxHeaders =
-		arg.linuxHeaders ?? tg.Directory.expect(await kernelHeaders(arg));
+		let linuxHeaders =
+			arg.linuxHeaders ?? tg.directory({ include: kernelHeaders(arg) });
 		return glibc.default({ ...arg, linuxHeaders });
 	} else if (kind === "musl") {
 		return musl.default(arg);
@@ -72,11 +72,11 @@ export let linkerFlags = async (arg: LinkerFlagArg) => {
 export let constructSysroot = async (arg: LibCArg) => {
 	let host = arg.host ?? (await std.triple.host());
 	let linuxHeaders =
-		arg.linuxHeaders ?? tg.Directory.expect(await kernelHeaders(arg));
+		arg.linuxHeaders ?? tg.directory({ include: kernelHeaders(arg) });
 	let cLibrary = await libc({ ...arg, linuxHeaders });
 	let cLibInclude = tg.Directory.expect(await cLibrary.get(`${host}/include`));
 	let hostLinuxInclude = tg.Directory.expect(
-		await linuxHeaders.get("include"),
+		await (await linuxHeaders).get("include"),
 	);
 	return tg.directory(cLibrary, {
 		[`${host}/include`]: tg.directory(cLibInclude, hostLinuxInclude),
