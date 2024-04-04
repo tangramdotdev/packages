@@ -1394,13 +1394,15 @@ let manifestInterpreterFromElf = async (
 	if (metadata.interpreter?.includes("ld-linux")) {
 		// Handle an ld-linux interpreter.
 		let toolchainDir = await gcc.toolchain({ host });
-		let { ldso, libDir } = await std.sdk.toolchainComponents({
+		let { ldso, libDir, directory } = await std.sdk.toolchainComponents({
 			env: toolchainDir,
 		});
 		tg.assert(
 			ldso,
 			"Could not find a valid ldso, required for Linux wrappers.",
 		);
+		let gccLibDir = tg.Directory.expect(await directory.get("lib"));
+		libDir = await tg.directory(libDir, gccLibDir);
 		return {
 			kind: "ld-linux",
 			path: await manifestSymlinkFromArg(ldso),
