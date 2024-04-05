@@ -385,7 +385,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 /// Create a manifest.
 #[allow(clippy::too_many_lines)]
 async fn create_manifest<H: BuildHasher>(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	ld_output_id: tg::artifact::Id,
 	options: &Options,
 	interpreter: InterpreterRequirement,
@@ -571,7 +571,7 @@ impl std::str::FromStr for LibraryPathOptimizationLevel {
 
 #[tracing::instrument(skip(tg, file))]
 async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	file: &Option<tg::File>,
 	library_paths: HashSet<tg::symlink::Id, H>,
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
@@ -626,7 +626,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 }
 
 async fn finalize_library_paths<H: BuildHasher + Default>(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	resolved_dirs: HashSet<tg::directory::Id, H>,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 	report_missing: bool,
@@ -640,7 +640,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 
 /// Given a list of needed library names and a set of selected paths, report which libraries are not accounted for.
 async fn report_missing_libraries<H: BuildHasher + Default>(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 	library_paths: &HashSet<tg::symlink::Id, H>,
 ) -> Result<()> {
@@ -648,11 +648,8 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 	for library in needed_libraries.keys() {
 		for library_path in library_paths {
 			let symlink = tg::Symlink::with_id(library_path.clone());
-			let artifact = symlink
-				.artifact(tg)
-				.await?
-				.as_ref()
-				.ok_or(error!("expected a directory"))?;
+			let artifact = symlink.artifact(tg).await?;
+			let artifact = artifact.as_ref().ok_or(error!("expected a directory"))?;
 			if let tg::Artifact::Directory(directory) = artifact {
 				if directory.entries(tg).await?.contains_key(library) {
 					found_libraries.insert(library.clone());
@@ -673,7 +670,7 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 
 /// Given a set of symlink IDs, return any directory IDs we can find by resolving them.
 async fn resolve_paths<H: BuildHasher + Default>(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	unresolved_paths: &HashSet<tg::symlink::Id, H>,
 ) -> Result<HashSet<tg::directory::Id, H>> {
 	let resolved_paths =
@@ -695,7 +692,7 @@ async fn resolve_paths<H: BuildHasher + Default>(
 
 /// Given a set of directory IDs, update the `library_paths` set to contain a matching set of symlinks with no `path` stored.
 async fn store_dirs_as_symlinks<H: BuildHasher + Default>(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	dirs: HashSet<tg::directory::Id, H>,
 ) -> Result<HashSet<tg::symlink::Id, H>> {
 	let result = try_join_all(dirs.iter().map(|dir_id| async {
@@ -712,7 +709,7 @@ async fn store_dirs_as_symlinks<H: BuildHasher + Default>(
 
 #[tracing::instrument(skip(tg, file))]
 async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	file: &tg::File,
 	library_paths: &HashSet<tg::directory::Id, H>,
 	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
@@ -942,7 +939,7 @@ async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
 }
 
 async fn file_from_reader(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	reader: impl AsyncRead + Unpin,
 	is_executable: bool,
 ) -> Result<tg::File> {
@@ -1002,7 +999,7 @@ where
 	}
 }
 
-async fn unrender(tg: &dyn tg::Handle, string: &str) -> tg::template::Data {
+async fn unrender(tg: &impl tg::Handle, string: &str) -> tg::template::Data {
 	tg::Template::unrender(string)
 		.expect("Failed to unrender template")
 		.data(tg)

@@ -453,7 +453,7 @@ struct SourceTree {
 
 // Convert a list of sources into a corresponding list of tg::Template.
 async fn create_remapping_table(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	remap_targets: Vec<RemapTarget>,
 ) -> Result<BTreeMap<RemapTarget, tg::Template>> {
 	let mut table = BTreeMap::new();
@@ -530,7 +530,7 @@ fn insert_into_source_tree(
 
 // Check in the source tree and return a list of templates that correspond to the files within it.
 async fn check_in_source_tree(
-	tg: &dyn tg::Handle,
+	tg: &impl tg::Handle,
 	subtree: SourceTree,
 ) -> Result<Vec<(RemapTarget, tg::Template)>> {
 	// Directory builder to check in the directory at the end.
