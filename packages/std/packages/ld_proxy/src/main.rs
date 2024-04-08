@@ -8,7 +8,6 @@ use std::{
 	str::FromStr,
 };
 use tangram_client as tg;
-use tangram_error::{error, Result};
 use tangram_wrapper::manifest::{self, Manifest};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing_subscriber::prelude::*;
@@ -21,12 +20,12 @@ const MAX_DEPTH: usize = 16;
 async fn main() {
 	if let Err(e) = main_inner().await {
 		eprintln!("linker proxy failed: {e}");
-		tracing::trace!("{}", e.trace(&tangram_error::TraceOptions::default()));
+		tracing::trace!("{}", e.trace(&tg::error::TraceOptions::default()));
 		std::process::exit(1);
 	}
 }
 
-async fn main_inner() -> Result<()> {
+async fn main_inner() -> tg::Result<()> {
 	// Read the options from the environment and arguments.
 	let options = read_options();
 	setup_tracing(options.tracing_level.as_deref());
@@ -36,7 +35,7 @@ async fn main_inner() -> Result<()> {
 	let status = std::process::Command::new(&options.command_path)
 		.args(&options.command_args)
 		.status()
-		.map_err(|error| error!(source = error, "failed to run the command"))?;
+		.map_err(|error| tg::error!(source = error, "failed to run the command"))?;
 
 	// If the command did not exit successfully, then exit with its code.
 	if !status.success() {
@@ -229,7 +228,7 @@ fn read_options() -> Options {
 }
 
 #[allow(clippy::too_many_lines)]
-async fn create_wrapper(options: &Options) -> Result<()> {
+async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Create the tangram instance.
 	let tg = tg::Client::with_env()?;
 	tg.connect().await?;
@@ -261,7 +260,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		let reader = tokio::io::BufReader::new(
 			tokio::fs::File::open(&options.output_path)
 				.await
-				.map_err(|error| error!(source = error, "Could not open output file"))?,
+				.map_err(|error| tg::error!(source = error, "Could not open output file"))?,
 		);
 		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
 
@@ -286,7 +285,7 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 				let object = tg::symlink::Object::try_from(symlink_data).unwrap();
 				let symlink = tg::Symlink::with_object(object);
 				let id = symlink.id(&tg).await?;
-				Ok::<_, tangram_error::Error>(id.clone())
+				Ok::<_, tg::Error>(id.clone())
 			}))
 			.await?
 			.into_iter()
@@ -335,10 +334,10 @@ async fn create_wrapper(options: &Options) -> Result<()> {
 		let wrapper_path = options
 			.wrapper_path
 			.as_ref()
-			.ok_or(error!("TANGRAM_LINKER_WRAPPER_PATH must be set"))?;
+			.ok_or(tg::error!("TANGRAM_LINKER_WRAPPER_PATH must be set"))?;
 		std::fs::remove_file(&options.output_path).ok();
 		std::fs::copy(wrapper_path, &options.output_path)
-			.map_err(|error| error!(source = error, "failed to copy the wrapper file"))?;
+			.map_err(|error| tg::error!(source = error, "failed to copy the wrapper file"))?;
 
 		// Set the permissions of the wrapper file so we can write the manifest to the end.
 		let mut perms = std::fs::metadata(&options.output_path)
@@ -390,7 +389,7 @@ async fn create_manifest<H: BuildHasher>(
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<HashSet<tg::symlink::Id, H>>,
-) -> Result<Manifest> {
+) -> tg::Result<Manifest> {
 	// Create the interpreter.
 	let interpreter = if cfg!(target_os = "linux") {
 		let config = match interpreter {
@@ -416,7 +415,7 @@ async fn create_manifest<H: BuildHasher>(
 			let result = futures::future::try_join_all(library_paths.into_iter().map(|id| async {
 				let symlink = tg::Symlink::with_id(id);
 				let data = symlink.data(tg).await?;
-				Ok::<_, tangram_error::Error>(data)
+				Ok::<_, tg::Error>(data)
 			}))
 			.await?;
 			Some(result)
@@ -548,7 +547,7 @@ enum LibraryPathOptimizationLevel {
 }
 
 impl std::str::FromStr for LibraryPathOptimizationLevel {
-	type Err = tangram_error::Error;
+	type Err = tg::Error;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s.to_ascii_lowercase().as_str() {
@@ -563,7 +562,7 @@ impl std::str::FromStr for LibraryPathOptimizationLevel {
 						return Ok(Self::Combine);
 					}
 				}
-				Err(error!("invalid library path optimization strategy {s}"))
+				Err(tg::error!("invalid library path optimization strategy {s}"))
 			},
 		}
 	}
@@ -578,7 +577,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	strategy: LibraryPathOptimizationLevel,
 	report_missing: bool,
 	max_depth: usize,
-) -> Result<HashSet<tg::symlink::Id, H>> {
+) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	if file.is_none()
 		|| matches!(strategy, LibraryPathOptimizationLevel::None)
 		|| library_paths.is_empty()
@@ -604,7 +603,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 
 	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
-		return Err(error!(
+		return Err(tg::error!(
 			"invalid library path optimization strategy {strategy:?}"
 		));
 	}
@@ -630,7 +629,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	resolved_dirs: HashSet<tg::directory::Id, H>,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 	report_missing: bool,
-) -> Result<HashSet<tg::symlink::Id, H>> {
+) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	let result = store_dirs_as_symlinks(tg, resolved_dirs).await?;
 	if report_missing {
 		report_missing_libraries(tg, needed_libraries, &result).await?;
@@ -643,13 +642,15 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 	library_paths: &HashSet<tg::symlink::Id, H>,
-) -> Result<()> {
+) -> tg::Result<()> {
 	let mut found_libraries = HashSet::default();
 	for library in needed_libraries.keys() {
 		for library_path in library_paths {
 			let symlink = tg::Symlink::with_id(library_path.clone());
 			let artifact = symlink.artifact(tg).await?;
-			let artifact = artifact.as_ref().ok_or(error!("expected a directory"))?;
+			let artifact = artifact
+				.as_ref()
+				.ok_or(tg::error!("expected a directory"))?;
 			if let tg::Artifact::Directory(directory) = artifact {
 				if directory.entries(tg).await?.contains_key(library) {
 					found_libraries.insert(library.clone());
@@ -672,13 +673,13 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 async fn resolve_paths<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	unresolved_paths: &HashSet<tg::symlink::Id, H>,
-) -> Result<HashSet<tg::directory::Id, H>> {
+) -> tg::Result<HashSet<tg::directory::Id, H>> {
 	let resolved_paths =
 		futures::future::try_join_all(unresolved_paths.iter().map(|symlink_id| async {
 			let symlink = tg::Symlink::with_id(symlink_id.clone());
 			if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
 				let dir_id = directory.id(tg).await?;
-				Ok::<_, tangram_error::Error>(Some(dir_id.clone()))
+				Ok::<_, tg::Error>(Some(dir_id.clone()))
 			} else {
 				Ok(None)
 			}
@@ -694,12 +695,12 @@ async fn resolve_paths<H: BuildHasher + Default>(
 async fn store_dirs_as_symlinks<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	dirs: HashSet<tg::directory::Id, H>,
-) -> Result<HashSet<tg::symlink::Id, H>> {
+) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	let result = try_join_all(dirs.iter().map(|dir_id| async {
 		let directory = tg::Directory::with_id(dir_id.clone());
 		let symlink = tg::Symlink::new(Some(directory.into()), None);
 		let symlink_id = symlink.id(tg).await?;
-		Ok::<_, tangram_error::Error>(symlink_id.clone())
+		Ok::<_, tg::Error>(symlink_id.clone())
 	}))
 	.await?
 	.into_iter()
@@ -715,7 +716,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
 	max_depth: usize,
 	depth: usize,
-) -> Result<()> {
+) -> tg::Result<()> {
 	// Check if we're done.
 	if found_all_libraries(all_needed_libraries) || depth == max_depth {
 		return Ok(());
@@ -747,7 +748,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				.try_get(
 					tg,
 					&tg::Path::from_str(&library_name)
-						.map_err(|error| error!(source = error, "could not create path"))?,
+						.map_err(|error| tg::error!(source = error, "could not create path"))?,
 				)
 				.await
 			{
@@ -782,7 +783,9 @@ fn found_all_libraries<H: BuildHasher + Default>(
 }
 
 /// Analyze an output file.
-async fn analyze_output_file(path: impl AsRef<std::path::Path>) -> Result<AnalyzeOutputFileOutput> {
+async fn analyze_output_file(
+	path: impl AsRef<std::path::Path>,
+) -> tg::Result<AnalyzeOutputFileOutput> {
 	let bytes = bytes_from_path(path).await?;
 	analyze_executable(&bytes)
 }
@@ -796,10 +799,10 @@ enum LinuxInterpreterFlavor {
 /// Determine the flavor of the `ld-linux.so` executable at the given path, if it is one.
 async fn determine_interpreter_flavor(
 	path: impl AsRef<std::path::Path>,
-) -> Result<LinuxInterpreterFlavor> {
+) -> tg::Result<LinuxInterpreterFlavor> {
 	let path = path.as_ref();
 	let path = std::fs::canonicalize(path).map_err(|error| {
-		error!(
+		tg::error!(
 			source = error,
 			"failed to canonicalize path {}",
 			path.display()
@@ -809,7 +812,7 @@ async fn determine_interpreter_flavor(
 	let bytes = bytes_from_path(path).await?;
 
 	let object = goblin::Object::parse(&bytes)
-		.map_err(|error| error!(source = error, "failed to parse output file as an object"))?;
+		.map_err(|error| tg::error!(source = error, "failed to parse output file as an object"))?;
 	if let goblin::Object::Elf(elf) = object {
 		let flavor = if elf.soname.is_some() && elf.soname.unwrap().starts_with("ld-linux") {
 			LinuxInterpreterFlavor::Default
@@ -818,15 +821,15 @@ async fn determine_interpreter_flavor(
 		};
 		Ok(flavor)
 	} else {
-		Err(error!("unsupported object type, expected elf file"))
+		Err(tg::error!("unsupported object type, expected elf file"))
 	}
 }
 
 /// Analyze an executable.
-fn analyze_executable(bytes: &[u8]) -> Result<AnalyzeOutputFileOutput> {
+fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 	// Parse the object and analyze it.
 	let object = goblin::Object::parse(bytes)
-		.map_err(|error| error!(source = error, "failed to parse output file as an object"))?;
+		.map_err(|error| tg::error!(source = error, "failed to parse output file as an object"))?;
 	let result = match object {
 		// Handle an archive file.
 		goblin::Object::Archive(_) => AnalyzeOutputFileOutput {
@@ -919,10 +922,10 @@ fn analyze_executable(bytes: &[u8]) -> Result<AnalyzeOutputFileOutput> {
 	Ok(result)
 }
 
-async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
+async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> tg::Result<Vec<u8>> {
 	let mut reader =
 		tokio::io::BufReader::new(tokio::fs::File::open(&path).await.map_err(|error| {
-			error!(
+			tg::error!(
 				source = error,
 				r#"failed to open the file at path "{}""#,
 				path.as_ref().display()
@@ -933,7 +936,7 @@ async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
 	reader
 		.read_to_end(&mut bytes)
 		.await
-		.map_err(|error| error!(source = error, "failed to read the output file"))?;
+		.map_err(|error| tg::error!(source = error, "failed to read the output file"))?;
 
 	Ok(bytes)
 }
@@ -942,10 +945,10 @@ async fn file_from_reader(
 	tg: &impl tg::Handle,
 	reader: impl AsyncRead + Unpin,
 	is_executable: bool,
-) -> Result<tg::File> {
+) -> tg::Result<tg::File> {
 	let blob = tg::Blob::with_reader(tg, reader)
 		.await
-		.map_err(|error| error!(source = error, "could not create blob"))?;
+		.map_err(|error| tg::error!(source = error, "could not create blob"))?;
 	let file = tg::File::builder(blob).executable(is_executable).build();
 	Ok(file)
 }
@@ -968,7 +971,7 @@ fn setup_tracing(targets: Option<&str>) {
 	}
 }
 
-async fn template_data_to_symlink_data<F>(template: F) -> Result<tg::symlink::Data>
+async fn template_data_to_symlink_data<F>(template: F) -> tg::Result<tg::symlink::Data>
 where
 	F: futures::Future<Output = tg::template::Data>,
 {
@@ -992,7 +995,7 @@ where
 				path: Some(s.strip_prefix('/').unwrap().to_owned()),
 			})
 		},
-		_ => Err(error!(
+		_ => Err(tg::error!(
 			"expected a template with 1-3 components, got {:?}",
 			components
 		)),

@@ -5,7 +5,6 @@ use std::{
 	path::{Path, PathBuf},
 };
 use tangram_client as tg;
-use tangram_error::{error, Result};
 
 // Data read from environment variables.
 #[derive(Debug)]
@@ -66,14 +65,14 @@ enum RemapKind {
 
 impl Environment {
 	// Parse the runtime environment.
-	fn parse() -> Result<Self> {
+	fn parse() -> tg::Result<Self> {
 		let mut env = BTreeMap::new();
 		let mut enable = false;
 		for (key, value) in std::env::vars() {
 			match key.as_str() {
 				"TANGRAM_CC_ENABLE" => {
 					enable = value.parse().map_err(|error| {
-						error!(source = error, "Failed to parse TANGRAM_CC_ENABLE")
+						tg::error!(source = error, "Failed to parse TANGRAM_CC_ENABLE")
 					})?;
 				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => continue,
@@ -90,7 +89,7 @@ impl Environment {
 
 impl Args {
 	// Parse the cli arguments as if this program was gcc to extract the sources, search paths, and rest of the arguments.
-	fn parse() -> Result<Self> {
+	fn parse() -> tg::Result<Self> {
 		let mut remap_targets = vec![];
 		let mut output = None;
 		let mut cli_args = vec![];
@@ -282,7 +281,7 @@ async fn main() {
 	}
 }
 
-async fn main_inner() -> Result<()> {
+async fn main_inner() -> tg::Result<()> {
 	// Get the environment information (env vars, runtime, cc path).
 	let environment = Environment::parse()?;
 
@@ -295,7 +294,7 @@ async fn main_inner() -> Result<()> {
 			.args(std::env::args_os().skip(1))
 			.exec();
 
-		return Err(error!(
+		return Err(tg::error!(
 			"failed to invoke C compiler ({:#?}): {error}",
 			environment.cc
 		));
@@ -369,13 +368,13 @@ async fn main_inner() -> Result<()> {
 	// Await the outcome.
 	let outcome = build.outcome(tg).await?;
 	let build_directory = match outcome {
-		tg::build::Outcome::Canceled => return Err(error!("build was cancelled")),
-		tg::build::Outcome::Failed(e) => return Err(error!("build failed: {e}")),
+		tg::build::Outcome::Canceled => return Err(tg::error!("build was cancelled")),
+		tg::build::Outcome::Failed(e) => return Err(tg::error!("build failed: {e}")),
 		tg::build::Outcome::Succeeded(outcome) => outcome
 			.try_unwrap_object()
-			.map_err(|error| error!(source = error, "expected build to create an object"))?
+			.map_err(|error| tg::error!(source = error, "expected build to create an object"))?
 			.try_unwrap_directory()
-			.map_err(|error| error!(source = error, "expected build to create a directory"))?,
+			.map_err(|error| tg::error!(source = error, "expected build to create a directory"))?,
 	};
 
 	// Dump stdout, stderr
@@ -388,7 +387,7 @@ async fn main_inner() -> Result<()> {
 		.await?;
 	std::io::stdout()
 		.write_all(&stdout)
-		.map_err(|error| error!(source = error, "failed to dump stdout"))?;
+		.map_err(|error| tg::error!(source = error, "failed to dump stdout"))?;
 	let stderr: Vec<u8> = build_directory
 		.get(tg, &"stderr".parse().unwrap())
 		.await?
@@ -398,20 +397,20 @@ async fn main_inner() -> Result<()> {
 		.await?;
 	std::io::stderr()
 		.write_all(&stderr)
-		.map_err(|error| error!(source = error, "failed to dump stdout"))?;
+		.map_err(|error| tg::error!(source = error, "failed to dump stdout"))?;
 
 	// Copy the output file to the destination.
 	let output_file = build_directory
 		.get(tg, &"output".parse().unwrap())
 		.await
-		.map_err(|error| error!(source = error, "cc failed: no output"))?;
+		.map_err(|error| tg::error!(source = error, "cc failed: no output"))?;
 
 	// Verify we did everything correctly.
 	let mut tangram_path = std::env::current_dir()
-		.map_err(|error| error!(source = error, "failed to get current working directory"))?;
+		.map_err(|error| tg::error!(source = error, "failed to get current working directory"))?;
 	while !tangram_path.join(".tangram").exists() {
 		let Some(parent) = tangram_path.parent() else {
-			return Err(error!("failed to find .tangram directory."));
+			return Err(tg::error!("failed to find .tangram directory."));
 		};
 		tangram_path = parent.into();
 	}
@@ -420,18 +419,19 @@ async fn main_inner() -> Result<()> {
 		.join(output_file.id(tg).await?.to_string());
 	eprintln!("Copying {artifact_path:#?} to {output:#?}");
 	std::fs::copy(artifact_path, output)
-		.map_err(|error| error!(source = error, "failed to copy file"))?;
+		.map_err(|error| tg::error!(source = error, "failed to copy file"))?;
 
 	Ok(())
 }
 
 // Find the C compiler by checking the TANGRAM_CC_CC compiler or searching PATH for cc.
-fn which_cc() -> Result<PathBuf> {
+fn which_cc() -> tg::Result<PathBuf> {
 	let compiler_name = std::env::args().next().unwrap();
 	if let Ok(cc) = std::env::var("TANGRAM_CC_COMPILER") {
 		return Ok(cc.into());
 	}
-	let path = std::env::var("PATH").map_err(|error| error!(source = error, "PATH is not set"))?;
+	let path =
+		std::env::var("PATH").map_err(|error| tg::error!(source = error, "PATH is not set"))?;
 	let cc = path
 		.split(':')
 		.filter_map(|path| {
@@ -440,7 +440,7 @@ fn which_cc() -> Result<PathBuf> {
 			path.exists().then_some(path)
 		})
 		.nth(1)
-		.ok_or(error!("could not find cc"))?;
+		.ok_or(tg::error!("could not find cc"))?;
 	Ok(cc)
 }
 
@@ -455,7 +455,7 @@ struct SourceTree {
 async fn create_remapping_table(
 	tg: &impl tg::Handle,
 	remap_targets: Vec<RemapTarget>,
-) -> Result<BTreeMap<RemapTarget, tg::Template>> {
+) -> tg::Result<BTreeMap<RemapTarget, tg::Template>> {
 	let mut table = BTreeMap::new();
 	let mut subtrees = Vec::new();
 
@@ -464,11 +464,11 @@ async fn create_remapping_table(
 		let path: &Path = remap_target.value.as_ref();
 		let path = path
 			.canonicalize()
-			.map_err(|error| error!(source = error, "failed to canonicalize path"))?;
+			.map_err(|error| tg::error!(source = error, "failed to canonicalize path"))?;
 
 		// Bail if the file does not exist.
 		if !path.exists() {
-			return Err(error!("Source file does not exist: {path:#?}."));
+			return Err(tg::error!("Source file does not exist: {path:#?}."));
 		}
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
@@ -480,7 +480,7 @@ async fn create_remapping_table(
 
 		// Add to the file trees.
 		let path: tg::Path = path.try_into().map_err(|error| {
-			error!(
+			tg::error!(
 				source = error,
 				"failed to convert std::fs::PathBuf to tg::Path"
 			)
@@ -532,7 +532,7 @@ fn insert_into_source_tree(
 async fn check_in_source_tree(
 	tg: &impl tg::Handle,
 	subtree: SourceTree,
-) -> Result<Vec<(RemapTarget, tg::Template)>> {
+) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
 	// Directory builder to check in the directory at the end.
 	let mut builder = tg::directory::Builder::new(BTreeMap::new());
 
@@ -570,7 +570,7 @@ async fn check_in_source_tree(
 					.add(tg, &subpath, artifact.clone())
 					.await
 					.map_err(|error| {
-						error!(
+						tg::error!(
 							source = error,
 							"failed to add {subpath}, {artifact} to directory"
 						)
