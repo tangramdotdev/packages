@@ -3,13 +3,13 @@ import * as cmake from "./cmake.tg.ts";
 
 export let metadata = {
 	name: "ninja",
-	version: "1.11.1",
+	version: "1.12.0",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:31747ae633213f1eda3842686f83c2aa1412e0f5691d1c14dbbcc67fe7400cea";
+		"sha256:8b2c86cd483dc7fcb7975c5ec7329135d210099a89bc7db0590a07b0bbfe49a5";
 	let owner = "ninja-build";
 	let repo = name;
 	let tag = `v${version}`;
@@ -39,7 +39,7 @@ export let ninja = async (arg?: Arg) => {
 	let build = build_ ?? host;
 
 	let configure = {
-		args: ["-DCMAKE_BUILD_TYPE=Release"],
+		args: ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTING=OFF"],
 	};
 
 	let result = cmake.build(

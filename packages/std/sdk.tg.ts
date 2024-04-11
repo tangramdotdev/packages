@@ -107,14 +107,13 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		buildToolchain: toolchain,
 		host,
 	});
-	envs.push(hostProxy);
 
 	// Add host utils if requested.
 	if (utils) {
 		let hostUtils = await std.utils.env({
 			build: host,
 			host,
-			env: envs,
+			env: [envs, hostProxy],
 			sdk: false,
 		});
 		envs.push(hostUtils);
@@ -171,6 +170,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		if (tg.Directory.is(linkerDir)) {
 			envs.push(linkerDir);
 		}
+	} else {
+		envs.push(hostProxy);
 	}
 
 	// Combine all envs, omitting the default standard utils as they've already been added manually.
@@ -938,7 +939,7 @@ export let testMoldSdk = tg.target(async () => {
 
 	let sdkArg = { host: detectedHost, linker: "mold" as const };
 
-	let moldSdk = tg.File.expect(await sdk(sdkArg));
+	let moldSdk = await sdk(sdkArg);
 
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(moldSdk, sdkArg);

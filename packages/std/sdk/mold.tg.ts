@@ -3,13 +3,13 @@ import * as cmake from "./cmake.tg.ts";
 
 export let metadata = {
 	name: "mold",
-	version: "2.4.0",
+	version: "2.30.0",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:be65f3d785d32ece7b3204ecaa57810847fdd25c232cf704cbfff2dafb1ac107";
+		"sha256:6e5178ccafe828fdb4ba0dd841d083ff6004d3cb41e56485143eb64c716345fd";
 	let owner = "rui314";
 	let repo = name;
 	let tag = `v${version}`;
