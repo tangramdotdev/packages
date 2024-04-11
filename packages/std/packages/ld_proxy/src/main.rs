@@ -9,7 +9,7 @@ use std::{
 };
 use tangram_client as tg;
 use tangram_wrapper::manifest::{self, Manifest};
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::AsyncReadExt;
 use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;
@@ -256,15 +256,16 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			options.library_path_optimization,
 			LibraryPathOptimizationLevel::None
 		) {
-		// Open the output file.
-		let reader = tokio::io::BufReader::new(
-			tokio::fs::File::open(&options.output_path)
-				.await
-				.map_err(|error| tg::error!(source = error, "Could not open output file"))?,
-		);
-		let output_artifact = file_from_reader(&tg, reader, is_executable).await?;
+		// Check in the output file.
+		let output_path = std::fs::canonicalize(&options.output_path)
+			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
+		let output_path = tg::Path::try_from(output_path)?;
+		let output_file = tg::Artifact::check_in(&tg, &output_path)
+			.await?
+			.try_unwrap_file()
+			.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
-		Some(output_artifact)
+		Some(output_file)
 	} else {
 		None
 	};
@@ -939,18 +940,6 @@ async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> tg::Result<Vec<u8
 		.map_err(|error| tg::error!(source = error, "failed to read the output file"))?;
 
 	Ok(bytes)
-}
-
-async fn file_from_reader(
-	tg: &impl tg::Handle,
-	reader: impl AsyncRead + Unpin,
-	is_executable: bool,
-) -> tg::Result<tg::File> {
-	let blob = tg::Blob::with_reader(tg, reader)
-		.await
-		.map_err(|error| tg::error!(source = error, "could not create blob"))?;
-	let file = tg::File::builder(blob).executable(is_executable).build();
-	Ok(file)
 }
 
 fn setup_tracing(targets: Option<&str>) {

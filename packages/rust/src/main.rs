@@ -1,7 +1,6 @@
 use itertools::Itertools;
 use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
-use tangram_error::{error, Result, WrapErr};
 use tokio::io::AsyncWriteExt;
 
 // Input arguments to the rustc proxy.
@@ -37,11 +36,11 @@ struct Args {
 
 impl Args {
     // Parse the command line arguments passed to the proxy by cargo.
-    fn parse() -> Result<Self> {
+    fn parse() -> tg::Result<Self> {
         // Parse arguments.
         let rustc = std::env::args()
             .nth(1)
-            .wrap_err("Missing argument for rustc.")?;
+            .ok_or(tg::error!("missing argument for rustc"))?;
         let mut stdin = false;
         let mut dependencies = Vec::new();
         let mut externs = Vec::new();
@@ -67,10 +66,14 @@ impl Args {
                     dependencies.push(dependency);
                 }
                 ("--extern", Some(value)) => {
-                    let (name, path) = value
-                        .split('=')
-                        .collect_tuple()
-                        .wrap_err("Expected --extern NAME=PATH")?;
+                    let components = value.split('=').collect_vec();
+                    let (name, path) = if components.len() == 1 {
+                        (components[0], "")
+                    } else if components.len() == 2 {
+                        (components[0], components[1])
+                    } else {
+                        return Err(tg::error!("invalid --extern argument: {value}"));
+                    };
                     externs.push((name.into(), path.into()));
                 }
                 ("--out-dir", Some(value)) => {
@@ -95,13 +98,14 @@ impl Args {
         let cargo_out_directory = std::env::var("OUT_DIR").ok();
 
         // Find the tangram path.
-        let cwd = std::env::current_dir().wrap_err("Missing current dir.")?;
+        let cwd = std::env::current_dir()
+            .map_err(|error| tg::error!(source = error, "missing current dir"))?;
 
         // Get the tangram root path by walking up from the current directory.
         let mut search_dir = cwd.clone();
         while !search_dir.join(".tangram").exists() {
             let Some(parent) = search_dir.parent() else {
-                return Err(error!("Missing tangram path."));
+                return Err(tg::error!("missing tangram path"));
             };
             search_dir = parent.into();
         }
@@ -125,11 +129,12 @@ impl Args {
 async fn main() {
     if let Err(e) = main_inner().await {
         eprintln!("rustc proxy failed: {e}");
+        eprintln!("{}", e.trace(&tg::error::TraceOptions::default()));
         std::process::exit(1);
     }
 }
 
-async fn main_inner() -> Result<()> {
+async fn main_inner() -> tg::Result<()> {
     let args = Args::parse()?;
 
     // If cargo expects to pipe into stdin, we immediately invoke rustc without doing anything.
@@ -137,11 +142,8 @@ async fn main_inner() -> Result<()> {
         let error = std::process::Command::new(std::env::args().nth(1).unwrap())
             .args(std::env::args().skip(2))
             .exec();
-        return Err(error!("exec failed: {error}."));
+        return Err(tg::error!("exec failed: {error}."));
     }
-
-    // Invoke rustc to get a list of output files.
-    let output_files = get_outputs(&args)?;
 
     // Create a client.
     let tg = tg::Client::with_env()?;
@@ -170,7 +172,7 @@ async fn main_inner() -> Result<()> {
     // Unrender the environment.
     let mut env = BTreeMap::new();
     for (name, value) in
-        std::env::vars().filter(|(name, _)| BLACKLISTED_ENV_VARS.contains(&name.as_str()))
+        std::env::vars().filter(|(name, _)| !BLACKLISTED_ENV_VARS.contains(&name.as_str()))
     {
         let value = tg::Template::unrender(&value)?;
         env.insert(name, value.into());
@@ -185,6 +187,7 @@ async fn main_inner() -> Result<()> {
         source_directory.into(),
         "--out-dir".to_owned().into(),
         out_dir.into(),
+        "--".to_owned().into(),
     ];
 
     for arg in &args.rustc_args {
@@ -203,13 +206,19 @@ async fn main_inner() -> Result<()> {
             .externs
             .iter()
             .filter_map(|(name, path)| {
-                let subpath = path.strip_prefix(dependency)?;
-                let template = tg::Template {
-                    components: vec![
-                        format!("{name}=").into(),
-                        directory.clone().into(),
-                        subpath.to_owned().into(),
-                    ],
+                let template = if path.is_empty() {
+                    tg::Template {
+                        components: vec![name.to_string().into()],
+                    }
+                } else {
+                    let subpath = path.strip_prefix(dependency)?;
+                    tg::Template {
+                        components: vec![
+                            format!("{name}=").into(),
+                            directory.clone().into(),
+                            subpath.to_owned().into(),
+                        ],
+                    }
                 };
                 Some(["--extern".to_owned().into(), template.into()])
             })
@@ -218,7 +227,7 @@ async fn main_inner() -> Result<()> {
     }
 
     // Create the target.
-    let host = tg::Triple::host()?;
+    let host = host().to_string();
     let lock = None;
     let checksum = None;
     let name = Some("tangram_rustc".into());
@@ -248,17 +257,24 @@ async fn main_inner() -> Result<()> {
     let outcome = tg::Build::with_id(build_id)
         .outcome(tg)
         .await
-        .wrap_err("Failed to get the build.")?;
+        .map_err(|error| tg::error!(source = error, "failed to get the build"))?;
 
     // Get the output.
     let output = match outcome {
-        tg::build::Outcome::Canceled => return Err(error!("Build was cancelled.")),
-        tg::build::Outcome::Failed(error) => return Err(error!("Build failed: {error}")),
+        tg::build::Outcome::Canceled => return Err(tg::error!("Build was cancelled.")),
+        tg::build::Outcome::Failed(error) => return Err(tg::error!("Build failed: {error}")),
         tg::build::Outcome::Succeeded(success) => success
             .try_unwrap_object()
-            .wrap_err("Expected the build outcome to be an object.")?
+            .map_err(|error| {
+                tg::error!(source = error, "expected the build outcome to be an object")
+            })?
             .try_unwrap_directory()
-            .wrap_err("Expected the build output to be a directory.")?,
+            .map_err(|error| {
+                tg::error!(
+                    source = error,
+                    "expected the build output to be a directory"
+                )
+            })?,
     };
 
     // Get stdout/stderr from the build and forward it to our stdout/stderr.
@@ -274,7 +290,7 @@ async fn main_inner() -> Result<()> {
     tokio::io::stdout()
         .write_all(&stdout)
         .await
-        .wrap_err("Failed to write stderr.")?;
+        .map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
     let stderr = output
         .get(tg, &"log/stderr".parse().unwrap())
         .await?
@@ -287,7 +303,7 @@ async fn main_inner() -> Result<()> {
     tokio::io::stderr()
         .write_all(&stderr)
         .await
-        .wrap_err("Failed to write stderr.")?;
+        .map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
     // Get the output directory.
     let output_directory = args
@@ -297,50 +313,36 @@ async fn main_inner() -> Result<()> {
         .join("build");
 
     // Copy output files from $OUTPUT to the path specified.
-    for from in output_files {
-        let filename = from.file_name().unwrap();
-        let from = output_directory.join(filename);
+    for from in output_directory.read_dir().unwrap() {
+        let filename = from.unwrap().file_name().into_string().unwrap();
+        let from = output_directory.join(&filename);
         let to = PathBuf::from(args.rustc_output_directory.as_ref().unwrap()).join(filename);
         if from.exists() && from.is_file() {
             tokio::fs::copy(from, to)
                 .await
-                .wrap_err("Failed to output directory.")?;
+                .map_err(|error| tg::error!(source = error, "failed to copy output directory"))?;
         }
     }
     Ok(())
 }
 
-// Invoke rustc to get the output files.
-fn get_outputs(args: &Args) -> Result<Vec<PathBuf>> {
-    let has_print_args = args.rustc_args.iter().any(|arg| arg.starts_with("--print"));
-    if has_print_args {
-        return Ok(Vec::new());
+fn host() -> &'static str {
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    {
+        "aarch64-darwin"
     }
-
-    let output = std::process::Command::new(&args.rustc)
-        .args(&args.rustc_args)
-        .args(["--print", "file-names"])
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::piped())
-        .output()
-        .wrap_err("Failed to spawn child")?;
-
-    if !output.status.success() {
-        let code = output.status.code().unwrap();
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(error!(
-            "{:#?} exited with code {code}. stderr: {error}",
-            &args.rustc
-        ));
+    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+    {
+        "aarch64-linux"
     }
-
-    let output_directory = args.rustc_output_directory.clone().unwrap_or(".".into());
-    let output_files = String::from_utf8(output.stdout)
-        .wrap_err("Failed to parse stdout.")?
-        .lines()
-        .map(|line| PathBuf::from(&output_directory).join(line))
-        .collect();
-    Ok(output_files)
+    #[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+    {
+        "x86_64-darwin"
+    }
+    #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+    {
+        "x86_64-linux"
+    }
 }
 
 // The driver script.
@@ -384,9 +386,9 @@ const ARGS_WITH_VALUES: [&str; 32] = [
 
 // Environment variables that must be filtered out before invoking the driver target.
 const BLACKLISTED_ENV_VARS: [&str; 5] = [
-    "TANGRAM_ADDRESS",
     "TANGRAM_RUSTC_TRACING",
     "TANGRAM_HOST",
+    "TANGRAM_URL",
     "HOME",
     "OUTPUT",
 ];

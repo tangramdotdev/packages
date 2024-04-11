@@ -11,7 +11,8 @@ type Arg = {
 };
 
 /** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
-export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
+export let workspace = tg.target(
+	async (arg: Arg): Promise<tg.Directory> => {
 	let {
 		build: build_,
 		buildToolchain,
@@ -39,7 +40,8 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 		release,
 		source,
 	});
-});
+},
+);
 
 export let tgcc = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/cc_proxy"));
