@@ -85,7 +85,6 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 
 	// Obtain an SDK.  If cross-targets were specified, use a cross-compiling SDK.
 	let sdk = await std.sdk({ host, targets }, arg?.sdk);
-	tg.assert(tg.File.is(sdk));
 
 	// Install each package.
 	let rustInstall = await std.build(

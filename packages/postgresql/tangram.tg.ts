@@ -1,4 +1,4 @@
-//import icu from "tg:icu" with { path: "../icu" };
+import icu from "tg:icu" with { path: "../icu" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import perl from "tg:perl" with { path: "../perl" };
@@ -37,6 +37,7 @@ type Arg = {
 	host?: string;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
+	withIcu?: boolean;
 };
 
 export let postgresql = tg.target(async (arg?: Arg) => {
@@ -46,11 +47,11 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		env: env_,
 		host,
 		source: source_,
+		withIcu = true,
 		...rest
 	} = arg ?? {};
 
 	let env = [
-		//icu(arg),
 		ncurses(arg),
 		openssl(arg),
 		perl(arg),
@@ -63,12 +64,18 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		},
 		env_,
 	];
+	if (withIcu) {
+		env.push(icu(arg));
+	}
 
 	let sourceDir = source_ ?? source();
 
 	let configure = {
-		args: ["--with-zstd", "--without-icu"],
+		args: ["--with-zstd"],
 	};
+	if (!withIcu) {
+		configure.args.push("--without-icu");
+	}
 	let phases = { configure };
 
 	let output = await std.autotools.build(
@@ -99,7 +106,7 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 export default postgresql;
 
 export let test = tg.target(async () => {
-	let directory = postgresql();
+	let directory = postgresql({ withIcu: false });
 	await std.assert.pkg({
 		directory,
 		binaries: ["psql"],

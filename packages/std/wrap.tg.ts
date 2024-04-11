@@ -164,7 +164,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						? arg.libraryPaths
 						: await tg.Mutation.arrayAppend(
 								arg.libraryPaths.map(manifestTemplateFromArg),
-							);
+						  );
 				}
 			}
 			if (arg.interpreter !== undefined) {
@@ -178,7 +178,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					? arg.args
 					: await tg.Mutation.arrayAppend(
 							(arg.args ?? []).map(manifestTemplateFromArg),
-						);
+					  );
 			}
 			if (arg.host !== undefined) {
 				object.host = arg.host;
@@ -200,8 +200,8 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	let buildToolchain = buildToolchain_
 		? buildToolchain_
 		: std.triple.os(host) === "linux"
-			? await gcc.toolchain({ host })
-			: await bootstrap.sdk.env(host);
+		  ? await gcc.toolchain({ host })
+		  : await bootstrap.sdk.env(host);
 
 	let manifestInterpreter = interpreter
 		? await manifestInterpreterFromArg(interpreter, buildToolchain_)
@@ -474,7 +474,7 @@ export namespace wrap {
 										.flatten([mutationArgs])
 										.filter((arg) => arg !== undefined)
 										.map(normalizeEnvVarValue),
-								);
+							  );
 						return [key, mutations];
 					}),
 				),
@@ -1151,7 +1151,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1185,7 +1185,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		let args = arg.args
@@ -1206,7 +1206,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -1240,7 +1240,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 
@@ -1261,7 +1261,7 @@ let manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: undefined;
 		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
 		let host = await std.triple.host();
@@ -1278,7 +1278,7 @@ let manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
-				)
+			  )
 			: [];
 		preloads = preloads.concat(additionalPreloads);
 		return {
@@ -1394,15 +1394,13 @@ let manifestInterpreterFromElf = async (
 	if (metadata.interpreter?.includes("ld-linux")) {
 		// Handle an ld-linux interpreter.
 		let toolchainDir = await gcc.toolchain({ host });
-		let { ldso, libDir, directory } = await std.sdk.toolchainComponents({
+		let { ldso, libDir } = await std.sdk.toolchainComponents({
 			env: toolchainDir,
 		});
 		tg.assert(
 			ldso,
 			"Could not find a valid ldso, required for Linux wrappers.",
 		);
-		let gccLibDir = tg.Directory.expect(await directory.get("lib"));
-		libDir = await tg.directory(libDir, gccLibDir);
 		return {
 			kind: "ld-linux",
 			path: await manifestSymlinkFromArg(ldso),
@@ -1625,22 +1623,19 @@ let mutateTemplate = async (
 let templateFromManifestTemplate = (
 	manifestTemplate: wrap.Manifest.Template,
 ): Promise<tg.Template> =>
-	manifestTemplate.components.reduce(
-		(result, component) => {
-			switch (component.kind) {
-				case "artifact": {
-					return tg`${result}${tg.Artifact.withId(component.value)}`;
-				}
-				case "string": {
-					return tg`${result}${component.value}`;
-				}
-				default: {
-					return tg.unreachable();
-				}
+	manifestTemplate.components.reduce((result, component) => {
+		switch (component.kind) {
+			case "artifact": {
+				return tg`${result}${tg.Artifact.withId(component.value)}`;
 			}
-		},
-		tg``,
-	);
+			case "string": {
+				return tg`${result}${component.value}`;
+			}
+			default: {
+				return tg.unreachable();
+			}
+		}
+	}, tg``);
 
 let mutationFromManifestMutation = (
 	manifestMutation: wrap.Manifest.Mutation,

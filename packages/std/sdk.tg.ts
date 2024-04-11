@@ -223,8 +223,6 @@ export namespace sdk {
 	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
 		let { bootstrapMode, env, host: host_, target: target_ } = arg;
 
-		console.log("assert provides env", await std.env.object(env));
-
 		let llvm = await std.env.provides({ env, names: ["clang"] });
 
 		let host = await canonicalTriple(host_ ?? (await std.triple.host()));
@@ -405,7 +403,6 @@ export namespace sdk {
 		let ldso;
 		let libDir;
 		if (os !== "darwin") {
-			console.log("directory", await directory.id());
 			if (std.triple.arch(host) !== std.triple.arch(target)) {
 				libDir = tg.Directory.expect(await directory.tryGet(`${target}/lib`));
 				let ldsoPath = libc.interpreterName(target);
