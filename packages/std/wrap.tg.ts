@@ -1434,7 +1434,7 @@ export let defaultShellInterpreter = async (
 	// Provide bash for the detected host system.
 	let buildArg = undefined;
 	if (buildToolchainArg) {
-		buildArg = { bootstrapMode: true, env: buildToolchainArg };
+		buildArg = { env: buildToolchainArg };
 	}
 	let shellArtifact = await std.utils.bash.build(buildArg);
 	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
@@ -2150,7 +2150,7 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 	let executable = await argAndEnvDump();
 	let executableID = await executable.id();
 
-	let buildToolchain = await std.sdk({ bootstrapMode: true });
+	let buildToolchain = await bootstrap.sdk();
 
 	let wrapper = await wrap({
 		args: ["--arg1", "--arg2"],

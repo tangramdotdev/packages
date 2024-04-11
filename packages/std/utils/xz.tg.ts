@@ -31,7 +31,6 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -50,16 +49,12 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let env: tg.Unresolved<std.env.Arg> = [env_];
-	if (bootstrapMode) {
-		env.push(prerequisites(host));
-	}
+	let env = [env_, prerequisites(host)];
 
 	let output = await buildUtil(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(),
@@ -78,7 +73,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	for (let bin of bins) {
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
 		let wrappedBin = std.wrap({
-			buildToolchain: bootstrapMode ? env_ : undefined,
+			buildToolchain: bootstrap.sdk(),
 			executable: unwrappedBin,
 			libraryPaths: [libDir],
 		});
@@ -90,16 +85,15 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let xzArtifact = build({ host, bootstrapMode, env: sdk });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdkArg = await bootstrap.sdk.arg(host);
+	let xzArtifact = build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		bootstrapMode,
 		directory: xzArtifact,
 		binaries: ["xz"],
 		libs: ["lzma"],
 		metadata,
+		sdk: sdkArg,
 	});
 	return xzArtifact;
 });

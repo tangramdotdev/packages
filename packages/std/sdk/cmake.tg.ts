@@ -113,12 +113,11 @@ export let build = tg.target(
 		let prefixArg = prefixArg_ ?? `-DCMAKE_INSTALL_PREFIX=`;
 
 		// Obtain a statically linked `cmake` binary and add it to the env.
-		let bootstrapHost = bootstrap.toolchainTriple(host);
+		let bootstrapHost = await bootstrap.toolchainTriple(host);
 		let dependencies = [
 			cmake({
 				host: bootstrapHost,
-				bootstrapMode: true,
-				env: std.sdk({ host: bootstrapHost, bootstrapMode: true }),
+				sdk: bootstrap.sdk.arg(bootstrapHost),
 			}),
 		];
 		if (useNinja) {
@@ -160,8 +159,9 @@ export let build = tg.target(
 
 export let test = tg.target(async () => {
 	let detectedHost = await std.triple.host();
-	let host = bootstrap.toolchainTriple(detectedHost);
-	let directory = cmake({ host, sdk: { bootstrapMode: true } });
+	let host = await bootstrap.toolchainTriple(detectedHost);
+	let sdkArg = await bootstrap.sdk.arg(host);
+	let directory = cmake({ host, sdk: sdkArg });
 	await std.assert.pkg({
 		directory,
 		binaries: ["cmake"],

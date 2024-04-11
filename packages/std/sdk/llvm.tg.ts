@@ -41,8 +41,8 @@ export let toolchain = async (arg?: LLVMArg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = canonicalTriple(host_ ?? (await std.triple.host()));
-	let build = canonicalTriple(build_ ?? host);
+	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
+	let build = await canonicalTriple(build_ ?? host);
 
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("LLVM toolchain must be built for Linux");
@@ -60,8 +60,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 		git({ host: build }),
 		dependencies.python.build({
 			host: build,
-			bootstrapMode: true,
-			env: std.sdk({ bootstrapMode: true, host: build }),
+			sdk: bootstrap.sdk.arg(build),
 		}),
 	];
 

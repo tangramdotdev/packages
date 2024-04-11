@@ -20,7 +20,7 @@ export let source = tg.target(async (build: string) => {
 		checksum,
 	});
 
-	let utils = bootstrap.utils({ host: build });
+	let utils = bootstrap.utils(build);
 
 	// Work around an issue regarding libtool and sysroots. See: https://www.linuxfromscratch.org/lfs/view/stable/chapter06/binutils-pass2.html
 	let script = tg`
@@ -47,10 +47,10 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
 		staticBuild,
 		target: target_,
@@ -93,7 +93,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		}
 	}
 
-	let deps = [std.utils.env({ host: build, env: env_, bootstrapMode })];
+	let deps = [std.utils.env({ host: build, sdk })];
 	let env = [env_, ...deps, additionalEnv];
 
 	// Collect configuration.
@@ -121,9 +121,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			bootstrapMode,
 			env,
 			phases,
+			sdk,
 			source: source_ ?? source(build),
 		},
 		autotools,
@@ -135,9 +135,8 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdkArg = await bootstrap.sdk.arg(host);
 
 	let binaries = [
 		"ar",
@@ -155,31 +154,29 @@ export let test = tg.target(async () => {
 	// Test wrapped build.
 	let wrappedDirectory = build({
 		host,
-		bootstrapMode,
-		env: sdk,
+		sdk: sdkArg,
 	});
 	tests.push(
 		std.assert.pkg({
-			bootstrapMode,
 			directory: wrappedDirectory,
 			binaries,
 			metadata,
+			sdk: sdkArg,
 		}),
 	);
 
 	// Test static build.
 	let staticDirectory = build({
 		host,
-		bootstrapMode,
-		env: sdk,
+		sdk: sdkArg,
 		staticBuild: true,
 	});
 	tests.push(
 		std.assert.pkg({
-			bootstrapMode,
 			directory: staticDirectory,
 			binaries,
 			metadata,
+			sdk: sdkArg,
 		}),
 	);
 

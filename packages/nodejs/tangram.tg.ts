@@ -96,8 +96,10 @@ export let nodejs = tg.target(async (args?: ToolchainArg) => {
 
 export let test = tg.target(async () => {
 	let node = nodejs();
+	console.log("node", await (await node).id());
 	return std.build(
 		tg`
+		set -x
 		mkdir -p $OUTPUT
 		echo "node: " ${node}
 		node --version

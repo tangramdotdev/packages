@@ -3,7 +3,7 @@ import * as triple from "./triple.tg.ts";
 
 export * as make from "./bootstrap/make.tg.ts";
 export * as musl from "./bootstrap/musl.tg.ts";
-export * as sdk from "./bootstrap/sdk.tg.ts";
+export { sdk } from "./bootstrap/sdk.tg.ts";
 
 export type Arg = {
 	/** Specify which component to provide. */
@@ -13,11 +13,12 @@ export type Arg = {
 };
 
 export let bootstrap = async (arg?: Arg) => {
-	let { component, host } = await configure(arg);
+	let host = triple.archAndOs(arg?.host ?? (await triple.host()));
+	let hostFilename = host.replace("-", "_");
 	if (triple.os(host) === "darwin") {
 		host = "universal_darwin";
 	}
-	if (!component) {
+	if (!arg?.component) {
 		// Download all and aggregate.
 		let allComponents = await componentList({ host });
 		tg.assert(allComponents);
@@ -30,31 +31,35 @@ export let bootstrap = async (arg?: Arg) => {
 		);
 		return tg.directory(dirObject);
 	}
-	let requestedComponentName = `${component}_${host.replace("-", "_")}`;
+	let requestedComponentName = `${arg.component}_${hostFilename}`;
 	return remoteComponent(requestedComponentName);
 };
 
 export default bootstrap;
 
 /** Retrieve just the dash component. */
-export let dash = (arg?: Arg) => {
-	let config = configureComponent(arg);
-	return bootstrap({ ...config, component: "dash" });
+export let dash = (host?: string) => {
+	return bootstrap({ host, component: "dash" });
 };
 export let shell = dash;
 
 /** Retrieve just the toolchain component. */
-export let toolchain = (arg?: Arg) => {
-	let config = configureComponent(arg);
-	return bootstrap({ ...config, component: "toolchain" });
+export let toolchain = (host?: string) => {
+	return bootstrap({ host, component: "toolchain" });
+};
+
+/** Retrieve just the utils component. */
+export let utils = (host?: string) => {
+	return bootstrap({ host, component: "utils" });
 };
 
 /** Get the GCC version bundled for the Linux toolchain. */
 export let gccVersion = "11.2.1";
 
 /** The build triple string of the bundled Linux toolchain. */
-export let toolchainTriple = (host: string) => {
-	let system = configureSystem(host);
+export let toolchainTriple = async (hostArg?: string) => {
+	let host = hostArg ?? (await triple.host());
+	let system = triple.archAndOs(host);
 	let arch = triple.arch(system);
 
 	let os = triple.os(system);
@@ -68,8 +73,9 @@ export let toolchainTriple = (host: string) => {
 };
 
 /** Get the interpreter name for a given host. */
-export let interpreterName = (host: string) => {
-	let system = configureSystem(host);
+export let interpreterName = async (hostArg?: string) => {
+	let host = hostArg ?? (await triple.host());
+	let system = triple.archAndOs(host);
 	switch (system) {
 		case "x86_64-linux": {
 			return "ld-musl-x86_64.so.1";
@@ -87,12 +93,6 @@ export let interpreterName = (host: string) => {
 	}
 };
 
-/** Retrieve just the utils component. */
-export let utils = (arg?: Arg) => {
-	let config = configureComponent(arg);
-	return bootstrap({ ...config, component: "utils" });
-};
-
 export type SdkVersion = "12" | "12.1" | "12.3" | "13" | "13.3" | "14" | "14.4";
 export let LatestSdkVersion: SdkVersion = "14.4" as const;
 
@@ -106,50 +106,6 @@ export let macOsSdk = (arg?: SdkArg) => {
 	let version = arg?.version ?? LatestSdkVersion;
 	// NOTE - the host doesn't matter, any host can request this component.
 	return bootstrap({ component: `sdk_${version}`, host: "aarch64-darwin" });
-};
-
-type Config = {
-	component?: string;
-	host: string;
-	remote: boolean;
-};
-
-/** Resolve optional system arguments to  */
-export let configure = async (arg?: Arg): Promise<Config> => {
-	let componentConfig = await configureComponent(arg);
-	let component = arg?.component ?? undefined;
-	return { ...componentConfig, component };
-};
-
-type ComponentArg = {
-	/** Optionally select a system different from the detected host. */
-	host?: string;
-	/** Optionally download components from remote hosting instead of including local files. */
-	remote?: boolean;
-};
-
-type ComponentConfig = {
-	host: string;
-	remote: boolean;
-};
-
-/** Resolve optional values for a component arg. */
-export let configureComponent = async (
-	arg?: ComponentArg,
-): Promise<ComponentConfig> => {
-	let host = configureSystem(arg?.host ?? (await triple.host()));
-
-	if (arg?.remote === false) {
-		throw new Error("Local source is not yet implemented.");
-	}
-
-	let remote = true;
-	return { host, remote };
-};
-
-/** This package cannot access `std`. This helper allows users to pass `triple` objects for the host. */
-export let configureSystem = (arg: string): string => {
-	return triple.archAndOs(arg);
 };
 
 /** Apply one or more patches to a directory using the bootstrap utils. */
@@ -171,9 +127,9 @@ export let patch = async (
 		${patchScript}
 	`;
 
-	let shellArtifact = await shell({ host });
+	let shellArtifact = await shell(host);
 	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/dash"));
-	let utilsArtifact = utils({ host });
+	let utilsArtifact = utils(host);
 
 	let patchedSource = tg.Directory.expect(
 		await tg.build({
@@ -203,7 +159,7 @@ export let remoteComponent = async (componentName: string) => {
 
 /** Enumerate the full set of components for a host. */
 export let componentList = async (arg?: Arg) => {
-	let { host } = await configureComponent(arg);
+	let host = arg?.host ?? (await triple.host());
 
 	let linuxComponents = (hostTriple: string) => {
 		let host = hostTriple.replace("-", "_");

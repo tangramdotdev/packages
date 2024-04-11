@@ -44,7 +44,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let install = tg`make install PREFIX=$OUTPUT`;
 	let phases = { install };
 
-	let env = [env_, std.utils.env({ ...rest, build, env: env_, host })];
+	let env = [env_, std.utils.env({ ...rest, build, host })];
 
 	let result = std.autotools.build({
 		...rest,
@@ -63,14 +63,14 @@ export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdkArg = await bootstrap.sdk.arg(host);
+	let directory = build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		bootstrapMode,
+		metadata,
 		directory,
 		libs: ["zstd"],
+		sdk: sdkArg,
 	});
 	return directory;
 });

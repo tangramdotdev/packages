@@ -33,7 +33,6 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -68,7 +67,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let phases = { configure };
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	if (bootstrapMode && usePrerequisites) {
+	if (usePrerequisites) {
 		env.push(prerequisites(host));
 	}
 	if (staticBuild) {
@@ -79,7 +78,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			bootstrapMode,
 			env,
 			phases,
 			opt: staticBuild ? "s" : undefined,
@@ -92,7 +90,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	for (let bin of bins) {
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
 		let wrappedBin = std.wrap({
-			buildToolchain: bootstrapMode ? env_ : undefined,
+			buildToolchain: bootstrap.sdk(),
 			executable: unwrappedBin,
 			libraryPaths: [tg.symlink(tg`${output}/lib`)],
 		});
@@ -105,10 +103,9 @@ export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ bootstrapMode, host });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdkArg = await bootstrap.sdk.arg(host);
+	let directory = build({ host, sdk: sdkArg });
 	let binTest = (name: string) => {
 		return {
 			name,
@@ -119,11 +116,11 @@ export let test = tg.target(async () => {
 	let binaries = ["attr", "getfattr", "setfattr"].map(binTest);
 
 	await std.assert.pkg({
-		bootstrapMode,
 		binaries,
 		directory,
 		libs: ["attr"],
 		metadata,
+		sdk: sdkArg,
 	});
 	return directory;
 });

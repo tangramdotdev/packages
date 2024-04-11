@@ -46,7 +46,6 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -61,7 +60,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let dependencies: tg.Unresolved<std.env.Arg> = [];
 
-	if (bootstrapMode && usePrerequisites) {
+	if (usePrerequisites) {
 		dependencies.push(prerequisites(host));
 	}
 
@@ -69,7 +68,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	if (os === "linux") {
 		attrArtifact = attr({
 			...rest,
-			bootstrapMode,
 			build,
 			env: env_,
 			host,
@@ -81,7 +79,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		dependencies.push(
 			libiconv({
 				...rest,
-				bootstrapMode,
 				build,
 				env: env_,
 				host,
@@ -110,7 +107,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			bootstrapMode,
 			env,
 			phases: { configure },
 			opt: staticBuild ? "s" : undefined,
@@ -135,14 +131,12 @@ export default build;
 
 /** Obtain just the `env` binary. */
 export let gnuEnv = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ bootstrapMode, host });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdk = bootstrap.sdk(host);
 	let make = await bootstrap.make.build(host);
 	let muslEnv = muslRuntimeEnv(host);
 	let directory = await build({
 		host,
-		bootstrapMode,
 		env: [sdk, make, muslEnv],
 		staticBuild: true,
 		usePrerequisites: false,
@@ -153,19 +147,18 @@ export let gnuEnv = tg.target(async () => {
 
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let system = std.triple.archAndOs(host);
 	let os = std.triple.os(system);
-	let bootstrapMode = true;
-	let sdk = std.sdk({ bootstrapMode, host });
+	let sdkArg = await bootstrap.sdk.arg(host);
 
-	let coreutils = await build({ host, bootstrapMode, env: sdk });
+	let coreutils = await build({ host, sdk: sdkArg });
 
 	await std.assert.pkg({
-		bootstrapMode,
 		binaries: ["cp", "mkdir", "mv", "ls", "rm"],
 		directory: coreutils,
 		metadata,
+		sdk: sdkArg,
 	});
 
 	let expected;
@@ -232,8 +225,8 @@ export let test = tg.target(async () => {
 	// Run the script.
 	let platformSupportLib =
 		os === "darwin"
-			? libiconv({ bootstrapMode, host, env: sdk })
-			: attr({ bootstrapMode, host, env: sdk });
+			? libiconv({ host, sdk: sdkArg })
+			: attr({ host, sdk: sdkArg });
 	let output = tg.File.expect(
 		await tg.build(script, {
 			env: std.env.object(platformSupportLib, coreutils),

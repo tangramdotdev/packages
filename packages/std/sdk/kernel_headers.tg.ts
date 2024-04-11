@@ -6,13 +6,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.8.2",
+	version: "6.8.5",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:9ac322d85bcf98a04667d929f5c2666b15bd58c6c2d68dd512c72acbced07d04";
+		"sha256:138923e5d73748b4bdbe9b5a0b8f36dfac9fcc16753a9222928dc6c963effa89";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${name}-${version}${unpackFormat}`;
 	let source = tg.Directory.expect(
@@ -28,18 +28,20 @@ type Arg = std.sdk.BuildEnvArg & {
 
 export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let {
-		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
 		phases: phasesArg = [],
+		sdk: sdk_,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let buildTriple = build_ ?? host;
 
 	let system = std.triple.archAndOs(buildTriple);
+
+	let sdk =
+		typeof sdk_ === "boolean" ? await bootstrap.sdk.arg(buildTriple) : sdk_;
 
 	let sourceDir = source_ ?? source();
 
@@ -58,18 +60,13 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	}
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	if (bootstrapMode) {
-		env.push(
-			std.utils.env({
-				...rest,
-				bootstrapMode,
-				env: std.sdk({ host: buildTriple, bootstrapMode }),
-				host: buildTriple,
-			}),
-		);
-	} else {
-		env.push(std.sdk({ host: buildTriple }, arg?.sdk));
-	}
+	env.push(std.sdk(sdk));
+	env.push(
+		std.utils.env({
+			sdk,
+			host: buildTriple,
+		}),
+	);
 
 	let prepare = tg`cp -r ${sourceDir}/* . && chmod -R +w . && make mrproper`;
 	let build = {
@@ -101,7 +98,7 @@ export default kernelHeaders;
 
 export let test = tg.target(async () => {
 	let detectedHost = await std.triple.host();
-	let host = bootstrap.toolchainTriple(detectedHost);
+	let host = await bootstrap.toolchainTriple(detectedHost);
 	if (std.triple.os(host) !== "linux") {
 		return;
 	}
@@ -120,10 +117,8 @@ export let test = tg.target(async () => {
 
 export let testKernelHeaders = async (host: string, target?: string) => {
 	let target_ = target ?? host;
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
+	let sdk = await bootstrap.sdk(host);
 	let headers = await kernelHeaders({
-		bootstrapMode,
 		build: host,
 		env: sdk,
 		host: target_,

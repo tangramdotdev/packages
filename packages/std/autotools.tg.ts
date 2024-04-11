@@ -1,9 +1,6 @@
 import * as std from "./tangram.tg.ts";
 
 export type Arg = {
-	/** Should we provide an SDK automatically? If true, the toollchain must be provided explicitly. */
-	bootstrapMode?: boolean;
-
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
@@ -49,8 +46,8 @@ export type Arg = {
 	/** The filepath to use as the installation prefix. Usually the default of `tg.ouput` is what you want here. */
 	prefixPath?: tg.Template.Arg;
 
-	/** Arguments to use for the SDK, or `false` to disable completely. */
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
+	sdk?: boolean | tg.MaybeNestedArray<std.sdk.Arg>;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source: tg.Directory;
@@ -64,7 +61,6 @@ export type Arg = {
 
 export let target = async (...args: tg.Args<Arg>) => {
 	type Apply = {
-		bootstrapMode: boolean;
 		buildInTree: boolean;
 		debug: boolean;
 		defaultCFlags: boolean;
@@ -79,14 +75,13 @@ export let target = async (...args: tg.Args<Arg>) => {
 		phases: Array<std.phases.Arg>;
 		prefixArg?: tg.Template.Arg | undefined;
 		prefixPath: tg.Template.Arg;
-		sdkArgs?: Array<std.sdk.Arg>;
+		sdkArgs?: Array<boolean | std.sdk.Arg>;
 		source: tg.Directory;
 		stripExecutables: boolean;
 		target: string;
 	};
 
 	let {
-		bootstrapMode = false,
 		buildInTree = false,
 		debug = false,
 		defaultCFlags = true,
@@ -101,7 +96,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		phases,
 		prefixArg = `--prefix=`,
 		prefixPath = `$OUTPUT`,
-		sdkArgs,
+		sdkArgs: sdkArgs_,
 		source,
 		stripExecutables = true,
 		target: target_,
@@ -111,9 +106,6 @@ export let target = async (...args: tg.Args<Arg>) => {
 		} else if (typeof arg === "object") {
 			let object: tg.MutationMap<Apply> = {};
 			let phasesArgs: Array<std.phases.Arg> = [];
-			if (arg.bootstrapMode !== undefined) {
-				object.bootstrapMode = arg.bootstrapMode;
-			}
 			if (arg.buildInTree !== undefined) {
 				object.buildInTree = arg.buildInTree;
 			}
@@ -167,12 +159,21 @@ export let target = async (...args: tg.Args<Arg>) => {
 				}
 			}
 			if (arg.sdk !== undefined) {
-				if (typeof arg.sdk === "boolean") {
-					object.sdkArgs = tg.Mutation.unset();
-				} else if (tg.Mutation.is(arg.sdk)) {
+				if (tg.Mutation.is(arg.sdk)) {
 					object.sdkArgs = arg.sdk;
 				} else {
-					object.sdkArgs = await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+					if (typeof arg.sdk === "boolean") {
+						if (arg.sdk === false) {
+							// If the user set this to `false`, pass it through. Ignore `true`.
+							object.sdkArgs = await tg.Mutation.arrayAppend<
+								boolean | std.sdk.Arg
+							>(false);
+						}
+					} else {
+						object.sdkArgs = await tg.Mutation.arrayAppend<
+							boolean | std.sdk.Arg
+						>(arg.sdk);
+					}
 				}
 			}
 			if (arg.stripExecutables !== undefined) {
@@ -190,6 +191,17 @@ export let target = async (...args: tg.Args<Arg>) => {
 
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
+
+	// Determine SDK configuration.
+	let sdkArgs: Array<std.sdk.Arg> | undefined = undefined;
+	// If any SDk arg is `false`, we don't want to include the SDK.
+	let includeSdk = !sdkArgs_?.some((arg) => arg === false);
+	// If we are including the SDK, omit any booleans from the array.
+	if (includeSdk) {
+		sdkArgs =
+			sdkArgs_?.filter((arg): arg is std.sdk.Arg => typeof arg !== "boolean") ??
+			([] as Array<std.sdk.Arg>);
+	}
 
 	// Detect the host system from the environment.
 	let host = host_ ?? (await std.triple.host());
@@ -257,9 +269,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 		pushOrSet(env, "LDFLAGS", extraLdFlags);
 	}
 
-	if (!bootstrapMode) {
+	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
-		let sdk = await std.sdk({ host, target }, sdkArgs);
+		let sdk = await std.sdk(sdkArgs);
 		env = [sdk, env];
 	}
 

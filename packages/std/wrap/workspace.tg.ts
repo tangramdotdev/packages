@@ -50,7 +50,7 @@ export let tgld = async (arg: Arg) =>
 export let wrapper = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
-let version = "1.77.1";
+let version = "1.77.2";
 
 type ToolchainArg = {
 	target?: string;
@@ -211,10 +211,7 @@ export let build = async (arg: BuildArg) => {
 		}
 	}
 
-	let bootstrapMode =
-		os === "darwin" || (os === "linux" && hostArch === targetArch);
 	let { directory, ldso, libDir } = await std.sdk.toolchainComponents({
-		bootstrapMode,
 		env: buildToolchain,
 		host: isCross ? host : host_,
 		target: isCross ? target : target_,

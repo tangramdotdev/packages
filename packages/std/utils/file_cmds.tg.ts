@@ -91,8 +91,8 @@ export let compileUtil = async (arg: UtilArg) => {
 	let { destDir, fileName, utilName, utilSource } = arg;
 
 	// Grab prerequisites.
-	let dashArtifact = await bootstrap.shell({ host });
-	let toolchainArtifact = await bootstrap.toolchain({ host });
+	let dashArtifact = await bootstrap.shell(host);
+	let toolchainArtifact = await bootstrap.toolchain(host);
 	let macOsSdk = await bootstrap.macOsSdk();
 
 	// Compile the util.
