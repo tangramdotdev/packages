@@ -19,7 +19,7 @@ export let metadata = {
 	name: "Python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.12.2",
+	version: "3.12.3",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -32,7 +32,7 @@ export let versionString = () => {
 export let source = tg.target(async (): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:be28112dac813d2053545c14bf13a16401a21877f1a69eb6ea5d84c4a0f3d870";
+		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://www.python.org/ftp/python/${version}/${name}-${version}${unpackFormat}`;
 
@@ -48,7 +48,7 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 });
 
 type ToolchainArg = {
- 	/** Optional autotools configuration. */
+	/** Optional autotools configuration. */
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 
 	/** Optional environment variables to set. */
@@ -75,7 +75,14 @@ type ToolchainArg = {
 
 /** Build and create a python environment. */
 export let python = tg.target(async (arg?: ToolchainArg) => {
-	let { autotools = [], build, env: env_, host, source: source_, ...rest } = arg ?? {};
+	let {
+		autotools = [],
+		build,
+		env: env_,
+		host,
+		source: source_,
+		...rest
+	} = arg ?? {};
 
 	let dependencies = [
 		bison(arg),
@@ -93,7 +100,7 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 		{
 			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "resolve",
 		},
-		env_
+		env_,
 	];
 
 	let configure = {
@@ -102,7 +109,7 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 			"--enable-optimizations",
 			"--with-pkg-config=yes",
 			"--without-c-locale-coercion",
-			"--without-readline"
+			"--without-readline",
 		],
 	};
 

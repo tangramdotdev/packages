@@ -1,3 +1,4 @@
+import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
 
@@ -83,18 +84,16 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	let buildSdk = std.sdk({ host: build, bootstrapMode: true });
+	let buildSdkArg = await bootstrap.sdk.arg(build);
 	env = env.concat([
-		std.utils.env({ host: build, bootstrapMode: true, env: buildSdk }),
+		std.utils.env({ host: build, sdk: buildSdkArg }),
 		dependencies.bison.build({
 			host: build,
-			bootstrapMode: true,
-			env: buildSdk,
+			sdk: buildSdkArg,
 		}),
 		dependencies.python.build({
 			host: build,
-			bootstrapMode: true,
-			env: buildSdk,
+			sdk: buildSdkArg,
 		}),
 	]);
 

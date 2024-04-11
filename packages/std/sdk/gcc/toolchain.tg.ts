@@ -16,8 +16,8 @@ export type ToolchainArg = std.sdk.BuildEnvArg & {
 /** Construct a complete binutils + libc + gcc toolchain. */
 export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	let { host: host_, target: target_, ...rest } = arg;
-	let host = canonicalTriple(host_ ?? (await std.triple.host()));
-	let target = canonicalTriple(target_ ?? host);
+	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
+	let target = await canonicalTriple(target_ ?? host);
 
 	// Always build a native toolchain.
 	let nativeToolchain = await canadianCross(host);
@@ -34,21 +34,17 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		host,
 	});
 
-	let { env, sysroot } = await crossToolchain({
+	let { env } = await crossToolchain({
 		...rest,
-		bootstrapMode: true,
 		build: host, // We've produced a native toolchain, so we can use it to build the cross-toolchain.
 		env: [nativeToolchain, nativeProxyEnv],
 		host,
+		sdk: false,
 		target,
 		variant: "stage2_full",
 	});
 
-	return [
-		...env,
-		sysroot,
-		{ [`TANGRAM_SYSROOT_${target.replace(/-/g, "_").toUpperCase()}`]: sysroot },
-	];
+	return env;
 });
 
 type CrossToolchainArg = std.sdk.BuildEnvArg & {
@@ -59,33 +55,33 @@ type CrossToolchainArg = std.sdk.BuildEnvArg & {
 
 export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let {
-		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		sysroot: sysroot_,
 		target: target_,
 		variant = "stage2_full",
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let buildTriple = build_ ?? host;
-	let target = target_ ?? host;
+	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
+	let buildTriple = await canonicalTriple(build_ ?? host);
+	let target = await canonicalTriple(target_ ?? host);
 
 	// Produce the binutils for build and host.
 	let [buildBinutils, crossBinutils] = await Promise.all([
 		binutils({
-			bootstrapMode,
 			build: buildTriple,
 			env: env_,
 			host: buildTriple,
+			sdk,
 			target: buildTriple,
 		}),
 		binutils({
-			bootstrapMode,
 			build: buildTriple,
 			env: env_,
 			host,
+			sdk,
 			target,
 		}),
 	]);
@@ -95,25 +91,28 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let sysroot =
 		sysroot_ ??
 		(await buildSysroot({
-			bootstrapMode,
 			build: buildTriple,
 			env: [env_, buildBinutils, crossBinutils],
 			host: target,
+			sdk,
 		}));
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
 	let crossGCC = await gcc.build({
-		bootstrapMode,
 		build: buildTriple,
 		env: [env_, buildBinutils, crossBinutils],
 		host,
+		sdk,
 		sysroot,
 		target,
 		variant,
 	});
 	console.log("cross gcc", await crossGCC.id());
 
-	return { env: [crossGCC, buildBinutils, crossBinutils], sysroot };
+	let combined = await tg.directory(crossGCC, sysroot);
+	console.log("combined cross toolchain", await combined.id());
+
+	return { env: [combined, buildBinutils, crossBinutils], sysroot };
 });
 
 export let buildSysroot = tg.target(async (arg: std.sdk.BuildEnvArg) => {
@@ -163,21 +162,20 @@ export let buildSysroot = tg.target(async (arg: std.sdk.BuildEnvArg) => {
 });
 
 export let canadianCross = tg.target(async (hostArg?: string) => {
-	let host = hostArg ?? (await std.triple.host());
+	let host = await canonicalTriple(hostArg ?? (await std.triple.host()));
 
 	let target = host;
 	let build = bootstrap.toolchainTriple(host);
 
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
+	let sdkArg = bootstrap.sdk.arg(host);
 
 	// Create cross-toolchain from build to host.
 	let { env, sysroot } = await buildToHostCrossToolchain(host);
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
-		env: [sdk, env],
-		bootstrapMode,
+		env,
+		sdk: sdkArg,
 		build,
 		host,
 		staticBuild: true,
@@ -186,42 +184,34 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	console.log("stage2 binutils", await nativeHostBinutils.id());
 
 	let fullGCC = await gcc.build({
-		bootstrapMode,
 		build,
-		env: [sdk, env, nativeHostBinutils],
+		debug: true,
+		env: [env, nativeHostBinutils],
 		host,
 		sysroot,
+		sdk: sdkArg,
 		target,
 		variant: "stage2_full",
 	});
 	console.log("stage2 gcc", await fullGCC.id());
 
-	// Pull the actual sysroot out of the triple-prefixed directory.
-	let sysrootInner = tg.Directory.expect(await sysroot.get(target));
-
-	return [
-		fullGCC,
-		sysrootInner,
-		nativeHostBinutils,
-		{
-			[`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]:
-				sysrootInner,
-		},
-	];
+	// Flatten the sysroot and combine into a native toolchain.
+	let innerSysroot = tg.Directory.expect(await sysroot.get(target));
+	let combined = await tg.directory(fullGCC, innerSysroot);
+	console.log("combined native toolchain", await combined.id());
+	return [combined, nativeHostBinutils];
 });
 
 export let buildToHostCrossToolchain = async (hostArg?: string) => {
-	let host = hostArg ?? (await std.triple.host());
+	let host = await canonicalTriple(hostArg ?? (await std.triple.host()));
 	let build = bootstrap.toolchainTriple(host);
 
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
+	let sdkArg = bootstrap.sdk.arg(host);
 
 	// Create cross-toolchain from build to host.
 	return crossToolchain({
-		bootstrapMode,
 		build,
-		env: sdk,
+		sdk: sdkArg,
 		host: build,
 		target: host,
 		variant: "stage1_limited",
@@ -230,8 +220,8 @@ export let buildToHostCrossToolchain = async (hostArg?: string) => {
 
 export let testStage1 = async () => {
 	let host = await std.triple.host();
-	let build = bootstrap.toolchainTriple(host);
-	let env = await buildToHostCrossToolchain(host);
+	let build = await bootstrap.toolchainTriple(host);
+	let { env } = await buildToHostCrossToolchain(host);
 	await std.sdk.assertValid(env, { host: build, target: host });
 	return env;
 };

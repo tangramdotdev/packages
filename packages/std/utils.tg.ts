@@ -33,21 +33,16 @@ export * as xz from "./utils/xz.tg.ts";
 
 type Arg = std.sdk.BuildEnvArg;
 
+// You need top-level helpers - one that passes through the bootstrap SDK arg and prereqs, and one that doesn't. Don't handle in the individual fns.
+
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: Arg) => {
-	let {
-		bootstrapMode: bootstrapMode_,
-		env: env_,
-		host: host_,
-		...rest
-	} = arg ?? {};
+	let { env: env_, host: host_, ...rest } = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
-	let bootstrapMode = bootstrapMode_ ?? false;
 
 	// Build bash and use it as the default shell.
 	let bashArtifact = await bash.build({
 		...rest,
-		bootstrapMode,
 		env: env_,
 		host,
 	});
@@ -56,23 +51,23 @@ export let env = tg.target(async (arg?: Arg) => {
 		CONFIG_SHELL: bashExecutable,
 		SHELL: bashExecutable,
 	};
-	let env = [bashEnv, env_];
+	let env = [env_, bashEnv];
 
 	let utils = [bashArtifact, bashEnv];
 	utils = utils.concat(
 		await Promise.all([
-			bzip2({ ...rest, bootstrapMode, env, host }),
-			coreutils({ ...rest, bootstrapMode, env, host }),
-			diffutils({ ...rest, bootstrapMode, env, host }),
-			findutils({ ...rest, bootstrapMode, env, host }),
-			gawk({ ...rest, bootstrapMode, env, host }),
-			grep({ ...rest, bootstrapMode, env, host }),
-			gzip({ ...rest, bootstrapMode, env, host }),
-			make({ ...rest, bootstrapMode, env, host }),
-			patch({ ...rest, bootstrapMode, env, host }),
-			sed({ ...rest, bootstrapMode, env, host }),
-			tar({ ...rest, bootstrapMode, env, host }),
-			xz({ ...rest, bootstrapMode, env, host }),
+			bzip2({ ...rest, env, host }),
+			coreutils({ ...rest, env, host }),
+			diffutils({ ...rest, env, host }),
+			findutils({ ...rest, env, host }),
+			gawk({ ...rest, env, host }),
+			grep({ ...rest, env, host }),
+			gzip({ ...rest, env, host }),
+			make({ ...rest, env, host }),
+			patch({ ...rest, env, host }),
+			sed({ ...rest, env, host }),
+			tar({ ...rest, env, host }),
+			xz({ ...rest, env, host }),
 		]),
 	);
 	return utils;
@@ -83,18 +78,17 @@ export default env;
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export let prerequisites = tg.target(async (hostArg?: string) => {
 	let host = hostArg ?? (await std.triple.host());
-	let components: std.env.Arg = [await bootstrap.utils({ host })];
+	let components: std.env.Arg = [await bootstrap.utils(host)];
 
 	// Add GNU make.
 	let makeArtifact = await bootstrap.make.build(host);
 	components.push(makeArtifact);
 
 	// Add patched GNU coreutils.
-	let bootstrapMode = true;
 	let coreutilsArtifact = await coreutils({
-		env: [std.sdk({ host, bootstrapMode }), makeArtifact],
+		env: makeArtifact,
 		host,
-		bootstrapMode,
+		sdk: bootstrap.sdk.arg(),
 		usePrerequisites: false,
 	});
 	components.push(coreutilsArtifact);
@@ -204,9 +198,7 @@ export let assertProvides = async (env: std.env.Arg) => {
 
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let utilsEnv = await env({ host, bootstrapMode, env: sdk });
+	let utilsEnv = await env({ host, sdk: bootstrap.sdk.arg() });
 	await assertProvides(utilsEnv);
 	return true;
 });

@@ -3,7 +3,7 @@ import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	name: "Python",
-	version: "3.12.2",
+	version: "3.12.3",
 };
 
 export let source = tg.target(async (os: string) => {
@@ -17,7 +17,7 @@ export let source = tg.target(async (os: string) => {
 	});
 
 	let checksum =
-		"sha256:be28112dac813d2053545c14bf13a16401a21877f1a69eb6ea5d84c4a0f3d870";
+		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
 	let source = tg.Directory.expect(
 		await std.download({ url, checksum, unpackFormat }),
@@ -79,11 +79,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		configure.args.push(`CC="$CC"`);
 	}
 
-	let env = [
-		env_,
-		std.utils.env({ ...rest, build, env: env_, host }),
-		additionalEnv,
-	];
+	let env = [env_, std.utils.env({ ...rest, build, host }), additionalEnv];
 
 	// Build python.
 	let result = std.autotools.build(
@@ -103,15 +99,14 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdkArg = await bootstrap.sdk.arg(host);
+	let directory = build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		bootstrapMode,
 		directory,
 		binaries: ["python3"],
 		metadata,
+		sdk: sdkArg,
 	});
 	return directory;
 });

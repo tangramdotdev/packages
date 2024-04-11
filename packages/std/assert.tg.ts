@@ -1,9 +1,8 @@
+import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.tg.ts";
 import { manifestReferences, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
-	/** Whether to run in bootstrap mode. Default: false. */
-	bootstrapMode?: boolean;
 	/* The package to check. If no other options are given, just asserts the package directory is non-empty. */
 	directory: tg.Unresolved<tg.Directory>;
 	/* All executables that should exist under `bin/`, with optional behavior to check. */
@@ -19,6 +18,7 @@ type PkgArg = {
 	/* Additional packages required at runtime to use this package. */
 	runtimeDeps?: Array<RuntimeDep>;
 	metadata?: tg.Metadata;
+	sdk?: std.sdk.Arg;
 };
 
 /** Optionally specify some behavior for a particular binary. */
@@ -52,7 +52,7 @@ type RuntimeDep = {
 
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export let pkg = async (arg: PkgArg) => {
-	let bootstrapMode = arg.bootstrapMode ?? false;
+	let sdk = arg.sdk;
 	let metadata = arg.metadata;
 	let directory = await tg.resolve(arg.directory);
 
@@ -105,7 +105,7 @@ export let pkg = async (arg: PkgArg) => {
 				};
 			}
 			if (library) {
-				tests.push(linkableLib({ bootstrapMode, directory, library }));
+				tests.push(linkableLib({ directory, library, sdk }));
 			}
 		});
 	}
@@ -152,7 +152,7 @@ export let headerCanBeIncluded = async (arg: HeaderArg) => {
 		await tg.build(
 			tg`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`,
 			{
-				env: std.env.object([std.sdk({ bootstrapMode: true }), arg.directory]),
+				env: std.env.object([bootstrap.sdk(), arg.directory]),
 			},
 		),
 	);
@@ -298,17 +298,17 @@ export let headerExists = async (arg: HeaderArg) => {
 };
 
 type LibraryArg = {
-	bootstrapMode: boolean;
 	directory: tg.Directory;
 	library: LibrarySpec;
+	sdk?: std.sdk.Arg;
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
 export let linkableLib = async (arg: LibraryArg) => {
 	let name;
-	let bootstrapMode = arg.bootstrapMode;
 	let dylib = true;
 	let staticlib = true;
+	let sdk = arg.sdk;
 	let runtimeDeps: Array<RuntimeDep> = [];
 	if (typeof arg.library === "string") {
 		name = arg.library;
@@ -344,11 +344,11 @@ export let linkableLib = async (arg: LibraryArg) => {
 		let runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
 		let runtimeDepLibs = runtimeDeps.flatMap((dep) => dep.libs.map(dylibName));
 		await dlopen({
-			bootstrapMode,
 			directory: arg.directory,
 			dylib: dylibName_,
 			runtimeDepDirs,
 			runtimeDepLibs,
+			sdk,
 		});
 	}
 
@@ -362,16 +362,15 @@ export let linkableLib = async (arg: LibraryArg) => {
 };
 
 type DlopenArg = {
-	bootstrapMode: boolean;
 	directory: tg.Directory;
 	dylib: string;
 	runtimeDepDirs: Array<tg.Directory>;
 	runtimeDepLibs: Array<string>;
+	sdk?: std.sdk.Arg;
 };
 
 /** Build and run a small program that dlopens the given dylib. */
 export let dlopen = async (arg: DlopenArg) => {
-	let bootstrapMode = arg.bootstrapMode;
 	let directory = arg.directory;
 	let dylibs = [arg.dylib, ...arg.runtimeDepLibs];
 
@@ -397,14 +396,12 @@ export let dlopen = async (arg: DlopenArg) => {
 
 	// Compile the program.
 	let linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
+	let sdkEnv = std.sdk(arg?.sdk);
 	let _program = tg.File.expect(
 		await tg.build(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
-			env: std.env.object(
-				std.sdk({ bootstrapMode }),
-				directory,
-				...arg.runtimeDepDirs,
-				{ TANGRAM_LD_PROXY_TRACING: "tangram=trace" },
-			),
+			env: std.env.object(sdkEnv, directory, ...arg.runtimeDepDirs, {
+				TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+			}),
 		}),
 	);
 

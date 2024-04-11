@@ -1,39 +1,42 @@
+import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.tg.ts";
 import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: tg.Args<env.Arg>) {
-	// Check if any arg sets bootstrapMode. If so, omit the std utils.
+	// Check if the user requested to omit the standard utils.
 	type Apply = {
-		bootstrapMode: boolean;
+		utils: boolean;
 		wrapEnv: Array<env.Arg>;
 	};
-	let { bootstrapMode: bootstrapMode_, wrapEnv: wrapEnv_ } =
-		await tg.Args.apply<env.Arg, Apply>(args, async (arg) => {
-			if (isBootstrapModeArg(arg)) {
-				let { bootstrapMode } = arg;
-				return { bootstrapMode };
-			} else {
-				let ret: tg.MutationMap<Apply> = {};
-				if (arg !== undefined) {
-					if (tg.Mutation.is(arg)) {
-						ret.wrapEnv = arg;
-					} else {
-						ret.wrapEnv = await tg.Mutation.arrayAppend<env.Arg>(arg);
-					}
+	let { utils: utils_, wrapEnv: wrapEnv_ } = await tg.Args.apply<
+		env.Arg,
+		Apply
+	>(args, async (arg) => {
+		if (isUtilsToggle(arg)) {
+			let { utils } = arg;
+			return { utils };
+		} else {
+			let ret: tg.MutationMap<Apply> = {};
+			if (arg !== undefined) {
+				if (tg.Mutation.is(arg)) {
+					ret.wrapEnv = arg;
+				} else {
+					ret.wrapEnv = await tg.Mutation.arrayAppend<env.Arg>(arg);
 				}
-				return ret;
 			}
-		});
-	let bootstrapMode = bootstrapMode_ ?? false;
+			return ret;
+		}
+	});
+	let utils = utils_ ?? true;
 	let wrapEnv = wrapEnv_ ?? [];
 
-	// Include the standard utils unless bootstrap mode is set.
+	// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
 	let buildToolchain = undefined;
-	if (!bootstrapMode) {
+	if (utils) {
 		wrapEnv.push(await std.utils.env());
 	} else {
-		buildToolchain = await std.sdk({ bootstrapMode });
+		buildToolchain = await bootstrap.sdk();
 	}
 
 	return std.wrap(gnuEnv(), {
@@ -46,10 +49,11 @@ export namespace env {
 	export type Arg =
 		| undefined
 		| tg.Artifact
-		| { bootstrapMode: boolean }
+		| UtilsToggle
 		| tg.MaybeMutation<ArgObject>
 		| Array<Arg>;
 
+	/** An object containing values or potentially nested mutations.  Suitable for use with `std.env`/`std.wrap`/`std.build`, but not directly with `tg.target`. */
 	export type ArgObject = tg.MutationMap<
 		Record<
 			string,
@@ -57,9 +61,13 @@ export namespace env {
 		>
 	>;
 
+	/** An object containing values or mutations for a set of environment variables, ready to pass to `tg.target`. */
 	export type EnvObject = tg.MutationMap<Record<string, tg.Template.Arg>>;
 
-	/** Take an `env.Arg` to a `tg.target`-friendly mutation map, additionally applying all mutations in each variable. */
+	/** An object containing only a `utils` boolean field and no other members. */
+	export type UtilsToggle = { utils: boolean } & Record<string, never>;
+
+	/** Take an `env.Arg` to a `tg.target`-friendly mutation map of type `env.EnvObject`, additionally applying all mutations in each variable. */
 	export let object = async (
 		...args: tg.Args<Arg>
 	): Promise<tg.MaybeMutation<env.EnvObject> | undefined> => {
@@ -69,7 +77,7 @@ export namespace env {
 		let { env: env_ } = await tg.Args.apply<env.Arg, Apply>(
 			args,
 			async (arg) => {
-				if (arg === undefined || isBootstrapModeArg(arg)) {
+				if (arg === undefined || isUtilsToggle(arg)) {
 					return {};
 				} else if (tg.Mutation.is(arg)) {
 					return { env: arg };
@@ -435,13 +443,8 @@ export namespace env {
 	};
 }
 
-let isBootstrapModeArg = (arg: unknown): arg is { bootstrapMode: boolean } => {
-	return (
-		arg !== undefined &&
-		arg !== null &&
-		typeof arg === "object" &&
-		"bootstrapMode" in arg
-	);
+let isUtilsToggle = (arg: unknown): arg is env.UtilsToggle => {
+	return typeof arg === "object" && arg !== null && "utils" in arg;
 };
 
 /** The wrapper can handle arrays of mutations for each key, but we need just a single mutation for each key to pass to `tg.target`. However, we don't want to render to templates completely and lose any mutation information. This utility produces an object where each key has a single mutation. */

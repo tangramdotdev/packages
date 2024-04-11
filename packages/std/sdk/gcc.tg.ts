@@ -136,8 +136,8 @@ export let build = tg.target(async (arg: Arg) => {
 		additionalArgs.push(...stage2FullArgs);
 		additionalEnv = {
 			...additionalEnv,
-			CC: `${host}-cc -static -fPIC`,
-			CXX: `${host}-c++ -static -fPIC`,
+			CC: `cc -static -fPIC`,
+			CXX: `c++ -static -fPIC`,
 		};
 	}
 
@@ -146,28 +146,22 @@ export let build = tg.target(async (arg: Arg) => {
 	let phases = { configure };
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	if (rest.bootstrapMode) {
-		let bootstrapMode = true;
-		let buildSdk = std.sdk({ host: build, bootstrapMode });
-		env = env.concat([
-			std.utils.env({ bootstrapMode, env: buildSdk, host: build }),
-			dependencies.perl.build({
-				bootstrapMode,
-				env: buildSdk,
-				host: build,
-			}),
-			dependencies.python.build({
-				bootstrapMode,
-				env: buildSdk,
-				host: build,
-			}),
-			dependencies.zstd.build({
-				bootstrapMode,
-				env: buildSdk,
-				host: build,
-			}),
-		]);
-	}
+	let buildSdkArg = bootstrap.sdk.arg(build);
+	env = env.concat([
+		std.utils.env({ sdk: buildSdkArg, host: build }),
+		dependencies.perl.build({
+			sdk: buildSdkArg,
+			host: build,
+		}),
+		dependencies.python.build({
+			sdk: buildSdkArg,
+			host: build,
+		}),
+		dependencies.zstd.build({
+			sdk: buildSdkArg,
+			host: build,
+		}),
+	]);
 	env.push(additionalEnv);
 
 	let result = await std.autotools.build(
@@ -277,16 +271,16 @@ export let interpreterPath = (host: string) =>
 type WrapArgsArg = {
 	host: string;
 	target?: string;
-	sysroot: tg.Directory;
 	toolchainDir: tg.Directory;
 };
 
 /** Produce the set of flags required to enable proxying a statically-linked toolchain dir. */
 export let wrapArgs = async (arg: WrapArgsArg) => {
-	let { host, sysroot, target, toolchainDir } = arg;
+	let { host, target, toolchainDir } = arg;
 	let targetTriple = target ?? host;
 	let gccVersion = await getGccVersion(toolchainDir, host, target);
 	let isCross = host !== targetTriple;
+	let sysroot = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
 
 	let ccArgs = [
 		tg`--sysroot=${sysroot}`,
@@ -295,12 +289,10 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	];
 	let fortranArgs = ccArgs;
 
-	let cxxToplevel = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
-
 	let cxxArgs = [
 		...ccArgs,
-		tg`-isystem${cxxToplevel}/include/c++/${gccVersion}`,
-		tg`-isystem${cxxToplevel}/include/c++/${gccVersion}/${target}`,
+		tg`-isystem${sysroot}/include/c++/${gccVersion}`,
+		tg`-isystem${sysroot}/include/c++/${gccVersion}/${target}`,
 	];
 
 	return { ccArgs, cxxArgs, fortranArgs };

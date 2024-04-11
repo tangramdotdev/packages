@@ -59,7 +59,7 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 		host,
 		phases,
 		prefixPath: "/",
-		sdk: { bootstrapMode: true },
+		sdk: bootstrap.sdk.arg(host),
 		source: source(),
 	});
 

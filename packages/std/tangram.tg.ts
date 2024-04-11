@@ -217,14 +217,9 @@ export let testCrossToolchainRpi = tg.target(() => {
 
 // SDK tests.
 
-import { toolchainTriple as bootstrapToolchainTriple } from "./bootstrap.tg.ts";
 import { sdk } from "./sdk.tg.ts";
 export let testBootstrapSdk = tg.target(async () => {
-	let env = await sdk({ bootstrapMode: true });
-	let host = await triple.host();
-	let detectedHost = bootstrapToolchainTriple(host);
-	await sdk.assertValid(env, { host: detectedHost, bootstrapMode: true });
-	return env;
+	return await bootstrap.sdk.test();
 });
 
 export let testDefaultSdk = tg.target(async () => {

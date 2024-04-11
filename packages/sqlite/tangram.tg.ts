@@ -1,3 +1,5 @@
+import ncurses from "tg:ncurses" with { path: "../ncurses" };
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import readline from "tg:readline" with { path: "../readline" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
@@ -55,7 +57,12 @@ export let sqlite = tg.target((arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let dependencies = [readline(arg), zlib(arg)];
+	let dependencies = [
+		ncurses(arg),
+		pkgconfig(arg),
+		readline(arg),
+		zlib(arg),
+	];
 	let env = [...dependencies, env_];
 
 	return std.autotools.build(

@@ -1,4 +1,5 @@
 import * as std from "../tangram.tg.ts";
+import { sdk } from "./sdk.tg.ts";
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/make/",
@@ -16,7 +17,7 @@ export let source = tg.target(() => {
 });
 
 export let build = tg.target(async (arg?: string) => {
-	let host = arg ?? await std.triple.host();
+	let host = arg ?? (await std.triple.host());
 
 	let configure = {
 		args: ["--disable-dependency-tracking"],
@@ -43,7 +44,7 @@ export let build = tg.target(async (arg?: string) => {
 		opt: "s",
 		phases,
 		prefixArg: "none",
-		sdk: { bootstrapMode: true },
+		sdk: sdk.arg(host),
 		source: source(),
 	});
 

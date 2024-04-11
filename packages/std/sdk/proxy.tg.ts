@@ -8,8 +8,6 @@ import * as llvmToolchain from "./llvm.tg.ts";
 /** This module provides the Tangram proxy tools, which are used in conjunction with compilers and linkers to produce Tangram-ready artifacts. */
 
 export type Arg = {
-	/** Relax checks of build toolchain, assumes it's the bootstrap. */
-	bootstrapMode?: boolean;
 	/** The build environment to use to produce components. */
 	buildToolchain: std.env.Arg;
 	/** The target triple of the build machine. */
@@ -32,7 +30,6 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		throw new Error("Cannot proxy an undefined env");
 	}
 
-	let bootstrapMode = arg.bootstrapMode ?? false;
 	let proxyCompiler = arg.compiler ?? false;
 	let proxyLinker = arg.linker ?? true;
 	let llvm = arg.llvm ?? false;
@@ -61,9 +58,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		flavor,
 		ld,
 		ldso,
-		sysroot
 	} = await std.sdk.toolchainComponents({
-		bootstrapMode,
 		env: buildToolchain,
 		host,
 		target: host,
@@ -104,10 +99,8 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let wrappedGFortran;
 		switch (flavor) {
 			case "gcc": {
-				tg.Directory.assert(sysroot);
 				let { ccArgs, cxxArgs, fortranArgs } = await gcc.wrapArgs({
 					host: build,
-					sysroot,
 					target: host,
 					toolchainDir: directory,
 				});
@@ -253,7 +246,7 @@ type LdProxyArg = {
 
 export let ldProxy = async (arg: LdProxyArg) => {
 	// Prepare the Tangram tools.
-	let host = arg.host ?? await std.triple.host();
+	let host = arg.host ?? (await std.triple.host());
 	let build = arg.build ?? host;
 	let buildToolchain = arg.buildToolchain;
 
@@ -298,7 +291,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 };
 
 export let test = tg.target(async () => {
-	let bootstrapSDK = await std.sdk({ bootstrapMode: true });
+	let bootstrapSDK = await bootstrap.sdk();
 	let helloSource = await tg.file(`
 #include <stdio.h>
 int main() {

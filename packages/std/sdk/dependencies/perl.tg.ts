@@ -79,7 +79,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		prepare,
 	};
 
-	let env = [env_, std.utils.env({ ...rest, build, env: env_, host })];
+	let env = [env_, std.utils.env({ ...rest, build, host })];
 
 	let perlArtifact = await std.utils.buildUtil(
 		{
@@ -96,7 +96,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let unwrappedPerl = tg.File.expect(await perlArtifact.get("bin/perl"));
 
 	let wrappedPerl = await std.wrap(unwrappedPerl, {
-		buildToolchain: env_,
+		buildToolchain: bootstrap.sdk(),
 		env: {
 			PERL5LIB: tg.Mutation.templatePrepend(
 				tg`${perlArtifact}/lib/perl5/${metadata.version}`,
@@ -127,7 +127,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 		// Wrap it.
 		let wrappedScript = await std.wrap({
-			buildToolchain: env_,
+			buildToolchain: bootstrap.sdk(),
 			executable: scriptArtifact,
 			interpreter: wrappedPerl,
 		});
@@ -146,15 +146,14 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = await build({ host, bootstrapMode, env: sdk });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdkArg = await bootstrap.sdk.arg(host);
+	let directory = await build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		bootstrapMode,
 		directory,
 		binaries: ["perl"],
 		metadata,
+		sdk: sdkArg,
 	});
 	return directory;
 });

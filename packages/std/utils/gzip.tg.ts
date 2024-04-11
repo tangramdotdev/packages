@@ -3,14 +3,14 @@ import { buildUtil, prerequisites } from "../utils.tg.ts";
 
 export let metadata = {
 	name: "gzip",
-	version: "1.12",
+	version: "1.13",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let compressionFormat = ".xz" as const;
 	let checksum =
-		"sha256:ce5e03e519f637e1f814011ace35c4f87b33c0bbabeec35baf5fbd3479e91956";
+		"sha256:7454eb6935db17c6655576c2e1b0fabefd38b4d0936e0f87f48cd062ce91a057";
 	return std.download.fromGnu({ name, version, compressionFormat, checksum });
 });
 
@@ -22,7 +22,6 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		bootstrapMode,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -37,16 +36,12 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	if (bootstrapMode) {
-		env.push(prerequisites(host));
-	}
+	let env = [env_, prerequisites(host)];
 
 	let output = buildUtil(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			bootstrapMode,
 			env,
 			phases: { configure },
 			source: source_ ?? source(),
@@ -75,15 +70,14 @@ export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let bootstrapMode = true;
-	let sdk = std.sdk({ host, bootstrapMode });
-	let directory = build({ host, bootstrapMode, env: sdk });
+	let host = await bootstrap.toolchainTriple(await std.triple.host());
+	let sdkArg = await bootstrap.sdk.arg(host);
+	let directory = build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		bootstrapMode,
 		directory,
 		binaries: ["gzip"],
 		metadata,
+		sdk: sdkArg,
 	});
 	return directory;
 });

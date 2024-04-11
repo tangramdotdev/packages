@@ -14,16 +14,19 @@ export let source = tg.target(async () => {
 	let owner = "unicode-org";
 	let repo = name;
 	let unpackFormat = ".tar.gz" as const;
-	let checksum = "sha256:68db082212a96d6f53e35d60f47d38b962e9f9d207a74cfac78029ae8ff5e08c";
+	let checksum =
+		"sha256:68db082212a96d6f53e35d60f47d38b962e9f9d207a74cfac78029ae8ff5e08c";
 	let releaseVersion = version.replace(/\./, "-");
 	let pkgVersion = version.replace(/\./, "_");
 	let pkgName = `icu4c-${pkgVersion}-src`;
 	let url = `https://github.com/${owner}/${repo}/releases/download/release-${releaseVersion}/${pkgName}.tgz`;
-	let outer = tg.Directory.expect(await std.download({
-		unpackFormat,
-		url,
-		checksum,
-	}));
+	let outer = tg.Directory.expect(
+		await std.download({
+			unpackFormat,
+			url,
+			checksum,
+		}),
+	);
 	return std.directory.unwrap(outer);
 });
 
@@ -53,7 +56,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let configure = {
 		command: tg`${sourceDir}/source/configure`,
-		args: ["--enable-static"]
+		args: ["--enable-static"],
 	};
 	let phases = { configure };
 
@@ -70,7 +73,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	// Every file in bin/ needs to get wrapped to include lib/.
 	let libDir = tg.Directory.expect(await output.get("lib"));
-	let binDir =tg.Directory.expect(await output.get("bin"));
+	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {
 		let unwrappedBin = tg.File.expect(artifact);
 		let wrappedBin = std.wrap(unwrappedBin, {
@@ -91,7 +94,19 @@ export let test = tg.target(async () => {
 
 	await std.assert.pkg({
 		directory,
-		binaries: ["derb", "genbrk", "gencfu", "gencval", "gendict", "icu-config", "icuexportdata", "icuinfo", "makeconv", "pkgdata", "uconv"],
+		binaries: [
+			"derb",
+			"genbrk",
+			"gencfu",
+			"gencval",
+			"gendict",
+			"icu-config",
+			"icuexportdata",
+			"icuinfo",
+			"makeconv",
+			"pkgdata",
+			"uconv",
+		],
 		libs: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
 		metadata,
 	});
