@@ -11,8 +11,7 @@ type Arg = {
 };
 
 /** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
-export let workspace = tg.target(
-	async (arg: Arg): Promise<tg.Directory> => {
+export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 	let {
 		build: build_,
 		buildToolchain,
@@ -32,7 +31,7 @@ export let workspace = tg.target(
 				"packages/cc_proxy": tg.include("../packages/cc_proxy"),
 				"packages/ld_proxy": tg.include("../packages/ld_proxy"),
 				"packages/wrapper": tg.include("../packages/wrapper"),
-			});
+		  });
 
 	return build({
 		...(await std.triple.rotate({ build: buildTriple, host })),
@@ -40,8 +39,7 @@ export let workspace = tg.target(
 		release,
 		source,
 	});
-},
-);
+});
 
 export let tgcc = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/cc_proxy"));
