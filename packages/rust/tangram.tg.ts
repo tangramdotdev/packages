@@ -1,3 +1,4 @@
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
@@ -139,11 +140,13 @@ export type Arg = {
 	env?: std.env.Arg;
 	features?: Array<string>;
 	host?: string;
+	parallel?: boolean;
 	proxy?: boolean;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Artifact;
 	target?: string;
 	useCargoVendor?: boolean;
+	verbose?: boolean;
 };
 
 export let build = async (...args: tg.Args<Arg>) => {
@@ -151,21 +154,25 @@ export let build = async (...args: tg.Args<Arg>) => {
 		env: Array<std.env.Arg>;
 		features: Array<string>;
 		host: string;
+		parallel: boolean;
 		proxy: boolean;
 		sdk: Array<std.sdk.Arg>;
 		source: tg.Artifact;
 		target: string;
 		useCargoVendor: boolean;
+		verbose: boolean;
 	};
 	let {
 		env,
 		features = [],
 		host: host_,
+		parallel = true,
 		proxy = false,
 		sdk: sdk_,
 		source,
 		target: target_,
 		useCargoVendor = false,
+		verbose = false,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
@@ -189,11 +196,17 @@ export let build = async (...args: tg.Args<Arg>) => {
 			if (arg.source !== undefined) {
 				object.source = arg.source;
 			}
+			if (arg.parallel !== undefined) {
+				object.parallel = arg.parallel;
+			}
 			if (arg.proxy !== undefined) {
 				object.proxy = arg.proxy;
 			}
 			if (arg.useCargoVendor !== undefined) {
 				object.useCargoVendor = arg.useCargoVendor;
+			}
+			if (arg.verbose !== undefined) {
+				object.verbose = arg.verbose;
 			}
 			return object;
 		}
@@ -231,8 +244,6 @@ export let build = async (...args: tg.Args<Arg>) => {
 
 		export CARGO_HOME=$HOME/.cargo
 
-		cargo --tangram-print-manifest
-
 		# Build.
 		TARGET_DIR="$(realpath "$OUTPUT/target")"
 		SOURCE="$(realpath ${source})"
@@ -247,13 +258,13 @@ export let build = async (...args: tg.Args<Arg>) => {
 	`;
 
 	// When not cross-compiling, ensure the `cc` provided by the SDK is used, which enables Tangram linking.
-	let additionalEnv = {
+	let toolchainEnv = {
 		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`cc`,
 	};
 
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
-		additionalEnv = {
+		toolchainEnv = {
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`${target}-cc`,
 			[`AR_${tripleToEnvVar(target)}`]: tg`${target}-ar`,
 			[`CC_${tripleToEnvVar(target)}`]: tg`${target}-cc`,
@@ -268,6 +279,21 @@ export let build = async (...args: tg.Args<Arg>) => {
 		};
 	}
 
+	let jobsEnv = undefined;
+	if (!parallel) {
+		jobsEnv = {
+			CARGO_BUILD_JOBS: "1",
+		};
+	}
+
+	let verbosityEnv = undefined;
+	if (verbose) {
+		verbosityEnv = {
+			RUSTFLAGS: "-v",
+			CARGO_TERM_VERBOSE: "true",
+		}
+	}
+
 	let artifact = await std.build(buildScript, {
 		env: std.env(
 			sdk,
@@ -275,9 +301,11 @@ export let build = async (...args: tg.Args<Arg>) => {
 			{
 				RUST_TARGET: target,
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-				...additionalEnv,
+				...toolchainEnv,
 			},
 			proxyEnv,
+			jobsEnv,
+			verbosityEnv,
 			{ TANGRAM_HOST: std.triple.archAndOs(host) },
 			env,
 		),
@@ -575,6 +603,8 @@ export let testCross = tg.target(async () => {
 });
 
 export let testProxy = tg.target(async () => {
+	await proxy_.test();
+
 	let helloWorld = build({
 		source: tg.include("./tests/hello-world"),
 		proxy: true,
@@ -582,7 +612,7 @@ export let testProxy = tg.target(async () => {
 
 	let helloOpenssl = build({
 		source: tg.include("./tests/hello-openssl"),
-		env: [await openssl()],
+		env: [await openssl(), await pkgconfig()],
 		proxy: true,
 	});
 

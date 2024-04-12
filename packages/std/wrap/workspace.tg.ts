@@ -31,7 +31,7 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 				"packages/cc_proxy": tg.include("../packages/cc_proxy"),
 				"packages/ld_proxy": tg.include("../packages/ld_proxy"),
 				"packages/wrapper": tg.include("../packages/wrapper"),
-			});
+		  });
 
 	return build({
 		...(await std.triple.rotate({ build: buildTriple, host })),

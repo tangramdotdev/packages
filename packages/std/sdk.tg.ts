@@ -218,7 +218,7 @@ export namespace sdk {
 	let requiredCompilerComponents = ["c++", "cc", "ld"] as const;
 	let requiredLLVMCompilerComponents = ["clang++", "clang", "ld.lld"];
 
-	let requiredUtils = ["ar", "as", "nm", "objdump", "ranlib", "strip"] as const;
+	let requiredUtils = ["ar", "nm", "objdump", "ranlib", "strip"] as const;
 
 	/** Assert that an env provides an toolchain. */
 	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {

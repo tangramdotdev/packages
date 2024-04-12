@@ -9,8 +9,11 @@ futures = "0.3"
 itertools = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { git = "https://github.com/tangramdotdev/tangram", rev = "eff3faefcd5d9ab09c41bdecba1870c258dc552e" }
-tangram_error = { git = "https://github.com/tangramdotdev/tangram", rev = "eff3faefcd5d9ab09c41bdecba1870c258dc552e" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "2adcda6f6f51ca310456b2076eadf20c5e66afec" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# https://github.com/rust-lang/jobserver-rs/issues/79
+[patch.crates-io]
+jobserver = { git = "https://github.com/weihanglo/jobserver-rs", rev = "995ef4307df54d48a77cfbf16bf866d2bbf7d0ff" }

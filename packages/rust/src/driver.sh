@@ -1,4 +1,4 @@
-#!/bin/sh -u
+#!/bin/sh -eu
 # Driver script for tangram_rustc.
 #
 # Arguments:
@@ -9,6 +9,7 @@
 # Environment variables:
 #   OUTPUT: output directory for rustc.
 #
+echo "Running rustc driver script: $*"
 while test  $# -gt 0  ; do
   case $1 in
     "--rustc")
@@ -28,7 +29,6 @@ while test  $# -gt 0  ; do
     ;;
     "--")
       shift
-      ARGS="$*"
       break;
     ;;
   esac
@@ -48,8 +48,8 @@ if ! cp -a "$OUT_DIR/." "$OUTPUT/out" ; then
 fi
 
 # Invoke the compiler.
-if ! OUT_DIR="$OUTPUT/out" "$RUSTC" $ARGS --out-dir "$OUTPUT/build" 2> "$OUTPUT/log/stderr" 1> "$OUTPUT/log/stdout" ; then
-  echo "Rustc failed."
+if ! OUT_DIR="$OUTPUT/out" "$RUSTC" "$@" --out-dir "$OUTPUT/build" 2> "$OUTPUT/log/stderr" 1> "$OUTPUT/log/stdout" ; then
+  echo "rustc failed."
   cat "$OUTPUT/log/stderr"
   exit 1
 fi

@@ -19,11 +19,11 @@ export let proxy = tg.target(async () => {
 });
 
 export let test = tg.target(async () => {
-	let env = std.env(proxy(), rust());
 	return std.build(
 		tg`
+		touch $OUTPUT
 		tangram_rustc rustc - --version
 	`,
-		env,
+		{ env: [proxy(), rust()] },
 	);
 });

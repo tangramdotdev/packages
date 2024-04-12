@@ -11,4 +11,3 @@ fn main() {
     let generated = std::str::from_utf8(GENERATED_TXT).unwrap();
     println!("{generated}");
 }
-
