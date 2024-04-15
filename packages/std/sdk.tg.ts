@@ -645,14 +645,13 @@ export namespace sdk {
 			tg.assert(expectedArch === actualArch);
 
 			// Ensure the correct libc was used.
+			let executable = compiledProgram;
 			if (proxiedLinker) {
-				compiledProgram = tg.File.expect(
-					await std.wrap.unwrap(compiledProgram),
-				);
-				metadata = await std.file.executableMetadata(compiledProgram);
+				executable = tg.File.expect(await std.wrap.unwrap(compiledProgram));
+				metadata = await std.file.executableMetadata(executable);
 			}
 			if (mold) {
-				await assertMoldComment(compiledProgram);
+				await assertMoldComment(executable);
 			}
 
 			tg.assert(metadata.format === "elf");
@@ -759,6 +758,8 @@ export namespace sdk {
 					} else {
 						proxiedLinker = arg.proxy.linker ?? false;
 					}
+				} else {
+					proxiedLinker = true;
 				}
 				let mold = arg?.linker === "mold";
 
@@ -795,13 +796,6 @@ export namespace sdk {
 				}
 			}),
 		);
-	};
-
-	/** Return a list of all supported `sdk.ArgObject` values for the given host. */
-	export let allSupportedSdkOptions = (
-		host: string,
-	): Array<std.sdk.ArgObject> => {
-		return tg.unimplemented();
 	};
 
 	export type HostAndTargetsOptions = {
