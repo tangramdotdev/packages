@@ -28,7 +28,7 @@ itertools = "0.12"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "2adcda6f6f51ca310456b2076eadf20c5e66afec" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "3f031396f51dd54f0804b09c13dcf3f0699c2542" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "macros",
@@ -42,10 +42,6 @@ xattr = "1"
 tangram_wrapper = { path = "packages/wrapper" }
 tangram_cc_proxy = { path = "packages/cc_proxy" }
 tangram_ld_proxy = { path = "packages/ld_proxy" }
-
-# https://github.com/rust-lang/jobserver-rs/issues/79
-[patch.crates-io]
-jobserver = { git = "https://github.com/weihanglo/jobserver-rs", rev = "995ef4307df54d48a77cfbf16bf866d2bbf7d0ff" }
 
 [profile.release]
 codegen-units = 1
