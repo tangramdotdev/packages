@@ -1849,22 +1849,6 @@ let manifestTemplateIsSymlink = (template: wrap.Manifest.Template) => {
 	}
 };
 
-let maybeSymlinkFromManifestTemplate = async (
-	template: wrap.Manifest.Template,
-): Promise<tg.Symlink | undefined> => {
-	if (manifestTemplateIsSymlink(template)) {
-		let artifactId = template.components[0]?.value;
-		if (!artifactId) {
-			return undefined;
-		}
-		let artifact = tg.Artifact.withId(artifactId);
-		let path = template.components[1]?.value.replace(":", "").substring(1);
-		return tg.symlink({ artifact, path });
-	} else {
-		return undefined;
-	}
-};
-
 /** Yield the artifacts referenced by a manifest. */
 export async function* manifestReferences(
 	manifest: wrap.Manifest,

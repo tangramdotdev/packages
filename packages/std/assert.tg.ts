@@ -18,7 +18,7 @@ type PkgArg = {
 	/* Additional packages required at runtime to use this package. */
 	runtimeDeps?: Array<RuntimeDep>;
 	metadata?: tg.Metadata;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg; // TODO - accept an array here, and do all tests for all args passed.
 };
 
 /** Optionally specify some behavior for a particular binary. */
@@ -202,12 +202,9 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 
 	let path = (runtimeDeps ?? [])
 		.flatMap((dep) => dep.directory)
-		.reduce(
-			(t, depDir) => {
-				return tg`${t}:${depDir}`;
-			},
-			tg``,
-		);
+		.reduce((t, depDir) => {
+			return tg`${t}:${depDir}`;
+		}, tg``);
 	let env = {
 		PATH: path,
 	};

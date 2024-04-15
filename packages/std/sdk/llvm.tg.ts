@@ -93,7 +93,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_EH=ON",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
 			"-DLLVM_ENABLE_PIC=ON",
-			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
+			"-DLLVM_ENABLE_PROJECTS='clang;lld'",
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
@@ -121,13 +121,10 @@ export let toolchain = async (arg?: LLVMArg) => {
 		"bin/c++": tg.symlink("clang++"),
 	});
 	console.log("llvmArtifact", await llvmArtifact.id());
+	let combined = tg.directory(llvmArtifact, sysroot);
+	console.log("combined llvm + sysroot", await (await combined).id());
 
-	return [
-		llvmArtifact,
-		{
-			[`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]: sysroot,
-		},
-	];
+	return combined;
 };
 
 export let llvmMajorVersion = () => {
