@@ -174,10 +174,7 @@ export let test = async () => {
 	let expectedInterpreter =
 		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
 
-	let fullLlvmPlusClang = await toolchain({ host });
-	let { directory } = await std.sdk.toolchainComponents({
-		env: fullLlvmPlusClang,
-	});
+	let directory = await toolchain({ host });
 
 	let testCSource = tg.file(`
 		#include <stdio.h>
@@ -191,7 +188,7 @@ export let test = async () => {
 	`;
 	let cOut = tg.File.expect(
 		await std.build(cScript, {
-			env: fullLlvmPlusClang,
+			env: directory,
 			host,
 		}),
 	);
@@ -218,7 +215,7 @@ export let test = async () => {
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
 			env: [
-				fullLlvmPlusClang,
+				directory,
 				{
 					LD_LIBRARY_PATH: tg.Mutation.templatePrepend(
 						tg`${directory}/lib/${host}`,
@@ -239,5 +236,5 @@ export let test = async () => {
 		tg.assert(cxxMetadata.format === "mach-o");
 	}
 
-	return fullLlvmPlusClang;
+	return directory;
 };
