@@ -127,6 +127,9 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	if (std.triple.os(host) === "linux") {
 		additionalArgs.push("-fstack-clash-protection");
 	}
+	if (await std.env.tryWhich({ env: arg.buildToolchain, name: "clang" })) {
+		additionalArgs.push("-fuse-ld=lld");
+	}
 
 	let prefix = useTriplePrefix ? `${host}-` : "";
 	let executable = `${prefix}cc`;

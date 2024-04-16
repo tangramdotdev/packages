@@ -100,6 +100,9 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		toolchain = toolchain_;
 	}
 	envs.push(toolchain);
+	if (toolchain_ === "llvm") {
+		envs.push({ CC: "clang -v", CXX: "clang++" });
+	}
 
 	// Proxy the host toolchain.
 	let hostProxy = proxy.env({
@@ -112,6 +115,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	if (utils) {
 		let hostUtils = await std.utils.env({
 			build: host,
+			debug: toolchain_ === "llvm",
 			host,
 			env: [envs, hostProxy],
 			sdk: false,
@@ -523,9 +527,10 @@ export namespace sdk {
 		let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
 		let targetPrefix = isCross ? `${targetString}-` : "";
 		if (!foundCC) {
-			let clangExists = await std.env.tryWhich({ env, name: "clang" });
-			if (clangExists) {
+			let clang = await std.env.tryWhich({ env, name: "clang" });
+			if (clang) {
 				cmd = "clang";
+				foundCC = clang as tg.File | tg.Symlink;
 			} else {
 				let name = `${targetPrefix}cc`;
 				foundCC = await std.env.tryWhich({ env, name });

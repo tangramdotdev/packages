@@ -144,7 +144,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	let version = llvmMajorVersion();
 
 	let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
-	let clangxxArgs = [...clangArgs];
+	let clangxxArgs: tg.Unresolved<tg.Template.Arg> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
 		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
@@ -154,6 +154,8 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		};
 	} else {
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
+		//clangArgs.push(tg`-fuse-ld=lld`);
+		//clangxxArgs.push(tg`-fuse-ld=lld`);
 		clangxxArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
 		clangxxArgs.push(tg`-unwindlib=libunwind`);
 		clangxxArgs.push(tg`-L${toolchainDir}/lib/${target}`);

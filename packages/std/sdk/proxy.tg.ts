@@ -14,8 +14,6 @@ export type Arg = {
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
-	/** Should we expect an LLVM toolchain? */
-	llvm?: boolean;
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
@@ -32,7 +30,6 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let proxyCompiler = arg.compiler ?? false;
 	let proxyLinker = arg.linker ?? true;
-	let llvm = arg.llvm ?? false;
 	let buildToolchain = arg.buildToolchain;
 
 	if (!proxyCompiler && !proxyLinker) {
@@ -66,6 +63,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let cc: tg.File | tg.Symlink = cc_;
 	let cxx: tg.File | tg.Symlink = cxx_;
+	let isLlvm = flavor === "llvm";
 
 	if (proxyLinker) {
 		let isCross = build !== host;
@@ -75,20 +73,20 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let ldProxyArtifact = await ldProxy({
 			buildToolchain,
 			build,
-			linker: arg.linkerExe ?? (llvm ? await tg`${directory}/bin/ld.lld` : ld),
+			linker:
+				arg.linkerExe ?? (isLlvm ? await tg`${directory}/bin/ld.lld` : ld),
 			interpreter: ldso,
 			host,
 		});
 
-		let linkerName = "ld";
-		if (llvm) {
+		if (isLlvm) {
 			cc = tg.File.expect(
 				await directory.get(`bin/clang-${llvmToolchain.llvmMajorVersion()}`),
 			);
 			cxx = cc;
 		}
 		let ldProxyDir = tg.directory({
-			[linkerName]: ldProxyArtifact,
+			ld: ldProxyArtifact,
 		});
 
 		// Construct wrappers that always pass the ld proxy.
@@ -104,21 +102,21 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					target: host,
 					toolchainDir: directory,
 				});
-				wrappedCC = await std.wrap(cc, {
+				wrappedCC = await std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
 					buildToolchain,
-					identity: "wrapper",
+					executable: cc,
 				});
-				wrappedCXX = await std.wrap(cxx, {
+				wrappedCXX = await std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
 					buildToolchain,
-					identity: "wrapper",
+					executable: cxx,
 				});
 				if (fortran) {
-					wrappedGFortran = await std.wrap(fortran, {
+					wrappedGFortran = await std.wrap({
 						args: [tg`-B${ldProxyDir}`, ...(fortranArgs ?? [])],
 						buildToolchain,
-						identity: "wrapper",
+						executable: fortran,
 					});
 				}
 
@@ -168,15 +166,17 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					target: host,
 					toolchainDir: directory,
 				});
-				wrappedCC = std.wrap(cc, {
+				wrappedCC = std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
 					buildToolchain,
 					env,
+					executable: cc,
 				});
-				wrappedCXX = std.wrap(cxx, {
+				wrappedCXX = std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
 					buildToolchain,
 					env,
+					executable: cxx,
 				});
 				binDir = tg.directory({
 					bin: {
@@ -184,8 +184,6 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 						"clang++": wrappedCXX,
 						cc: tg.symlink("clang"),
 						"c++": tg.symlink("clang++"),
-						gcc: tg.symlink("clang"),
-						"g++": tg.symlink("clang++"),
 					},
 				});
 			}
