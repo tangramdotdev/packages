@@ -42,9 +42,9 @@ export let build = tg.target(async (arg?: Arg) => {
 	let sourceDir = source_ ?? source();
 
 	// Define phases.
-	let buildPhase = `make -f Makefile-libbz2_so && make`;
+	let buildPhase = `make CC="cc" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="cc" SHELL="$SHELL"`;
 	let install = tg.Mutation.set(
-		`make install PREFIX=$OUTPUT && cp libbz2.so.* $OUTPUT/lib`,
+		`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
 	);
 	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
 	let fixup = `

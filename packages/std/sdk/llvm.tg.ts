@@ -154,8 +154,6 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		};
 	} else {
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
-		//clangArgs.push(tg`-fuse-ld=lld`);
-		//clangxxArgs.push(tg`-fuse-ld=lld`);
 		clangxxArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
 		clangxxArgs.push(tg`-unwindlib=libunwind`);
 		clangxxArgs.push(tg`-L${toolchainDir}/lib/${target}`);
