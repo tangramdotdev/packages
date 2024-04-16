@@ -14,10 +14,10 @@ export type Arg = {
 
 export let bootstrap = async (arg?: Arg) => {
 	let host = triple.archAndOs(arg?.host ?? (await triple.host()));
-	let hostFilename = host.replace("-", "_");
 	if (triple.os(host) === "darwin") {
 		host = "universal_darwin";
 	}
+	let hostFilename = host.replace("-", "_");
 	if (!arg?.component) {
 		// Download all and aggregate.
 		let allComponents = await componentList({ host });
@@ -96,14 +96,9 @@ export let interpreterName = async (hostArg?: string) => {
 export type SdkVersion = "12" | "12.1" | "12.3" | "13" | "13.3" | "14" | "14.4";
 export let LatestSdkVersion: SdkVersion = "14.4" as const;
 
-type SdkArg = {
-	/** Specify the version of the macOS SDK to use. Omit this argument to use the latest version, or pass `"none"` to not include an SDK. */
-	version?: SdkVersion;
-};
-
 /** Retrieve a single version of the MacOSSDK */
-export let macOsSdk = (arg?: SdkArg) => {
-	let version = arg?.version ?? LatestSdkVersion;
+export let macOsSdk = (versionArg?: SdkVersion) => {
+	let version = versionArg ?? LatestSdkVersion;
 	// NOTE - the host doesn't matter, any host can request this component.
 	return bootstrap({ component: `sdk_${version}`, host: "aarch64-darwin" });
 };
@@ -183,6 +178,7 @@ export let componentList = async (arg?: Arg) => {
 		["aarch64-darwin"]: darwinComponents,
 		["aarch64-linux"]: linuxComponents("aarch64-linux"),
 		["js"]: [],
+		["universal_darwin"]: darwinComponents,
 		["x86_64-darwin"]: darwinComponents,
 		["x86_64-linux"]: linuxComponents("x86_64-linux"),
 	};
@@ -197,7 +193,7 @@ export let test = tg.target(async () => {
 	tg.assert(components);
 	tg.assert(
 		(
-			await tg.resolve(
+			await Promise.all(
 				components.map(async (component) =>
 					(await bootstrap()).tryGet(component).then(async (artifact) => {
 						// Assert that the component exists.

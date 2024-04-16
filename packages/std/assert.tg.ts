@@ -202,12 +202,9 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 
 	let path = (runtimeDeps ?? [])
 		.flatMap((dep) => dep.directory)
-		.reduce(
-			(t, depDir) => {
-				return tg`${t}:${depDir}`;
-			},
-			tg``,
-		);
+		.reduce((t, depDir) => {
+			return tg`${t}:${depDir}`;
+		}, tg``);
 	let env = {
 		PATH: path,
 	};

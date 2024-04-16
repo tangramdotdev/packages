@@ -19,7 +19,7 @@ export let metadata = {
 	version: "0.0.0",
 };
 
-export let flatten = <T,>(value: tg.MaybeNestedArray<T>): Array<T> => {
+export let flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
 	// @ts-ignore
 	return value instanceof Array ? value.flat(Infinity) : [value];
 };
@@ -217,7 +217,7 @@ export let testCrossToolchainRpi = tg.target(() => {
 
 // SDK tests.
 
-import { sdk } from "./sdk.tg.ts";
+import { sdk, assertAllSdks } from "./sdk.tg.ts";
 export let testBootstrapSdk = tg.target(async () => {
 	return await bootstrap.sdk.test();
 });
@@ -227,6 +227,11 @@ export let testDefaultSdk = tg.target(async () => {
 	let detectedHost = await triple.host();
 	await sdk.assertValid(env, { host: detectedHost });
 	return env;
+});
+
+export let testAllSdks = tg.target(async () => {
+	await assertAllSdks();
+	return true;
 });
 
 // Post-native SDK component tests.

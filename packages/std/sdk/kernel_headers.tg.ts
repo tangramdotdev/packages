@@ -6,13 +6,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.8.5",
+	version: "6.8.6",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:138923e5d73748b4bdbe9b5a0b8f36dfac9fcc16753a9222928dc6c963effa89";
+		"sha256:9e723232d603ab45ebf043c34714c48f277ab195c29abcb8472f2a4c3a5a1995";
 	let unpackFormat = ".tar.xz" as const;
 	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${name}-${version}${unpackFormat}`;
 	let source = tg.Directory.expect(

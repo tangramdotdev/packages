@@ -93,7 +93,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_EH=ON",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
 			"-DLLVM_ENABLE_PIC=ON",
-			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
+			"-DLLVM_ENABLE_PROJECTS='clang;lld'",
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
@@ -121,13 +121,10 @@ export let toolchain = async (arg?: LLVMArg) => {
 		"bin/c++": tg.symlink("clang++"),
 	});
 	console.log("llvmArtifact", await llvmArtifact.id());
+	let combined = tg.directory(llvmArtifact, sysroot);
+	console.log("combined llvm + sysroot", await (await combined).id());
 
-	return [
-		llvmArtifact,
-		{
-			[`TANGRAM_SYSROOT_${host.replace(/-/g, "_").toUpperCase()}`]: sysroot,
-		},
-	];
+	return combined;
 };
 
 export let llvmMajorVersion = () => {
@@ -147,7 +144,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	let version = llvmMajorVersion();
 
 	let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
-	let clangxxArgs = [...clangArgs];
+	let clangxxArgs: tg.Unresolved<tg.Template.Arg> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
 		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
@@ -157,6 +154,8 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		};
 	} else {
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
+		//clangArgs.push(tg`-fuse-ld=lld`);
+		//clangxxArgs.push(tg`-fuse-ld=lld`);
 		clangxxArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
 		clangxxArgs.push(tg`-unwindlib=libunwind`);
 		clangxxArgs.push(tg`-L${toolchainDir}/lib/${target}`);
@@ -177,10 +176,7 @@ export let test = async () => {
 	let expectedInterpreter =
 		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
 
-	let fullLlvmPlusClang = await toolchain({ host });
-	let { directory } = await std.sdk.toolchainComponents({
-		env: fullLlvmPlusClang,
-	});
+	let directory = await toolchain({ host });
 
 	let testCSource = tg.file(`
 		#include <stdio.h>
@@ -194,7 +190,7 @@ export let test = async () => {
 	`;
 	let cOut = tg.File.expect(
 		await std.build(cScript, {
-			env: fullLlvmPlusClang,
+			env: directory,
 			host,
 		}),
 	);
@@ -221,7 +217,7 @@ export let test = async () => {
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
 			env: [
-				fullLlvmPlusClang,
+				directory,
 				{
 					LD_LIBRARY_PATH: tg.Mutation.templatePrepend(
 						tg`${directory}/lib/${host}`,
@@ -242,5 +238,5 @@ export let test = async () => {
 		tg.assert(cxxMetadata.format === "mach-o");
 	}
 
-	return fullLlvmPlusClang;
+	return directory;
 };
