@@ -2,24 +2,28 @@ import perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://openssl.org/",
+	license: "Apache-2.0",
 	name: "openssl",
-	version: "3.2.1",
+	repository: "https://github.com/openssl/openssl",
+	version: "3.3.0",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:83c7329fe52c850677d75e5d0b0ca245309b97e8ecbcfdc1dfdc4ab9fac35b39";
-	let unpackFormat = ".tar.gz" as const;
-	let url = `https://www.openssl.org/source/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
-	return std.directory.unwrap(download);
+		"sha256:53e66b043322a606abf0087e7699a0e033a37fa13feb9742df35c3a33b18fb02";
+	let owner = name;
+	let repo = name;
+	let tag = `${name}-${version}`;
+	return std.download.fromGithub({
+		checksum,
+		owner,
+		repo,
+		tag,
+		release: true,
+		version,
+	});
 });
 
 type Arg = {
