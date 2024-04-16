@@ -777,6 +777,17 @@ export namespace sdk {
 					host: expected.host,
 					target,
 				});
+				if (proxiedLinker) {
+					// Test C with linker proxy bypass.
+					await assertCompiler({
+						mold,
+						parameters: testCParameters,
+						proxiedLinker: false,
+						sdk: [env, { TANGRAM_LINKER_PASSTHROUGH: "1" }],
+						host: expected.host,
+						target,
+					});
+				}
 
 				// Test C++.
 				await assertCompiler({
@@ -787,6 +798,17 @@ export namespace sdk {
 					host: expected.host,
 					target,
 				});
+				if (proxiedLinker) {
+					// Test C++ with linker proxy bypass.
+					await assertCompiler({
+						mold,
+						parameters: testCxxParameters,
+						proxiedLinker: false,
+						sdk: [env, { TANGRAM_LINKER_PASSTHROUGH: "1" }],
+						host: expected.host,
+						target,
+					});
+				}
 
 				// Test Fortran.
 				if (std.triple.os(target) !== "darwin" && arg?.toolchain !== "llvm") {
@@ -798,6 +820,17 @@ export namespace sdk {
 						host: expected.host,
 						target,
 					});
+					if (proxiedLinker) {
+						// Test Fortran with linker proxy bypass.
+						await assertCompiler({
+							mold,
+							parameters: testFortranParameters,
+							proxiedLinker: false,
+							sdk: [env, { TANGRAM_LINKER_PASSTHROUGH: "1" }],
+							host: expected.host,
+							target,
+						});
+					}
 				}
 			}),
 		);

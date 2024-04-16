@@ -18,7 +18,7 @@ type PkgArg = {
 	/* Additional packages required at runtime to use this package. */
 	runtimeDeps?: Array<RuntimeDep>;
 	metadata?: tg.Metadata;
-	sdk?: std.sdk.Arg; // TODO - accept an array here, and do all tests for all args passed.
+	sdk?: std.sdk.Arg;
 };
 
 /** Optionally specify some behavior for a particular binary. */
