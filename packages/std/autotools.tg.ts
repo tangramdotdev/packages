@@ -43,7 +43,7 @@ export type Arg = {
 	/** The argument configuring the installation prefix. Default value is `--prefix=${prefixPath}` Set to `"none"` to omit an installation destination argument.*/
 	prefixArg?: tg.Template.Arg | "none";
 
-	/** The filepath to use as the installation prefix. Usually the default of `tg.ouput` is what you want here. */
+	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
 	prefixPath?: tg.Template.Arg;
 
 	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
