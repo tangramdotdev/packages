@@ -948,6 +948,7 @@ export namespace wrap {
 			| { kind: "directory"; value: tg.Directory.Id }
 			| { kind: "file"; value: tg.File.Id }
 			| { kind: "symlink"; value: tg.Symlink.Id }
+			| { kind: "path"; value: tg.Path }
 			| { kind: "template"; value: Manifest.Template }
 			| { kind: "mutation"; value: Manifest.Mutation }
 			| { kind: "map"; value: { [key: string]: Manifest.Value } }
@@ -1456,11 +1457,11 @@ let symlinkFromManifestSymlink = async (
 	if (symlink.artifact) {
 		let artifact = tg.Artifact.withId(symlink.artifact);
 		if (symlink.path) {
-			return tg.symlink({ artifact, path: symlink.path });
+			return tg.symlink({ artifact, path: tg.Path.new(symlink.path) });
 		}
 		return tg.symlink({ artifact });
 	} else if (symlink.path) {
-		return tg.symlink({ path: symlink.path });
+		return tg.symlink({ path: tg.Path.new(symlink.path) });
 	} else {
 		return tg.symlink();
 	}
@@ -1475,9 +1476,10 @@ let manifestSymlinkFromArg = async (
 	} else if (typeof arg === "string" || tg.Template.is(arg)) {
 		return manifestSymlinkFromArg(await tg.symlink(arg));
 	} else if (tg.Symlink.is(arg)) {
+		let path = await arg.path();
 		return {
 			artifact: await (await arg.artifact())?.id(),
-			path: await arg.path(),
+			path: path ? path.toString() : undefined,
 		};
 	} else if (tg.Artifact.is(arg)) {
 		return { artifact: await arg.id() };
@@ -1688,6 +1690,8 @@ let manifestValueFromValue = async (
 		return { kind: "file", value: await value.id() };
 	} else if (tg.Symlink.is(value)) {
 		return { kind: "symlink", value: await value.id() };
+	} else if (tg.Path.is(value)) {
+		return { kind: "path", value };
 	} else if (tg.Template.is(value)) {
 		return { kind: "template", value: await manifestTemplateFromArg(value) };
 	} else if (tg.Mutation.is(value)) {
@@ -1732,6 +1736,8 @@ let valueFromManifestValue = async (
 		return tg.File.withId(value.value);
 	} else if (value.kind === "symlink") {
 		return tg.Symlink.withId(value.value);
+	} else if (value.kind === "path") {
+		return value.value;
 	} else if (value.kind === "template") {
 		return await templateFromManifestTemplate(value.value);
 	} else if (value.kind === "mutation") {
@@ -1834,19 +1840,6 @@ let isManifestTemplateComponent = (
 		"kind" in arg &&
 		(arg.kind === "string" || arg.kind === "artifact")
 	);
-};
-
-let manifestTemplateIsSymlink = (template: wrap.Manifest.Template) => {
-	let components = template.components;
-	if (components.length === 1) {
-		return components[0]?.kind === "artifact";
-	} else if (components.length === 2) {
-		return (
-			components[0]?.kind === "artifact" && components[1]?.kind === "string"
-		);
-	} else {
-		return false;
-	}
 };
 
 /** Yield the artifacts referenced by a manifest. */

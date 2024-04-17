@@ -9,14 +9,13 @@ export let metadata = {
 export let source = tg.target(async (build: string) => {
 	let { name, version } = metadata;
 
-	let compressionFormat = ".xz" as const;
 	let checksum =
 		"sha256:f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800";
 
 	let unpatchedSource = std.download.fromGnu({
 		name,
 		version,
-		compressionFormat,
+		compressionFormat: "xz",
 		checksum,
 	});
 

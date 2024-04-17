@@ -23,51 +23,39 @@ let source = async (): Promise<tg.Directory> => {
 		[key: string]: {
 			url: string;
 			checksum: tg.Checksum;
-			unpackFormat: std.download.UnpackFormat;
 		};
 	} = {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
 				"sha256:c957f29eb4e341903520caf362534f0acd1db7be79c502ae8e283994eed07fe1",
-			unpackFormat: ".tar.xz",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
 			checksum:
 				"sha256:d8dab549b09672b03356aa2257699f3de3b58c96e74eb26a8b495fbdc9cf6fbe",
-			unpackFormat: ".tar.xz",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
 				"sha256:fd771bf3881733bfc0622128918ae6baf2ed1178146538a53c30ac2f7006af5b",
-			unpackFormat: ".tar.xz",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
 				"sha256:ed69f1f300beb75fb4cad45d96aacd141c3ddca03b6d77c76b42cb258202363d",
-			unpackFormat: ".tar.xz",
 		},
 	};
 
 	// Get the NodeJS release.
-	tg.assert(
-		target in releases,
-		`Unsupported target system: ${target}.`,
-	);
+	tg.assert(target in releases, `Unsupported target system: ${target}.`);
 
 	let release = releases[target];
 	tg.assert(release, "Unsupported target");
-	let { url, checksum, unpackFormat } = release;
+	let { url, checksum } = release;
 
 	// Download and return the inner object.
-	let download = await std.download({
-		url,
-		checksum,
-		unpackFormat,
-	});
+	let download = await std.download({ url, checksum });
 
 	tg.assert(tg.Directory.is(download));
 	let node = await std.directory.unwrap(download);
@@ -184,7 +172,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	});
 	tg.assert(source, "Must provide a source");
 
-	let host = hostArg ?? await std.triple.host();
+	let host = hostArg ?? (await std.triple.host());
 	let build = buildArg ?? host;
 
 	let node = nodejs({

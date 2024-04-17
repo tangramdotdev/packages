@@ -1,5 +1,5 @@
-import * as python from "tg:python" with { path = "../python" };
-import * as std from "tg:std" with { path = "../std" };
+import * as python from "tg:python" with { path: "../python" };
+import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "httpie",
@@ -13,14 +13,13 @@ export let source = tg.target(async () => {
 	let owner = name;
 	let repo = name;
 	let tag = version;
-	// let url = `https://github.com/httpie/cli/archive/refs/tags/3.2.2.tar.gz`;
 
 	return std.download.fromGithub({
+		checksum,
 		owner,
 		repo,
+		source: "tag",
 		tag,
-		checksum,
-		version
 	});
 });
 
@@ -66,7 +65,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory: await httpie(),
 		binaries: ["http", "https", "httpie"],
-		metadata
+		metadata,
 	});
 	return true;
 });

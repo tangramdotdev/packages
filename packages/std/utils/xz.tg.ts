@@ -9,17 +9,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
+	let packageArchive = std.download.packageArchive({
+		extension,
+		name,
+		version,
+	});
 	let checksum =
 		"sha256:aeba3e03bf8140ddedf62a0a367158340520f6b384f75ca6045ccc6c0d43fd5c";
-	let url = `https://downloads.sourceforge.net/project/lzmautils/${name}-${version}${unpackFormat}`;
-	let outer = tg.Directory.expect(
-		await std.download({
-			url,
-			checksum,
-			unpackFormat,
-		}),
-	);
+	let url = `https://downloads.sourceforge.net/project/lzmautils/${packageArchive}`;
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(outer);
 });
 

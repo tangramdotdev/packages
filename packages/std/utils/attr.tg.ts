@@ -8,18 +8,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.xz" as const;
+	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
 	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
-	let outer = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return await std.directory.unwrap(outer);
 });
 

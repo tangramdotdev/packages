@@ -13,11 +13,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:291d1a1faf4e87b3b0ea9729080db887aafd1ff2fac1430ceca921e46bc22fae";
-	let unpackFormat = ".tar.xz" as const;
-	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${name}-${version}${unpackFormat}`;
-	let source = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
+	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${packageArchive}`;
+	let source = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(source);
 });
 

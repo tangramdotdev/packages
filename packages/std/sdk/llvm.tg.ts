@@ -19,11 +19,9 @@ export let source = async () => {
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
-	let unpackFormat = ".tar.xz" as const;
-	let url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${repo}-${version}.src${unpackFormat}`;
-	let outer = tg.Directory.expect(
-		await std.download({ checksum, url, unpackFormat }),
-	);
+	let extension = ".tar.xz";
+	let url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${repo}-${version}.src${extension}`;
+	let outer = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(outer);
 };
 

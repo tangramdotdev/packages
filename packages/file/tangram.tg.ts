@@ -14,18 +14,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 	let packageArchive = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let checksum =
 		"sha256:fc97f51029bb0e2c9f4e3bffefdaf678f0e039ee872b9de5c002a6d09c784d82";
 	let url = `https://astron.com/pub/file/${packageArchive}`;
-	let outer = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return await std.directory.unwrap(outer);
 });
 

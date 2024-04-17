@@ -14,16 +14,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
-	let unpackFormat = ".tar.gz" as const;
-	let url = `https://sourceware.org/pub/${name}/${name}-${version}${unpackFormat}`;
-	let artifact = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
-
+	let extension = ".tar.gz" as const;
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
+	let url = `https://sourceware.org/pub/${name}/${packageArchive}`;
+	let artifact = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(artifact);
 });
 
@@ -115,7 +113,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libs: ["bz2"],
+		libraries: ["bz2"],
 		metadata,
 	});
 	return directory;

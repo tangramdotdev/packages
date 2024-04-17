@@ -16,8 +16,8 @@ export let source = tg.target(() => {
 	return std.download.fromGithub({
 		checksum,
 		owner,
-		release: true,
 		repo,
+		source: "release",
 		tag,
 		version,
 	});
@@ -47,7 +47,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: ["docformatter"],
-		metadata
+		metadata,
 	});
 	return directory;
 });

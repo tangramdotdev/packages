@@ -21,12 +21,10 @@ export let source = tg.target(async () => {
 	let { version } = metadata;
 	let checksum =
 		"sha256:96518814d9832bece92a85415a819d4893b307db5921ae1f0f751a9a89a56b7d";
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 	let majorMinor = version.split(".").slice(0, 2).join(".");
-	let url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${unpackFormat}`;
-	let outer = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${extension}`;
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(outer);
 });
 

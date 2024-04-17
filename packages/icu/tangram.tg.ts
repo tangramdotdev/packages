@@ -13,20 +13,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let owner = "unicode-org";
 	let repo = name;
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 	let checksum =
 		"sha256:68db082212a96d6f53e35d60f47d38b962e9f9d207a74cfac78029ae8ff5e08c";
 	let releaseVersion = version.replace(/\./, "-");
 	let pkgVersion = version.replace(/\./, "_");
 	let pkgName = `icu4c-${pkgVersion}-src`;
 	let url = `https://github.com/${owner}/${repo}/releases/download/release-${releaseVersion}/${pkgName}.tgz`;
-	let outer = tg.Directory.expect(
-		await std.download({
-			unpackFormat,
-			url,
-			checksum,
-		}),
-	);
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(outer);
 });
 
@@ -107,7 +101,7 @@ export let test = tg.target(async () => {
 			"pkgdata",
 			"uconv",
 		],
-		libs: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
+		libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
 		metadata,
 	});
 	return directory;

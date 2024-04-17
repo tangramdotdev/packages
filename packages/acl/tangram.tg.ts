@@ -10,16 +10,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:5f2bdbad629707aa7d85c623f994aa8a1d2dec55a73de5205bac0bf6058a2f7c";
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz" as const;
 	let packageName = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let url = `http://download.savannah.gnu.org/releases/${name}/${packageName}`;
-	let outer = tg.Directory.expect(
-		await std.download({ checksum, unpackFormat, url }),
-	);
+	let outer = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(outer);
 });
 
@@ -93,7 +91,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		binaries,
 		directory,
-		libs: ["acl"],
+		libraries: ["acl"],
 		metadata,
 	});
 	return directory;

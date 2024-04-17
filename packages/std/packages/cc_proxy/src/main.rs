@@ -312,7 +312,7 @@ async fn main_inner() -> tg::Result<()> {
 	let tg = &tg::Client::with_env()?;
 
 	// Create the driver executable.
-	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
+	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes(), None).await?;
 	let executable = tg::File::with_object(tg::file::Object {
 		contents,
 		executable: true,
@@ -354,15 +354,14 @@ async fn main_inner() -> tg::Result<()> {
 	});
 
 	// Create a build.
-	let id = target.id(tg).await?;
+	let id = target.id(tg, None).await?;
 	let build_arg = tg::build::GetOrCreateArg {
 		parent: None,
 		remote: false,
 		retry: tg::build::Retry::Canceled,
 		target: id.clone(),
 	};
-	let tg::build::GetOrCreateOutput { id: build_id } =
-		tg.get_or_create_build(None, build_arg).await?;
+	let tg::build::GetOrCreateOutput { id: build_id } = tg.get_or_create_build(build_arg).await?;
 	let build = tg::Build::with_id(build_id);
 
 	// Await the outcome.
@@ -416,7 +415,7 @@ async fn main_inner() -> tg::Result<()> {
 	}
 	let artifact_path = tangram_path
 		.join(".tangram/artifacts")
-		.join(output_file.id(tg).await?.to_string());
+		.join(output_file.id(tg, None).await?.to_string());
 	eprintln!("Copying {artifact_path:#?} to {output:#?}");
 	std::fs::copy(artifact_path, output)
 		.map_err(|error| tg::error!(source = error, "failed to copy file"))?;

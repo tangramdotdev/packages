@@ -16,7 +16,7 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:bc9067442eedf3dd39989b5c5cfbfff37ae66cc9c99274e0c3052dc4d4a8f6ae";
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 
 	let produceVersion = (version: string) => {
 		let [major, minor, patch] = version.split(".");
@@ -27,14 +27,8 @@ export let source = tg.target(async () => {
 	};
 
 	let pkgName = `${name}-autoconf-${produceVersion(version)}`;
-	let url = `https://www.sqlite.org/2024/${pkgName}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
+	let url = `https://www.sqlite.org/2024/${pkgName}${extension}`;
+	let download = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(download);
 });
 
@@ -57,12 +51,7 @@ export let sqlite = tg.target((arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let dependencies = [
-		ncurses(arg),
-		pkgconfig(arg),
-		readline(arg),
-		zlib(arg),
-	];
+	let dependencies = [ncurses(arg), pkgconfig(arg), readline(arg), zlib(arg)];
 	let env = [...dependencies, env_];
 
 	return std.autotools.build(
@@ -83,7 +72,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: ["sqlite3"],
-		libs: ["sqlite3"],
+		libraries: ["sqlite3"],
 		metadata,
 	});
 	return directory;

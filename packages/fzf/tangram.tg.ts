@@ -14,8 +14,8 @@ export let source = tg.target((): Promise<tg.Directory> => {
 		checksum,
 		owner: "junegunn",
 		repo: name,
+		source: "tag",
 		tag: version,
-		version,
 	});
 });
 

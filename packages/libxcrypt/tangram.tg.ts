@@ -19,9 +19,9 @@ export let source = tg.target(() => {
 		"sha256:e5e1f4caee0a01de2aee26e3138807d6d3ca2b8e67287966d1fefd65e1fd8943";
 	return std.download.fromGithub({
 		checksum,
-		compressionFormat,
+		compressionFormat: "xz",
 		owner,
-		release: true,
+		source: "release",
 		repo,
 		tag,
 		version,
@@ -73,7 +73,7 @@ export let test = tg.target(async () => {
 	let directory = build();
 	await std.assert.pkg({
 		directory,
-		libs: ["crypt"],
+		libraries: ["crypt"],
 	});
 	return directory;
 });

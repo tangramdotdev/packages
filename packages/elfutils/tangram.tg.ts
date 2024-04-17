@@ -15,15 +15,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871";
-	let unpackFormat = ".tar.bz2" as const;
-	let url = `https://sourceware.org/elfutils/ftp/${version}/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			url,
-			checksum,
-			unpackFormat,
-		}),
-	);
+	let extension = ".tar.bz2";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
+	let url = `https://sourceware.org/elfutils/ftp/${version}/${packageArchive}`;
+	let download = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(download);
 });
 
@@ -76,7 +75,12 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 		openssl(arg),
 		xz(arg),
 		zlib(arg),
-		{ CFLAGS: tg.Mutation.templateAppend("-Wno-format-nonliteral -lz -lbz2 -llzma", " ") },
+		{
+			CFLAGS: tg.Mutation.templateAppend(
+				"-Wno-format-nonliteral -lz -lbz2 -llzma",
+				" ",
+			),
+		},
 		env_,
 	];
 
@@ -133,7 +137,7 @@ export let test = tg.target(async () => {
 		// 	"elfutils/libdwfl.h",
 		// 	"elfutils/version.h",
 		// ],
-		libs: ["elf", "dw", "asm"],
+		libraries: ["elf", "dw", "asm"],
 	});
 	return true;
 });

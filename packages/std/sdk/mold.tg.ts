@@ -18,8 +18,8 @@ export let source = () => {
 		checksum,
 		owner,
 		repo,
+		source: "tag",
 		tag,
-		version,
 	});
 };
 

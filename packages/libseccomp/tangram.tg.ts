@@ -20,8 +20,8 @@ export let source = tg.target(async () => {
 		checksum,
 		owner,
 		repo,
+		source: "release",
 		tag,
-		release: true,
 		version,
 	});
 });
@@ -69,7 +69,7 @@ export let test = tg.target(async () => {
 	let directory = libseccomp();
 	await std.assert.pkg({
 		directory,
-		libs: ["seccomp"],
+		libraries: ["seccomp"],
 	});
 	return directory;
 });

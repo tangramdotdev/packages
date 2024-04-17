@@ -8,18 +8,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 	let packageArchive = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
 	let url = `https://musl.libc.org/releases/${packageArchive}`;
-	let source = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let source = tg.Directory.expect(await std.download({ url, checksum }));
 	source = await std.directory.unwrap(source);
 
 	let patch = tg.File.expect(await tg.include("musl_permission.patch"));
@@ -79,12 +77,12 @@ export default tg.target(async (arg?: Arg) => {
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-		env.push(
-			std.utils.env({
-				sdk: bootstrap.sdk.arg(build),
-				host: build,
-			}),
-		);
+	env.push(
+		std.utils.env({
+			sdk: bootstrap.sdk.arg(build),
+			host: build,
+		}),
+	);
 	env = env.concat([{ CPATH: tg.Mutation.unset() }]);
 
 	let result = await std.autotools.build(

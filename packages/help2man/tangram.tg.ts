@@ -17,10 +17,14 @@ export let metadata = {
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
-	let compressionFormat = ".xz" as const;
 	let checksum =
 		"sha256:4d7e4fdef2eca6afe07a2682151cea78781e0a4e8f9622142d9f70c083a2fd4f";
-	return std.download.fromGnu({ name, version, compressionFormat, checksum });
+	return std.download.fromGnu({
+		name,
+		version,
+		compressionFormat: "xz",
+		checksum,
+	});
 });
 
 type Arg = {
@@ -43,7 +47,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 
 	let perlArtifact = await perl(arg);
-	let interpreter = tg.symlink({ artifact: perlArtifact, path: "bin/perl" });
+	let interpreter = tg.symlink({
+		artifact: perlArtifact,
+		path: tg.Path.new("bin/perl"),
+	});
 	let dependencies = [
 		autoconf(arg),
 		bison(arg),
@@ -64,9 +71,12 @@ export let build = tg.target(async (arg?: Arg) => {
 		autotools,
 	);
 
-	let wrappedScript = std.wrap(tg.symlink({ artifact, path: "bin/help2man" }), {
-		interpreter,
-	});
+	let wrappedScript = std.wrap(
+		tg.symlink({ artifact, path: tg.Path.new("bin/help2man") }),
+		{
+			interpreter,
+		},
+	);
 
 	return tg.directory({
 		["bin/help2man"]: wrappedScript,

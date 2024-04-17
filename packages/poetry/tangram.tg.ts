@@ -20,8 +20,8 @@ export let source = tg.target(() => {
 		owner,
 		repo,
 		tag,
+		source: "release",
 		version,
-		release: true,
 		checksum,
 	});
 });

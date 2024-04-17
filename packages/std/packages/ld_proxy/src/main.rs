@@ -285,7 +285,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			futures::future::try_join_all(library_paths.into_iter().map(|symlink_data| async {
 				let object = tg::symlink::Object::try_from(symlink_data).unwrap();
 				let symlink = tg::Symlink::with_object(object);
-				let id = symlink.id(&tg).await?;
+				let id = symlink.id(&tg, None).await?;
 				Ok::<_, tg::Error>(id.clone())
 			}))
 			.await?
@@ -329,7 +329,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Handle an executable or a library.
 	if is_executable {
 		let output_artifact = output_artifact.unwrap();
-		let output_artifact_id = output_artifact.id(&tg).await?.clone().into();
+		let output_artifact_id = output_artifact.id(&tg, None).await?.clone().into();
 
 		// Copy the wrapper to the temporary path.
 		let wrapper_path = options
@@ -415,7 +415,7 @@ async fn create_manifest<H: BuildHasher>(
 		let library_paths = if let Some(library_paths) = library_paths {
 			let result = futures::future::try_join_all(library_paths.into_iter().map(|id| async {
 				let symlink = tg::Symlink::with_id(id);
-				let data = symlink.data(tg).await?;
+				let data = symlink.data(tg, None).await?;
 				Ok::<_, tg::Error>(data)
 			}))
 			.await?;
@@ -619,7 +619,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		}
 	}
 	let directory = tg::Directory::new(entries);
-	let dir_id = directory.id(tg).await?;
+	let dir_id = directory.id(tg, None).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
 	return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;
@@ -679,7 +679,7 @@ async fn resolve_paths<H: BuildHasher + Default>(
 		futures::future::try_join_all(unresolved_paths.iter().map(|symlink_id| async {
 			let symlink = tg::Symlink::with_id(symlink_id.clone());
 			if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
-				let dir_id = directory.id(tg).await?;
+				let dir_id = directory.id(tg, None).await?;
 				Ok::<_, tg::Error>(Some(dir_id.clone()))
 			} else {
 				Ok(None)
@@ -700,7 +700,7 @@ async fn store_dirs_as_symlinks<H: BuildHasher + Default>(
 	let result = try_join_all(dirs.iter().map(|dir_id| async {
 		let directory = tg::Directory::with_id(dir_id.clone());
 		let symlink = tg::Symlink::new(Some(directory.into()), None);
-		let symlink_id = symlink.id(tg).await?;
+		let symlink_id = symlink.id(tg, None).await?;
 		Ok::<_, tg::Error>(symlink_id.clone())
 	}))
 	.await?
@@ -968,7 +968,7 @@ where
 	match components.as_slice() {
 		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data {
 			artifact: None,
-			path: Some(s.to_owned()),
+			path: Some(tg::Path::from(s)),
 		}),
 		[tg::template::component::Data::Artifact(id)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
@@ -981,7 +981,7 @@ where
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data {
 				artifact: Some(artifact_id.clone()),
-				path: Some(s.strip_prefix('/').unwrap().to_owned()),
+				path: Some(tg::Path::from(s)),
 			})
 		},
 		_ => Err(tg::error!(
@@ -994,7 +994,7 @@ where
 async fn unrender(tg: &impl tg::Handle, string: &str) -> tg::template::Data {
 	tg::Template::unrender(string)
 		.expect("Failed to unrender template")
-		.data(tg)
+		.data(tg, None)
 		.await
 		.expect("Failed to produce template data from template")
 }

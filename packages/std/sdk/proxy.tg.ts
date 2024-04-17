@@ -316,6 +316,8 @@ int main() {
 			},
 		),
 	);
+	let manifest = await std.wrap.Manifest.read(output);
+	console.log("manifest", manifest);
 	let result = tg.File.expect(
 		await tg.build(tg`${output} > $OUTPUT`, {
 			env: {

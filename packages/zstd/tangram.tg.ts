@@ -18,11 +18,11 @@ export let source = tg.target(() => {
 	let tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
-		compressionFormat,
+		compressionFormat: "zst",
 		owner,
 		repo,
+		source: "release",
 		tag,
-		release: true,
 		version,
 	});
 });

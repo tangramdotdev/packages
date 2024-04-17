@@ -12,15 +12,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:b6e4e8bac3a950a3a1b7bdb0904979d4ab420a81e74de8636dd50b467d36f5a9";
-	let unpackFormat = ".tar.xz" as const;
-	let url = `https://www.gnupg.org/ftp/gcrypt/${name}/v3.7/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		extension,
+		name,
+		version,
+	});
+	let url = `https://www.gnupg.org/ftp/gcrypt/${name}/v3.7/${packageArchive}`;
+	let download = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(download);
 });
 

@@ -76,7 +76,6 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	for (let [name, pkg] of packages) {
 		let artifact = await std.download({
 			checksum: `sha256:${pkg.xz_hash}`,
-			unpackFormat: ".tar.xz" as const,
 			url: pkg.xz_url,
 		});
 		packagesArtifact = await tg.directory(packagesArtifact, {
@@ -291,7 +290,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 		verbosityEnv = {
 			RUSTFLAGS: "-v",
 			CARGO_TERM_VERBOSE: "true",
-		}
+		};
 	}
 
 	let artifact = await std.build(buildScript, {
@@ -424,11 +423,11 @@ export let vendorDependencies = tg.target(async (cargoLock: tg.File) => {
 			tg.assert(pkg.source);
 			tg.assert(pkg.checksum);
 			let checksum = `sha256:${pkg.checksum}`;
-			let unpackFormat = ".tar.gz" as const;
 			let url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
 			let artifact = await std.download({
 				checksum,
-				unpackFormat,
+				decompress: "gz",
+				extract: "tar",
 				url,
 			});
 			tg.assert(tg.Directory.is(artifact));
