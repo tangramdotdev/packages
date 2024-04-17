@@ -54,7 +54,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: ["iconv"],
-		libs: ["charset", { name: "iconv", dylib: true, staticlib: false }],
+		libraries: ["charset", { name: "iconv", dylib: true, staticlib: false }],
 		metadata,
 	});
 	return directory;

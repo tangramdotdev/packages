@@ -42,7 +42,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let sourceDir = source_ ?? source();
 
 	// Define phases.
-	let buildPhase = `make CC="cc" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="cc" SHELL="$SHELL"`;
+	let buildPhase = `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
 	let install = tg.Mutation.set(
 		`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
 	);
@@ -92,7 +92,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libs: ["bz2"],
+		libraries: ["bz2"],
 		metadata,
 		sdk,
 	});

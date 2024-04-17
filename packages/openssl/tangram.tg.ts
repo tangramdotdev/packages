@@ -101,6 +101,8 @@ export let test = tg.target(async () => {
 		`),
 	});
 
+	let sdkArg: std.sdk.Arg = { toolchain: "llvm" };
+
 	return std.build(
 		tg`
 		 	echo "Checking if we can run openssl"
@@ -108,6 +110,6 @@ export let test = tg.target(async () => {
 			echo "Checking if we can link against libssl."
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto
 		`,
-		{ env: [std.sdk(), openssl()] },
+		{ env: [std.sdk(sdkArg), openssl({ sdk: sdkArg })] },
 	);
 });

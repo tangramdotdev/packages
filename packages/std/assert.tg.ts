@@ -3,7 +3,8 @@ import * as std from "./tangram.tg.ts";
 import { manifestReferences, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
-	/* The package to check. If no other options are given, just asserts the package directory is non-empty. */
+	/* A function that builds a package to check. If no other options are given, just asserts the package directory is non-empty. */
+	//directory: (arg: { sdk?: std.sdk.Arg }) => Promise<tg.Directory>;
 	directory: tg.Unresolved<tg.Directory>;
 	/* All executables that should exist under `bin/`, with optional behavior to check. */
 	binaries?: Array<BinarySpec>;
@@ -12,13 +13,17 @@ type PkgArg = {
 	/* The names of all header files that should exist under `include/`. */
 	headers?: Array<string>;
 	/* All libraries that should exist under `lib/`. By default, checks for both staticlibs and dylibs */
-	libs?: Array<LibrarySpec>;
+	libraries?: Array<LibrarySpec>;
 	/* Does the package provide an overall .pc file? */
 	pkgConfigName?: string;
 	/* Additional packages required at runtime to use this package. */
 	runtimeDeps?: Array<RuntimeDep>;
+	/** The metadata of the package being tested */
 	metadata?: tg.Metadata;
+	/** The SDK args to use for testing. Will be combined with `sdks` if present. If both are omitted, a default set will be tested. */
 	sdk?: std.sdk.Arg;
+	/** A list of sdk args to use for testing. Will be combined with `sdk`. If both are omitted, a default set will be tested. */
+	sdks?: Array<std.sdk.Arg>;
 };
 
 /** Optionally specify some behavior for a particular binary. */
@@ -52,7 +57,20 @@ type RuntimeDep = {
 
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export let pkg = async (arg: PkgArg) => {
-	let sdk = arg.sdk;
+	// Produce list of all requested SDK args.
+	let sdks = [];
+	if (arg.sdk) {
+		sdks.push(arg.sdk);
+	}
+	if (arg.sdks) {
+		sdks.push(...arg.sdks);
+	}
+	// If no SDK args were provided, test with the default set of SDKs for the platform.
+	if (sdks.length === 0) {
+		sdks.push(...(await defaultSdkSet()));
+	}
+	let sdk = sdks[0]; // FIXME remove.
+
 	let metadata = arg.metadata;
 	let directory = await tg.resolve(arg.directory);
 
@@ -86,8 +104,8 @@ export let pkg = async (arg: PkgArg) => {
 	}
 
 	// Assert the package contains the specified libraries.
-	if (arg.libs) {
-		arg.libs.forEach((lib) => {
+	if (arg.libraries) {
+		arg.libraries.forEach((lib) => {
 			let library;
 			if (typeof lib === "string") {
 				library = {
@@ -424,4 +442,21 @@ export let tryBaseName = (lib: string): string | undefined => {
 		return undefined;
 	}
 	return match[1];
+};
+
+/** Produce a set of SDK configurations to test for the given platform. */
+let defaultSdkSet = async () => {
+	let host = await std.triple.host();
+	let os = std.triple.os(host);
+
+	// Start with the default arg.
+	let sdks = [{}];
+	if (os === "linux") {
+		// On Linux, also test llvm, musl, and mold.
+		sdks.push({ toolchain: "llvm" });
+		sdks.push({ host: std.triple.create(host, { environment: "musl" }) });
+		sdks.push({ linker: "mold" });
+	}
+
+	return sdks;
 };

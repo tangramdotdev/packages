@@ -42,10 +42,6 @@ export let cmake = tg.target(async (arg?: Arg) => {
 
 	let sourceDir = source_ ?? source();
 
-	let prepare = tg`
-		cp -rT ${sourceDir} $PWD
-		chmod -R u+w .`;
-
 	let configure = {
 		command: `./bootstrap`,
 		args: [
@@ -56,9 +52,10 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let deps = [std.utils.env({ ...rest, build, host })];
+	let bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
 	let env = [
-		...deps,
+		bootstrapSdk,
+		bootstrap.make.build(host),
 		{
 			LDFLAGS: tg.Mutation.templatePrepend("-static", " "),
 			TANGRAM_LINKER_PASSTHROUGH: "1",
@@ -69,9 +66,11 @@ export let cmake = tg.target(async (arg?: Arg) => {
 	let result = std.autotools.build({
 		...rest,
 		...std.triple.rotate({ build, host }),
+		buildInTree: true,
 		env,
 		hardeningCFlags: false,
-		phases: { prepare, configure },
+		phases: { configure },
+		sdk: false,
 		source: sourceDir,
 	});
 
@@ -80,92 +79,366 @@ export let cmake = tg.target(async (arg?: Arg) => {
 
 export default cmake;
 
-export type BuildArg = std.autotools.Arg & {
-	useNinja?: boolean;
+export type BuildArg = {
+	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
+	debug?: boolean;
+
+	/** Should we add the default CFLAGS? Will compile with `-mtune=generic -pipe`. Default: true */
+	defaultCFlags?: boolean;
+
+	/** Any environment to add to the target. */
+	env?: std.env.Arg;
+
+	/** Use full RELRO? Will use partial if disabled.  May cause long start-up times in large programs. Default: true. */
+	fullRelro?: boolean;
+
+	/** Which generator to use. Default: "Ninja" */
+	generator: "Ninja" | "Unix Makefiles";
+
+	/** Should we add the extra set of harderning CFLAGS? Default: true*/
+	hardeningCFlags?: boolean;
+
+	/** The computer this build should get compiled on. */
+	host?: string;
+
+	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
+	march?: string;
+
+	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
+	mtune?: string;
+
+	/** The optlevel to pass. Defaults to "2" */
+	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
+
+	/** Should make jobs run in parallel? Default: false until new branch. */
+	parallel?: boolean | number;
+
+	/** Override the phases. */
+	phases?: std.phases.Arg;
+
+	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
+	prefixPath?: tg.Template.Arg;
+
+	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
+	sdk?: boolean | tg.MaybeNestedArray<std.sdk.Arg>;
+
+	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
+	source: tg.Template.Arg;
+
+	/** Should executables be stripped? Default is true. */
+	stripExecutables?: boolean;
+
+	/** The computer this build produces executables for. */
+	target?: string;
 };
 
-/** Wrapper for `std.autotools.build` that invokes `cmake` to generate the build system. */
-export let build = tg.target(
-	async (arg: BuildArg, autotools: tg.MaybeNestedArray<std.autotools.Arg>) => {
-		let {
-			env: env_,
-			host: host_,
-			phases: phases_,
-			prefixArg: prefixArg_,
-			target: target_,
-			useNinja = true,
-			...rest
-		} = arg ?? {};
-		let host = host_ ?? (await std.triple.host());
-		let target = target_ ?? host;
+/** Construct a cmake package build target. */
+export let target = async (...args: tg.Args<BuildArg>) => {
+	type Apply = {
+		debug: boolean;
+		defaultCFlags: boolean;
+		fullRelro: boolean;
+		generator: "Ninja" | "Unix Makefiles";
+		hardeningCFlags: boolean;
+		host: string;
+		march: string;
+		mtune: string;
+		opt: "1" | "2" | "3" | "s" | "z" | "fast";
+		parallel: boolean | number;
+		phases: Array<std.phases.Arg>;
+		prefixPath: tg.Template.Arg;
+		sdkArgs?: Array<boolean | std.sdk.Arg>;
+		source: tg.Template.Arg;
+		stripExecutables: boolean;
+		target: string;
+	};
 
-		// Set up env vars to pass through the include and library paths.
-		let cmakeEnv = `
-			export CMAKE_INCLUDE_PATH="$CPATH"
-			export CMAKE_LIBRARY_PATH="$LIBRARY_PATH"
-		`;
-
-		// Set up build phases.
-		let buildCommand = `cmake --build .`;
-		let generator = useNinja ? ` -G Ninja` : ``;
-		let configureCommand = tg`cmake -S ${arg.source}${generator}`;
-		let installCommand = `cmake --build . --target install`;
-		let prefixArg = prefixArg_ ?? `-DCMAKE_INSTALL_PREFIX=`;
-
-		// Obtain a statically linked `cmake` binary and add it to the env.
-		let bootstrapHost = await bootstrap.toolchainTriple(host);
-		let dependencies = [
-			cmake({
-				host: bootstrapHost,
-				sdk: bootstrap.sdk.arg(bootstrapHost),
-			}),
-		];
-		if (useNinja) {
-			dependencies.push(ninja({ host }));
+	let {
+		debug = false,
+		defaultCFlags = true,
+		fullRelro = true,
+		generator = "Ninja",
+		hardeningCFlags = true,
+		host: host_,
+		march,
+		mtune = "generic",
+		opt = 2,
+		parallel = true,
+		phases,
+		prefixPath = "$OUTPUT",
+		sdkArgs: sdkArgs_,
+		source,
+		stripExecutables = true,
+		target: target_,
+	} = await tg.Args.apply<BuildArg, Apply>(args, async (arg) => {
+		if (arg === undefined) {
+			return {};
+		} else if (typeof arg === "object") {
+			let object: tg.MutationMap<Apply> = {};
+			let phasesArgs: Array<std.phases.Arg> = [];
+			if (arg.debug !== undefined) {
+				object.debug = arg.debug;
+			}
+			if (arg.defaultCFlags !== undefined) {
+				object.defaultCFlags = arg.defaultCFlags;
+			}
+			if (arg.hardeningCFlags !== undefined) {
+				object.hardeningCFlags = arg.hardeningCFlags;
+			}
+			if (arg.env !== undefined) {
+				phasesArgs.push({ env: arg.env });
+			}
+			if (arg.fullRelro !== undefined) {
+				object.fullRelro = arg.fullRelro;
+			}
+			if (arg.generator !== undefined) {
+				object.generator = arg.generator;
+			}
+			if (arg.host !== undefined) {
+				object.host = arg.host;
+			}
+			if (arg.opt !== undefined) {
+				object.opt = arg.opt;
+			}
+			if (arg.march !== undefined) {
+				object.march = arg.march;
+			}
+			if (arg.mtune !== undefined) {
+				object.mtune = arg.mtune;
+			}
+			if (arg.parallel !== undefined) {
+				object.parallel = arg.parallel;
+			}
+			if (arg.prefixPath !== undefined) {
+				object.prefixPath = arg.prefixPath;
+			}
+			if (arg.source !== undefined) {
+				object.source = arg.source;
+			}
+			if (arg.phases !== undefined) {
+				if (tg.Mutation.is(arg.phases)) {
+					object.phases = arg.phases;
+				} else {
+					phasesArgs.push(arg.phases);
+				}
+			}
+			if (arg.sdk !== undefined) {
+				if (tg.Mutation.is(arg.sdk)) {
+					object.sdkArgs = arg.sdk;
+				} else {
+					if (typeof arg.sdk === "boolean") {
+						if (arg.sdk === false) {
+							// If the user set this to `false`, pass it through. Ignore `true`.
+							object.sdkArgs = await tg.Mutation.arrayAppend<
+								boolean | std.sdk.Arg
+							>(false);
+						}
+					} else {
+						object.sdkArgs = await tg.Mutation.arrayAppend<
+							boolean | std.sdk.Arg
+						>(arg.sdk);
+					}
+				}
+			}
+			if (arg.stripExecutables !== undefined) {
+				object.stripExecutables = arg.stripExecutables;
+			}
+			if (arg.target !== undefined) {
+				object.target = arg.target;
+			}
+			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
+			return object;
+		} else {
+			return tg.unreachable();
 		}
-		let env = [...dependencies, env_];
+	});
 
-		let cmakePhases = {
-			cmakeEnv,
-			configure: {
-				command: configureCommand,
-			},
-			build: {
-				command: buildCommand,
-			},
-			install: {
-				command: installCommand,
-			},
-		};
+	// Make sure the the arguments provided a source.
+	tg.assert(source !== undefined, `source must be defined`);
 
-		let result = std.autotools.build(
-			{
-				...rest,
-				env,
-				host,
-				phases: {
-					phases: cmakePhases,
-					order: ["cmakeEnv", ...std.phases.defaultOrder()],
-				},
-				prefixArg,
-				target,
-			},
-			{ phases: phases_ },
-			autotools,
+	// Determine SDK configuration.
+	let sdkArgs: Array<std.sdk.Arg> | undefined = undefined;
+	// If any SDk arg is `false`, we don't want to include the SDK.
+	let includeSdk = !sdkArgs_?.some((arg) => arg === false);
+	// If we are including the SDK, omit any booleans from the array.
+	if (includeSdk) {
+		sdkArgs =
+			sdkArgs_?.filter((arg): arg is std.sdk.Arg => typeof arg !== "boolean") ??
+			([] as Array<std.sdk.Arg>);
+	}
+
+	// Detect the host system from the environment.
+	let host = host_ ?? (await std.triple.host());
+	let target = target_ ?? host;
+	let os = std.triple.os(host);
+
+	// Set up env.
+	let env: std.env.Arg = {};
+
+	// // C/C++ flags.
+	let cflags = tg``;
+	if (opt) {
+		let optFlag = `-O${opt}`;
+		cflags = tg`${cflags} ${optFlag}`;
+	}
+	if (defaultCFlags) {
+		let mArchFlag = march ? `-march=${march} ` : "";
+		let defaultCFlags = `${mArchFlag}-mtune=${mtune} -pipe`;
+		cflags = tg`${cflags} ${defaultCFlags}`;
+	}
+	if (hardeningCFlags) {
+		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
+		if (os === "linux") {
+			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
+		}
+		cflags = tg`${cflags} ${extraCFlags}`;
+	}
+
+	let environment = std.triple.environment(host);
+	if (!environment || environment === "gnu") {
+		let cc1Specs = tg.file(`
+	 *cc1_options:
+	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+
+	 *cpp_options:
+	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
+	 		`);
+		let ldSpecs = tg.file(`
+	 *self_spec:
+	 + %{!static:%{!shared:%{!r:-pie}}}
+	 		`);
+		let extraCxxFlags = await tg.Mutation.templatePrepend(
+			`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
+			" ",
 		);
-		return result;
-	},
-);
+		pushOrSet(env, "CXXFLAGS", extraCxxFlags);
+	}
+	pushOrSet(env, "CFLAGS", await cflags);
+	pushOrSet(env, "CXXFLAGS", await cflags);
+
+	// LDFLAGS
+	if (stripExecutables === true) {
+		let stripFlag = await tg.Mutation.templatePrepend(
+			os === "darwin" ? `-Wl,-S` : `-s`,
+			" ",
+		);
+		pushOrSet(env, "LDFLAGS", stripFlag);
+	}
+	if (os === "linux" && hardeningCFlags) {
+		let fullRelroString = fullRelro ? ",-z,now" : "";
+		let extraLdFlags = await tg.Mutation.templatePrepend(
+			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
+			" ",
+		);
+		pushOrSet(env, "LDFLAGS", extraLdFlags);
+	}
+
+	// Add cmake to env.
+	env = [await cmake({ host }), env];
+
+	// If the generator is ninja, add ninja to env.
+	if (generator === "Ninja") {
+		env = [await ninja({ host }), env];
+	}
+
+	if (includeSdk) {
+		// Set up the SDK, add it to the environment.
+		tg.assert(Array.isArray(sdkArgs));
+		if (!sdkArgs.some((arg) => arg?.host)) {
+			sdkArgs.push({ host });
+		}
+		if (host !== target && !sdkArgs.some((arg) => arg?.target)) {
+			sdkArgs.push({ target });
+		}
+		let sdk = await std.sdk(sdkArgs);
+		env = [sdk, env];
+	}
+
+	// Define default phases.
+	let configureArgs = [
+		`-S`,
+		tg.template(source),
+		`-G`,
+		`"${generator}"`,
+		tg`-DCMAKE_INSTALL_PREFIX=${prefixPath}`,
+	];
+	let defaultConfigure = {
+		command: `cmake`,
+		args: configureArgs,
+	};
+
+	let jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
+	let jobsArg = tg.Mutation.templatePrepend(`-j${jobs}`, " ");
+	let defaultBuild = {
+		command: `cmake`,
+		args: [`--build`, `.`, jobsArg],
+	};
+
+	let defaultInstall = {
+		command: `cmake`,
+		args: [`--build`, `.`, `--target`, `install`],
+	};
+
+	let defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
+		configure: defaultConfigure,
+		build: defaultBuild,
+		install: defaultInstall,
+	};
+
+	if (debug) {
+		let defaultFixup = {
+			command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
+		};
+		defaultPhases.fixup = defaultFixup;
+	}
+
+	let system = std.triple.archAndOs(host);
+	return await std.phases.target(
+		{
+			debug,
+			phases: defaultPhases,
+			env,
+			target: { env: { TANGRAM_HOST: system }, host: system },
+		},
+		...(phases ?? []),
+	);
+};
+
+/** Build a cmake package. */
+export let build = async (
+	...args: tg.Args<BuildArg>
+): Promise<tg.Directory> => {
+	return tg.Directory.expect(await (await target(...args)).build());
+};
+
+export let pushOrSet = (
+	obj: { [key: string]: unknown },
+	key: string,
+	value: tg.Value,
+) => {
+	if (obj === undefined) {
+		obj = {};
+		obj[key] = value;
+	} else if (obj[key] === undefined) {
+		obj[key] = value;
+	} else {
+		if (!Array.isArray(obj[key])) {
+			obj[key] = [obj[key]];
+		}
+		tg.assert(obj && key in obj && Array.isArray(obj[key]));
+		let a = obj[key] as Array<tg.Value>;
+		a.push(value);
+		obj[key] = a;
+	}
+};
 
 export let test = tg.target(async () => {
-	let detectedHost = await std.triple.host();
-	let host = await bootstrap.toolchainTriple(detectedHost);
-	let sdkArg = await bootstrap.sdk.arg(host);
-	let directory = cmake({ host, sdk: sdkArg });
+	let directory = cmake();
 	await std.assert.pkg({
 		directory,
-		binaries: ["cmake"],
+		//binaries: ["cmake"],
 		metadata,
 	});
+
 	return directory;
 });

@@ -61,7 +61,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries: ["zstd"],
-		libs: ["zstd"],
+		libraries: ["zstd"],
 	});
 	return directory;
 });

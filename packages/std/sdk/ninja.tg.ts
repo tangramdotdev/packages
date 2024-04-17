@@ -46,9 +46,9 @@ export let ninja = async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			generator: "Unix Makefiles",
 			phases: { configure },
 			source: source_ ?? source(),
-			useNinja: false,
 		},
 		autotools,
 	);

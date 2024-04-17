@@ -91,7 +91,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory: xzArtifact,
 		binaries: ["xz"],
-		libs: ["lzma"],
+		libraries: ["lzma"],
 		metadata,
 		sdk: sdkArg,
 	});

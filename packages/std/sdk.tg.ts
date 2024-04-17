@@ -1,6 +1,6 @@
 /** This module provides environments ready to produce Tangram-wrapped executables from C and C++ code. */
 
-import * as bootstrap from "./bootstrap.tg.ts";
+import binutils from "./sdk/binutils.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
@@ -73,8 +73,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		}
 	});
 	// Obtain host and targets.
-	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
-	let targets = await Promise.all(targets_?.map(canonicalTriple) ?? [host]);
+	let host = host_ ?? (await std.triple.host());
+	let targets = targets_ ?? [];
 
 	// Set the default proxy arguments.
 	let proxyArg = proxyArg_ ?? { compiler: false, linker: true };
@@ -82,6 +82,12 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	// Set the default toolchain if not provided.
 	if (toolchain_ === undefined) {
 		toolchain_ = std.triple.os(host) === "darwin" ? "llvm" : "gcc";
+	}
+
+	// If we're building our own toolchain, canonicalize the host and targets.
+	if (toolchain_ === "gcc" || toolchain_ === "llvm") {
+		host = await canonicalTriple(host);
+		targets = await Promise.all(targets.map(canonicalTriple));
 	}
 
 	// Create an array to collect all constituent envs.
@@ -101,19 +107,68 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	}
 	envs.push(toolchain);
 
+	let { flavor } = await std.sdk.toolchainComponents({ env: toolchain, host });
+	if (flavor === "gcc") {
+		envs.push({
+			CC: tg.Mutation.setIfUnset("gcc"),
+			CXX: tg.Mutation.setIfUnset("g++"),
+		});
+	} else if (flavor === "llvm") {
+		envs.push({
+			CC: tg.Mutation.setIfUnset("clang"),
+			CXX: tg.Mutation.setIfUnset("clang++"),
+		});
+	}
+
+	// Swap linker if requested.
+	let linkerDir: tg.Directory | undefined = undefined;
+	let linkerExe: tg.File | tg.Symlink | undefined = undefined;
+	if (linker) {
+		if (tg.Symlink.is(linker) || tg.File.is(linker)) {
+			linkerExe = linker;
+		} else {
+			switch (linker) {
+				case "lld": {
+					if (flavor === "gcc") {
+						return tg.unimplemented("lld support is not yet implemented.");
+					}
+					break;
+				}
+				case "mold": {
+					let moldArtifact = await mold({ host });
+					linkerDir = moldArtifact;
+					linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
+					break;
+				}
+				case "bfd": {
+					if (flavor === "llvm") {
+						let binutilsDir = await binutils({ host });
+						linkerDir = binutilsDir;
+						linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
+					}
+					break;
+				}
+			}
+		}
+	}
+
 	// Proxy the host toolchain.
-	let hostProxy = proxy.env({
-		...proxyArg,
-		buildToolchain: toolchain,
-		host,
-	});
+	proxyArg = { ...proxyArg, buildToolchain: toolchain, host };
+	if (linkerExe) {
+		proxyArg = { ...proxyArg, linkerExe };
+	}
+	let hostProxy = await proxy.env(proxyArg as proxy.Arg);
+	envs.push(hostProxy);
+	if (linkerDir) {
+		envs.push(linkerDir);
+	}
 
 	// Add host utils if requested.
 	if (utils) {
 		let hostUtils = await std.utils.env({
 			build: host,
 			host,
-			env: [envs, hostProxy],
+			env: envs,
 			sdk: false,
 		});
 		envs.push(hostUtils);
@@ -140,46 +195,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		envs.push(proxyEnv);
 	}
 
-	// Swap linker if requested.
-	if (linker) {
-		// If an alternate linker was requested, use the default env to build a new proxy env with the alternate linker.
-		let linkerDir: tg.Directory | undefined = undefined;
-		let linkerExe: tg.File | tg.Symlink | undefined = undefined;
-		if (tg.Symlink.is(linker) || tg.File.is(linker)) {
-			linkerExe = linker;
-		} else {
-			switch (linker) {
-				case "lld": {
-					return tg.unimplemented("lld support is not yet implemented.");
-				}
-				case "mold": {
-					let moldArtifact = await mold({ host });
-					linkerDir = moldArtifact;
-					linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
-					break;
-				}
-				case "bfd": {
-					// The default SDK is already correct.
-					break;
-				}
-			}
-		}
-		let proxyEnv = await proxy.env({
-			...proxyArg,
-			buildToolchain: toolchain,
-			build: host,
-			host,
-			linkerExe,
-		});
-		envs.push(proxyEnv);
-		if (tg.Directory.is(linkerDir)) {
-			envs.push(linkerDir);
-		}
-	} else {
-		envs.push(hostProxy);
-	}
-
-	// Combine all envs, omitting the default standard utils as they've already been added manually.
+	// Combine all envs.
 	return std.env.object(...envs);
 }
 
@@ -214,7 +230,6 @@ export namespace sdk {
 	///////// QUERIES
 
 	type ProvidesToolchainArg = {
-		bootstrapMode?: boolean;
 		env: std.env.Arg;
 		host?: string;
 		target?: string;
@@ -227,7 +242,7 @@ export namespace sdk {
 
 	/** Assert that an env provides an toolchain. */
 	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
-		let { bootstrapMode, env, host: host_, target: target_ } = arg;
+		let { env, host: host_, target: target_ } = arg;
 
 		let llvm = await std.env.provides({ env, names: ["clang"] });
 
@@ -236,7 +251,7 @@ export namespace sdk {
 		let isCross = host !== target;
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
-		if (isCross && !bootstrapMode) {
+		if (isCross) {
 			let os = std.triple.os(target);
 			if (os !== "darwin") {
 				targetPrefix = `${target}-`;
@@ -506,10 +521,8 @@ export namespace sdk {
 	/** Obtain the host system for the compilers provided by this env. Throws an error if no compiler is found. */
 	export let getTarget = async (arg: ToolchainEnvArg): Promise<string> => {
 		let { env, host: host_, target: target_ } = arg;
-		let detectedHost = await canonicalTriple(
-			host_ ?? (await std.triple.host()),
-		);
-		let target = await canonicalTriple(target_ ?? detectedHost);
+		let detectedHost = host_ ?? (await std.triple.host());
+		let target = target_ ?? detectedHost;
 		let isCross = detectedHost !== target;
 
 		if (std.triple.os(detectedHost) === "darwin") {
@@ -652,7 +665,7 @@ export namespace sdk {
 				metadata = await std.file.executableMetadata(executable);
 			}
 			if (mold) {
-				await assertMoldComment(executable);
+				await assertMoldComment(executable, arg.sdk);
 			}
 
 			tg.assert(metadata.format === "elf");
@@ -917,12 +930,6 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 
 /** Produce the canonical version of the triple used by the toolchain. */
 export let canonicalTriple = async (triple: string): Promise<string> => {
-	// If the triple matches the bootstrap triple for the host, don't change it.
-	let bootstrapTriple = await bootstrap.toolchainTriple();
-	if (triple === bootstrapTriple) {
-		return triple;
-	}
-
 	let components = std.triple.components(std.triple.normalize(triple));
 	if (components.os === "linux") {
 		return std.triple.create({
@@ -939,10 +946,10 @@ export let canonicalTriple = async (triple: string): Promise<string> => {
 	}
 };
 
-export let assertMoldComment = async (exe: tg.File) => {
+export let assertMoldComment = async (exe: tg.File, toolchain: std.env.Arg) => {
 	let elfComment = tg.File.expect(
 		await tg.build(tg`readelf -p .comment ${exe} | grep mold > $OUTPUT`, {
-			env: await std.env.object(bootstrap.sdk()),
+			env: await std.env.object(toolchain),
 		}),
 	);
 	let text = await elfComment.text();
@@ -1122,7 +1129,6 @@ export let allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 	let crossMusl = std.triple.create(crossGnu, { environment: "musl" });
 
 	return [
-		await bootstrap.sdk.arg(),
 		{},
 		{ proxy: false },
 		{ host: hostMusl },
