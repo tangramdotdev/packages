@@ -4,7 +4,7 @@ import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import git from "./git.tg.ts";
-import { interpreterName } from "./libc.tg.ts";
+import * as libc from "./libc.tg.ts";
 import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
 
 export let metadata = {
@@ -162,7 +162,7 @@ export let test = async () => {
 
 	let libDir = std.triple.environment(host) === "musl" ? "lib" : "lib64";
 	let expectedInterpreter =
-		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
+		os === "darwin" ? undefined : `/${libDir}/${libc.interpreterName(host)}`;
 
 	let directory = await toolchain({ host });
 
