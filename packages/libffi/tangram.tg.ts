@@ -59,7 +59,7 @@ export let test = tg.target(async () => {
 	let directory = libffi();
 	await std.assert.pkg({
 		directory,
-		libs: ["ffi"],
+		libraries: ["ffi"],
 	});
 	return directory;
 });

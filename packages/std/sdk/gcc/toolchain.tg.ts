@@ -64,9 +64,9 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		variant = "stage2_full",
 	} = arg ?? {};
 
-	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
-	let buildTriple = await canonicalTriple(build_ ?? host);
-	let target = await canonicalTriple(target_ ?? host);
+	let host = host_ ?? (await std.triple.host());
+	let buildTriple = build_ ?? host;
+	let target = target_ ?? host;
 
 	// Produce the binutils for build and host.
 	let [buildBinutils, crossBinutils] = await Promise.all([

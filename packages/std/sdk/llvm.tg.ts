@@ -5,17 +5,17 @@ import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import git from "./git.tg.ts";
 import * as libc from "./libc.tg.ts";
-import { interpreterName } from "./libc.tg.ts";
+import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
 
 export let metadata = {
 	name: "llvm",
-	version: "18.1.3",
+	version: "18.1.4",
 };
 
 export let source = async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:2929f62d69dec0379e529eb632c40e15191e36f3bd58c2cb2df0413a0dc48651";
+		"sha256:2c01b2fbb06819a12a92056a7fd4edcdc385837942b5e5260b9c2c0baff5116b";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -32,7 +32,7 @@ export type LLVMArg = std.sdk.BuildEnvArg & {
 	source?: tg.Directory;
 };
 
-export let toolchain = async (arg?: LLVMArg) => {
+export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -42,7 +42,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 		...rest
 	} = arg ?? {};
 	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
-	let build = await canonicalTriple(build_ ?? host);
+	let build = build_ ?? host;
 
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("LLVM toolchain must be built for Linux");
@@ -50,7 +50,8 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 	let sourceDir = source_ ?? source();
 
-	let sysroot = await libc.constructSysroot({ host });
+	// Use the internal GCC bootstrapping function to avoid needlesssly rebuilding glibc.
+	let { sysroot } = await buildToHostCrossToolchain(host);
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());
@@ -68,16 +69,6 @@ export let toolchain = async (arg?: LLVMArg) => {
 
 	let configureLlvm = {
 		args: [
-			"-S",
-			tg`${sourceDir}/llvm`,
-			"-DBOOTSTRAP_CLANG_DEFAULT_CXX_STDLIB=libc++",
-			"-DBOOTSTRAP_CLANG_DEFAULT_RTLIB=compiler-rt",
-			"-DBOOTSTRAP_CMAKE_BUILD_TYPE=Release",
-			"-DBOOTSTRAP_LIBCXX_USE_COMPILER_RT=YES",
-			"-DBOOTSTRAP_LIBCXXABI_USE_COMPILER_RT=YES",
-			"-DBOOTSTRAP_LIBCXXABI_USE_LLVM_UNWINDER=YES",
-			"-DBOOTSTRAP_LIBUNWIND_USE_COMPILER_RT=YES",
-			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
 			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
 			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
 			"-DCMAKE_BUILD_TYPE=Release",
@@ -93,7 +84,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_EH=ON",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
 			"-DLLVM_ENABLE_PIC=ON",
-			"-DLLVM_ENABLE_PROJECTS='clang;lld'",
+			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
@@ -110,7 +101,7 @@ export let toolchain = async (arg?: LLVMArg) => {
 			phases: {
 				configure: configureLlvm,
 			},
-			source: sourceDir,
+			source: tg`${sourceDir}/llvm`,
 		},
 		autotools,
 	);
@@ -120,12 +111,11 @@ export let toolchain = async (arg?: LLVMArg) => {
 		"bin/cc": tg.symlink("clang"),
 		"bin/c++": tg.symlink("clang++"),
 	});
-	console.log("llvmArtifact", await llvmArtifact.id());
 	let combined = tg.directory(llvmArtifact, sysroot);
 	console.log("combined llvm + sysroot", await (await combined).id());
 
 	return combined;
-};
+});
 
 export let llvmMajorVersion = () => {
 	return metadata.version.split(".")[0];
@@ -166,13 +156,13 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 
 export let test = async () => {
 	// Build a triple for the detected host.
-	let host = await std.triple.host();
+	let host = await canonicalTriple(await std.triple.host());
 	let hostArch = std.triple.arch(host);
 	let os = std.triple.os(std.triple.archAndOs(host));
 
 	let libDir = std.triple.environment(host) === "musl" ? "lib" : "lib64";
 	let expectedInterpreter =
-		os === "darwin" ? undefined : `/${libDir}/${interpreterName(host)}`;
+		os === "darwin" ? undefined : `/${libDir}/${libc.interpreterName(host)}`;
 
 	let directory = await toolchain({ host });
 
@@ -210,19 +200,11 @@ export let test = async () => {
 		}
 	`);
 	let cxxScript = tg`
-		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -isystem${directory}/include/c++/v1 -isystem${directory}/include/${host}/c++/v1 -o $OUTPUT
+		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`;
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
-			env: [
-				directory,
-				{
-					LD_LIBRARY_PATH: tg.Mutation.templatePrepend(
-						tg`${directory}/lib/${host}`,
-						":",
-					),
-				},
-			],
+			env: [directory],
 			host,
 		}),
 	);

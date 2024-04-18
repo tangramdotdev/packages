@@ -118,7 +118,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		binaries,
 		directory,
-		libs: ["attr"],
+		libraries: ["attr"],
 		metadata,
 		sdk: sdkArg,
 	});

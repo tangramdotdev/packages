@@ -74,7 +74,11 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 			buildToolchain,
 			build,
 			linker:
-				arg.linkerExe ?? (isLlvm ? await tg`${directory}/bin/ld.lld` : ld),
+				arg.linkerExe === undefined
+					? isLlvm
+						? await tg`${directory}/bin/ld.lld`
+						: ld
+					: arg.linkerExe,
 			interpreter: ldso,
 			host,
 		});

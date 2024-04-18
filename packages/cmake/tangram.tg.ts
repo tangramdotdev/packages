@@ -137,7 +137,7 @@ export type BuildArg = {
 	sdk?: boolean | tg.MaybeNestedArray<std.sdk.Arg>;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
-	source: tg.Directory;
+	source: tg.Template.Arg;
 
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean;
@@ -162,7 +162,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 		phases: Array<std.phases.Arg>;
 		prefixPath: tg.Template.Arg;
 		sdkArgs?: Array<boolean | std.sdk.Arg>;
-		source: tg.Directory;
+		source: tg.Template.Arg;
 		stripExecutables: boolean;
 		target: string;
 	};
@@ -357,6 +357,13 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 
 	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
+		tg.assert(Array.isArray(sdkArgs));
+		if (!sdkArgs.some((arg) => arg?.host)) {
+			sdkArgs.push({ host });
+		}
+		if (host !== target && !sdkArgs.some((arg) => arg?.target)) {
+			sdkArgs.push({ target });
+		}
 		let sdk = await std.sdk(sdkArgs);
 		env = [sdk, env];
 	}
@@ -364,7 +371,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	// Define default phases.
 	let configureArgs = [
 		`-S`,
-		source,
+		tg.template(source),
 		`-G`,
 		`"${generator}"`,
 		tg`-DCMAKE_INSTALL_PREFIX=${prefixPath}`,

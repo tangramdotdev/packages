@@ -1,5 +1,6 @@
 import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
+import zstd from "./dependencies/zstd.tg.ts";
 
 export let metadata = {
 	name: "mold",
@@ -31,6 +32,7 @@ export let mold = async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
+		env: env_,
 		host: host_,
 		source: source_,
 		...rest
@@ -39,13 +41,16 @@ export let mold = async (arg?: Arg) => {
 	let build = build_ ?? host;
 
 	let configure = {
-		args: ["-DCMAKE_BUILD_TYPE=Release"],
+		args: ["-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_LIBDIR=lib"],
 	};
+
+	let env = [zstd({ build, host }), env_];
 
 	let result = cmake.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			env,
 			phases: { configure },
 			source: source_ ?? source(),
 		},

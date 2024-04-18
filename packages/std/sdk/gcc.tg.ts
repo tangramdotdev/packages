@@ -276,10 +276,10 @@ type WrapArgsArg = {
 
 /** Produce the set of flags required to enable proxying a statically-linked toolchain dir. */
 export let wrapArgs = async (arg: WrapArgsArg) => {
-	let { host, target, toolchainDir } = arg;
-	let targetTriple = target ?? host;
+	let { host, target: target_, toolchainDir } = arg;
+	let target = target_ ?? host;
 	let gccVersion = await getGccVersion(toolchainDir, host, target);
-	let isCross = host !== targetTriple;
+	let isCross = host !== target;
 	let sysroot = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
 
 	let ccArgs = [

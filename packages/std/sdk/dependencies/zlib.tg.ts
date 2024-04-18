@@ -62,7 +62,7 @@ export let test = tg.target(async () => {
 	let directory = build({ host, sdk: sdkArg });
 	await std.assert.pkg({
 		directory,
-		libs: ["z"],
+		libraries: ["z"],
 		sdk: sdkArg,
 	});
 	return directory;

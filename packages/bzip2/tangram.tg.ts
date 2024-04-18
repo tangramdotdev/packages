@@ -53,7 +53,7 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 	// Only build the shared library on Linux.
 	let buildCommand =
 		os === "linux"
-			? `make CC="cc" SHELL="$SHELL" -f Makefile-libbz2_so && make clean && make CC="cc" SHELL="$SHELL"`
+			? `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make clean && make CC="$$" SHELL="$SHELL"`
 			: `make CC="cc $CFLAGS" SHELL="$SHELL"`;
 
 	let install = tg.Mutation.set(

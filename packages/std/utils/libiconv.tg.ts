@@ -66,7 +66,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		metadata,
 		directory,
-		libs: [{ name: "iconv", staticlib: false }],
+		libraries: [{ name: "iconv", staticlib: false }],
 		sdk: sdkArg,
 	});
 	return directory;

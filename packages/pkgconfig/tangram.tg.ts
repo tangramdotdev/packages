@@ -75,6 +75,16 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 		});
 	}
 	let env = [...dependencies, env_];
+
+	if (
+		(await std.env.tryWhich({ env: env_, name: "clang" })) ||
+		std.flatten(rest.sdk ?? []).some((sdk) => sdk?.toolchain === "llvm")
+	) {
+		env.push({
+			CC: "clang -Wno-int-conversion",
+		});
+	}
+
 	let pkgConfigBuild = await std.autotools.build(
 		{
 			...rest,

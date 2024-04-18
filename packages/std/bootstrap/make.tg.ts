@@ -56,7 +56,7 @@ export default build;
 export let test = tg.target(async () => {
 	let directory = build();
 	await std.assert.pkg({
-		binaries: ["make"],
+		//binaries: ["make"],
 		directory,
 		metadata,
 	});

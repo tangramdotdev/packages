@@ -71,6 +71,16 @@ export let testPlainBootstrapSdk = tg.target(async () => {
 	let bootstrapSdk = await bootstrap.sdk.env();
 	return bootstrapSdk;
 });
+import { env } from "./env.tg.ts";
+export let bootstrapCompileHello = tg.target(async () => {
+	//let bootstrapSdk = await bootstrap.sdk.env();
+
+	//let result = await tg.build(tg`touch $OUTPUT && env`, {
+	//	env: await env.object(bootstrapSdk),
+	//});
+	let result = await tg.build(tg`set -x && echo "hello" > $OUTPUT`);
+	return result;
+});
 
 import { testSingleArgObjectNoMutations, wrap } from "./wrap.tg.ts";
 export let testWrap = tg.target(async () => {
