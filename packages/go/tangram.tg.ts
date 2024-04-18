@@ -44,14 +44,8 @@ export let toolchain = tg.target(
 
 		let { checksum, url } = RELEASES[system as keyof typeof RELEASES];
 
-		let unpackFormat = ".tar.gz" as const;
-
 		// Download the Go toolchain from `go.dev`.
-		let downloaded = await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		});
+		let downloaded = await std.download({ checksum, url });
 
 		tg.assert(tg.Directory.is(downloaded));
 		let go = await downloaded.get("go");

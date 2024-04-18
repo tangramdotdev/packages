@@ -17,10 +17,14 @@ export let metadata = {
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
-	let compressionFormat = ".xz" as const;
 	let checksum =
 		"sha256:f01d58cd6d9d77fbdca9eb4bbd5ead1988228fdb73d6f7a201f5f8d6b118b469";
-	return std.download.fromGnu({ name, version, compressionFormat, checksum });
+	return std.download.fromGnu({
+		name,
+		version,
+		compressionFormat: "xz",
+		checksum,
+	});
 });
 
 type Arg = {
@@ -46,7 +50,7 @@ export let automake = tg.target(async (arg?: Arg) => {
 
 	let perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
-		path: "bin/perl",
+		path: tg.Path.new("bin/perl"),
 	});
 	let scripts = ["automake", "aclocal"];
 

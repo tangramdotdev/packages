@@ -11,18 +11,10 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.gz" as const;
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		unpackFormat,
-	});
 	let checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
-	let url = `https://musl.libc.org/releases/${packageArchive}`;
-	let source = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let url = `https://musl.libc.org/releases/${name}-${version}.tar.gz`;
+	let source = tg.Directory.expect(await std.download({ url, checksum }));
 	source = await std.directory.unwrap(source);
 
 	let patch = tg.File.expect(await tg.include("musl_permission.patch"));
@@ -32,7 +24,7 @@ export let source = tg.target(async () => {
 });
 
 export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
-	let host = arg?.host ?? await std.triple.host();
+	let host = arg?.host ?? (await std.triple.host());
 	let hostSystem = std.triple.archAndOs(host);
 
 	let configure = { args: [`--enable-debug`, `--enable-optimize=*`] };

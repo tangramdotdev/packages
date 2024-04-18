@@ -17,15 +17,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:446e88294dbc2c9085ab4b7061a646fa604b4bec03521d5ea671c2e5ad9b2952";
-	let unpackFormat = ".tar.bz2" as const;
-	let url = `https://ftp.postgresql.org/pub/source/v${version}/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
+	let extension = ".tar.bz2";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
+	let url = `https://ftp.postgresql.org/pub/source/v${version}/${packageArchive}`;
+	let download = tg.Directory.expect(await std.download({ checksum, url }));
 
 	return tg.Directory.expect(await std.directory.unwrap(download));
 });

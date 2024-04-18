@@ -13,7 +13,6 @@ export let metadata = {
 export let source = tg.target((version?: GlibcVersion) => {
 	let { name } = metadata;
 	let version_ = version ?? defaultGlibcVersion;
-	let compressionFormat = ".xz" as const;
 
 	let checksum = checksums.get(version_);
 	tg.assert(checksum, `Unsupported glibc version ${version}`);
@@ -21,7 +20,7 @@ export let source = tg.target((version?: GlibcVersion) => {
 	return std.download.fromGnu({
 		name,
 		version: version_,
-		compressionFormat,
+		compressionFormat: "xz",
 		checksum,
 	});
 });

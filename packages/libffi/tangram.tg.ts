@@ -10,16 +10,17 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	let checksum =
 		"sha256:b0dea9df23c863a7a50e825440f3ebffabd65df1497108e5d437747843895a4e";
 	let unpackFormat = ".tar.gz" as const;
-	let url = `https://github.com/${name}/${name}/releases/download/v${version}/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
-
-	return std.directory.unwrap(download);
+	let owner = name;
+	let repo = name;
+	let tag = `v${version}`;
+	return std.download.fromGithub({
+		checksum,
+		owner,
+		repo,
+		source: "release",
+		tag,
+		version,
+	});
 });
 
 type Arg = {

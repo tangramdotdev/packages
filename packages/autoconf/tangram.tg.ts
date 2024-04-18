@@ -16,8 +16,12 @@ export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
-	let compressionFormat = ".xz" as const;
-	return std.download.fromGnu({ name, version, checksum, compressionFormat });
+	return std.download.fromGnu({
+		name,
+		version,
+		checksum,
+		compressionFormat: "xz",
+	});
 });
 
 type Arg = {
@@ -70,7 +74,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let interpreter = await tg.symlink({
 		artifact: perlArtifact,
-		path: "bin/perl",
+		path: tg.Path.new("bin/perl"),
 	});
 
 	let binDirectory = tg.directory();
@@ -78,7 +82,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let autom4te = await std.wrap(
 		tg.symlink({
 			artifact: autoconf,
-			path: "bin/autom4te",
+			path: tg.Path.new("bin/autom4te"),
 		}),
 		{
 			interpreter,

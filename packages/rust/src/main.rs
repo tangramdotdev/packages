@@ -159,7 +159,7 @@ async fn main_inner() -> tg::Result<()> {
     };
 
     // Create the executable file.
-    let contents = tg::Blob::with_reader(tg, DRIVER_SH).await?;
+    let contents = tg::Blob::with_reader(tg, DRIVER_SH, None).await?;
     let executable = true;
     let references = Vec::new();
     let object = tg::file::Object {
@@ -241,7 +241,7 @@ async fn main_inner() -> tg::Result<()> {
         checksum,
     };
     let target = tg::Target::with_object(object);
-    let target_id = target.id(tg).await?;
+    let target_id = target.id(tg, None).await?;
 
     // Create the build and mark it as a child.
     let build_options = tg::build::GetOrCreateArg {
@@ -251,7 +251,7 @@ async fn main_inner() -> tg::Result<()> {
         target: target_id.clone(),
     };
     let tg::build::GetOrCreateOutput { id: build_id } =
-        tg.get_or_create_build(None, build_options).await?;
+        tg.get_or_create_build(build_options).await?;
 
     // Get the build outcome.
     let outcome = tg::Build::with_id(build_id)
@@ -309,7 +309,7 @@ async fn main_inner() -> tg::Result<()> {
     let output_directory = args
         .tangram_path
         .join("artifacts")
-        .join(output.id(tg).await?.to_string())
+        .join(output.id(tg, None).await?.to_string())
         .join("build");
 
     // Copy output files from $OUTPUT to the path specified.

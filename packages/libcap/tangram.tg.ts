@@ -9,18 +9,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.xz" as const;
+	let extension = ".tar.xz";
 	let packageName = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let checksum =
 		"sha256:cee4568f78dc851d726fc93f25f4ed91cc223b1fe8259daa4a77158d174e6c65";
 	let url = `https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/${packageName}`;
-	let outer = tg.Directory.expect(
-		await std.download({ checksum, unpackFormat, url }),
-	);
+	let outer = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(outer);
 });
 
@@ -109,7 +107,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory,
 		binaries,
-		libs: ["cap"],
+		libraries: ["cap"],
 		metadata,
 	});
 	return directory;

@@ -8,7 +8,8 @@ export let metadata = {
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
-	let checksum = "sha256:0f13e665483ca8cfa3d3e1809738ea518f8a66fe5489430273f08368893193e1";
+	let checksum =
+		"sha256:0f13e665483ca8cfa3d3e1809738ea518f8a66fe5489430273f08368893193e1";
 	let owner = "PyCQA";
 	let repo = name;
 	let tag = version;
@@ -17,8 +18,8 @@ export let source = tg.target(() => {
 		checksum,
 		owner,
 		repo,
+		source: "tag",
 		tag,
-		version,
 	});
 });
 
@@ -46,7 +47,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		directory: await isort(),
 		binaries: ["isort"],
-		metadata
+		metadata,
 	});
 	return true;
 });

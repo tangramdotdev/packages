@@ -13,18 +13,16 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 
 	// Download raw source.
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 	let packageArchive = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let checksum =
 		"sha256:a0a31534451eb7b83c7d6594a497543a54d488bc90ca00f5e34762577f40655e";
 	let url = `https://www.cpan.org/src/5.0/${packageArchive}`;
-	let source = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let source = tg.Directory.expect(await std.download({ url, checksum }));
 	source = await std.directory.unwrap(source);
 
 	// Apply patches.
@@ -102,7 +100,7 @@ export let perl = tg.target(async (arg?: Arg) => {
 	);
 
 	let wrappedPerl = await std.wrap(
-		tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
+		tg.symlink({ artifact: perlArtifact, path: tg.Path.new("bin/perl") }),
 		{
 			env: {
 				PERL5LIB: tg.Mutation.templateAppend(

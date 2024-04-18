@@ -1,4 +1,4 @@
-import * as std from "tg:std" with { path = "../std" };
+import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "gcc",
@@ -33,7 +33,7 @@ export let build = tg.target(async (arg: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ?? await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let target = target_ ? tg.triple(target_) : host;
 
@@ -109,39 +109,48 @@ export default build;
 
 export let gccSource = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
 	let checksum =
 		"sha256:8cb4be3796651976f94b9356fa08d833524f62420d6292c5033a9a26af315078";
-	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${name}-${version}${unpackFormat}`;
-	let outer = tg.Directory.expect(
-		await std.download({ checksum, url, unpackFormat }),
-	);
+	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${packageArchive}`;
+	let outer = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(outer);
 });
 
 export let gmpSource = tg.target(async () => {
 	let name = "gmp";
 	let version = "6.2.1";
-	let unpackFormat = ".tar.xz" as const;
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
 	let checksum =
 		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
-	let url = `https://gmplib.org/download/gmp/${name}-${version}${unpackFormat}`;
-	let outer = tg.Directory.expect(
-		await std.download({ checksum, url, unpackFormat }),
-	);
+	let url = `https://gmplib.org/download/gmp/${packageArchive}`;
+	let outer = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(outer);
 });
 
 export let islSource = tg.target(async () => {
 	let name = "isl";
 	let version = "0.24";
-	let unpackFormat = ".tar.xz" as const;
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
 	let checksum =
 		"sha256:043105cc544f416b48736fff8caf077fb0663a717d06b1113f16e391ac99ebad";
-	let url = `https://libisl.sourceforge.io/${name}-${version}${unpackFormat}`;
-	let outer = tg.Directory.expect(
-		await std.download({ checksum, url, unpackFormat }),
-	);
+	let url = `https://libisl.sourceforge.io/${packageArchive}`;
+	let outer = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(outer);
 });
 
@@ -158,6 +167,10 @@ export let mpfrSource = tg.target(async () => {
 	let version = "4.1.0";
 	let checksum =
 		"sha256:feced2d430dd5a97805fa289fed3fc8ff2b094c02d05287fd6133e7f1f0ec926";
-	let compressionFormat = ".bz2" as const;
-	return std.download.fromGnu({ checksum, name, version, compressionFormat });
+	return std.download.fromGnu({
+		checksum,
+		name,
+		version,
+		compressionFormat: "bz2",
+	});
 });

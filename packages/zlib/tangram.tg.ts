@@ -11,15 +11,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
-	let unpackFormat = ".tar.xz" as const;
-	let url = `https://zlib.net/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		extension,
+		name,
+		version,
+	});
+	let url = `https://zlib.net/${packageArchive}`;
+	let download = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(download);
 });
 

@@ -9,19 +9,17 @@ export let metadata = {
 export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 
-	let unpackFormat = ".tar.xz" as const;
+	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 
 	let checksum =
 		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
-	let source = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let source = tg.Directory.expect(await std.download({ url, checksum }));
 	source = await std.directory.unwrap(source);
 
 	if (os === "darwin") {

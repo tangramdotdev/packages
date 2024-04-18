@@ -14,15 +14,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:04357661e6717b6941682cde02ad741ae4819c67a260593dfb2431861b251acb";
-	let unpackFormat = ".tar.xz" as const;
-	let url = `https://www.libarchive.org/downloads/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			url,
-			checksum,
-			unpackFormat,
-		}),
-	);
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
+	let url = `https://www.libarchive.org/downloads/${packageArchive}`;
+	let download = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(download);
 });
 

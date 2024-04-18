@@ -10,22 +10,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.xz" as const;
+	let extension = ".tar.xz";
 	let packageName = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let checksum =
 		"sha256:c3e02c948d51f3ca9cdb23e011050d2d3a48226c581e0749ed7cbac413ce5461";
 	let url = `https://git.gavinhoward.com/gavin/${name}/releases/download/${version}/${packageName}`;
-	let outer = tg.Directory.expect(
-		await std.download({
-			url,
-			checksum,
-			unpackFormat,
-		}),
-	);
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(outer);
 });
 
@@ -48,7 +42,7 @@ export let bc = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ?? await std.triple.host();
+	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
@@ -59,7 +53,8 @@ export let bc = tg.target(async (arg?: Arg) => {
 	};
 
 	// Define environment.
-	let ccCommand = std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
+	let ccCommand =
+		std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
 	let env = [{ CC: tg.Mutation.setIfUnset(ccCommand) }, env_];
 
 	let output = std.autotools.build(

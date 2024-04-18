@@ -14,8 +14,12 @@ export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:fe10c37353213d78a5b83d48af231e005c4da84db5ce88037d88355938259640";
-	let compressionFormat = ".xz" as const;
-	return std.download.fromGnu({ name, version, checksum, compressionFormat });
+	return std.download.fromGnu({
+		name,
+		version,
+		checksum,
+		compressionFormat: "xz",
+	});
 });
 
 type Arg = {

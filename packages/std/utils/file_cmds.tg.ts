@@ -12,33 +12,21 @@ export let source = tg.target(async () => {
 		"sha256:ac636da85aaa15ba03affc2bed43821d53d745e077845d85cb2964409eb61a99";
 	let owner = "apple-oss-distributions";
 	let repo = "file_cmds";
-	let tag = `${name}-${version}`;
-	let url = `https://github.com/apple-oss-distributions/file_cmds/archive/refs/tags/file_cmds-403.100.6.tar.gz`;
-	let dload = tg.Directory.expect(
-		await std.download({
-			checksum,
-			url,
-			unpackFormat: ".tar.gz",
-		}),
-	);
-	// FIXME - the non-release URL is broken.
-	// let dload = tg.Directory.expect(
-	// 	await std.download.fromGithub({
-	// 		checksum,
-	// 		owner,
-	// 		repo,
-	// 		tag,
-	// 		version,
-	// 	}),
-	// );
-	return std.directory.unwrap(dload);
+	let tag = std.download.packageName({ name, version });
+	return std.download.fromGithub({
+		checksum,
+		source: "tag",
+		owner,
+		repo,
+		tag,
+	});
 });
 
 type Arg = std.sdk.BuildEnvArg;
 
 /** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
 export let macOsXattrCmds = tg.target(async (arg?: Arg) => {
-	let build = arg?.build ?? await std.triple.host();
+	let build = arg?.build ?? (await std.triple.host());
 	let os = std.triple.os(build);
 
 	// Assert that the system is macOS.
@@ -84,7 +72,7 @@ type UtilArg = std.sdk.BuildEnvArg & {
 };
 
 export let compileUtil = async (arg: UtilArg) => {
-	let build = arg.build ?? await std.triple.host();
+	let build = arg.build ?? (await std.triple.host());
 	let host = build;
 
 	// Grab args.

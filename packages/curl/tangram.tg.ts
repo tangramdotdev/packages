@@ -24,7 +24,7 @@ export let source = tg.target(() => {
 		repo,
 		tag,
 		checksum,
-		release: true,
+		source: "release",
 		version,
 	});
 });

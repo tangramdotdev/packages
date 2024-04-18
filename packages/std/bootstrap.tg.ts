@@ -143,13 +143,12 @@ export let patch = async (
 /** Download a component tarball from the remote host. */
 export let remoteComponent = async (componentName: string) => {
 	let version = "v2024.04.02";
-	let unpackFormat = ".tar.zst" as const;
-	let url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}${unpackFormat}`;
+	let url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}.tar.zst`;
 	let checksum = checksums[componentName];
 	tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
 
 	// Download and extract the selected tarball.
-	return tg.Directory.expect(await download({ url, checksum, unpackFormat }));
+	return tg.Directory.expect(await download({ url, checksum }));
 };
 
 /** Enumerate the full set of components for a host. */

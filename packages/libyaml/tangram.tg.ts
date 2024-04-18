@@ -9,15 +9,9 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:c642ae9b75fee120b2d96c712538bd2cf283228d2337df2cf2988e3c02678ef4";
-	let unpackFormat = ".tar.gz" as const;
-	let url = `https://github.com/yaml/libyaml/releases/download/${version}/yaml-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			url,
-			checksum,
-			unpackFormat,
-		}),
-	);
+	let extension = ".tar.gz";
+	let url = `https://github.com/yaml/libyaml/releases/download/${version}/yaml-${version}${extension}`;
+	let download = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(download);
 });
 

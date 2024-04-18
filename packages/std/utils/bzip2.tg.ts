@@ -9,18 +9,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 	let packageArchive = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
 	let url = `https://sourceware.org/pub/bzip2/${packageArchive}`;
-	let outer = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return await std.directory.unwrap(outer);
 });
 

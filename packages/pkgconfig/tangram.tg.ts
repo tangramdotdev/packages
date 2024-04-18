@@ -14,18 +14,16 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let unpackFormat = ".tar.gz" as const;
+	let extension = ".tar.gz";
 	let packageArchive = std.download.packageArchive({
+		extension,
 		name,
 		version,
-		unpackFormat,
 	});
 	let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
 	let checksum =
 		"sha256:6fc69c01688c9458a57eb9a1664c9aba372ccda420a02bf4429fe610e7e7d591";
-	let outer = tg.Directory.expect(
-		await std.download({ url, checksum, unpackFormat }),
-	);
+	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return await std.directory.unwrap(outer);
 });
 
@@ -100,7 +98,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 	let wrappedBin = std.wrap(
 		tg.symlink({
 			artifact: pkgConfigBuild,
-			path: "bin/pkg-config",
+			path: tg.Path.new("bin/pkg-config"),
 		}),
 		{
 			args: ["--define-prefix"],

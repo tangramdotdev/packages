@@ -603,13 +603,14 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 }
 
 fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
+	// TODO use path here.
 	let mut components = Vec::with_capacity(3);
 	if let Some(artifact) = &symlink.artifact {
 		components.push(tg::template::component::Data::Artifact(artifact.clone()));
 	}
 	if let Some(subpath) = &symlink.path {
 		components.push(tg::template::component::Data::String("/".to_owned()));
-		components.push(tg::template::component::Data::String(subpath.clone()));
+		components.push(tg::template::component::Data::String(subpath.to_string()));
 	}
 	tg::template::Data { components }
 }

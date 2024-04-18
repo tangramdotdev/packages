@@ -15,7 +15,7 @@ export let source = tg.target(async () => {
 	return std.download.fromGithub({
 		checksum,
 		owner,
-		release: true,
+		source: "release",
 		repo,
 		tag,
 		version,

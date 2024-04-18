@@ -197,7 +197,7 @@ impl Manifest {
 			tracing::info!(
 				"Magic number mismatch.  Recognized: {:?}, Read: {:?}",
 				MAGIC_NUMBER,
-				magic_number
+				buf
 			);
 			return Ok(None);
 		};

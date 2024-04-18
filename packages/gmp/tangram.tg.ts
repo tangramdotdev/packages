@@ -9,15 +9,14 @@ export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
-	let unpackFormat = ".tar.xz" as const;
-	let url = `https://gmplib.org/download/${name}/${name}-${version}${unpackFormat}`;
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		extension,
+		name,
+		version,
+	});
+	let url = `https://gmplib.org/download/${name}/${packageArchive}`;
+	let download = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(download);
 });
 

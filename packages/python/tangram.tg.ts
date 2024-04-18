@@ -33,16 +33,14 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
-	let unpackFormat = ".tar.xz" as const;
-	let url = `https://www.python.org/ftp/python/${version}/${name}-${version}${unpackFormat}`;
-
-	let download = tg.Directory.expect(
-		await std.download({
-			checksum,
-			unpackFormat,
-			url,
-		}),
-	);
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
+	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
+	let download = tg.Directory.expect(await std.download({ checksum, url }));
 
 	return std.directory.unwrap(download);
 });
