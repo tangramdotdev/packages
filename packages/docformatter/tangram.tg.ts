@@ -43,11 +43,10 @@ export let docformatter = tg.target(async (arg?: Arg) => {
 export default docformatter;
 
 export let test = tg.target(async () => {
-	let directory = docformatter();
 	await std.assert.pkg({
-		directory,
+		buildFunction: docformatter,
 		binaries: ["docformatter"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

@@ -50,12 +50,11 @@ export let libiconv = tg.target(async (arg?: Arg) => {
 export default libiconv;
 
 export let test = tg.target(async () => {
-	let directory = libiconv();
 	await std.assert.pkg({
-		directory,
+		buildFunction: libiconv,
 		binaries: ["iconv"],
 		libraries: ["charset", { name: "iconv", dylib: true, staticlib: false }],
 		metadata,
 	});
-	return directory;
+	return true;
 });

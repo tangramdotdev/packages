@@ -61,9 +61,8 @@ export let coreutils = tg.target(async (arg?: Arg) => {
 export default coreutils;
 
 export let test = tg.target(async () => {
-	let directory = coreutils();
 	await std.assert.pkg({
-		directory,
+		buildFunction: coreutils,
 		binaries: [
 			"cp",
 			"ls",
@@ -83,5 +82,5 @@ export let test = tg.target(async () => {
 		],
 		metadata,
 	});
-	return directory;
+	return true;
 });

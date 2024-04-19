@@ -9,7 +9,10 @@ import zlib from "tg:zlib" with { path: "../zlib" };
 import zstd from "tg:zstd" with { path: "../zstd" };
 
 export let metadata = {
+	homepage: "https://www.postgresql.org",
+	license: "https://www.postgresql.org/about/licence/",
 	name: "postgresql",
+	repository: "https://git.postgresql.org/gitweb/?p=postgresql.git;a=summary",
 	version: "16.2",
 };
 
@@ -105,11 +108,10 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 export default postgresql;
 
 export let test = tg.target(async () => {
-	let directory = postgresql({ withIcu: false });
 	await std.assert.pkg({
-		directory,
+		buildFunction: postgresql,
 		binaries: ["psql"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

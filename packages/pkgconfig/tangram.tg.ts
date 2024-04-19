@@ -137,11 +137,10 @@ export let path = tg.target(
 export default pkgconfig;
 
 export let test = tg.target(async () => {
-	let directory = pkgconfig();
 	await std.assert.pkg({
-		directory,
+		buildFunction: pkgconfig,
 		binaries: ["pkg-config"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

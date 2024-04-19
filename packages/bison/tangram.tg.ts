@@ -67,11 +67,10 @@ export let bison = tg.target((arg?: Arg) => {
 export default bison;
 
 export let test = tg.target(async () => {
-	let directory = bison();
 	await std.assert.pkg({
-		directory,
+		buildFunction: bison,
 		binaries: ["bison"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

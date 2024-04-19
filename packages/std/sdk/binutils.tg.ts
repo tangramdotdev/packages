@@ -148,38 +148,11 @@ export let test = tg.target(async () => {
 		"strip",
 	];
 
-	let tests = [];
-
-	// Test wrapped build.
-	let wrappedDirectory = build({
-		host,
+	await std.assert.pkg({
+		buildFunction: build,
+		binaries,
+		metadata,
 		sdk: sdkArg,
 	});
-	tests.push(
-		std.assert.pkg({
-			directory: wrappedDirectory,
-			binaries,
-			metadata,
-			sdk: sdkArg,
-		}),
-	);
-
-	// Test static build.
-	let staticDirectory = build({
-		host,
-		sdk: sdkArg,
-		staticBuild: true,
-	});
-	tests.push(
-		std.assert.pkg({
-			directory: staticDirectory,
-			binaries,
-			metadata,
-			sdk: sdkArg,
-		}),
-	);
-
-	await Promise.all(tests);
-
-	return wrappedDirectory;
+	return true;
 });

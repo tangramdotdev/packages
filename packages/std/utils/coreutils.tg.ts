@@ -155,7 +155,7 @@ export let test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries: ["cp", "mkdir", "mv", "ls", "rm"],
-		directory: coreutils,
+		buildFunction: build,
 		metadata,
 		sdk: sdkArg,
 	});

@@ -103,7 +103,6 @@ import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdkArg = await bootstrap.sdk.arg(host);
-	let directory = build({ host, sdk: sdkArg });
 	let binTest = (name: string) => {
 		return {
 			name,
@@ -115,10 +114,10 @@ export let test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		directory,
+		buildFunction: build,
 		libraries: ["attr"],
 		metadata,
 		sdk: sdkArg,
 	});
-	return directory;
+	return true;
 });

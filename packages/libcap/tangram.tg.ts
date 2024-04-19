@@ -95,7 +95,6 @@ export let libcap = tg.target(async (arg?: Arg) => {
 export default libcap;
 
 export let test = tg.target(async () => {
-	let directory = libcap();
 	let binTest = (name: string) => {
 		return {
 			name,
@@ -105,10 +104,10 @@ export let test = tg.target(async () => {
 	};
 	let binaries = ["capsh", "getcap", "setcap", "getpcaps"].map(binTest);
 	await std.assert.pkg({
-		directory,
+		buildFunction: libcap,
 		binaries,
 		libraries: ["cap"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

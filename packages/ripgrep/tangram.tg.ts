@@ -4,16 +4,19 @@ import * as rust from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://github.com/BurntSushi/ripgrep",
+	license: "Unlicense",
 	name: "ripgrep",
-	owner: "BurntSushi",
-	repo: "ripgrep",
+	repository: "https://github.com/BurntSushi/ripgrep",
 	version: "14.1.0",
 };
 
 export let source = tg.target(async () => {
-	let { owner, repo, version } = metadata;
+	let { name, version } = metadata;
 	let checksum =
 		"sha256:33c6169596a6bbfdc81415910008f26e0809422fda2d849562637996553b2ab6";
+	let owner = "BurntSushi";
+	let repo = name;
 	return std.download.fromGithub({
 		checksum,
 		owner,
@@ -59,36 +62,10 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 export default ripgrep;
 
 export let test = tg.target(async () => {
-	let directory = ripgrep();
 	await std.assert.pkg({
-		directory,
+		buildFunction: ripgrep,
 		binaries: ["rg"],
 		metadata,
 	});
-
-	// // On Linux, test cross-compiling.
-	// let host = await std.triple.host();
-	// let os = std.triple.os(std.triple.archAndOs(host));
-	// if (os === "linux") {
-	// 	// Determine the target triple with differing architecture from the host.
-	// 	let hostArch = host.arch;
-	// 	let targetArch: std.triple.Arch =
-	// 		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	// 	let target = tg.triple({
-	// 		arch: targetArch,
-	// 		vendor: "unknown",
-	// 		os: "linux",
-	// 		environment: "gnu",
-	// 	});
-
-	// 	// Assert that we build a binary for the target.
-	// 	let output = await ripgrep({ host: target });
-	// 	tg.Directory.assert(output);
-	// 	let bin = await output.get("bin/rg");
-	// 	tg.File.assert(bin);
-	// 	let metadata = await std.file.executableMetadata(bin);
-	// 	tg.assert(metadata.format === "elf");
-	// 	tg.assert(metadata.arch === targetArch);
-	// }
-	return directory;
+	return true;
 });

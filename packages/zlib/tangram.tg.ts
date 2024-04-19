@@ -47,12 +47,11 @@ export let zlib = tg.target((arg?: Arg) => {
 export default zlib;
 
 export let test = tg.target(async () => {
-	let zlibArtifact = await zlib();
-	console.log("zlib", await zlibArtifact.id());
 	await std.assert.pkg({
-		directory: zlibArtifact,
+		buildFunction: zlib,
 		docs: ["man/man3/zlib.3"],
 		pkgConfigName: "zlib",
+		libraries: ["z"],
 	});
-	return zlibArtifact;
+	return true;
 });

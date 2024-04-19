@@ -57,10 +57,9 @@ export let libffi = tg.target(async (arg?: Arg) => {
 export default libffi;
 
 export let test = tg.target(async () => {
-	let directory = libffi();
 	await std.assert.pkg({
-		directory,
+		buildFunction: libffi,
 		libraries: ["ffi"],
 	});
-	return directory;
+	return true;
 });

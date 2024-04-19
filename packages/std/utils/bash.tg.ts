@@ -108,12 +108,11 @@ let providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdk = await bootstrap.sdk.arg(host);
-	let directory = build({ host, sdk });
 	await std.assert.pkg({
-		directory,
+		buildFunction: build,
 		binaries: ["bash"],
 		metadata,
 		sdk,
 	});
-	return directory;
+	return true;
 });

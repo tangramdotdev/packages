@@ -163,11 +163,10 @@ export let wrapScript = async (script: tg.File) => {
 };
 
 export let test = tg.target(async () => {
-	let directory = perl();
 	await std.assert.pkg({
-		directory,
+		buildFunction: perl,
 		binaries: ["perl"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

@@ -81,11 +81,10 @@ export let gettext = tg.target(async (arg?: Arg) => {
 export default gettext;
 
 export let test = tg.target(async () => {
-	let directory = gettext();
 	await std.assert.pkg({
-		directory,
+		buildFunction: gettext,
 		binaries: ["msgfmt", "msgmerge", "xgettext"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

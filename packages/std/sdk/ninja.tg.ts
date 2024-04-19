@@ -59,11 +59,10 @@ export let ninja = async (arg?: Arg) => {
 export default ninja;
 
 export let test = tg.target(async () => {
-	let directory = ninja();
 	await std.assert.pkg({
-		directory,
+		buildFunction: ninja,
 		binaries: ["ninja"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

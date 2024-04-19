@@ -433,12 +433,10 @@ export let pushOrSet = (
 };
 
 export let test = tg.target(async () => {
-	let directory = cmake();
 	await std.assert.pkg({
-		directory,
-		//binaries: ["cmake"],
+		buildFunction: cmake,
+		binaries: ["cmake"],
 		metadata,
 	});
-
-	return directory;
+	return true;
 });

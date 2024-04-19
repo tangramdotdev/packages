@@ -95,12 +95,11 @@ export let curl = tg.target(async (arg?: Arg) => {
 export default curl;
 
 export let test = tg.target(async () => {
-	let directory = curl();
 	await std.assert.pkg({
-		directory,
+		buildFunction: curl,
 		binaries: ["curl"],
 		metadata,
 	});
 
-	return directory;
+	return true;
 });

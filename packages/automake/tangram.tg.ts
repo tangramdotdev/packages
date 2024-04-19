@@ -127,11 +127,10 @@ export let automake = tg.target(async (arg?: Arg) => {
 export default automake;
 
 export let test = tg.target(async () => {
-	let directory = automake();
 	await std.assert.pkg({
-		directory,
+		buildFunction: automake,
 		binaries: ["automake"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

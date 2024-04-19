@@ -78,7 +78,6 @@ export let acl = tg.target(async (arg?: Arg) => {
 export default acl;
 
 export let test = tg.target(async () => {
-	let directory = acl();
 	let binTest = (name: string) => {
 		return {
 			name,
@@ -90,9 +89,9 @@ export let test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		directory,
+		buildFunction: acl,
 		libraries: ["acl"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

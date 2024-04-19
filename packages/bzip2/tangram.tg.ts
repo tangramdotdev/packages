@@ -109,12 +109,11 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 export default bzip2;
 
 export let test = tg.target(async () => {
-	let directory = bzip2();
 	await std.assert.pkg({
-		directory,
+		buildFunction: bzip2,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
 		libraries: ["bz2"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

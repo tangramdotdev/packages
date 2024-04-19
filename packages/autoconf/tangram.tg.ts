@@ -200,11 +200,10 @@ export let patchAutom4teCfg = tg.target(
 export default build;
 
 export let test = tg.target(async () => {
-	let directory = build();
 	await std.assert.pkg({
-		directory,
+		buildFunction: build,
 		binaries: ["autoconf"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

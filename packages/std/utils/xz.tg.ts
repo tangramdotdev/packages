@@ -86,13 +86,12 @@ export default build;
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdkArg = await bootstrap.sdk.arg(host);
-	let xzArtifact = build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		directory: xzArtifact,
+		buildFunction: build,
 		binaries: ["xz"],
 		libraries: ["lzma"],
 		metadata,
 		sdk: sdkArg,
 	});
-	return xzArtifact;
+	return true;
 });

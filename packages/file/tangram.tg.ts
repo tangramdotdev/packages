@@ -85,11 +85,10 @@ export let file = tg.target(async (arg?: Arg) => {
 export default file;
 
 export let test = tg.target(async () => {
-	let directory = file();
 	await std.assert.pkg({
-		directory,
+		buildFunction: file,
 		binaries: ["file"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

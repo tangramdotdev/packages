@@ -57,11 +57,10 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let directory = build();
 	await std.assert.pkg({
-		directory,
+		buildFunction: build,
 		binaries: ["zstd"],
 		libraries: ["zstd"],
 	});
-	return directory;
+	return true;
 });

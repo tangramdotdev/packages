@@ -146,12 +146,11 @@ export default build;
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdkArg = await bootstrap.sdk.arg(host);
-	let directory = await build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		directory,
+		buildFunction: build,
 		binaries: ["perl"],
 		metadata,
 		sdk: sdkArg,
 	});
-	return directory;
+	return true;
 });

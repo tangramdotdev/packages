@@ -1113,6 +1113,29 @@ export let testLLVMMuslSdk = tg.target(async () => {
 	return env;
 });
 
+export let testNativeProxiedSdks = async () => {
+	await Promise.all(
+		(await nativeProxiedSdkArgs()).map(async (arg) => {
+			await sdk.assertValid(await sdk(arg), arg);
+		}),
+	);
+	return true;
+};
+
+export let nativeProxiedSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
+	let detectedHost = await std.triple.host();
+	let detectedOs = std.triple.os(detectedHost);
+
+	if (detectedOs === "darwin") {
+		return [{}];
+	}
+
+	let hostGnu = await canonicalTriple(detectedHost);
+	let hostMusl = std.triple.create(hostGnu, { environment: "musl" });
+
+	return [{}, { host: hostMusl }, { toolchain: "llvm" }, { linker: "mold" }];
+};
+
 export let allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 	let detectedHost = await std.triple.host();
 	let detectedOs = std.triple.os(detectedHost);

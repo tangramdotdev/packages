@@ -4,8 +4,7 @@ import { manifestReferences, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
 	/* A function that builds a package to check. If no other options are given, just asserts the package directory is non-empty. */
-	//directory: (arg: { sdk?: std.sdk.Arg }) => Promise<tg.Directory>;
-	directory: tg.Unresolved<tg.Directory>;
+	buildFunction: (arg: { sdk?: std.sdk.Arg }) => Promise<tg.Directory>;
 	/* All executables that should exist under `bin/`, with optional behavior to check. */
 	binaries?: Array<BinarySpec>;
 	/* Any documentation files that should exist under `share/`. */
@@ -69,74 +68,81 @@ export let pkg = async (arg: PkgArg) => {
 	if (sdks.length === 0) {
 		sdks.push(...(await defaultSdkSet()));
 	}
-	let sdk = sdks[0]; // FIXME remove.
 
 	let metadata = arg.metadata;
-	let directory = await tg.resolve(arg.directory);
 
-	// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
-	let tests = [nonEmpty(directory)];
+	// Collect a seried of tests to run for each provided SDK.
+	let tests = std.flatten(
+		sdks.map(async (sdk) => {
+			let directory = await arg.buildFunction({ sdk });
 
-	// Assert the package contains the specified binaries.
-	if (arg.binaries) {
-		for (let binarySpec of arg.binaries) {
-			let binary =
-				typeof binarySpec === "string"
-					? { name: binarySpec, runtimeDeps: arg.runtimeDeps ?? [] }
-					: binarySpec;
-			tests.push(runnableBin({ directory, binary, metadata }));
-		}
-	}
+			// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
+			let tests = [nonEmpty(directory)];
 
-	// Assert the package contains the specified documentation.
-	if (arg.docs) {
-		for (let docPath of arg.docs) {
-			tests.push(assertFileExists({ directory, subpath: `share/${docPath}` }));
-		}
-	}
-
-	// Assert the package contains the specified headers.
-	if (arg.headers) {
-		for (let header of arg.headers) {
-			tests.push(headerExists({ directory, header }));
-			tests.push(headerCanBeIncluded({ directory, header }));
-		}
-	}
-
-	// Assert the package contains the specified libraries.
-	if (arg.libraries) {
-		arg.libraries.forEach((lib) => {
-			let library;
-			if (typeof lib === "string") {
-				library = {
-					name: lib,
-					dylib: true,
-					staticlib: true,
-					runtimeDeps: arg.runtimeDeps ?? [],
-				};
-			} else {
-				library = {
-					name: lib.name,
-					dylib: lib.dylib ?? true,
-					staticlib: lib.staticlib ?? true,
-					runtimeDeps: lib.runtimeDeps ?? [],
-				};
+			// Assert the package contains the specified binaries.
+			if (arg.binaries) {
+				for (let binarySpec of arg.binaries) {
+					let binary =
+						typeof binarySpec === "string"
+							? { name: binarySpec, runtimeDeps: arg.runtimeDeps ?? [] }
+							: binarySpec;
+					tests.push(runnableBin({ directory, binary, metadata }));
+				}
 			}
-			if (library) {
-				tests.push(linkableLib({ directory, library, sdk }));
-			}
-		});
-	}
 
-	// Assert the toplevel pkg-config file exists.
-	if (arg.pkgConfigName) {
-		tests.push(
-			assertFileExists({
-				directory,
-				subpath: `lib/pkgconfig/${arg.pkgConfigName}.pc`,
-			}),
-		);
-	}
+			// Assert the package contains the specified documentation.
+			if (arg.docs) {
+				for (let docPath of arg.docs) {
+					tests.push(
+						assertFileExists({ directory, subpath: `share/${docPath}` }),
+					);
+				}
+			}
+
+			// Assert the package contains the specified headers.
+			if (arg.headers) {
+				for (let header of arg.headers) {
+					tests.push(headerExists({ directory, header }));
+					tests.push(headerCanBeIncluded({ directory, header }));
+				}
+			}
+
+			// Assert the package contains the specified libraries.
+			if (arg.libraries) {
+				arg.libraries.forEach((lib) => {
+					let library;
+					if (typeof lib === "string") {
+						library = {
+							name: lib,
+							dylib: true,
+							staticlib: true,
+							runtimeDeps: arg.runtimeDeps ?? [],
+						};
+					} else {
+						library = {
+							name: lib.name,
+							dylib: lib.dylib ?? true,
+							staticlib: lib.staticlib ?? true,
+							runtimeDeps: lib.runtimeDeps ?? [],
+						};
+					}
+					if (library) {
+						tests.push(linkableLib({ directory, library, sdk }));
+					}
+				});
+			}
+
+			// Assert the toplevel pkg-config file exists.
+			if (arg.pkgConfigName) {
+				tests.push(
+					assertFileExists({
+						directory,
+						subpath: `lib/pkgconfig/${arg.pkgConfigName}.pc`,
+					}),
+				);
+			}
+		}),
+	);
 
 	await Promise.all(tests);
 	return true;

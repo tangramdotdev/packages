@@ -1,3 +1,4 @@
+//import * as gcc from "tg:gcc" with { path: "../gcc" };
 import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
@@ -220,6 +221,8 @@ export let build = async (...args: tg.Args<Arg>) => {
 	// Obtain handles to the SDK and Rust artifacts.
 	// NOTE - pulls an SDK assuming the selected target is the intended host.
 	let sdk = std.sdk({ host, target }, sdk_ ?? []);
+	// FIXME - replace with just the lib from the post-std package.
+	//let libgccSdk = gcc.libgcc({ host });
 	let rustArtifact = rust({ target });
 
 	// Download the dependencies using the cargo vendor.
@@ -296,6 +299,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	let artifact = await std.build(buildScript, {
 		env: std.env(
 			sdk,
+			//libgccSdk,
 			rustArtifact,
 			{
 				RUST_TARGET: target,

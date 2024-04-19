@@ -42,15 +42,14 @@ export let fzf = tg.target(async (arg?: Arg) => {
 });
 
 export let test = tg.target(async () => {
-	let directory = fzf();
 	await std.assert.pkg({
-		directory,
+		buildFunction: fzf,
 		binaries: [
 			{ name: "fzf", testPredicate: (stdout) => stdout.includes("0.46") },
 		],
 		metadata,
 	});
-	return directory;
+	return true;
 });
 
 export default fzf;

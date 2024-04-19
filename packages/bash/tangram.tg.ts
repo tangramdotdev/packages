@@ -12,7 +12,7 @@ export let metadata = {
 
 export let source = tg.target(async (arg?: Arg) => {
 	let { name, version } = metadata;
-	let build = arg?.build ?? await std.triple.host();
+	let build = arg?.build ?? (await std.triple.host());
 	let env = std.env.object([std.sdk({ host: build }, arg?.sdk), arg?.env]);
 
 	let checksum =
@@ -91,11 +91,10 @@ export let wrapScript = async (script: tg.File) => {
 };
 
 export let test = tg.target(async () => {
-	let directory = bash();
 	await std.assert.pkg({
-		directory,
+		buildFunction: bash,
 		binaries: ["bash"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

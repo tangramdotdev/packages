@@ -87,7 +87,7 @@ export let testMuslWrapper = tg.target(async () => {
 
 import * as bootstrapMake from "./bootstrap/make.tg.ts";
 export let testBootstrapMake = tg.target(async () => {
-	return await bootstrapMake.test();
+	return await bootstrapMake.build();
 });
 
 export let testBootstrapMusl = tg.target(async () => {
@@ -261,6 +261,7 @@ import {
 	testLLVMSdk,
 	testMoldSdk,
 	testMuslSdk,
+	testNativeProxiedSdks,
 } from "./sdk.tg.ts";
 export let testMold = tg.target(async () => {
 	return await testMoldSdk();
@@ -292,6 +293,10 @@ export let testLlvmMold = tg.target(async () => {
 });
 export let testLlvmMusl = tg.target(async () => {
 	return await testLLVMMuslSdk();
+});
+
+export let testNative = tg.target(async () => {
+	return await testNativeProxiedSdks();
 });
 
 // Image tests.

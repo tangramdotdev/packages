@@ -1,7 +1,15 @@
 import * as std from "tg:std" with { path: "../std" };
+<<<<<<< Updated upstream
+=======
+
+// TODO - handle libc.
+>>>>>>> Stashed changes
 
 export let metadata = {
+	homepage: "https://gcc.gnu.org/",
+	license: "GPL-3.0-or-later",
 	name: "gcc",
+	repository: "https://gcc.gnu.org/git.html",
 	version: "13.2.0",
 };
 
@@ -15,14 +23,18 @@ export let source = tg.target(() =>
 	}),
 );
 
-type Arg = std.sdk.BuildEnvArg & {
+type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 	target?: string;
 };
 
 /* Produce a GCC toolchain. */
-export let build = tg.target(async (arg: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -35,11 +47,10 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
-	let target = target_ ? tg.triple(target_) : host;
+	let target = target_ ?? host;
 
-	let build = std.triple.toString(build);
-	let host = std.triple.toString(host);
-	let target = std.triple.toString(target);
+	let sdk = await std.sdk({ host, target });
+	let { directory: sdkDir } = await std.sdk.toolchainComponents({ env: sdk });
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
@@ -49,6 +60,7 @@ export let build = tg.target(async (arg: Arg) => {
 		"--enable-default-ssp",
 		"--enable-default-pie",
 		"--enable-initfini-array",
+		tg`--with-native-system-header-dir=${sdkDir}/include`,
 		`--build=${build}`,
 		`--host=${host}`,
 		`--target=${target}`,
@@ -56,27 +68,25 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv: std.env.Arg = {
-		MAKEFLAGS: "--output-sync --silent",
-	};
+	let additionalEnv: std.env.Arg = {};
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
-	if (target.environment === "musl") {
+	if (std.triple.environment(target) === "musl") {
 		additionalArgs.push("--disable-libsanitizer");
 		additionalArgs.push("--disable-libitm");
 		additionalArgs.push("--disable-libvtv");
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
-	if (host.environment === "gnu") {
+	if (std.triple.environment(host) === "gnu") {
 		additionalArgs.push("--enable-__cxa_atexit");
 	}
 
 	let configure = { args: [...commonArgs, ...additionalArgs] };
 
-	let phases = { prepare, configure };
+	let phases = { configure };
 
-	let env = [additionalEnv, env_];
+	let env = [additionalEnv, sdk, env_];
 
 	let result = await std.autotools.build(
 		{
@@ -85,6 +95,7 @@ export let build = tg.target(async (arg: Arg) => {
 			env,
 			phases,
 			opt: "2",
+			sdk: false,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -93,6 +104,8 @@ export let build = tg.target(async (arg: Arg) => {
 	result = await mergeLibDirs(result);
 
 	// Add cc symlinks.
+	let isCross = host !== target;
+	let targetPrefix = isCross ? `${target}-` : "";
 	result = await tg.directory(result, {
 		[`bin/${targetPrefix}cc`]: tg.symlink(`./${targetPrefix}gcc`),
 	});
@@ -106,6 +119,84 @@ export let build = tg.target(async (arg: Arg) => {
 });
 
 export default build;
+
+export let libgcc = tg.target(async (arg?: Arg) => {
+	let {
+		autotools = [],
+		build: build_,
+		env: env_,
+		host: host_,
+		source: source_,
+		target: target_,
+		...rest
+	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let target = target_ ?? host;
+
+	let sdk = await std.sdk({ host, target });
+	let { directory: sdkDir } = await std.sdk.toolchainComponents({ env: sdk });
+
+	// Set up configuration common to all GCC builds.
+	let commonArgs = [
+		"--disable-dependency-tracking",
+		"--disable-nls",
+		"--disable-multilib",
+		"--enable-initfini-array",
+		"--enable-default-ssp",
+		"--enable-default-pie",
+		"--enable-langugages=c",
+		//tg`--with-native-system-header-dir=${sdkDir}/include`,
+		`--build=${build}`,
+		`--host=${host}`,
+		`--target=${target}`,
+	];
+
+	// Set up containers to collect additional arguments and environment variables for specific configurations.
+	let additionalArgs = [];
+	let additionalEnv: std.env.Arg = {};
+
+	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
+	if (std.triple.environment(target) === "musl") {
+		additionalArgs.push("--disable-libsanitizer");
+		additionalArgs.push("--disable-libitm");
+		additionalArgs.push("--disable-libvtv");
+	}
+
+	// On GLIBC hosts, enable cxa_atexit.
+	if (std.triple.environment(host) === "gnu") {
+		additionalArgs.push("--enable-__cxa_atexit");
+	}
+
+	let configure = { args: [...commonArgs, ...additionalArgs] };
+	let buildPhase = tg.Mutation.set(
+		"make -j$(nproc) all-gcc && make -j$(nproc) all-target-libgcc",
+	);
+	let install = tg.Mutation.set("make install-target-libgcc");
+
+	let phases = { configure, build: buildPhase, install };
+
+	let env = [additionalEnv, sdk, env_];
+
+	let result = await std.autotools.build(
+		{
+			...rest,
+			...std.triple.rotate({ build, host }),
+			env,
+			phases,
+			opt: "2",
+			sdk: false,
+			source: source_ ?? source(),
+		},
+		autotools,
+	);
+	console.log("result");
+
+	let libgcc = tg.File.expect(await result.get("lib/libgcc_s.so"));
+
+	return libgcc;
+});
 
 export let gccSource = tg.target(async () => {
 	let { name, version } = metadata;
@@ -173,4 +264,49 @@ export let mpfrSource = tg.target(async () => {
 		version,
 		compressionFormat: "bz2",
 	});
+});
+
+/** Merge all lib and lib64 directories into a single lib directory, leaving a symlink. */
+export let mergeLibDirs = async (dir: tg.Directory) => {
+	for await (let [name, artifact] of dir) {
+		// If we find a lib64, merge it with the adjacent lib.
+		if (tg.Directory.is(artifact)) {
+			if (name === "lib64") {
+				let maybeLibDir = await dir.tryGet("lib");
+				if (!maybeLibDir) {
+					// There was no adjacent lib - this is best effort. Do nothing.
+					continue;
+				}
+				// If we found it, deep merge the lib64 into it.
+				let libDir = maybeLibDir;
+				tg.assert(tg.Directory.is(libDir));
+				let mergedLibDir = await tg.directory(libDir, artifact);
+
+				// Recurse into the merged lib directory.
+				mergedLibDir = await mergeLibDirs(mergedLibDir);
+
+				// Replace the original lib directory with the merged one, and add a symlink.
+				dir = await tg.directory(dir, {
+					lib: mergedLibDir,
+					lib64: tg.symlink("lib"),
+				});
+			} else {
+				// For all other directories, just recurse.
+				let mergedSubdir = await mergeLibDirs(artifact);
+				dir = await tg.directory(dir, {
+					[name]: mergedSubdir,
+				});
+			}
+		}
+	}
+	return dir;
+};
+
+export let test = tg.target(async () => {
+	await std.assert.pkg({
+		buildFunction: build,
+		binaries: ["gcc"],
+		metadata,
+	});
+	return true;
 });

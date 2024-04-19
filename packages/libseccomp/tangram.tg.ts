@@ -66,10 +66,9 @@ export let libseccomp = tg.target(async (arg?: Arg) => {
 export default libseccomp;
 
 export let test = tg.target(async () => {
-	let directory = libseccomp();
 	await std.assert.pkg({
-		directory,
+		buildFunction: libseccomp,
 		libraries: ["seccomp"],
 	});
-	return directory;
+	return true;
 });

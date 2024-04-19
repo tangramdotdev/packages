@@ -65,11 +65,10 @@ export let vim = tg.target(async (arg?: Arg) => {
 export default vim;
 
 export let test = tg.target(async () => {
-	let directory = vim();
 	await std.assert.pkg({
-		directory,
-		//binaries: ["vim"],
+		buildFunction: vim,
+		binaries: ["vim"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

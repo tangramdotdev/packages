@@ -84,10 +84,8 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export let test = tg.target(async () => {
-	let directory = build();
-
 	await std.assert.pkg({
-		directory,
+		buildFunction: build,
 		binaries: [
 			"derb",
 			"genbrk",
@@ -104,5 +102,5 @@ export let test = tg.target(async () => {
 		libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

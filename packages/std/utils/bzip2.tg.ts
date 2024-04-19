@@ -86,13 +86,12 @@ export default build;
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdk = await bootstrap.sdk.arg(host);
-	let directory = build({ host, sdk });
 	await std.assert.pkg({
-		directory,
+		buildFunction: build,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
 		libraries: ["bz2"],
 		metadata,
 		sdk,
 	});
-	return directory;
+	return true;
 });

@@ -64,11 +64,10 @@ export let flex = tg.target(async (arg?: Arg) => {
 export default flex;
 
 export let test = tg.target(async () => {
-	let directory = flex();
 	await std.assert.pkg({
-		directory,
+		buildFunction: flex,
 		binaries: ["flex"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

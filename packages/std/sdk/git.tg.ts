@@ -77,11 +77,10 @@ export let git = tg.target(async (arg?: Arg) => {
 export default git;
 
 export let test = tg.target(async () => {
-	let directory = git();
 	await std.assert.pkg({
-		directory,
+		buildFunction: git,
 		binaries: ["git"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

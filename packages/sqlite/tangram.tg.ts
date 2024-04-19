@@ -68,12 +68,11 @@ export let sqlite = tg.target((arg?: Arg) => {
 export default sqlite;
 
 export let test = tg.target(async () => {
-	let directory = sqlite();
 	await std.assert.pkg({
-		directory,
+		buildFunction: sqlite,
 		binaries: ["sqlite3"],
 		libraries: ["sqlite3"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

@@ -42,11 +42,10 @@ export let m4 = tg.target(async (arg?: Arg) => {
 export default m4;
 
 export let test = tg.target(async () => {
-	let directory = m4();
 	await std.assert.pkg({
-		directory,
+		buildFunction: m4,
 		binaries: ["m4"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

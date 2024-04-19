@@ -33,8 +33,6 @@ export * as xz from "./utils/xz.tg.ts";
 
 type Arg = std.sdk.BuildEnvArg;
 
-// You need top-level helpers - one that passes through the bootstrap SDK arg and prereqs, and one that doesn't. Don't handle in the individual fns.
-
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: Arg) => {
 	let { env: env_, host: host_, ...rest } = arg ?? {};

@@ -74,11 +74,10 @@ export let mold = async (arg?: Arg) => {
 export default mold;
 
 export let test = tg.target(async () => {
-	let directory = mold();
 	await std.assert.pkg({
-		directory,
+		buildFunction: mold,
 		binaries: ["mold"],
 		metadata,
 	});
-	return directory;
+	return true;
 });

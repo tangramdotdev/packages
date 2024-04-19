@@ -62,12 +62,11 @@ import * as bootstrap from "../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdkArg = await bootstrap.sdk.arg(host);
-	let directory = build({ host, sdk: sdkArg });
 	await std.assert.pkg({
-		directory,
+		buildFunction: build,
 		binaries: ["sed"],
 		metadata,
 		sdk: sdkArg,
 	});
-	return directory;
+	return true;
 });

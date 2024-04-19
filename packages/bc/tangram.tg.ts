@@ -76,11 +76,10 @@ export let bc = tg.target(async (arg?: Arg) => {
 export default bc;
 
 export let test = tg.target(async () => {
-	let directory = bc();
 	await std.assert.pkg({
-		directory,
+		buildFunction: bc,
 		binaries: ["bc"],
 		metadata,
 	});
-	return directory;
+	return true;
 });
