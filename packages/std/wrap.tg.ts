@@ -448,13 +448,6 @@ export namespace wrap {
 					"LIBRARY_PATH",
 					await tg.Mutation.templatePrepend(tg`${arg}/lib`, ":"),
 				);
-				if (await arg.tryGet("lib/pkgconfig")) {
-					pushOrSet(
-						ret,
-						"PKG_CONFIG_PATH",
-						await tg.Mutation.templatePrepend(tg`${arg}/lib/pkgconfig`, ":"),
-					);
-				}
 			}
 			return manifestMutationFromMutation(await tg.Mutation.set(ret));
 		} else if (Array.isArray(arg)) {
