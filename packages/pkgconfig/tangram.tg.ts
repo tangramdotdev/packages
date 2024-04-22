@@ -32,6 +32,7 @@ type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
+	proxy?: boolean;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
@@ -42,6 +43,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 		build: build_,
 		env: env_,
 		host: host_,
+		proxy = true,
 		source: source_,
 		...rest
 	} = arg ?? {};
@@ -95,16 +97,40 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 	);
 
 	// Bundle the resulting binary with the `--define-prefix` flag.
-	let wrappedBin = std.wrap(
-		tg.symlink({
-			artifact: pkgConfigBuild,
-			path: tg.Path.new("bin/pkg-config"),
-		}),
-		{
-			args: ["--define-prefix"],
-			libraryPaths: additionalLibDirs,
-		},
+	let pkgConfig: tg.File | tg.Template = tg.File.expect(
+		await pkgConfigBuild.get("bin/pkg-config"),
 	);
+	if (proxy) {
+		pkgConfig = await tg`
+			#!/usr/bin/env sh
+
+			PKG_CONFIG_PATH=""
+
+			for dir in $(echo $LIBRARY_PATH | tr ":" "\n"); do
+				if [ -d "$dir/pkgconfig" ]; then
+					PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$dir/pkgconfig"
+				fi
+
+				if echo "$dir" | grep -q '/lib$'; then
+						adjacent_share="\${dir%/lib}/share/pkgconfig"
+						if [ -d "$adjacent_share" ]; then
+								PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$adjacent_share"
+						fi
+				fi
+			done
+
+			# Remove leading colon if it exists
+			PKG_CONFIG_PATH=$(echo "$PKG_CONFIG_PATH" | sed 's/^://')
+
+			export PKG_CONFIG_PATH
+			${pkgConfig} "$@"
+		`;
+	}
+
+	let wrappedBin = std.wrap(pkgConfig, {
+		args: ["--define-prefix"],
+		libraryPaths: additionalLibDirs,
+	});
 
 	return tg.directory(pkgConfigBuild, {
 		["bin/pkg-config"]: wrappedBin,

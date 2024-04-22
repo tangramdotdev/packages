@@ -260,7 +260,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_path = std::fs::canonicalize(&options.output_path)
 			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
 		let output_path = tg::Path::try_from(output_path)?;
-		let output_file = tg::Artifact::check_in(&tg, &output_path)
+		let output_file = tg::Artifact::check_in(&tg, output_path)
 			.await?
 			.try_unwrap_file()
 			.map_err(|error| tg::error!(source = error, "expected a file"))?;
