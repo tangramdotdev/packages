@@ -1312,7 +1312,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=14ae3e9e048bd538e1089e35e5cb137b611714f6#14ae3e9e048bd538e1089e35e5cb137b611714f6"
+source = "git+https://github.com/tangramdotdev/tangram?rev=84b35fb30a6fb7349d0dc4aa47802a63fd4c949d#84b35fb30a6fb7349d0dc4aa47802a63fd4c949d"
 dependencies = [
  "blake3",
  "bytes",
@@ -1375,7 +1375,7 @@ dependencies = [
 [[package]]
 name = "tangram_sse"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=14ae3e9e048bd538e1089e35e5cb137b611714f6#14ae3e9e048bd538e1089e35e5cb137b611714f6"
+source = "git+https://github.com/tangramdotdev/tangram?rev=84b35fb30a6fb7349d0dc4aa47802a63fd4c949d#84b35fb30a6fb7349d0dc4aa47802a63fd4c949d"
 dependencies = [
  "futures",
  "tokio",

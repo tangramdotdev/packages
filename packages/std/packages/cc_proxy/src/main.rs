@@ -77,7 +77,7 @@ impl Environment {
 				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => continue,
 				_ => {
-					let value = tg::Template::unrender(&value)?;
+					let value = unrender(&value)?;
 					env.insert(key, value.into());
 				},
 			}
@@ -324,7 +324,7 @@ async fn main_inner() -> tg::Result<()> {
 	let remappings = create_remapping_table(tg, remap_targets).await?;
 
 	// Create the arguments to the driver script.
-	let cc = tg::Template::unrender(environment.cc.to_str().unwrap())?.into();
+	let cc = unrender(environment.cc.to_str().unwrap())?.into();
 	let mut args = std::iter::once(cc)
 		.chain(cli_args.into_iter().map(tg::Value::from))
 		.collect::<Vec<_>>();
@@ -472,7 +472,7 @@ async fn create_remapping_table(
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
 		if path.starts_with("/.tangram/artifacts") {
-			let template = tg::Template::unrender(path.to_str().unwrap())?;
+			let template = unrender(path.to_str().unwrap())?;
 			table.insert(remap_target, template);
 			continue;
 		}
@@ -614,6 +614,29 @@ fn host() -> &'static str {
 	{
 		"x86_64-linux"
 	}
+}
+
+fn unrender(string: &str) -> tg::Result<tg::Template> {
+	// Get the artifacts directory.
+	let mut artifacts_directory = None;
+	let cwd = std::env::current_dir()
+		.map_err(|error| tg::error!(source = error, "Failed to get the current directory"))?;
+	for path in cwd.ancestors().skip(1) {
+		let directory = path.join(".tangram/artifacts");
+		if directory.exists() {
+			artifacts_directory = Some(directory);
+			break;
+		}
+	}
+	let artifacts_directory =
+		artifacts_directory.ok_or(tg::error!("Failed to find the artifacts directory"))?;
+
+	tg::Template::unrender(
+		artifacts_directory
+			.to_str()
+			.ok_or(tg::error!("artifacts directory should be valid UTF-8"))?,
+		string,
+	)
 }
 
 const DRIVER_SH: &str = include_str!("driver.sh");

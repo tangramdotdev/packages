@@ -992,11 +992,28 @@ where
 }
 
 async fn unrender(tg: &impl tg::Handle, string: &str) -> tg::template::Data {
-	tg::Template::unrender(string)
-		.expect("Failed to unrender template")
-		.data(tg, None)
-		.await
-		.expect("Failed to produce template data from template")
+	// Get the artifacts directory.
+	let mut artifacts_directory = None;
+	let cwd = std::env::current_dir().expect("Failed to get the current directory");
+	for path in cwd.ancestors().skip(1) {
+		let directory = path.join(".tangram/artifacts");
+		if directory.exists() {
+			artifacts_directory = Some(directory);
+			break;
+		}
+	}
+	let artifacts_directory = artifacts_directory.expect("Failed to find the artifacts directory");
+
+	tg::Template::unrender(
+		artifacts_directory
+			.to_str()
+			.expect("artifacts directory should be valid UTF-8"),
+		string,
+	)
+	.expect("Failed to unrender template")
+	.data(tg, None)
+	.await
+	.expect("Failed to produce template data from template")
 }
 
 #[cfg(test)]
