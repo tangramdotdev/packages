@@ -66,24 +66,18 @@ export let build = tg.target(async (arg?: Arg) => {
 		},
 		autotools,
 	);
-	console.log("pre-wrap xz", await output.id());
 
 	let bins = ["lzmadec", "lzmainfo", "xz", "xzdec"];
 	let libDir = tg.Directory.expect(await output.get("lib"));
-	console.log("libDir", await libDir.id());
 	for (let bin of bins) {
-		console.log("wrapping", bin);
 		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
-		console.log("unwrappedBin", await unwrappedBin.id());
 		let wrappedBin = std.wrap({
 			buildToolchain: bootstrap.sdk.env(host),
 			executable: unwrappedBin,
 			libraryPaths: [libDir],
 		});
-		console.log("wrappedBin", await (await wrappedBin).id());
 		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
 	}
-	console.log("post-wrap xz", await output.id());
 
 	return output;
 });
