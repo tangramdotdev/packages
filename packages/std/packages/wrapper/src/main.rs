@@ -359,6 +359,8 @@ fn set_dyld_environment(
 		} else {
 			manifest_library_path
 		};
+		#[cfg(feature = "tracing")]
+		tracing::trace!(?library_path);
 		std::env::set_var("DYLD_LIBRARY_PATH", library_path);
 	}
 
@@ -603,7 +605,6 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 }
 
 fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
-	// TODO use path here.
 	let mut components = Vec::with_capacity(3);
 	if let Some(artifact) = &symlink.artifact {
 		components.push(tg::template::component::Data::Artifact(artifact.clone()));

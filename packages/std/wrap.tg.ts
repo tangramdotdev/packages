@@ -159,19 +159,14 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 				object.identity = arg.identity ?? "executable";
 			}
 			if (arg.libraryPaths !== undefined) {
-				if (arg.libraryPaths !== undefined) {
-					object.libraryPaths = tg.Mutation.is(arg.libraryPaths)
-						? arg.libraryPaths
-						: await tg.Mutation.arrayAppend(
-								arg.libraryPaths.map(manifestTemplateFromArg),
-						  );
-				}
+				object.libraryPaths = tg.Mutation.is(arg.libraryPaths)
+					? arg.libraryPaths
+					: await tg.Mutation.arrayAppend(
+							arg.libraryPaths.map(manifestTemplateFromArg),
+					  );
 			}
 			if (arg.interpreter !== undefined) {
 				object.interpreter = arg.interpreter;
-			}
-			if (arg.executable !== undefined) {
-				object.executable = arg.executable;
 			}
 			if (arg.args !== undefined) {
 				object.manifestArgs = tg.Mutation.is(arg.args)

@@ -61,6 +61,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: configureArgs,
 	};
+	let buildPhase = `make -j$(nproc) NO_GETTEXT=1`;
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	env.push(prerequisites(host));
@@ -76,7 +77,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
-			phases: { configure },
+			phases: { configure, build: buildPhase },
 			source: source_ ?? source(arg),
 		},
 		autotools,
