@@ -70,6 +70,22 @@ export let testBootstrap = tg.target(async () => {
 export let testBootstrapShell = tg.target(async () => {
 	return await bootstrap.shell();
 });
+export let testBootstrapUtils = tg.target(async () => {
+	return await bootstrap.utils();
+});
+export let testBootstrapToolchain = tg.target(async () => {
+	return await bootstrap.toolchain();
+});
+export let testBootstrapMacosSdk = tg.target(async () => {
+	return await bootstrap.macOsSdk();
+});
+export let testAllBootstrapComponents = tg.target(async () => {
+	let shell = await bootstrap.shell();
+	let utils = await bootstrap.utils();
+	let toolchain = await bootstrap.toolchain();
+	let macOsSdk = await bootstrap.macOsSdk();
+	return [shell, utils, toolchain, macOsSdk];
+});
 export let testPlainBootstrapSdk = tg.target(async () => {
 	let bootstrapSdk = await bootstrap.sdk.env();
 	return bootstrapSdk;

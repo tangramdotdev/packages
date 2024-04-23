@@ -9,7 +9,7 @@ futures = "0.3"
 itertools = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "14ae3e9e048bd538e1089e35e5cb137b611714f6" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "d3f8968fe6a03902ed80c6be845619a215ed6ef8" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

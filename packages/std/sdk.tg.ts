@@ -235,8 +235,12 @@ export namespace sdk {
 		target?: string;
 	};
 
-	let requiredCompilerComponents = ["c++", "cc", "ld"] as const;
-	let requiredLLVMCompilerComponents = ["clang++", "clang", "ld.lld"];
+	let requiredCompilerComponents = (os: string, flavor: "gcc" | "llvm") => {
+		let cc = flavor === "llvm" ? "clang" : "gcc";
+		let cxx = flavor === "llvm" ? "clang++" : "g++";
+		let ld = os === "linux" && flavor === "llvm" ? "ld.lld" : "ld";
+		return [cc, cxx, ld];
+	};
 
 	let requiredUtils = ["ar", "nm", "objdump", "ranlib", "strip"] as const;
 
@@ -248,33 +252,28 @@ export namespace sdk {
 
 		let host = await canonicalTriple(host_ ?? (await std.triple.host()));
 		let target = await canonicalTriple(target_ ?? host);
+		let os = std.triple.os(target);
 		let isCross = host !== target;
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
 		if (isCross) {
-			let os = std.triple.os(target);
 			if (os !== "darwin") {
 				targetPrefix = `${target}-`;
 			}
 		}
-		let llvmPrefix = llvm ? "llvm-" : "";
+		let llvmPrefix = llvm && os !== "darwin" ? "llvm-" : "";
 		await std.env.assertProvides({
 			env,
 			names: requiredUtils.map((name) => `${targetPrefix}${llvmPrefix}${name}`),
 		});
-		if (llvm) {
-			await std.env.assertProvides({
-				env,
-				names: requiredLLVMCompilerComponents,
-			});
-		} else {
-			await std.env.assertProvides({
-				env,
-				names: requiredCompilerComponents.map(
-					(name) => `${targetPrefix}${name}`,
-				),
-			});
-		}
+		let compilerComponents = requiredCompilerComponents(
+			os,
+			llvm ? "llvm" : "gcc",
+		);
+		await std.env.assertProvides({
+			env,
+			names: compilerComponents,
+		});
 		return true;
 	};
 
@@ -283,25 +282,27 @@ export namespace sdk {
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
 		let { env, target } = arg;
+		let os = std.triple.os(target ?? (await std.triple.host()));
 		let targetPrefix = ``;
 		if (target) {
-			let os = std.triple.os(target);
 			if (os !== "darwin") {
 				targetPrefix = `${target}-`;
 			}
 		}
 		let llvm = await std.env.provides({ env, names: ["clang"] });
+		let compilerComponents = requiredCompilerComponents(
+			os,
+			llvm ? "llvm" : "gcc",
+		);
 		if (llvm) {
 			return std.env.provides({
 				env,
-				names: requiredLLVMCompilerComponents,
+				names: compilerComponents,
 			});
 		} else {
 			return std.env.provides({
 				env,
-				names: requiredCompilerComponents.map(
-					(name) => `${targetPrefix}${name}`,
-				),
+				names: compilerComponents.map((name) => `${targetPrefix}${name}`),
 			});
 		}
 	};
