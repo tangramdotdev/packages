@@ -137,6 +137,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	if (std.triple.os(host) === "darwin") {
 		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/15.0.0`);
+		clangxxArgs = [...clangArgs];
 		env = {
 			SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 		};

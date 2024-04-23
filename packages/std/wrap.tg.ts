@@ -1261,7 +1261,7 @@ let manifestInterpreterFromArg = async (
 		let host = await std.triple.host();
 		let buildToolchain = buildToolchainArg
 			? buildToolchainArg
-			: gcc.toolchain({ host });
+			: bootstrap.sdk.env(host);
 		let injectionLibrary = await injection.default({
 			buildToolchain,
 			host,
@@ -1327,8 +1327,7 @@ let manifestInterpreterFromExecutableArg = async (
 			return manifestInterpreterFromElf(metadata);
 		}
 		case "mach-o": {
-			let arch = metadata.arches[0];
-			tg.assert(arch);
+			let arch = std.triple.arch(await std.triple.host());
 			let host = std.triple.create({ os: "darwin", arch });
 			let buildToolchain = buildToolchainArg
 				? buildToolchainArg
@@ -2003,11 +2002,10 @@ async function* fileReferences(file: tg.File): AsyncGenerator<tg.Artifact> {
 async function* symlinkReferences(
 	symlink: tg.Symlink,
 ): AsyncGenerator<tg.Artifact> {
-	if (await symlink.artifact()) {
-		let artifact = await symlink.resolve();
-		if (artifact) {
-			yield* artifactReferences(artifact);
-		}
+	yield symlink;
+	let artifact = await symlink.artifact();
+	if (artifact) {
+		yield artifact;
 	}
 }
 
