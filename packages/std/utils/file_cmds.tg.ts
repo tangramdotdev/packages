@@ -3,13 +3,13 @@ import * as std from "../tangram.tg.ts";
 
 export let metadata = {
 	name: "file_cmds",
-	version: "493.100.6",
+	version: "430.100.5",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:ac636da85aaa15ba03affc2bed43821d53d745e077845d85cb2964409eb61a99";
+		"sha256:035272979817edb250e3527b95a028e59b5bff546a13346c4a4e0e83c4d7ac20";
 	let owner = "apple-oss-distributions";
 	let repo = "file_cmds";
 	let tag = std.download.packageName({ name, version });

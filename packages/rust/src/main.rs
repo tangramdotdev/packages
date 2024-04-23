@@ -170,16 +170,30 @@ async fn main_inner() -> tg::Result<()> {
     let executable = tg::File::with_object(object).into();
 
     // Unrender the environment.
+    // Get the artifacts directory.
+    let mut artifacts_directory = None;
+    let cwd = std::env::current_dir().expect("Failed to get the current directory");
+    for path in cwd.ancestors().skip(1) {
+        let directory = path.join(".tangram/artifacts");
+        if directory.exists() {
+            artifacts_directory = Some(directory);
+            break;
+        }
+    }
+    let artifacts_directory = artifacts_directory.expect("Failed to find the artifacts directory");
+    let artifacts_directory = artifacts_directory
+        .to_str()
+        .expect("artifacts directory path is not valid UTF-8");
     let mut env = BTreeMap::new();
     for (name, value) in
         std::env::vars().filter(|(name, _)| !BLACKLISTED_ENV_VARS.contains(&name.as_str()))
     {
-        let value = tg::Template::unrender(&value)?;
+        let value = tg::Template::unrender(artifacts_directory, &value)?;
         env.insert(name, value.into());
     }
 
     // Create/Unrender the arguments passed to driver.sh.
-    let rustc = tg::Template::unrender(&args.rustc)?;
+    let rustc = tg::Template::unrender(artifacts_directory, &args.rustc)?;
     let mut target_args: Vec<tg::Value> = vec![
         "--rustc".to_owned().into(),
         rustc.into(),
@@ -191,7 +205,7 @@ async fn main_inner() -> tg::Result<()> {
     ];
 
     for arg in &args.rustc_args {
-        let template = tg::Template::unrender(arg)?;
+        let template = tg::Template::unrender(artifacts_directory, arg)?;
         target_args.push(template.into());
     }
 

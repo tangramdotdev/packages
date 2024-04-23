@@ -30,20 +30,29 @@ type Arg = std.sdk.BuildEnvArg & {
 export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
 
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
 	let sourceDir = source_ ?? source();
 
 	// Define phases.
-	let buildPhase = `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
-	let install = tg.Mutation.set(
-		`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
-	);
+	let buildPhase =
+		os === "darwin"
+			? `make CC="$CC" SHELL="$SHELL"`
+			: `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
+	let install =
+		os === "darwin"
+			? tg.Mutation.set(`make install PREFIX="$OUTPUT" SHELL="$SHELL"`)
+			: tg.Mutation.set(
+					`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
+			  );
 	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
 	let fixup = `
 		cd $OUTPUT/bin
@@ -55,8 +64,10 @@ export let build = tg.target(async (arg?: Arg) => {
 		rm bzless
 		ln -s bzmore bzless
 		cd $OUTPUT/lib
-		ln -s libbz2.so.1.0 libbz2.so
 	`;
+	if (os === "linux") {
+		fixup += `\nln -s libbz2.so.1.0 libbz2.so`;
+	}
 	let phases = {
 		configure: tg.Mutation.unset(),
 		build: buildPhase,
@@ -86,10 +97,14 @@ export default build;
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdk = await bootstrap.sdk.arg(host);
+	let os = std.triple.os(host);
 	await std.assert.pkg({
 		buildFunction: build,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libraries: ["bz2"],
+		libraries:
+			os === "darwin"
+				? [{ name: "bz2", dylib: false, staticlib: true }]
+				: ["bz2"],
 		metadata,
 		sdk,
 	});

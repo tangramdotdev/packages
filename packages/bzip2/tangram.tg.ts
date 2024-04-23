@@ -54,9 +54,12 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 			? `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make clean && make CC="$$" SHELL="$SHELL"`
 			: `make CC="cc $CFLAGS" SHELL="$SHELL"`;
 
-	let install = tg.Mutation.set(
-		`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
-	);
+	let install =
+		os === "darwin"
+			? tg.Mutation.set(`make install PREFIX="$OUTPUT" SHELL="$SHELL"`)
+			: tg.Mutation.set(
+					`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
+			  );
 
 	let fixup =
 		os === "linux"
@@ -109,10 +112,15 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 export default bzip2;
 
 export let test = tg.target(async () => {
+	let host = await std.triple.host();
+	let os = std.triple.os(host);
 	await std.assert.pkg({
 		buildFunction: bzip2,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libraries: ["bz2"],
+		libraries:
+			os === "darwin"
+				? [{ name: "bz2", dylib: false, staticlib: true }]
+				: ["bz2"],
 		metadata,
 	});
 	return true;

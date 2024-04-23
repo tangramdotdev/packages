@@ -42,8 +42,9 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
 	let build = build_ ?? host;
 
-	if (std.triple.os(host) !== "linux") {
-		throw new Error("LLVM toolchain must be built for Linux");
+	if (std.triple.os(host) === "darwin") {
+		// On macOS, just return the bootstrap toolchain, which provides Apple Clang.
+		return bootstrap.sdk.env(host);
 	}
 
 	let sourceDir = source_ ?? source();
@@ -137,6 +138,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	if (std.triple.os(host) === "darwin") {
 		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/15.0.0`);
+		clangxxArgs = [...clangArgs];
 		env = {
 			SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 		};

@@ -1082,9 +1082,9 @@ checksum = "d626bb9dae77e28219937af045c257c28bfd3f69333c512553507f5f9798cb76"
 
 [[package]]
 name = "rustix"
-version = "0.38.33"
+version = "0.38.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3cc72858054fcff6d7dea32df2aeaee6a7c24227366d7ea429aada2f26b16ad"
+checksum = "70dc5ec042f7a43c4a73241207cecc9873a06d45debb38b329f8541d85c2730f"
 dependencies = [
  "bitflags 2.5.0",
  "errno",
@@ -1312,7 +1312,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=84b35fb30a6fb7349d0dc4aa47802a63fd4c949d#84b35fb30a6fb7349d0dc4aa47802a63fd4c949d"
+source = "git+https://github.com/tangramdotdev/tangram?rev=d3f8968fe6a03902ed80c6be845619a215ed6ef8#d3f8968fe6a03902ed80c6be845619a215ed6ef8"
 dependencies = [
  "blake3",
  "bytes",
@@ -1375,7 +1375,7 @@ dependencies = [
 [[package]]
 name = "tangram_sse"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=84b35fb30a6fb7349d0dc4aa47802a63fd4c949d#84b35fb30a6fb7349d0dc4aa47802a63fd4c949d"
+source = "git+https://github.com/tangramdotdev/tangram?rev=d3f8968fe6a03902ed80c6be845619a215ed6ef8#d3f8968fe6a03902ed80c6be845619a215ed6ef8"
 dependencies = [
  "futures",
  "tokio",

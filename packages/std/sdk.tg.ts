@@ -74,6 +74,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	});
 	// Obtain host and targets.
 	let host = host_ ?? (await std.triple.host());
+	let hostOs = std.triple.os(host);
 	let targets = targets_ ?? [];
 
 	// Set the default proxy arguments.
@@ -96,7 +97,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	// Determine host toolchain.
 	let toolchain: std.env.Arg;
 	if (toolchain_ === "gcc") {
-		if (std.triple.os(host) === "darwin") {
+		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS.`);
 		}
 		toolchain = await gcc.toolchain({ host });
@@ -235,8 +236,12 @@ export namespace sdk {
 		target?: string;
 	};
 
-	let requiredCompilerComponents = ["c++", "cc", "ld"] as const;
-	let requiredLLVMCompilerComponents = ["clang++", "clang", "ld.lld"];
+	let requiredCompilerComponents = (os: string, flavor: "gcc" | "llvm") => {
+		let cc = flavor === "llvm" ? "clang" : "gcc";
+		let cxx = flavor === "llvm" ? "clang++" : "g++";
+		let ld = os === "linux" && flavor === "llvm" ? "ld.lld" : "ld";
+		return [cc, cxx, ld];
+	};
 
 	let requiredUtils = ["ar", "nm", "objdump", "ranlib", "strip"] as const;
 
@@ -248,33 +253,28 @@ export namespace sdk {
 
 		let host = await canonicalTriple(host_ ?? (await std.triple.host()));
 		let target = await canonicalTriple(target_ ?? host);
+		let os = std.triple.os(target);
 		let isCross = host !== target;
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
 		if (isCross) {
-			let os = std.triple.os(target);
 			if (os !== "darwin") {
 				targetPrefix = `${target}-`;
 			}
 		}
-		let llvmPrefix = llvm ? "llvm-" : "";
+		let llvmPrefix = llvm && os !== "darwin" ? "llvm-" : "";
 		await std.env.assertProvides({
 			env,
 			names: requiredUtils.map((name) => `${targetPrefix}${llvmPrefix}${name}`),
 		});
-		if (llvm) {
-			await std.env.assertProvides({
-				env,
-				names: requiredLLVMCompilerComponents,
-			});
-		} else {
-			await std.env.assertProvides({
-				env,
-				names: requiredCompilerComponents.map(
-					(name) => `${targetPrefix}${name}`,
-				),
-			});
-		}
+		let compilerComponents = requiredCompilerComponents(
+			os,
+			llvm ? "llvm" : "gcc",
+		);
+		await std.env.assertProvides({
+			env,
+			names: compilerComponents,
+		});
 		return true;
 	};
 
@@ -283,25 +283,27 @@ export namespace sdk {
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
 		let { env, target } = arg;
+		let os = std.triple.os(target ?? (await std.triple.host()));
 		let targetPrefix = ``;
 		if (target) {
-			let os = std.triple.os(target);
 			if (os !== "darwin") {
 				targetPrefix = `${target}-`;
 			}
 		}
 		let llvm = await std.env.provides({ env, names: ["clang"] });
+		let compilerComponents = requiredCompilerComponents(
+			os,
+			llvm ? "llvm" : "gcc",
+		);
 		if (llvm) {
 			return std.env.provides({
 				env,
-				names: requiredLLVMCompilerComponents,
+				names: compilerComponents,
 			});
 		} else {
 			return std.env.provides({
 				env,
-				names: requiredCompilerComponents.map(
-					(name) => `${targetPrefix}${name}`,
-				),
+				names: compilerComponents.map((name) => `${targetPrefix}${name}`),
 			});
 		}
 	};
@@ -729,25 +731,27 @@ export namespace sdk {
 			);
 		}
 
-		// Assert it provides at the basic utilities all builds will assume to be available.
-		await std.env.assertProvides({
-			env,
-			names: [
-				"awk",
-				"cp",
-				"diff",
-				"find",
-				"grep",
-				"gzip",
-				"patch",
-				"ls",
-				"mkdir",
-				"mv",
-				"sed",
-				"sh",
-				"tar",
-			],
-		});
+		// Assert it provides at the utils. If utils was set to false, check for the smaller set, otherwise ensure we built all the utils.
+		if (arg?.utils ?? true) {
+			await std.utils.assertProvides(env);
+		} else {
+			await std.env.assertProvides({
+				env,
+				names: [
+					"awk",
+					"cp",
+					"find",
+					"grep",
+					"patch",
+					"ls",
+					"mkdir",
+					"mv",
+					"sed",
+					"sh",
+					"tar",
+				],
+			});
+		}
 
 		// Assert it can compile and wrap for all requested targets.
 		let allTargets =

@@ -46,6 +46,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let host = arg.host ?? (await std.triple.host());
 	let build = arg.build ?? host;
+	let os = std.triple.os(host);
 
 	let {
 		cc: cc_,
@@ -75,7 +76,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 			build,
 			linker:
 				arg.linkerExe === undefined
-					? isLlvm
+					? os === "linux" && isLlvm
 						? await tg`${directory}/bin/ld.lld`
 						: ld
 					: arg.linkerExe,
@@ -84,9 +85,9 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		});
 
 		if (isLlvm) {
-			cc = tg.File.expect(
-				await directory.get(`bin/clang-${llvmToolchain.llvmMajorVersion()}`),
-			);
+			let binName =
+				os === "linux" ? `clang-${llvmToolchain.llvmMajorVersion()}` : "clang";
+			cc = tg.File.expect(await directory.get(`bin/${binName}`));
 			cxx = cc;
 		}
 		let ldProxyDir = tg.directory({
@@ -270,7 +271,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// Create the linker proxy.
-	let output = await std.wrap({
+	return std.wrap({
 		buildToolchain,
 		env: {
 			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
@@ -288,8 +289,6 @@ export let ldProxy = async (arg: LdProxyArg) => {
 		executable: tgld,
 		identity: "wrapper",
 	});
-
-	return output;
 };
 
 export let test = tg.target(async () => {
