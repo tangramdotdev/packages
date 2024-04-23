@@ -65,7 +65,7 @@ export let env = tg.target(async (arg?: Arg) => {
 			patch({ ...rest, env, host }),
 			sed({ ...rest, env, host }),
 			tar({ ...rest, env, host }),
-			xz({ ...rest, env, host }),
+			//xz({ ...rest, env, host }),
 		]),
 	);
 	return utils;

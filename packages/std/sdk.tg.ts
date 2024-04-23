@@ -74,6 +74,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	});
 	// Obtain host and targets.
 	let host = host_ ?? (await std.triple.host());
+	let hostOs = std.triple.os(host);
 	let targets = targets_ ?? [];
 
 	// Set the default proxy arguments.
@@ -96,7 +97,7 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	// Determine host toolchain.
 	let toolchain: std.env.Arg;
 	if (toolchain_ === "gcc") {
-		if (std.triple.os(host) === "darwin") {
+		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS.`);
 		}
 		toolchain = await gcc.toolchain({ host });
@@ -731,7 +732,7 @@ export namespace sdk {
 		}
 
 		// Assert it provides at the utils. If utils was set to false, check for the smaller set, otherwise ensure we built all the utils.
-		if (arg?.utils) {
+		if (arg?.utils ?? true) {
 			await std.utils.assertProvides(env);
 		} else {
 			await std.env.assertProvides({

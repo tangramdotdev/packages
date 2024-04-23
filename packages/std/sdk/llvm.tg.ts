@@ -42,8 +42,9 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
 	let build = build_ ?? host;
 
-	if (std.triple.os(host) !== "linux") {
-		throw new Error("LLVM toolchain must be built for Linux");
+	if (std.triple.os(host) === "darwin") {
+		// On macOS, just return the bootstrap toolchain, which provides Apple Clang.
+		return bootstrap.sdk.env(host);
 	}
 
 	let sourceDir = source_ ?? source();
