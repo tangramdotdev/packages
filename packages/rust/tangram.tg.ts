@@ -41,6 +41,8 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	let manifestArtifact = await std.download({
 		url: `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`,
 		checksum: "unsafe",
+		decompress: false,
+		extract: false,
 	});
 
 	// Parse the manifest.
@@ -77,6 +79,8 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	for (let [name, pkg] of packages) {
 		let artifact = await std.download({
 			checksum: `sha256:${pkg.xz_hash}`,
+			decompress: "xz",
+			extract: "tar",
 			url: pkg.xz_url,
 		});
 		packagesArtifact = await tg.directory(packagesArtifact, {
