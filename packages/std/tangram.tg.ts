@@ -330,3 +330,28 @@ export let testOciBasicEnv = tg.target(async () => {
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
 });
+
+import { env } from "./env.tg.ts";
+export let testMemory = tg.target(async () => {
+	let sdkEnv = bootstrap.sdk();
+	let source = (i: number) =>
+		tg.file(`
+		#include <stdio.h>
+		int main() {
+			printf("Hello, ${i}!\\n");
+			return 0;
+		}
+	`);
+	let jobs = [];
+	for (let i = 0; i < 1000; i++) {
+		jobs.push(
+			tg.build(tg`cc -xc ${source(i)} -o $OUTPUT`, {
+				env: await env.object(sdkEnv),
+			}),
+		);
+	}
+	let results = await Promise.all(
+		jobs.map(async (job) => await tg.File.expect(await job).id()),
+	);
+	return results;
+});
