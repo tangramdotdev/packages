@@ -23,7 +23,7 @@ export let source = tg.target(async (arg?: Arg) => {
 	// See https://lists.gnu.org/archive/html/bug-bash/2022-10/msg00000.html
 	// We don't have autoreconf available so we additionally manually resolve the configure script change. The m4 change isn't used, just here for completeness.
 	// Once this fix is adopted upstream, we can remove this workaround.
-	let prepare = tg`mkdir $OUTPUT && cp -R ${source} $OUTPUT && chmod -R u+w $OUTPUT`;
+	let prepare = tg`cp -R ${source} $OUTPUT && chmod -R u+w $OUTPUT`;
 	let fixup = tg`
 		sed -i 's/if test $bash_cv_func_strtoimax = yes; then/if test $bash_cv_func_strtoimax = no; then/' $OUTPUT/m4/strtoimax.m4
 		sed -i 's/if test $bash_cv_func_strtoimax = yes; then/if test $bash_cv_func_strtoimax = no ; then/' $OUTPUT/configure
