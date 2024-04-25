@@ -77,6 +77,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 	let env = [...dependencies, env_];
 
 	if (
+		std.triple.os(build) === "darwin" ||
 		(await std.env.tryWhich({ env: env_, name: "clang" })) ||
 		std.flatten(rest.sdk ?? []).some((sdk) => sdk?.toolchain === "llvm")
 	) {

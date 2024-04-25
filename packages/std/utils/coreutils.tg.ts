@@ -137,7 +137,7 @@ export let gnuEnv = tg.target(async () => {
 	let directory = await build({
 		host,
 		env: [sdk, make, muslEnv],
-		staticBuild: true,
+		staticBuild: std.triple.os(host) === "linux",
 		usePrerequisites: false,
 	});
 	let exe = tg.File.expect(await directory.get("bin/env"));
