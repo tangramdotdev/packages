@@ -25,20 +25,10 @@ export let source = tg.target(async () => {
 	// Apply patches.
 	let patches = [];
 
-	let macosPatch = tg.File.expect(
-		await tg.include("./perl_macos_version.patch"),
-	);
-	patches.push(macosPatch);
-
 	let noFixDepsPatch = tg.File.expect(
 		await tg.include("./perl_no_fix_deps.patch"),
 	);
 	patches.push(noFixDepsPatch);
-
-	let cppPrecompPatch = tg.File.expect(
-		await tg.include("./perl_cpp_precomp.patch"),
-	);
-	patches.push(cppPrecompPatch);
 
 	return bootstrap.patch(source, ...(await Promise.all(patches)));
 });

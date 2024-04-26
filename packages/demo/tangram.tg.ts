@@ -25,7 +25,7 @@ export let executable = tg.target((arg?: Arg) =>
 );
 
 let packages = (arg?: Arg) => {
-	return [nodejs(arg), postgresql({ ...arg, withIcu: false }), ripgrep(arg)];
+	return [nodejs(arg), postgresql(arg), ripgrep(arg)];
 };
 
 export let script = `

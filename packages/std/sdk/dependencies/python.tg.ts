@@ -20,17 +20,7 @@ export let source = tg.target(async (os: string) => {
 		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
 	let source = tg.Directory.expect(await std.download({ url, checksum }));
-	source = await std.directory.unwrap(source);
-
-	if (os === "darwin") {
-		// Apply patch to use uname from coreutils instead of /usr/bin/arch.
-		let macosPatch = tg.File.expect(
-			await tg.include("./python_macos_arch.patch"),
-		);
-
-		source = await bootstrap.patch(source, macosPatch);
-	}
-	return source;
+	return std.directory.unwrap(source);
 });
 
 type Arg = std.sdk.BuildEnvArg & {
@@ -55,12 +45,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let additionalEnv: std.env.Arg = {
 		TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "resolve",
 	};
-	if (os === "darwin") {
-		additionalEnv = {
-			...additionalEnv,
-			MACOSX_DEPLOYMENT_TARGET: "14.4",
-		};
-	}
 
 	let configure = {
 		args: [

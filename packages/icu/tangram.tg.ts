@@ -6,16 +6,15 @@ export let metadata = {
 	name: "icu",
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
-	version: "74.2",
+	version: "75.1",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let owner = "unicode-org";
 	let repo = name;
-	let extension = ".tar.gz";
 	let checksum =
-		"sha256:68db082212a96d6f53e35d60f47d38b962e9f9d207a74cfac78029ae8ff5e08c";
+		"sha256:cb968df3e4d2e87e8b11c49a5d01c787bd13b9545280fc6642f826527618caef";
 	let releaseVersion = version.replace(/\./, "-");
 	let pkgVersion = version.replace(/\./, "_");
 	let pkgName = `icu4c-${pkgVersion}-src`;

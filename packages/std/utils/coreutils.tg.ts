@@ -131,13 +131,17 @@ export default build;
 /** Obtain just the `env` binary. */
 export let gnuEnv = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdk = bootstrap.sdk(host);
-	let make = await bootstrap.make.build(host);
-	let muslEnv = muslRuntimeEnv(host);
+	let os = std.triple.os(host);
+	let sdk = bootstrap.sdk.arg(host);
+	let env: tg.Unresolved<std.env.Arg> = [bootstrap.make.build(host)];
+	if (os === "linux") {
+		env.push(muslRuntimeEnv(host));
+	}
 	let directory = await build({
 		host,
-		env: [sdk, make, muslEnv],
-		staticBuild: std.triple.os(host) === "linux",
+		env,
+		sdk,
+		staticBuild: os === "linux",
 		usePrerequisites: false,
 	});
 	let exe = tg.File.expect(await directory.get("bin/env"));

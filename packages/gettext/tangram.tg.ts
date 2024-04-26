@@ -1,3 +1,4 @@
+import libiconv from "tg:libiconv" with { path: "../libiconv" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
@@ -34,12 +35,16 @@ type Arg = {
 export let gettext = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
 
 	let configure = {
 		args: [
@@ -52,7 +57,13 @@ export let gettext = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [ncurses(arg), perl(arg)];
+	let dependencies = [
+		ncurses({ ...rest, build, env: env_, host }),
+		perl({ ...rest, build, env: env_, host }),
+	];
+	if (os === "darwin") {
+		dependencies.push(libiconv({ ...rest, build, env: env_, host }));
+	}
 	let env = [...dependencies, env_];
 
 	let output = await std.autotools.build(

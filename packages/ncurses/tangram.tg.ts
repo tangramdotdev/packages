@@ -31,6 +31,7 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
+	let os = std.triple.os(host);
 
 	let configure = {
 		args: [
@@ -47,8 +48,11 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 			"--without-manpages",
 		],
 	};
+	if (os === "darwin") {
+		configure.args.push("--disable-stripping"); // prevent calling xcrun. compiling -with `-Wl,-s` makes this unnecessary anyway.
+	}
 	let fixup =
-		std.triple.os(host) === "linux"
+		os === "linux"
 			? `
 				chmod -R u+w \${OUTPUT}
 				for lib in ncurses form panel menu tinfo ; do

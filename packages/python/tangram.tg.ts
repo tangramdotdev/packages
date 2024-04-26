@@ -41,8 +41,12 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	});
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
 	let download = tg.Directory.expect(await std.download({ checksum, url }));
-
-	return std.directory.unwrap(download);
+	let source = await std.directory.unwrap(download);
+	let macOsVersionPatch = tg.File.expect(
+		await tg.include("macos_platform_version.patch"),
+	);
+	source = await std.patch(source, macOsVersionPatch);
+	return source;
 });
 
 type ToolchainArg = {
@@ -75,23 +79,27 @@ type ToolchainArg = {
 export let python = tg.target(async (arg?: ToolchainArg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
 
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
+
 	let dependencies = [
-		bison(arg),
-		bzip2(arg),
-		libffi(arg),
-		libxcrypt(arg),
-		m4(arg),
-		openssl(arg),
-		pkgconfig(arg),
-		sqlite(arg),
-		zlib(arg),
+		bison({ ...rest, build, env: env_, host }),
+		bzip2({ ...rest, build, env: env_, host }),
+		libffi({ ...rest, build, env: env_, host }),
+		libxcrypt({ ...rest, build, env: env_, host }),
+		m4({ ...rest, build, env: env_, host }),
+		openssl({ ...rest, build, env: env_, host }),
+		pkgconfig({ ...rest, build, env: env_, host }),
+		sqlite({ ...rest, build, env: env_, host }),
+		zlib({ ...rest, build, env: env_, host }),
 	];
 	let env = [
 		...dependencies,
@@ -100,6 +108,9 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 		},
 		env_,
 	];
+	if (os === "darwin") {
+		env.push({ MACOSX_DEPLOYMENT_TARGET: "14.4" });
+	}
 
 	let configure = {
 		args: [
