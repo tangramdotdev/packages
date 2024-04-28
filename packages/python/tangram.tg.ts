@@ -5,6 +5,7 @@ import bzip2 from "tg:bzip2" with { path: "../bzip2" };
 import libffi from "tg:libffi" with { path: "../libffi" };
 import libxcrypt from "tg:libxcrypt" with { path: "../libxcrypt" };
 import m4 from "tg:m4" with { path: "../m4" };
+import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import sqlite from "tg:sqlite" with { path: "../sqlite" };
@@ -96,6 +97,7 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 		libffi({ ...rest, build, env: env_, host }),
 		libxcrypt({ ...rest, build, env: env_, host }),
 		m4({ ...rest, build, env: env_, host }),
+		ncurses({ ...rest, build, env: env_, host }),
 		openssl({ ...rest, build, env: env_, host }),
 		pkgconfig({ ...rest, build, env: env_, host }),
 		sqlite({ ...rest, build, env: env_, host }),
