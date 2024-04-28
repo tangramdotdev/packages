@@ -1,8 +1,12 @@
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://tiswww.cwru.edu/php/chet/readline/rltop.html",
+	license: "https://tiswww.cwru.edu/php/chet/readline/rltop.html",
 	name: "readline",
+	repository: "http://git.savannah.gnu.org/cgit/readline.git/log/",
 	version: "8.2",
 };
 
@@ -32,7 +36,11 @@ export let readline = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let env = [ncurses(arg), env_];
+	let env = [
+		ncurses({ ...rest, build, env: env_, host }),
+		pkgconfig({ ...rest, build, env: env_, host }),
+		env_,
+	];
 
 	return std.autotools.build(
 		{
@@ -48,18 +56,10 @@ export let readline = tg.target(async (arg?: Arg) => {
 export default readline;
 
 export let test = tg.target(async () => {
-	let source = tg.directory({
-		["main.c"]: tg.file(`
-			#include <stdio.h>
-			int main () {}
-		`),
+	let artifact = readline();
+	await std.assert.pkg({
+		buildFunction: readline,
+		metadata,
 	});
-
-	return std.build(
-		tg`
-			echo "Checking if we can link against libreadline."
-			cc ${source}/main.c -o $OUTPUT -lreadline -lncurses
-		`,
-		{ env: [std.sdk(), ncurses(), readline()] },
-	);
+	return artifact;
 });
