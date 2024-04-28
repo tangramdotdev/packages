@@ -82,20 +82,20 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 export default ncurses;
 
 export let test = tg.target(async () => {
-	let source = tg.directory({
-		["main.c"]: tg.file(`
-			#include <stdio.h>
-			int main () {}
-		`),
+	await std.assert.pkg({
+		binaries: [
+			"cleanr",
+			"infocmp",
+			"ncursesw6-config",
+			"tabs",
+			"tix",
+			"tow",
+			"tput",
+			"tset",
+		],
+		buildFunction: ncurses,
+		libraries: ["formw", "menuw", "ncursesw", "panelw", "tinfo"],
+		metadata,
 	});
-
-	return std.build(
-		tg`
-			set -x
-			env
-			echo "Checking if we can link against libcurses."
-			cc -v ${source}/main.c -o $OUTPUT -lncurses -ltinfo
-		`,
-		{ env: [std.sdk(), ncurses()] },
-	);
+	return ncurses();
 });

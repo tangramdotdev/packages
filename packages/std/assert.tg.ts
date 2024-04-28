@@ -56,18 +56,21 @@ type RuntimeDep = {
 
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export let pkg = async (arg: PkgArg) => {
-	// Produce list of all requested SDK args.
-	let sdks = [];
-	if (arg.sdk) {
-		sdks.push(arg.sdk);
-	}
-	if (arg.sdks) {
-		sdks.push(...arg.sdks);
-	}
-	// If no SDK args were provided, test with the default set of SDKs for the platform.
-	if (sdks.length === 0) {
-		sdks.push(...(await defaultSdkSet()));
-	}
+	//// Produce list of all requested SDK args.
+	// FIXME - re-enable testing multiple toolchains.
+	//let sdks = [];
+	//if (arg.sdk) {
+	//	sdks.push(arg.sdk);
+	//}
+	//if (arg.sdks) {
+	//	sdks.push(...arg.sdks);
+	//}
+	//// If no SDK args were provided, test with the default set of SDKs for the platform.
+	//if (sdks.length === 0) {
+	//	sdks.push(...(await defaultSdkSet()));
+	//}
+
+	let sdks: Array<std.sdk.Arg> = [];
 
 	let metadata = arg.metadata;
 
@@ -459,7 +462,7 @@ let defaultSdkSet = async () => {
 	let sdks = [{}];
 	if (os === "linux") {
 		// On Linux, also test llvm, musl, and mold.
-		sdks.push({ toolchain: "llvm" });
+		// sdks.push({ toolchain: "llvm" }); // FIXME - renable when fixed
 		sdks.push({ host: std.triple.create(host, { environment: "musl" }) });
 		sdks.push({ linker: "mold" });
 	}

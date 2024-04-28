@@ -68,7 +68,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	env.push(bootstrap.shell(host));
 	if (await std.env.tryWhich({ env: env_, name: "clang" })) {
 		env.push({
-			CFLAGS: "-Wno-implicit-function-declaration",
+			CC: "clang -Wno-implicit-function-declaration",
 		});
 	}
 

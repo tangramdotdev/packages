@@ -85,10 +85,8 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		});
 
 		if (isLlvm) {
-			let binName =
-				os === "linux" ? `clang-${llvmToolchain.llvmMajorVersion()}` : "clang";
-			cc = tg.File.expect(await directory.get(`bin/${binName}`));
-			cxx = cc;
+			cc = await tg.symlink(tg`${directory}/bin/clang`);
+			cxx = await tg.symlink(tg`${directory}/bin/clang++`);
 		}
 		let ldProxyDir = tg.directory({
 			ld: ldProxyArtifact,

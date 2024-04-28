@@ -1,4 +1,5 @@
 import * as std from "../tangram.tg.ts";
+import zstd from "../sdk/dependencies/zstd.tg.ts";
 
 /*
 	notes:
@@ -17,6 +18,8 @@ import * as std from "../tangram.tg.ts";
 */
 
 export type Arg = (ExecutableArg | RootFsArg) & {
+	/** The compression type to use for the image layers. Default: "zstd". */
+	layerCompression: "gzip" | "zstd";
 	/** The image should target a specific system. If not provided, will detect the host. */
 	system?: string;
 };
@@ -42,6 +45,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 		cmdString: Array<string>;
 		entrypointArtifact: tg.File;
 		entrypointString: Array<string>;
+		layerCompression: "gzip" | "zstd";
 		rootDir: Array<tg.Directory>;
 		system: string;
 	};
@@ -49,6 +53,7 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 		cmdString,
 		entrypointArtifact,
 		entrypointString,
+		layerCompression = "zstd",
 		rootDir: rootDirs,
 		system: system_,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
@@ -90,6 +95,9 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 				object.entrypointArtifact = tg.Mutation.is(arg.executable)
 					? arg.executable
 					: await std.wrap(arg.executable);
+			}
+			if ("layerCompression" in arg) {
+				object.layerCompression = arg.layerCompression;
 			}
 			if ("rootFileSystem" in arg) {
 				object.rootDir = tg.Mutation.is(arg.rootFileSystem)
@@ -153,11 +161,12 @@ export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 		},
 	};
 
-	return imageFromLayers(config, ...layers);
+	return imageFromLayers(config, layerCompression, ...layers);
 };
 
 export let imageFromLayers = async (
 	config: ImageConfigV1,
+	layerCompression: "gzip" | "zstd",
 	...layers: Array<Layer>
 ): Promise<tg.File> => {
 	let blobs = tg.directory();
@@ -188,12 +197,21 @@ export let imageFromLayers = async (
 	};
 
 	// Add the layers as blobs.
+	let compressionCmd = layerCompression === "gzip" ? "gzip -nc" : "zstd -c";
+	let mediaType =
+		layerCompression === "gzip"
+			? MediaTypeV1.imageLayerTarGzip
+			: MediaTypeV1.imageLayerTarZstd;
+	let additionalArgs = layerCompression === "gzip" ? [] : [{ env: zstd() }];
 	let layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
-			let file = await std.build(tg`gzip -nc ${layer.tar} > $OUTPUT`);
+			let file = await std.build(
+				tg`${compressionCmd} ${layer.tar} > $OUTPUT`,
+				...additionalArgs,
+			);
 			tg.File.assert(file);
-			let descriptor: ImageDescriptor<typeof MediaTypeV1.imageLayerTarGzip> = {
-				mediaType: MediaTypeV1.imageLayerTarGzip,
+			let descriptor: ImageDescriptor<typeof mediaType> = {
+				mediaType,
 				platform,
 				...(await addBlob(file)),
 			};
