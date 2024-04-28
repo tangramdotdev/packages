@@ -1,14 +1,17 @@
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://invisible-island.net/ncurses/",
+	license: "https://invisible-island.net/ncurses/ncurses-license.html",
 	name: "ncurses",
-	version: "6.4",
+	version: "6.5",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:6931283d9ac87c5073f30b6290c4c75f21632bb4fc3603ac8100812bed248159";
+		"sha256:136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6";
 	return std.download.fromGnu({ name, version, checksum });
 });
 
@@ -51,24 +54,10 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	if (os === "darwin") {
 		configure.args.push("--disable-stripping"); // prevent calling xcrun. compiling -with `-Wl,-s` makes this unnecessary anyway.
 	}
-	let fixup =
-		os === "linux"
-			? `
-				chmod -R u+w \${OUTPUT}
-				for lib in ncurses form panel menu tinfo ; do
-					rm -vf                     \${OUTPUT}/lib/lib\${lib}.so
-					echo "INPUT(-l\${lib}w)" > \${OUTPUT}/lib/lib\${lib}.so
-					ln -sfv \${lib}w.pc        \${OUTPUT}/lib/pkgconfig/\${lib}.pc
-				done
-				cd $OUTPUT
-				rm -vf                     \${OUTPUT}/lib/libcursesw.so
-				echo "INPUT(-lncursesw)" > \${OUTPUT}/lib/libcursesw.so
-				ln -sfv libncurses.so      \${OUTPUT}/lib/libcurses.so
-		`
-			: "";
-	let phases = { configure, fixup };
 
-	return std.autotools.build(
+	let phases = { configure };
+
+	let result = await std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
@@ -77,25 +66,46 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 		},
 		autotools,
 	);
+
+	// Set libraries to post-process.
+	let libNames = ["form", "menu", "ncurses", "ncurses++", "panel", "tinfo"];
+	let dylibExt = os === "darwin" ? "dylib" : "so";
+
+	// Create widechar-to-normal symlinks and fix pkgconfig files.
+	await Promise.all(
+		libNames.map(async (libName) => {
+			let pc = tg.File.expect(await result.get(`lib/pkgconfig/${libName}w.pc`));
+			let content = await pc.text();
+			let lines = content.split("\n");
+			lines = lines.map((line) => {
+				if (line.startsWith("Libs:")) {
+					return line.replace("-L/output/output/lib", "-L${libdir}");
+				} else {
+					return line;
+				}
+			});
+			result = await tg.directory(result, {
+				lib: {
+					[`lib${libName}.${dylibExt}`]: tg.symlink(
+						`lib${libName}w.${dylibExt}`,
+					),
+					[`pkgconfig/${libName}w.pc`]: tg.file(lines.join("\n")),
+					[`pkgconfig/${libName}.pc`]: tg.symlink(`./${libName}w.pc`),
+				},
+			});
+		}),
+	);
+
+	return result;
 });
 
 export default ncurses;
 
 export let test = tg.target(async () => {
+	let artifact = ncurses();
 	await std.assert.pkg({
-		binaries: [
-			"cleanr",
-			"infocmp",
-			"ncursesw6-config",
-			"tabs",
-			"tix",
-			"tow",
-			"tput",
-			"tset",
-		],
 		buildFunction: ncurses,
-		libraries: ["formw", "menuw", "ncursesw", "panelw", "tinfo"],
 		metadata,
 	});
-	return ncurses();
+	return artifact;
 });

@@ -51,7 +51,11 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 
 	let configure = {
-		args: ["--with-internal-glib", "--disable-dependency-tracking"],
+		args: [
+			"--with-internal-glib",
+			"--disable-dependency-tracking",
+			"--enable-define-prefix",
+		],
 	};
 
 	let phases = { configure };
@@ -104,6 +108,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 	if (proxy) {
 		pkgConfig = await tg`
 			#!/usr/bin/env sh
+			set -eu
 
 			PKG_CONFIG_PATH=""
 
@@ -129,7 +134,6 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 	}
 
 	let wrappedBin = std.wrap(pkgConfig, {
-		args: ["--define-prefix"],
 		libraryPaths: additionalLibDirs,
 	});
 
@@ -169,5 +173,5 @@ export let test = tg.target(async () => {
 		binaries: ["pkg-config"],
 		metadata,
 	});
-	return true;
+	return pkgconfig();
 });

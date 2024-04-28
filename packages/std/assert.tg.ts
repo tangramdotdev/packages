@@ -4,11 +4,15 @@ import { manifestReferences, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
 	/* A function that builds a package to check. If no other options are given, just asserts the package directory is non-empty. */
-	buildFunction: (arg: { sdk?: std.sdk.Arg }) => Promise<tg.Directory>;
+	buildFunction: (arg: {
+		sdk?: std.sdk.Arg;
+	}) => Promise<tg.Directory>;
 	/* All executables that should exist under `bin/`, with optional behavior to check. */
 	binaries?: Array<BinarySpec>;
 	/* Any documentation files that should exist under `share/`. */
 	docs?: Array<string>;
+	/** Additional env to include when running tests. */
+	env?: std.env.Arg;
 	/* The names of all header files that should exist under `include/`. */
 	headers?: Array<string>;
 	/* All libraries that should exist under `lib/`. By default, checks for both staticlibs and dylibs */
@@ -70,7 +74,8 @@ export let pkg = async (arg: PkgArg) => {
 	//	sdks.push(...(await defaultSdkSet()));
 	//}
 
-	let sdks: Array<std.sdk.Arg> = [];
+	let env = arg.env ?? {};
+	let sdks: Array<std.sdk.Arg> = [{}];
 
 	let metadata = arg.metadata;
 
@@ -89,7 +94,7 @@ export let pkg = async (arg: PkgArg) => {
 						typeof binarySpec === "string"
 							? { name: binarySpec, runtimeDeps: arg.runtimeDeps ?? [] }
 							: binarySpec;
-					tests.push(runnableBin({ directory, binary, metadata }));
+					tests.push(runnableBin({ directory, binary, env, metadata }));
 				}
 			}
 
@@ -106,7 +111,7 @@ export let pkg = async (arg: PkgArg) => {
 			if (arg.headers) {
 				for (let header of arg.headers) {
 					tests.push(headerExists({ directory, header }));
-					tests.push(headerCanBeIncluded({ directory, header }));
+					tests.push(headerCanBeIncluded({ directory, env, header }));
 				}
 			}
 
@@ -130,7 +135,7 @@ export let pkg = async (arg: PkgArg) => {
 						};
 					}
 					if (library) {
-						tests.push(linkableLib({ directory, library, sdk }));
+						tests.push(linkableLib({ directory, env, library, sdk }));
 					}
 				});
 			}
@@ -163,7 +168,7 @@ type FileExistsArg = {
 	subpath: string;
 };
 
-export let headerCanBeIncluded = async (arg: HeaderArg) => {
+export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 	let maybeFile = await arg.directory.tryGet(arg.header);
 	tg.assert(maybeFile, `Path ${arg.header} does not exist.`);
 	tg.File.assert(maybeFile);
@@ -179,24 +184,25 @@ export let headerCanBeIncluded = async (arg: HeaderArg) => {
 		await tg.build(
 			tg`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`,
 			{
-				env: std.env.object([bootstrap.sdk(), arg.directory]),
+				env: std.env.object([bootstrap.sdk(), arg.directory, arg.env ?? {}]),
 			},
 		),
 	);
 	return true;
-};
+});
 
 /** Assert the provided path exists and refers to a file. */
-export let assertFileExists = async (arg: FileExistsArg) => {
+export let assertFileExists = tg.target(async (arg: FileExistsArg) => {
 	let maybeFile = await arg.directory.tryGet(arg.subpath);
 	tg.assert(maybeFile, `Path ${arg.subpath} does not exist.`);
 	tg.File.assert(maybeFile);
 	return true;
-};
+});
 
 type RunnableBinArg = {
 	directory: tg.Directory;
 	binary: BinarySpec;
+	env?: std.env.Arg;
 	metadata?: tg.Metadata;
 };
 
@@ -232,9 +238,12 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 		.reduce((t, depDir) => {
 			return tg`${t}:${depDir}`;
 		}, tg``);
-	let env = {
-		PATH: path,
-	};
+	let env = std.env(
+		{
+			PATH: path,
+		},
+		arg.env,
+	);
 
 	// Run the binary with the provided test invocation.
 	let executable = tg`${arg.directory}/bin/${name} ${tg.Template.join(
@@ -242,7 +251,9 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 		...testArgs,
 	)} > $OUTPUT 2>&1 || true`;
 
-	let output = tg.File.expect(await tg.build(executable, { env }));
+	let output = tg.File.expect(
+		await tg.build(executable, { env: await std.env.object(env) }),
+	);
 	let stdout = await output.text();
 	tg.assert(
 		testPredicate(stdout),
@@ -290,11 +301,12 @@ export let assertFileReferences = async (
 
 type HeaderArg = {
 	directory: tg.Directory;
+	env?: std.env.Arg;
 	header: string;
 };
 
 /** Assert the directory contains a header file with the provided name. */
-export let headerExists = async (arg: HeaderArg) => {
+export let headerExists = tg.target(async (arg: HeaderArg) => {
 	// Ensure the file exists.
 	await assertFileExists({
 		directory: arg.directory,
@@ -319,19 +331,21 @@ export let headerExists = async (arg: HeaderArg) => {
 	// Run the program.
 	await std.build(program);
 	return true;
-};
+});
 
 type LibraryArg = {
 	directory: tg.Directory;
+	env?: std.env.Arg;
 	library: LibrarySpec;
 	sdk?: std.sdk.Arg;
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
-export let linkableLib = async (arg: LibraryArg) => {
+export let linkableLib = tg.target(async (arg: LibraryArg) => {
 	let name;
 	let dylib = true;
 	let staticlib = true;
+	let env = arg.env ?? {};
 	let sdk = arg.sdk;
 	let runtimeDeps: Array<RuntimeDep> = [];
 	if (typeof arg.library === "string") {
@@ -370,6 +384,7 @@ export let linkableLib = async (arg: LibraryArg) => {
 		await dlopen({
 			directory: arg.directory,
 			dylib: dylibName_,
+			env,
 			runtimeDepDirs,
 			runtimeDepLibs,
 			sdk,
@@ -383,11 +398,12 @@ export let linkableLib = async (arg: LibraryArg) => {
 		});
 	}
 	return true;
-};
+});
 
 type DlopenArg = {
 	directory: tg.Directory;
 	dylib: string;
+	env?: std.env.Arg;
 	runtimeDepDirs: Array<tg.Directory>;
 	runtimeDepLibs: Array<string>;
 	sdk?: std.sdk.Arg;
@@ -423,9 +439,15 @@ export let dlopen = async (arg: DlopenArg) => {
 	let sdkEnv = std.sdk(arg?.sdk);
 	let _program = tg.File.expect(
 		await tg.build(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
-			env: std.env.object(sdkEnv, directory, ...arg.runtimeDepDirs, {
-				TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-			}),
+			env: std.env.object(
+				sdkEnv,
+				directory,
+				...arg.runtimeDepDirs,
+				{
+					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+				},
+				arg.env,
+			),
 		}),
 	);
 
