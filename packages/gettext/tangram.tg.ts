@@ -1,3 +1,4 @@
+import attr from "tg:attr" with { path: "../attr" };
 import libiconv from "tg:libiconv" with { path: "../libiconv" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import perl from "tg:perl" with { path: "../perl" };
@@ -63,6 +64,8 @@ export let gettext = tg.target(async (arg?: Arg) => {
 	];
 	if (os === "darwin") {
 		dependencies.push(libiconv({ ...rest, build, env: env_, host }));
+	} else if (os === "linux") {
+		dependencies.push(attr({ ...rest, build, env: env_, host }));
 	}
 	let env = [...dependencies, env_];
 
