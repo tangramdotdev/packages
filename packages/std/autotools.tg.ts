@@ -4,6 +4,9 @@ export type Arg = {
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
+	/** If the build rewuires network access, provide a checksum or the string "unsafe" to accept any result. */
+	checksum?: tg.Checksum;
+
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
 	debug?: boolean;
 
@@ -57,9 +60,6 @@ export type Arg = {
 
 	/** The computer this build produces executables for. */
 	target?: string;
-
-	/** Additional options to configure the target. */
-	targetArg?: tg.Target.Arg;
 };
 
 export let target = async (...args: tg.Args<Arg>) => {
@@ -82,7 +82,6 @@ export let target = async (...args: tg.Args<Arg>) => {
 		source: tg.Directory;
 		stripExecutables: boolean;
 		target: string;
-		targetArg: Array<tg.Target.Arg>;
 	};
 
 	let {
@@ -104,7 +103,6 @@ export let target = async (...args: tg.Args<Arg>) => {
 		source,
 		stripExecutables = true,
 		target: target_,
-		targetArg: targetArg_,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
@@ -113,6 +111,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 			let phasesArgs: Array<std.phases.Arg> = [];
 			if (arg.buildInTree !== undefined) {
 				object.buildInTree = arg.buildInTree;
+			}
+			if (arg.checksum !== undefined) {
+				phasesArgs.push({ checksum: arg.checksum });
 			}
 			if (arg.debug !== undefined) {
 				object.debug = arg.debug;
@@ -186,11 +187,6 @@ export let target = async (...args: tg.Args<Arg>) => {
 			}
 			if (arg.target !== undefined) {
 				object.target = arg.target;
-			}
-			if (arg.targetArg !== undefined) {
-				object.targetArg = tg.Mutation.is(arg.targetArg)
-					? arg.targetArg
-					: await tg.Mutation.arrayAppend<tg.Target.Arg>(arg.targetArg);
 			}
 			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
 			return object;
@@ -335,12 +331,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	}
 
 	let system = std.triple.archAndOs(host);
-	// Merge additional phase args and target args.
-	let phaseArgs = (phases ?? []).concat(
-		(targetArg_ ?? []).map((arg) => {
-			return { target: arg };
-		}),
-	);
+	let phaseArgs = phases ?? [];
 	return await std.phases.target(
 		{
 			debug,

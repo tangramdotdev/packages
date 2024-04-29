@@ -5,9 +5,10 @@ export async function build(
 	...args: tg.Args<build.Arg>
 ): Promise<tg.Artifact | undefined> {
 	type Apply = {
-		targetArg: Array<tg.Target.Arg>;
+		checksum?: tg.Checksum;
+		host?: string;
 	};
-	let { targetArg: targetArgs_ } = await tg.Args.apply<build.Arg, Apply>(
+	let { checksum, host } = await tg.Args.apply<build.Arg, Apply>(
 		args,
 		async (arg) => {
 			if (
@@ -19,10 +20,11 @@ export async function build(
 				return {};
 			} else {
 				let object: tg.MaybeMutationMap<Apply> = {};
-				if (arg.targetArg) {
-					object.targetArg = tg.Mutation.is(arg.targetArg)
-						? arg.targetArg
-						: await tg.Mutation.arrayAppend<tg.Target.Arg>(arg.targetArg);
+				if (arg.checksum !== undefined) {
+					object.checksum = arg.checksum;
+				}
+				if (arg.host !== undefined) {
+					object.host = arg.host;
 				}
 				return object;
 			}
@@ -32,36 +34,23 @@ export async function build(
 	// Create the executable.
 	let executable = await std.wrap(...args);
 
-	// Check if the user specified an explicit host.
-	let targetArgs = targetArgs_ ?? [];
-	let specifiedHost =
-		targetArgs.filter(
-			(arg) =>
-				arg !== undefined &&
-				typeof arg === "object" &&
-				"host" in arg &&
-				arg.host !== undefined,
-		).length > 0;
-
-	// If not, determine an approriate host from the executable.
-	if (!specifiedHost) {
+	// If no host was specified, determine an approriate host from the executable.
+	if (host === undefined) {
 		let detectedHost = await std.triple.host();
 		let executableTriples = await std.file.executableTriples(executable);
 		let hostSystem = executableTriples?.includes(detectedHost)
 			? detectedHost
 			: executableTriples?.at(0);
-		let host = std.triple.archAndOs(hostSystem ?? detectedHost);
-		targetArgs.push({ host });
+		host = std.triple.archAndOs(hostSystem ?? detectedHost);
 	}
 
 	// Run.
 	return tg.Artifact.expect(
-		await tg.build(
-			{
-				executable,
-			},
-			...targetArgs,
-		),
+		await tg.build({
+			checksum,
+			executable,
+			host,
+		}),
 	);
 }
 
@@ -69,7 +58,9 @@ export namespace build {
 	export type Arg = string | tg.Template | tg.File | tg.Symlink | ArgObject;
 
 	export type ArgObject = std.wrap.ArgObject & {
-		/** Options to configure the target being built. */
-		targetArg?: tg.Target.Arg;
+		/** An optional checksum to enable network access. Provide the checksu of the result, or the string "unsafe" to accept any result. */
+		checksum?: tg.Checksum;
+		/** The machine this build should run on. If omitted, will autodetect an appropriate host. */
+		host?: string;
 	};
 }
