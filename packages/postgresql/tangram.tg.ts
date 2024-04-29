@@ -39,7 +39,6 @@ type Arg = {
 	host?: string;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
-	withIcu?: boolean;
 };
 
 export let postgresql = tg.target(async (arg?: Arg) => {
@@ -49,35 +48,29 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		env: env_,
 		host,
 		source: source_,
-		withIcu = true,
 		...rest
 	} = arg ?? {};
 
 	let env = [
-		ncurses(arg),
-		openssl(arg),
-		perl(arg),
-		pkgconfig(arg),
-		readline(arg),
-		zlib(arg),
-		zstd(arg),
+		icu({ ...rest, build, env: env_, host }),
+		ncurses({ ...rest, build, env: env_, host }),
+		openssl({ ...rest, build, env: env_, host }),
+		perl({ ...rest, build, env: env_, host }),
+		pkgconfig({ ...rest, build, env: env_, host }),
+		readline({ ...rest, build, env: env_, host }),
+		zlib({ ...rest, build, env: env_, host }),
+		zstd({ ...rest, build, env: env_, host }),
 		{
 			LDFLAGS: tg.Mutation.templatePrepend(`-ltinfo`, ` `),
 		},
 		env_,
 	];
-	if (withIcu) {
-		env.push(icu(arg));
-	}
 
 	let sourceDir = source_ ?? source();
 
 	let configure = {
 		args: ["--with-zstd"],
 	};
-	if (!withIcu) {
-		configure.args.push("--without-icu");
-	}
 	let phases = { configure };
 
 	let output = await std.autotools.build(
