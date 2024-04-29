@@ -2,14 +2,17 @@ import * as node from "tg:nodejs" with { path: "../nodejs" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	home: "https://eslint.org",
+	license: "MIT",
 	name: "eslint",
-	version: "8.55.0",
+	repository: "https://github.com/eslint/eslint",
+	version: "9.1.1",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:249fc81da9761b0f8710d0239ad09dcceea0c777d4933111496900a0ed2b3128";
+		"sha256:4f39cb81c3540cbb5e0ccbbb7afff672fec31ac835b1f0be9bbf353083c61b38";
 	let owner = name;
 	let repo = name;
 	let tag = `v${version}`;
