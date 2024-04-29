@@ -113,10 +113,11 @@ export default nodejs;
 
 export type Arg = {
 	build?: string;
+	checksum?: tg.Checksum;
 	env?: std.env.Arg;
 	host?: string;
 	packageLock?: tg.File;
-	phases?: tg.MaybeNestedArray<std.phases.Arg>;
+	phases?: std.phases.Arg;
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source: tg.Directory;
 };
@@ -144,6 +145,10 @@ export let build = async (...args: tg.Args<Arg>) => {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
+			let phasesArgs: Array<std.phases.Arg> = [];
+			if (arg.checksum !== undefined) {
+				phasesArgs.push({ checksum: arg.checksum });
+			}
 			if (arg.env !== undefined) {
 				object.env = tg.Mutation.is(arg.env)
 					? arg.env
@@ -155,9 +160,11 @@ export let build = async (...args: tg.Args<Arg>) => {
 					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
 			}
 			if (arg.phases !== undefined) {
-				object.phases = tg.Mutation.is(arg.phases)
-					? arg.phases
-					: await tg.Mutation.arrayAppend(arg.phases);
+				if (tg.Mutation.is(arg.phases)) {
+					object.phases = arg.phases;
+				} else {
+					phasesArgs.push(arg.phases);
+				}
 			}
 			if (arg.source !== undefined) {
 				object.source = arg.source;
