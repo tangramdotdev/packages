@@ -45,7 +45,11 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let env = [pkgconfig(arg), pcre2(arg), env_];
+	let env = [
+		pkgconfig({ ...rest, build, env: env_, host }),
+		pcre2({ ...rest, build, env: env_, host }),
+		env_,
+	];
 
 	return rust.build(
 		{
