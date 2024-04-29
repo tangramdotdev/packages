@@ -42,15 +42,47 @@ export let readline = tg.target(async (arg?: Arg) => {
 		env_,
 	];
 
-	return std.autotools.build(
+	let configure = {
+		args: [
+			"--with-curses",
+			"--disable-install-examples",
+			"--with-shared-termcap-library",
+		],
+	};
+	let phases = { configure };
+
+	let output = await std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
+			phases,
 			source: source_ ?? source(),
 		},
 		autotools,
 	);
+
+	// Patch pc files to add tinfo as `Requires` instead of Requires.private`.
+	let libNames = ["history", "readline"];
+	await Promise.all(
+		libNames.map(async (name) => {
+			let pc = tg.File.expect(await output.get(`lib/pkgconfig/${name}.pc`));
+			let content = await pc.text();
+			let lines = content.split("\n");
+			lines = lines.map((line) => {
+				if (line.startsWith("Requires.private: tinfo")) {
+					return `Requires: tinfo`;
+				} else {
+					return line;
+				}
+			});
+			output = await tg.directory(output, {
+				[`lib/pkgconfig/${name}.pc`]: tg.file(lines.join("\n")),
+			});
+		}),
+	);
+
+	return output;
 });
 
 export default readline;
