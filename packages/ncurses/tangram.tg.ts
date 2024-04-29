@@ -96,6 +96,12 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 		}),
 	);
 
+	// Add links from curses to ncurses.
+	result = await tg.directory(result, {
+		[`lib/libcurses.${dylibExt}`]: tg.symlink(`libncurses.${dylibExt}`),
+		[`lib/pkgconfig/curses.pc`]: tg.symlink(`ncurses.pc`),
+	});
+
 	return result;
 });
 
