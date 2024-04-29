@@ -1,30 +1,33 @@
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://go.dev/",
+	license: "BSD-3-Clause",
 	name: "go",
-	version: "1.22.1",
+	repository: "https://github.com/golang/go",
+	version: "1.22.2",
 };
 
 // See https://go.dev/dl.
 let RELEASES = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:e56685a245b6a0c592fc4a55f0b7803af5b3f827aaa29feab1f40e491acf35b8",
+			"sha256:36e720b2d564980c162a48c7e97da2e407dfcc4239e1e58d98082dfa2486a0c1",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:aab8e15785c997ae20f9c88422ee35d962c4562212bb0f879d052a35c8307c7f",
+			"sha256:5901c52b7a78002aeff14a21f93e0f064f74ce1360fce51c6ee68cd471216a17",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:5f10b95e2678618f85ba9d87fbed506b3b87efc9d5a8cafda939055cb97949ba",
+			"sha256:e09de4ad7b0bd112437912781429f717b092053600b804b10e7c22107d18accf",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha245:943e4f9f038239f9911c44366f52ab9202f6ee13610322a668fe42406fb3deef",
+			"sha256:35c399ffa0195193eba73cd3ce4e2382b78154cbe8296ebbb53f27cfdbb11c57",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -71,6 +74,9 @@ export let toolchain = tg.target(
 export default toolchain;
 
 export type Arg = {
+	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	checksum?: tg.Checksum;
+
 	/**
 	 * Explicitly enable or disable updating vendored dependencies, or override the command used in the vendor phase.
 	 *
@@ -122,6 +128,7 @@ export type Arg = {
 
 export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 	type Apply = {
+		checksum: tg.Checksum;
 		cgo: boolean;
 		env: Array<std.env.Arg>;
 		generate: boolean | { command: tg.Template.Arg };
@@ -134,6 +141,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 	};
 
 	let {
+		checksum,
 		cgo,
 		env: env_,
 		generate,
@@ -148,6 +156,9 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
+			if (arg.checksum !== undefined) {
+				object.checksum = arg.checksum;
+			}
 			if (arg.source !== undefined) {
 				object.source = arg.source;
 			}
@@ -261,7 +272,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		{
 			host,
 			env,
-			checksum: "unsafe",
+			checksum,
 		},
 	);
 
