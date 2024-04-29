@@ -29,8 +29,12 @@ export let source = tg.target(async () => {
 	});
 	let url = `https://ftp.postgresql.org/pub/source/v${version}/${packageArchive}`;
 	let download = tg.Directory.expect(await std.download({ checksum, url }));
+	let source = await std.directory.unwrap(download);
 
-	return tg.Directory.expect(await std.directory.unwrap(download));
+	let pwdPatch = tg.File.expect(await tg.include("dont_use_bin_pwd.patch"));
+	source = await std.patch(source, pwdPatch);
+
+	return source;
 });
 
 type Arg = {
@@ -76,9 +80,7 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			buildInTree: true,
 			env,
-			hardeningCFlags: false,
 			phases,
 			source: sourceDir,
 		},
