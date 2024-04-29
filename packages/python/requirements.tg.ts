@@ -21,7 +21,7 @@ export let install = tg.target(
 				`,
 			{
 				env: pythonArtifact,
-				checksum: "unsafe",
+				targetArg: { checksum: "unsafe" },
 			},
 		);
 		tg.Directory.assert(downloads);

@@ -44,7 +44,6 @@ export let env = tg.target(async (arg?: Arg) => {
 		env: env_,
 		host,
 	});
-	console.log("bashArtifact", await bashArtifact.id());
 
 	let bashExecutable = tg.File.expect(await bashArtifact.get("bin/bash"));
 	let bashEnv = {

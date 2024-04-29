@@ -57,6 +57,9 @@ export type Arg = {
 
 	/** The computer this build produces executables for. */
 	target?: string;
+
+	/** Additional options to configure the target. */
+	targetArg?: tg.Target.Arg;
 };
 
 export let target = async (...args: tg.Args<Arg>) => {
@@ -79,6 +82,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		source: tg.Directory;
 		stripExecutables: boolean;
 		target: string;
+		targetArg: Array<tg.Target.Arg>;
 	};
 
 	let {
@@ -100,6 +104,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 		source,
 		stripExecutables = true,
 		target: target_,
+		targetArg: targetArg_,
 	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
@@ -181,6 +186,11 @@ export let target = async (...args: tg.Args<Arg>) => {
 			}
 			if (arg.target !== undefined) {
 				object.target = arg.target;
+			}
+			if (arg.targetArg !== undefined) {
+				object.targetArg = tg.Mutation.is(arg.targetArg)
+					? arg.targetArg
+					: await tg.Mutation.arrayAppend<tg.Target.Arg>(arg.targetArg);
 			}
 			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
 			return object;
@@ -325,6 +335,12 @@ export let target = async (...args: tg.Args<Arg>) => {
 	}
 
 	let system = std.triple.archAndOs(host);
+	// Merge additional phase args and target args.
+	let phaseArgs = (phases ?? []).concat(
+		(targetArg_ ?? []).map((arg) => {
+			return { target: arg };
+		}),
+	);
 	return await std.phases.target(
 		{
 			debug,
@@ -332,7 +348,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 			env,
 			target: { env: { TANGRAM_HOST: system }, host: system },
 		},
-		...(phases ?? []),
+		...phaseArgs,
 	);
 };
 
