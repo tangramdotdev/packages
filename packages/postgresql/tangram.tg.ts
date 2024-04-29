@@ -62,16 +62,13 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		readline({ ...rest, build, env: env_, host }),
 		zlib({ ...rest, build, env: env_, host }),
 		zstd({ ...rest, build, env: env_, host }),
-		{
-			LDFLAGS: tg.Mutation.templatePrepend(`-ltinfo`, ` `),
-		},
 		env_,
 	];
 
 	let sourceDir = source_ ?? source();
 
 	let configure = {
-		args: ["--with-lz4", "--with-zstd"],
+		args: ["--disable-rpath", "--with-lz4", "--with-zstd"],
 	};
 	let phases = { configure };
 
@@ -103,10 +100,12 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 export default postgresql;
 
 export let test = tg.target(async () => {
+	let artifact = postgresql();
 	await std.assert.pkg({
 		buildFunction: postgresql,
 		binaries: ["psql"],
+		libraries: ["pq"],
 		metadata,
 	});
-	return true;
+	return artifact;
 });
