@@ -221,7 +221,10 @@ let isPythonScript = (metadata: std.file.ExecutableMetadata): boolean => {
 };
 
 export type Arg = {
+	/** The machine this package will build on. */
 	build?: string;
+
+	/** The machine this package produces binaries for. */
 	host?: string;
 
 	/** An optional pyproject.toml. */
