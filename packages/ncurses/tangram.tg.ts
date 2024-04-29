@@ -42,7 +42,6 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 			"--with-cxx-shared",
 			"--enable-widec",
 			"--without-debug",
-			"--with-termlib",
 			"--enable-pc-files",
 			`--with-pkg-config-libdir="$OUTPUT/lib/pkgconfig"`,
 			"--enable-symlinks",
@@ -55,7 +54,10 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 		configure.args.push("--disable-stripping"); // prevent calling xcrun. compiling -with `-Wl,-s` makes this unnecessary anyway.
 	}
 
-	let phases = { configure };
+	// Patch curses.h to always use the wide-character ABI.
+	let fixup = `sed -e 's/^#if.*XOPEN.*$/#if 1/' -i $OUTPUT/include/ncursesw/curses.h`;
+
+	let phases = { configure, fixup };
 
 	let result = await std.autotools.build(
 		{
@@ -68,7 +70,7 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	);
 
 	// Set libraries to post-process.
-	let libNames = ["form", "menu", "ncurses", "ncurses++", "panel", "tinfo"];
+	let libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];
 	let dylibExt = os === "darwin" ? "dylib" : "so";
 
 	// Create widechar-to-normal symlinks and fix pkgconfig files.
