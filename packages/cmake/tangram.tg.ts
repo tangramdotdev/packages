@@ -94,6 +94,9 @@ export let cmake = tg.target(async (arg?: Arg) => {
 export default cmake;
 
 export type BuildArg = {
+	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	checksum?: tg.Checksum;
+
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
 	debug?: boolean;
 
@@ -190,6 +193,9 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 		} else if (typeof arg === "object") {
 			let object: tg.MutationMap<Apply> = {};
 			let phasesArgs: Array<std.phases.Arg> = [];
+			if (arg.checksum !== undefined) {
+				phasesArgs.push({ checksum: arg.checksum });
+			}
 			if (arg.debug !== undefined) {
 				object.debug = arg.debug;
 			}
