@@ -38,11 +38,11 @@ export async function build(
 	if (host === undefined) {
 		let detectedHost = await std.triple.host();
 		let executableTriples = await std.file.executableTriples(executable);
-		let hostSystem = executableTriples?.includes(detectedHost)
+		host = executableTriples?.includes(detectedHost)
 			? detectedHost
-			: executableTriples?.at(0);
-		host = std.triple.archAndOs(hostSystem ?? detectedHost);
+			: executableTriples?.at(0) ?? detectedHost;
 	}
+	host = std.triple.archAndOs(host);
 
 	// Run.
 	return tg.Artifact.expect(
