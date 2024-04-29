@@ -1,4 +1,5 @@
 import icu from "tg:icu" with { path: "../icu" };
+import lz4 from "tg:lz4" with { path: "../lz4" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import perl from "tg:perl" with { path: "../perl" };
@@ -53,6 +54,7 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 
 	let env = [
 		icu({ ...rest, build, env: env_, host }),
+		lz4({ ...rest, build, env: env_, host }),
 		ncurses({ ...rest, build, env: env_, host }),
 		openssl({ ...rest, build, env: env_, host }),
 		perl({ ...rest, build, env: env_, host }),
@@ -69,7 +71,7 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 	let sourceDir = source_ ?? source();
 
 	let configure = {
-		args: ["--with-zstd"],
+		args: ["--with-lz4", "--with-zstd"],
 	};
 	let phases = { configure };
 
