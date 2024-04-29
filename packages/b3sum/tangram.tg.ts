@@ -1,5 +1,3 @@
-import pcre2 from "tg:pcre2" with { path: "../pcre2" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as rust from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 
@@ -38,14 +36,11 @@ type Arg = {
 export let b3sum = tg.target(async (arg?: Arg) => {
 	let {
 		build,
-		env: env_,
 		host,
 		rust: rustArgs = [],
 		source: source_,
 		...rest
 	} = arg ?? {};
-
-	let env = [pkgconfig({ ...rest, build, env: env_, host }), env_];
 
 	// Point to the b3sum subdirectory of the blake3 source.
 	let sourceDir = tg.Directory.expect(source_ ?? (await source()));
@@ -55,7 +50,6 @@ export let b3sum = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
 			source: b3sumSource,
 		},
 		rustArgs,
