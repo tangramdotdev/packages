@@ -4,6 +4,9 @@ export type Arg = {
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
+	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	checksum?: tg.Checksum;
+
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
 	debug?: boolean;
 
@@ -108,6 +111,9 @@ export let target = async (...args: tg.Args<Arg>) => {
 			let phasesArgs: Array<std.phases.Arg> = [];
 			if (arg.buildInTree !== undefined) {
 				object.buildInTree = arg.buildInTree;
+			}
+			if (arg.checksum !== undefined) {
+				phasesArgs.push({ checksum: arg.checksum });
 			}
 			if (arg.debug !== undefined) {
 				object.debug = arg.debug;
@@ -325,6 +331,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 	}
 
 	let system = std.triple.archAndOs(host);
+	let phaseArgs = phases ?? [];
 	return await std.phases.target(
 		{
 			debug,
@@ -332,7 +339,7 @@ export let target = async (...args: tg.Args<Arg>) => {
 			env,
 			target: { env: { TANGRAM_HOST: system }, host: system },
 		},
-		...(phases ?? []),
+		...phaseArgs,
 	);
 };
 

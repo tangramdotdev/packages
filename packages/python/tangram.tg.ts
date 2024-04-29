@@ -8,6 +8,7 @@ import m4 from "tg:m4" with { path: "../m4" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import readline from "tg:readline" with { path: "../readline" };
 import sqlite from "tg:sqlite" with { path: "../sqlite" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
@@ -100,6 +101,7 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 		ncurses({ ...rest, build, env: env_, host }),
 		openssl({ ...rest, build, env: env_, host }),
 		pkgconfig({ ...rest, build, env: env_, host }),
+		readline({ ...rest, build, env: env_, host }),
 		sqlite({ ...rest, build, env: env_, host }),
 		zlib({ ...rest, build, env: env_, host }),
 	];
@@ -120,7 +122,6 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 			"--enable-optimizations",
 			"--with-pkg-config=yes",
 			"--without-c-locale-coercion",
-			"--without-readline",
 		],
 	};
 
@@ -220,7 +221,10 @@ let isPythonScript = (metadata: std.file.ExecutableMetadata): boolean => {
 };
 
 export type Arg = {
+	/** The machine this package will build on. */
 	build?: string;
+
+	/** The machine this package produces binaries for. */
 	host?: string;
 
 	/** An optional pyproject.toml. */

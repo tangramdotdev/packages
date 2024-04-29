@@ -141,20 +141,43 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 export default rust;
 
 export type Arg = {
+	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	checksum?: tg.Checksum;
+
+	/** Environment variables to set during the build. */
 	env?: std.env.Arg;
+
+	/** Features to enable during the build. */
 	features?: Array<string>;
+
+	/** Machine that will run the compilation. */
 	host?: string;
+
+	/** Whether to compile in parallel. */
 	parallel?: boolean;
+
+	/** Whether to use the tangram_rustc proxy. */
 	proxy?: boolean;
+
+	/** SDK configuration to use during the build. */
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+
+	/** Source directory containing the Cargo.toml. */
 	source?: tg.Artifact;
+
+	/** Target triple for the build. */
 	target?: string;
+
+	/** Whether to use cargo vendor instead of the Tangram-native vendoring. */
 	useCargoVendor?: boolean;
+
+	/** Whether to enable verbose logging. */
 	verbose?: boolean;
 };
 
 export let build = async (...args: tg.Args<Arg>) => {
 	type Apply = {
+		checksum: tg.Checksum;
 		env: Array<std.env.Arg>;
 		features: Array<string>;
 		host: string;
@@ -167,6 +190,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 		verbose: boolean;
 	};
 	let {
+		checksum,
 		env,
 		features = [],
 		host: host_,
@@ -182,6 +206,9 @@ export let build = async (...args: tg.Args<Arg>) => {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
+			if (arg.checksum !== undefined) {
+				object.checksum = arg.checksum;
+			}
 			if (arg.env !== undefined) {
 				object.env = tg.Mutation.is(arg.env)
 					? arg.env
@@ -301,6 +328,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	}
 
 	let artifact = await std.build(buildScript, {
+		checksum,
 		env: std.env(
 			sdk,
 			//libgccSdk,

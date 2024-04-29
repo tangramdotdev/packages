@@ -5,6 +5,7 @@ import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
+	homepage: "https://www.perl.org/",
 	name: "perl",
 	version: "5.38.2",
 };

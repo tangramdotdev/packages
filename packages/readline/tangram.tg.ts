@@ -42,11 +42,21 @@ export let readline = tg.target(async (arg?: Arg) => {
 		env_,
 	];
 
+	let configure = {
+		args: [
+			"--with-curses",
+			"--disable-install-examples",
+			"--with-shared-termcap-library",
+		],
+	};
+	let phases = { configure };
+
 	return std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
+			phases,
 			source: source_ ?? source(),
 		},
 		autotools,

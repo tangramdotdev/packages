@@ -5,19 +5,28 @@ export async function build(
 	...args: tg.Args<build.Arg>
 ): Promise<tg.Artifact | undefined> {
 	type Apply = {
-		system: string;
-		checksum: tg.Checksum;
+		checksum?: tg.Checksum;
+		host?: string;
 	};
-	let { system, checksum } = await tg.Args.apply<build.Arg, Apply>(
+	let { checksum, host } = await tg.Args.apply<build.Arg, Apply>(
 		args,
 		async (arg) => {
-			if (isArgObject(arg)) {
-				return {
-					system: arg.system,
-					checksum: arg.checksum,
-				};
-			} else {
+			if (
+				typeof arg === "string" ||
+				tg.Template.is(arg) ||
+				tg.File.is(arg) ||
+				tg.Symlink.is(arg)
+			) {
 				return {};
+			} else {
+				let object: tg.MaybeMutationMap<Apply> = {};
+				if (arg.checksum !== undefined) {
+					object.checksum = arg.checksum;
+				}
+				if (arg.host !== undefined) {
+					object.host = arg.host;
+				}
+				return object;
 			}
 		},
 	);
@@ -25,23 +34,22 @@ export async function build(
 	// Create the executable.
 	let executable = await std.wrap(...args);
 
-	// If the system was not set in the args, then get it from the executable or the host.
-	let host = await std.triple.host();
-	if (!system) {
+	// If no host was specified, determine an approriate host from the executable.
+	if (host === undefined) {
+		let detectedHost = await std.triple.host();
 		let executableTriples = await std.file.executableTriples(executable);
-		let hostSystem = executableTriples?.includes(host)
-			? host
+		let hostSystem = executableTriples?.includes(detectedHost)
+			? detectedHost
 			: executableTriples?.at(0);
-		system = std.triple.archAndOs(hostSystem ?? host);
+		host = std.triple.archAndOs(hostSystem ?? detectedHost);
 	}
-	system = system ?? host;
 
 	// Run.
 	return tg.Artifact.expect(
 		await tg.build({
-			host: system,
-			executable,
 			checksum,
+			executable,
+			host,
 		}),
 	);
 }
@@ -50,16 +58,9 @@ export namespace build {
 	export type Arg = string | tg.Template | tg.File | tg.Symlink | ArgObject;
 
 	export type ArgObject = std.wrap.ArgObject & {
-		system?: string;
-		unsafe?: boolean;
+		/** An optional checksum to enable network access. Provide the checksu of the result, or the string "unsafe" to accept any result. */
 		checksum?: tg.Checksum;
-		network?: boolean;
+		/** The machine this build should run on. If omitted, will autodetect an appropriate host. */
+		host?: string;
 	};
 }
-
-let isArgObject = (arg: unknown): arg is build.ArgObject => {
-	return (
-		typeof arg === "object" &&
-		!(tg.File.is(arg) || tg.Symlink.is(arg) || tg.Template.is(arg))
-	);
-};
