@@ -83,14 +83,12 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_EH=ON",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
 			"-DLLVM_ENABLE_PIC=ON",
-			//"-DLLVM_ENABLE_PROJECTS='clang;lld'",
 			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
 			"-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON",
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			//"-DLLVM_TARGETS_TO_BUILD=X86",
 		],
 	};
 

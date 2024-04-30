@@ -298,7 +298,7 @@ export namespace wrap {
 		/** The identity of the executable. The default is "executable". */
 		identity?: Identity;
 
-		/** If the executable being wrapped is already a Tangram wrapper, should we simply amend the existing wrapper in place, or create a new wrapper pointing to the existing one? Default: true. */
+		/** Specify how to handle executables that are already Tangram wrappers. When `inPlace` is true, retain the original executable in the resulting manifest. When `inPlace` is set to false, produce a manifest pointing to the original wrapper. Default: true. */
 		inPlace?: boolean;
 
 		/** The interpreter to run the executable with. If not provided, a default is detected. */
