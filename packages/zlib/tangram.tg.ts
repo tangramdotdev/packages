@@ -31,13 +31,41 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let zlib = tg.target((arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+export let zlib = tg.target(async (arg?: Arg) => {
+	let {
+		autotools = [],
+		build: build_,
+		env: env_,
+		host: host_,
+		source: source_,
+		...rest
+	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
+
+	let env = [];
+
+	// On Linux with LLVM, we need to add -Wl,-undefined-version to CFLAGS to build the shared library.
+	// https://github.com/zlib-ng/zlib-ng/issues/1427
+	if (
+		os === "linux" &&
+		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
+			std.flatten(rest.sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
+				.length > 0)
+	) {
+		env.push({
+			CFLAGS: tg.Mutation.templatePrepend("-Wl,-undefined-version", " "),
+		});
+	}
+	env.push(env_);
 
 	return std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			env,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -45,6 +73,8 @@ export let zlib = tg.target((arg?: Arg) => {
 });
 
 export default zlib;
+
+export let zlibLlvm = tg.target(() => zlib({ sdk: { toolchain: "llvm" } }));
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
