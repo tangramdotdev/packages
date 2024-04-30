@@ -16,7 +16,6 @@ let VERSION = "1.77.2" as const;
 let PROFILE = "minimal" as const;
 
 type ToolchainArg = {
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	target?: string;
 	targets?: Array<string>;
 };
@@ -89,7 +88,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	}
 
 	// Obtain an SDK.  If cross-targets were specified, use a cross-compiling SDK.
-	let sdk = await std.sdk({ host, targets }, arg?.sdk);
+	let sdk = await std.sdk({ host, targets });
 
 	// Install each package.
 	let rustInstall = await std.build(
@@ -120,7 +119,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 
 	let artifact = tg.directory();
 
-	let zlibArtifact = await zlib(arg);
+	let zlibArtifact = await zlib({ host });
 
 	for (let executable of executables) {
 		let wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
@@ -244,16 +243,22 @@ export let build = async (...args: tg.Args<Arg>) => {
 	});
 
 	let host = rustTriple(host_ ?? (await std.triple.host()));
+	let os = std.triple.os(host);
 	let target = target_ ? rustTriple(target_) : host;
 
 	// Check if we're cross-compiling.
 	let crossCompiling = target !== host;
 
 	// Obtain handles to the SDK and Rust artifacts.
-	// NOTE - pulls an SDK assuming the selected target is the intended host.
-	let sdk = std.sdk({ host, target }, sdk_ ?? []);
-	// FIXME - replace with just the lib from the post-std package.
-	//let libgccSdk = gcc.libgcc({ host });
+	// NOTE - pulls an SDK assuming the selected target is the intended host. Forces GCC on Linux, as rustc expects libgcc_s.
+	let sdkArgs: Array<std.sdk.Arg> = [{ host, target }, ...(sdk_ ?? [])];
+	if (
+		os === "linux" &&
+		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
+	) {
+		sdkArgs.push({ toolchain: "gcc" });
+	}
+	let sdk = std.sdk(...sdkArgs);
 	let rustArtifact = rust({ target });
 
 	// Download the dependencies using the cargo vendor.
@@ -262,18 +267,13 @@ export let build = async (...args: tg.Args<Arg>) => {
 
 	// Create the build script.
 	let buildScript = tg`
-		set -eux
+		set -eu
 		# Create the output directory
 		mkdir -p "$OUTPUT/target"
 
 		# Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
-
 		mkdir -p "$HOME/.cargo"
 		echo '${cargoConfig}' >> "$HOME/.cargo/config"
-
-		echo "Cargo config:"
-		cat "$HOME/.cargo/config"
-		echo ""
 
 		export CARGO_HOME=$HOME/.cargo
 
@@ -331,7 +331,6 @@ export let build = async (...args: tg.Args<Arg>) => {
 		checksum,
 		env: std.env(
 			sdk,
-			//libgccSdk,
 			rustArtifact,
 			{
 				RUST_TARGET: target,
