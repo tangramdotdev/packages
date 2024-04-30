@@ -55,6 +55,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());
 
+	let zlibArtifact = await dependencies.zlib.build({ host: build });
 	let deps: tg.Unresolved<std.env.Arg> = [
 		std.utils.env({ host: build }),
 		git({ host: build }),
@@ -62,6 +63,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			host: build,
 			sdk: bootstrap.sdk.arg(build),
 		}),
+		zlibArtifact,
 	];
 
 	let env = [...deps, env_];
@@ -89,6 +91,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
 			"-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON",
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			tg`-DZLIB_ROOT=${zlibArtifact}`,
 		],
 	};
 
