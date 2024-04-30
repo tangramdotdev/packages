@@ -22,12 +22,12 @@ let RELEASES = {
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:e09de4ad7b0bd112437912781429f717b092053600b804b10e7c22107d18accf",
+			"sha256:660298be38648723e783ba0398e90431de1cb288c637880cdb124f39bd977f0d",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:35c399ffa0195193eba73cd3ce4e2382b78154cbe8296ebbb53f27cfdbb11c57",
+			"sha256:33e7f63077b1c5bce4f1ecadd4d990cf229667c40bfb00686990c950911b7ab7",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
