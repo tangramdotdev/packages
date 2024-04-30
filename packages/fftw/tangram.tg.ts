@@ -39,22 +39,28 @@ type Arg = {
 export let fftw = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
 
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
+
 	let configure = {
 		args: [
 			"--disable-dependency-tracking",
-			"--enable-openmp",
 			"--enable-shared",
 			"--enable-static",
 			"--enable-threads",
 		],
 	};
+	if (os === "linux") {
+		configure.args.push("--enable-openmp");
+	}
 
 	let env = [{ TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter" }, env_];
 
