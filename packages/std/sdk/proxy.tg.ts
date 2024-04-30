@@ -208,10 +208,6 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
-	console.log(
-		"proxy env dirs",
-		await Promise.all(dirs.map(async (d) => await (await d).id())),
-	);
 	return std.env.object(...dirs);
 });
 
