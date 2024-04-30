@@ -65,10 +65,6 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 
 export default ripgrep;
 
-export let ripgrepLlvm = tg.target(() =>
-	ripgrep({ sdk: { toolchain: "llvm" } }),
-);
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFunction: ripgrep,

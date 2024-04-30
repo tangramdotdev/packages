@@ -119,11 +119,20 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 	let configure = {
 		args: [
 			"--disable-test-modules",
-			"--enable-optimizations",
 			"--with-pkg-config=yes",
 			"--without-c-locale-coercion",
 		],
 	};
+
+	// Enable PGO on macOS and Linux only if the LLVm toolchain is not used.
+	if (
+		std.triple.os(build) === "darwin" ||
+		((await std.env.tryWhich({ env: env_, name: "clang" })) === undefined &&
+			std.flatten(rest.sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
+				.length === 0)
+	) {
+		configure.args.push("--enable-optimizations");
+	}
 
 	let phases = { configure };
 
