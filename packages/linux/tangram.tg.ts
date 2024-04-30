@@ -23,8 +23,13 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(source);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
+type Arg = {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
 	phases?: tg.MaybeNestedArray<std.phases.Arg>;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
 
