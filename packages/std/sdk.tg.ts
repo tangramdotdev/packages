@@ -168,7 +168,6 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 	if (utils) {
 		let hostUtils = await std.utils.env({
 			build: host,
-			debug: toolchain_ === "llvm",
 			host,
 			env: envs,
 			sdk: false,

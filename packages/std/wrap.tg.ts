@@ -11,8 +11,12 @@ import * as workspace from "./wrap/workspace.tg.ts";
 export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	type Apply = {
 		buildToolchain: std.env.Arg;
+		env: Array<std.env.Arg>;
+		executable: tg.File | tg.Symlink | wrap.Manifest.Executable;
+		executableArg: tg.File | tg.Symlink;
 		host: string;
 		identity: wrap.Identity;
+		inPlace: boolean;
 		interpreter:
 			| tg.File
 			| tg.Symlink
@@ -20,19 +24,19 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			| wrap.Manifest.Interpreter
 			| undefined;
 		libraryPaths: Array<string | tg.Artifact | tg.Template>;
-		executable: tg.File | tg.Symlink | wrap.Manifest.Executable;
-		env: Array<std.env.Arg>;
 		manifestArgs: Array<wrap.Manifest.Template>;
 	};
 
 	let {
 		buildToolchain: buildToolchain_,
+		env: env_,
+		executable: executable_,
+		executableArg,
 		host: host_,
 		identity: identity_,
-		libraryPaths,
+		inPlace = true,
 		interpreter,
-		executable: executable_,
-		env: env_,
+		libraryPaths,
 		manifestArgs,
 	} = await tg.Args.apply<wrap.Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
@@ -60,6 +64,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 					identity: existingManifest.identity,
 					interpreter: existingManifest.interpreter,
 					executable: existingManifest.executable,
+					executableArg: file,
 					env,
 					manifestArgs: existingManifest.args,
 				};
@@ -134,6 +139,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						object.identity = existingManifest.identity;
 						object.interpreter = existingManifest.interpreter;
 						object.executable = existingManifest.executable;
+						object.executableArg = file;
 						object.env = env;
 						object.manifestArgs = existingManifest.args;
 					} else {
@@ -157,6 +163,9 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 			}
 			if (arg.identity !== undefined) {
 				object.identity = arg.identity ?? "executable";
+			}
+			if (arg.inPlace !== undefined) {
+				object.inPlace = arg.inPlace;
 			}
 			if (arg.libraryPaths !== undefined) {
 				object.libraryPaths = tg.Mutation.is(arg.libraryPaths)
@@ -186,6 +195,16 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	});
 
 	tg.assert(executable_ !== undefined, "No executable was provided.");
+
+	// If the caller doesn't want to wrap the executable in place, swap the existing executable for the value they passed explicitly.
+	if (!inPlace) {
+		tg.assert(
+			executableArg !== undefined,
+			"in-place wrapping is explicitly disabled but we're not wrapping an already-wrapped executable.",
+		);
+		executable_ = executableArg;
+	}
+
 	let executable = await manifestExecutableFromArg(executable_);
 
 	let identity = identity_ ?? "executable";
@@ -278,6 +297,9 @@ export namespace wrap {
 
 		/** The identity of the executable. The default is "executable". */
 		identity?: Identity;
+
+		/** If the executable being wrapped is already a Tangram wrapper, should we simply amend the existing wrapper in place, or create a new wrapper pointing to the existing one? Default: true. */
+		inPlace?: boolean;
 
 		/** The interpreter to run the executable with. If not provided, a default is detected. */
 		interpreter?: tg.File | tg.Symlink | Interpreter;

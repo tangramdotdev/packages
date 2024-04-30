@@ -83,12 +83,14 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_EH=ON",
 			"-DLLVM_ENABLE_LIBXML2=OFF",
 			"-DLLVM_ENABLE_PIC=ON",
+			//"-DLLVM_ENABLE_PROJECTS='clang;lld'",
 			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld;lldb'",
 			"-DLLVM_ENABLE_RTTI=ON",
 			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
 			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
 			"-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON",
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			//"-DLLVM_TARGETS_TO_BUILD=X86",
 		],
 	};
 
@@ -174,7 +176,7 @@ export let test = async () => {
 		}
 	`);
 	let cScript = tg`
-		set -x && clang -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
+		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
 	`;
 	let cOut = tg.File.expect(
 		await std.build(cScript, {
@@ -200,7 +202,7 @@ export let test = async () => {
 		}
 	`);
 	let cxxScript = tg`
-		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
+		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`;
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {

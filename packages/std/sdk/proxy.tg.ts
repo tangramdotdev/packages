@@ -85,7 +85,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		});
 
 		if (isLlvm) {
-			cc = await tg.symlink(tg`${directory}/bin/clang`);
+			cc = tg.File.expect(await directory.get(`bin/clang`));
 			cxx = cc;
 		}
 		let ldProxyDir = tg.directory({
@@ -164,23 +164,26 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 				break;
 			}
 			case "llvm": {
-				console.log("proxy dir", await directory.id());
 				let { clangArgs, clangxxArgs, env } = await llvmToolchain.wrapArgs({
 					host: build,
 					target: host,
 					toolchainDir: directory,
 				});
+				// On Linux, don't wrap in place.
+				let inPlace = os === "darwin";
 				wrappedCC = std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
 					buildToolchain,
 					env,
 					executable: cc,
+					inPlace,
 				});
 				wrappedCXX = std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
 					buildToolchain,
 					env,
 					executable: cxx,
+					inPlace,
 				});
 				binDir = tg.directory({
 					bin: {
