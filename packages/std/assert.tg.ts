@@ -1,5 +1,6 @@
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.tg.ts";
+import { nativeProxiedSdkArgs } from "./sdk.tg.ts";
 import { manifestReferences, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
@@ -61,21 +62,19 @@ type RuntimeDep = {
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export let pkg = async (arg: PkgArg) => {
 	//// Produce list of all requested SDK args.
-	// FIXME - re-enable testing multiple toolchains.
-	//let sdks = [];
-	//if (arg.sdk) {
-	//	sdks.push(arg.sdk);
-	//}
-	//if (arg.sdks) {
-	//	sdks.push(...arg.sdks);
-	//}
-	//// If no SDK args were provided, test with the default set of SDKs for the platform.
-	//if (sdks.length === 0) {
-	//	sdks.push(...(await defaultSdkSet()));
-	//}
+	let sdks: Array<std.sdk.Arg> = [];
+	if (arg.sdk) {
+		sdks.push(arg.sdk);
+	}
+	if (arg.sdks) {
+		sdks.push(...arg.sdks);
+	}
+	// If no SDK args were provided, test with the default set of SDKs for the platform.
+	if (sdks.length === 0) {
+		sdks.push(...(await defaultSdkSet()));
+	}
 
 	let env = arg.env ?? {};
-	let sdks: Array<std.sdk.Arg> = [{}];
 
 	let metadata = arg.metadata;
 
@@ -83,6 +82,7 @@ export let pkg = async (arg: PkgArg) => {
 	let tests = std.flatten(
 		sdks.map(async (sdk) => {
 			let directory = await arg.buildFunction({ sdk });
+			console.log("result from arg", sdk, await directory.id());
 
 			// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
 			let tests = [nonEmpty(directory)];
@@ -476,18 +476,6 @@ export let tryBaseName = (lib: string): string | undefined => {
 };
 
 /** Produce a set of SDK configurations to test for the given platform. */
-let defaultSdkSet = async () => {
-	let host = await std.triple.host();
-	let os = std.triple.os(host);
-
-	// Start with the default arg.
-	let sdks = [{}];
-	if (os === "linux") {
-		// On Linux, also test llvm, musl, and mold.
-		// sdks.push({ toolchain: "llvm" }); // FIXME - renable when fixed
-		sdks.push({ host: std.triple.create(host, { environment: "musl" }) });
-		sdks.push({ linker: "mold" });
-	}
-
-	return sdks;
+let defaultSdkSet = async (): Promise<Array<std.sdk.Arg>> => {
+	return nativeProxiedSdkArgs();
 };
