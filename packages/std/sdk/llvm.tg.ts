@@ -174,7 +174,7 @@ export let test = async () => {
 		}
 	`);
 	let cScript = tg`
-		set -x && clang -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
+		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
 	`;
 	let cOut = tg.File.expect(
 		await std.build(cScript, {
@@ -200,7 +200,7 @@ export let test = async () => {
 		}
 	`);
 	let cxxScript = tg`
-		set -x && clang++ -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
+		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`;
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
