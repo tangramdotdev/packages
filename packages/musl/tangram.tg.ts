@@ -77,7 +77,7 @@ export let musl = tg.target(async (arg?: Arg) => {
 	};
 
 	let install = {
-		args: [`DESTDIR="$OUTPUT/${host}"`],
+		args: [`DESTDIR="$OUTPUT"`],
 	};
 
 	let phases = {

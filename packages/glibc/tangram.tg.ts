@@ -66,7 +66,7 @@ export let glibc = tg.target(async (arg: Arg) => {
 	};
 
 	let install = {
-		args: [`DESTDIR="$OUTPUT/${host}"`],
+		args: [`DESTDIR="$OUTPUT"`],
 	};
 
 	let phases = {
@@ -106,13 +106,13 @@ export let glibc = tg.target(async (arg: Arg) => {
 	// Fix libc.so.
 	result = await applySysrootFix({
 		directory: result,
-		filePath: `${host}/lib/libc.so`,
+		filePath: `lib/libc.so`,
 	});
 
 	// Fix libm.so.
 	result = await applySysrootFix({
 		directory: result,
-		filePath: `${host}/lib/libm.so`,
+		filePath: `lib/libm.so`,
 	});
 
 	return result;
