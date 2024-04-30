@@ -1,9 +1,11 @@
 import icu from "tg:icu" with { path: "../icu" };
+import libxml2 from "tg:libxml2" with { path: "../libxml2" };
 import lz4 from "tg:lz4" with { path: "../lz4" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import perl from "tg:perl" with { path: "../perl" };
 import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import python from "tg:python" with { path: "../python" };
 import readline from "tg:readline" with { path: "../readline" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
@@ -65,6 +67,7 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<std.env.Arg> = [
 		icu({ ...rest, build, env: env_, host }),
+		libxml2({ ...rest, build, env: env_, host }),
 		lz4({ ...rest, build, env: env_, host }),
 		ncurses({ ...rest, build, env: env_, host }),
 		openssl({ ...rest, build, env: env_, host }),
@@ -82,11 +85,11 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 
 	let sourceDir = source_ ?? source(os);
 
-	let prepare = "export DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH";
+	//let prepare = "export DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH";
 	let configure = {
-		args: ["--disable-rpath", "--with-lz4", "--with-zstd"],
+		args: ["--with-libxml", "--with-lz4", "--with-zstd"],
 	};
-	let phases = { prepare, configure };
+	let phases = { configure };
 
 	let output = await std.autotools.build(
 		{
