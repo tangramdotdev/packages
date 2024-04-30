@@ -17,7 +17,7 @@ export let metadata = {
 	version: "16.2",
 };
 
-export let source = tg.target(async () => {
+export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:446e88294dbc2c9085ab4b7061a646fa604b4bec03521d5ea671c2e5ad9b2952";
@@ -31,7 +31,10 @@ export let source = tg.target(async () => {
 	let download = tg.Directory.expect(await std.download({ checksum, url }));
 	let source = await std.directory.unwrap(download);
 
-	let pwdPatch = tg.File.expect(await tg.include("dont_use_bin_pwd.patch"));
+	let pwdPatch =
+		os === "linux"
+			? tg.File.expect(await tg.include("dont_use_bin_pwd_linux.patch"))
+			: tg.File.expect(await tg.include("dont_use_bin_pwd_darwin.patch"));
 	source = await std.patch(source, pwdPatch);
 
 	return source;
@@ -49,14 +52,18 @@ type Arg = {
 export let postgresql = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
 
-	let env = [
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
+
+	let env: tg.Unresolved<std.env.Arg> = [
 		icu({ ...rest, build, env: env_, host }),
 		lz4({ ...rest, build, env: env_, host }),
 		ncurses({ ...rest, build, env: env_, host }),
@@ -68,24 +75,31 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		zstd({ ...rest, build, env: env_, host }),
 		env_,
 	];
+	if (os === "darwin") {
+		//env.push({ LDFLAGS: tg.Mutation.templatePrepend("-z nodefs", " ") });
+		//env.push({ CC: tg.Mutation.unset(), CXX: tg.Mutation.unset() });
+	}
 
-	let sourceDir = source_ ?? source();
+	let sourceDir = source_ ?? source(os);
 
+	let prepare = "export DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH";
 	let configure = {
 		args: ["--disable-rpath", "--with-lz4", "--with-zstd"],
 	};
-	let phases = { configure };
+	let phases = { prepare, configure };
 
 	let output = await std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
+			debug: true,
 			env,
 			phases,
 			source: sourceDir,
 		},
 		autotools,
 	);
+	console.log("output", await output.id());
 
 	// Wrap output binaries.
 	let libDir = tg.Directory.expect(await output.get("lib"));
