@@ -86,7 +86,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 		std.flatten(rest.sdk ?? []).some((sdk) => sdk?.toolchain === "llvm")
 	) {
 		env.push({
-			CC: "clang -Wno-int-conversion",
+			CFLAGS: tg.Mutation.templatePrepend("-Wno-int-conversion", " "),
 		});
 	}
 
@@ -125,7 +125,6 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 				fi
 			done
 
-			# Remove leading colon if it exists
 			PKG_CONFIG_PATH=$(echo "$PKG_CONFIG_PATH" | sed 's/^://')
 
 			export PKG_CONFIG_PATH
