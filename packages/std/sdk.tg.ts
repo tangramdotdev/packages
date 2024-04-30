@@ -87,8 +87,8 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 
 	// If we're building our own toolchain, canonicalize the host and targets.
 	if (toolchain_ === "gcc" || toolchain_ === "llvm") {
-		host = await canonicalTriple(host);
-		targets = await Promise.all(targets.map(canonicalTriple));
+		host = sdk.canonicalTriple(host);
+		targets = targets.map(sdk.canonicalTriple);
 	}
 
 	// Create an array to collect all constituent envs.
@@ -251,8 +251,8 @@ export namespace sdk {
 
 		let llvm = await std.env.provides({ env, names: ["clang"] });
 
-		let host = await canonicalTriple(host_ ?? (await std.triple.host()));
-		let target = await canonicalTriple(target_ ?? host);
+		let host = canonicalTriple(host_ ?? (await std.triple.host()));
+		let target = canonicalTriple(target_ ?? host);
 		let os = std.triple.os(target);
 		let isCross = host !== target;
 		// Provides binutils, cc/c++.
@@ -849,6 +849,23 @@ export namespace sdk {
 		);
 	};
 
+	export let canonicalTriple = (triple: string): string => {
+		let components = std.triple.components(std.triple.normalize(triple));
+		if (components.os === "linux") {
+			return std.triple.create({
+				...components,
+				environment: components.environment ?? "gnu",
+			});
+		} else if (components.os === "darwin") {
+			return std.triple.create({
+				...components,
+				vendor: "apple",
+			});
+		} else {
+			throw new Error(`Unsupported OS ${components.os}`);
+		}
+	};
+
 	export type HostAndTargetsOptions = {
 		host?: string;
 		target?: string;
@@ -930,24 +947,6 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 		}
 	}
 	return dir;
-};
-
-/** Produce the canonical version of the triple used by the toolchain. */
-export let canonicalTriple = async (triple: string): Promise<string> => {
-	let components = std.triple.components(std.triple.normalize(triple));
-	if (components.os === "linux") {
-		return std.triple.create({
-			...components,
-			environment: components.environment ?? "gnu",
-		});
-	} else if (components.os === "darwin") {
-		return std.triple.create({
-			...components,
-			vendor: "apple",
-		});
-	} else {
-		throw new Error(`Unsupported OS ${components.os}`);
-	}
 };
 
 export let assertMoldComment = async (exe: tg.File, toolchain: std.env.Arg) => {
@@ -1134,7 +1133,7 @@ export let nativeProxiedSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 		return [{}];
 	}
 
-	let hostGnu = await canonicalTriple(detectedHost);
+	let hostGnu = sdk.canonicalTriple(detectedHost);
 	let hostMusl = std.triple.create(hostGnu, { environment: "musl" });
 
 	return [{}, { host: hostMusl }, { toolchain: "llvm" }, { linker: "mold" }];
@@ -1148,7 +1147,7 @@ export let allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 		return [{}, { proxy: false }];
 	}
 
-	let hostGnu = await canonicalTriple(detectedHost);
+	let hostGnu = sdk.canonicalTriple(detectedHost);
 	let hostMusl = std.triple.create(hostGnu, { environment: "musl" });
 	let detectedHostArch = std.triple.arch(detectedHost);
 	let crossArch = detectedHostArch === "x86_64" ? "aarch64" : "x86_64";

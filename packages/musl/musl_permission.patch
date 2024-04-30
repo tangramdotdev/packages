@@ -1,0 +1,11 @@
+diff -Naur musl-1.2.4/Makefile musl-1.2.4_patched/Makefile
+--- musl-1.2.4/Makefile	2023-05-01 23:39:41.000000000 -0400
++++ musl-1.2.4_patched/Makefile	2024-01-18 10:51:49.053309022 -0500
+@@ -100,6 +100,7 @@
+ 
+ obj/include/bits/syscall.h: $(srcdir)/arch/$(ARCH)/bits/syscall.h.in
+ 	cp $< $@
++	chmod +w $@
+ 	sed -n -e s/__NR_/SYS_/p < $< >> $@
+ 
+ obj/src/internal/version.h: $(wildcard $(srcdir)/VERSION $(srcdir)/.git)

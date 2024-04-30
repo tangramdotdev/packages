@@ -50,7 +50,6 @@ export let gettext = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: [
 			"--disable-dependency-tracking",
-			"--disable-rpath",
 			"--enable-relocatable",
 			"--without-emacs",
 			"--without-git",
@@ -58,16 +57,23 @@ export let gettext = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [
-		ncurses({ ...rest, build, env: env_, host }),
+	let ncursesArtifact = await ncurses({ ...rest, build, env: env_, host });
+	let dependencies: tg.Unresolved<std.env.Arg> = [
+		ncursesArtifact,
 		perl({ ...rest, build, env: env_, host }),
 	];
+	let attrArtifact;
 	if (os === "darwin") {
 		dependencies.push(libiconv({ ...rest, build, env: env_, host }));
 	} else if (os === "linux") {
-		dependencies.push(attr({ ...rest, build, env: env_, host }));
+		attrArtifact = await attr({ ...rest, build, env: env_, host });
+		dependencies.push(attrArtifact);
 	}
-	let env = [...dependencies, env_];
+	let env = [
+		...dependencies,
+		{ TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter" },
+		env_,
+	];
 
 	let output = await std.autotools.build(
 		{
@@ -82,10 +88,19 @@ export let gettext = tg.target(async (arg?: Arg) => {
 
 	// Wrap output binaries.
 	let libDir = tg.Directory.expect(await output.get("lib"));
+	let libraryPaths = [
+		libDir,
+		tg.Directory.expect(await ncursesArtifact.get("lib")),
+	];
+	if (os === "linux") {
+		tg.assert(attrArtifact);
+		let attrDir = tg.Directory.expect(await attrArtifact.get("lib"));
+		libraryPaths.push(attrDir);
+	}
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {
 		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths: [libDir] });
+		let wrappedBin = await std.wrap(file, { libraryPaths });
 		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
 	}
 

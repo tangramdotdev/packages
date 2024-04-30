@@ -1,9 +1,11 @@
 import * as std from "tg:std" with { path: "../std" };
-<<<<<<< Updated upstream
-=======
-
-// TODO - handle libc.
->>>>>>> Stashed changes
+import binutils from "tg:binutils" with { path: "../binutils" };
+import glibc from "tg:glibc" with { path: "../glibc" };
+import musl from "tg:musl" with { path: "../musl" };
+import perl from "tg:perl" with { path: "../perl" };
+import python from "tg:python" with { path: "../python" };
+import texinfo from "tg:texinfo" with { path: "../texinfo" };
+import zstd from "tg:zstd" with { path: "../zstd" };
 
 export let metadata = {
 	homepage: "https://gcc.gnu.org/",
@@ -33,8 +35,7 @@ type Arg = {
 	target?: string;
 };
 
-/* Produce a GCC toolchain. */
-export let build = tg.target(async (arg?: Arg) => {
+export let gcc = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -45,22 +46,35 @@ export let build = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let target = target_ ?? host;
+	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	let os = std.triple.os(host);
+	if (os !== "linux") {
+		throw new Error("GCC is only supported on Linux");
+	}
+	let build = std.sdk.canonicalTriple(build_ ?? host);
+	let target = std.sdk.canonicalTriple(target_ ?? host);
 
-	let sdk = await std.sdk({ host, target });
-	let { directory: sdkDir } = await std.sdk.toolchainComponents({ env: sdk });
+	let deps = [
+		binutils({ build, host: build, target: build }),
+		perl({ host: build }),
+		python({ host: build }),
+		texinfo({ host: build }),
+		zstd({ host: build }),
+	];
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
+		"--disable-bootstrap",
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
 		"--enable-default-ssp",
 		"--enable-default-pie",
+		"--enable-host-pie",
+		"--enable-host-bind-now",
 		"--enable-initfini-array",
-		tg`--with-native-system-header-dir=${sdkDir}/include`,
+		`--with-native-system-header-dir=/include`,
+		tg`--with-sysroot=${libc(target)}`,
 		`--build=${build}`,
 		`--host=${host}`,
 		`--target=${target}`,
@@ -86,7 +100,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let phases = { configure };
 
-	let env = [additionalEnv, sdk, env_];
+	let env = [additionalEnv, ...deps, env_];
 
 	let result = await std.autotools.build(
 		{
@@ -95,7 +109,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			env,
 			phases,
 			opt: "2",
-			sdk: false,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -118,9 +131,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	return result;
 });
 
-export default build;
+export default gcc;
 
 export let libgcc = tg.target(async (arg?: Arg) => {
+	// FIXME - write in terms of gcc above, pass phases down.
 	let {
 		autotools = [],
 		build: build_,
@@ -131,23 +145,36 @@ export let libgcc = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let target = target_ ?? host;
+	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	let os = std.triple.os(host);
+	if (os !== "linux") {
+		throw new Error("GCC is only supported on Linux");
+	}
+	let build = std.sdk.canonicalTriple(build_ ?? host);
+	let target = std.sdk.canonicalTriple(target_ ?? host);
 
-	let sdk = await std.sdk({ host, target });
-	let { directory: sdkDir } = await std.sdk.toolchainComponents({ env: sdk });
+	let deps = [
+		binutils({ build, host: build, target: build }),
+		perl({ host: build }),
+		python({ host: build }),
+		texinfo({ host: build }),
+		zstd({ host: build }),
+	];
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
+		"--disable-bootstrap",
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
-		"--enable-initfini-array",
 		"--enable-default-ssp",
 		"--enable-default-pie",
-		"--enable-langugages=c",
-		//tg`--with-native-system-header-dir=${sdkDir}/include`,
+		"--enable-host-pie",
+		"--enable-host-bind-now",
+		"--enable-initfini-array",
+		"--enable-languages=c",
+		`--with-native-system-header-dir=/include`,
+		tg`--with-sysroot=${libc(target)}`,
 		`--build=${build}`,
 		`--host=${host}`,
 		`--target=${target}`,
@@ -170,14 +197,17 @@ export let libgcc = tg.target(async (arg?: Arg) => {
 	}
 
 	let configure = { args: [...commonArgs, ...additionalArgs] };
-	let buildPhase = tg.Mutation.set(
-		"make -j$(nproc) all-gcc && make -j$(nproc) all-target-libgcc",
-	);
-	let install = tg.Mutation.set("make install-target-libgcc");
+	let buildPhase = tg.Mutation.set(`
+		make -j$(nproc) all-gcc
+		make -j$(nproc) all-target-libgcc
+	`);
+	let install = tg.Mutation.set(`
+		make install-target-libgcc
+	`);
 
 	let phases = { configure, build: buildPhase, install };
 
-	let env = [additionalEnv, sdk, env_];
+	let env = [additionalEnv, ...deps, env_];
 
 	let result = await std.autotools.build(
 		{
@@ -186,12 +216,10 @@ export let libgcc = tg.target(async (arg?: Arg) => {
 			env,
 			phases,
 			opt: "2",
-			sdk: false,
 			source: source_ ?? source(),
 		},
 		autotools,
 	);
-	console.log("result");
 
 	let libgcc = tg.File.expect(await result.get("lib/libgcc_s.so"));
 
@@ -266,6 +294,19 @@ export let mpfrSource = tg.target(async () => {
 	});
 });
 
+/** Select the correct libc for the host. */
+export let libc = (host: string) => {
+	let environment = std.triple.environment(std.triple.normalize(host));
+	switch (environment) {
+		case "musl":
+			return musl({ host });
+		case "gnu":
+			return glibc({ host });
+		default:
+			throw new Error(`Unsupported environment: ${environment}`);
+	}
+};
+
 /** Merge all lib and lib64 directories into a single lib directory, leaving a symlink. */
 export let mergeLibDirs = async (dir: tg.Directory) => {
 	for await (let [name, artifact] of dir) {
@@ -304,7 +345,7 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		buildFunction: gcc,
 		binaries: ["gcc"],
 		metadata,
 	});

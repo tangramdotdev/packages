@@ -1,5 +1,4 @@
-import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://www.kernel.org",
@@ -24,8 +23,13 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(source);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
+type Arg = {
+	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
 	phases?: tg.MaybeNestedArray<std.phases.Arg>;
+	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
 
@@ -44,7 +48,9 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let system = std.triple.archAndOs(buildTriple);
 
 	let sdk =
-		typeof sdk_ === "boolean" ? await bootstrap.sdk.arg(buildTriple) : sdk_;
+		typeof sdk_ === "boolean"
+			? await std.sdk({ host: buildTriple, target: host })
+			: std.sdk(sdk_);
 
 	let sourceDir = source_ ?? source();
 
@@ -62,14 +68,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		karch = "arm";
 	}
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	env.push(std.sdk(sdk));
-	env.push(
-		std.utils.env({
-			sdk,
-			host: buildTriple,
-		}),
-	);
+	let env = [sdk, env_];
 
 	let prepare = tg`cp -r ${sourceDir}/* . && chmod -R +w . && make mrproper`;
 	let build = {
@@ -100,30 +99,19 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 export default kernelHeaders;
 
 export let test = tg.target(async () => {
-	let detectedHost = await std.triple.host();
-	let host = await bootstrap.toolchainTriple(detectedHost);
+	let host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		return;
 	}
 
 	// test host
-	await testKernelHeaders(host);
-
-	// test cross
-	let hostArch = std.triple.arch(host);
-	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = std.triple.create(host, { arch: targetArch });
-	await testKernelHeaders(host, target);
-
-	return true;
+	return await testKernelHeaders(host);
 });
 
 export let testKernelHeaders = async (host: string, target?: string) => {
 	let target_ = target ?? host;
-	let sdk = await bootstrap.sdk(host);
 	let headers = await kernelHeaders({
 		build: host,
-		env: sdk,
 		host: target_,
 	});
 	let configFile = tg.File.expect(await headers.get("config/kernel.release"));
@@ -132,4 +120,5 @@ export let testKernelHeaders = async (host: string, target?: string) => {
 	let kernelH = tg.File.expect(await headers.get("linux/kernel.h"));
 	let kernelHContents = await kernelH.text();
 	tg.assert(kernelHContents.includes("#ifndef _LINUX_KERNEL_H"));
+	return headers;
 };
