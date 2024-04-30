@@ -63,14 +63,16 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
+	let ncursesArtifact = ncurses({ ...rest, build, host });
+	let readlineArtifact = readline({ ...rest, build, host });
 	let env: tg.Unresolved<std.env.Arg> = [
 		icu({ ...rest, build, env: env_, host }),
 		lz4({ ...rest, build, env: env_, host }),
-		ncurses({ ...rest, build, env: env_, host }),
+		ncursesArtifact,
 		openssl({ ...rest, build, env: env_, host }),
 		perl({ ...rest, build, env: env_, host }),
 		pkgconfig({ ...rest, build, env: env_, host }),
-		readline({ ...rest, build, env: env_, host }),
+		readlineArtifact,
 		zlib({ ...rest, build, env: env_, host }),
 		zstd({ ...rest, build, env: env_, host }),
 		env_,
@@ -92,21 +94,30 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			debug: true,
 			env,
 			phases,
 			source: sourceDir,
 		},
 		autotools,
 	);
-	console.log("output", await output.id());
 
 	// Wrap output binaries.
 	let libDir = tg.Directory.expect(await output.get("lib"));
+	let libraryPaths = [libDir];
+	if (os === "darwin") {
+		let ncursesLibDir = tg.Directory.expect(
+			await (await ncursesArtifact).get("lib"),
+		);
+		let readlineLibDir = tg.Directory.expect(
+			await (await readlineArtifact).get("lib"),
+		);
+		libraryPaths.push(ncursesLibDir);
+		libraryPaths.push(readlineLibDir);
+	}
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {
 		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths: [libDir] });
+		let wrappedBin = await std.wrap(file, { libraryPaths });
 		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
 	}
 
