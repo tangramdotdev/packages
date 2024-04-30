@@ -1,5 +1,4 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import { canonicalTriple } from "../sdk.tg.ts";
 import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
@@ -39,7 +38,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		source: source_,
 		...rest
 	} = arg ?? {};
-	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
+	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	let build = build_ ?? host;
 
 	if (std.triple.os(host) === "darwin") {
@@ -156,7 +155,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 
 export let test = async () => {
 	// Build a triple for the detected host.
-	let host = await canonicalTriple(await std.triple.host());
+	let host = std.sdk.canonicalTriple(await std.triple.host());
 	let hostArch = std.triple.arch(host);
 	let os = std.triple.os(std.triple.archAndOs(host));
 

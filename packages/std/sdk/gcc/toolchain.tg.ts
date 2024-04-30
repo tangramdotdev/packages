@@ -1,7 +1,6 @@
 /** This package takes a bootstrap C/C++ compiler and some utilities and canadian-crosses up a sizzling plate of farm-fresh GCC. The output of this package can then be used to build other compilers like LLVM. */
 
 import * as bootstrap from "../../bootstrap.tg.ts";
-import { canonicalTriple } from "../../sdk.tg.ts";
 import * as std from "../../tangram.tg.ts";
 import binutils from "../binutils.tg.ts";
 import * as gcc from "../gcc.tg.ts";
@@ -16,8 +15,8 @@ export type ToolchainArg = std.sdk.BuildEnvArg & {
 /** Construct a complete binutils + libc + gcc toolchain. */
 export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	let { host: host_, target: target_, ...rest } = arg;
-	let host = await canonicalTriple(host_ ?? (await std.triple.host()));
-	let target = await canonicalTriple(target_ ?? host);
+	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	let target = std.sdk.canonicalTriple(target_ ?? host);
 
 	// Always build a native toolchain.
 	let nativeToolchain = await canadianCross(host);
@@ -162,7 +161,7 @@ export let buildSysroot = tg.target(async (arg: std.sdk.BuildEnvArg) => {
 });
 
 export let canadianCross = tg.target(async (hostArg?: string) => {
-	let host = await canonicalTriple(hostArg ?? (await std.triple.host()));
+	let host = std.sdk.canonicalTriple(hostArg ?? (await std.triple.host()));
 
 	let target = host;
 	let build = bootstrap.toolchainTriple(host);
@@ -203,7 +202,7 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 });
 
 export let buildToHostCrossToolchain = async (hostArg?: string) => {
-	let host = await canonicalTriple(hostArg ?? (await std.triple.host()));
+	let host = std.sdk.canonicalTriple(hostArg ?? (await std.triple.host()));
 	let build = bootstrap.toolchainTriple(host);
 
 	let sdkArg = bootstrap.sdk.arg(host);
