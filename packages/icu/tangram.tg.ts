@@ -32,20 +32,36 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
+export let icu = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		source: source_,
 		...rest
 	} = arg ?? {};
 
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
+
 	let sourceDir = source_ ?? source();
 
-	let dependencies = [python(arg)];
+	let dependencies = [python({ ...rest, build, env: env_, host })];
 	let env = [...dependencies, env_];
+
+	// On Linux with LLVM, use the filter option to prevent dropping libm.so.1 from the proxied library paths.
+	if (
+		os === "linux" &&
+		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
+			std.flatten(rest.sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
+				.length > 0)
+	) {
+		env.push({
+			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter",
+		});
+	}
 
 	let configure = {
 		command: tg`${sourceDir}/source/configure`,
@@ -80,11 +96,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	return output;
 });
 
-export default build;
+export default icu;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		buildFunction: icu,
 		binaries: [
 			"derb",
 			"genbrk",
