@@ -74,8 +74,6 @@ export let zlib = tg.target(async (arg?: Arg) => {
 
 export default zlib;
 
-export let zlibLlvm = tg.target(() => zlib({ sdk: { toolchain: "llvm" } }));
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFunction: zlib,
