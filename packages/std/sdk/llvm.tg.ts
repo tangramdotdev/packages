@@ -75,8 +75,6 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	// https://github.com/llvm/llvm-project/blob/main/clang/cmake/caches/DistributionExample.cmake
 	/*
  for bootstrap cmake args.
-				-DLLVM_TOOLCHAIN_TOOLS='dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size';\
-				-DLLVM_DISTRIBUTION_COMPONENTS='clang;LTO;clang-format;clang-resource-headers;builtins;runtimes;dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size'"`,
 */
 
 	let configure = {
@@ -96,12 +94,15 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 				-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld';\
 				-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind';\
 				-DLLVM_TARGETS_TO_BUILD='X86;ARM;AARCH64';\
-				-DCMAKE_BUILD_TYPE=Release;\
-				-DCMAKE_C_FLAGS_RELEASE='-O3 -gline-tables-only -DNDEBUG';\
-				-DCMAKE_CXX_FLAGS_RELEASE='-O3 -gline-tables-only -DNDEBUG';\
-				-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON;"`,
+				-DCMAKE_BUILD_TYPE=RelWithDebInfo;\
+				-DCMAKE_C_FLAGS_RELWITHDEBINFO='-O3 -gline-tables-only -DNDEBUG';\
+				-DCMAKE_CXX_FLAGS_RELWITHDEBINFO='-O3 -gline-tables-only -DNDEBUG';\
+				-DCOMPILER_RT_BUILD_PROFILE=ON;\
+				-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON;\
+				-DLLVM_TOOLCHAIN_TOOLS='dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size';\
+				-DLLVM_DISTRIBUTION_COMPONENTS='clang;LTO;clang-format;clang-resource-headers;builtins;runtimes;dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size'"`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS"`,
-			`-DCLANG_BOOTSTRAP_TARGET='check-all;check-llvm;check-clang;llvm-config;test-suite;test-depends;llvm-test-depends;clang-test-depends;distribution;install-distribution;clang'`,
+			`-DCLANG_BOOTSTRAP_TARGETS='check-all;check-llvm;check-clang;llvm-config;test-suite;test-depends;llvm-test-depends;clang-test-depends;distribution;install-distribution;clang'`,
 			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
 			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
 			"-DCLANG_ENABLE_BOOTSTRAP=ON",
@@ -131,10 +132,10 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		],
 	};
 
-	// let buildPhase = tg.Mutation.set("ninja stage2-distribution");
-	// let install = tg.Mutation.set("ninja stage2-install-distribution");
-	let buildPhase = tg.Mutation.set("ninja stage2");
-	let install = tg.Mutation.set("ninja stage2-install");
+	let buildPhase = tg.Mutation.set("ninja stage2-distribution");
+	let install = tg.Mutation.set("ninja stage2-install-distribution");
+	// let buildPhase = tg.Mutation.set("ninja stage2");
+	// let install = tg.Mutation.set("ninja stage2-install");
 	let phases = { configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build(
