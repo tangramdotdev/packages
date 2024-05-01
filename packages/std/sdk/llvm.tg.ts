@@ -54,7 +54,6 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());
 
-	//let zlibArtifact = await dependencies.zlib.build({ host: build });
 	let deps: tg.Unresolved<std.env.Arg> = [
 		std.utils.env({ host: build }),
 		git({ host: build }),
@@ -62,80 +61,30 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			host: build,
 			sdk: bootstrap.sdk.arg(build),
 		}),
-		//{ TANGRAM_LINKER_PASSTHROUGH: "1" },
-		//zlibArtifact,
 	];
 
 	let env = [...deps, env_];
 
-	let ldsoName = libc.interpreterName(host);
-	let stage2Ldflags = tg`-Wl,-rpath=${sysroot}/lib:/home/tangram/work/lib:/home/tangram/work/lib/${host} -Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
+	// let ldsoName = libc.interpreterName(host);
+	// FIXME - try not to embed these paths as rpaths, especially in late stage 2 its not even correct.
+	//let stage2Ldflags = tg`-Wl,-rpath=${sysroot}/lib:/home/tangram/work/lib:/home/tangram/work/lib/${host} -Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
+	//let stage2Ldflags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
-	// TODO - use cmake cache files.
-	// https://github.com/llvm/llvm-project/blob/main/clang/cmake/caches/DistributionExample.cmake
-	/*
- for bootstrap cmake args.
-*/
+	// Grab the cache files.
+	let cacheDir = tg.Directory.expect(await tg.include("llvm/cmake"));
 
 	let configure = {
 		args: [
-			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2Ldflags}'`,
-			`-DBOOTSTRAP_CMAKE_SHARED_LINKER_FLAGS='-unwindlib=libunwind'`,
-			"-DBOOTSTRAP_CMAKE_BUILD_TYPE=Release",
-			"-DBOOTSTRAP_CLANG_DEFAULT_CXX_STDLIB=libc++",
-			"-DBOOTSTRAP_CLANG_DEFAULT_RTLIB=compiler-rt",
-			"-DBOOTSTRAP_LIBCXX_USE_COMPILER_RT=YES",
-			"-DBOOTSTRAP_LIBCXXABI_USE_COMPILER_RT=YES",
-			"-DBOOTSTRAP_LIBCXXABI_USE_LLVM_UNWINDER=YES",
-			"-DBOOTSTRAP_LIBUNWIND_USE_COMPILER_RT=Yes",
-			"-DBOOTSTRAP_LLVM_ENABLE_LTO=ON",
-			"-DBOOTSTRAP_LLVM_USE_LINKER=lld",
-			`-DCLANG_BOOTSTRAP_CMAKE_ARGS="\
-				-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld';\
-				-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind';\
-				-DLLVM_TARGETS_TO_BUILD='X86;ARM;AARCH64';\
-				-DCMAKE_BUILD_TYPE=RelWithDebInfo;\
-				-DCMAKE_C_FLAGS_RELWITHDEBINFO='-O3 -gline-tables-only -DNDEBUG';\
-				-DCMAKE_CXX_FLAGS_RELWITHDEBINFO='-O3 -gline-tables-only -DNDEBUG';\
-				-DCOMPILER_RT_BUILD_PROFILE=ON;\
-				-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON;\
-				-DLLVM_TOOLCHAIN_TOOLS='dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size';\
-				-DLLVM_DISTRIBUTION_COMPONENTS='clang;LTO;clang-format;clang-resource-headers;builtins;runtimes;dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size'"`,
+			"-C",
+			tg`${cacheDir}/Distribution.cmake`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS"`,
-			`-DCLANG_BOOTSTRAP_TARGETS='check-all;check-llvm;check-clang;llvm-config;test-suite;test-depends;llvm-test-depends;clang-test-depends;distribution;install-distribution;clang'`,
-			"-DCLANG_DEFAULT_CXX_STDLIB=libc++",
-			"-DCLANG_DEFAULT_RTLIB=compiler-rt",
-			"-DCLANG_ENABLE_BOOTSTRAP=ON",
-			"-DCMAKE_BUILD_TYPE=Release",
-			"-DCMAKE_INSTALL_LIBDIR=lib",
-			"-DCMAKE_SKIP_INSTALL_RPATH=ON",
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
-			"-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON",
-			"-DLIBCXX_USE_COMPILER_RT=YES",
-			"-DLIBCXXABI_USE_COMPILER_RT=YES",
-			"-DLIBCXXABI_USE_LLVM_UNWINDER=YES",
-			"-DLIBUNWIND_USE_COMPILER_RT=YES",
-			"-DLLVM_ENABLE_EH=ON",
-			"-DLLVM_ENABLE_LIBXML2=OFF",
-			"-DLLVM_ENABLE_PIC=ON",
-			"-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld'",
-			"-DLLVM_ENABLE_RTTI=ON",
-			"-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind'",
-			"-DLLVM_INSTALL_BINUTILS_SYMLINKS=ON",
-			"-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON",
-			//`-DLLVM_TOOLCHAIN_TOOLS='dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size'`,
-			//`-DLLVM_DISTRIBUTION_COMPONENTS='clang;LTO;clang-format;clang-resource-headers;builtins;runtimes;dsymutil;llvm-cov;llvm-darfdump;llvm-profdata;llvm-objdump;llvm-nm;llvm-size'`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			"-DLLVM_TARGETS_TO_BUILD=Native", // This only applies to stage1, which we throw away.
-			"-DPACKAGE_VENDOR=Tangram",
-			//tg`-DZLIB_ROOT=${zlibArtifact}`,
 		],
 	};
 
 	let buildPhase = tg.Mutation.set("ninja stage2-distribution");
 	let install = tg.Mutation.set("ninja stage2-install-distribution");
-	// let buildPhase = tg.Mutation.set("ninja stage2");
-	// let install = tg.Mutation.set("ninja stage2-install");
 	let phases = { configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build(
