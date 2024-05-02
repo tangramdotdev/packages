@@ -1,6 +1,5 @@
 # This file defines the bootstrapping distribution build for the LLVM SDK.
 # Adapted from the example in the LLVM documentation: https://github.com/llvm/llvm-project/blob/main/clang/cmake/caches/DistributionExample.cmake
-# In addition to the basic example this build uses the LLVM libc++, compiler-rt, and libunwind in both stages.
 
 #  Enable LLVM projects and runtimes
 set(LLVM_ENABLE_PROJECTS "clang;clang-tools-extra;lld" CACHE STRING "")
@@ -17,6 +16,8 @@ set(PACKAGE_VENDOR Tangram CACHE STRING "")
 
 # Setting up the stage2 LTO option needs to be done on the stage1 build so that the proper LTO library dependencies can be connected.
 set(BOOTSTRAP_LLVM_ENABLE_LTO ON CACHE BOOL "")
+
+set(LLVM_INSTALL_BINUTILS_SYMLINKS ON CACHE BOOL "")
 
 if (NOT APPLE)
   # Since LLVM_ENABLE_LTO is ON we need a LTO capable linker
@@ -40,25 +41,32 @@ set(BOOTSTRAP_LIBCXXABI_USE_LLVM_UNWINDER ON CACHE BOOL "")
 set(LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
 set(BOOTSTRAP_LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
 
-# Ensure we build a static libc++abi library in stage 1.
+# Ensure we build a static libc++abi library.
 set(LIBCXX_ENABLE_STATIC_ABI_LIBRARY ON CACHE BOOL "")
+set(BOOTSTRAP_LIBCXX_ENABLE_STATIC_ABI_LIBRARY ON CACHE BOOL "")
 
-# Set up LLVM to handle static builds.
-# see https://github.com/ClangBuiltLinux/tc-build/issues/150#issuecomment-1005053204
-set(LLVM_BUILD_STATIC ON CACHE BOOL "")
-set(LLVM_ENABLE_PIC OFF CACHE BOOL "")
-set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL "")
-set(LLVM_ENABLE_ZLIB OFF CACHE BOOL "")
-set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
-set(CMAKE_EXE_LINKER_FLAGS "-static" CACHE STRING "")
-set(BOOTSTRAP_CMAKE_EXE_LINKER_FLAGS "-static -unwindlib=libunwind" CACHE STRING "")
+# Ensure libunwind is used throughout stage2.
 set(BOOTSTRAP_CMAKE_SHARED_LINKER_FLAGS "-unwindlib=libunwind" CACHE STRING "")
+
+# Set up LLVM.
+set(LLVM_ENABLE_EH ON CACHE BOOL "")
+set(BOOTSTRAP_LLVM_ENABLE_EH ON CACHE BOOL "")
+set(LLVM_ENABLE_PIC ON CACHE BOOL "")
+set(BOOTSTRAP_LLVM_ENABLE_PIC ON CACHE BOOL "")
+set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
+set(BOOTSTRAP_LLVM_ENABLE_RTTI ON CACHE BOOL "")
+set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL "")
+set(BOOTSTRAP_LLVM_ENABLE_LIBXML2 OFF CACHE BOOL "")
+set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
+set(BOOTSTRAP_LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
 
 # Install libraries to lib
 set(CMAKE_INSTALL_LIBDIR lib CACHE STRING "")
+set(BOOTSTRAP_CMAKE_INSTALL_LIBDIR lib CACHE STRING "")
 
 # Skip the rpath install step, as the Tangram ld proxy may have made this impossible for some targets, and circumvents the need.
 set(CMAKE_SKIP_INSTALL_RPATH ON CACHE BOOL "")
+set(BOOTSTRAP_CMAKE_SKIP_INSTALL_RPATH ON CACHE BOOL "")
 
 # Expose stage2 targets through the stage1 build configuration.
 set(CLANG_BOOTSTRAP_TARGETS

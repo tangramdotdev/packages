@@ -7,14 +7,18 @@ import * as libc from "./libc.tg.ts";
 import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
 
 export let metadata = {
+	homepage: "https://llvm.org/",
 	name: "llvm",
-	version: "18.1.4",
+	license:
+		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
+	repository: "https://github.com/llvm/llvm-project/",
+	version: "18.1.5",
 };
 
 export let source = async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:2c01b2fbb06819a12a92056a7fd4edcdc385837942b5e5260b9c2c0baff5116b";
+		"sha256:3591a52761a7d390ede51af01ea73abfecc4b1d16445f9d019b67a57edd7de56";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -54,6 +58,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());
 
+	let zlibArtifact = dependencies.zlib.build({ host: build });
 	let deps: tg.Unresolved<std.env.Arg> = [
 		std.utils.env({ host: build }),
 		git({ host: build }),
@@ -61,31 +66,35 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			host: build,
 			sdk: bootstrap.sdk.arg(build),
 		}),
+		zlibArtifact,
 	];
 
 	let env = [...deps, env_];
 
-	// let ldsoName = libc.interpreterName(host);
-	// FIXME - try not to embed these paths as rpaths, especially in late stage 2 its not even correct.
-	//let stage2Ldflags = tg`-Wl,-rpath=${sysroot}/lib:/home/tangram/work/lib:/home/tangram/work/lib/${host} -Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
-	//let stage2Ldflags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
+	let ldsoName = libc.interpreterName(host);
+	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
+	let stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Grab the cache files.
 	let cacheDir = tg.Directory.expect(await tg.include("llvm/cmake"));
 
+	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
+	let prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
 	let configure = {
 		args: [
-			"-C",
-			tg`${cacheDir}/Distribution.cmake`,
-			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS"`,
+			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			tg`-DZLIB_ROOT=${zlibArtifact}`,
+			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
+			"-C",
+			tg`${cacheDir}/Distribution.cmake`,
 		],
 	};
 
 	let buildPhase = tg.Mutation.set("ninja stage2-distribution");
 	let install = tg.Mutation.set("ninja stage2-install-distribution");
-	let phases = { configure, build: buildPhase, install };
+	let phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build(
 		{
@@ -98,15 +107,53 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		autotools,
 	);
 
-	// Add sysroot and `cc`/`c++` symlinks.
+	// Add sysroot and symlinks.
 	llvmArtifact = await tg.directory(llvmArtifact, {
+		"bin/ar": tg.symlink("llvm-ar"),
 		"bin/cc": tg.symlink("clang"),
 		"bin/c++": tg.symlink("clang++"),
+		"bin/nm": tg.symlink("llvm-nm"),
+		"bin/objcopy": tg.symlink("llvm-objcopy"),
+		"bin/objdump": tg.symlink("llvm-objdump"),
+		"bin/ranlib": tg.symlink("llvm-ar"),
+		"bin/readelf": tg.symlink("llvm-readobj"),
+		"bin/strings": tg.symlink("llvm-strings"),
+		"bin/strip": tg.symlink("llvm-strip"),
 	});
-	let combined = tg.directory(llvmArtifact, sysroot);
-	console.log("combined llvm + sysroot", await (await combined).id());
+	llvmArtifact = await tg.directory(llvmArtifact, sysroot);
+	console.log("combined llvm + sysroot", await llvmArtifact.id());
 
-	return combined;
+	// The bootstrap compiler was not proxied. Manually wrap the output binaries.
+
+	// Collect all required library paths.
+	let libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
+	let hostLibDir = tg.symlink(tg`${libDir}/${host}`);
+	let zlibLibDir = zlibArtifact.then((dir) =>
+		dir.get("lib").then(tg.Directory.expect),
+	);
+	let libraryPaths = [libDir, hostLibDir, zlibLibDir];
+
+	// Wrap all ELF binaries in the bin directory.
+	let binDir = await llvmArtifact.get("bin").then(tg.Directory.expect);
+	for await (let [name, artifact] of binDir) {
+		if (tg.File.is(artifact)) {
+			let { format } = await std.file.executableMetadata(artifact);
+			if (format === "elf") {
+				let unwrapped = binDir.get(name).then(tg.File.expect);
+				// Use the wrapper identity to ensure the wrapper is called when binaries call themselves. Otherwise it won't find all required libraries.
+				let wrapped = std.wrap(unwrapped, {
+					identity: "wrapper",
+					libraryPaths,
+				});
+				llvmArtifact = await tg.directory(llvmArtifact, {
+					[`bin/${name}`]: wrapped,
+				});
+			}
+		}
+	}
+
+	console.log("wrapped llvm artifact", await llvmArtifact.id());
+	return llvmArtifact;
 });
 
 export let llvmMajorVersion = () => {

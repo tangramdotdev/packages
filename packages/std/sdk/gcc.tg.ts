@@ -171,7 +171,7 @@ export let build = tg.target(async (arg: Arg) => {
 			debug,
 			env,
 			phases,
-			opt: "2",
+			opt: "3",
 			source: source_ ?? source(),
 		},
 		autotools,
