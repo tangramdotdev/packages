@@ -270,6 +270,11 @@ export let testMoldBuild = tg.target(async () => {
 	return await mold.test();
 });
 
+import * as ncurses from "./sdk/llvm/ncurses.tg.ts";
+export let testNcurses = tg.target(async () => {
+	return await ncurses.test();
+});
+
 import {
 	testExplicitGlibcVersionSdk,
 	testLLVMMoldSdk,

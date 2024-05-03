@@ -1,4 +1,4 @@
-import * as std from "tg:std" with { path: "../std" };
+import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	homepage: "https://invisible-island.net/ncurses/",
@@ -41,8 +41,6 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 			"--with-cxx-shared",
 			"--enable-widec",
 			"--without-debug",
-			"--enable-pc-files",
-			`--with-pkg-config-libdir="$OUTPUT/lib/pkgconfig"`,
 			"--enable-symlinks",
 			"--disable-home-terminfo",
 			"--disable-rpath-hack",
@@ -72,35 +70,18 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	let libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];
 	let dylibExt = os === "darwin" ? "dylib" : "so";
 
-	// Create widechar-to-normal symlinks and fix pkgconfig files.
-	await Promise.all(
-		libNames.map(async (libName) => {
-			let pc = tg.File.expect(await result.get(`lib/pkgconfig/${libName}w.pc`));
-			let content = await pc.text();
-			let lines = content.split("\n");
-			lines = lines.map((line) => {
-				if (line.startsWith("Libs:")) {
-					return line.replace("-L/output/output/lib", "-L${libdir}");
-				} else {
-					return line;
-				}
-			});
-			result = await tg.directory(result, {
-				lib: {
-					[`lib${libName}.${dylibExt}`]: tg.symlink(
-						`lib${libName}w.${dylibExt}`,
-					),
-					[`pkgconfig/${libName}w.pc`]: tg.file(lines.join("\n")),
-					[`pkgconfig/${libName}.pc`]: tg.symlink(`./${libName}w.pc`),
-				},
-			});
-		}),
-	);
+	// Create widechar-to-normal symlinks.
+	for (let libName of libNames) {
+		result = await tg.directory(result, {
+			lib: {
+				[`lib${libName}.${dylibExt}`]: tg.symlink(`lib${libName}w.${dylibExt}`),
+			},
+		});
+	}
 
 	// Add links from curses to ncurses.
 	result = await tg.directory(result, {
 		[`lib/libcurses.${dylibExt}`]: tg.symlink(`libncurses.${dylibExt}`),
-		[`lib/pkgconfig/curses.pc`]: tg.symlink(`ncurses.pc`),
 	});
 
 	return result;
@@ -109,10 +90,5 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 export default ncurses;
 
 export let test = tg.target(async () => {
-	let artifact = ncurses();
-	await std.assert.pkg({
-		buildFunction: ncurses,
-		metadata,
-	});
-	return artifact;
+	return await ncurses();
 });

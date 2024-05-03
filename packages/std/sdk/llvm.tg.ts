@@ -4,6 +4,7 @@ import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import git from "./git.tg.ts";
 import * as libc from "./libc.tg.ts";
+import ncurses from "./llvm/ncurses.tg.ts";
 import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
 
 export let metadata = {
@@ -58,14 +59,16 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 	console.log("llvm sysroot", await sysroot.id());
 
+	// Define build environment.
+	let ncursesArtifact = ncurses({ host: build });
 	let zlibArtifact = dependencies.zlib.build({ host: build });
-	let deps: tg.Unresolved<std.env.Arg> = [
-		std.utils.env({ host: build }),
+	let deps = [
 		git({ host: build }),
 		dependencies.python.build({
 			host: build,
 			sdk: bootstrap.sdk.arg(build),
 		}),
+		ncursesArtifact,
 		zlibArtifact,
 	];
 
@@ -79,12 +82,15 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let cacheDir = tg.Directory.expect(await tg.include("llvm/cmake"));
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	let prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
+	let prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
 	let configure = {
 		args: [
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
+			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH didn't work for Terminfo_ROOT, but this did.
+			tg`-DBOOTSTRAP_Terminfo_ROOT=${ncursesArtifact}`,
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
 			"-C",
@@ -128,10 +134,13 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	// Collect all required library paths.
 	let libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	let hostLibDir = tg.symlink(tg`${libDir}/${host}`);
+	let ncursesLibDir = ncursesArtifact.then((dir) =>
+		dir.get("lib").then(tg.Directory.expect),
+	);
 	let zlibLibDir = zlibArtifact.then((dir) =>
 		dir.get("lib").then(tg.Directory.expect),
 	);
-	let libraryPaths = [libDir, hostLibDir, zlibLibDir];
+	let libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
 
 	// Wrap all ELF binaries in the bin directory.
 	let binDir = await llvmArtifact.get("bin").then(tg.Directory.expect);
