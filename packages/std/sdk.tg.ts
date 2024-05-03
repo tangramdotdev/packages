@@ -262,10 +262,9 @@ export namespace sdk {
 				targetPrefix = `${target}-`;
 			}
 		}
-		let llvmPrefix = llvm && os !== "darwin" ? "llvm-" : "";
 		await std.env.assertProvides({
 			env,
-			names: requiredUtils.map((name) => `${targetPrefix}${llvmPrefix}${name}`),
+			names: requiredUtils.map((name) => `${targetPrefix}${name}`),
 		});
 		let compilerComponents = requiredCompilerComponents(
 			os,

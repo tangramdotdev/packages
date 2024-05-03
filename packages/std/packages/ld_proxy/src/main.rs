@@ -517,7 +517,7 @@ async fn create_manifest<H: BuildHasher>(
 struct AnalyzeOutputFileOutput {
 	/// Is the output file executable?
 	is_executable: bool,
-	/// Does the output file need an interpreter? On macOS, This should always get `Some(None)`. On Linux, None indicates a statically-linked executable, `Some(None)` indicates a dynamically-linked executable with a default ldso path, and `Some(Some(symlink))` indicates the PT_INTERP field has been explicitly set to point at a non-standard path we need to retain.
+	/// Does the output file need an interpreter? On macOS, This should always get `Some(None)`. On Linux, None indicates a statically-linked executable, `Some(None)` indicates a dynamically-linked executable with a default ldso path, and `Some(Some(symlink))` indicates the `PT_INTERP` field has been explicitly set to point at a non-standard path we need to retain.
 	interpreter: InterpreterRequirement,
 	/// Does the output file specify libraries required at runtime?
 	needed_libraries: Vec<String>,

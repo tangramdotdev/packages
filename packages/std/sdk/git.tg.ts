@@ -3,7 +3,7 @@ import zlib from "./dependencies/zlib.tg.ts";
 
 let metadata = {
 	name: "git",
-	version: "2.44.0",
+	version: "2.45.0",
 };
 
 export let source = tg.target(async () => {
@@ -16,7 +16,7 @@ export let source = tg.target(async () => {
 	});
 	let url = `https://mirrors.edge.kernel.org/pub/software/scm/git/${packageArchive}`;
 	let checksum =
-		"sha256:e358738dcb5b5ea340ce900a0015c03ae86e804e7ff64e47aa4631ddee681de3";
+		"sha256:0aac200bd06476e7df1ff026eb123c6827bc10fe69d2823b4bf2ebebe5953429";
 	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return await std.directory.unwrap(outer);
 });
