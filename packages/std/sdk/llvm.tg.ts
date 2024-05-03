@@ -16,7 +16,7 @@ export let metadata = {
 	version: "18.1.5",
 };
 
-export let source = async () => {
+export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:3591a52761a7d390ede51af01ea73abfecc4b1d16445f9d019b67a57edd7de56";
@@ -25,8 +25,10 @@ export let source = async () => {
 	let tag = `llvmorg-${version}`;
 	let extension = ".tar.xz";
 	let url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${repo}-${version}.src${extension}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(outer);
+	return std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 };
 
 export type LLVMArg = std.sdk.BuildEnvArg & {
@@ -79,7 +81,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Grab the cache files.
-	let cacheDir = tg.Directory.expect(await tg.include("llvm/cmake"));
+	let cacheDir = tg.include("llvm/cmake").then(tg.Directory.expect);
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
 	let prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
@@ -114,7 +116,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	);
 
 	// Add sysroot and symlinks.
-	llvmArtifact = await tg.directory(llvmArtifact, {
+	llvmArtifact = await tg.directory(llvmArtifact, sysroot, {
 		"bin/ar": tg.symlink("llvm-ar"),
 		"bin/cc": tg.symlink("clang"),
 		"bin/c++": tg.symlink("clang++"),
@@ -126,7 +128,6 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		"bin/strings": tg.symlink("llvm-strings"),
 		"bin/strip": tg.symlink("llvm-strip"),
 	});
-	llvmArtifact = await tg.directory(llvmArtifact, sysroot);
 	console.log("combined llvm + sysroot", await llvmArtifact.id());
 
 	// The bootstrap compiler was not proxied. Manually wrap the output binaries.
