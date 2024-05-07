@@ -70,7 +70,9 @@ export let build = tg.target(async (arg?: Arg) => {
 		additionalEnv = {
 			...additionalEnv,
 			CC: await tg`${target}-cc --static -fPIC`,
+			CC_FOR_BUILD: `cc --static -fPIC`,
 			CXX: await tg`${target}-c++ -static-libstdc++ -fPIC`,
+			CXX_FOR_BUILD: `c++ -static-libstdc++ -fPIC`,
 		};
 		additionalArgs = [
 			"--enable-shared=no",

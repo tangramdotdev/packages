@@ -1,5 +1,5 @@
-import * as std from "../tangram.tg.ts";
-import zlib from "./dependencies/zlib.tg.ts";
+import * as std from "../../tangram.tg.ts";
+import zlib from "../dependencies/zlib.tg.ts";
 
 let metadata = {
 	name: "git",

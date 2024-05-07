@@ -155,6 +155,7 @@ export let buildSysroot = tg.target(async (arg: std.sdk.BuildEnvArg) => {
 		host,
 		linuxHeaders,
 		env: [env, bootstrapGCC],
+		sdk: false,
 	});
 	console.log("sysroot", await sysroot.id());
 	return sysroot;
@@ -184,7 +185,6 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 
 	let fullGCC = await gcc.build({
 		build,
-		debug: true,
 		env: [env, nativeHostBinutils],
 		host,
 		sysroot,
@@ -198,6 +198,7 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	let innerSysroot = tg.Directory.expect(await sysroot.get(target));
 	let combined = await tg.directory(fullGCC, innerSysroot);
 	console.log("combined native toolchain", await combined.id());
+
 	return [combined, nativeHostBinutils];
 });
 

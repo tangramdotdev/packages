@@ -3,14 +3,17 @@ import * as cmake from "./cmake.tg.ts";
 import zstd from "./dependencies/zstd.tg.ts";
 
 export let metadata = {
+	homepage: "https://github.com/rui314/mold",
+	license: "MIT",
 	name: "mold",
-	version: "2.30.0",
+	repository: "https://github.com/rui314/mold",
+	version: "2.31.0",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:6e5178ccafe828fdb4ba0dd841d083ff6004d3cb41e56485143eb64c716345fd";
+		"sha256:3dc3af83a5d22a4b29971bfad17261851d426961c665480e2ca294e5c74aa1e5";
 	let owner = "rui314";
 	let repo = name;
 	let tag = `v${version}`;

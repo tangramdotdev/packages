@@ -169,7 +169,15 @@ export async function sdk(...args: tg.Args<sdk.Arg>): Promise<std.env.Arg> {
 		let hostUtils = await std.utils.env({
 			build: host,
 			host,
-			env: envs,
+			env: [
+				envs,
+				{
+					CFLAGS: tg.Mutation.templatePrepend(
+						"-Wno-int-conversion -Wno-implicit-function-declaration",
+						" ",
+					),
+				},
+			],
 			sdk: false,
 		});
 		envs.push(hostUtils);

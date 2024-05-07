@@ -8,8 +8,11 @@ import { defaultGlibcVersion } from "./libc/glibc.tg.ts";
 export { toolchain, crossToolchain } from "./gcc/toolchain.tg.ts";
 
 export let metadata = {
+	homepage: "https://gcc.gnu.org/",
+	license: "GPL-3.0-or-later",
 	name: "gcc",
-	version: "13.2.0",
+	repository: "https://gcc.gnu.org/git.html",
+	version: "14.1.0",
 };
 
 /* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
@@ -59,8 +62,8 @@ export let build = tg.target(async (arg: Arg) => {
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
-		"--enable-host-pie",
 		"--enable-host-bind-now",
+		"--enable-host-pie",
 		`--build=${build}`,
 		`--host=${host}`,
 		`--target=${target}`,
@@ -169,7 +172,7 @@ export let build = tg.target(async (arg: Arg) => {
 			...rest,
 			...std.triple.rotate({ build, host }),
 			debug,
-			env,
+			env: std.env.object(env),
 			phases,
 			opt: "3",
 			source: source_ ?? source(),
@@ -196,25 +199,19 @@ export default build;
 
 export let gccSource = tg.target(async () => {
 	let { name, version } = metadata;
-	let extension = ".tar.gz";
+	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
 		name,
 		version,
 		extension,
 	});
 	let checksum =
-		"sha256:8cb4be3796651976f94b9356fa08d833524f62420d6292c5033a9a26af315078";
+		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
 	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	let inner = await std.directory.unwrap(outer);
-	// https://github.com/crosstool-ng/crosstool-ng/blob/f064a63c6f65e7bbe5b974879502d8225f9fa1bf/packages/gcc/13.2.0/0011-libsanitizer-Remove-crypt-and-crypt_r-interceptors.patch
-	let libsanitizerPatch = tg.File.expect(
-		await tg.include(
-			"./gcc/libsanitizer-remove-crypt-and-cryptr-interceptors.patch",
-		),
-	);
-	inner = await bootstrap.patch(inner, libsanitizerPatch);
-	return inner;
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export let gmpSource = tg.target(async () => {
@@ -229,8 +226,10 @@ export let gmpSource = tg.target(async () => {
 	let checksum =
 		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
 	let url = `https://gmplib.org/download/gmp/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(outer);
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export let islSource = tg.target(async () => {
@@ -245,8 +244,10 @@ export let islSource = tg.target(async () => {
 	let checksum =
 		"sha256:043105cc544f416b48736fff8caf077fb0663a717d06b1113f16e391ac99ebad";
 	let url = `https://libisl.sourceforge.io/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(outer);
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export let mpcSource = tg.target(() => {

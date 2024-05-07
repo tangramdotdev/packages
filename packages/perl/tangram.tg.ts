@@ -126,20 +126,24 @@ export let perl = tg.target(async (arg?: Arg) => {
 		}
 	}
 
-	for (let script of scripts) {
-		// Get the script artifact.
-		let scriptArtifact = tg.File.expect(
-			await perlArtifact.get(`bin/${script}`),
-		);
+	let wrappedScripts = await Promise.all(
+		scripts.map(async (script) => {
+			// Get the script artifact.
+			let scriptArtifact = perlArtifact
+				.get(`bin/${script}`)
+				.then(tg.File.expect);
 
-		// Wrap it.
-		let wrappedScript = std.wrap(scriptArtifact, {
-			interpreter: wrappedPerl,
-		});
+			// Wrap it.
+			return await std.wrap(scriptArtifact, {
+				interpreter: wrappedPerl,
+			});
+		}),
+	);
 
+	for (let script of wrappedScripts) {
 		// Replace in the original artifact.
 		perlArtifact = await tg.directory(perlArtifact, {
-			[`bin/${script}`]: wrappedScript,
+			[`bin/${script}`]: script,
 		});
 	}
 
