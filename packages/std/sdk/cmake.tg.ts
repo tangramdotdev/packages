@@ -3,14 +3,17 @@ import * as std from "../tangram.tg.ts";
 import ninja from "./ninja.tg.ts";
 
 export let metadata = {
+	homepage: "https://cmake.org/",
+	license: "BSD-3-Clause",
 	name: "cmake",
-	version: "3.29.2",
+	repository: "https://gitlab.kitware.com/cmake/cmake",
+	version: "3.29.3",
 };
 
 export let source = tg.target(() => {
 	let { version } = metadata;
 	let checksum =
-		"sha256:36db4b6926aab741ba6e4b2ea2d99c9193222132308b4dc824d4123cb730352e";
+		"sha256:252aee1448d49caa04954fd5e27d189dd51570557313e7b281636716a238bccb";
 	let owner = "Kitware";
 	let repo = "CMake";
 	let tag = `v${version}`;
@@ -57,7 +60,8 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		bootstrapSdk,
 		bootstrap.make.build(host),
 		{
-			LDFLAGS: tg.Mutation.templatePrepend("-static", " "),
+			CC: "cc -static",
+			CXX: "c++ -static",
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},
 		env_,
@@ -68,7 +72,6 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		...std.triple.rotate({ build, host }),
 		buildInTree: true,
 		env,
-		hardeningCFlags: false,
 		phases: { configure },
 		sdk: false,
 		source: sourceDir,
@@ -437,6 +440,7 @@ export let test = tg.target(async () => {
 		buildFunction: cmake,
 		binaries: ["cmake"],
 		metadata,
+		sdk: {},
 	});
 	return true;
 });

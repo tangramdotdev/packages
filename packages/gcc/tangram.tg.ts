@@ -12,7 +12,7 @@ export let metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
-	version: "13.2.0",
+	version: "14.1.0",
 };
 
 /* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
@@ -235,7 +235,7 @@ export let gccSource = tg.target(async () => {
 		extension,
 	});
 	let checksum =
-		"sha256:8cb4be3796651976f94b9356fa08d833524f62420d6292c5033a9a26af315078";
+		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
 	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${packageArchive}`;
 	let outer = tg.Directory.expect(await std.download({ checksum, url }));
 	return std.directory.unwrap(outer);

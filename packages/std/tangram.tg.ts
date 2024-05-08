@@ -294,7 +294,7 @@ export let testExplicitGlibcVersion = tg.target(async () => {
 	return await testExplicitGlibcVersionSdk();
 });
 
-import * as git from "./sdk/git.tg.ts";
+import * as git from "./sdk/llvm/git.tg.ts";
 export let testGit = tg.target(async () => {
 	return await git.test();
 });

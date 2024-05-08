@@ -1,7 +1,9 @@
+import acl from "tg:acl" with { path: "../acl" };
 import attr from "tg:attr" with { path: "../attr" };
 import libiconv from "tg:libiconv" with { path: "../libiconv" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import perl from "tg:perl" with { path: "../perl" };
+import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -45,7 +47,6 @@ export let gettext = tg.target(async (arg?: Arg) => {
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
-	let os = std.triple.os(host);
 
 	let configure = {
 		args: [
@@ -61,14 +62,14 @@ export let gettext = tg.target(async (arg?: Arg) => {
 	let dependencies: tg.Unresolved<std.env.Arg> = [
 		ncursesArtifact,
 		perl({ ...rest, build, env: env_, host }),
+		pkgconfig({ ...rest, build, env: env_, host }),
 	];
-	let attrArtifact;
-	if (os === "darwin") {
-		dependencies.push(libiconv({ ...rest, build, env: env_, host }));
-	} else if (os === "linux") {
-		attrArtifact = await attr({ ...rest, build, env: env_, host });
-		dependencies.push(attrArtifact);
-	}
+	let aclArtifact = await acl({ ...rest, build, env: env_, host });
+	let attrArtifact = await attr({ ...rest, build, env: env_, host });
+	let libiconvArtifact = await libiconv({ ...rest, build, env: env_, host });
+	dependencies.push(libiconvArtifact);
+	dependencies.push(aclArtifact);
+	dependencies.push(attrArtifact);
 	let env = [
 		...dependencies,
 		{ TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter" },
@@ -92,11 +93,12 @@ export let gettext = tg.target(async (arg?: Arg) => {
 		libDir,
 		tg.Directory.expect(await ncursesArtifact.get("lib")),
 	];
-	if (os === "linux") {
-		tg.assert(attrArtifact);
-		let attrDir = tg.Directory.expect(await attrArtifact.get("lib"));
-		libraryPaths.push(attrDir);
-	}
+	let aclDir = tg.Directory.expect(await aclArtifact.get("lib"));
+	let attrDir = tg.Directory.expect(await attrArtifact.get("lib"));
+	let libiconvDir = tg.Directory.expect(await libiconvArtifact.get("lib"));
+	libraryPaths.push(aclDir);
+	libraryPaths.push(attrDir);
+	libraryPaths.push(libiconvDir);
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {
 		let file = tg.File.expect(artifact);

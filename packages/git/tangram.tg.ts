@@ -1,6 +1,6 @@
-import gettext from "tg:gettext" with { path: "../gettext" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
+import zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://git-scm.com/",
@@ -58,7 +58,11 @@ export let git = tg.target(async (arg?: Arg) => {
 		configure,
 	};
 
-	let env = [gettext(arg), openssl(arg), env_];
+	let env = [
+		openssl({ ...rest, build, env: env_, host }),
+		zlib({ ...rest, build, env: env_, host }),
+		env_,
+	];
 
 	return std.autotools.build(
 		{

@@ -2,7 +2,7 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
-import git from "./git.tg.ts";
+import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import ncurses from "./llvm/ncurses.tg.ts";
 import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";

@@ -1,6 +1,5 @@
 import autoconf from "tg:autoconf" with { path: "../autoconf" };
 import bison from "tg:bison" with { path: "../bison" };
-import gettext from "tg:gettext" with { path: "../gettext" };
 import m4 from "tg:m4" with { path: "../m4" };
 import perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
@@ -54,7 +53,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let dependencies = [
 		autoconf(arg),
 		bison(arg),
-		gettext(arg),
 		m4(arg),
 		perlArtifact,
 		texinfo(arg),

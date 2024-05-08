@@ -144,11 +144,15 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 						object.manifestArgs = existingManifest.args;
 					} else {
 						let executable = await manifestExecutableFromArg(file);
-						let manifestInterpreter =
-							await manifestInterpreterFromExecutableArg(
-								file,
-								object.buildToolchain,
-							);
+						let manifestInterpreter = arg.interpreter
+							? await manifestInterpreterFromArg(
+									arg.interpreter,
+									object.buildToolchain,
+							  )
+							: await manifestInterpreterFromExecutableArg(
+									file,
+									object.buildToolchain,
+							  );
 						object.executable = executable;
 						if (manifestInterpreter) {
 							object.interpreter = manifestInterpreter;
@@ -174,7 +178,7 @@ export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 							arg.libraryPaths.map(manifestTemplateFromArg),
 					  );
 			}
-			if (arg.interpreter !== undefined) {
+			if (arg.interpreter !== undefined && object.interpreter === undefined) {
 				object.interpreter = arg.interpreter;
 			}
 			if (arg.args !== undefined) {
@@ -1320,7 +1324,8 @@ let isManifestInterpreter = (
 		(arg.kind === "normal" ||
 			arg.kind === "ld-linux" ||
 			arg.kind === "ld-musl" ||
-			arg.kind === "dyld")
+			arg.kind === "dyld") &&
+		"path" in arg
 	);
 };
 
@@ -1341,7 +1346,7 @@ let manifestInterpreterFromExecutableArg = async (
 	// Handle the executable by its format.
 	switch (metadata.format) {
 		case "elf": {
-			return manifestInterpreterFromElf(metadata);
+			return manifestInterpreterFromElf(metadata, buildToolchainArg);
 		}
 		case "mach-o": {
 			let arch = std.triple.arch(await std.triple.host());
@@ -1377,6 +1382,7 @@ let manifestInterpreterFromExecutableArg = async (
 
 let manifestInterpreterFromElf = async (
 	metadata: std.file.ElfExecutableMetadata,
+	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Manifest.Interpreter | undefined> => {
 	// If there is no interpreter, this is a statically-linked executable. Nothing to do.
 	if (metadata.interpreter === undefined) {
@@ -1392,10 +1398,11 @@ let manifestInterpreterFromElf = async (
 		environment: libc,
 	});
 	// If the interpreter is ld-linux, use the host toolchain. Otherwise, use the bootstrap toolchain.
-	// FIXME - can we make this better, and prefer the host toolchain if it's available? Tricky when bootstrapping.
-	// This function should probably also get buildToolchain threaded through.
-	let buildToolchain =
-		libc === "musl" ? bootstrap.sdk.env(host) : gcc.toolchain({ host });
+	let buildToolchain = buildToolchainArg
+		? buildToolchainArg
+		: libc === "musl"
+		  ? bootstrap.sdk.env(host)
+		  : gcc.toolchain({ host });
 
 	// Obtain injection library.
 	let injectionLib = await injection.default({ buildToolchain, host });
@@ -1403,7 +1410,9 @@ let manifestInterpreterFromElf = async (
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {
 		// Handle an ld-linux interpreter.
-		let toolchainDir = await gcc.toolchain({ host });
+		let toolchainDir = buildToolchainArg
+			? buildToolchainArg
+			: await gcc.toolchain({ host });
 		let { ldso, libDir } = await std.sdk.toolchainComponents({
 			env: toolchainDir,
 		});

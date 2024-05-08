@@ -141,6 +141,7 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
+			opt: "3",
 			phases,
 			source: source_ ?? (await source()),
 		},

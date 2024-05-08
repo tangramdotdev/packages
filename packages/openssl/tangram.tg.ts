@@ -66,7 +66,7 @@ export let openssl = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { prepare, configure, install };
 
-	let env = [perl(arg), env_];
+	let env = [perl({ ...rest, build, env: env_, host }), env_];
 
 	let openssl = await std.autotools.build(
 		{

@@ -45,13 +45,13 @@ export let texinfo = tg.target(async (arg?: Arg) => {
 		...rest
 	} = arg ?? {};
 
-	let perlArtifact = await perl(arg);
+	let perlArtifact = await perl({ ...rest, build, env: env_, host });
 	let dependencies = [
-		bison(arg),
-		m4(arg),
-		ncurses(arg),
+		bison({ ...rest, build, env: env_, host }),
+		m4({ ...rest, build, env: env_, host }),
+		ncurses({ ...rest, build, env: env_, host }),
 		perlArtifact,
-		zlib(arg),
+		zlib({ ...rest, build, env: env_, host }),
 	];
 	let env = [...dependencies, env_];
 

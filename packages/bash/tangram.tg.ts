@@ -1,4 +1,3 @@
-import gettext from "tg:gettext" with { path: "../gettext" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
@@ -62,7 +61,6 @@ export let bash = tg.target((arg?: Arg) => {
 	let phases = { configure };
 
 	let dependencies = [
-		gettext({ ...rest, build, env: env_, host }),
 		ncurses({ ...rest, build, env: env_, host }),
 		pkgconfig({ ...rest, build, env: env_, host }),
 	];
