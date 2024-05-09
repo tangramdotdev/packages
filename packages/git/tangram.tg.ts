@@ -1,3 +1,4 @@
+import gettext from "tg:gettext" with { path: "../gettext" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
@@ -59,6 +60,7 @@ export let git = tg.target(async (arg?: Arg) => {
 	};
 
 	let env = [
+		gettext({ ...rest, build, env: env_, host }),
 		openssl({ ...rest, build, env: env_, host }),
 		zlib({ ...rest, build, env: env_, host }),
 		env_,

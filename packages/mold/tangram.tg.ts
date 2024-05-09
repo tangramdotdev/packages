@@ -35,7 +35,7 @@ type Arg = {
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 	source?: tg.Directory;
 };
-export let mold = async (arg?: Arg) => {
+export let mold = tg.target(async (arg?: Arg) => {
 	let {
 		cmake: cmake_ = [],
 		build: build_,
@@ -69,7 +69,7 @@ export let mold = async (arg?: Arg) => {
 	);
 
 	return result;
-};
+});
 
 export default mold;
 
