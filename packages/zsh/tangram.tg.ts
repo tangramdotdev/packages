@@ -1,8 +1,5 @@
-// import gettext from "tg:gettext" with { path: "../gettext" };
-import libiconv from "tg:libiconv" with { path: "../libiconv" };
 import ncurses from "tg:ncurses" with { path: "../ncurses" };
 import pcre2 from "tg:pcre2" with { path: "../pcre2" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -33,7 +30,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let zsh = tg.target((arg?: Arg) => {
+export let zsh = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build,
@@ -53,18 +50,25 @@ export let zsh = tg.target((arg?: Arg) => {
 	let phases = { configure };
 
 	let dependencies = [
-		libiconv({ ...rest, build, env: env_, host }),
 		pcre2({ ...rest, build, env: env_, host }),
-		pkgconfig({ ...rest, build, env: env_, host }),
 		ncurses({ ...rest, build, env: env_, host }),
 	];
-	let env = [...dependencies, env_];
+	let env = [
+		...dependencies,
+		{
+			// Necessary to get the `boolcodes` configure test to pass, preventing a build failure in the termcap module later when it attempts to use a conflicting type.
+			CFLAGS: tg.Mutation.templatePrepend(
+				`-Wno-incompatible-pointer-types`,
+				" ",
+			),
+		},
+		env_,
+	];
 
 	return std.autotools.build(
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			debug: true,
 			env,
 			phases,
 			source: source_ ?? source(),
