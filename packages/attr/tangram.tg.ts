@@ -61,6 +61,14 @@ export let attr = tg.target(async (arg?: Arg) => {
 	for (let [binName, binFile] of bins) {
 		output = await tg.directory(output, { [`bin/${binName}`]: binFile });
 	}
+
+	// Remove .la files.
+	for await (let [name, _] of libDir) {
+		if (name.endsWith(".la")) {
+			output = await tg.directory(output, { [`lib/${name}`]: undefined });
+		}
+	}
+
 	return output;
 });
 

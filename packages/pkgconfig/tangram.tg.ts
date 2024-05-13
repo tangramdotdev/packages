@@ -122,7 +122,7 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 			PKG_CONFIG_PATH=$(echo "$PKG_CONFIG_PATH" | sed 's/^://')
 
 			export PKG_CONFIG_PATH
-			${pkgConfig} "$@"
+			exec ${pkgConfig} "$@"
 		`;
 	}
 

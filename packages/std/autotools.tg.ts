@@ -198,6 +198,11 @@ export let target = async (...args: tg.Args<Arg>) => {
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
 
+	// Detect the host system from the environment.
+	let host = host_ ?? (await std.triple.host());
+	let target = target_ ?? host;
+	let os = std.triple.os(host);
+
 	// Determine SDK configuration.
 	let sdkArgs: Array<std.sdk.Arg> | undefined = undefined;
 	// If any SDk arg is `false`, we don't want to include the SDK.
@@ -207,12 +212,13 @@ export let target = async (...args: tg.Args<Arg>) => {
 		sdkArgs =
 			sdkArgs_?.filter((arg): arg is std.sdk.Arg => typeof arg !== "boolean") ??
 			([] as Array<std.sdk.Arg>);
+		if (
+			sdkArgs.length === 0 ||
+			sdkArgs.every((arg) => arg?.host === undefined)
+		) {
+			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
+		}
 	}
-
-	// Detect the host system from the environment.
-	let host = host_ ?? (await std.triple.host());
-	let target = target_ ?? host;
-	let os = std.triple.os(host);
 
 	// Set up env.
 	let env: std.env.Arg = {};

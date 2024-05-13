@@ -3,13 +3,13 @@ import * as cmake from "./cmake.tg.ts";
 
 export let metadata = {
 	name: "ninja",
-	version: "1.12.0",
+	version: "1.12.1",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:8b2c86cd483dc7fcb7975c5ec7329135d210099a89bc7db0590a07b0bbfe49a5";
+		"sha256:821bdff48a3f683bc4bb3b6f0b5fe7b2d647cf65d52aeb63328c91a6c6df285a";
 	let owner = "ninja-build";
 	let repo = name;
 	let tag = `v${version}`;
@@ -63,6 +63,7 @@ export let test = tg.target(async () => {
 		buildFunction: ninja,
 		binaries: ["ninja"],
 		metadata,
+		sdk: {},
 	});
 	return true;
 });
