@@ -18,20 +18,16 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target((arg?: Arg) => {
-	let {
-		autotools = [],
-		build,
-		env: env_,
-		host,
-		source: source_,
-		...rest
-	} = arg ?? {};
+	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
 
 	let configure = {
 		args: [
@@ -43,22 +39,19 @@ export let build = tg.target((arg?: Arg) => {
 	};
 
 	let dependencies = [
-		std.utils.env({ ...rest, build, host }),
-		m4({ ...rest, build, host }),
+		std.utils.env({ build, host, sdk }),
+		m4({ build, host, sdk }),
 	];
-	let env = [env_, ...dependencies];
+	let env = std.env.arg(env_, ...dependencies);
 
-	let output = std.utils.buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases: { configure },
-			source: source_ ?? source(),
-			wrapBashScriptPaths: ["bin/yacc"],
-		},
-		autotools,
-	);
+	let output = std.utils.buildUtil({
+		...std.triple.rotate({ build, host }),
+		env,
+		phases: { configure },
+		sdk,
+		source: source_ ?? source(),
+		wrapBashScriptPaths: ["bin/yacc"],
+	});
 
 	return output;
 });

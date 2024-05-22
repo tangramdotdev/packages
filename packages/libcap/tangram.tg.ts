@@ -62,7 +62,7 @@ export let libcap = tg.target(async (arg?: Arg) => {
 	let env = [
 		...dependencies,
 		{
-			LDFLAGS: tg.Mutation.templatePrepend(`-L${attrArtifact}/lib`, " "),
+			LDFLAGS: tg.Mutation.prefix(`-L${attrArtifact}/lib`, " "),
 		},
 		env_,
 	];

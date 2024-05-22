@@ -27,7 +27,11 @@ export let source = tg.target(() => {
 	});
 });
 
-export type Arg = std.sdk.BuildEnvArg & {
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
@@ -37,8 +41,8 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -56,7 +60,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 	};
 
 	let bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
-	let env = [
+	let env = std.env.arg(
 		bootstrapSdk,
 		bootstrap.make.build(host),
 		{
@@ -65,10 +69,9 @@ export let cmake = tg.target(async (arg?: Arg) => {
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},
 		env_,
-	];
+	);
 
 	let result = std.autotools.build({
-		...rest,
 		...std.triple.rotate({ build, host }),
 		buildInTree: true,
 		env,
@@ -123,10 +126,10 @@ export type BuildArg = {
 	prefixPath?: tg.Template.Arg;
 
 	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
-	sdk?: boolean | tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
-	source: tg.Template.Arg;
+	source: tg.Directory | tg.Symlink;
 
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean;
@@ -136,26 +139,25 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export let target = async (...args: tg.Args<BuildArg>) => {
-	type Apply = {
-		debug: boolean;
-		defaultCFlags: boolean;
-		fullRelro: boolean;
-		generator: "Ninja" | "Unix Makefiles";
-		hardeningCFlags: boolean;
-		host: string;
-		march: string;
-		mtune: string;
-		opt: "1" | "2" | "3" | "s" | "z" | "fast";
-		parallel: boolean | number;
-		phases: Array<std.phases.Arg>;
-		prefixPath: tg.Template.Arg;
-		sdkArgs?: Array<boolean | std.sdk.Arg>;
-		source: tg.Template.Arg;
-		stripExecutables: boolean;
-		target: string;
-	};
-
+export let target = tg.target(async (...args: std.Args<BuildArg>) => {
+	let mutationArgs = await std.args.createMutations<
+		BuildArg,
+		std.args.MakeArrayKeys<BuildArg, "env" | "phases" | "sdk">
+	>(std.flatten(args), {
+		env: "append",
+		generator: "set",
+		phases: "append",
+		sdk: (arg) => {
+			if (arg === false) {
+				return tg.Mutation.append(false);
+			} else if (arg === true) {
+				return tg.Mutation.append({});
+			} else {
+				return tg.Mutation.append<boolean | std.sdk.Arg>(arg as std.sdk.Arg);
+			}
+		},
+		source: "set",
+	});
 	let {
 		debug = false,
 		defaultCFlags = true,
@@ -165,96 +167,15 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 		host: host_,
 		march,
 		mtune = "generic",
-		opt = 2,
+		opt = "2",
 		parallel = true,
 		phases,
-		prefixPath = "$OUTPUT",
-		sdkArgs: sdkArgs_,
+		prefixPath = `$OUTPUT`,
+		sdk: sdkArgs_,
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await tg.Args.apply<BuildArg, Apply>(args, async (arg) => {
-		if (arg === undefined) {
-			return {};
-		} else if (typeof arg === "object") {
-			let object: tg.MutationMap<Apply> = {};
-			let phasesArgs: Array<std.phases.Arg> = [];
-			if (arg.debug !== undefined) {
-				object.debug = arg.debug;
-			}
-			if (arg.defaultCFlags !== undefined) {
-				object.defaultCFlags = arg.defaultCFlags;
-			}
-			if (arg.hardeningCFlags !== undefined) {
-				object.hardeningCFlags = arg.hardeningCFlags;
-			}
-			if (arg.env !== undefined) {
-				phasesArgs.push({ env: arg.env });
-			}
-			if (arg.fullRelro !== undefined) {
-				object.fullRelro = arg.fullRelro;
-			}
-			if (arg.generator !== undefined) {
-				object.generator = arg.generator;
-			}
-			if (arg.host !== undefined) {
-				object.host = arg.host;
-			}
-			if (arg.opt !== undefined) {
-				object.opt = arg.opt;
-			}
-			if (arg.march !== undefined) {
-				object.march = arg.march;
-			}
-			if (arg.mtune !== undefined) {
-				object.mtune = arg.mtune;
-			}
-			if (arg.parallel !== undefined) {
-				object.parallel = arg.parallel;
-			}
-			if (arg.prefixPath !== undefined) {
-				object.prefixPath = arg.prefixPath;
-			}
-			if (arg.source !== undefined) {
-				object.source = arg.source;
-			}
-			if (arg.phases !== undefined) {
-				if (tg.Mutation.is(arg.phases)) {
-					object.phases = arg.phases;
-				} else {
-					phasesArgs.push(arg.phases);
-				}
-			}
-			if (arg.sdk !== undefined) {
-				if (tg.Mutation.is(arg.sdk)) {
-					object.sdkArgs = arg.sdk;
-				} else {
-					if (typeof arg.sdk === "boolean") {
-						if (arg.sdk === false) {
-							// If the user set this to `false`, pass it through. Ignore `true`.
-							object.sdkArgs = await tg.Mutation.arrayAppend<
-								boolean | std.sdk.Arg
-							>(false);
-						}
-					} else {
-						object.sdkArgs = await tg.Mutation.arrayAppend<
-							boolean | std.sdk.Arg
-						>(arg.sdk);
-					}
-				}
-			}
-			if (arg.stripExecutables !== undefined) {
-				object.stripExecutables = arg.stripExecutables;
-			}
-			if (arg.target !== undefined) {
-				object.target = arg.target;
-			}
-			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
-			return object;
-		} else {
-			return tg.unreachable();
-		}
-	});
+	} = await std.args.applyMutations(mutationArgs);
 
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
@@ -265,14 +186,15 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	let os = std.triple.os(host);
 
 	// Determine SDK configuration.
-	let sdkArgs: Array<std.sdk.Arg> | undefined = undefined;
+	let sdkArgs: Array<std.sdk.ArgObject> | undefined = undefined;
 	// If any SDk arg is `false`, we don't want to include the SDK.
 	let includeSdk = !sdkArgs_?.some((arg) => arg === false);
 	// If we are including the SDK, omit any booleans from the array.
 	if (includeSdk) {
 		sdkArgs =
-			sdkArgs_?.filter((arg): arg is std.sdk.Arg => typeof arg !== "boolean") ??
-			([] as Array<std.sdk.Arg>);
+			sdkArgs_?.filter(
+				(arg): arg is std.sdk.ArgObject => typeof arg !== "boolean",
+			) ?? [];
 		if (
 			sdkArgs.length === 0 ||
 			sdkArgs.every((arg) => arg?.host === undefined)
@@ -316,7 +238,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	 *self_spec:
 	 + %{!static:%{!shared:%{!r:-pie}}}
 	 		`);
-		let extraCxxFlags = await tg.Mutation.templatePrepend(
+		let extraCxxFlags = await tg.Mutation.prefix(
 			`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
 			" ",
 		);
@@ -327,7 +249,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 
 	// LDFLAGS
 	if (stripExecutables === true) {
-		let stripFlag = await tg.Mutation.templatePrepend(
+		let stripFlag = await tg.Mutation.prefix(
 			os === "darwin" ? `-Wl,-S` : `-s`,
 			" ",
 		);
@@ -335,7 +257,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	}
 	if (os === "linux" && hardeningCFlags) {
 		let fullRelroString = fullRelro ? ",-z,now" : "";
-		let extraLdFlags = await tg.Mutation.templatePrepend(
+		let extraLdFlags = await tg.Mutation.prefix(
 			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
 			" ",
 		);
@@ -343,16 +265,16 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	}
 
 	// Add cmake to env.
-	env = [await cmake({ host }), env];
+	env = await std.env.arg(await cmake({ host }), env);
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		env = [await ninja({ host }), env];
+		env = await std.env.arg(await ninja({ host }), env);
 	}
 
 	if (includeSdk) {
 		let sdk = await std.sdk(sdkArgs);
-		env = [sdk, env];
+		env = await std.env.arg(sdk, env);
 	}
 
 	// Define default phases.
@@ -369,7 +291,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	};
 
 	let jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
-	let jobsArg = tg.Mutation.templatePrepend(`-j${jobs}`, " ");
+	let jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
 	let defaultBuild = {
 		command: `cmake`,
 		args: [`--build`, `.`, jobsArg],
@@ -394,6 +316,9 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	}
 
 	let system = std.triple.archAndOs(host);
+	let phaseArgs = (phases ?? []).filter(
+		(arg): arg is std.phases.Arg => arg !== undefined,
+	);
 	return await std.phases.target(
 		{
 			debug,
@@ -401,16 +326,16 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 			env,
 			target: { env: { TANGRAM_HOST: system }, host: system },
 		},
-		...(phases ?? []),
+		...phaseArgs,
 	);
-};
+});
 
 /** Build a cmake package. */
-export let build = async (
-	...args: tg.Args<BuildArg>
-): Promise<tg.Directory> => {
-	return tg.Directory.expect(await (await target(...args)).build());
-};
+export let build = tg.target(
+	async (...args: std.Args<BuildArg>): Promise<tg.Directory> => {
+		return tg.Directory.expect(await (await target(...args)).output());
+	},
+);
 
 export let pushOrSet = (
 	obj: { [key: string]: unknown },

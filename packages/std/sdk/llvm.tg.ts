@@ -6,6 +6,7 @@ import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import ncurses from "./llvm/ncurses.tg.ts";
 import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
+// import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
 export let metadata = {
 	homepage: "https://llvm.org/",
@@ -13,13 +14,13 @@ export let metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "18.1.5",
+	version: "18.1.6",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:3591a52761a7d390ede51af01ea73abfecc4b1d16445f9d019b67a57edd7de56";
+		"sha256:bd4b4cb6374bcd5fc5a3ba60cb80425d29da34f316b8821abc12c0db225cf6b4";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -31,19 +32,21 @@ export let source = () => {
 		.then(std.directory.unwrap);
 };
 
-export type LLVMArg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type LLVMArg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	let build = build_ ?? host;
@@ -80,9 +83,6 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
 	let stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
-	// Grab the cache files.
-	let cacheDir = tg.include("llvm/cmake").then(tg.Directory.expect);
-
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
 	let prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
 	let configure = {
@@ -96,7 +96,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
 			"-C",
-			tg`${cacheDir}/Distribution.cmake`,
+			// tg`${cmakeCacheDir}/Distribution.cmake`,
 		],
 	};
 
@@ -104,16 +104,13 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let install = tg.Mutation.set("ninja stage2-install-distribution");
 	let phases = { prepare, configure, build: buildPhase, install };
 
-	let llvmArtifact = await cmake.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases,
-			source: tg`${sourceDir}/llvm`,
-		},
-		autotools,
-	);
+	let llvmArtifact = await cmake.build({
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		phases,
+		sdk,
+		source: tg.symlink(tg`${sourceDir}/llvm`),
+	});
 
 	// Add sysroot and symlinks.
 	llvmArtifact = await tg.directory(llvmArtifact, sysroot, {
@@ -146,7 +143,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	// Wrap all ELF binaries in the bin directory.
 	let binDir = await llvmArtifact.get("bin").then(tg.Directory.expect);
 	for await (let [name, artifact] of binDir) {
-		if (tg.File.is(artifact)) {
+		if (artifact instanceof tg.File) {
 			let { format } = await std.file.executableMetadata(artifact);
 			if (format === "elf") {
 				let unwrapped = binDir.get(name).then(tg.File.expect);
@@ -182,8 +179,8 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	let target = target_ ?? host;
 	let version = llvmMajorVersion();
 
-	let clangArgs: tg.Unresolved<tg.Template.Arg> = [];
-	let clangxxArgs: tg.Unresolved<tg.Template.Arg> = [];
+	let clangArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
+	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
 		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
@@ -254,7 +251,7 @@ export let test = async () => {
 	`;
 	let cxxOut = tg.File.expect(
 		await std.build(cxxScript, {
-			env: [directory],
+			env: directory,
 			host,
 		}),
 	);

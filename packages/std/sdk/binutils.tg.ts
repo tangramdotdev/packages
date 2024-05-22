@@ -30,13 +30,16 @@ export let source = tg.target(async (build: string) => {
 		sed '6009s/$add_dir//' -i ltmain.sh
 	`;
 	let result = tg.Directory.expect(
-		await tg.build(script, { env: std.env.object(utils) }),
+		await tg.build(script, { env: std.env.arg(utils) }),
 	);
 	return result;
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	staticBuild?: boolean;
 	target?: string;
@@ -45,7 +48,6 @@ type Arg = std.sdk.BuildEnvArg & {
 /** Obtain the GNU binutils. */
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
@@ -53,7 +55,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		staticBuild,
 		target: target_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -89,13 +90,13 @@ export let build = tg.target(async (arg?: Arg) => {
 			*/
 			additionalEnv = {
 				...additionalEnv,
-				CFLAGS: await tg.Mutation.templatePrepend("-D_LARGEFILE64_SOURCE", " "),
+				CFLAGS: await tg.Mutation.prefix("-D_LARGEFILE64_SOURCE", " "),
 			};
 		}
 	}
 
 	let deps = [std.utils.env({ host: build, sdk })];
-	let env = [env_, ...deps, additionalEnv];
+	let env = std.env.arg(env_, ...deps, additionalEnv);
 
 	// Collect configuration.
 	let configure = {
@@ -118,18 +119,14 @@ export let build = tg.target(async (arg?: Arg) => {
 		install: tg.Mutation.set("make MAKEINFO=true install"),
 	};
 
-	let output = std.autotools.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			opt: "3",
-			phases,
-			sdk,
-			source: source_ ?? source(build),
-		},
-		autotools,
-	);
+	let output = std.autotools.build({
+		...std.triple.rotate({ build, host }),
+		env,
+		opt: "3",
+		phases,
+		sdk,
+		source: source_ ?? source(build),
+	});
 
 	return output;
 });

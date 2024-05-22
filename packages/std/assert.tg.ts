@@ -184,7 +184,7 @@ export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 		await tg.build(
 			tg`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`,
 			{
-				env: std.env.object([bootstrap.sdk(), arg.directory, arg.env ?? {}]),
+				env: std.env.arg([bootstrap.sdk(), arg.directory, arg.env ?? {}]),
 			},
 		),
 	);
@@ -202,8 +202,8 @@ export let assertFileExists = tg.target(async (arg: FileExistsArg) => {
 type RunnableBinArg = {
 	directory: tg.Directory;
 	binary: BinarySpec;
-	env?: std.env.Arg;
-	metadata?: tg.Metadata;
+	env?: std.env.Arg | undefined;
+	metadata?: tg.Metadata | undefined;
 };
 
 /** Assert the directory contains a binary conforming to the provided spec. */
@@ -252,7 +252,7 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 	)} > $OUTPUT 2>&1 || true`;
 
 	let output = tg.File.expect(
-		await tg.build(executable, { env: await std.env.object(env) }),
+		await tg.build(executable, { env: await std.env.arg(env) }),
 	);
 	let stdout = await output.text();
 	tg.assert(
@@ -324,7 +324,7 @@ export let headerExists = tg.target(async (arg: HeaderArg) => {
 	// Compile the program, ensuring the env properly made the header discoverable.
 	let program = tg.File.expect(
 		await std.build(tg`env && cc -xc "${source}" -o $OUTPUT`, {
-			env: [std.sdk(), arg.directory],
+			env: std.env.arg(std.sdk(), arg.directory),
 		}),
 	);
 
@@ -439,7 +439,7 @@ export let dlopen = async (arg: DlopenArg) => {
 	let sdkEnv = std.sdk(arg?.sdk);
 	let _program = tg.File.expect(
 		await tg.build(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
-			env: std.env.object(
+			env: std.env.arg(
 				sdkEnv,
 				directory,
 				...arg.runtimeDepDirs,

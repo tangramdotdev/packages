@@ -170,20 +170,20 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					toolchainDir: directory,
 				});
 				// On Linux, don't wrap in place.
-				let inPlace = os === "darwin";
+				let merge = os === "darwin";
 				wrappedCC = std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
 					buildToolchain,
 					env,
 					executable: cc,
-					inPlace,
+					merge,
 				});
 				wrappedCXX = std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
 					buildToolchain,
 					env,
 					executable: cxx,
-					inPlace,
+					merge,
 				});
 				binDir = tg.directory({
 					bin: {
@@ -208,7 +208,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
-	return std.env.object(...dirs);
+	return std.env.arg(...dirs);
 });
 
 export default env;
@@ -243,7 +243,7 @@ export let ccProxy = async (arg: CcProxyArg) => {
 type LdProxyArg = {
 	buildToolchain: std.env.Arg;
 	build?: string;
-	interpreter?: tg.File;
+	interpreter?: tg.File | undefined;
 	interpreterArgs?: Array<tg.Template.Arg>;
 	linker: tg.File | tg.Symlink | tg.Template;
 	host?: string;
@@ -309,7 +309,7 @@ int main() {
 				/usr/bin/env
 				cc -v -xc ${helloSource} -o $OUTPUT`,
 			{
-				env: await std.env.object(bootstrapSDK, {
+				env: await std.env.arg(bootstrapSDK, {
 					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 					TANGRAM_WRAPPER_TRACING: "tangram=trace",

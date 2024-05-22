@@ -22,7 +22,13 @@ export let source = tg.target(async () => {
 	});
 });
 
-type Arg = std.sdk.BuildEnvArg;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
+	source?: tg.Directory;
+};
 
 /** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
 export let macOsXattrCmds = tg.target(async (arg?: Arg) => {
@@ -63,7 +69,7 @@ export let macOsXattrCmds = tg.target(async (arg?: Arg) => {
 
 export default macOsXattrCmds;
 
-type UtilArg = std.sdk.BuildEnvArg & {
+type UtilArg = Arg & {
 	destDir: tg.Directory;
 	fileName: string;
 	utilSource: tg.Directory;
@@ -95,13 +101,13 @@ export let compileUtil = async (arg: UtilArg) => {
 	let util = tg.File.expect(
 		await tg.build(await tg.template(script), {
 			host: std.triple.archAndOs(build),
-			env: std.env.object([
+			env: std.env.arg(
 				arg.env ?? {},
 				{
 					SDKROOT: macOsSdk,
 				},
 				...dependencies,
-			]),
+			),
 		}),
 	);
 

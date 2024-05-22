@@ -87,7 +87,11 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 
 	if (os === "darwin") {
 		configure.args.push("DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH");
-		env.push({ CC: tg.Mutation.unset(), CXX: tg.Mutation.unset() });
+		env.push({
+			CC: tg.Mutation.unset(),
+			CXX: tg.Mutation.unset(),
+			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "none",
+		});
 	}
 
 	let output = await std.autotools.build(
@@ -111,8 +115,8 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		let readlineLibDir = tg.Directory.expect(
 			await (await readlineArtifact).get("lib"),
 		);
-		libraryPaths.push(ncursesLibDir);
-		libraryPaths.push(readlineLibDir);
+		//libraryPaths.push(ncursesLibDir);
+		//libraryPaths.push(readlineLibDir);
 	}
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {

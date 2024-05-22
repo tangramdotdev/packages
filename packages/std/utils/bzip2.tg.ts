@@ -18,23 +18,27 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
 	let url = `https://sourceware.org/pub/bzip2/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return await std.directory.unwrap(outer);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
@@ -75,20 +79,17 @@ export let build = tg.target(async (arg?: Arg) => {
 		fixup,
 	};
 
-	let env = [env_, prerequisites(host)];
+	let env = std.env.arg(env_, prerequisites(host));
 
-	let output = buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			buildInTree: true,
-			env,
-			phases,
-			source: sourceDir,
-			wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],
-		},
-		autotools,
-	);
+	let output = buildUtil({
+		...std.triple.rotate({ build, host }),
+		buildInTree: true,
+		env,
+		phases,
+		sdk,
+		source: sourceDir,
+		wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],
+	});
 	return output;
 });
 

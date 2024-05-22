@@ -1,5 +1,6 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
+import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 
 export let metadata = {
 	name: "perl",
@@ -19,34 +20,28 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:a0a31534451eb7b83c7d6594a497543a54d488bc90ca00f5e34762577f40655e";
 	let url = `https://www.cpan.org/src/5.0/${packageArchive}`;
-	let source = tg.Directory.expect(await std.download({ url, checksum }));
-	source = await std.directory.unwrap(source);
+	let source = await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 
 	// Apply patches.
 	let patches = [];
-
-	let noFixDepsPatch = tg.File.expect(
-		await tg.include("./perl_no_fix_deps.patch"),
-	);
 	patches.push(noFixDepsPatch);
 
 	return bootstrap.patch(source, ...(await Promise.all(patches)));
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
-	let {
-		autotools = [],
-		build,
-		env: env_,
-		host,
-		source: source_,
-		...rest
-	} = arg ?? {};
+	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
 
 	let sourceDir = source_ ?? source();
 	let prepare = tg`cp -r ${sourceDir}/. . && chmod -R u+w .`;
@@ -54,7 +49,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: [
 			"-des",
-			`-Dscriptdir=$OUTPUT/bin`,
+			"-Dscriptdir=$OUTPUT/bin",
 			"-Dinstallstyle=lib/perl5",
 			"-Dusethreads",
 			'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',
@@ -67,26 +62,23 @@ export let build = tg.target(async (arg?: Arg) => {
 		prepare,
 	};
 
-	let env = [env_, std.utils.env({ ...rest, build, host })];
+	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
 
-	let perlArtifact = await std.utils.buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases,
-			prefixArg: "-Dprefix=",
-			source: sourceDir,
-		},
-		autotools,
-	);
+	let perlArtifact = await std.utils.buildUtil({
+		...std.triple.rotate({ build, host }),
+		env,
+		phases,
+		prefixArg: "-Dprefix=",
+		sdk,
+		source: sourceDir,
+	});
 
 	let unwrappedPerl = tg.File.expect(await perlArtifact.get("bin/perl"));
 
 	let wrappedPerl = await std.wrap({
 		buildToolchain: bootstrap.sdk(),
 		env: {
-			PERL5LIB: tg.Mutation.templatePrepend(
+			PERL5LIB: tg.Mutation.prefix(
 				tg`${perlArtifact}/lib/perl5/${metadata.version}`,
 				":",
 			),
@@ -97,7 +89,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let scripts = [];
 	let binDir = tg.Directory.expect(await perlArtifact.get("bin"));
 	for await (let [name, artifact] of binDir) {
-		if (tg.File.is(artifact)) {
+		if (artifact instanceof tg.File) {
 			let metadata = await std.file.executableMetadata(artifact);
 			if (
 				metadata.format == "shebang" &&

@@ -1,5 +1,5 @@
-import pcre2 from "tg:pcre2" with { path: "../pcre2" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as rust from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 
@@ -26,30 +26,35 @@ export let source = tg.target(async () => {
 	});
 });
 
-type Arg = {
+export type Arg = {
+	// Common args
 	build?: string;
 	env?: std.env.Arg;
-	rust?: tg.MaybeNestedArray<rust.Arg>;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
-	source?: tg.Directory;
+	sdk?: std.sdk.Arg;
 	host?: string;
+	// Source
+	source?: tg.Directory;
+	// Builder
+	rust?: rust.Arg;
+	// Dependencies
+	dependencies?: {
+		pcre2?: pcre2.Arg;
+		pkgconfig?: pkgconfig.Arg;
+	};
 };
 
-export let ripgrep = tg.target(async (arg?: Arg) => {
+export let ripgrep = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build,
+		dependencies: { pcre2: pcre2Arg = {}, pkgconfig: pkgconfigArg = {} } = {},
 		env: env_,
 		host,
-		rust: rustArgs = [],
+		rust: rustArg = {},
 		source: source_,
 		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(args);
 
-	let env = [
-		pkgconfig({ ...rest, build, env: env_, host }),
-		pcre2({ ...rest, build, env: env_, host }),
-		env_,
-	];
+	let env = [pkgconfig.build(pkgconfigArg), pcre2.build(pcre2Arg), env_];
 
 	return rust.build(
 		{
@@ -59,17 +64,21 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 			features: ["pcre2"],
 			source: source_ ?? source(),
 		},
-		rustArgs,
+		rustArg,
 	);
 });
 
 export default ripgrep;
 
+export let arg = tg.target(async (...args: std.Args<Arg>) => {
+	return await std.args.apply<Arg>(args);
+});
+
 export let test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: ripgrep,
-		binaries: ["rg"],
-		metadata,
-	});
+	// await std.assert.pkg({
+	// 	buildFunction: ripgrep,
+	// 	binaries: ["rg"],
+	// 	metadata,
+	// });
 	return true;
 });

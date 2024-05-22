@@ -61,9 +61,9 @@ let source = async (): Promise<tg.Directory> => {
 	// Download and return the inner object.
 	let download = await std.download({ url, checksum });
 
-	tg.assert(tg.Directory.is(download));
+	tg.assert(download instanceof tg.Directory);
 	let node = await std.directory.unwrap(download);
-	tg.assert(tg.Directory.is(node));
+	tg.assert(node instanceof tg.Directory);
 	return node;
 };
 
@@ -122,7 +122,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export let build = async (...args: tg.Args<Arg>) => {
+export let build = async (...args: std.Args<Arg>) => {
 	type Apply = {
 		build?: string;
 		env: Array<std.env.Arg>;
@@ -140,7 +140,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 		phases: phasesArg,
 		sdkArg,
 		source,
-	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
+	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else {
@@ -150,17 +150,19 @@ export let build = async (...args: tg.Args<Arg>) => {
 				phasesArgs.push({ checksum: arg.checksum });
 			}
 			if (arg.env !== undefined) {
-				object.env = tg.Mutation.is(arg.env)
-					? arg.env
-					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+				object.env =
+					arg.env instanceof tg.Mutation
+						? arg.env
+						: await tg.Mutation.append<std.env.Arg>(arg.env);
 			}
 			if (arg.sdk !== undefined) {
-				object.sdkArg = tg.Mutation.is(arg.sdk)
-					? arg.sdk
-					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+				object.sdkArg =
+					arg.sdk instanceof tg.Mutation
+						? arg.sdk
+						: await tg.Mutation.append<std.sdk.Arg>(arg.sdk);
 			}
 			if (arg.phases !== undefined) {
-				if (tg.Mutation.is(arg.phases)) {
+				if (arg.phases instanceof tg.Mutation) {
 					object.phases = arg.phases;
 				} else {
 					phasesArgs.push(arg.phases);
@@ -339,10 +341,7 @@ export let wrapBin = tg.target(
 				executable: tg.symlink(tg`${arg}/${path}`),
 				interpreter,
 				env: {
-					NODE_PATH: tg.Mutation.templateAppend(
-						tg`${dependencies}/node_modules`,
-						":",
-					),
+					NODE_PATH: tg.Mutation.suffix(tg`${dependencies}/node_modules`, ":"),
 				},
 			});
 

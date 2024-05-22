@@ -22,19 +22,21 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(outer);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -48,24 +50,21 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let env = [env_, prerequisites(host)];
+	let env = std.env.arg(env_, prerequisites(host));
 
-	let output = await buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases: { configure },
-			source: source_ ?? source(),
-			wrapBashScriptPaths: [
-				"bin/xzdiff",
-				"bin/xzgrep",
-				"bin/xzless",
-				"bin/xzmore",
-			],
-		},
-		autotools,
-	);
+	let output = await buildUtil({
+		...std.triple.rotate({ build, host }),
+		env,
+		phases: { configure },
+		sdk,
+		source: source_ ?? source(),
+		wrapBashScriptPaths: [
+			"bin/xzdiff",
+			"bin/xzgrep",
+			"bin/xzless",
+			"bin/xzmore",
+		],
+	});
 
 	let bins = ["lzmadec", "lzmainfo", "xz", "xzdec"];
 	let libDir = tg.Directory.expect(await output.get("lib"));

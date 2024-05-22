@@ -12,53 +12,41 @@ export type OciImageArg = oci.Arg & {
 export type ImageFormat = "oci";
 
 /** Create an image file comprised of Tangram artifacts. */
-export let image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
-	// Determine format.
-	type Apply = {
-		format: ImageFormat;
-		args: Array<ArgObject>;
-	};
-	let { format: format_, args: args_ } = await tg.Args.apply<Arg, Apply>(
-		args,
-		async (arg) => {
-			if (
-				typeof arg === "string" ||
-				tg.Template.is(arg) ||
-				tg.File.is(arg) ||
-				tg.Symlink.is(arg)
-			) {
-				return {
-					format: "oci",
-					args: await tg.Mutation.arrayAppend({ executable: arg }),
-				};
-			} else if (tg.Directory.is(arg)) {
-				return {
-					format: "oci",
-					args: await tg.Mutation.arrayAppend({ rootFileSystem: arg }),
-				};
-			} else if (typeof arg === "object") {
-				let object: tg.MutationMap<Apply> = {};
-				let { format, ...rest } = arg;
-				object.format = format;
-				object.args = await tg.Mutation.arrayAppend(rest);
-				return object;
-			} else {
-				return tg.unreachable();
-			}
-		},
-	);
-	let format = format_ ?? "oci";
+export let image = tg.target(
+	async (...args: std.Args<Arg>): Promise<tg.File> => {
+		let objectArgs = await Promise.all(
+			std.flatten(args).map(async (arg) => {
+				if (arg === undefined) {
+					return {};
+				} else if (
+					typeof arg === "string" ||
+					arg instanceof tg.Template ||
+					arg instanceof tg.File ||
+					arg instanceof tg.Symlink
+				) {
+					return { executable: arg, format: "oci" as const };
+				} else if (arg instanceof tg.Directory) {
+					return { rootFileSystem: arg, format: "oci" as const };
+				} else {
+					return arg;
+				}
+			}),
+		);
+		let mutationArgs = await std.args.createMutations(objectArgs);
 
-	// Build image.
-	switch (format) {
-		case "oci": {
-			return oci.image(...(args_ ?? []));
+		let format = "oci";
+
+		// Build image.
+		switch (format) {
+			case "oci": {
+				return oci.image(...mutationArgs);
+			}
+			default: {
+				throw new Error(`unknown image format: ${format}`);
+			}
 		}
-		default: {
-			throw new Error(`unknown image format: ${format}`);
-		}
-	}
-};
+	},
+);
 
 export default image;
 

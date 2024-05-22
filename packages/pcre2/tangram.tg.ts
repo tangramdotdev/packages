@@ -1,11 +1,14 @@
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://github.com/PCRE2Project/pcre2",
 	name: "pcre2",
+	repository: "https://github.com/PCRE2Project/pcre2",
+	license: "https://github.com/PCRE2Project/pcre2/blob/master/LICENCE",
 	version: "10.43",
 };
 
-export let source = tg.target(async () => {
+export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:889d16be5abb8d05400b33c25e151638b8d4bac0e2d9c76e9d6923118ae8a34e";
@@ -22,17 +25,23 @@ export let source = tg.target(async () => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.Args<std.autotools.Arg>;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.Args<std.sdk.Arg>;
 	source?: tg.Directory;
 };
 
-export let pcre2 = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+export let build = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = [],
+		build,
+		host,
+		source: source_,
+		...rest
+	} = await arg(...(args ?? []));
 
 	return std.autotools.build(
 		{
@@ -40,11 +49,15 @@ export let pcre2 = tg.target(async (arg?: Arg) => {
 			...std.triple.rotate({ build, host }),
 			source: source_ ?? source(),
 		},
-		autotools,
+		...autotools,
 	);
 });
 
-export default pcre2;
+export default build;
+
+export let arg = tg.target(async (...args: std.Args<Arg>) => {
+	return await std.args.apply<Arg>(args);
+});
 
 export let test = tg.target(async () => {
 	let source = tg.directory({
@@ -63,7 +76,7 @@ export let test = tg.target(async () => {
 				echo "Checking if we can link against libpcre2."
 				cc ${source}/main.c -o $OUTPUT -lpcre2-8
 			`,
-			{ env: [std.sdk(), pcre2()] },
+			{ env: [std.sdk(), build()] },
 		),
 	);
 	let metadata = await std.file.executableMetadata(output);

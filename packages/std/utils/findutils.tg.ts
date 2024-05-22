@@ -1,6 +1,9 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
+import disableLocatePatch from "./findutils-disable-locate.diff" with {
+	type: "file",
+};
 
 export let metadata = {
 	name: "findutils",
@@ -20,27 +23,26 @@ export let source = tg.target(async (os: string) => {
 
 	// On macos, don't build locate/updatedb.
 	if (os === "darwin") {
-		let locatePatch = tg.File.expect(
-			await tg.include("findutils-disable-locate.diff"),
-		);
-		source = await bootstrap.patch(source, locatePatch);
+		source = await bootstrap.patch(source, disableLocatePatch);
 	}
 	return source;
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -53,19 +55,16 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	let env = [env_, prerequisites(host)];
+	let env = std.env.arg(env_, prerequisites(host));
 
-	let output = buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases: { configure },
-			source: source_ ?? source(os),
-			wrapBashScriptPaths,
-		},
-		autotools,
-	);
+	let output = buildUtil({
+		...std.triple.rotate({ build, host }),
+		env,
+		phases: { configure },
+		sdk,
+		source: source_ ?? source(os),
+		wrapBashScriptPaths,
+	});
 
 	return output;
 });

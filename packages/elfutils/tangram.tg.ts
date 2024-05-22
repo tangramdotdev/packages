@@ -76,7 +76,7 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 		xz(arg),
 		zlib(arg),
 		{
-			CFLAGS: tg.Mutation.templateAppend(
+			CFLAGS: tg.Mutation.suffix(
 				"-Wno-format-nonliteral -lz -lbz2 -llzma",
 				" ",
 			),

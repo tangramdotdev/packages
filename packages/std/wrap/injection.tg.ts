@@ -1,6 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
+import injectionSource from "./injection" with { type: "directory" };
 
 type Arg = {
 	build?: string;
@@ -16,10 +17,8 @@ export let injection = tg.target(async (arg: Arg) => {
 	let os = std.triple.os(host);
 
 	// Get the source.
-	let sourceDir = arg?.source
-		? arg.source
-		: tg.Directory.expect(await tg.include("injection/"));
-	let source = tg.File.expect(await sourceDir.get(`${os}/lib.c`));
+	let sourceDir = arg?.source ? arg.source : injectionSource;
+	let source = await sourceDir.get(`${os}/lib.c`).then(tg.File.expect);
 
 	// Get the build toolchain.
 	let buildToolchain = arg.buildToolchain;
@@ -73,12 +72,12 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 
 	// Define common options.
 	let additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
-	let env = [
+	let env = await std.env.arg(
 		{
 			SDKROOT: await bootstrap.macOsSdk(),
 		},
 		arg.env,
-	];
+	);
 
 	// Compile arm64 dylib.
 	let arm64Args = additionalArgs.concat(["--target=aarch64-apple-darwin"]);
@@ -103,7 +102,7 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 	let injection = tg.File.expect(
 		await tg.build(
 			tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
-			{ host: system, env: std.env.object(arg.buildToolchain, env) },
+			{ host: system, env: std.env.arg(arg.buildToolchain, env) },
 		),
 	);
 	return injection;
@@ -135,7 +134,7 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let executable = `${prefix}cc`;
 
 	let system = std.triple.archAndOs(host);
-	let env = std.env.object(arg.buildToolchain, arg.env);
+	let env = std.env.arg(arg.buildToolchain, arg.env);
 	let output = tg.File.expect(
 		await tg.build(
 			tg`${executable}                               \

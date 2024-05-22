@@ -311,7 +311,7 @@ export let libc = (host: string) => {
 export let mergeLibDirs = async (dir: tg.Directory) => {
 	for await (let [name, artifact] of dir) {
 		// If we find a lib64, merge it with the adjacent lib.
-		if (tg.Directory.is(artifact)) {
+		if (artifact instanceof tg.Directory) {
 			if (name === "lib64") {
 				let maybeLibDir = await dir.tryGet("lib");
 				if (!maybeLibDir) {
@@ -320,7 +320,7 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 				}
 				// If we found it, deep merge the lib64 into it.
 				let libDir = maybeLibDir;
-				tg.assert(tg.Directory.is(libDir));
+				tg.assert(libDir instanceof tg.Directory);
 				let mergedLibDir = await tg.directory(libDir, artifact);
 
 				// Recurse into the merged lib directory.

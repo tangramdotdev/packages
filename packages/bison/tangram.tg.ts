@@ -1,4 +1,4 @@
-import m4 from "tg:m4" with { path: "../m4" };
+import * as m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -21,24 +21,28 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
 	build?: string;
+	dependencies: {
+		m4?: m4.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
+	autotools?: std.autotools.Arg;
 };
 
-export let bison = tg.target((arg?: Arg) => {
+export let bison = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
+		dependencies,
 		env: env_,
 		host,
 		source: source_,
 		...rest
-	} = arg ?? {};
+	} = await arg(...(args ?? []));
 
 	let configure = {
 		args: [
@@ -50,7 +54,7 @@ export let bison = tg.target((arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let env = [m4(arg), env_];
+	let env = [m4.m4(dependencies?.m4 ?? {}), env_];
 
 	return std.autotools.build(
 		{
@@ -65,6 +69,10 @@ export let bison = tg.target((arg?: Arg) => {
 });
 
 export default bison;
+
+export let arg = tg.target(async (...args: std.Args<Arg>) => {
+	return await std.args.apply<Arg>(args);
+});
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({

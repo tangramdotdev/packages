@@ -43,7 +43,7 @@ export let wget = tg.target(async (arg?: Arg) => {
 		pcre2(arg),
 		zlib(arg),
 		{
-			LDFLAGS: tg.Mutation.templateAppend(
+			LDFLAGS: tg.Mutation.suffix(
 				"-lnettle -lhogweed -lpcre2-8 -lgmp -lgnutls -lz",
 				" ",
 			),
@@ -74,14 +74,14 @@ export let wget = tg.target(async (arg?: Arg) => {
 	return output;
 });
 
-	export let test = tg.target(async () => {
-		return std.build(
-			tg`
+export let test = tg.target(async () => {
+	return std.build(
+		tg`
 		echo "Checking that we can run wget."
 		wget --version
 		echo "Checking that we can download a file."
 		wget -O - https://tangram.dev > $OUTPUT
 	`,
-			{ env: wget(), checksum: "unsafe" },
-		);
-	});
+		{ env: wget(), checksum: "unsafe" },
+	);
+});

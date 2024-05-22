@@ -21,19 +21,21 @@ export let source = tg.target(async () => {
 	return await std.directory.unwrap(outer);
 });
 
-export type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let git = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -54,23 +56,20 @@ export let git = tg.target(async (arg?: Arg) => {
 		install,
 	};
 
-	let env = [
+	let env = std.env.arg(
 		env_,
-		std.utils.env({ ...rest, build, env: env_, host }),
-		zlib({ ...rest, build, env: env_, host }),
-	];
-
-	let result = std.autotools.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			buildInTree: true,
-			env,
-			phases,
-			source: sourceDir,
-		},
-		autotools,
+		std.utils.env({ build, env: env_, host, sdk }),
+		zlib({ build, env: env_, host, sdk }),
 	);
+
+	let result = std.autotools.build({
+		...std.triple.rotate({ build, host }),
+		buildInTree: true,
+		env,
+		phases,
+		sdk,
+		source: sourceDir,
+	});
 	return result;
 });
 

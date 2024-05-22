@@ -1,10 +1,12 @@
+export * as args from "./args.tg.ts";
+export { type Args } from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
 export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
-export { download } from "tg:download" with { path: "./download" };
+export { download } from "./download.tg.ts";
 export { env } from "./env.tg.ts";
 export * as file from "./file.tg.ts";
 export { patch } from "./patch.tg.ts";
@@ -20,8 +22,12 @@ export let metadata = {
 };
 
 export let flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
-	// @ts-ignore
-	return value instanceof Array ? value.flat(Infinity) : [value];
+	if (value instanceof Array) {
+		// @ts-ignore
+		return value.flat(Number.POSITIVE_INFINITY);
+	} else {
+		return [value];
+	}
 };
 
 export let test = tg.target(() => testDefaultSdk());
@@ -88,7 +94,28 @@ export let testAllBootstrapComponents = tg.target(async () => {
 });
 export let testPlainBootstrapSdk = tg.target(async () => {
 	let bootstrapSdk = await bootstrap.sdk.env();
-	return bootstrapSdk;
+	let ret = await tg.build(tg`touch $OUTPUT && env && ar --version`, {
+		env: bootstrapSdk,
+	});
+	return ret;
+});
+export let testEnvVars = tg.target(async () => {
+	let env_ = await bootstrap.sdk.env();
+	for await (let [key, value] of env.envVars(env_)) {
+		console.log(await tg`${key}=${value}`);
+	}
+	return true;
+});
+
+import * as phases from "./phases.tg.ts";
+export let testPhasesBasic = tg.target(async () => {
+	return await phases.basicTest();
+});
+export let testPhasesOverride = tg.target(async () => {
+	return await phases.overrideTest();
+});
+export let testPhasesEnv = tg.target(async () => {
+	return await phases.envTest();
 });
 
 import { testSingleArgObjectNoMutations, wrap } from "./wrap.tg.ts";
@@ -351,7 +378,7 @@ export let testMemory = tg.target(async () => {
 	for (let i = 0; i < 1000; i++) {
 		jobs.push(
 			tg.build(tg`cc -xc ${source(i)} -o $OUTPUT`, {
-				env: await env.object(sdkEnv),
+				env: await env.arg(sdkEnv),
 			}),
 		);
 	}

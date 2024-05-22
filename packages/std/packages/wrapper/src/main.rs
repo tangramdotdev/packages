@@ -457,7 +457,7 @@ fn apply_mutation_to_key(
 				apply_value_to_key(key, value, artifacts_directories);
 			}
 		},
-		tg::mutation::Data::ArrayPrepend { values } => {
+		tg::mutation::Data::Prepend { values } => {
 			let values = values
 				.iter()
 				.map(|arg| render_value(arg, artifacts_directories))
@@ -470,7 +470,7 @@ fn apply_mutation_to_key(
 				std::env::set_var(key, values.join(":"));
 			}
 		},
-		tg::mutation::Data::ArrayAppend { values } => {
+		tg::mutation::Data::Append { values } => {
 			let values = values
 				.iter()
 				.map(|arg| render_value(arg, artifacts_directories))
@@ -483,7 +483,7 @@ fn apply_mutation_to_key(
 				std::env::set_var(key, values.join(":"));
 			}
 		},
-		tg::mutation::Data::TemplatePrepend {
+		tg::mutation::Data::Prefix {
 			template,
 			separator,
 		} => {
@@ -496,7 +496,7 @@ fn apply_mutation_to_key(
 				std::env::set_var(key, value);
 			}
 		},
-		tg::mutation::Data::TemplateAppend {
+		tg::mutation::Data::Suffix {
 			template,
 			separator,
 		} => {

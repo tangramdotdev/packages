@@ -7,7 +7,7 @@ export let metadata = {
 	version: "1.3.1",
 };
 
-export let source = tg.target(async () => {
+export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
@@ -18,20 +18,22 @@ export let source = tg.target(async () => {
 		version,
 	});
 	let url = `https://zlib.net/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(download);
+	return std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let zlib = tg.target(async (arg?: Arg) => {
+export let zlib = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -39,24 +41,24 @@ export let zlib = tg.target(async (arg?: Arg) => {
 		host: host_,
 		source: source_,
 		...rest
-	} = arg ?? {};
+	} = await arg(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
-	let env = [];
+	let env: Array<tg.Unresolved<std.env.Arg>> = [];
 
 	// On Linux with LLVM, we need to add -Wl,-undefined-version to CFLAGS to build the shared library.
 	// https://github.com/zlib-ng/zlib-ng/issues/1427
 	if (
 		os === "linux" &&
 		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
-			std.flatten(rest.sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
-				.length > 0)
+			std.flatten(rest.sdk).filter((sdk) => sdk?.toolchain === "llvm").length >
+				0)
 	) {
 		env.push({
-			CFLAGS: tg.Mutation.templatePrepend("-Wl,-undefined-version", " "),
+			CFLAGS: tg.Mutation.prefix("-Wl,-undefined-version", " "),
 		});
 	}
 	env.push(env_);
@@ -68,8 +70,20 @@ export let zlib = tg.target(async (arg?: Arg) => {
 			env,
 			source: source_ ?? source(),
 		},
-		autotools,
+		...autotools,
 	);
+});
+
+export let arg = tg.target(async (...args: std.Args<Arg>) => {
+	type Apply = {
+		autotools: Array<std.autotools.Arg>;
+		build: string;
+		env: Array<std.env.Arg>;
+		host: string;
+		sdk: Array<std.sdk.Arg>;
+		source: tg.Directory;
+	};
+	return std.Args.apply<Arg, Apply>(args, async (arg) => tg.unimplemented());
 });
 
 export default zlib;

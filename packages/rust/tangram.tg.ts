@@ -1,5 +1,3 @@
-//import * as gcc from "tg:gcc" with { path: "../gcc" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
@@ -45,7 +43,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	});
 
 	// Parse the manifest.
-	tg.assert(tg.File.is(manifestArtifact));
+	tg.assert(manifestArtifact instanceof tg.File);
 	let manifest = (await tg.encoding.toml.decode(
 		await manifestArtifact.text(),
 	)) as RustupManifestV2;
@@ -103,7 +101,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 	);
 
 	tg.assert(
-		tg.Directory.is(rustInstall),
+		rustInstall instanceof tg.Directory,
 		`Expected rust installation to be a directory.`,
 	);
 
@@ -174,7 +172,7 @@ export type Arg = {
 	verbose?: boolean;
 };
 
-export let build = async (...args: tg.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	type Apply = {
 		checksum: tg.Checksum;
 		env: Array<std.env.Arg>;
@@ -200,7 +198,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 		target: target_,
 		useCargoVendor = false,
 		verbose = false,
-	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
+	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else {
@@ -209,19 +207,22 @@ export let build = async (...args: tg.Args<Arg>) => {
 				object.checksum = arg.checksum;
 			}
 			if (arg.env !== undefined) {
-				object.env = tg.Mutation.is(arg.env)
-					? arg.env
-					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+				object.env =
+					arg.env instanceof tg.Mutation
+						? arg.env
+						: await tg.Mutation.append<std.env.Arg>(arg.env);
 			}
 			if (arg.sdk !== undefined) {
-				object.sdk = tg.Mutation.is(arg.sdk)
-					? arg.sdk
-					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+				object.sdk =
+					arg.sdk instanceof tg.Mutation
+						? arg.sdk
+						: await tg.Mutation.append<std.sdk.Arg>(arg.sdk);
 			}
 			if (arg.features !== undefined) {
-				object.features = tg.Mutation.is(arg.features)
-					? arg.features
-					: await tg.Mutation.arrayAppend(arg.features);
+				object.features =
+					arg.features instanceof tg.Mutation
+						? arg.features
+						: await tg.Mutation.append(arg.features);
 			}
 			if (arg.source !== undefined) {
 				object.source = arg.source;
@@ -346,16 +347,16 @@ export let build = async (...args: tg.Args<Arg>) => {
 	});
 
 	// Ensure the output artifact matches the expected structure.
-	tg.assert(tg.Directory.is(artifact));
+	tg.assert(artifact instanceof tg.Directory);
 
 	// Store a handle to the release directory containing Tangram bundles.
 	let releaseDir = await artifact.get(`target/${target}/release`);
-	tg.assert(tg.Directory.is(releaseDir));
+	tg.assert(releaseDir instanceof tg.Directory);
 
 	// Grab the bins from the release dir.
 	let bins: Map<string, tg.Artifact> = new Map();
 	for await (let [name, artifact] of releaseDir) {
-		if (tg.File.is(artifact)) {
+		if (artifact instanceof tg.File) {
 			if (await artifact.executable()) {
 				bins.set(name, artifact);
 			}
@@ -372,7 +373,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 	return tg.directory({
 		["bin"]: binDir,
 	});
-};
+});
 
 export type VendoredSourcesArg = {
 	rustTarget?: string;
@@ -409,11 +410,11 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 		});
 
 		// Get the output.
-		tg.assert(tg.Directory.is(result));
+		tg.assert(result instanceof tg.Directory);
 		let vendoredSources = await result.get("tg_vendor_dir");
-		tg.assert(tg.Directory.is(vendoredSources));
+		tg.assert(vendoredSources instanceof tg.Directory);
 		let config = await result.get("config");
-		tg.assert(tg.File.is(config));
+		tg.assert(config instanceof tg.File);
 
 		let text = await config.text();
 		let match = /tg_vendor_dir/g.exec(text);
@@ -424,7 +425,7 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 		)}${vendoredSources}${text.substring(match.index + match[0].length)}`;
 	} else {
 		let cargoLock = await (await tg.symlink(source, "Cargo.lock")).resolve();
-		tg.assert(tg.File.is(cargoLock));
+		tg.assert(cargoLock instanceof tg.File);
 		let vendoredSources = vendorDependencies(cargoLock);
 		return tg`
 [source.crates-io]
@@ -465,9 +466,9 @@ export let vendorDependencies = tg.target(async (cargoLock: tg.File) => {
 				extract: "tar",
 				url,
 			});
-			tg.assert(tg.Directory.is(artifact));
+			tg.assert(artifact instanceof tg.Directory);
 			let child = await artifact.get(`${pkg.name}-${pkg.version}`);
-			tg.assert(tg.Directory.is(child));
+			tg.assert(child instanceof tg.Directory);
 			return tg.directory({
 				[`${pkg.name}-${pkg.version}`]: vendorPackage(child, checksum),
 			});
@@ -505,9 +506,9 @@ export let vendorPackage = async (
 		let [path, dir] = stack.pop() as [string, tg.Directory];
 		for (let [subpath, artifact] of Object.entries(await dir.entries())) {
 			subpath = `${path}${subpath}`;
-			if (tg.Directory.is(artifact)) {
+			if (artifact instanceof tg.Directory) {
 				stack.push([`${subpath}/`, artifact]);
-			} else if (tg.File.is(artifact)) {
+			} else if (artifact instanceof tg.File) {
 				let bytes = await artifact.bytes();
 				let checksum = tg.checksum("sha256", bytes);
 				cargoChecksum.files[subpath] = checksum.replace("sha256:", "");
@@ -646,7 +647,7 @@ export let testProxy = tg.target(async () => {
 
 	let helloOpenssl = build({
 		source: tg.include("./tests/hello-openssl"),
-		env: [await openssl(), await pkgconfig()],
+		env: [await openssl(), await build()],
 		proxy: true,
 	});
 
@@ -659,9 +660,9 @@ export let testProxy = tg.target(async () => {
 // Compare the results of cargo vendor and vendorDependencies.
 export let testVendorDependencies = tg.target(async () => {
 	let sourceDirectory = await tg.include("./tests/hello-openssl");
-	tg.assert(tg.Directory.is(sourceDirectory));
+	tg.assert(sourceDirectory instanceof tg.Directory);
 	let cargoLock = await sourceDirectory.get("Cargo.lock");
-	tg.assert(tg.File.is(cargoLock));
+	tg.assert(cargoLock instanceof tg.File);
 	let tgVendored = vendorDependencies(cargoLock);
 
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;

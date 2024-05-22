@@ -85,23 +85,23 @@ export let automake = tg.target(async (arg?: Arg) => {
 		let wrappedScript = std.wrap(executable, {
 			interpreter: perlInterpreter,
 			env: {
-				PERL5LIB: tg.Mutation.templateAppend(
+				PERL5LIB: tg.Mutation.suffix(
 					tg`${automake}/share/automake-${version}`,
 					":",
 				),
-				M4PATH: tg.Mutation.templateAppend(
+				M4PATH: tg.Mutation.suffix(
 					tg`${automake}/share/aclocal-${version}`,
 					":",
 				),
-				ACLOCAL_PATH: tg.Mutation.templateAppend(
+				ACLOCAL_PATH: tg.Mutation.suffix(
 					tg`${automake}/share/aclocal-${version}`,
 					":",
 				),
-				ACLOCAL_AUTOMAKE_DIR: tg.Mutation.templateAppend(
+				ACLOCAL_AUTOMAKE_DIR: tg.Mutation.suffix(
 					tg`${automake}/share/aclocal-${version}`,
 					":",
 				),
-				AUTOMAKE_LIBDIR: tg.Mutation.templateAppend(
+				AUTOMAKE_LIBDIR: tg.Mutation.suffix(
 					tg`${automake}/share/automake-${version}`,
 					":",
 				),

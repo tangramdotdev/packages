@@ -15,17 +15,23 @@ export let source = tg.target(() => {
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let libiconv = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+export let libiconv = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = [],
+		build,
+		host,
+		source: source_,
+		...rest
+	} = await arg(...(args ?? []));
 
 	let output = await std.autotools.build(
 		{
@@ -48,6 +54,10 @@ export let libiconv = tg.target(async (arg?: Arg) => {
 });
 
 export default libiconv;
+
+export let arg = tg.target(async (...args: std.Args<Arg>) => {
+	return await std.args.apply<Arg>(args);
+});
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({

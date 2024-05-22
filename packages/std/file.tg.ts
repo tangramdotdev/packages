@@ -13,7 +13,7 @@ export type ElfExecutableMetadata = {
 	arch: string;
 
 	/** The executable's interpreter. */
-	interpreter?: string;
+	interpreter?: string | undefined;
 };
 
 export type MachOExecutableMetadata = {
@@ -104,7 +104,7 @@ let elfExecutableMetadata = (
 	let arch = fileHeader.arch;
 
 	let interpreter = undefined;
-	for (let programHeader of parseElfProgramHeaders(bytes)) {
+	for (let programHeader of Array.from(parseElfProgramHeaders(bytes))) {
 		// Find the PT_INTERP program header.
 		if (programHeader.type === 0x03) {
 			// Read the section from the file.

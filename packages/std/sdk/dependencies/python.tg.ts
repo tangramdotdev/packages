@@ -19,23 +19,27 @@ export let source = tg.target(async (os: string) => {
 	let checksum =
 		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
-	let source = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(source);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
@@ -61,19 +65,20 @@ export let build = tg.target(async (arg?: Arg) => {
 		configure.args.push(`CC="$CC"`);
 	}
 
-	let env = [env_, std.utils.env({ ...rest, build, host }), additionalEnv];
+	let env = std.env.arg(
+		env_,
+		std.utils.env({ build, host, sdk }),
+		additionalEnv,
+	);
 
 	// Build python.
-	let result = std.autotools.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases: { configure },
-			source: source_ ?? source(os),
-		},
-		autotools,
-	);
+	let result = std.autotools.build({
+		...std.triple.rotate({ build, host }),
+		env,
+		phases: { configure },
+		sdk,
+		source: source_ ?? source(os),
+	});
 
 	return result;
 });

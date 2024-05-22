@@ -50,14 +50,14 @@ export let toolchain = tg.target(
 		// Download the Go toolchain from `go.dev`.
 		let downloaded = await std.download({ checksum, url });
 
-		tg.assert(tg.Directory.is(downloaded));
+		tg.assert(downloaded instanceof tg.Directory);
 		let go = await downloaded.get("go");
-		tg.assert(tg.Directory.is(go));
+		tg.assert(go instanceof tg.Directory);
 
 		let artifact = tg.directory();
 		for (let bin of ["bin/go", "bin/gofmt"]) {
 			let file = await go.get(bin);
-			tg.assert(tg.File.is(file));
+			tg.assert(file instanceof tg.File);
 			artifact = tg.directory(artifact, {
 				[bin]: std.wrap(file, {
 					env: {
@@ -126,7 +126,7 @@ export type Arg = {
 	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
 };
 
-export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
+export let build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 	type Apply = {
 		checksum: tg.Checksum;
 		cgo: boolean;
@@ -151,7 +151,7 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		source,
 		target: target_,
 		vendor: vendor_,
-	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
+	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else {
@@ -181,14 +181,16 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 				object.target = arg.target;
 			}
 			if (arg.env !== undefined) {
-				object.env = tg.Mutation.is(arg.env)
-					? arg.env
-					: await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+				object.env =
+					arg.env instanceof tg.Mutation
+						? arg.env
+						: await tg.Mutation.append<std.env.Arg>(arg.env);
 			}
 			if (arg.sdk !== undefined) {
-				object.sdkArgs = tg.Mutation.is(arg.sdk)
-					? arg.sdk
-					: await tg.Mutation.arrayAppend<std.sdk.Arg>(arg.sdk);
+				object.sdkArgs =
+					arg.sdk instanceof tg.Mutation
+						? arg.sdk
+						: await tg.Mutation.append<std.sdk.Arg>(arg.sdk);
 			}
 			return object;
 		}
@@ -276,15 +278,15 @@ export let build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		},
 	);
 
-	tg.assert(tg.Directory.is(output));
+	tg.assert(output instanceof tg.Directory);
 
 	// Get a list of all dynamically-linked binaries in the output.
 	let binDir = await output.get("bin");
-	tg.assert(tg.Directory.is(binDir));
+	tg.assert(binDir instanceof tg.Directory);
 
 	// Wrap each executable in the /bin directory.
 	for await (let [name, file] of binDir) {
-		if (!tg.Directory.is(file)) {
+		if ((!file) instanceof tg.Directory) {
 			binDir = await tg.directory(binDir, {
 				[name]: std.wrap({
 					executable: file,

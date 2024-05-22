@@ -2,9 +2,9 @@ export type Components = {
 	arch: string;
 	vendor?: string;
 	os: string;
-	osVersion?: string;
+	osVersion?: string | undefined;
 	environment?: string;
-	environmentVersion?: string;
+	environmentVersion?: string | undefined;
 };
 
 export type Arg = string | Partial<Components>;
@@ -220,8 +220,8 @@ export let normalize = (s: string): string => {
 
 /** Given optional `build` and `host` machines for a build, return the concrete `host` and `target` for producing the correct build toolchain by "rotating" the inputs: build->host, host->target. */
 export let rotate = async (arg: {
-	build?: string;
-	host?: string;
+	build?: string | undefined;
+	host?: string | undefined;
 }): Promise<{ host: string; target: string }> => {
 	let host = arg.host ?? ((await tg.current.env())["TANGRAM_HOST"] as string);
 	let build = arg.build ?? host;
@@ -232,7 +232,9 @@ let envs = ["gnu", "musl"];
 let oss = ["linux", "darwin"];
 
 /** Check if a string contains a known OS and optional version. Return undefined if not. */
-let parseOs = (s: string): { os: string; osVersion?: string } | undefined => {
+let parseOs = (
+	s: string,
+): { os: string; osVersion?: string | undefined } | undefined => {
 	for (let knownOs of oss) {
 		if (s.startsWith(knownOs)) {
 			// If we found it, check if there's an os version.
@@ -250,7 +252,9 @@ let parseOs = (s: string): { os: string; osVersion?: string } | undefined => {
 /** Check if a string contains a known environment and optional version. Return undefined if not. */
 let parseEnv = (
 	s: string,
-): { environment: string; environmentVersion?: string } | undefined => {
+):
+	| { environment: string; environmentVersion?: string | undefined }
+	| undefined => {
 	for (let knownEnv of envs) {
 		if (s.startsWith(knownEnv)) {
 			// If we found it, check if there's an environment version.

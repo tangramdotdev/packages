@@ -89,15 +89,9 @@ export let build = tg.target(async (arg?: Arg) => {
 			args: ["-B", await tg`${autoconf}/share/autoconf`],
 			env: {
 				autom4te_perllibdir: tg`${autoconf}/share/autoconf`,
-				AC_MACRODIR: tg.Mutation.templateAppend(
-					tg`${autoconf}/share/autoconf`,
-					":",
-				),
-				M4PATH: tg.Mutation.templateAppend(tg`${autoconf}/share/autoconf`, ":"),
-				PERL5LIB: tg.Mutation.templateAppend(
-					tg`${autoconf}/share/autoconf`,
-					":",
-				),
+				AC_MACRODIR: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
+				M4PATH: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
+				PERL5LIB: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
 				AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 			},
 		},
@@ -111,15 +105,9 @@ export let build = tg.target(async (arg?: Arg) => {
 				interpreter,
 				env: {
 					AUTOM4TE: autom4te,
-					M4PATH: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
+					M4PATH: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
 					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
-					PERL5LIB: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
+					PERL5LIB: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
 				},
 			},
 		);
@@ -139,14 +127,8 @@ export let build = tg.target(async (arg?: Arg) => {
 						tg`${autoconf}/share/autoconf/autoconf/trailer.m4`,
 					),
 					AUTOM4TE: tg`${autoconf}/bin/autom4te`,
-					M4PATH: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
-					PERL5LIB: tg.Mutation.templateAppend(
-						tg`${autoconf}/share/autoconf`,
-						":",
-					),
+					M4PATH: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
+					PERL5LIB: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
 					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
 				},
 			},
@@ -166,7 +148,7 @@ export let build = tg.target(async (arg?: Arg) => {
 export let patchAutom4teCfg = tg.target(
 	async (autoconf: tg.Directory, arg?: Arg): Promise<tg.Directory> => {
 		let autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
-		tg.assert(tg.File.is(autom4teCfg));
+		tg.assert(autom4teCfg instanceof tg.File);
 
 		let lines = (await autom4teCfg.text()).split("\n");
 

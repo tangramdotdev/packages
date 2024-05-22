@@ -1,6 +1,11 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
+import cargoToml from "../Cargo.toml" with { type: "file" };
+import cargoLock from "../Cargo.lock" with { type: "file" };
+import ccProxyDir from "../packages/cc_proxy" with { type: "directory" };
+import ldProxyDir from "../packages/ld_proxy" with { type: "directory" };
+import wrapperDir from "../packages/wrapper" with { type: "directory" };
 
 type Arg = {
 	buildToolchain: std.env.Arg;
@@ -10,7 +15,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-/** Build Tangram-in-Tangram, producing the binaries that enable Tangram's wrapping and environment composition strategy. */
+/** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
 export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 	let {
 		build: build_,
@@ -26,11 +31,11 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 	let source = source_
 		? source_
 		: await tg.directory({
-				"Cargo.toml": tg.include("../Cargo.toml"),
-				"Cargo.lock": tg.include("../Cargo.lock"),
-				"packages/cc_proxy": tg.include("../packages/cc_proxy"),
-				"packages/ld_proxy": tg.include("../packages/ld_proxy"),
-				"packages/wrapper": tg.include("../packages/wrapper"),
+				"Cargo.toml": cargoToml,
+				"Cargo.lock": cargoLock,
+				"packages/cc_proxy": ccProxyDir,
+				"packages/ld_proxy": ldProxyDir,
+				"packages/wrapper": wrapperDir,
 		  });
 
 	return build({
@@ -69,7 +74,7 @@ export let rust = tg.target(
 				"unsafe",
 			),
 		);
-		tg.assert(tg.File.is(manifestFile));
+		tg.assert(manifestFile instanceof tg.File);
 		let manifest = tg.encoding.toml.decode(
 			await manifestFile.text(),
 		) as RustupManifest;
@@ -196,7 +201,7 @@ export let build = async (arg: BuildArg) => {
 
 	// Use the bootstrap shell and utils.
 	let shellArtifact = await bootstrap.shell();
-	let shell = tg.File.expect(await shellArtifact.get("bin/sh"));
+	let shell = await shellArtifact.get("bin/sh").then(tg.File.expect);
 	let utilsArtifact = await bootstrap.utils();
 
 	// Get the appropriate toolchain directory.
@@ -226,7 +231,7 @@ export let build = async (arg: BuildArg) => {
 	// Set up common environemnt.
 	let certFile = tg`${std.caCertificates()}/cacert.pem`;
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [
+	let env: tg.Unresolved<std.Args<std.env.Arg>> = [
 		buildToolchain,
 		rustToolchain,
 		shellArtifact,
@@ -293,6 +298,7 @@ export let build = async (arg: BuildArg) => {
 	];
 	if (release) {
 		args.push(`--release`);
+		args.push(`--features tracing`);
 	} else {
 		args.push(`--features tracing`);
 	}
@@ -316,7 +322,7 @@ export let build = async (arg: BuildArg) => {
 	// Build and return.
 	return tg.Directory.expect(
 		await std.phases.build({
-			env,
+			env: std.env.arg(env),
 			phases: { prepare, build, install },
 			target: {
 				host: system,

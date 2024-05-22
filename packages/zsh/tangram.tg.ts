@@ -57,10 +57,7 @@ export let zsh = tg.target(async (arg?: Arg) => {
 		...dependencies,
 		{
 			// Necessary to get the `boolcodes` configure test to pass, preventing a build failure in the termcap module later when it attempts to use a conflicting type.
-			CFLAGS: tg.Mutation.templatePrepend(
-				`-Wno-incompatible-pointer-types`,
-				" ",
-			),
+			CFLAGS: tg.Mutation.prefix(`-Wno-incompatible-pointer-types`, " "),
 		},
 		env_,
 	];

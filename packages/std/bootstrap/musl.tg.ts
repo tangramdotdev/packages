@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
+import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 
 export let metadata = {
 	homepage: "https://musl.libc.org",
@@ -14,16 +15,22 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
 	let url = `https://musl.libc.org/releases/${name}-${version}.tar.gz`;
-	let source = tg.Directory.expect(await std.download({ url, checksum }));
-	source = await std.directory.unwrap(source);
-
-	let patch = tg.File.expect(await tg.include("musl_permission.patch"));
-	source = await bootstrap.patch(source, patch);
-
-	return source;
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap)
+		.then((source) => bootstrap.patch(source, muslPermissionPatch));
 });
 
-export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
+	source?: tg.Directory;
+};
+
+export let build = tg.target(async (arg?: Arg) => {
 	let host = arg?.host ?? (await std.triple.host());
 	let hostSystem = std.triple.archAndOs(host);
 
@@ -38,13 +45,9 @@ export let build = tg.target(async (arg?: std.sdk.BuildEnvArg) => {
 		install,
 	};
 
-	let env = [
-		bootstrap.sdk.env(host),
-		bootstrap.make.build(host),
-		{
-			CPATH: tg.Mutation.unset(),
-		},
-	];
+	let env = std.env.arg(bootstrap.sdk.env(host), bootstrap.make.build(host), {
+		CPATH: tg.Mutation.unset(),
+	});
 
 	let result = await std.autotools.build({
 		env,

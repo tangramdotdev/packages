@@ -1,8 +1,8 @@
-import bison from "tg:bison" with { path: "../bison" };
-import libiconv from "tg:libiconv" with { path: "../libiconv" };
-import m4 from "tg:m4" with { path: "../m4" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
+import * as m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://www.freedesktop.org/wiki/Software/pkg-config/",
@@ -12,7 +12,7 @@ export let metadata = {
 	version: "0.29.2",
 };
 
-export let source = tg.target(async () => {
+export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let extension = ".tar.gz";
 	let packageArchive = std.download.packageArchive({
@@ -23,21 +23,34 @@ export let source = tg.target(async () => {
 	let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
 	let checksum =
 		"sha256:6fc69c01688c9458a57eb9a1664c9aba372ccda420a02bf4429fe610e7e7d591";
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return await std.directory.unwrap(outer);
+	return std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	// Common args
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	proxy?: boolean;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
+	// Source
 	source?: tg.Directory;
+	// Builder
+	autotools?: std.autotools.Arg;
+	// Package-specific args
+	proxy?: boolean;
+	// Dependencies
+	dependencies?: {
+		bison?: bison.Arg;
+		libiconv?: libiconv.Arg;
+		m4?: m4.Arg;
+		zlib?: zlib.Arg;
+	};
 };
 
-export let pkgconfig = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -45,8 +58,14 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 		host: host_,
 		proxy = true,
 		source: source_,
+		dependencies: {
+			bison: bisonArg = {},
+			libiconv: libiconvArg = {},
+			m4: m4Arg = {},
+			zlib: zlibArg = {},
+		} = {},
 		...rest
-	} = arg ?? {};
+	} = await arg(...(args ?? []));
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -60,28 +79,25 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 
 	let phases = { configure };
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		bison(arg),
-		m4(arg),
-		zlib(arg),
+		bison.bison(bisonArg),
+		m4.m4(m4Arg),
+		zlib.zlib(zlibArg),
 	];
 	let additionalLibDirs = [];
 	if (std.triple.os(build) === "darwin") {
-		let libiconvArtifact = await libiconv(arg);
+		let libiconvArtifact = await libiconv.libiconv(libiconvArg);
 		dependencies.push(libiconvArtifact);
 		additionalLibDirs.push(
 			tg.Directory.expect(await libiconvArtifact.get("lib")),
 		);
 		dependencies.push({
-			LDFLAGS: await tg.Mutation.templatePrepend(
-				tg`-L${libiconvArtifact}/lib`,
-				" ",
-			),
+			LDFLAGS: await tg.Mutation.prefix(tg`-L${libiconvArtifact}/lib`, " "),
 		});
 	}
 	let env = [...dependencies, env_];
 
 	env.push({
-		CFLAGS: tg.Mutation.templatePrepend("-Wno-int-conversion", " "),
+		CFLAGS: tg.Mutation.prefix("-Wno-int-conversion", " "),
 	});
 
 	let pkgConfigBuild = await std.autotools.build(
@@ -135,6 +151,10 @@ export let pkgconfig = tg.target(async (arg?: Arg) => {
 	});
 });
 
+export let arg = tg.target(async (...args: std.Args<Arg>) => {
+	return await std.args.apply<Arg>(args);
+});
+
 export let path = tg.target(
 	async (
 		dependencies: Array<tg.Artifact>,
@@ -158,13 +178,13 @@ export let path = tg.target(
 	},
 );
 
-export default pkgconfig;
+export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: pkgconfig,
+		buildFunction: build,
 		binaries: ["pkg-config"],
 		metadata,
 	});
-	return pkgconfig();
+	return build();
 });

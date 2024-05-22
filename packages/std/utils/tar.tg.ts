@@ -19,34 +19,37 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
-
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
-	let dependencies: tg.Unresolved<std.env.Arg> = [prerequisites(host)];
+	let dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [
+		prerequisites(host),
+	];
 	let additionalEnv = {};
 	if (std.triple.os(host) === "darwin") {
-		dependencies.push(libiconv({ ...rest, build, env: env_, host }));
+		dependencies.push(libiconv({ build, env: env_, host, sdk }));
 		// Bug: https://savannah.gnu.org/bugs/?64441.
 		// Fix http://git.savannah.gnu.org/cgit/tar.git/commit/?id=8632df39
 		// Remove in next release.
 		additionalEnv = {
 			...additionalEnv,
-			LDFLAGS: tg.Mutation.templatePrepend(`-liconv`, " "),
+			LDFLAGS: tg.Mutation.prefix(`-liconv`, " "),
 		};
 	}
 
@@ -54,18 +57,15 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [env_, ...dependencies, additionalEnv];
+	let env = std.env.arg(env_, ...dependencies, additionalEnv);
 
-	let output = buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases: { configure },
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let output = buildUtil({
+		...std.triple.rotate({ build, host }),
+		env,
+		phases: { configure },
+		sdk,
+		source: source_ ?? source(),
+	});
 
 	return output;
 });

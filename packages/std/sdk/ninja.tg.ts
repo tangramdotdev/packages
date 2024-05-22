@@ -22,19 +22,16 @@ export let source = () => {
 	});
 };
 
-export type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let ninja = async (arg?: Arg) => {
-	let {
-		autotools = [],
-		build: build_,
-		host: host_,
-		source: source_,
-		...rest
-	} = arg ?? {};
+	let { build: build_, host: host_, sdk, source: source_ } = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -42,16 +39,13 @@ export let ninja = async (arg?: Arg) => {
 		args: ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTING=OFF"],
 	};
 
-	let result = cmake.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			generator: "Unix Makefiles",
-			phases: { configure },
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let result = cmake.build({
+		...std.triple.rotate({ build, host }),
+		generator: "Unix Makefiles",
+		phases: { configure },
+		sdk,
+		source: source_ ?? source(),
+	});
 
 	return result;
 };

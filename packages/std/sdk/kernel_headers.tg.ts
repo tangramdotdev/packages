@@ -24,8 +24,12 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(source);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
+export type Arg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
 	phases?: tg.MaybeNestedArray<std.phases.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
@@ -85,7 +89,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let result = tg.Directory.expect(
 		await std.phases.build(
 			{
-				env,
+				env: std.env.arg(env),
 				phases: { prepare, build, install },
 				order,
 				target: { host: system },

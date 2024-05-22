@@ -3,9 +3,12 @@ import kernelHeaders from "./kernel_headers.tg.ts";
 import * as glibc from "./libc/glibc.tg.ts";
 import * as musl from "./libc/musl.tg.ts";
 
-type LibCArg = std.sdk.BuildEnvArg & {
-	// /** Optionally point to a specific implementation of libcc. Only supported for musl, glibc requires libgcc. */
-	// libcc?: tg.File;
+export type LibCArg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
+	source?: tg.Directory;
 	linuxHeaders?: tg.Directory;
 };
 

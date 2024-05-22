@@ -194,7 +194,7 @@ export let wrapScripts = async (
 
 	let bin = tg.Directory.expect(await artifact.get("bin"));
 	for await (let [filename, file] of bin) {
-		if (tg.File.is(file) && (await file.executable())) {
+		if (file instanceof tg.File && (await file.executable())) {
 			let metadata = await std.file.executableMetadata(file);
 			if (isPythonScript(metadata)) {
 				scripts.push(filename);
@@ -208,7 +208,7 @@ export let wrapScripts = async (
 			[`bin/${script}`]: std.wrap(executable, {
 				interpreter: pythonInterpreter,
 				env: {
-					PYTHONPATH: tg.Mutation.templateAppend(pythonPath, ":"),
+					PYTHONPATH: tg.Mutation.suffix(pythonPath, ":"),
 				},
 			}),
 		});
@@ -247,7 +247,7 @@ export type Arg = {
 	python?: ToolchainArg;
 };
 
-export let build = async (...args: tg.Args<Arg>) => {
+export let build = async (...args: std.Args<Arg>) => {
 	type Apply = {
 		buildTriple?: string;
 		host?: string;
@@ -261,7 +261,7 @@ export let build = async (...args: tg.Args<Arg>) => {
 		pythonArg,
 		pyprojectToml: pyprojectToml_,
 		source,
-	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
+	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else {
@@ -273,9 +273,10 @@ export let build = async (...args: tg.Args<Arg>) => {
 				object.host = arg.host;
 			}
 			if (arg.python) {
-				object.pythonArg = tg.Mutation.is(arg.python)
-					? arg.python
-					: await tg.Mutation.arrayAppend(arg.python);
+				object.pythonArg =
+					arg.python instanceof tg.Mutation
+						? arg.python
+						: await tg.Mutation.append(arg.python);
 			}
 			if (arg.pyprojectToml) {
 				object.pyprojectToml = arg.pyprojectToml;

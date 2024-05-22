@@ -52,7 +52,7 @@ export let install = tg.target(
 			let sitePackages = await installed.tryGet(
 				`lib/python${versionString()}/site-packages`,
 			);
-			if (!tg.Directory.is(sitePackages)) {
+			if (!sitePackages instanceof tg.Directory) {
 				continue;
 			}
 
@@ -93,12 +93,12 @@ let mergeSitePackages = async (output: tg.Directory, input: tg.Directory) => {
 	for await (let [name, artifact] of input) {
 		// Resolve symlinks.
 		let installed = await output.tryGet(name);
-		if (tg.Symlink.is(installed)) {
+		if (installed instanceof tg.Symlink) {
 			installed = await installed.resolve();
 		}
 
 		// Detect conflicting directories and merge, otherwise override.
-		if (tg.Directory.is(installed) && tg.Directory.is(artifact)) {
+		if (installed instanceof tg.Directory && artifact instanceof tg.Directory) {
 			output = await tg.directory(output, {
 				[name]: tg.directory(installed, artifact),
 			});

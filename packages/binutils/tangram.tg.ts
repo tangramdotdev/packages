@@ -88,7 +88,7 @@ export let binutils = tg.target(async (arg?: Arg) => {
 			*/
 			additionalEnv = {
 				...additionalEnv,
-				CFLAGS: await tg.Mutation.templatePrepend("-D_LARGEFILE64_SOURCE", " "),
+				CFLAGS: await tg.Mutation.prefix("-D_LARGEFILE64_SOURCE", " "),
 			};
 		}
 	}

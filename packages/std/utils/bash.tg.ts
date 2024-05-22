@@ -7,15 +7,16 @@ export let metadata = {
 	version: "5.2.21",
 };
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let source = tg.target(async (arg?: Arg) => {
+export let source = tg.target(async (triple: string) => {
 	let { name, version } = metadata;
-	let build = arg?.build ?? (await std.triple.host());
-	let env = std.env.object(bootstrap.sdk(), arg?.env);
 
 	let checksum =
 		"sha256:c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8";
@@ -30,9 +31,9 @@ export let source = tg.target(async (arg?: Arg) => {
 	`;
 	let patchedSource = tg.Directory.expect(
 		await std.phases.build({
-			env,
+			env: bootstrap.sdk(),
 			phases: { prepare, fixup },
-			target: { host: std.triple.archAndOs(build) },
+			target: { host: std.triple.archAndOs(triple) },
 		}),
 	);
 	return patchedSource;
@@ -40,12 +41,11 @@ export let source = tg.target(async (arg?: Arg) => {
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
-		env: env_,
+		env: env_ = [],
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
@@ -54,7 +54,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
 	// If the provided env has ncurses in the library path, use it instead of termcap.
-	if (await providesNcurses(env_)) {
+	let envArg = await std.env.arg(env_);
+	if (await providesNcurses(envArg)) {
 		configureArgs.push("--with-curses");
 	}
 
@@ -63,26 +64,20 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	env.push(prerequisites(host));
 	env.push(bootstrap.shell(host));
 	env.push({
-		CFLAGS: tg.Mutation.templatePrepend(
-			"-Wno-implicit-function-declaration",
-			" ",
-		),
+		CFLAGS: tg.Mutation.prefix("-Wno-implicit-function-declaration", " "),
 	});
 
-	let output = buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases,
-			source: source_ ?? source(arg),
-		},
-		autotools,
-	);
+	let output = buildUtil({
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		phases,
+		sdk,
+		source: source_ ?? source(build),
+	});
 
 	output = tg.directory(output, {
 		"bin/sh": tg.symlink("bash"),

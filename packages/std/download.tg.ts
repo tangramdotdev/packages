@@ -1,15 +1,10 @@
-export let metadata = {
-	name: "download",
-	version: "0.0.0",
-};
-
 export type Arg = {
 	/** The expected checksum of the downloaded file. */
 	checksum: tg.Checksum;
 	/** The format of the file to unpack. If `true`, will infer from the URL. Default: `true`. */
-	decompress?: boolean | tg.Blob.CompressionFormat;
+	decompress?: boolean | tg.Blob.CompressionFormat | undefined;
 	/** The format of the archive file to unpack. If `true`, will infer from the URL. Default: `true`. */
-	extract?: boolean | tg.Artifact.ArchiveFormat;
+	extract?: boolean | tg.Artifact.ArchiveFormat | undefined;
 	/** The URL to download. */
 	url: string;
 };
@@ -31,9 +26,10 @@ export let download_ = tg.target(async (arg: Arg) => {
 	} = arg;
 
 	// Perform the download.
-	let blob = await tg.download(url, checksum);
+	let blob = await download.memoized.download(url, checksum);
+	// TODO - always do an unsafe download, then verify the checksum afterward, so the download itself is still a cache hit.
 
-	// If there's notthing to unpack, return the blob.
+	// If there's nothing to unpack, return the blob.
 	if (!decompress_ && !extract_) {
 		return tg.file(blob);
 	}
@@ -67,8 +63,8 @@ export let download_ = tg.target(async (arg: Arg) => {
 
 export namespace download {
 	export type fromGitHubArg = GithubSource & {
-		archiveFormat?: tg.Artifact.ArchiveFormat;
-		compressionFormat?: tg.Blob.CompressionFormat;
+		archiveFormat?: tg.Artifact.ArchiveFormat | undefined;
+		compressionFormat?: tg.Blob.CompressionFormat | undefined;
 		owner: string;
 		repo: string;
 		tag: string;
@@ -131,7 +127,7 @@ export namespace download {
 
 	export type FromGnuArg = {
 		checksum: tg.Checksum;
-		compressionFormat?: tg.Blob.CompressionFormat;
+		compressionFormat?: tg.Blob.CompressionFormat | undefined;
 		name: string;
 		version: string;
 	};
@@ -161,8 +157,8 @@ export namespace download {
 
 	export type UnpackArg = {
 		blob: tg.Blob;
-		decompress?: tg.Blob.CompressionFormat;
-		extract?: tg.Artifact.ArchiveFormat;
+		decompress?: tg.Blob.CompressionFormat | undefined;
+		extract?: tg.Artifact.ArchiveFormat | undefined;
 	};
 
 	export let unpackBlob = async (arg: UnpackArg): Promise<tg.Artifact> => {
@@ -173,12 +169,12 @@ export namespace download {
 
 		// Decompress if necessary.
 		if (decompress) {
-			blob = await blob.decompress(decompress);
+			blob = await download.memoized.decompress(blob, decompress);
 		}
 
 		// Unpack if necessary.
 		if (extract) {
-			return blob.extract(extract);
+			return download.memoized.extract(blob, extract);
 		} else {
 			return tg.file(blob);
 		}
@@ -243,7 +239,17 @@ export namespace download {
 			default:
 				throw new Error(`could not infer compression format from URL: ${url}`);
 		}
-		return { decompress, extract };
+
+		if (extract === undefined && decompress === undefined) {
+			return {};
+		} else if (extract === undefined) {
+			tg.assert(decompress !== undefined);
+			return { decompress };
+		} else if (decompress === undefined) {
+			return { extract };
+		} else {
+			return { decompress, extract };
+		}
 	};
 
 	/** If the given directory contains a single child directory, return the inner child. */
@@ -257,7 +263,79 @@ export namespace download {
 			"Expected the directory to contain one entry.",
 		);
 		let ret = inner.value.at(1);
-		tg.assert(tg.Directory.is(ret), "Expected the entry to be a directory.");
+		tg.assert(
+			ret instanceof tg.Directory,
+			"Expected the entry to be a directory.",
+		);
 		return ret;
 	};
+
+	export namespace memoized {
+		// FIXME - just a file for these , not a directory.
+		/** Utiltity to memoize the result of the raw `tg.download` call. */
+		export let download = async (
+			url: string,
+			checksum: string,
+		): Promise<tg.Blob> => {
+			let artifactDir = tg.directory({
+				"tangram.ts": tg.file(
+					`export default tg.target((...args) => tg.download(...args));`,
+				),
+			});
+			let target = await tg.target({
+				host: "js",
+				executable: tg.symlink(tg`${artifactDir}/tangram.ts`),
+				args: ["default", url, checksum],
+				env: tg.current.env(),
+				lock: tg.lock(),
+			});
+			let blob = await target.output();
+			tg.assert(blob instanceof tg.Leaf || blob instanceof tg.Branch);
+			return blob;
+		};
+
+		/** Utiltity to memoize the result of the raw `tg.Blob.decompress` call. */
+		export let decompress = async (
+			blob: tg.Blob,
+			compressionFormat: tg.Blob.CompressionFormat,
+		): Promise<tg.Blob> => {
+			let artifactDir = tg.directory({
+				"tangram.ts": tg.file(
+					`export default tg.target((...args) => tg.Blob.decompress(...args));`,
+				),
+			});
+			let target = await tg.target({
+				host: "js",
+				executable: tg.symlink(tg`${artifactDir}/tangram.ts`),
+				args: ["default", blob, compressionFormat],
+				env: tg.current.env(),
+				lock: tg.lock(),
+			});
+			let result = await target.output();
+			tg.assert(result instanceof tg.Leaf || result instanceof tg.Branch);
+			return result;
+		};
+
+		/** Utiltity to memoize the result of the raw `tg.Artifact.extract` call. */
+		export let extract = async (
+			blob: tg.Blob,
+			format: tg.Artifact.ArchiveFormat,
+		): Promise<tg.Artifact> => {
+			let artifactDir = tg.directory({
+				"tangram.ts": tg.file(
+					`export default tg.target((...args) => tg.Artifact.extract(...args));`,
+				),
+			});
+			let target = await tg.target({
+				host: "js",
+				executable: tg.symlink(tg`${artifactDir}/tangram.ts`),
+				args: ["default", blob, format],
+				env: tg.current.env(),
+				lock: tg.lock(),
+			});
+			let result = await target.output();
+			tg.Artifact.assert(result);
+			return result;
+		};
+	}
 }

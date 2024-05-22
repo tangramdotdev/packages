@@ -13,18 +13,21 @@ export let source = tg.target(() => {
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	usePrerequisites?: boolean;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
 		usePrerequisites = true,
 		...rest
@@ -37,21 +40,18 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	if (usePrerequisites) {
 		env.push(prerequisites(host));
 	}
 
-	let output = buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases: { configure },
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let output = buildUtil({
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		phases: { configure },
+		sdk,
+		source: source_ ?? source(),
+	});
 
 	return output;
 });

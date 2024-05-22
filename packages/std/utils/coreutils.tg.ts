@@ -4,6 +4,9 @@ import { buildUtil, muslRuntimeEnv, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import { macOsXattrCmds } from "./file_cmds.tg.ts";
 import libiconv from "./libiconv.tg.ts";
+import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch" with {
+	type: "file",
+};
 
 export let metadata = {
 	name: "coreutils",
@@ -24,19 +27,18 @@ export let source = tg.target(async (os: string) => {
 	// Apply xattr patch on Linux.
 	if (os === "linux") {
 		let patches = [];
-		patches.push(
-			tg.File.expect(
-				await tg.include("coreutils-always-preserve-xattrs.patch"),
-			),
-		);
+		patches.push(alwaysPreserveXattrsPatch);
 		source = await bootstrap.patch(source, ...patches);
 	}
 
 	return source;
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	staticBuild?: boolean;
 	usePrerequisites?: boolean;
@@ -44,20 +46,19 @@ type Arg = std.sdk.BuildEnvArg & {
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
 		staticBuild = false,
 		usePrerequisites = true,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
-	let dependencies: tg.Unresolved<std.env.Arg> = [];
+	let dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [];
 
 	if (usePrerequisites) {
 		dependencies.push(prerequisites(host));
@@ -66,10 +67,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	let attrArtifact;
 	if (os === "linux") {
 		attrArtifact = attr({
-			...rest,
 			build,
 			env: env_,
 			host,
+			sdk,
 			staticBuild,
 			usePrerequisites,
 		});
@@ -77,10 +78,10 @@ export let build = tg.target(async (arg?: Arg) => {
 	} else if (os === "darwin") {
 		dependencies.push(
 			libiconv({
-				...rest,
 				build,
 				env: env_,
 				host,
+				sdk,
 				usePrerequisites,
 			}),
 		);
@@ -102,17 +103,14 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let output = await buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases: { configure },
-			opt: staticBuild ? "s" : undefined,
-			source: source_ ?? source(os),
-		},
-		autotools,
-	);
+	let output = await buildUtil({
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		phases: { configure },
+		opt: staticBuild ? "s" : undefined,
+		sdk,
+		source: source_ ?? source(os),
+	});
 
 	// On macOS, replace `install` with the Apple Open Source version that correctly handles xattrs.
 	if (os === "darwin") {
@@ -133,13 +131,13 @@ export let gnuEnv = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let os = std.triple.os(host);
 	let sdk = bootstrap.sdk.arg(host);
-	let env: tg.Unresolved<std.env.Arg> = [bootstrap.make.build(host)];
+	let env: tg.Unresolved<std.Args<std.env.Arg>> = [bootstrap.make.build(host)];
 	if (os === "linux") {
 		env.push(muslRuntimeEnv(host));
 	}
 	let directory = await build({
 		host,
-		env,
+		env: std.env.arg(env),
 		sdk,
 		staticBuild: os === "linux",
 		usePrerequisites: false,
@@ -232,7 +230,7 @@ export let test = tg.target(async () => {
 			: attr({ host, sdk: sdkArg });
 	let output = tg.File.expect(
 		await tg.build(script, {
-			env: std.env.object(platformSupportLib, coreutils),
+			env: std.env.arg(platformSupportLib, coreutils),
 		}),
 	);
 

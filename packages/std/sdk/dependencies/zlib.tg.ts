@@ -17,36 +17,31 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
 	let url = `https://zlib.net/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return await std.directory.unwrap(outer);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target((arg?: Arg) => {
-	let {
-		autotools = [],
-		build,
-		env: env_,
-		host,
-		source: source_,
-		...rest
-	} = arg ?? {};
+	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
 
-	let env = [env_, std.utils.env({ ...rest, build, host })];
+	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
 
-	let output = std.utils.buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let output = std.utils.buildUtil({
+		...std.triple.rotate({ build, host }),
+		env,
+		sdk,
+		source: source_ ?? source(),
+	});
 
 	return output;
 });

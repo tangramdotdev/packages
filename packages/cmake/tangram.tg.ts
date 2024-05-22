@@ -150,7 +150,7 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export let target = async (...args: tg.Args<BuildArg>) => {
+export let target = async (...args: std.Args<BuildArg>) => {
 	type Apply = {
 		debug: boolean;
 		defaultCFlags: boolean;
@@ -187,7 +187,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await tg.Args.apply<BuildArg, Apply>(args, async (arg) => {
+	} = await std.Args.apply<BuildArg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else if (typeof arg === "object") {
@@ -236,27 +236,27 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 				object.source = arg.source;
 			}
 			if (arg.phases !== undefined) {
-				if (tg.Mutation.is(arg.phases)) {
+				if (arg.phases instanceof tg.Mutation) {
 					object.phases = arg.phases;
 				} else {
 					phasesArgs.push(arg.phases);
 				}
 			}
 			if (arg.sdk !== undefined) {
-				if (tg.Mutation.is(arg.sdk)) {
+				if (arg.sdk instanceof tg.Mutation) {
 					object.sdkArgs = arg.sdk;
 				} else {
 					if (typeof arg.sdk === "boolean") {
 						if (arg.sdk === false) {
 							// If the user set this to `false`, pass it through. Ignore `true`.
-							object.sdkArgs = await tg.Mutation.arrayAppend<
-								boolean | std.sdk.Arg
-							>(false);
+							object.sdkArgs = await tg.Mutation.append<boolean | std.sdk.Arg>(
+								false,
+							);
 						}
 					} else {
-						object.sdkArgs = await tg.Mutation.arrayAppend<
-							boolean | std.sdk.Arg
-						>(arg.sdk);
+						object.sdkArgs = await tg.Mutation.append<boolean | std.sdk.Arg>(
+							arg.sdk,
+						);
 					}
 				}
 			}
@@ -266,7 +266,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 			if (arg.target !== undefined) {
 				object.target = arg.target;
 			}
-			object.phases = await tg.Mutation.arrayAppend(phasesArgs);
+			object.phases = await tg.Mutation.append(phasesArgs);
 			return object;
 		} else {
 			return tg.unreachable();
@@ -327,7 +327,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	 *self_spec:
 	 + %{!static:%{!shared:%{!r:-pie}}}
 	 		`);
-		let extraCxxFlags = await tg.Mutation.templatePrepend(
+		let extraCxxFlags = await tg.Mutation.prefix(
 			`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
 			" ",
 		);
@@ -338,7 +338,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 
 	// LDFLAGS
 	if (stripExecutables === true) {
-		let stripFlag = await tg.Mutation.templatePrepend(
+		let stripFlag = await tg.Mutation.prefix(
 			os === "darwin" ? `-Wl,-S` : `-s`,
 			" ",
 		);
@@ -346,7 +346,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	}
 	if (os === "linux" && hardeningCFlags) {
 		let fullRelroString = fullRelro ? ",-z,now" : "";
-		let extraLdFlags = await tg.Mutation.templatePrepend(
+		let extraLdFlags = await tg.Mutation.prefix(
 			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
 			" ",
 		);
@@ -388,7 +388,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 	};
 
 	let jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
-	let jobsArg = tg.Mutation.templatePrepend(`-j${jobs}`, " ");
+	let jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
 	let defaultBuild = {
 		command: `cmake`,
 		args: [`--build`, `.`, jobsArg],
@@ -426,7 +426,7 @@ export let target = async (...args: tg.Args<BuildArg>) => {
 
 /** Build a cmake package. */
 export let build = async (
-	...args: tg.Args<BuildArg>
+	...args: std.Args<BuildArg>
 ): Promise<tg.Directory> => {
 	return tg.Directory.expect(await (await target(...args)).build());
 };

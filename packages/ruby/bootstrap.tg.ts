@@ -40,11 +40,8 @@ export let ruby = tg.target(async (host: string) => {
 		["bin/ruby"]: std.wrap({
 			executable: tg.symlink(tg`${build}/bin/ruby`),
 			env: {
-				RUBYLIB: tg.Mutation.templateAppend(rubylib, ":"),
-				GEM_PATH: tg.Mutation.templateAppend(
-					tg`${build}/lib/ruby/gems/2.5.0`,
-					":",
-				),
+				RUBYLIB: tg.Mutation.suffix(rubylib, ":"),
+				GEM_PATH: tg.Mutation.suffix(tg`${build}/lib/ruby/gems/2.5.0`, ":"),
 			},
 		}),
 	});

@@ -12,7 +12,6 @@ export let source = tg.target(() => {
 	let owner = "facebook";
 	let repo = name;
 	let tag = `v${version}`;
-	// https://github.com/facebook/zstd/releases/download/v1.5.6/zstd-1.5.6.tar.zst
 	return std.download.fromGithub({
 		checksum,
 		compressionFormat: "zst",
@@ -24,35 +23,31 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
-	let {
-		autotools = [],
-		build,
-		env: env_,
-		host,
-		source: source_,
-		...rest
-	} = arg ?? {};
+	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
 
 	let sourceDir = source_ ?? source();
 
 	let install = tg`make install PREFIX=$OUTPUT`;
 	let phases = { install };
 
-	let env = [env_, std.utils.env({ ...rest, build, host })];
+	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
 
 	let result = std.autotools.build({
-		...rest,
 		...std.triple.rotate({ build, host }),
 		buildInTree: true,
 		env,
 		phases: { phases, order: ["prepare", "build", "install"] },
 		prefixArg: "none",
+		sdk,
 		source: sourceDir,
 	});
 

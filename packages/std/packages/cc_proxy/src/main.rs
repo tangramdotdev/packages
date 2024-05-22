@@ -312,7 +312,7 @@ async fn main_inner() -> tg::Result<()> {
 	let tg = &tg::Client::with_env()?;
 
 	// Create the driver executable.
-	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes(), None).await?;
+	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
 	let executable = tg::File::with_object(tg::file::Object {
 		contents,
 		executable: true,
@@ -325,7 +325,8 @@ async fn main_inner() -> tg::Result<()> {
 
 	// Create the arguments to the driver script.
 	let cc = unrender(environment.cc.to_str().unwrap())?.into();
-	let mut args = std::iter::once(cc)
+	let mut args = std::iter::once("tangram_cc".to_string().into())
+		.chain(std::iter::once(cc))
 		.chain(cli_args.into_iter().map(tg::Value::from))
 		.collect::<Vec<_>>();
 	for (target, value) in remappings {
@@ -347,7 +348,6 @@ async fn main_inner() -> tg::Result<()> {
 		host: host().to_string(),
 		executable,
 		lock: None,
-		name: Some("tangram_cc".into()),
 		env: environment.env,
 		args,
 		checksum: None,
@@ -355,14 +355,13 @@ async fn main_inner() -> tg::Result<()> {
 
 	// Create a build.
 	let id = target.id(tg, None).await?;
-	let build_arg = tg::build::GetOrCreateArg {
+	let build_arg = tg::target::build::Arg {
 		parent: None,
 		remote: false,
 		retry: tg::build::Retry::Canceled,
-		target: id.clone(),
 	};
-	let tg::build::GetOrCreateOutput { id: build_id } = tg.get_or_create_build(build_arg).await?;
-	let build = tg::Build::with_id(build_id);
+	let build_output = tg.build_target(&id, build_arg).await?;
+	let build = tg::Build::with_id(build_output.build);
 
 	// Await the outcome.
 	let outcome = build.outcome(tg).await?;

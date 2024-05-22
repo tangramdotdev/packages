@@ -47,7 +47,7 @@ export let source = tg.target(async () => {
 	return std.patch(source, ...(await Promise.all(patches)));
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	build?: string;
 	env?: std.env.Arg;
@@ -85,7 +85,7 @@ export let perl = tg.target(async (arg?: Arg) => {
 		prepare,
 	};
 
-	let dependencies = [bison(arg), libffi(arg), m4(arg), zlib(arg)];
+	let dependencies = [bison(arg), libffi(arg), m4(arg), zlib()];
 	let env = [...dependencies, env_];
 
 	let perlArtifact = await std.autotools.build(
@@ -104,7 +104,7 @@ export let perl = tg.target(async (arg?: Arg) => {
 		tg.symlink({ artifact: perlArtifact, path: tg.Path.new("bin/perl") }),
 		{
 			env: {
-				PERL5LIB: tg.Mutation.templateAppend(
+				PERL5LIB: tg.Mutation.suffix(
 					tg`${perlArtifact}/lib/perl5/${metadata.version}`,
 					":",
 				),
@@ -115,7 +115,7 @@ export let perl = tg.target(async (arg?: Arg) => {
 	let scripts = [];
 	let binDir = tg.Directory.expect(await perlArtifact.get("bin"));
 	for await (let [name, artifact] of binDir) {
-		if (tg.File.is(artifact)) {
+		if (artifact instanceof tg.File) {
 			let metadata = await std.file.executableMetadata(artifact);
 			if (
 				metadata.format == "shebang" &&

@@ -52,7 +52,7 @@ export let sphinx = tg.target((arg?: Arg) => {
 		executable: tg.symlink(tg`${pythonEnv}/bin/python3.11`),
 		args: ["-m", "sphinx"],
 		env: {
-			PYTHONPATH: tg.Mutation.templateAppend(
+			PYTHONPATH: tg.Mutation.suffix(
 				tg`${sourceArtifact}:${pythonEnv}/lib/python3/site-packages`,
 				":",
 			),

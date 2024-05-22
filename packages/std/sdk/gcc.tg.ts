@@ -25,14 +25,16 @@ export let source = tg.target(() =>
 	}),
 );
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	sysroot: tg.Directory;
 	target?: string;
 	variant: Variant;
 };
-
 export type Variant =
 	| "stage1_bootstrap" // C only, no libraries.
 	| "stage1_limited" // C/C++ only, most libraries disabled, but inclded libgcc/libstdc++.
@@ -41,15 +43,14 @@ export type Variant =
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
 export let build = tg.target(async (arg: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
 		sysroot,
 		target: target_,
 		variant,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
@@ -135,12 +136,13 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
+			"--with-build-config=bootstrap-lto",
 		];
 		additionalArgs.push(...stage2FullArgs);
 		additionalEnv = {
 			...additionalEnv,
-			CC: `cc -static -fPIC`,
-			CXX: `c++ -static -fPIC`,
+			CC: `cc -static -fPIC -flto`,
+			CXX: `c++ -static -fPIC -flto`,
 		};
 	}
 
@@ -167,18 +169,15 @@ export let build = tg.target(async (arg: Arg) => {
 	]);
 	env.push(additionalEnv);
 
-	let result = await std.autotools.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			debug,
-			env: std.env.object(env),
-			phases,
-			opt: "3",
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let result = await std.autotools.build({
+		...std.triple.rotate({ build, host }),
+		debug,
+		env: std.env.arg(env),
+		phases,
+		opt: "3",
+		sdk,
+		source: source_ ?? source(),
+	});
 
 	result = await mergeLibDirs(result);
 
@@ -322,7 +321,7 @@ async function getGccVersion(
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
 	let script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
-	let envObject = std.env.object(bootstrap.utils(), env);
+	let envObject = std.env.arg(bootstrap.utils(), env);
 	let result = tg.File.expect(await tg.build(script, { env: envObject }));
 	return (await result.text()).trim();
 }

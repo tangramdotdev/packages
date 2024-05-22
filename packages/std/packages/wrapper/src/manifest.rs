@@ -402,14 +402,13 @@ pub fn collect_references_from_mutation_data<H: BuildHasher>(
 		tg::mutation::Data::Set { value } | tg::mutation::Data::SetIfUnset { value } => {
 			collect_references_from_value_data(value, references);
 		},
-		tg::mutation::Data::ArrayPrepend { values }
-		| tg::mutation::Data::ArrayAppend { values } => {
+		tg::mutation::Data::Prepend { values } | tg::mutation::Data::Append { values } => {
 			for value in values {
 				collect_references_from_value_data(value, references);
 			}
 		},
-		tg::mutation::Data::TemplatePrepend { template, .. }
-		| tg::mutation::Data::TemplateAppend { template, .. } => {
+		tg::mutation::Data::Prefix { template, .. }
+		| tg::mutation::Data::Suffix { template, .. } => {
 			collect_references_from_template_data(template, references);
 		},
 	}

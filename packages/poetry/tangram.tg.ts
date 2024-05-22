@@ -95,7 +95,7 @@ export let build = tg.target(async (args: BuildArgs) => {
 			`,
 		{
 			env: std.env(poetryArtifact, {
-				PYTHONPATH: tg.Mutation.templateAppend(
+				PYTHONPATH: tg.Mutation.suffix(
 					tg`${installedRequirements}/lib/python3/site-packages}`,
 					":",
 				),

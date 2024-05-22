@@ -21,13 +21,13 @@ export namespace sdk {
 	};
 
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxying. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
-	export let env = async (hostArg?: string): Promise<std.env.Arg> => {
+	export let env = async (hostArg?: string) => {
 		let host = hostArg ?? (await std.triple.host());
 		let toolchain = await prepareBootstrapToolchain(host);
 		let bootstrapHost = await bootstrap.toolchainTriple(host);
 		let utils = await prepareBootstrapUtils(bootstrapHost);
-		let shellExe = tg.File.expect(await utils.get("bin/dash"));
-		let env: tg.MutationMap<Record<string, tg.Template.Arg>> = {
+		let shellExe = await utils.get("bin/dash").then(tg.File.expect);
+		let env: std.env.Arg = {
 			CONFIG_SHELL: shellExe,
 			SHELL: shellExe,
 		};
@@ -38,7 +38,7 @@ export namespace sdk {
 				SDKROOT: sdkroot,
 			};
 		}
-		return std.env.object(toolchain, utils, env);
+		return await std.env.arg(toolchain, utils, env);
 	};
 
 	/** Get the bootstrap components as a single directory, for use before SDK. */
@@ -69,7 +69,7 @@ export namespace sdk {
 	export let prepareBootstrapUtils = async (hostArg?: string) => {
 		let host = hostArg ?? (await std.triple.host());
 		let shell = await bootstrap.shell(host);
-		let shellFile = tg.File.expect(await shell.get("bin/dash"));
+		let shellFile = await shell.get("bin/dash").then(tg.File.expect);
 		let utils = bootstrap.utils(host);
 		let combined = tg.directory(utils, {
 			"bin/dash": shellFile,

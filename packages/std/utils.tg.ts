@@ -31,7 +31,12 @@ export * as sed from "./utils/sed.tg.ts";
 export * as tar from "./utils/tar.tg.ts";
 export * as xz from "./utils/xz.tg.ts";
 
-type Arg = std.sdk.BuildEnvArg;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
+};
 
 /** A basic set of GNU system utilites. */
 export let env = tg.target(async (arg?: Arg) => {
@@ -50,7 +55,7 @@ export let env = tg.target(async (arg?: Arg) => {
 		CONFIG_SHELL: bashExecutable,
 		SHELL: bashExecutable,
 	};
-	let env = [env_, bashEnv];
+	let env = std.env.arg(env_, bashEnv);
 
 	let utils = [bashArtifact, bashEnv];
 	utils = utils.concat(
@@ -69,7 +74,7 @@ export let env = tg.target(async (arg?: Arg) => {
 			xz({ ...rest, env, host }),
 		]),
 	);
-	return utils;
+	return await std.env.arg(utils);
 });
 
 export default env;
@@ -77,7 +82,7 @@ export default env;
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export let prerequisites = tg.target(async (hostArg?: string) => {
 	let host = hostArg ?? (await std.triple.host());
-	let components: std.env.Arg = [await bootstrap.utils(host)];
+	let components: std.Args<std.env.Arg> = [await bootstrap.utils(host)];
 
 	// Add GNU make.
 	let makeArtifact = await bootstrap.make.build(host);
@@ -114,46 +119,36 @@ export let muslRuntimeEnv = async (hostArg?: string) => {
 	let interpreter = tg.File.expect(
 		await muslArtifact.get(bootstrap.musl.interpreterPath(host)),
 	);
-	return [
-		muslArtifact,
-		{
-			TANGRAM_LINKER_INTERPRETER_PATH: interpreter,
-		},
-	];
+	return std.env.arg(muslArtifact, {
+		TANGRAM_LINKER_INTERPRETER_PATH: interpreter,
+	});
 };
 
 type BuildUtilArg = std.autotools.Arg & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
-	wrapBashScriptPaths?: Array<string>;
+	wrapBashScriptPaths?: Array<string> | undefined;
 };
 
 /** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag. */
-export let buildUtil = tg.target(
-	async (
-		arg: BuildUtilArg,
-		autotools: tg.MaybeNestedArray<std.autotools.Arg>,
-	) => {
-		let opt = arg.opt ?? "s";
-		let output = await std.autotools.build(
-			{
-				...arg,
-				opt,
-			},
-			autotools,
-		);
+export let buildUtil = tg.target(async (arg: BuildUtilArg) => {
+	let { opt: opt_, wrapBashScriptPaths, ...rest } = arg;
+	let opt = opt_ ?? "s";
+	let output = await std.autotools.build({
+		...rest,
+		opt,
+	});
 
-		// Wrap the bash scripts in the output.
-		for (let path of arg.wrapBashScriptPaths ?? []) {
-			let file = tg.File.expect(await output.get(path));
-			let wrappedFile = changeShebang(file);
-			output = await tg.directory(output, {
-				[path]: wrappedFile,
-			});
-		}
+	// Wrap the bash scripts in the output.
+	for (let path of arg.wrapBashScriptPaths ?? []) {
+		let file = tg.File.expect(await output.get(path));
+		let wrappedFile = changeShebang(file);
+		output = await tg.directory(output, {
+			[path]: wrappedFile,
+		});
+	}
 
-		return output;
-	},
-);
+	return output;
+});
 
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
 export let changeShebang = async (scriptFile: tg.File) => {

@@ -159,7 +159,7 @@ async fn main_inner() -> tg::Result<()> {
     };
 
     // Create the executable file.
-    let contents = tg::Blob::with_reader(tg, DRIVER_SH, None).await?;
+    let contents = tg::Blob::with_reader(tg, DRIVER_SH).await?;
     let executable = true;
     let references = Vec::new();
     let object = tg::file::Object {
@@ -194,7 +194,9 @@ async fn main_inner() -> tg::Result<()> {
 
     // Create/Unrender the arguments passed to driver.sh.
     let rustc = tg::Template::unrender(artifacts_directory, &args.rustc)?;
+    let name = "tangram_rustc".to_string().into();
     let mut target_args: Vec<tg::Value> = vec![
+        name,
         "--rustc".to_owned().into(),
         rustc.into(),
         "--source".to_owned().into(),
@@ -244,31 +246,27 @@ async fn main_inner() -> tg::Result<()> {
     let host = host().to_string();
     let lock = None;
     let checksum = None;
-    let name = Some("tangram_rustc".into());
     let object = tg::target::Object {
         executable,
         env,
         host,
         lock,
         args: target_args,
-        name,
         checksum,
     };
     let target = tg::Target::with_object(object);
     let target_id = target.id(tg, None).await?;
 
     // Create the build and mark it as a child.
-    let build_options = tg::build::GetOrCreateArg {
+    let build_options = tg::target::build::Arg {
         parent: None,
         remote: false,
         retry: tg::build::Retry::Failed,
-        target: target_id.clone(),
     };
-    let tg::build::GetOrCreateOutput { id: build_id } =
-        tg.get_or_create_build(build_options).await?;
+    let build_output = tg.build_target(&target_id, build_options).await?;
 
     // Get the build outcome.
-    let outcome = tg::Build::with_id(build_id)
+    let outcome = tg::Build::with_id(build_output.build)
         .outcome(tg)
         .await
         .map_err(|error| tg::error!(source = error, "failed to get the build"))?;

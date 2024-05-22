@@ -36,7 +36,7 @@ type Arg = {
 	host?: string;
 };
 
-export let ruby = async (...args: tg.Args<Arg>) => {
+export let ruby = async (...args: std.Args<Arg>) => {
 	type Apply = {
 		envs: std.env.Arg;
 		phases: tg.MaybeNestedArray<std.phases.Arg>;
@@ -50,18 +50,19 @@ export let ruby = async (...args: tg.Args<Arg>) => {
 		source: source_,
 		build: build_,
 		host: host_,
-	} = await tg.Args.apply<Arg, Apply>(args, async (arg) => {
+	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
 		if (arg === undefined) {
 			return {};
 		} else {
 			let object: tg.MutationMap<Apply> = {};
 			if (arg.env !== undefined) {
-				object.envs = await tg.Mutation.arrayAppend<std.env.Arg>(arg.env);
+				object.envs = await tg.Mutation.append<std.env.Arg>(arg.env);
 			}
 			if (arg.phases !== undefined) {
-				object.phases = tg.Mutation.is(arg.phases)
-					? arg.phases
-					: await tg.Mutation.arrayAppend<std.phases.Arg>(arg.phases);
+				object.phases =
+					arg.phases instanceof tg.Mutation
+						? arg.phases
+						: await tg.Mutation.append<std.phases.Arg>(arg.phases);
 			}
 			if (arg.source !== undefined) {
 				object.source = arg.source;

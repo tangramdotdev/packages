@@ -17,12 +17,17 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
 	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return await std.directory.unwrap(outer);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	build?: string | undefined;
+	env?: std.env.Arg;
+	host?: string | undefined;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	staticBuild?: boolean;
 	usePrerequisites?: boolean;
@@ -30,14 +35,13 @@ type Arg = std.sdk.BuildEnvArg & {
 
 export let build = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
 		staticBuild = false,
 		usePrerequisites = true,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
@@ -64,7 +68,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let phases = { configure };
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	if (usePrerequisites) {
 		env.push(prerequisites(host));
 	}
@@ -72,17 +76,14 @@ export let build = tg.target(async (arg?: Arg) => {
 		env.push({ CC: "gcc -static" });
 	}
 
-	let output = await buildUtil(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases,
-			opt: staticBuild ? "s" : undefined,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let output = await buildUtil({
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		phases,
+		opt: staticBuild ? "s" : undefined,
+		sdk,
+		source: source_ ?? source(),
+	});
 
 	let bins = ["attr", "getfattr", "setfattr"];
 	for (let bin of bins) {

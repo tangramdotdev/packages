@@ -25,23 +25,25 @@ export let source = tg.target((version?: GlibcVersion) => {
 	});
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	linuxHeaders: tg.Directory;
+export type Arg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
+	linuxHeaders: tg.Directory;
 	version?: GlibcVersion;
 };
 
 export default tg.target(async (arg: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
 		linuxHeaders,
+		sdk,
 		source: source_,
 		version = defaultGlibcVersion,
-		...rest
 	} = arg;
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -102,18 +104,15 @@ export default tg.target(async (arg: Arg) => {
 		TANGRAM_LINKER_PASSTHROUGH: "1",
 	});
 
-	let result = await std.autotools.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			opt: "3",
-			phases,
-			prefixPath: "/",
-			source: source_ ?? source(version),
-		},
-		autotools,
-	);
+	let result = await std.autotools.build({
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		opt: "3",
+		phases,
+		prefixPath: "/",
+		sdk,
+		source: source_ ?? source(version),
+	});
 
 	// Fix libc.so.
 	result = await applySysrootFix({

@@ -1,5 +1,6 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
+import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 
 export let metadata = {
 	name: "musl",
@@ -17,31 +18,30 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
 	let url = `https://musl.libc.org/releases/${packageArchive}`;
-	let source = tg.Directory.expect(await std.download({ url, checksum }));
-	source = await std.directory.unwrap(source);
-
-	let patch = tg.File.expect(await tg.include("musl_permission.patch"));
-	source = await bootstrap.patch(source, patch);
-
-	return source;
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap)
+		.then((source) => bootstrap.patch(source, muslPermissionPatch));
 });
 
-type Arg = std.sdk.BuildEnvArg & {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
-	/* Optionally point to a specific implementation of libcc. */
-	libcc?: tg.File;
+export type Arg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
+	libcc?: tg.File;
 };
 
 export default tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
 		libcc = false,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -85,17 +85,14 @@ export default tg.target(async (arg?: Arg) => {
 	);
 	env = env.concat([{ CPATH: tg.Mutation.unset() }]);
 
-	let result = await std.autotools.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			phases,
-			prefixPath: "/", // It's going in a sysroot.
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let result = await std.autotools.build({
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		phases,
+		prefixPath: "/", // It's going in a sysroot.
+		sdk,
+		source: source_ ?? source(),
+	});
 
 	// Add an ld.so file, which in musl is just a symlink to libc.so.
 	result = await tg.directory(result, {

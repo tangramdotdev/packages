@@ -7,9 +7,9 @@ export { sdk } from "./bootstrap/sdk.tg.ts";
 
 export type Arg = {
 	/** Specify which component to provide. */
-	component?: string;
+	component?: string | undefined;
 	/** Optionally select a system different from the detected host. */
-	host?: string;
+	host?: string | undefined;
 };
 
 export let bootstrap = async (arg?: Arg) => {
@@ -123,7 +123,9 @@ export let patch = async (
 	`;
 
 	let shellArtifact = await shell(host);
-	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/dash"));
+	let shellExecutable = await shellArtifact
+		.get("bin/dash")
+		.then(tg.File.expect);
 	let utilsArtifact = utils(host);
 
 	let patchedSource = tg.Directory.expect(
@@ -148,7 +150,7 @@ export let remoteComponent = async (componentName: string) => {
 	tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
 
 	// Download and extract the selected tarball.
-	return tg.Directory.expect(await download({ url, checksum }));
+	return await download({ url, checksum }).then(tg.Directory.expect);
 };
 
 /** Enumerate the full set of components for a host. */
