@@ -57,24 +57,24 @@ export namespace env {
 	});
 
 	/** Produce a single env object from a potentially nested array of env args. */
-	export let arg = tg.target(
-		async (...args: std.Args<Arg>): Promise<std.env.EnvObject> => {
-			let envObjects = await Promise.all(
-				std
-					.flatten(args)
-					.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
-					.map(async (arg) => {
-						if (tg.Artifact.is(arg)) {
-							return await env.envObjectFromArtifact(arg);
-						} else {
-							tg.assert(arg !== undefined);
-							return arg;
-						}
-					}),
-			);
-			return await env.mergeArgObjects(...envObjects);
-		},
-	);
+	export let arg = async (
+		...args: std.args.UnresolvedArgs<Arg>
+	): Promise<std.env.EnvObject> => {
+		let envObjects = await Promise.all(
+			std
+				.flatten(await Promise.all(args.map(tg.resolve)))
+				.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
+				.map(async (arg) => {
+					if (tg.Artifact.is(arg)) {
+						return await env.envObjectFromArtifact(arg);
+					} else {
+						tg.assert(arg !== undefined);
+						return arg;
+					}
+				}),
+		);
+		return await env.mergeArgObjects(...envObjects);
+	};
 
 	/** Produce an env object from an artifact value. */
 	export let envObjectFromArtifact = async (
@@ -341,76 +341,76 @@ export namespace env {
 	};
 
 	/** Retrieve the artifact a key's template value refers to. Throws if cannot be found. */
-	export let getArtifactByKey = tg.target(
-		async (arg: ArtifactByKeyArg): Promise<tg.Artifact> => {
-			let template = await tryGetKey(arg);
-			tg.assert(template, `Unable to find key ${arg.key} in this env.`);
-			// There are two options. Either the template points directly to an artifact with a single reference, or it points to a directory with a subpath. Anything else, we reject.
-			let components = template.components;
-			switch (components.length) {
-				case 1: {
-					let [artifact] = components;
-					if (artifact && typeof artifact !== "string") {
-						return artifact;
-					}
-				}
-				case 2: {
-					let [directory, subpath] = components;
-					if (
-						directory &&
-						typeof directory !== "string" &&
-						directory instanceof tg.Directory &&
-						subpath &&
-						typeof subpath === "string"
-					) {
-						// Slice off the leading `/`.
-						return await directory.get(subpath.slice(1));
-					}
-				}
-				default: {
-					throw new Error(
-						`Could not resolve artifact from key ${arg.key}. Value: ${template}.`,
-					);
+	export let getArtifactByKey = async (
+		arg: ArtifactByKeyArg,
+	): Promise<tg.Artifact> => {
+		let template = await tryGetKey(arg);
+		tg.assert(template, `Unable to find key ${arg.key} in this env.`);
+		// There are two options. Either the template points directly to an artifact with a single reference, or it points to a directory with a subpath. Anything else, we reject.
+		let components = template.components;
+		switch (components.length) {
+			case 1: {
+				let [artifact] = components;
+				if (artifact && typeof artifact !== "string") {
+					return artifact;
 				}
 			}
-		},
-	);
+			case 2: {
+				let [directory, subpath] = components;
+				if (
+					directory &&
+					typeof directory !== "string" &&
+					directory instanceof tg.Directory &&
+					subpath &&
+					typeof subpath === "string"
+				) {
+					// Slice off the leading `/`.
+					return await directory.get(subpath.slice(1));
+				}
+			}
+			default: {
+				throw new Error(
+					`Could not resolve artifact from key ${arg.key}. Value: ${template}.`,
+				);
+			}
+		}
+	};
 
 	/** Retrieve the artifact a key's template value refers to. Returns undefined if cannot be found. */
-	export let tryGetArtifactByKey = tg.target(
-		async (arg: ArtifactByKeyArg): Promise<tg.Artifact | undefined> => {
-			let template = await tryGetKey(arg);
-			if (!template) {
+	export let tryGetArtifactByKey = async (
+		arg: ArtifactByKeyArg,
+	): Promise<tg.Artifact | undefined> => {
+		let template = await tryGetKey(arg);
+		if (!template) {
+			return undefined;
+		}
+		// There are two options. Either the template points directly to an artifact with a single reference, or it points to a directory with a subpath. Anything else, we reject.
+		let components = template.components;
+		switch (components.length) {
+			case 1: {
+				let [artifact] = components;
+				if (artifact && typeof artifact !== "string") {
+					return artifact;
+				}
+			}
+			case 2: {
+				let [directory, subpath] = components;
+				if (
+					directory &&
+					typeof directory !== "string" &&
+					directory instanceof tg.Directory &&
+					subpath &&
+					typeof subpath === "string"
+				) {
+					// Slice off the leading `/`.
+					return await directory.get(subpath.slice(1));
+				}
+			}
+			default: {
 				return undefined;
 			}
-			// There are two options. Either the template points directly to an artifact with a single reference, or it points to a directory with a subpath. Anything else, we reject.
-			let components = template.components;
-			switch (components.length) {
-				case 1: {
-					let [artifact] = components;
-					if (artifact && typeof artifact !== "string") {
-						return artifact;
-					}
-				}
-				case 2: {
-					let [directory, subpath] = components;
-					if (
-						directory &&
-						typeof directory !== "string" &&
-						directory instanceof tg.Directory &&
-						subpath &&
-						typeof subpath === "string"
-					) {
-						// Slice off the leading `/`.
-						return await directory.get(subpath.slice(1));
-					}
-				}
-				default: {
-					return undefined;
-				}
-			}
-		},
-	);
+		}
+	};
 
 	type GetKeyArg = {
 		env: env.Arg;
@@ -418,18 +418,16 @@ export namespace env {
 	};
 
 	/** Retrieve the value of a key. If not present, throw an error. */
-	export let getKey = tg.target(
-		async (arg: GetKeyArg): Promise<tg.Template> => {
-			let { env, key } = arg;
-			for await (let [foundKey, value] of envVars(env)) {
-				if (foundKey === key) {
-					tg.assert(value, `Found key ${key} but it was undefined.`);
-					return value;
-				}
+	export let getKey = async (arg: GetKeyArg): Promise<tg.Template> => {
+		let { env, key } = arg;
+		for await (let [foundKey, value] of envVars(env)) {
+			if (foundKey === key) {
+				tg.assert(value, `Found key ${key} but it was undefined.`);
+				return value;
 			}
-			throw new Error(`Could not find key ${key} in this env.`);
-		},
-	);
+		}
+		throw new Error(`Could not find key ${key} in this env.`);
+	};
 
 	/** Retrieve the value of a key. If not present, return `undefined`. */
 	export async function tryGetKey(
@@ -543,7 +541,7 @@ export namespace env {
 	};
 
 	/** Assert the env provides a specific executable in PATH. */
-	export let assertProvides = tg.target(async (arg: ProvidesArg) => {
+	export let assertProvides = async (arg: ProvidesArg) => {
 		let { name, names: names_ } = arg;
 		let names = names_ ?? [];
 		if (name) {
@@ -561,75 +559,69 @@ export namespace env {
 			}),
 		);
 		return true;
-	});
+	};
 
 	/** Check if the env provides a specific executable in PATH. */
-	export let provides = tg.target(
-		async (arg: ProvidesArg): Promise<boolean> => {
-			let { name, names: names_ } = arg;
-			let names = names_ ?? [];
-			if (name) {
-				names.push(name);
-			}
+	export let provides = async (arg: ProvidesArg): Promise<boolean> => {
+		let { name, names: names_ } = arg;
+		let names = names_ ?? [];
+		if (name) {
+			names.push(name);
+		}
 
-			let results = await Promise.all(
-				names.map(async (name) => {
-					for await (let [binName, _file] of env.binsInPath(arg)) {
-						if (binName === name) {
-							return true;
-						}
+		let results = await Promise.all(
+			names.map(async (name) => {
+				for await (let [binName, _file] of env.binsInPath(arg)) {
+					if (binName === name) {
+						return true;
 					}
-					return false;
-				}),
-			);
-			return results.every((el) => el);
-		},
-	);
+				}
+				return false;
+			}),
+		);
+		return results.every((el) => el);
+	};
+
 	type WhichArg = {
 		env: env.Arg;
 		name: string;
 	};
 
 	/** Return the file for a given executable in an env's PATH. Throws an error if not present. */
-	export let which = tg.target(
-		async (arg: WhichArg): Promise<tg.File | tg.Symlink> => {
-			let file = await tryWhich(arg);
-			tg.assert(file, `This env does not provide ${arg.name} in $PATH`);
-			return file;
-		},
-	);
+	export let which = async (arg: WhichArg): Promise<tg.File | tg.Symlink> => {
+		let file = await tryWhich(arg);
+		tg.assert(file, `This env does not provide ${arg.name} in $PATH`);
+		return file;
+	};
 
 	/** Return the artifact providing a given binary by name. */
-	export let whichArtifact = tg.target(
-		async (arg: WhichArg): Promise<tg.Directory | undefined> => {
-			for await (let [parentDir, binDir] of env.dirsInVar({
-				env: arg.env,
-				key: "PATH",
-			})) {
-				let artifact = await binDir.tryGet(arg.name);
-				if (artifact) {
-					return parentDir;
-				}
+	export let whichArtifact = async (
+		arg: WhichArg,
+	): Promise<tg.Directory | undefined> => {
+		for await (let [parentDir, binDir] of env.dirsInVar({
+			env: arg.env,
+			key: "PATH",
+		})) {
+			let artifact = await binDir.tryGet(arg.name);
+			if (artifact) {
+				return parentDir;
 			}
-		},
-	);
+		}
+	};
 
 	/** Return the file for a given executable in an env's PATH. Returns undefined if not present. */
-	export let tryWhich = tg.target(
-		async (arg: WhichArg): Promise<tg.File | tg.Symlink | undefined> => {
-			for await (let [name, executable] of env.binsInPath(arg)) {
-				if (name === arg.name) {
-					if (
-						executable instanceof tg.Symlink ||
-						executable instanceof tg.File
-					) {
-						return executable;
-					}
+	export let tryWhich = async (
+		arg: WhichArg,
+	): Promise<tg.File | tg.Symlink | undefined> => {
+		for await (let [name, executable] of env.binsInPath(arg)) {
+			if (name === arg.name) {
+				if (executable instanceof tg.Symlink || executable instanceof tg.File) {
+					return executable;
 				}
 			}
-			return undefined;
-		},
-	);
+		}
+		return undefined;
+	};
 }
 
 let isUtilsToggle = (arg: unknown): arg is env.UtilsToggle => {

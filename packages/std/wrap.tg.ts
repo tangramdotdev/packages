@@ -119,9 +119,9 @@ export namespace wrap {
 	};
 
 	/** Process variadiac arguments. */
-	export let arg = tg.target(async (...args: std.Args<wrap.Arg>) => {
+	export let arg = async (...args: std.args.UnresolvedArgs<wrap.Arg>) => {
 		let objectArgs = await Promise.all(
-			std.flatten(args).map(async (arg) => {
+			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
@@ -202,7 +202,7 @@ export namespace wrap {
 			merge,
 			libraryPaths,
 		};
-	});
+	};
 
 	export let target = tg.target(async (...args: std.Args<wrap.Arg>) => {
 		let arg = await wrap.arg(...args);

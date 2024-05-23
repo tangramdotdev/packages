@@ -30,7 +30,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		sdk,
 		source: source_,
 		usePrerequisites = true,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());

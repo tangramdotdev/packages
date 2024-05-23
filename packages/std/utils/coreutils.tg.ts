@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
-import { buildUtil, muslRuntimeEnv, prerequisites } from "../utils.tg.ts";
+import { buildUtil, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import { macOsXattrCmds } from "./file_cmds.tg.ts";
 import libiconv from "./libiconv.tg.ts";
@@ -132,9 +132,6 @@ export let gnuEnv = tg.target(async () => {
 	let os = std.triple.os(host);
 	let sdk = bootstrap.sdk.arg(host);
 	let env: tg.Unresolved<std.Args<std.env.Arg>> = [bootstrap.make.build(host)];
-	if (os === "linux") {
-		env.push(muslRuntimeEnv(host));
-	}
 	let directory = await build({
 		host,
 		env: std.env.arg(env),

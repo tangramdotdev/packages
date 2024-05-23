@@ -298,7 +298,6 @@ export let build = async (arg: BuildArg) => {
 	];
 	if (release) {
 		args.push(`--release`);
-		args.push(`--features tracing`);
 	} else {
 		args.push(`--features tracing`);
 	}

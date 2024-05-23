@@ -161,6 +161,7 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 	let {
 		debug = false,
 		defaultCFlags = true,
+		env: userEnv,
 		fullRelro = true,
 		generator = "Ninja",
 		hardeningCFlags = true,
@@ -276,6 +277,9 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 		let sdk = await std.sdk(sdkArgs);
 		env = await std.env.arg(sdk, env);
 	}
+
+	// Include any user-defined env with higher precedence than the SDK and autotools settings.
+	env = await std.env.arg(env, userEnv);
 
 	// Define default phases.
 	let configureArgs = [

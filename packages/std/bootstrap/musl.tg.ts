@@ -41,11 +41,12 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 
 	let phases = {
+		prepare: "env",
 		configure,
 		install,
 	};
 
-	let env = std.env.arg(bootstrap.sdk.env(host), bootstrap.make.build(host), {
+	let env = std.env.arg(bootstrap.make.build(host), {
 		CPATH: tg.Mutation.unset(),
 	});
 

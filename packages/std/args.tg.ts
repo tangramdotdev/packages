@@ -281,9 +281,9 @@ export let mergeMutations = async (
 		let val = b.inner.value;
 		return [await tg.Mutation.set<tg.Value>(val)];
 	} else if (a.inner.kind === "unset" && b.inner.kind === "prefix") {
-		return [await tg.Mutation.set(b.inner.template)];
+		return [b];
 	} else if (a.inner.kind === "unset" && b.inner.kind === "suffix") {
-		return [await tg.Mutation.set(b.inner.template)];
+		return [b];
 	} else if (a.inner.kind === "unset" && b.inner.kind === "append") {
 		return [b];
 	} else if (a.inner.kind === "unset" && b.inner.kind === "prepend") {
@@ -360,6 +360,7 @@ export let mergeMutations = async (
 						b.inner.template,
 						a.inner.template,
 					),
+					a.inner.separator,
 				),
 			];
 		} else {
@@ -414,6 +415,7 @@ export let mergeMutations = async (
 						a.inner.template,
 						b.inner.template,
 					),
+					a.inner.separator,
 				),
 			];
 		} else {

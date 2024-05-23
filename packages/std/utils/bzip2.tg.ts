@@ -53,10 +53,14 @@ export let build = tg.target(async (arg?: Arg) => {
 			: `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
 	let install =
 		os === "darwin"
-			? tg.Mutation.set(`make install PREFIX="$OUTPUT" SHELL="$SHELL"`)
-			: tg.Mutation.set(
-					`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
-			  );
+			? {
+					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL"`,
+					args: tg.Mutation.unset(),
+			  }
+			: {
+					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
+					args: tg.Mutation.unset(),
+			  };
 	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
 	let fixup = `
 		cd $OUTPUT/bin
@@ -99,6 +103,7 @@ export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdk = await bootstrap.sdk.arg(host);
 	let os = std.triple.os(host);
+
 	await std.assert.pkg({
 		buildFunction: build,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],

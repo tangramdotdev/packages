@@ -53,7 +53,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		...std.triple.rotate({ build, host }),
 		env,
 		phases: { configure },
-		source: source(),
+		sdk,
+		source: source_ ?? source(),
 		wrapBashScriptPaths: ["bin/egrep", "bin/fgrep"],
 	});
 

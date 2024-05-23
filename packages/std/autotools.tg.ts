@@ -85,6 +85,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		debug = false,
 		defaultCFlags = true,
 		doCheck = false,
+		env: userEnv,
 		fullRelro = true,
 		hardeningCFlags = true,
 		host: host_,
@@ -194,6 +195,9 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		env = await std.env.arg(sdk, env);
 	}
 
+	// Include any user-defined env with higher precedence than the SDK and autotools settings.
+	env = await std.env.arg(env, userEnv);
+
 	// Define default phases.
 	let configureArgs =
 		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : undefined;
@@ -258,9 +262,11 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let build = tg.target(async (...args: std.Args<Arg>) => {
-	return tg.Directory.expect(await (await target(...args)).output());
-});
+export let build = async (...args: std.args.UnresolvedArgs<Arg>) => {
+	return await target(...args)
+		.then((t) => t.output())
+		.then(tg.Directory.expect);
+};
 
 export let pushOrSet = (
 	obj: { [key: string]: unknown },

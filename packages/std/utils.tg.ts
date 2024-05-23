@@ -97,32 +97,8 @@ export let prerequisites = tg.target(async (hostArg?: string) => {
 	});
 	components.push(coreutilsArtifact);
 
-	// On Linux, build musl and use it for the runtime libc.
-	if (
-		std.triple.os(host) === "linux" &&
-		std.triple.environment(host) === "musl"
-	) {
-		let muslEnv = await muslRuntimeEnv(host);
-		components.push(muslEnv);
-	}
-
 	return components;
 });
-
-/** Build a fresh musl and use it as the runtime libc. */
-export let muslRuntimeEnv = async (hostArg?: string) => {
-	let host = hostArg ?? (await std.triple.host());
-	if (std.triple.os(host) !== "linux") {
-		throw new Error("muslRuntimeEnv is only supported on Linux.");
-	}
-	let muslArtifact = await bootstrap.musl.build({ host });
-	let interpreter = tg.File.expect(
-		await muslArtifact.get(bootstrap.musl.interpreterPath(host)),
-	);
-	return std.env.arg(muslArtifact, {
-		TANGRAM_LINKER_INTERPRETER_PATH: interpreter,
-	});
-};
 
 type BuildUtilArg = std.autotools.Arg & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
@@ -194,5 +170,5 @@ export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.triple.host());
 	let utilsEnv = await env({ host, sdk: bootstrap.sdk.arg() });
 	await assertProvides(utilsEnv);
-	return true;
+	return utilsEnv;
 });
