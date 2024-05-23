@@ -271,26 +271,43 @@ export namespace download {
 	};
 
 	export namespace memoized {
-		// FIXME - just a file for these , not a directory.
 		/** Utiltity to memoize the result of the raw `tg.download` call. */
 		export let download = async (
 			url: string,
 			checksum: string,
 		): Promise<tg.Blob> => {
-			let artifactDir = tg.directory({
-				"tangram.ts": tg.file(
-					`export default tg.target((...args) => tg.download(...args));`,
-				),
-			});
+			// Perform the unsafe download.
 			let target = await tg.target({
 				host: "js",
-				executable: tg.symlink(tg`${artifactDir}/tangram.ts`),
-				args: ["default", url, checksum],
+				executable: tg.file(
+					`export default tg.target((...args) => tg.download(...args));`,
+				),
+				args: ["default", url, "unsafe"],
 				env: tg.current.env(),
 				lock: tg.lock(),
 			});
 			let blob = await target.output();
 			tg.assert(blob instanceof tg.Leaf || blob instanceof tg.Branch);
+
+			// Verify the checksum.
+			if (checksum === "unsafe") {
+				return blob;
+			}
+			let algorithm = checksum.split(":")[0];
+			let algorithms = ["blake3", "sha256", "sha512"];
+			tg.assert(
+				algorithm && algorithms.includes(algorithm),
+				`unsupported algorithm: ${algorithm}`,
+			);
+			let actual = await tg.Blob.checksum(
+				blob,
+				algorithm as tg.Checksum.Algorithm,
+			);
+			if (actual !== checksum) {
+				throw new Error(
+					`Checksum mismatch for download from ${url}. Expected ${checksum}, got ${actual}.`,
+				);
+			}
 			return blob;
 		};
 
@@ -299,14 +316,11 @@ export namespace download {
 			blob: tg.Blob,
 			compressionFormat: tg.Blob.CompressionFormat,
 		): Promise<tg.Blob> => {
-			let artifactDir = tg.directory({
-				"tangram.ts": tg.file(
-					`export default tg.target((...args) => tg.Blob.decompress(...args));`,
-				),
-			});
 			let target = await tg.target({
 				host: "js",
-				executable: tg.symlink(tg`${artifactDir}/tangram.ts`),
+				executable: tg.file(
+					`export default tg.target((...args) => tg.Blob.decompress(...args));`,
+				),
 				args: ["default", blob, compressionFormat],
 				env: tg.current.env(),
 				lock: tg.lock(),
@@ -321,14 +335,11 @@ export namespace download {
 			blob: tg.Blob,
 			format: tg.Artifact.ArchiveFormat,
 		): Promise<tg.Artifact> => {
-			let artifactDir = tg.directory({
-				"tangram.ts": tg.file(
-					`export default tg.target((...args) => tg.Artifact.extract(...args));`,
-				),
-			});
 			let target = await tg.target({
 				host: "js",
-				executable: tg.symlink(tg`${artifactDir}/tangram.ts`),
+				executable: tg.file(
+					`export default tg.target((...args) => tg.Artifact.extract(...args));`,
+				),
 				args: ["default", blob, format],
 				env: tg.current.env(),
 				lock: tg.lock(),
