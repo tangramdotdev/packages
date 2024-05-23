@@ -160,9 +160,9 @@ export namespace sdk {
 		},
 	);
 
-	export let arg = tg.target(async (...args: std.Args<Arg>) => {
+	export let arg = async (...args: std.args.UnresolvedArgs<Arg>) => {
 		let objectArgs = await Promise.all(
-			std.flatten(args).map(async (arg) => {
+			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else if (typeof arg === "boolean") {
@@ -195,7 +195,7 @@ export namespace sdk {
 			target,
 			targets: targets_,
 			toolchain: toolchain_,
-			utils,
+			utils = true,
 		} = await std.args.applyMutations(mutationArgs);
 
 		tg.assert(typeof proxyArg_ === "object" || proxyArg_ === undefined);
@@ -229,7 +229,7 @@ export namespace sdk {
 			linker,
 			utils,
 		};
-	});
+	};
 
 	///////// QUERIES
 
