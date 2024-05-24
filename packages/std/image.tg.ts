@@ -5,7 +5,7 @@ export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
 export type ArgObject = OciImageArg;
 
-export type OciImageArg = oci.Arg & {
+export type OciImageArg = oci.ArgObject & {
 	format: "oci";
 };
 
@@ -14,32 +14,35 @@ export type ImageFormat = "oci";
 /** Create an image file comprised of Tangram artifacts. */
 export let image = tg.target(
 	async (...args: std.Args<Arg>): Promise<tg.File> => {
-		let objectArgs = await Promise.all(
+		// Determine image format.
+		type Format = {
+			format: ImageFormat;
+		};
+		let formatArgs = await Promise.all(
 			std.flatten(args).map(async (arg) => {
 				if (arg === undefined) {
-					return {};
+					return { format: "oci" as const };
 				} else if (
 					typeof arg === "string" ||
 					arg instanceof tg.Template ||
 					arg instanceof tg.File ||
 					arg instanceof tg.Symlink
 				) {
-					return { executable: arg, format: "oci" as const };
+					return { format: "oci" as const };
 				} else if (arg instanceof tg.Directory) {
-					return { rootFileSystem: arg, format: "oci" as const };
+					return { format: "oci" as const };
 				} else {
-					return arg;
+					return { format: arg.format ?? ("oci" as const) };
 				}
 			}),
 		);
-		let mutationArgs = await std.args.createMutations(objectArgs);
-
-		let format = "oci";
+		let mutationArgs = await std.args.createMutations<Format>(formatArgs);
+		let { format } = await std.args.applyMutations(mutationArgs);
 
 		// Build image.
 		switch (format) {
 			case "oci": {
-				return oci.image(...mutationArgs);
+				return oci.image(...args);
 			}
 			default: {
 				throw new Error(`unknown image format: ${format}`);

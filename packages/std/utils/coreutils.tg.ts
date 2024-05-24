@@ -232,8 +232,6 @@ export let test = tg.target(async () => {
 	);
 
 	let contents = (await output.text()).trim();
-	console.log("actual", contents);
-	console.log("expected", expected);
 	tg.assert(contents === expected);
 	return coreutils;
 });

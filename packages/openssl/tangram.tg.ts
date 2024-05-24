@@ -27,24 +27,25 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let openssl = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
@@ -66,14 +67,14 @@ export let openssl = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { prepare, configure, install };
 
-	let env = [perl({ ...rest, build, env: env_, host }), env_];
+	let env = std.env.arg(perl({ build, env: env_, host, sdk }), env_);
 
 	let openssl = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
 			phases,
+			sdk,
 			source: sourceDir,
 		},
 		autotools,
@@ -110,6 +111,6 @@ export let test = tg.target(async () => {
 			echo "Checking if we can link against libssl."
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto
 		`,
-		{ env: [std.sdk(sdkArg), openssl({ sdk: sdkArg })] },
+		{ env: std.env.arg(std.sdk(sdkArg), openssl({ sdk: sdkArg })) },
 	);
 });

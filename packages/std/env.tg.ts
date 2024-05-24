@@ -192,16 +192,34 @@ export namespace env {
 					let newValues = Array.isArray(val) ? val : [val];
 					for (let newVal of std.flatten(newValues)) {
 						// If it's not a mutation, wrap it in a set mutation.
-						// Convert booleans to the proper string, "1" for true, empty string for false.
 						if (!(newVal instanceof tg.Mutation)) {
-							if (typeof newVal === "boolean") {
-								if (newVal) {
-									newVal = await tg.Mutation.set("1");
-								} else {
-									newVal = await tg.Mutation.set("");
-								}
-							} else {
-								newVal = await tg.Mutation.set<tg.Template.Arg>(newVal);
+							newVal = await tg.Mutation.set<tg.Template.Arg>(
+								templateFromArg(newVal),
+							);
+						} else {
+							tg.assert(newVal instanceof tg.Mutation);
+							if (newVal.inner.kind === "set") {
+								tg.assert(std.args.isTemplateArg(newVal.inner.value));
+								newVal = await tg.Mutation.set(
+									templateFromArg(newVal.inner.value),
+								);
+							} else if (newVal.inner.kind === "set_if_unset") {
+								tg.assert(std.args.isTemplateArg(newVal.inner.value));
+								newVal = await tg.Mutation.setIfUnset(
+									templateFromArg(newVal.inner.value),
+								);
+							} else if (newVal.inner.kind === "prefix") {
+								tg.assert(std.args.isTemplateArg(newVal.inner.template));
+								newVal = await tg.Mutation.prefix(
+									templateFromArg(newVal.inner.template),
+									newVal.inner.separator,
+								);
+							} else if (newVal.inner.kind === "suffix") {
+								tg.assert(std.args.isTemplateArg(newVal.inner.template));
+								newVal = await tg.Mutation.suffix(
+									templateFromArg(newVal.inner.template),
+									newVal.inner.separator,
+								);
 							}
 						}
 						// At this point, we know we have a mutation.
@@ -216,6 +234,14 @@ export namespace env {
 			}
 		}
 		return result;
+	};
+
+	/** Convert booleans to the proper string, "1" for true, empty string for false. */
+	let templateFromArg = (val: tg.Template.Arg | boolean) => {
+		if (typeof val === "boolean") {
+			return tg.template(val ? "1" : "");
+		}
+		return tg.template(val);
 	};
 
 	/** Combine two tg.MaybeMutation<tg.Template.Arg> values into one. */

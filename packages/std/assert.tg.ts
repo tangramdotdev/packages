@@ -82,7 +82,6 @@ export let pkg = async (arg: PkgArg) => {
 	let tests = std.flatten(
 		sdks.map(async (sdk) => {
 			let directory = await arg.buildFunction({ sdk });
-			console.log("result from arg", sdk, await directory.id());
 
 			// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
 			let tests = [nonEmpty(directory)];

@@ -33,15 +33,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let zlib = tg.target(async (...args: std.Args<Arg>) => {
+export let zlib = tg.target(async (arg?: Arg) => {
 	let {
-		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
 		source: source_,
 		...rest
-	} = await arg(...args);
+	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -54,8 +53,14 @@ export let zlib = tg.target(async (...args: std.Args<Arg>) => {
 	if (
 		os === "linux" &&
 		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
-			std.flatten(rest.sdk).filter((sdk) => sdk?.toolchain === "llvm").length >
-				0)
+			std
+				.flatten(rest.sdk)
+				.filter(
+					(sdk) =>
+						sdk !== undefined &&
+						typeof sdk === "object" &&
+						sdk.toolchain === "llvm",
+				).length > 0)
 	) {
 		env.push({
 			CFLAGS: tg.Mutation.prefix("-Wl,-undefined-version", " "),
@@ -63,27 +68,12 @@ export let zlib = tg.target(async (...args: std.Args<Arg>) => {
 	}
 	env.push(env_);
 
-	return std.autotools.build(
-		{
-			...rest,
-			...std.triple.rotate({ build, host }),
-			env,
-			source: source_ ?? source(),
-		},
-		...autotools,
-	);
-});
-
-export let arg = tg.target(async (...args: std.Args<Arg>) => {
-	type Apply = {
-		autotools: Array<std.autotools.Arg>;
-		build: string;
-		env: Array<std.env.Arg>;
-		host: string;
-		sdk: Array<std.sdk.Arg>;
-		source: tg.Directory;
-	};
-	return std.Args.apply<Arg, Apply>(args, async (arg) => tg.unimplemented());
+	return std.autotools.build({
+		...rest,
+		...std.triple.rotate({ build, host }),
+		env: std.env.arg(env),
+		source: source_ ?? source(),
+	});
 });
 
 export default zlib;

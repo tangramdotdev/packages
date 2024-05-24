@@ -12,6 +12,8 @@ import readline from "tg:readline" with { path: "../readline" };
 import sqlite from "tg:sqlite" with { path: "../sqlite" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
+import patches from "./patches" with { type: "directory" };
+
 import * as requirements from "./requirements.tg.ts";
 export { requirements };
 
@@ -44,16 +46,19 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
 	let download = tg.Directory.expect(await std.download({ checksum, url }));
 	let source = await std.directory.unwrap(download);
-	let macOsVersionPatch = tg.File.expect(
-		await tg.include("macos_platform_version.patch"),
-	);
-	source = await std.patch(source, macOsVersionPatch);
-	return source;
+	// Apply patches.
+	let patchFiles = [];
+	for await (let [_, artifact] of patches) {
+		if (artifact instanceof tg.File) {
+			patchFiles.push(artifact);
+		}
+	}
+	return std.patch(source, ...(await Promise.all(patchFiles)));
 });
 
 type ToolchainArg = {
 	/** Optional autotools configuration. */
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 
 	/** Optional environment variables to set. */
 	env?: std.env.Arg;
@@ -71,7 +76,7 @@ type ToolchainArg = {
 	host?: string;
 
 	/** Optional sdk args to use. */
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 
 	/** Optional python source override. */
 	source?: tg.Directory;
@@ -84,8 +89,9 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 		build: build_,
 		env: env_,
 		host: host_,
+		requirements: requirementsArg,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
@@ -93,17 +99,17 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 	let os = std.triple.os(host);
 
 	let dependencies = [
-		bison({ ...rest, build, env: env_, host }),
-		bzip2({ ...rest, build, env: env_, host }),
-		libffi({ ...rest, build, env: env_, host }),
-		libxcrypt({ ...rest, build, env: env_, host }),
-		m4({ ...rest, build, env: env_, host }),
-		ncurses({ ...rest, build, env: env_, host }),
-		openssl({ ...rest, build, env: env_, host }),
-		pkgconfig({ ...rest, build, env: env_, host }),
-		readline({ ...rest, build, env: env_, host }),
-		sqlite({ ...rest, build, env: env_, host }),
-		zlib({ ...rest, build, env: env_, host }),
+		bison({ build, env: env_, host, sdk }),
+		bzip2({ build, env: env_, host, sdk }),
+		libffi({ build, env: env_, host, sdk }),
+		libxcrypt({ build, env: env_, host, sdk }),
+		m4({ build, env: env_, host, sdk }),
+		ncurses({ build, env: env_, host, sdk }),
+		openssl({ build, env: env_, host, sdk }),
+		pkgconfig({ build, env: env_, host, sdk }),
+		readline({ build, env: env_, host, sdk }),
+		sqlite({ build, env: env_, host, sdk }),
+		zlib({ build, env: env_, host, sdk }),
 	];
 	let env = [
 		...dependencies,
@@ -128,8 +134,14 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 	if (
 		std.triple.os(build) === "darwin" ||
 		((await std.env.tryWhich({ env: env_, name: "clang" })) === undefined &&
-			std.flatten(rest.sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
-				.length === 0)
+			std
+				.flatten(sdk ?? [])
+				.filter(
+					(sdk) =>
+						sdk !== undefined &&
+						typeof sdk === "object" &&
+						sdk?.toolchain === "llvm",
+				).length === 0)
 	) {
 		configure.args.push("--enable-optimizations");
 	}
@@ -138,11 +150,11 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			opt: "3",
 			phases,
+			sdk,
 			source: source_ ?? (await source()),
 		},
 		autotools,
@@ -174,8 +186,8 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 		["bin/python3.12"]: pythonInterpreter,
 	});
 
-	if (arg?.requirements) {
-		let deps = requirements.install(python, arg.requirements);
+	if (requirementsArg) {
+		let deps = requirements.install(python, requirementsArg);
 		return tg.directory(python, deps);
 	}
 
@@ -247,46 +259,15 @@ export type Arg = {
 	python?: ToolchainArg;
 };
 
-export let build = async (...args: std.Args<Arg>) => {
-	type Apply = {
-		buildTriple?: string;
-		host?: string;
-		pythonArg?: Array<ToolchainArg>;
-		pyprojectToml: tg.File;
-		source: tg.Directory;
-	};
+export let build = tg.target(async (...args: std.Args<Arg>) => {
+	let mutationArgs = await std.args.createMutations<Arg>(std.flatten(args));
 	let {
-		buildTriple: buildTriple_,
+		build: buildTriple_,
 		host: host_,
-		pythonArg,
+		python: pythonArg,
 		pyprojectToml: pyprojectToml_,
 		source,
-	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
-		if (arg === undefined) {
-			return {};
-		} else {
-			let object: tg.MutationMap<Apply> = {};
-			if (arg.build) {
-				object.buildTriple = arg.build;
-			}
-			if (arg.host) {
-				object.host = arg.host;
-			}
-			if (arg.python) {
-				object.pythonArg =
-					arg.python instanceof tg.Mutation
-						? arg.python
-						: await tg.Mutation.append(arg.python);
-			}
-			if (arg.pyprojectToml) {
-				object.pyprojectToml = arg.pyprojectToml;
-			}
-			if (arg.source) {
-				object.source = arg.source;
-			}
-			return object;
-		}
-	});
+	} = await std.args.applyMutations(mutationArgs);
 	let host = host_ ?? (await std.triple.host());
 	let buildTriple = buildTriple_ ?? host;
 
@@ -338,7 +319,7 @@ export let build = async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-};
+});
 
 type PyProjectToml = {
 	project?: {

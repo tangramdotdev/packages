@@ -21,14 +21,17 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 };
 
-export let m4 = tg.target(async (...args: std.Args<Arg>) => {
+export let m4 = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
-		host,
+		build: build_,
+		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = await arg(...(args ?? []));
+	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let configure = {
 		args: ["--disable-dependency-tracking"],
@@ -36,9 +39,9 @@ export let m4 = tg.target(async (...args: std.Args<Arg>) => {
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			phases: { configure },
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -46,10 +49,6 @@ export let m4 = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default m4;
-
-export let arg = tg.target(async (...args: std.Args<Arg>) => {
-	return await std.args.apply<Arg>(args);
-});
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({

@@ -5,29 +5,29 @@ export let metadata = {
 	license: "BSD-3-Clause",
 	name: "go",
 	repository: "https://github.com/golang/go",
-	version: "1.22.2",
+	version: "1.22.3",
 };
 
 // See https://go.dev/dl.
 let RELEASES = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:36e720b2d564980c162a48c7e97da2e407dfcc4239e1e58d98082dfa2486a0c1",
+			"sha256:6c33e52a5b26e7aa021b94475587fce80043a727a54ceb0eee2f9fc160646434",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:5901c52b7a78002aeff14a21f93e0f064f74ce1360fce51c6ee68cd471216a17",
+			"sha256:8920ea521bad8f6b7bc377b4824982e011c19af27df88a815e3586ea895f1b36",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:660298be38648723e783ba0398e90431de1cb288c637880cdb124f39bd977f0d",
+			"sha256:02abeab3f4b8981232237ebd88f0a9bad933bc9621791cd7720a9ca29eacbe9d",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:33e7f63077b1c5bce4f1ecadd4d990cf229667c40bfb00686990c950911b7ab7",
+			"sha256:610e48c1df4d2f852de8bc2e7fd2dc1521aac216f0c0026625db12f67f192024",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -123,138 +123,96 @@ export type Arg = {
 	target?: string;
 
 	/** Any required SDK customization. */
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 };
 
-export let build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
-	type Apply = {
-		checksum: tg.Checksum;
-		cgo: boolean;
-		env: Array<std.env.Arg>;
-		generate: boolean | { command: tg.Template.Arg };
-		host: string;
-		install: { command: tg.Template.Arg };
-		sdkArgs: Array<std.sdk.Arg>;
-		source: tg.Directory;
-		target: string;
-		vendor: boolean | { command: tg.Template.Arg };
-	};
-
-	let {
-		checksum,
-		cgo,
-		env: env_,
-		generate,
-		host: host_,
-		install,
-		sdkArgs,
-		source,
-		target: target_,
-		vendor: vendor_,
-	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
-		if (arg === undefined) {
-			return {};
-		} else {
-			let object: tg.MutationMap<Apply> = {};
-			if (arg.checksum !== undefined) {
-				object.checksum = arg.checksum;
-			}
-			if (arg.source !== undefined) {
-				object.source = arg.source;
-			}
-			if (arg.cgo !== undefined) {
-				object.cgo = arg.cgo;
-			}
-			if (arg.vendor !== undefined) {
-				object.vendor = arg.vendor;
-			}
-			if (arg.generate !== undefined) {
-				object.generate = arg.generate;
-			}
-			if (arg.install !== undefined) {
-				object.install = arg.install;
-			}
-			if (arg.host !== undefined) {
-				object.host = arg.host;
-			}
-			if (arg.target !== undefined) {
-				object.target = arg.target;
-			}
-			if (arg.env !== undefined) {
-				object.env =
-					arg.env instanceof tg.Mutation
-						? arg.env
-						: await tg.Mutation.append<std.env.Arg>(arg.env);
-			}
-			if (arg.sdk !== undefined) {
-				object.sdkArgs =
-					arg.sdk instanceof tg.Mutation
-						? arg.sdk
-						: await tg.Mutation.append<std.sdk.Arg>(arg.sdk);
-			}
-			return object;
-		}
-	});
-	let host = host_ ?? (await std.triple.host());
-	let system = std.triple.archAndOs(host);
-	let target = target_ ?? host;
-	tg.assert(source, "Must provide a source directory.");
-
-	let sdk = std.sdk({ host, target }, sdkArgs);
-
-	// Check if the build has a vendor dir, then determine whether or not we're going to be vendoring dependencies.
-	let willVendor =
-		vendor_ === true || (vendor_ !== false && (await source.tryGet("vendor")));
-
-	// If we need to, vendor the build's dependencies.
-	let buildArgs = "";
-
-	if (willVendor) {
-		// Vendor the build, and insert the `vendor` dir in the source artifact.
-		let vendorCommand =
-			typeof vendor_ === "object" ? vendor_.command : undefined;
-		let vendorArtifact = await vendor({
-			command: vendorCommand,
+export let build = tg.target(
+	async (...args: std.Args<Arg>): Promise<tg.Directory> => {
+		let mutationArgs = await std.args.createMutations<
+			Arg,
+			std.args.MakeArrayKeys<Arg, "env" | "sdk">
+		>(std.flatten(args), {
+			env: "append",
+			sdk: "append",
+			source: "set",
+		});
+		let {
+			checksum,
+			cgo,
+			env: env_,
+			generate,
+			host: host_,
+			install,
+			sdk: sdkArgs,
 			source,
-		});
+			target: target_,
+			vendor: vendor_,
+		} = await std.args.applyMutations(mutationArgs);
+		let host = host_ ?? (await std.triple.host());
+		let system = std.triple.archAndOs(host);
+		let target = target_ ?? host;
+		tg.assert(source, "Must provide a source directory.");
 
-		source = await tg.directory(source, {
-			["vendor"]: vendorArtifact,
-		});
+		let sdk = std.sdk({ host, target }, sdkArgs);
 
-		// We need to pass the `-mod=vendor` to obey the vendored dependencies.
-		buildArgs = "-mod=vendor";
-	}
+		// Check if the build has a vendor dir, then determine whether or not we're going to be vendoring dependencies.
+		let willVendor =
+			vendor_ === true ||
+			(vendor_ !== false && (await source.tryGet("vendor")));
 
-	// Come up with the right command to run in the `go generate` phase.
-	let generateCommand = await tg`go generate -v -x`;
-	if (generate === false) {
-		generateCommand =
-			await tg`echo "'go generate' phase disabled by 'generate: false'"`;
-	} else if (typeof generate === "object") {
-		generateCommand = await tg.template(generate.command);
-	}
+		// If we need to, vendor the build's dependencies.
+		let buildArgs = "";
 
-	// Come up with the right command to run in the `go install` phase.
-	let installCommand = await tg`go install -v ${buildArgs}`;
-	if (install) {
-		installCommand = await tg.template(install.command);
-	}
+		if (willVendor) {
+			// Vendor the build, and insert the `vendor` dir in the source artifact.
+			let vendorCommand =
+				typeof vendor_ === "object" ? vendor_.command : undefined;
+			let vendorArtifact = await vendor({
+				command: vendorCommand,
+				source,
+			});
 
-	// Build the vendored source code without internet access.
-	let goArtifact = toolchain({ host });
+			source = await tg.directory(source, {
+				["vendor"]: vendorArtifact,
+			});
 
-	let certFile = tg`${std.caCertificates()}/cacert.pem`;
-	let cgoEnabled = cgo ? "1" : "0";
-	let env = std.env(
-		sdk,
-		goArtifact,
-		{ CGO_ENABLED: cgoEnabled, SSL_CERT_FILE: certFile, TANGRAM_HOST: system },
-		env_,
-	);
+			// We need to pass the `-mod=vendor` to obey the vendored dependencies.
+			buildArgs = "-mod=vendor";
+		}
 
-	let output = await std.build(
-		tg`
+		// Come up with the right command to run in the `go generate` phase.
+		let generateCommand = await tg`go generate -v -x`;
+		if (generate === false) {
+			generateCommand =
+				await tg`echo "'go generate' phase disabled by 'generate: false'"`;
+		} else if (typeof generate === "object") {
+			generateCommand = await tg.template(generate.command);
+		}
+
+		// Come up with the right command to run in the `go install` phase.
+		let installCommand = await tg`go install -v ${buildArgs}`;
+		if (install) {
+			installCommand = await tg.template(install.command);
+		}
+
+		// Build the vendored source code without internet access.
+		let goArtifact = toolchain({ host });
+
+		let certFile = tg`${std.caCertificates()}/cacert.pem`;
+		let cgoEnabled = cgo ? "1" : "0";
+		let env = std.env(
+			sdk,
+			goArtifact,
+			{
+				CGO_ENABLED: cgoEnabled,
+				SSL_CERT_FILE: certFile,
+				TANGRAM_HOST: system,
+			},
+			env_,
+		);
+
+		let output = await std.build(
+			tg`
 				set -x
 				# Copy the build tree into the working directory
 				cp -rT ${source}/. .
@@ -271,36 +229,37 @@ export let build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 				${generateCommand}
 				${installCommand}
 			`,
-		{
-			host,
-			env,
-			checksum,
-		},
-	);
+			{
+				host,
+				env,
+				checksum,
+			},
+		);
 
-	tg.assert(output instanceof tg.Directory);
+		tg.assert(output instanceof tg.Directory);
 
-	// Get a list of all dynamically-linked binaries in the output.
-	let binDir = await output.get("bin");
-	tg.assert(binDir instanceof tg.Directory);
+		// Get a list of all dynamically-linked binaries in the output.
+		let binDir = await output.get("bin");
+		tg.assert(binDir instanceof tg.Directory);
 
-	// Wrap each executable in the /bin directory.
-	for await (let [name, file] of binDir) {
-		if ((!file) instanceof tg.Directory) {
-			binDir = await tg.directory(binDir, {
-				[name]: std.wrap({
-					executable: file,
-					identity: "wrapper",
-				}),
-			});
+		// Wrap each executable in the /bin directory.
+		for await (let [name, file] of binDir) {
+			if (!(file instanceof tg.Directory)) {
+				binDir = await tg.directory(binDir, {
+					[name]: std.wrap({
+						executable: file,
+						identity: "wrapper",
+					}),
+				});
+			}
 		}
-	}
 
-	// Return the output.
-	return tg.directory(source, {
-		["bin"]: binDir,
-	});
-};
+		// Return the output.
+		return tg.directory(source, {
+			["bin"]: binDir,
+		});
+	},
+);
 
 export type VendorArgs = {
 	source: tg.Directory;
@@ -328,12 +287,9 @@ export let vendor = async ({
 				mv -T ./vendor "$OUTPUT"
 			`,
 		{
-			env: [
-				toolchain(),
-				{
-					SSL_CERT_DIR: std.caCertificates(),
-				},
-			],
+			env: std.env.arg(toolchain(), {
+				SSL_CERT_DIR: std.caCertificates(),
+			}),
 		},
 	);
 
@@ -381,6 +337,6 @@ export let test = tg.target(() => {
 				go run main.go
 				go run ./subcommand.go
 			`,
-		{ env: [std.sdk(), toolchain()] },
+		{ env: std.env.arg(std.sdk(), toolchain()) },
 	);
 });

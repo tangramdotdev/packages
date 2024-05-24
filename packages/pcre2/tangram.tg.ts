@@ -26,38 +26,28 @@ export let source = tg.target(() => {
 });
 
 export type Arg = {
-	autotools?: std.Args<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.Args<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (...args: std.Args<Arg>) => {
-	let {
-		autotools = [],
-		build,
-		host,
-		source: source_,
-		...rest
-	} = await arg(...(args ?? []));
+export let build = tg.target(async (arg?: Arg) => {
+	let { autotools = [], build, host, sdk, source: source_ } = arg ?? {};
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
+			sdk,
 			source: source_ ?? source(),
 		},
-		...autotools,
+		autotools,
 	);
 });
 
 export default build;
-
-export let arg = tg.target(async (...args: std.Args<Arg>) => {
-	return await std.args.apply<Arg>(args);
-});
 
 export let test = tg.target(async () => {
 	let source = tg.directory({
@@ -76,7 +66,7 @@ export let test = tg.target(async () => {
 				echo "Checking if we can link against libpcre2."
 				cc ${source}/main.c -o $OUTPUT -lpcre2-8
 			`,
-			{ env: [std.sdk(), build()] },
+			{ env: std.env.arg(std.sdk(), build()) },
 		),
 	);
 	let metadata = await std.file.executableMetadata(output);

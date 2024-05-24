@@ -17,7 +17,9 @@ import zstd from "../sdk/dependencies/zstd.tg.ts";
 
 */
 
-export type Arg = (ExecutableArg | RootFsArg) & {
+export type Arg = string | tg.Template | tg.Artifact | ArgObject;
+
+export type ArgObject = (ExecutableArg | RootFsArg) & {
 	/** The compression type to use for the image layers. Default: "zstd". */
 	layerCompression: "gzip" | "zstd";
 	/** The image should target a specific system. If not provided, will detect the host. */
@@ -42,133 +44,145 @@ type RootFsArg = {
 
 export let image = tg.target(
 	async (...args: std.Args<Arg>): Promise<tg.File> => {
-		// 	type Apply = {
-		// 		cmdString: Array<string>;
-		// 		entrypointArtifact: tg.File;
-		// 		entrypointString: Array<string>;
-		// 		layerCompression: "gzip" | "zstd";
-		// 		rootDir: Array<tg.Directory>;
-		// 		system: string;
-		// 	};
-		// 	let {
-		// 		cmdString,
-		// 		entrypointArtifact,
-		// 		entrypointString,
-		// 		layerCompression = "zstd",
-		// 		rootDir: rootDirs,
-		// 		system: system_,
-		// 	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
-		// 		if (arg === undefined) {
-		// 			return {};
-		// 		} else if (typeof arg === "string" || arg instanceof tg.Template) {
-		// 			// It's a script. Wrap it, use it as the entrypoint.
-		// 			return { entrypointArtifact: await std.wrap(arg) };
-		// 		} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
-		// 			let file;
-		// 			if (arg instanceof tg.Symlink) {
-		// 				file = await arg.resolve();
-		// 				tg.assert(
-		// 					file,
-		// 					`Could not resolve symlink ${await arg.id()} to a file.`,
-		// 				);
-		// 			} else {
-		// 				file = arg;
-		// 			}
-		// 			tg.File.assert(file);
-		// 			// Is the file executable? If so, wrap it, use it as the entrypoint.
-		// 			let executableMetadata = await std.file.executableMetadata(file);
-		// 			if (executableMetadata) {
-		// 				return {
-		// 					entrypointArtifact: await std.wrap(file),
-		// 				};
-		// 			} else {
-		// 				let id = await file.id();
-		// 				throw new Error(
-		// 					`Non-executable file passed to std.container: ${id}.`,
-		// 				);
-		// 			}
-		// 		} else if (arg instanceof tg.Directory) {
-		// 			// Add it to the root.
-		// 			return {
-		// 				rootDir: await tg.Mutation.append(arg),
-		// 			};
-		// 		} else if (typeof arg === "object") {
-		// 			let object: tg.MutationMap<Apply> = {};
-		// 			if ("executable" in arg && arg.executable !== undefined) {
-		// 				object.entrypointArtifact =
-		// 					arg.executable instanceof tg.Mutation
-		// 						? arg.executable
-		// 						: await std.wrap(arg.executable);
-		// 			}
-		// 			if ("layerCompression" in arg) {
-		// 				object.layerCompression = arg.layerCompression;
-		// 			}
-		// 			if ("rootFileSystem" in arg) {
-		// 				object.rootDir =
-		// 					arg.rootFileSystem instanceof tg.Mutation
-		// 						? arg.rootFileSystem
-		// 						: await tg.Mutation.append(arg.rootFileSystem);
-		// 			}
-		// 			if ("cmd" in arg) {
-		// 				object.cmdString = arg.cmd;
-		// 			}
-		// 			if ("entrypoint" in arg) {
-		// 				object.entrypointString = arg.entrypoint;
-		// 			}
-		// 			if (arg.system) {
-		// 				object.system =
-		// 					arg.system instanceof tg.Mutation
-		// 						? arg.system
-		// 						: std.triple.archAndOs(arg.system);
-		// 			}
-		// 			return object;
-		// 		} else {
-		// 			return tg.unreachable();
-		// 		}
-		// 	});
+		type CombinedArgObject = {
+			cmdString?: Array<string>;
+			entrypointArtifact?: std.wrap.Arg;
+			entrypointString?: Array<string>;
+			layerCompression?: "gzip" | "zstd";
+			rootDir?: tg.Directory;
+			system?: string;
+		};
+		let objectArgs = await Promise.all(
+			std.flatten(args).map(async (arg) => {
+				if (arg === undefined) {
+					return {};
+				} else if (typeof arg === "string" || arg instanceof tg.Template) {
+					// It's a script. Wrap it, use it as the entrypoint.
+					return { entrypointArtifact: arg };
+				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
+					let file;
+					if (arg instanceof tg.Symlink) {
+						file = arg.resolve();
+						tg.assert(file, `Could not resolve symlink ${arg.id()} to a file.`);
+					} else {
+						file = arg;
+					}
+					tg.File.assert(file);
+					// Is the file executable? If so, wrap it, use it as the entrypoint.
+					let executableMetadata = await std.file.executableMetadata(file);
+					if (executableMetadata) {
+						return {
+							entrypointArtifact: await std.wrap(arg),
+						};
+					} else {
+						let id = arg.id();
+						throw new Error(
+							`Non-executable file passed to std.container: ${id}.`,
+						);
+					}
+				} else if (arg instanceof tg.Directory) {
+					// Add it to the root.
+					return {
+						rootDir: arg,
+					};
+				} else {
+					let object: std.args.MaybeMutationMap<CombinedArgObject> = {};
+					if ("executable" in arg && arg.executable !== undefined) {
+						object.entrypointArtifact = arg.executable;
+					}
+					if ("layerCompression" in arg) {
+						object.layerCompression = arg.layerCompression;
+					}
+					if ("rootFileSystem" in arg && arg.rootFileSystem !== undefined) {
+						object.rootDir = arg.rootFileSystem;
+					}
+					if ("cmd" in arg) {
+						object.cmdString = arg.cmd;
+					}
+					if ("entrypoint" in arg) {
+						object.entrypointString = arg.entrypoint;
+					}
+					if (arg.system) {
+						object.system = arg.system;
+					}
+					return object;
+				}
+			}),
+		);
 
-		// 	// Fill in defaults.
-		// 	let system = system_ ?? (await std.triple.host());
+		let mutationArgs = await std.args.createMutations<
+			CombinedArgObject,
+			std.args.MakeArrayKeys<
+				CombinedArgObject,
+				"entrypointArtifact" | "rootDir"
+			>
+		>(objectArgs, {
+			cmdString: "set",
+			entrypointArtifact: "append",
+			entrypointString: "append",
+			layerCompression: "set",
+			rootDir: "append",
+			system: "set",
+		});
+		let {
+			cmdString = [],
+			entrypointArtifact: entrypointArtifact_,
+			entrypointString = [],
+			layerCompression = "zstd",
+			rootDir: rootDirs,
+			system: system_,
+		} = await std.args.applyMutations(mutationArgs);
 
-		// 	// Combine all root dirs.
-		// 	let rootDir =
-		// 		rootDirs !== undefined ? await tg.directory(...rootDirs) : undefined;
+		// Fill in defaults.
+		let system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
 
-		// 	// Verify that the arguments supplied are correct.
-		// 	tg.assert(
-		// 		rootDir || entrypointArtifact,
-		// 		"Cannot create a container image without either a root filesystem or entrypoint.",
-		// 	);
+		// Combine all root dirs.
+		let rootDir =
+			rootDirs !== undefined ? await tg.directory(...rootDirs) : undefined;
 
-		// 	// Create the layers for the image.
-		// 	let layers: Array<Layer> = [];
-		// 	if (rootDir) {
-		// 		layers.push(await layer(rootDir));
-		// 	}
-		// 	if (entrypointArtifact) {
-		// 		layers.push(
-		// 			await layer(await tg.directory({ entrypoint: entrypointArtifact })),
-		// 		);
-		// 		if (!entrypointString) {
-		// 			entrypointString = ["/entrypoint"];
-		// 		}
-		// 	}
+		// Wrap entrypoint artifact.
+		let entrypointArtifact: tg.File | undefined = undefined;
+		if (entrypointArtifact_ !== undefined) {
+			let entrypointArtifactArgs = entrypointArtifact_.filter(
+				(arg) => arg !== undefined,
+			) as Array<std.wrap.Arg>;
+			entrypointArtifact = await std.wrap(...entrypointArtifactArgs);
+		}
 
-		// 	// Create the image configuration.
-		// 	let config: ImageConfigV1 = {
-		// 		...platform(system),
-		// 		rootfs: {
-		// 			type: "layers",
-		// 			diff_ids: layers.map((l) => l.diffId),
-		// 		},
-		// 		config: {
-		// 			Entrypoint: entrypointString,
-		// 			Cmd: cmdString,
-		// 		},
-		// 	};
+		// Verify that the arguments supplied are correct.
+		tg.assert(
+			rootDir || entrypointArtifact,
+			"Cannot create a container image without either a root filesystem or entrypoint.",
+		);
 
-		// 	return imageFromLayers(config, layerCompression, ...layers);
-		return tg.unimplemented("oci image");
+		// Create the layers for the image.
+		let layers: Array<Layer> = [];
+		if (rootDir) {
+			layers.push(await layer(rootDir));
+		}
+		if (entrypointArtifact) {
+			layers.push(
+				await layer(await tg.directory({ entrypoint: entrypointArtifact })),
+			);
+			if (!entrypointString) {
+				entrypointString = ["/entrypoint"];
+			}
+		}
+
+		// Create the image configuration.
+		let config: ImageConfigV1 = {
+			...platform(system),
+			rootfs: {
+				type: "layers",
+				diff_ids: layers.map((l) => l.diffId),
+			},
+			config: {
+				Entrypoint: entrypointString,
+				Cmd: cmdString,
+			},
+		};
+
+		return imageFromLayers(config, layerCompression, ...layers);
 	},
 );
 

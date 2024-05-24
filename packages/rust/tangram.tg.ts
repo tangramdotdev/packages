@@ -1,4 +1,4 @@
-import openssl from "tg:openssl" with { path: "../openssl" };
+// import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
@@ -157,7 +157,7 @@ export type Arg = {
 	proxy?: boolean;
 
 	/** SDK configuration to use during the build. */
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 
 	/** Source directory containing the Cargo.toml. */
 	source?: tg.Artifact;
@@ -173,19 +173,23 @@ export type Arg = {
 };
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
-	type Apply = {
-		checksum: tg.Checksum;
-		env: Array<std.env.Arg>;
-		features: Array<string>;
-		host: string;
-		parallel: boolean;
-		proxy: boolean;
-		sdk: Array<std.sdk.Arg>;
-		source: tg.Artifact;
-		target: string;
-		useCargoVendor: boolean;
-		verbose: boolean;
-	};
+	let mutationArgs = await std.args.createMutations<
+		Arg,
+		std.args.MakeArrayKeys<Arg, "env" | "sdk">
+	>(std.flatten(args), {
+		env: "append",
+		features: "append",
+		sdk: (arg) => {
+			if (arg === false) {
+				return tg.Mutation.append(false);
+			} else if (arg === true) {
+				return tg.Mutation.append({});
+			} else {
+				return tg.Mutation.append<boolean | std.sdk.Arg>(arg as std.sdk.Arg);
+			}
+		},
+		source: "set",
+	});
 	let {
 		checksum,
 		env,
@@ -198,50 +202,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		target: target_,
 		useCargoVendor = false,
 		verbose = false,
-	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
-		if (arg === undefined) {
-			return {};
-		} else {
-			let object: tg.MutationMap<Apply> = {};
-			if (arg.checksum !== undefined) {
-				object.checksum = arg.checksum;
-			}
-			if (arg.env !== undefined) {
-				object.env =
-					arg.env instanceof tg.Mutation
-						? arg.env
-						: await tg.Mutation.append<std.env.Arg>(arg.env);
-			}
-			if (arg.sdk !== undefined) {
-				object.sdk =
-					arg.sdk instanceof tg.Mutation
-						? arg.sdk
-						: await tg.Mutation.append<std.sdk.Arg>(arg.sdk);
-			}
-			if (arg.features !== undefined) {
-				object.features =
-					arg.features instanceof tg.Mutation
-						? arg.features
-						: await tg.Mutation.append(arg.features);
-			}
-			if (arg.source !== undefined) {
-				object.source = arg.source;
-			}
-			if (arg.parallel !== undefined) {
-				object.parallel = arg.parallel;
-			}
-			if (arg.proxy !== undefined) {
-				object.proxy = arg.proxy;
-			}
-			if (arg.useCargoVendor !== undefined) {
-				object.useCargoVendor = arg.useCargoVendor;
-			}
-			if (arg.verbose !== undefined) {
-				object.verbose = arg.verbose;
-			}
-			return object;
-		}
-	});
+	} = await std.args.applyMutations(mutationArgs);
 
 	let host = rustTriple(host_ ?? (await std.triple.host()));
 	let os = std.triple.os(host);
@@ -255,7 +216,12 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let sdkArgs: Array<std.sdk.Arg> = [{ host, target }, ...(sdk_ ?? [])];
 	if (
 		os === "linux" &&
-		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
+		sdkArgs.filter(
+			(arg) =>
+				arg !== undefined &&
+				typeof arg === "object" &&
+				arg?.toolchain === "llvm",
+		).length > 0
 	) {
 		sdkArgs.push({ toolchain: "gcc" });
 	}
@@ -330,7 +296,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let artifact = await std.build(buildScript, {
 		checksum,
-		env: std.env(
+		env: std.env.arg(
 			sdk,
 			rustArtifact,
 			{
@@ -365,7 +331,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Construct a result containing all located executables.
 	let binDir = await tg.directory({});
-	for (let [name, artifact] of bins) {
+	for (let [name, artifact] of Object.entries(bins)) {
 		binDir = await tg.directory(binDir, {
 			[name]: artifact,
 		});
@@ -397,16 +363,13 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 		let sdk = std.sdk();
 		let result = await std.build(vendorScript, {
 			checksum: "unsafe",
-			env: [
-				sdk,
-				{
-					CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-					CARGO_HTTP_CAINFO: certFile,
-					PATH: tg`${rustArtifact}/bin`,
-					RUST_TARGET: rustTarget,
-					SSL_CERT_FILE: certFile,
-				},
-			],
+			env: std.env.arg(sdk, {
+				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+				CARGO_HTTP_CAINFO: certFile,
+				PATH: tg`${rustArtifact}/bin`,
+				RUST_TARGET: rustTarget,
+				SSL_CERT_FILE: certFile,
+			}),
 		});
 
 		// Get the output.
@@ -609,7 +572,7 @@ export let testHost = tg.target(async () => {
 	`;
 
 	await tg.build(script);
-	return true;
+	return rustArtifact;
 });
 
 export let testCross = tg.target(async () => {
@@ -647,7 +610,7 @@ export let testProxy = tg.target(async () => {
 
 	let helloOpenssl = build({
 		source: tg.include("./tests/hello-openssl"),
-		env: [await openssl(), await build()],
+		// env: std.env.arg(await openssl(), await build()),
 		proxy: true,
 	});
 

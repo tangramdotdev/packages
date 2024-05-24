@@ -56,10 +56,14 @@ export let bzip2 = tg.target(async (arg?: Arg) => {
 
 	let install =
 		os === "darwin"
-			? tg.Mutation.set(`make install PREFIX="$OUTPUT" SHELL="$SHELL"`)
-			: tg.Mutation.set(
-					`make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
-			  );
+			? {
+					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL"`,
+					args: tg.Mutation.unset(),
+			  }
+			: {
+					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
+					args: tg.Mutation.unset(),
+			  };
 
 	let fixup =
 		os === "linux"

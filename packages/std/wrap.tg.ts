@@ -287,7 +287,6 @@ export namespace wrap {
 		return output;
 	});
 
-	// FIXME - this looks wrong.
 	export let envArgFromManifestEnv = async (
 		mutation: wrap.Manifest.Mutation | undefined,
 	): Promise<std.env.ArgObject> => {
@@ -410,19 +409,19 @@ export namespace wrap {
 	export let manifestEnvFromEnvObject = async (
 		envObject: std.env.EnvObject,
 	): Promise<wrap.Manifest.Mutation | undefined> => {
-		let ret = await manifestValueFromValue(envObject);
+		let value = await std.env.arg(envObject).then(manifestValueFromValue);
 		tg.assert(
-			!Array.isArray(ret),
-			`Expected a single value, but got an array: ${ret}`,
+			!Array.isArray(value),
+			`Expected a single value, but got an array: ${value}`,
 		);
-		if (ret === undefined) {
+		if (value === undefined) {
 			return undefined;
 		}
 		tg.assert(
-			typeof ret === "object" && "kind" in ret && ret.kind === "map",
-			`Expected a map, but got ${ret}.`,
+			typeof value === "object" && "kind" in value && value.kind === "map",
+			`Expected a map, but got ${value}.`,
 		);
-		return { kind: "set", value: ret };
+		return { kind: "set", value };
 	};
 
 	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */

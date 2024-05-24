@@ -24,19 +24,13 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let libiconv = tg.target(async (...args: std.Args<Arg>) => {
-	let {
-		autotools = [],
-		build,
-		host,
-		source: source_,
-		...rest
-	} = await arg(...(args ?? []));
+export let libiconv = tg.target(async (arg?: Arg) => {
+	let { autotools = [], build, host, sdk, source: source_ } = arg ?? {};
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -54,10 +48,6 @@ export let libiconv = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default libiconv;
-
-export let arg = tg.target(async (...args: std.Args<Arg>) => {
-	return await std.args.apply<Arg>(args);
-});
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({

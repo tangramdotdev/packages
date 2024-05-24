@@ -129,7 +129,7 @@ export type BuildArg = {
 	sdk?: std.sdk.Arg;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
-	source: tg.Directory | tg.Symlink;
+	source: tg.Template.Arg;
 
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean;
@@ -245,8 +245,8 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 		);
 		pushOrSet(env, "CXXFLAGS", extraCxxFlags);
 	}
-	pushOrSet(env, "CFLAGS", await tg.Mutation.prefix(cflags, " "));
-	pushOrSet(env, "CXXFLAGS", await tg.Mutation.prefix(cflags, " "));
+	pushOrSet(env, "CFLAGS", await cflags);
+	pushOrSet(env, "CXXFLAGS", await cflags);
 
 	// LDFLAGS
 	if (stripExecutables === true) {

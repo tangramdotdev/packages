@@ -6,7 +6,7 @@ import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import ncurses from "./llvm/ncurses.tg.ts";
 import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
-// import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
+import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
 export let metadata = {
 	homepage: "https://llvm.org/",
@@ -62,7 +62,6 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let { sysroot } = await buildToHostCrossToolchain(host);
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
 	sysroot = tg.Directory.expect(await sysroot.get(host));
-	console.log("llvm sysroot", await sysroot.id());
 
 	// Define build environment.
 	let ncursesArtifact = ncurses({ host: build });
@@ -96,12 +95,18 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
 			"-C",
-			// tg`${cmakeCacheDir}/Distribution.cmake`,
+			tg`${cmakeCacheDir}/Distribution.cmake`,
 		],
 	};
 
-	let buildPhase = tg.Mutation.set("ninja stage2-distribution");
-	let install = tg.Mutation.set("ninja stage2-install-distribution");
+	let buildPhase = {
+		command: "ninja",
+		args: tg.Mutation.set(["stage2-distribution"]),
+	};
+	let install = {
+		command: "ninja",
+		args: tg.Mutation.set(["stage2-install-distribution"]),
+	};
 	let phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
@@ -109,7 +114,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		env: std.env.arg(env),
 		phases,
 		sdk,
-		source: tg.symlink(tg`${sourceDir}/llvm`),
+		source: tg`${sourceDir}/llvm`,
 	});
 
 	// Add sysroot and symlinks.
@@ -125,7 +130,6 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		"bin/strings": tg.symlink("llvm-strings"),
 		"bin/strip": tg.symlink("llvm-strip"),
 	});
-	console.log("combined llvm + sysroot", await llvmArtifact.id());
 
 	// The bootstrap compiler was not proxied. Manually wrap the output binaries.
 
@@ -159,7 +163,6 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		}
 	}
 
-	console.log("wrapped llvm artifact", await llvmArtifact.id());
 	return llvmArtifact;
 });
 

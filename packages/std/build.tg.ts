@@ -12,9 +12,9 @@ export namespace build {
 
 	export type ArgObject = std.wrap.ArgObject & {
 		/** An optional checksum to enable network access. Provide the checksu of the result, or the string "unsafe" to accept any result. */
-		checksum?: tg.Checksum;
+		checksum?: tg.Checksum | undefined;
 		/** The machine this build should run on. If omitted, will autodetect an appropriate host. */
-		host?: string;
+		host?: string | undefined;
 	};
 
 	export let target = tg.target(async (...args: std.Args<Arg>) => {

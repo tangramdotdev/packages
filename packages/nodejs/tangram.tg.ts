@@ -6,7 +6,7 @@ export let metadata = {
 		"https://github.com/nodejs/node/blob/12fb157f79da8c094a54bc99370994941c28c235/LICENSE",
 	name: "nodejs",
 	repository: "https://github.com/nodejs/node",
-	version: "20.13.0",
+	version: "20.13.1",
 };
 
 type ToolchainArg = {
@@ -32,22 +32,22 @@ let source = async (): Promise<tg.Directory> => {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
-				"sha256:44abc8a22d723fd0946b18c6339016a8882eb850e8fc26ea4f470de9545be778",
+				"sha256:d251cda3ee0a539d8aea4ea2327e98998cb23487569073902e35efb0526d574b",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
 			checksum:
-				"sha256:a58d5d99b4ccf95d966dd1e3d3a560f4686e3e1e4f7331258860d429f13fc7eb",
+				"sha256:efc0f295dd878e510ab12ea36bbadc3db03c687ab30c07e86c7cdba7eed879a9",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
-				"sha256:46890acbe8107a87786af601e5fa17bdde3c6c54caf2ac15474bfa0690025ea2",
+				"e8a8e78b91485bc95d20f2aa86201485593685c828ee609245ce21c5680d07ce",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:9101e1bd6de7dc657d97c7ed9dde2ceabbe9054992d891c54c5570a9be782b30",
+				"sha256:c83bffeb4eb793da6cb61a44c422b399048a73d7a9c5eb735d9c7f5b0e8659b6",
 		},
 	};
 
@@ -88,7 +88,6 @@ export let nodejs = tg.target(async (args?: ToolchainArg) => {
 
 export let test = tg.target(async () => {
 	let node = nodejs();
-	console.log("node", await (await node).id());
 	return std.build(
 		tg`
 		set -x
@@ -118,71 +117,28 @@ export type Arg = {
 	host?: string;
 	packageLock?: tg.File;
 	phases?: std.phases.Arg;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source: tg.Directory;
 };
 
-export let build = async (...args: std.Args<Arg>) => {
-	type Apply = {
-		build?: string;
-		env: Array<std.env.Arg>;
-		host?: string;
-		packageLock?: tg.File;
-		phases?: Array<std.phases.Arg>;
-		sdkArg: Array<std.sdk.Arg>;
-		source?: tg.Directory;
-	};
+export let build = tg.target(async (...args: std.Args<Arg>) => {
+	let mutationArgs = await std.args.createMutations<
+		Arg,
+		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">
+	>(std.flatten(args), {
+		phases: "append",
+		sdk: "append",
+		source: "set",
+	});
 	let {
 		build: buildArg,
 		env: env_,
 		host: hostArg,
 		packageLock: packageLockArg,
 		phases: phasesArg,
-		sdkArg,
+		sdk: sdkArg,
 		source,
-	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
-		if (arg === undefined) {
-			return {};
-		} else {
-			let object: tg.MutationMap<Apply> = {};
-			let phasesArgs: Array<std.phases.Arg> = [];
-			if (arg.checksum !== undefined) {
-				phasesArgs.push({ checksum: arg.checksum });
-			}
-			if (arg.env !== undefined) {
-				object.env =
-					arg.env instanceof tg.Mutation
-						? arg.env
-						: await tg.Mutation.append<std.env.Arg>(arg.env);
-			}
-			if (arg.sdk !== undefined) {
-				object.sdkArg =
-					arg.sdk instanceof tg.Mutation
-						? arg.sdk
-						: await tg.Mutation.append<std.sdk.Arg>(arg.sdk);
-			}
-			if (arg.phases !== undefined) {
-				if (arg.phases instanceof tg.Mutation) {
-					object.phases = arg.phases;
-				} else {
-					phasesArgs.push(arg.phases);
-				}
-			}
-			if (arg.source !== undefined) {
-				object.source = arg.source;
-			}
-			if (arg.packageLock !== undefined) {
-				object.packageLock = arg.packageLock;
-			}
-			if (arg.build !== undefined) {
-				object.build = arg.build;
-			}
-			if (arg.host !== undefined) {
-				object.host = arg.host;
-			}
-			return object;
-		}
-	});
+	} = await std.args.applyMutations(mutationArgs);
 	tg.assert(source, "Must provide a source");
 
 	let host = hostArg ?? (await std.triple.host());
@@ -263,20 +219,24 @@ export let build = async (...args: std.Args<Arg>) => {
 	};
 
 	let sdk = std.sdk({ host }, sdkArg ?? []);
-	let env = [
+	let env = std.env.arg(
 		sdk,
 		node,
 		devBins,
 		{ NODE_PATH: tg`${devDependencies}/node_modules` },
 		env_,
-	];
+	);
+
+	let additionalPhasesArgs = (phasesArg ?? []).filter(
+		(arg) => arg !== undefined,
+	) as Array<std.phases.Arg>;
 
 	let built = await std.phases.build(
 		{
 			phases,
 			env,
 		},
-		phasesArg ?? [],
+		...additionalPhasesArgs,
 	);
 
 	tg.Directory.assert(built);
@@ -291,7 +251,7 @@ export let build = async (...args: std.Args<Arg>) => {
 	else {
 		return built;
 	}
-};
+});
 
 type PackageLockJson = {
 	packages: Record<

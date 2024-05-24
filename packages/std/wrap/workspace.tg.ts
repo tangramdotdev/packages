@@ -174,6 +174,7 @@ type RustupManifest = {
 
 type BuildArg = {
 	buildToolchain?: std.env.Arg;
+	enableTracingFeature?: boolean;
 	host?: string;
 	release?: boolean;
 	source: tg.Directory;
@@ -181,6 +182,7 @@ type BuildArg = {
 };
 
 export let build = async (arg: BuildArg) => {
+	let enableTracing = arg.enableTracingFeature ?? true;
 	let release = arg.release ?? true;
 	let source = arg.source;
 	let host_ = arg.host ?? (await std.triple.host());
@@ -298,7 +300,8 @@ export let build = async (arg: BuildArg) => {
 	];
 	if (release) {
 		args.push(`--release`);
-	} else {
+	}
+	if (enableTracing) {
 		args.push(`--features tracing`);
 	}
 

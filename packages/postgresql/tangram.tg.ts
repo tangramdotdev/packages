@@ -9,6 +9,13 @@ import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 import zstd from "tg:zstd" with { path: "../zstd" };
 
+import pwdPatchLinux from "./dont_use_bin_pwd_linux.patch" with {
+	type: "file",
+};
+import pwdPatchDarwin from "./dont_use_bin_pwd_darwin.patch" with {
+	type: "file",
+};
+
 export let metadata = {
 	homepage: "https://www.postgresql.org",
 	license: "https://www.postgresql.org/about/licence/",
@@ -31,21 +38,18 @@ export let source = tg.target(async (os: string) => {
 	let download = tg.Directory.expect(await std.download({ checksum, url }));
 	let source = await std.directory.unwrap(download);
 
-	let pwdPatch =
-		os === "linux"
-			? tg.File.expect(await tg.include("dont_use_bin_pwd_linux.patch"))
-			: tg.File.expect(await tg.include("dont_use_bin_pwd_darwin.patch"));
+	let pwdPatch = os === "linux" ? pwdPatchLinux : pwdPatchDarwin;
 	source = await std.patch(source, pwdPatch);
 
 	return source;
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
@@ -55,26 +59,26 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
-	let ncursesArtifact = ncurses({ ...rest, build, host });
-	let readlineArtifact = readline({ ...rest, build, host });
-	let env: tg.Unresolved<std.env.Arg> = [
-		icu({ ...rest, build, env: env_, host }),
-		lz4({ ...rest, build, env: env_, host }),
+	let ncursesArtifact = ncurses({ build, host, sdk });
+	let readlineArtifact = readline({ build, host, sdk });
+	let env: tg.Unresolved<Array<std.env.Arg>> = [
+		icu({ build, env: env_, host, sdk }),
+		lz4({ build, env: env_, host, sdk }),
 		ncursesArtifact,
-		openssl({ ...rest, build, env: env_, host }),
-		perl({ ...rest, build, env: env_, host }),
-		pkgconfig({ ...rest, build, env: env_, host }),
+		openssl({ build, env: env_, host, sdk }),
+		perl({ build, env: env_, host, sdk }),
+		pkgconfig({ build, env: env_, host, sdk }),
 		readlineArtifact,
-		zlib({ ...rest, build, env: env_, host }),
-		zstd({ ...rest, build, env: env_, host }),
+		zlib({ build, env: env_, host, sdk }),
+		zstd({ build, env: env_, host, sdk }),
 		env_,
 	];
 
@@ -96,10 +100,10 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(...env),
 			phases,
+			sdk,
 			source: sourceDir,
 		},
 		autotools,

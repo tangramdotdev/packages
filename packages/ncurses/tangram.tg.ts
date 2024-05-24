@@ -15,11 +15,11 @@ export let source = tg.target(() => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
@@ -28,8 +28,8 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 		autotools = [],
 		build: build_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -60,9 +60,9 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 
 	let result = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

@@ -169,8 +169,8 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		);
 		pushOrSet(env, "CXXFLAGS", extraCxxFlags);
 	}
-	pushOrSet(env, "CFLAGS", await tg.Mutation.prefix(cflags, " "));
-	pushOrSet(env, "CXXFLAGS", await tg.Mutation.prefix(cflags, " "));
+	pushOrSet(env, "CFLAGS", await cflags);
+	pushOrSet(env, "CXXFLAGS", await cflags);
 
 	// LDFLAGS
 	if (stripExecutables === true) {

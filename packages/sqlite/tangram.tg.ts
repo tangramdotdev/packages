@@ -9,13 +9,13 @@ export let metadata = {
 	name: "sqlite",
 	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",
 	repository: "https://www.sqlite.org/src/",
-	version: "3.45.3",
+	version: "3.46.0",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:b2809ca53124c19c60f42bf627736eae011afdcc205bb48270a5ee9a38191531";
+		"sha256:6f8e6a7b335273748816f9b3b62bbdc372a889de8782d7f048c653a447417a7d";
 	let extension = ".tar.gz";
 
 	let produceVersion = (version: string) => {
@@ -33,32 +33,40 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let sqlite = tg.target((arg?: Arg) => {
+export let sqlite = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
-	let dependencies = [ncurses(arg), pkgconfig(arg), readline(arg), zlib(arg)];
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+
+	let dependencies = [
+		ncurses({ build, env: env_, host, sdk }),
+		pkgconfig({ build, env: env_, host, sdk }),
+		readline({ build, env: env_, host, sdk }),
+		zlib({ build, env: env_, host, sdk }),
+	];
 	let env = [...dependencies, env_];
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

@@ -99,7 +99,6 @@ export namespace sdk {
 
 	export let test = tg.target(async () => {
 		let sdkEnv = await sdk();
-		console.log(sdkEnv);
 		let arg = await sdk.arg();
 		await std.sdk.assertValid(sdkEnv, arg);
 		return sdkEnv;

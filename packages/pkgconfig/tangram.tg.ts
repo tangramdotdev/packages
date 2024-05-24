@@ -42,30 +42,18 @@ export type Arg = {
 	// Package-specific args
 	proxy?: boolean;
 	// Dependencies
-	dependencies?: {
-		bison?: bison.Arg;
-		libiconv?: libiconv.Arg;
-		m4?: m4.Arg;
-		zlib?: zlib.Arg;
-	};
 };
 
-export let build = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
 		env: env_,
 		host: host_,
 		proxy = true,
+		sdk,
 		source: source_,
-		dependencies: {
-			bison: bisonArg = {},
-			libiconv: libiconvArg = {},
-			m4: m4Arg = {},
-			zlib: zlibArg = {},
-		} = {},
-		...rest
-	} = await arg(...(args ?? []));
+	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -79,13 +67,13 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let phases = { configure };
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		bison.bison(bisonArg),
-		m4.m4(m4Arg),
-		zlib.zlib(zlibArg),
+		bison.bison({ build, env: env_, sdk, host }),
+		m4.m4({ build, env: env_, sdk, host }),
+		zlib.zlib({ build, env: env_, sdk, host }),
 	];
 	let additionalLibDirs = [];
 	if (std.triple.os(build) === "darwin") {
-		let libiconvArtifact = await libiconv.libiconv(libiconvArg);
+		let libiconvArtifact = await libiconv.libiconv({ build, host });
 		dependencies.push(libiconvArtifact);
 		additionalLibDirs.push(
 			tg.Directory.expect(await libiconvArtifact.get("lib")),
@@ -102,10 +90,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let pkgConfigBuild = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(...env),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -149,10 +137,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	return tg.directory(pkgConfigBuild, {
 		["bin/pkg-config"]: wrappedBin,
 	});
-});
-
-export let arg = tg.target(async (...args: std.Args<Arg>) => {
-	return await std.args.apply<Arg>(args);
 });
 
 export let path = tg.target(

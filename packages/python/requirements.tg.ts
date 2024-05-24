@@ -52,7 +52,7 @@ export let install = tg.target(
 			let sitePackages = await installed.tryGet(
 				`lib/python${versionString()}/site-packages`,
 			);
-			if (!sitePackages instanceof tg.Directory) {
+			if (!(sitePackages instanceof tg.Directory)) {
 				continue;
 			}
 

@@ -3,10 +3,13 @@ import libffi from "tg:libffi" with { path: "../libffi" };
 import m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
+import patches from "./patches" with { type: "directory" };
 
 export let metadata = {
 	homepage: "https://www.perl.org/",
 	name: "perl",
+	license: "GPL-1.0-or-later",
+	repository: "https://github.com/Perl/perl5",
 	version: "5.38.2",
 };
 
@@ -27,44 +30,37 @@ export let source = tg.target(async () => {
 	source = await std.directory.unwrap(source);
 
 	// Apply patches.
-	let patches = [];
+	let patchFiles = [];
+	for await (let [_, artifact] of patches) {
+		if (artifact instanceof tg.File) {
+			patchFiles.push(artifact);
+		}
+	}
 
-	let macosPatch = tg.File.expect(
-		await tg.include("./perl_macos_version.patch"),
-	);
-	patches.push(macosPatch);
-
-	let noFixDepsPatch = tg.File.expect(
-		await tg.include("./perl_no_fix_deps.patch"),
-	);
-	patches.push(noFixDepsPatch);
-
-	let cppPrecompPatch = tg.File.expect(
-		await tg.include("./perl_cpp_precomp.patch"),
-	);
-	patches.push(cppPrecompPatch);
-
-	return std.patch(source, ...(await Promise.all(patches)));
+	return std.patch(source, ...(await Promise.all(patchFiles)));
 });
 
 export type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let perl = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 	let prepare = tg`cp -r ${sourceDir}/. . && chmod -R u+w .`;
@@ -85,16 +81,22 @@ export let perl = tg.target(async (arg?: Arg) => {
 		prepare,
 	};
 
-	let dependencies = [bison(arg), libffi(arg), m4(arg), zlib()];
-	let env = [...dependencies, env_];
+	let dependencies = [
+		bison({ build, env: env_, host, sdk }),
+		libffi({ build, env: env_, host, sdk }),
+		m4({ build, env: env_, host, sdk }),
+		zlib({ build, env: env_, host, sdk }),
+	];
+	let env = std.env.arg(...dependencies, env_, { WATERMARK: "1" });
+	console.log("env", await env);
 
 	let perlArtifact = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
 			phases,
 			prefixArg: "-Dprefix=",
+			sdk,
 			source: sourceDir,
 		},
 		autotools,

@@ -22,23 +22,26 @@ export let source = tg.target(async (arg?: Arg) => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let zsh = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let configure = {
 		args: [
@@ -50,8 +53,8 @@ export let zsh = tg.target(async (arg?: Arg) => {
 	let phases = { configure };
 
 	let dependencies = [
-		pcre2({ ...rest, build, env: env_, host }),
-		ncurses({ ...rest, build, env: env_, host }),
+		pcre2({ build, env: env_, host, sdk }),
+		ncurses({ build, env: env_, host, sdk }),
 	];
 	let env = [
 		...dependencies,
@@ -64,10 +67,10 @@ export let zsh = tg.target(async (arg?: Arg) => {
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

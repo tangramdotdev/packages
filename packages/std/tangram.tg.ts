@@ -99,13 +99,7 @@ export let testPlainBootstrapSdk = tg.target(async () => {
 	});
 	return ret;
 });
-export let testEnvVars = tg.target(async () => {
-	let env_ = await bootstrap.sdk.env();
-	for await (let [key, value] of env.envVars(env_)) {
-		console.log(await tg`${key}=${value}`);
-	}
-	return true;
-});
+//
 
 import * as phases from "./phases.tg.ts";
 export let testPhasesBasic = tg.target(async () => {
@@ -361,29 +355,4 @@ export let testOciBasicEnv = tg.target(async () => {
 });
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
-});
-
-import { env } from "./env.tg.ts";
-export let testMemory = tg.target(async () => {
-	let sdkEnv = bootstrap.sdk();
-	let source = (i: number) =>
-		tg.file(`
-		#include <stdio.h>
-		int main() {
-			printf("Hello, ${i}!\\n");
-			return 0;
-		}
-	`);
-	let jobs = [];
-	for (let i = 0; i < 1000; i++) {
-		jobs.push(
-			tg.build(tg`cc -xc ${source(i)} -o $OUTPUT`, {
-				env: await env.arg(sdkEnv),
-			}),
-		);
-	}
-	let results = await Promise.all(
-		jobs.map(async (job) => await tg.File.expect(await job).id()),
-	);
-	return results;
 });

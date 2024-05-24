@@ -27,39 +27,42 @@ export let source = tg.target(() => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let texinfo = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
 
-	let perlArtifact = await perl({ ...rest, build, env: env_, host });
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+
+	let perlArtifact = await perl({ build, env: env_, host, sdk });
 	let dependencies = [
-		bison({ ...rest, build, env: env_, host }),
-		m4({ ...rest, build, env: env_, host }),
-		ncurses({ ...rest, build, env: env_, host }),
+		bison({ build, env: env_, host, sdk }),
+		m4({ build, env: env_, host, sdk }),
+		ncurses({ build, env: env_, host, sdk }),
 		perlArtifact,
-		zlib({ ...rest, build, env: env_, host }),
+		zlib({ build, env: env_, host, sdk }),
 	];
 	let env = [...dependencies, env_];
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -121,7 +124,7 @@ export let test = tg.target(() => {
 				texindex --version
 			`,
 		{
-			env: std.env.object(texinfo()),
+			env: std.env.arg(texinfo()),
 		},
 	);
 });

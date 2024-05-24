@@ -94,8 +94,6 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 			target,
 		}),
 	]);
-	console.log("buildBinutils", await buildBinutils.id());
-	console.log("crossBinutils", await crossBinutils.id());
 
 	let sysroot =
 		sysroot_ ??
@@ -116,10 +114,8 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		target,
 		variant,
 	});
-	console.log("cross gcc", await crossGCC.id());
 
 	let combined = await tg.directory(crossGCC, sysroot);
-	console.log("combined cross toolchain", await combined.id());
 
 	return {
 		env: await std.env.arg(combined, buildBinutils, crossBinutils),
@@ -150,7 +146,6 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 			sdk,
 		}),
 	});
-	console.log("linuxHeaders", await linuxHeaders.id());
 
 	let linuxHeadersSysroot = await tg.directory({
 		[target]: linuxHeaders,
@@ -166,7 +161,6 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		target,
 		variant: "stage1_bootstrap",
 	});
-	console.log("bootstrapGCC", await bootstrapGCC.id());
 
 	// Produce a combined directory containing the correct C library for the host and the Linux headers.
 	let sysroot = await constructSysroot({
@@ -176,7 +170,6 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		env: await std.env.arg(env, bootstrapGCC),
 		sdk: false,
 	});
-	console.log("sysroot", await sysroot.id());
 	return sysroot;
 });
 
@@ -200,7 +193,6 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 		staticBuild: true,
 		target,
 	});
-	console.log("stage2 binutils", await nativeHostBinutils.id());
 
 	let fullGCC = await gcc.build({
 		build,
@@ -211,12 +203,10 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 		target,
 		variant: "stage2_full",
 	});
-	console.log("stage2 gcc", await fullGCC.id());
 
 	// Flatten the sysroot and combine into a native toolchain.
 	let innerSysroot = tg.Directory.expect(await sysroot.get(target));
 	let combined = await tg.directory(fullGCC, innerSysroot);
-	console.log("combined native toolchain", await combined.id());
 	return std.env.arg(combined, nativeHostBinutils);
 });
 

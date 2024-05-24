@@ -22,37 +22,40 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export let acl = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
+		sdk,
 		source: source_,
-		...rest
 	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 	let phases = { configure };
 
-	let env = [attr(arg), env_];
+	let env = [attr({ build, env: env_, host, sdk }), env_];
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
