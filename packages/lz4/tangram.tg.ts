@@ -43,7 +43,10 @@ export let lz4 = tg.target(async (arg?: Arg) => {
 	let install = {
 		args: ["prefix=$OUTPUT"],
 	};
-	let phases = { configure: tg.Mutation.unset(), install };
+	let phases = {
+		configure: { command: tg.Mutation.unset(), args: tg.Mutation.unset() },
+		install,
+	};
 
 	return std.autotools.build(
 		{

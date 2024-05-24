@@ -244,7 +244,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 		# Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
 		mkdir -p "$HOME/.cargo"
-		echo '${cargoConfig}' >> "$HOME/.cargo/config"
+		echo '${cargoConfig}' >> "$HOME/.cargo/config.toml"
 
 		export CARGO_HOME=$HOME/.cargo
 
@@ -326,11 +326,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	tg.assert(releaseDir instanceof tg.Directory);
 
 	// Grab the bins from the release dir.
-	let bins: Map<string, tg.Artifact> = new Map();
+	let bins: Record<string, tg.Artifact> = {};
 	for await (let [name, artifact] of releaseDir) {
 		if (artifact instanceof tg.File) {
 			if (await artifact.executable()) {
-				bins.set(name, artifact);
+				bins[name] = artifact;
 			}
 		}
 	}

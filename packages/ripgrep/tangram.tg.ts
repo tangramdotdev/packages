@@ -64,6 +64,7 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 			features: ["pcre2"],
 			sdk,
 			source: source_ ?? source(),
+			useCargoVendor: true,
 		},
 		rustArg,
 	);

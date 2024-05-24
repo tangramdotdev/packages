@@ -119,8 +119,8 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		let readlineLibDir = tg.Directory.expect(
 			await (await readlineArtifact).get("lib"),
 		);
-		//libraryPaths.push(ncursesLibDir);
-		//libraryPaths.push(readlineLibDir);
+		libraryPaths.push(ncursesLibDir);
+		libraryPaths.push(readlineLibDir);
 	}
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {
