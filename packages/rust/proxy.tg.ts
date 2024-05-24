@@ -2,11 +2,15 @@ import * as std from "tg:std" with { path: "../std" };
 
 import { build, rust } from "./tangram.tg.ts";
 
+import cargoToml from "./Cargo.toml" with { type: "file" };
+import cargoLock from "./Cargo.lock" with { type: "file" };
+import src from "./src" with { type: "directory" };
+
 export let source = tg.target(async () => {
 	return tg.directory({
-		"Cargo.toml": tg.include("./Cargo.toml"),
-		"Cargo.lock": tg.include("./Cargo.lock"),
-		src: tg.include("./src"),
+		"Cargo.toml": cargoToml,
+		"Cargo.lock": cargoLock,
+		src,
 	});
 });
 
@@ -24,6 +28,6 @@ export let test = tg.target(async () => {
 		touch $OUTPUT
 		tangram_rustc rustc - --version
 	`,
-		{ env: [proxy(), rust()] },
+		{ env: std.env.arg(proxy(), rust()) },
 	);
 });

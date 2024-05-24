@@ -8,7 +8,7 @@ export let metadata = {
 };
 
 // Generated using pip-tools/pip-compile: https://pypi.org/project/pip-tools
-const requirements = tg.File.expect(await tg.include("requirements.txt"));
+import requirements from "./requirements.txt" with { type: "file" };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;

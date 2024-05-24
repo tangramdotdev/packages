@@ -1,4 +1,4 @@
-// import openssl from "tg:openssl" with { path: "../openssl" };
+import openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
 import zlib from "tg:zlib" with { path: "../zlib" };
 
@@ -153,6 +153,9 @@ export type Arg = {
 	/** Whether to compile in parallel. */
 	parallel?: boolean;
 
+	/** Additional script to run prior to the build */
+	pre?: tg.Template.Arg;
+
 	/** Whether to use the tangram_rustc proxy. */
 	proxy?: boolean;
 
@@ -196,6 +199,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		features = [],
 		host: host_,
 		parallel = true,
+		pre,
 		proxy = false,
 		sdk: sdk_,
 		source,
@@ -243,6 +247,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		echo '${cargoConfig}' >> "$HOME/.cargo/config"
 
 		export CARGO_HOME=$HOME/.cargo
+
+		${pre}
 
 		# Build.
 		TARGET_DIR="$(realpath "$OUTPUT/target")"
@@ -555,10 +561,6 @@ let tripleToEnvVar = (triple: string, upcase?: boolean) => {
 
 export let test = tg.target(async () => {
 	let tests = [testHost()];
-	let os = std.triple.os(await std.triple.host());
-	if (os === "linux") {
-		tests.push(testCross());
-	}
 	await Promise.all(tests);
 	return true;
 });
@@ -600,17 +602,18 @@ export let testCross = tg.target(async () => {
 	return true;
 });
 
+import tests from "./tests" with { type: "directory" };
 export let testProxy = tg.target(async () => {
 	await proxy_.test();
 
 	let helloWorld = build({
-		source: tg.include("./tests/hello-world"),
+		source: tests.get("hello-world"),
 		proxy: true,
 	});
 
 	let helloOpenssl = build({
-		source: tg.include("./tests/hello-openssl"),
-		// env: std.env.arg(await openssl(), await build()),
+		source: tests.get("hello-openssl"),
+		env: std.env.arg(await openssl(), await build()),
 		proxy: true,
 	});
 
@@ -622,7 +625,7 @@ export let testProxy = tg.target(async () => {
 
 // Compare the results of cargo vendor and vendorDependencies.
 export let testVendorDependencies = tg.target(async () => {
-	let sourceDirectory = await tg.include("./tests/hello-openssl");
+	let sourceDirectory = tests.get("hello-openssl");
 	tg.assert(sourceDirectory instanceof tg.Directory);
 	let cargoLock = await sourceDirectory.get("Cargo.lock");
 	tg.assert(cargoLock instanceof tg.File);

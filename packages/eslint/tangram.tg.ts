@@ -1,6 +1,8 @@
 import * as node from "tg:nodejs" with { path: "../nodejs" };
 import * as std from "tg:std" with { path: "../std" };
 
+import packageLock from "./package-lock.json" with { type: "file" };
+
 export let metadata = {
 	home: "https://eslint.org",
 	license: "MIT",
@@ -40,7 +42,7 @@ export let eslint = tg.target((arg?: Arg) => {
 	return node.build(
 		{
 			...rest,
-			packageLock: tg.include("./package-lock.json").then(tg.File.expect),
+			packageLock,
 			phases,
 			source: source_ ?? source(),
 		},

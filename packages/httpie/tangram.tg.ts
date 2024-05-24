@@ -1,6 +1,9 @@
 import * as python from "tg:python" with { path: "../python" };
 import * as std from "tg:std" with { path: "../std" };
 
+import requirements from "./requirements.txt" with { type: "file" };
+import pyprojectToml from "./pyproject.toml" with { type: "file" };
+
 export let metadata = {
 	name: "httpie",
 	version: "3.2.2",
@@ -31,27 +34,20 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let requirements = tg.target(async () => {
-	let file = await tg.include("requirements.txt");
-	return tg.File.expect(file);
-});
-
-export let pyprojectToml = tg.target(async () => {
-	let file = await tg.include("pyproject.toml");
-	return tg.File.expect(file);
-});
-
 export let httpie = tg.target(async (arg?: Arg) => {
 	let sourceArtifact = arg?.source ?? (await source());
 	let main = await sourceArtifact.get("httpie/__main__.py");
 
+	let host = arg?.host ?? (await std.triple.host());
+	let build_ = arg?.build ?? host;
+
 	let build = python.build(
 		{
-			build: arg?.build,
+			build: build_,
 			source: sourceArtifact,
-			pyprojectToml: pyprojectToml(),
-			python: { requirements: requirements() },
-			host: arg?.host,
+			pyprojectToml,
+			python: { requirements },
+			host,
 		},
 		arg?.python ?? [],
 	);

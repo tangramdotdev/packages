@@ -1,5 +1,7 @@
 import * as std from "tg:std" with { path: "../std" };
 
+import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
+
 export let metadata = {
 	homepage: "https://musl.libc.org/",
 	license: "MIT",
@@ -22,8 +24,7 @@ export let source = tg.target(async () => {
 	let source = tg.Directory.expect(await std.download({ url, checksum }));
 	source = await std.directory.unwrap(source);
 
-	let patch = tg.File.expect(await tg.include("musl_permission.patch"));
-	source = await std.patch(source, patch);
+	source = await std.patch(source, muslPermissionPatch);
 
 	return source;
 });

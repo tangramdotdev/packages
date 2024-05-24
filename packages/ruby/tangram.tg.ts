@@ -9,6 +9,10 @@ import zlib from "tg:zlib" with { path: "../zlib" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
 
+import skipUpdateGems from "./0001-skip-update-gems.patch" with {
+	type: "file",
+};
+
 export let metadata = {
 	homepage: "https://www.ruby-lang.org/",
 	name: "ruby",
@@ -30,61 +34,34 @@ export let source = tg.target(async () => {
 
 type Arg = {
 	env: std.env.Arg;
-	phases: tg.MaybeNestedArray<std.phases.Arg>;
+	phases: std.phases.Arg;
 	source?: tg.Directory;
 	build?: string;
 	host?: string;
 };
 
-export let ruby = async (...args: std.Args<Arg>) => {
-	type Apply = {
-		envs: std.env.Arg;
-		phases: tg.MaybeNestedArray<std.phases.Arg>;
-		source: tg.Directory;
-		build: string;
-		host: string;
-	};
+export let ruby = tg.target(async (...args: std.Args<Arg>) => {
+	let mutationArgs = await std.args.createMutations<
+		Arg,
+		std.args.MakeArrayKeys<Arg, "env" | "phases">
+	>(std.flatten(args), {
+		env: "append",
+		phases: "append",
+		source: "set",
+	});
 	let {
-		envs,
+		env: envs,
 		phases: phases_,
 		source: source_,
 		build: build_,
 		host: host_,
-	} = await std.Args.apply<Arg, Apply>(args, async (arg) => {
-		if (arg === undefined) {
-			return {};
-		} else {
-			let object: tg.MutationMap<Apply> = {};
-			if (arg.env !== undefined) {
-				object.envs = await tg.Mutation.append<std.env.Arg>(arg.env);
-			}
-			if (arg.phases !== undefined) {
-				object.phases =
-					arg.phases instanceof tg.Mutation
-						? arg.phases
-						: await tg.Mutation.append<std.phases.Arg>(arg.phases);
-			}
-			if (arg.source !== undefined) {
-				object.source = arg.source;
-			}
-			if (arg.build !== undefined) {
-				object.build = arg.build;
-			}
-			if (arg.host !== undefined) {
-				object.host = arg.host;
-			}
-			return object;
-		}
-	});
+	} = await std.args.applyMutations(mutationArgs);
 
 	// Get the source code.
 	let sourceDir = source_ ?? (await source());
 
 	// We need to skip the makefile step that attempts to update any .gem files in the bundle and replace them with the .gems we download ourself.
-	sourceDir = await std.patch(
-		sourceDir,
-		tg.File.expect(await tg.include("./0001-skip-update-gems.patch")),
-	);
+	sourceDir = await std.patch(sourceDir, skipUpdateGems);
 
 	// The ruby build will attempt to download and install several .gem files. Explicitly forbid this.
 	source_ = await tg.directory(sourceDir, {
@@ -111,7 +88,7 @@ export let ruby = async (...args: std.Args<Arg>) => {
 	let ruby = await std.autotools.build({
 		source: source_,
 		// Ruby requires an existing Ruby to build, so we pull in an older version.
-		env: env_,
+		env: std.env.arg(env_),
 		phases: {
 			configure: {
 				// Disable documentation.
@@ -181,7 +158,7 @@ export let ruby = async (...args: std.Args<Arg>) => {
 		include: tg.symlink(tg`${ruby}/include`),
 		lib: tg.symlink(tg`${ruby}/lib`),
 	});
-};
+});
 
 export type DownloadGemArg = {
 	/** The name of the gem. */

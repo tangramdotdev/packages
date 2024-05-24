@@ -2,6 +2,7 @@ import * as python from "tg:python" with { path: "../python" };
 import * as std from "tg:std" with { path: "../std" };
 
 import * as lockfile from "./lockfile.tg.ts";
+import requirements from "./requirements.txt" with { type: "file" };
 
 export let metadata = {
 	name: "poetry",
@@ -32,17 +33,11 @@ export type Arg = {
 	target?: string;
 };
 
-// In order to bootstrap poetry, we need to have poetry. Internally, poetry works by bootstrapping with the most recent version published to pypi.org. To mock this, we use a known 'good' requirements.txt created with pip-compile to install a version of poetry from the pypi registry safely.
-export let requirements = tg.target(async () => {
-	let requirements = await tg.include("./requirements.txt");
-	return tg.File.expect(requirements);
-});
-
 /** Create an environment with poetry installed. */
 export let poetry = tg.target(async (arg?: Arg) => {
 	let sourceArtifact = arg?.source ?? (await source());
 	return python.python({
-		requirements: requirements(),
+		requirements,
 	});
 });
 
@@ -65,10 +60,12 @@ export type BuildArgs = {
 
 /** Build a poetry project. */
 export let build = tg.target(async (args: BuildArgs) => {
+	let host = args.host ?? (await std.triple.host());
+	let target = args.target ?? host;
 	// Construct the basic build environment.
 	let poetryArtifact = await poetry({
-		host: args.host,
-		target: args.target,
+		host,
+		target,
 	});
 
 	// Parse the lockfile into a requirements.txt. Note: we do not use poetry export, as the lockfile may be missing hashes.

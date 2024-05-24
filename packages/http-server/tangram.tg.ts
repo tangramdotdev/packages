@@ -1,6 +1,8 @@
 import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
 import * as std from "tg:std" with { path: "../std" };
 
+import packageLock from "./package-lock.json" with { type: "file" };
+
 export let metadata = {
 	name: "http-server",
 	version: "14.1.1",
@@ -37,7 +39,7 @@ export let httpServer = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			source: source_ ?? source(),
-			packageLock: tg.File.expect(await tg.include("./package-lock.json")),
+			packageLock,
 		},
 		nodeArgs,
 	);

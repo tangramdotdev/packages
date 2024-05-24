@@ -1,5 +1,6 @@
 import * as poetry from "tg:poetry" with { path = "../poetry" };
 import * as std from "tg:std" with { path = "../std" };
+import poetryLock from "./poetry.lock" with { type: "file" };
 
 export let metadata = {
 	name: "docformatter",
@@ -30,11 +31,9 @@ type Arg = {
 };
 
 export let docformatter = tg.target(async (arg?: Arg) => {
-	let lockfile = tg.File.expect(await tg.include("./poetry.lock"));
-
 	return poetry.build({
 		source: arg?.source ?? source(),
-		lockfile: lockfile,
+		lockfile: poetryLock,
 		host: arg?.host,
 		target: arg?.target,
 	});

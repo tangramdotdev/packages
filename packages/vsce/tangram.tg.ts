@@ -1,6 +1,8 @@
 import * as node from "tg:nodejs" with { path: "../nodejs" };
 import * as std from "tg:std" with { path: "../std" };
 
+import packageLock from "./package-lock.json" with { type: "file" };
+
 export let metadata = {
 	name: "vsce",
 	version: "2.15.0",
@@ -36,7 +38,7 @@ export let vsce = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			source: source_ ?? source(),
-			packageLock: tg.File.expect(await tg.include("./package-lock.json")),
+			packageLock,
 		},
 		nodejs,
 	);
