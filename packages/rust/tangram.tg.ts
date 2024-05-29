@@ -479,7 +479,7 @@ export let vendorPackage = async (
 				stack.push([`${subpath}/`, artifact]);
 			} else if (artifact instanceof tg.File) {
 				let bytes = await artifact.bytes();
-				let checksum = tg.checksum("sha256", bytes);
+				let checksum = await tg.checksum(bytes, "sha256");
 				cargoChecksum.files[subpath] = checksum.replace("sha256:", "");
 			} else {
 				throw new Error("Found symlink in downloaded cargo artifact.");

@@ -14,6 +14,7 @@ version = { workspace = true }
 workspace = true
 
 [dependencies]
+bytes = { workspace = true }
 fnv = { workspace = true }
 futures = { workspace = true }
 goblin = { workspace = true }
@@ -25,4 +26,3 @@ tangram_wrapper = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-xattr = { workspace = true }

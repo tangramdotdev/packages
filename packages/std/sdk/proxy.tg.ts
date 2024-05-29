@@ -286,7 +286,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 			TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 				arg.interpreter ?? "none",
 			),
-			TANGRAM_LINKER_WRAPPER_PATH: tg.Mutation.setIfUnset(wrapper),
+			TANGRAM_LINKER_WRAPPER_ID: tg.Mutation.setIfUnset(await wrapper.id()),
 		},
 		executable: tgld,
 		identity: "wrapper",
@@ -310,14 +310,17 @@ int main() {
 				cc -v -xc ${helloSource} -o $OUTPUT`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
+					// LIBRARY_PATH: tg`${tg.directory()}`,
 					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					// TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "none",
 					TANGRAM_WRAPPER_TRACING: "tangram=trace",
 				}),
 			},
 		),
 	);
 	let manifest = await std.wrap.Manifest.read(output);
+	console.log("\n\nMANIFEST", manifest);
 	let result = tg.File.expect(
 		await tg.build(tg`${output} > $OUTPUT`, {
 			env: {

@@ -1,9 +1,7 @@
-#[cfg(feature = "tracing")]
-use std::os::unix::fs::PermissionsExt;
 use std::{
 	collections::HashSet,
 	hash::BuildHasher,
-	io::{Read, Seek, Write},
+	io::{Read, Seek},
 	path::Path,
 };
 use tangram_client as tg;
@@ -139,44 +137,6 @@ pub enum Executable {
 }
 
 impl Manifest {
-	/// Write a manifest to the end of a file.
-	pub fn write(&self, path: &Path) -> std::io::Result<()> {
-		#[cfg(feature = "tracing")]
-		tracing::debug!(?path, "Writing manifest");
-
-		#[cfg(feature = "tracing")]
-		{
-			let perms = std::fs::metadata(path)?.permissions();
-			let mode = perms.mode();
-			tracing::debug!("Mode: {mode:o}");
-		}
-
-		// Open the file.
-		let file = std::fs::OpenOptions::new().append(true).open(path)?;
-		#[cfg(feature = "tracing")]
-		tracing::debug!(?file);
-		let mut file = std::io::BufWriter::new(file);
-
-		// Serialize the manifest.
-		let manifest = serde_json::to_string(self)?;
-
-		// Write the manifest.
-		file.write_all(manifest.as_bytes())?;
-		#[cfg(feature = "tracing")]
-		tracing::debug!("Wrote manifest");
-
-		// Write the length of the manifest.
-		file.write_all(&u64::try_from(manifest.len()).unwrap().to_le_bytes())?;
-
-		// Write the manifest version.
-		file.write_all(&VERSION.to_le_bytes())?;
-
-		// Write the magic number.
-		file.write_all(MAGIC_NUMBER)?;
-
-		Ok(())
-	}
-
 	/// Read a manifest from the end of a file.
 	pub fn read(path: &Path) -> std::io::Result<Option<Self>> {
 		#[cfg(feature = "tracing")]
@@ -349,27 +309,6 @@ pub fn collect_references_from_value_data<H: BuildHasher>(
 			}
 		},
 		_ => {},
-	}
-}
-
-pub fn collect_references_from_artifact_data<H: BuildHasher>(
-	value: &tg::artifact::Data,
-	references: &mut HashSet<tg::artifact::Id, H>,
-) {
-	match value {
-		tg::artifact::Data::Directory(data) => {
-			for id in data.entries.values() {
-				references.insert(id.clone());
-			}
-		},
-		tg::artifact::Data::File(data) => {
-			for id in &data.references {
-				references.insert(id.clone());
-			}
-		},
-		tg::artifact::Data::Symlink(data) => {
-			collect_references_from_symlink_data(data, references);
-		},
 	}
 }
 

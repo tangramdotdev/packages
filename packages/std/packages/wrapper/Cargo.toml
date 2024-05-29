@@ -21,7 +21,6 @@ serde_json = { workspace = true }
 tangram_client = { workspace = true }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
-xattr = { workspace = true }
 
 [features]
 tracing = ["dep:tracing", "dep:tracing-subscriber"]

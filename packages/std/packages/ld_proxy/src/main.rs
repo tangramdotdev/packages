@@ -1,9 +1,11 @@
+use bytes::Bytes;
 use futures::future::try_join_all;
 use itertools::Itertools;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	hash::BuildHasher,
-	os::unix::fs::PermissionsExt,
+	io::Write as _,
+	os::unix::fs::PermissionsExt as _,
 	path::PathBuf,
 	str::FromStr,
 };
@@ -64,7 +66,7 @@ async fn main_inner() -> tg::Result<()> {
 // The options read from the environment and arguments.
 #[derive(Debug)]
 struct Options {
-	/// Library path optimization strategy. Select `filter`, `combine`, or `none`. Defaults to `filter`.
+	/// Library path optimization strategy. Select `resolve`, `filter`, `combine`, or `none`. Defaults to `combine`.
 	library_path_optimization: LibraryPathOptimizationLevel,
 
 	/// The path to the command that will be invoked.
@@ -98,7 +100,7 @@ struct Options {
 	tracing_level: Option<String>,
 
 	/// The path to the wrapper.
-	wrapper_path: Option<PathBuf>,
+	wrapper_id: tg::file::Id,
 }
 
 // Read the options from the environment and arguments.
@@ -118,9 +120,10 @@ fn read_options() -> Options {
 	let passthrough = std::env::var("TANGRAM_LINKER_PASSTHROUGH").is_ok();
 
 	// Get the wrapper path.
-	let wrapper_path = std::env::var("TANGRAM_LINKER_WRAPPER_PATH")
-		.ok()
-		.map(Into::into);
+	let wrapper_id = tg::file::Id::from_str(
+		&std::env::var("TANGRAM_LINKER_WRAPPER_ID").expect("TANGRAM_LINKER_WRAPPER_ID must be set"),
+	)
+	.expect("Could not parse wrapper ID");
 
 	// Get the interpreter path.
 	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH")
@@ -223,7 +226,7 @@ fn read_options() -> Options {
 		output_path,
 		passthrough,
 		tracing_level,
-		wrapper_path,
+		wrapper_id,
 	}
 }
 
@@ -250,24 +253,16 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let library_paths = futures::future::try_join_all(library_paths).await?;
 	tracing::debug!(?library_paths);
 
-	// We need to obtain an artifact if the file is executable or we are creating a combined library directory.
-	let output_artifact = if is_executable
-		|| !matches!(
-			options.library_path_optimization,
-			LibraryPathOptimizationLevel::None
-		) {
+	// Obtain the file artifact from the output path.
+	let output_file = {
 		// Check in the output file.
 		let output_path = std::fs::canonicalize(&options.output_path)
 			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
 		let output_path = tg::Path::try_from(output_path)?;
-		let output_file = tg::Artifact::check_in(&tg, output_path)
+		tg::Artifact::check_in(&tg, output_path)
 			.await?
 			.try_unwrap_file()
-			.map_err(|error| tg::error!(source = error, "expected a file"))?;
-
-		Some(output_file)
-	} else {
-		None
+			.map_err(|error| tg::error!(source = error, "expected a file"))?
 	};
 
 	let library_paths = if library_paths.is_empty() {
@@ -302,16 +297,20 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// If any tracing level is set, enable verifying missing libraries.
 		let report_missing = options.tracing_level.is_some();
 
-		let library_paths = optimize_library_paths(
-			&tg,
-			&output_artifact,
-			library_paths,
-			&mut needed_libraries,
-			options.library_path_optimization,
-			report_missing,
-			options.max_depth,
-		)
-		.await?;
+		let library_paths = if is_executable {
+			optimize_library_paths(
+				&tg,
+				&output_file,
+				library_paths,
+				&mut needed_libraries,
+				options.library_path_optimization,
+				report_missing,
+				options.max_depth,
+			)
+			.await?
+		} else {
+			library_paths
+		};
 
 		tracing::trace!(
 			?library_paths,
@@ -323,61 +322,94 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		Some(library_paths)
 	};
 
-	// Keep track of the references.
-	let mut references: HashSet<tg::artifact::Id, Hasher> = HashSet::default();
-
 	// Handle an executable or a library.
-	if is_executable {
-		let output_artifact = output_artifact.unwrap();
-		let output_artifact_id = output_artifact.id(&tg, None).await?.clone().into();
+	let output_file = if is_executable {
+		// Obtain the output artifact ID.
+		let output_artifact_id = output_file.id(&tg, None).await?.clone().into();
 
-		// Copy the wrapper to the temporary path.
-		let wrapper_path = options
-			.wrapper_path
-			.as_ref()
-			.ok_or(tg::error!("TANGRAM_LINKER_WRAPPER_PATH must be set"))?;
-		std::fs::remove_file(&options.output_path).ok();
-		std::fs::copy(wrapper_path, &options.output_path)
-			.map_err(|error| tg::error!(source = error, "failed to copy the wrapper file"))?;
-
-		// Set the permissions of the wrapper file so we can write the manifest to the end.
-		let mut perms = std::fs::metadata(&options.output_path)
-			.expect("failed to get the wrapper file metadata")
-			.permissions();
-		perms.set_mode(0o755);
-		std::fs::set_permissions(&options.output_path, perms)
-			.expect("failed to set the wrapper file permissions");
-
+		// Create the manifest.
 		let manifest =
 			create_manifest(&tg, output_artifact_id, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
+		let references = manifest
+			.references()
+			.into_iter()
+			.map(tg::Artifact::with_id)
+			.collect_vec();
 
-		// Write the manifest.
-		manifest
-			.write(&options.output_path)
-			.expect("Failed to write the manifest");
+		// Obtain the wrapper contents blob.
+		let wrapper = tg::File::with_id(options.wrapper_id.clone());
+		let wrapper_contents = wrapper.contents(&tg).await?;
 
-		// Get the manifest's references.
-		references = manifest.references();
+		// Serialize the manifest.
+		let manifest = serde_json::to_string(&manifest)
+			.map_err(|error| tg::error!(source = error, "failed to serialize the manifest"))?;
+
+		// Add three 64-bit values (manifest length, version, magic number).
+		let manifest_len = (manifest.len() as u64).to_le_bytes();
+		let version = tangram_wrapper::manifest::VERSION.to_le_bytes();
+		let magic_number = tangram_wrapper::manifest::MAGIC_NUMBER;
+		let manifest = manifest
+			.as_bytes()
+			.iter()
+			.chain(manifest_len.iter())
+			.chain(version.iter())
+			.chain(magic_number.iter());
+
+		// Create a new blob with the wrapper contents and the manifest.
+		let wrapper_bytes = wrapper_contents.bytes(&tg).await?;
+		let output_bytes: Bytes = wrapper_bytes
+			.iter()
+			.chain(manifest)
+			.map(ToOwned::to_owned)
+			.collect();
+		let output_leaf_id = tg::Leaf::from(output_bytes).id(&tg, None).await?;
+		let output_blob = tg::Blob::with_id(output_leaf_id.into());
+
+		// Create a file with the new blob and references.
+		let output_file = tg::File::builder(output_blob)
+			.executable(true)
+			.references(references.into_iter().map(Into::into).collect_vec())
+			.build();
+
+		// Create the new file at the output path.
+		let new_contents = output_file.bytes(&tg).await?;
+		std::fs::remove_file(&options.output_path).ok();
+		let mut file = std::fs::File::create(&options.output_path)
+			.map_err(|error| tg::error!(source = error, "failed to create the output file"))?;
+		file.write_all(&new_contents)
+			.map_err(|error| tg::error!(source = error, "failed to write the output file"))?;
+
+		// Set to executable.
+		let mut perms = file
+			.metadata()
+			.map_err(|error| tg::error!(source = error, "could not get file metadata"))?
+			.permissions();
+		perms.set_mode(0o755);
+		file.set_permissions(perms)
+			.map_err(|error| tg::error!(source = error, "could not set file permissions"))?;
+
+		output_file
 	} else {
-		// Otherwise, if the linker generated a library, then add its references.
-		if let Some(library_paths) = library_paths {
-			references.reserve(library_paths.len());
-			for library_path in &library_paths {
-				references.insert(library_path.clone().into());
-			}
+		// If the linker generated a library, then add the library paths to its references.
+		if library_paths.is_some() {
+			let references = library_paths
+				.unwrap()
+				.into_iter()
+				.map(|library_path_id| tg::Artifact::with_id(library_path_id.clone().into()))
+				.collect_vec();
+			let output_file_contents = output_file.contents(&tg).await?;
+			// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
+			let output_file_executable = output_file.executable(&tg).await?;
+			tg::File::builder(output_file_contents)
+				.executable(output_file_executable)
+				.references(references)
+				.build()
+		} else {
+			output_file
 		}
-	}
-
-	// Set the xattrs of the output file.
-	tracing::trace!(?references, "Writing references");
-	let attributes = tg::file::Attributes {
-		references: references.into_iter().collect(),
 	};
-	let attributes =
-		serde_json::to_string(&attributes).expect("Failed to serialize the attributes");
-	xattr::set(&options.output_path, "user.tangram", attributes.as_bytes())
-		.expect("Failed to write the attributes.");
+	output_file.store(&tg, None).await?;
 
 	Ok(())
 }
@@ -572,17 +604,14 @@ impl std::str::FromStr for LibraryPathOptimizationLevel {
 #[tracing::instrument(skip(tg, file))]
 async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tg: &impl tg::Handle,
-	file: &Option<tg::File>,
+	file: &tg::File,
 	library_paths: HashSet<tg::symlink::Id, H>,
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
 	strategy: LibraryPathOptimizationLevel,
 	report_missing: bool,
 	max_depth: usize,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
-	if file.is_none()
-		|| matches!(strategy, LibraryPathOptimizationLevel::None)
-		|| library_paths.is_empty()
-	{
+	if matches!(strategy, LibraryPathOptimizationLevel::None) || library_paths.is_empty() {
 		return Ok(library_paths);
 	}
 
@@ -594,7 +623,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
-	let file = file.as_ref().unwrap();
 	find_transitive_needed_libraries(tg, file, &resolved_dirs, needed_libraries, max_depth, 0)
 		.await?;
 	tracing::trace!(?needed_libraries, "post-find");

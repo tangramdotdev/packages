@@ -1520,7 +1520,12 @@ async function* manifestExecutableReferences(
 async function* manifestSymlinkReferences(
 	symlink: wrap.Manifest.Symlink,
 ): AsyncGenerator<tg.Artifact> {
-	yield* symlinkReferences(await symlinkFromManifestSymlink(symlink));
+	let s = await symlinkFromManifestSymlink(symlink);
+	yield s;
+	let artifact = await s.artifact();
+	if (artifact) {
+		yield artifact;
+	}
 }
 
 /** Yield the artifacts referenced by a template. */
@@ -1529,52 +1534,8 @@ async function* manifestTemplateReferences(
 ): AsyncGenerator<tg.Artifact> {
 	for (let component of template.components) {
 		if (component.kind === "artifact") {
-			yield* artifactReferences(tg.Artifact.withId(component.value));
+			yield tg.Artifact.withId(component.value);
 		}
-	}
-}
-
-/** Yield the artifacts referenced by an artifact. */
-async function* artifactReferences(
-	artifact: tg.Artifact,
-): AsyncGenerator<tg.Artifact> {
-	if (artifact instanceof tg.File) {
-		yield* fileReferences(artifact);
-	} else if (artifact instanceof tg.Directory) {
-		yield* directoryReferences(artifact);
-	} else if (artifact instanceof tg.Symlink) {
-		yield* symlinkReferences(artifact);
-	} else {
-		return tg.unreachable();
-	}
-}
-
-/** Yield the artifacts referenced by a directory. */
-async function* directoryReferences(
-	directory: tg.Directory,
-): AsyncGenerator<tg.Artifact> {
-	yield directory;
-	for await (let [_, artifact] of directory) {
-		yield* artifactReferences(artifact);
-	}
-}
-
-/** Yield any references found from in a file */
-async function* fileReferences(file: tg.File): AsyncGenerator<tg.Artifact> {
-	yield file;
-	for (let reference of await file.references()) {
-		yield reference;
-	}
-}
-
-/** Yield any references found from resolving a symlink. */
-async function* symlinkReferences(
-	symlink: tg.Symlink,
-): AsyncGenerator<tg.Artifact> {
-	yield symlink;
-	let artifact = await symlink.artifact();
-	if (artifact) {
-		yield artifact;
 	}
 }
 
@@ -1638,12 +1599,11 @@ export let pushOrSet = (
 
 /** Basic program for testing the wrapper code. */
 export let argAndEnvDump = tg.target(async () => {
-	let toolchain = await bootstrap.toolchain();
-	let utils = await bootstrap.utils();
+	let sdkEnv = await std.env.arg(bootstrap.sdk.env());
 
 	return tg.File.expect(
 		await tg.build(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
-			env: { PATH: tg`${toolchain}/bin:${utils}/bin` },
+			env: sdkEnv,
 		}),
 	);
 });
@@ -1663,14 +1623,20 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 		executable,
 	});
 	let wrapperID = await wrapper.id();
+	console.log("wrapper id", wrapperID);
+
+	let libraryDir = await tg.directory({
+		"lib.dylib": tg.file(),
+	});
+	let withLibraryPath = await wrap(wrapper, { libraryPaths: [libraryDir] });
+	let withLibraryPathID = await withLibraryPath.id();
+	console.log("withLibraryPath id", withLibraryPathID);
 
 	// Check the manifest can be deserialized properly.
 	let manifest = await wrap.Manifest.read(wrapper);
 	tg.assert(manifest);
 	tg.assert(manifest.identity === "executable");
 	tg.assert(manifest.interpreter);
-	tg.assert(manifest.interpreter.kind === "ld-musl");
-	tg.assert(manifest.interpreter.preloads?.length === 1);
 
 	// Check the output matches the expected output.
 	let output = tg.File.expect(await tg.build(tg`${wrapper} > $OUTPUT`));
