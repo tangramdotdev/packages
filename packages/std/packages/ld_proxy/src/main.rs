@@ -670,8 +670,9 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	report_missing: bool,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|id| async {
-		let dir = tg::Directory::with_id(id.clone());
-		dir.store(tg, None).await?;
+		tg::Artifact::from(tg::Directory::with_id(id.clone()))
+			.check_out(tg, tg::artifact::checkout::Arg::default())
+			.await?;
 		Ok::<_, tg::Error>(())
 	}))
 	.await?;
