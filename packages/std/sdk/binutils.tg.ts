@@ -12,27 +12,12 @@ export let source = tg.target(async (build: string) => {
 	let checksum =
 		"sha256:f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800";
 
-	let unpatchedSource = std.download.fromGnu({
+	return std.download.fromGnu({
 		name,
 		version,
 		compressionFormat: "xz",
 		checksum,
 	});
-
-	let utils = bootstrap.utils(build);
-
-	// Work around an issue regarding libtool and sysroots. See: https://www.linuxfromscratch.org/lfs/view/stable/chapter06/binutils-pass2.html
-	let script = tg`
-		mkdir -p $OUTPUT
-		cp -R ${unpatchedSource}/* $OUTPUT
-		chmod -R u+w $OUTPUT
-		cd $OUTPUT
-		sed '6009s/$add_dir//' -i ltmain.sh
-	`;
-	let result = tg.Directory.expect(
-		await tg.build(script, { env: std.env.arg(utils) }),
-	);
-	return result;
 });
 
 export type Arg = {

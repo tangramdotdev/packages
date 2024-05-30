@@ -42,7 +42,7 @@ let source = async (): Promise<tg.Directory> => {
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
-				"e8a8e78b91485bc95d20f2aa86201485593685c828ee609245ce21c5680d07ce",
+				"sha256:e8a8e78b91485bc95d20f2aa86201485593685c828ee609245ce21c5680d07ce",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,

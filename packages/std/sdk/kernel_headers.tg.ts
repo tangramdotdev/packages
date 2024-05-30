@@ -6,13 +6,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.9.1",
+	version: "6.9.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:01b414ba98fd189ecd544435caf3860ae2a790e3ec48f5aa70fdf42dc4c5c04a";
+		"sha256:d46c5bdf2c5961cc2a4dedefe0434d456865e95e4a7cd9f93fff054f9090e5f9";
 	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
 		name,
@@ -54,7 +54,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 
 	tg.assert(
 		std.triple.os(system) === "linux",
-		"The Linux kernel headers can only be built on Linux.",
+		"the Linux kernel headers can only be built on Linux",
 	);
 
 	// NOTE - the kernel build wants the string x86_64 on x86_64 but arm64 on aarch64.
@@ -75,22 +75,21 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		}),
 	);
 
-	let prepare = tg`cp -r ${sourceDir}/* . && chmod -R +w . && make mrproper`;
 	let build = {
-		body: `make -j"\$(nproc)" ARCH=${karch} headers`,
+		body: tg`make -C ${sourceDir} O="\$PWD" -j"\$(nproc)" ARCH=${karch} headers`,
 		post: "find usr/include -type f ! -name '*.h' -delete",
 	};
 	let install = {
 		pre: "mkdir -p $OUTPUT",
 		body: `cp -r usr/include/. $OUTPUT && mkdir -p $OUTPUT/config && echo ${metadata.version}-default > $OUTPUT/config/kernel.release`,
 	};
-	let order = ["prepare", "build", "install"];
+	let order = ["build", "install"];
 
 	let result = tg.Directory.expect(
 		await std.phases.build(
 			{
 				env: std.env.arg(env),
-				phases: { prepare, build, install },
+				phases: { build, install },
 				order,
 				target: { host: system },
 			},

@@ -47,6 +47,7 @@ export let gettext = tg.target(async (arg?: Arg) => {
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
+	let os = std.triple.os(host);
 
 	let configure = {
 		args: [
@@ -64,12 +65,17 @@ export let gettext = tg.target(async (arg?: Arg) => {
 		perl({ build, env: env_, host, sdk }),
 		pkgconfig({ build, env: env_, host, sdk }),
 	];
-	let aclArtifact = await acl({ build, env: env_, host, sdk });
-	let attrArtifact = await attr({ build, env: env_, host, sdk });
+	let aclArtifact = undefined;
+	let attrArtifact = undefined;
+
 	let libiconvArtifact = await libiconv({ build, env: env_, host, sdk });
 	dependencies.push(libiconvArtifact);
-	dependencies.push(aclArtifact);
-	dependencies.push(attrArtifact);
+	if (os === "linux") {
+		aclArtifact = await acl({ build, env: env_, host, sdk });
+		attrArtifact = await attr({ build, env: env_, host, sdk });
+		dependencies.push(aclArtifact);
+		dependencies.push(attrArtifact);
+	}
 	let env = [
 		...dependencies,
 		{ TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter" },
@@ -93,11 +99,13 @@ export let gettext = tg.target(async (arg?: Arg) => {
 		libDir,
 		tg.Directory.expect(await ncursesArtifact.get("lib")),
 	];
-	let aclDir = tg.Directory.expect(await aclArtifact.get("lib"));
-	let attrDir = tg.Directory.expect(await attrArtifact.get("lib"));
+	if (os === "linux") {
+		let aclDir = tg.Directory.expect(await aclArtifact?.get("lib"));
+		let attrDir = tg.Directory.expect(await attrArtifact?.get("lib"));
+		libraryPaths.push(aclDir);
+		libraryPaths.push(attrDir);
+	}
 	let libiconvDir = tg.Directory.expect(await libiconvArtifact.get("lib"));
-	libraryPaths.push(aclDir);
-	libraryPaths.push(attrDir);
 	libraryPaths.push(libiconvDir);
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {
