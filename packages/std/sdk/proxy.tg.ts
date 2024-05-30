@@ -312,8 +312,8 @@ int main() {
 				env: await std.env.arg(bootstrapSDK, {
 					// LIBRARY_PATH: tg`${tg.directory()}`,
 					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-					// TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "none",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					// TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "none",
 					TANGRAM_WRAPPER_TRACING: "tangram=trace",
 				}),
 			},

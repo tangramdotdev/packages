@@ -340,31 +340,39 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// Obtain the wrapper contents blob.
 		let wrapper = tg::File::with_id(options.wrapper_id.clone());
 		let wrapper_contents = wrapper.contents(&tg).await?;
+		let wrapper_size = wrapper_contents.size(&tg).await?;
 
 		// Serialize the manifest.
-		let manifest = serde_json::to_string(&manifest)
+		let mut manifest = serde_json::to_vec(&manifest)
 			.map_err(|error| tg::error!(source = error, "failed to serialize the manifest"))?;
 
 		// Add three 64-bit values (manifest length, version, magic number).
-		let manifest_len = (manifest.len() as u64).to_le_bytes();
-		let version = tangram_wrapper::manifest::VERSION.to_le_bytes();
-		let magic_number = tangram_wrapper::manifest::MAGIC_NUMBER;
-		let manifest = manifest
-			.as_bytes()
-			.iter()
-			.chain(manifest_len.iter())
-			.chain(version.iter())
-			.chain(magic_number.iter());
+		manifest.reserve_exact(3 * std::mem::size_of::<u64>());
+		manifest.extend(
+			(manifest.len() as u64)
+				.to_le_bytes()
+				.iter()
+				.chain(tangram_wrapper::manifest::VERSION.to_le_bytes().iter())
+				.chain(tangram_wrapper::manifest::MAGIC_NUMBER.iter()),
+		);
+		let manifest = Bytes::from(manifest);
 
-		// Create a new blob with the wrapper contents and the manifest.
-		let wrapper_bytes = wrapper_contents.bytes(&tg).await?;
-		let output_bytes: Bytes = wrapper_bytes
-			.iter()
-			.chain(manifest)
-			.map(ToOwned::to_owned)
-			.collect();
-		let output_leaf_id = tg::Leaf::from(output_bytes).id(&tg, None).await?;
-		let output_blob = tg::Blob::with_id(output_leaf_id.into());
+		// Create the manifest blob.
+		let manifest_leaf_id = tg::Leaf::from(manifest).id(&tg, None).await?;
+		let manifest_blob = tg::Blob::with_id(manifest_leaf_id.into());
+		let manifest_size = manifest_blob.size(&tg).await?;
+
+		// Create a new blob with the wrapper contents and the manifest, keeping the wrapper in a separate blob.
+		let output_blob = tg::Blob::new(vec![
+			tg::branch::Child {
+				blob: wrapper_contents,
+				size: wrapper_size,
+			},
+			tg::branch::Child {
+				blob: manifest_blob,
+				size: manifest_size,
+			},
+		]);
 
 		// Create a file with the new blob and references.
 		let output_file = tg::File::builder(output_blob)
@@ -409,6 +417,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			output_file
 		}
 	};
+
+	// Store the new file.
 	output_file.store(&tg, None).await?;
 
 	Ok(())
@@ -659,6 +669,12 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 	report_missing: bool,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
+	futures::future::try_join_all(resolved_dirs.iter().map(|id| async {
+		let dir = tg::Directory::with_id(id.clone());
+		dir.store(tg, None).await?;
+		Ok::<_, tg::Error>(())
+	}))
+	.await?;
 	let result = store_dirs_as_symlinks(tg, resolved_dirs).await?;
 	if report_missing {
 		report_missing_libraries(tg, needed_libraries, &result).await?;
