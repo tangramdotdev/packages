@@ -64,7 +64,6 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 			features: ["pcre2"],
 			sdk,
 			source: source_ ?? source(),
-			useCargoVendor: true,
 		},
 		rustArg,
 	);
@@ -73,10 +72,10 @@ export let ripgrep = tg.target(async (arg?: Arg) => {
 export default ripgrep;
 
 export let test = tg.target(async () => {
-	// await std.assert.pkg({
-	// 	buildFunction: ripgrep,
-	// 	binaries: ["rg"],
-	// 	metadata,
-	// });
+	await std.assert.pkg({
+		buildFunction: ripgrep,
+		binaries: ["rg"],
+		metadata,
+	});
 	return true;
 });

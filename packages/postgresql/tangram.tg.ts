@@ -67,18 +67,22 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
+	let icuArtifact = icu({ build, host, sdk });
+	let lz4Artifact = lz4({ build, host, sdk });
 	let ncursesArtifact = ncurses({ build, host, sdk });
 	let readlineArtifact = readline({ build, host, sdk });
+	let zlibArtifact = zlib({ build, host, sdk });
+	let zstdArtifact = zstd({ build, host, sdk });
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
-		icu({ build, env: env_, host, sdk }),
-		lz4({ build, env: env_, host, sdk }),
+		icuArtifact,
+		lz4Artifact,
 		ncursesArtifact,
 		openssl({ build, env: env_, host, sdk }),
 		perl({ build, env: env_, host, sdk }),
 		pkgconfig({ build, env: env_, host, sdk }),
 		readlineArtifact,
-		zlib({ build, env: env_, host, sdk }),
-		zstd({ build, env: env_, host, sdk }),
+		zlibArtifact,
+		zstdArtifact,
 		env_,
 	];
 
@@ -92,9 +96,8 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 	if (os === "darwin") {
 		configure.args.push("DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH");
 		env.push({
-			CC: tg.Mutation.unset(),
-			CXX: tg.Mutation.unset(),
-			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "none",
+			CC: "gcc",
+			CXX: "g++",
 		});
 	}
 
@@ -119,8 +122,16 @@ export let postgresql = tg.target(async (arg?: Arg) => {
 		let readlineLibDir = tg.Directory.expect(
 			await (await readlineArtifact).get("lib"),
 		);
+		let icuLibDir = tg.Directory.expect(await (await icuArtifact).get("lib"));
+		let lz4LibDir = tg.Directory.expect(await (await lz4Artifact).get("lib"));
+		let zlibLibDir = tg.Directory.expect(await (await zlibArtifact).get("lib"));
+		let zstdLibDir = tg.Directory.expect(await (await zstdArtifact).get("lib"));
+		libraryPaths.push(icuLibDir);
+		libraryPaths.push(lz4LibDir);
 		libraryPaths.push(ncursesLibDir);
 		libraryPaths.push(readlineLibDir);
+		libraryPaths.push(zlibLibDir);
+		libraryPaths.push(zstdLibDir);
 	}
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {
