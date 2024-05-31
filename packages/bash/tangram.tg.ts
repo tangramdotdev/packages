@@ -1,6 +1,6 @@
-import gettext from "tg:gettext" with { path: "../gettext" };
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as gettext from "tg:gettext" with { path: "../gettext" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -37,24 +37,34 @@ export let source = tg.target(async (arg?: Arg) => {
 	return patchedSource;
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		gettext: gettext.Arg;
+		ncurses: ncurses.Arg;
+		pkgconfig: pkgconfig.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let bash = tg.target(async (arg?: Arg) => {
+export let bash = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			gettext: gettextArg = {},
+			ncurses: ncursesArg = {},
+			pkgconfig: pkgconfigArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -65,11 +75,11 @@ export let bash = tg.target(async (arg?: Arg) => {
 	let phases = { configure };
 
 	let dependencies = [
-		gettext({ build, env: env_, host, sdk }),
-		ncurses({ build, env: env_, host, sdk }),
-		pkgconfig({ build, env: env_, host, sdk }),
+		gettext.gettext(gettextArg),
+		ncurses.ncurses(ncursesArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
 	];
-	let env = [...dependencies, env_];
+	let env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
 		{

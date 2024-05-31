@@ -1,4 +1,4 @@
-import perl from "tg:perl" with { path: "../perl" };
+import * as perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -26,24 +26,28 @@ export let source = tg.target(async () => {
 	});
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		perl: perl.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let openssl = tg.target(async (arg?: Arg) => {
+export let openssl = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
+		dependencies: { perl: perlArg = {} } = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -67,7 +71,7 @@ export let openssl = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { prepare, configure, install };
 
-	let env = std.env.arg(perl({ build, env: env_, host, sdk }), env_);
+	let env = std.env.arg(perl.perl(perlArg), env_);
 
 	let openssl = await std.autotools.build(
 		{

@@ -11,7 +11,7 @@ type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 };
 
 export let image = tg.target((arg?: Arg) =>
@@ -25,7 +25,8 @@ export let executable = tg.target((arg?: Arg) =>
 );
 
 let packages = (arg?: Arg) => {
-	return [nodejs(arg), postgresql(arg), ripgrep(arg)];
+	let arg_ = arg ?? {};
+	return [nodejs(arg_), postgresql(arg_), ripgrep(arg_)];
 };
 
 export let script = `

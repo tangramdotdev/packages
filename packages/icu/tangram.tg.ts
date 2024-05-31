@@ -1,4 +1,4 @@
-import python from "tg:python" with { path: "../python" };
+import * as python from "tg:python" with { path: "../python" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -23,24 +23,28 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(outer);
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		python: python.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let icu = tg.target(async (arg?: Arg) => {
+export let icu = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: { python: pythonArg = {} } = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -48,21 +52,15 @@ export let icu = tg.target(async (arg?: Arg) => {
 
 	let sourceDir = source_ ?? source();
 
-	let dependencies = [python({ build, env: env_, host, sdk })];
+	let dependencies = [python.python(pythonArg)];
 	let env = [...dependencies, env_];
 
 	// On Linux with LLVM, use the filter option to prevent dropping libm.so.1 from the proxied library paths.
 	if (
 		os === "linux" &&
 		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
-			std
-				.flatten(sdk ?? [])
-				.filter(
-					(sdk) =>
-						sdk !== undefined &&
-						typeof sdk === "object" &&
-						sdk?.toolchain === "llvm",
-				).length > 0)
+			std.flatten(sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm").length >
+				0)
 	) {
 		env.push({
 			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter",

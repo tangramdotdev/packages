@@ -22,23 +22,27 @@ export let source = tg.target(() => {
 });
 
 export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		m4?: m4.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
-	autotools?: std.autotools.Arg;
 };
 
-export let bison = tg.target(async (arg?: Arg) => {
+export let bison = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
+		dependencies: { m4: m4Arg = {} } = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -53,7 +57,7 @@ export let bison = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let env = std.env.arg(m4.m4({ build, env: env_, sdk, host }), env_);
+	let env = std.env.arg(m4.m4(m4Arg), env_);
 
 	return std.autotools.build(
 		{

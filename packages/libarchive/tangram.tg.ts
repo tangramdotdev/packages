@@ -1,9 +1,9 @@
-import bzip2 from "tg:bzip2" with { path: "../bzip2" };
-import libiconv from "tg:libiconv" with { path: "../libiconv" };
-import openssl from "tg:openssl" with { path: "../openssl" };
+import * as bzip2 from "tg:bzip2" with { path: "../bzip2" };
+import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
-import xz from "tg:xz" with { path: "../xz" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as xz from "tg:xz" with { path: "../xz" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "libarchive",
@@ -25,24 +25,38 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(download);
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		bzip2: bzip2.Arg;
+		libiconv: libiconv.Arg;
+		openssl: openssl.Arg;
+		xz: xz.Arg;
+		zlib: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let libarchive = tg.target(async (arg?: Arg) => {
+export let libarchive = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			bzip2: bzip2Arg = {},
+			libiconv: libiconvArg = {},
+			openssl: opensslArg = {},
+			xz: xzArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -56,15 +70,22 @@ export let libarchive = tg.target(async (arg?: Arg) => {
 
 	let phases = { configure };
 
-	let env = [bzip2(arg), libiconv(arg), openssl(arg), xz(arg), zlib(arg), env_];
+	let env = std.env.arg(
+		bzip2.bzip2(bzip2Arg),
+		libiconv.libiconv(libiconvArg),
+		openssl.openssl(opensslArg),
+		xz.xz(xzArg),
+		zlib.zlib(zlibArg),
+		env_,
+	);
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
-			source: source_ ?? source(),
 			phases,
+			source: source_ ?? source(),
+			sdk,
 		},
 		autotools,
 	);
@@ -86,15 +107,15 @@ export let test = tg.target(async () => {
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto -larchive -lz -lbz2 -liconv -llzma
 		`,
 		{
-			env: [
+			env: std.env.arg(
 				std.sdk(),
-				bzip2(),
-				libiconv(),
-				openssl(),
+				bzip2.bzip2(),
+				libiconv.libiconv(),
+				openssl.openssl(),
 				libarchive(),
-				xz(),
-				zlib(),
-			],
+				xz.xz(),
+				zlib.zlib(),
+			),
 		},
 	);
 });

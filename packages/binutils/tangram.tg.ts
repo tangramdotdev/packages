@@ -1,5 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
-import texinfo from "tg:texinfo" with { path: "../texinfo" };
+import * as texinfo from "tg:texinfo" with { path: "../texinfo" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/binutils/",
@@ -35,20 +35,24 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		texinfo?: texinfo.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	staticBuild?: boolean;
 	target?: string;
 };
 
-export let binutils = tg.target(async (arg?: Arg) => {
+export let binutils = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: { texinfo: texinfoArg = {} } = {},
 		env: env_,
 		host: host_,
 		sdk,
@@ -56,7 +60,7 @@ export let binutils = tg.target(async (arg?: Arg) => {
 		staticBuild,
 		target: target_,
 		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let target = target_ ?? host;
@@ -93,7 +97,7 @@ export let binutils = tg.target(async (arg?: Arg) => {
 		}
 	}
 
-	let deps = [texinfo({ host: build })];
+	let deps = [texinfo.texinfo(texinfoArg)];
 	let env = [...deps, additionalEnv, env_];
 
 	// Collect configuration.
@@ -118,7 +122,7 @@ export let binutils = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
 			sdk,
 			source: source_ ?? source(),

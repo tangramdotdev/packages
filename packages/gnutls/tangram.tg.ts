@@ -1,7 +1,7 @@
-import gmp from "tg:gmp" with { path: "../gmp" };
-import nettle from "tg:nettle" with { path: "../nettle" };
+import * as gmp from "tg:gmp" with { path: "../gmp" };
+import * as nettle from "tg:nettle" with { path: "../nettle" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "gnutls",
@@ -24,25 +24,40 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		gmp?: gmp.Arg;
+		nettle?: nettle.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let gnutls = tg.target(async (arg?: Arg) => {
+export let gnutls = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			gmp: gmpArg = {},
+			nettle: nettleArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
-	let env = [gmp(arg), nettle(arg), zlib(arg), env_];
+	let env = [
+		gmp.gmp(gmpArg),
+		nettle.nettle(nettleArg),
+		zlib.zlib(zlibArg),
+		env_,
+	];
 
 	let configure = {
 		args: [
@@ -57,10 +72,10 @@ export let gnutls = tg.target(async (arg?: Arg) => {
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -82,6 +97,14 @@ export let test = tg.target(() => {
 			echo "Checking if we can link against gnutls."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp -lgnutls -lz
 		`,
-		{ env: [std.sdk(), gnutls(), nettle(), gmp(), zlib()] },
+		{
+			env: std.env.arg(
+				std.sdk(),
+				gnutls(),
+				nettle.nettle(),
+				gmp.gmp(),
+				zlib.zlib(),
+			),
+		},
 	);
 });

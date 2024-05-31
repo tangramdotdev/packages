@@ -1,7 +1,7 @@
-import openssl from "tg:openssl" with { path: "../openssl" };
-import perl from "tg:perl" with { path: "../perl" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
+import * as perl from "tg:perl" with { path: "../perl" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -29,36 +29,48 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		openssl?: openssl.Arg;
+		perl?: perl.Arg;
+		pkgconfig?: pkgconfig.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let curl = tg.target(async (arg?: Arg) => {
+export let curl = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			openssl: opensslArg = {},
+			perl: perlArg = {},
+			pkgconfig: pkgconfigArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let configure = {
 		args: ["--with-openssl"],
 	};
 	let phases = { configure };
 
-	let openSslDir = await openssl({ ...rest, build, env: env_, host });
-	let zlibDir = await zlib({ ...rest, build, env: env_, host });
+	let openSslDir = await openssl.openssl(opensslArg);
+	let zlibDir = await zlib.zlib(zlibArg);
 
 	let env = [
-		perl({ ...rest, build, env: env_, host }),
-		pkgconfig({ ...rest, build, env: env_, host }),
+		perl.perl(perlArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
 		openSslDir,
 		zlibDir,
 		env_,
@@ -66,10 +78,10 @@ export let curl = tg.target(async (arg?: Arg) => {
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

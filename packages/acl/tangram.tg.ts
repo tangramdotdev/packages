@@ -1,4 +1,4 @@
-import attr from "tg:attr" with { path: "../attr" };
+import * as attr from "tg:attr" with { path: "../attr" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -21,8 +21,11 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(outer);
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
+	dependencies?: {
+		attr?: attr.Arg;
+	};
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
@@ -30,15 +33,16 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let acl = tg.target(async (arg?: Arg) => {
+export let acl = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: { attr: attrArg = {} } = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -48,7 +52,7 @@ export let acl = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let env = [attr({ build, env: env_, host, sdk }), env_];
+	let env = [attr.attr(attrArg), env_];
 
 	let output = await std.autotools.build(
 		{

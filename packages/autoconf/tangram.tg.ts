@@ -1,8 +1,8 @@
-import bison from "tg:bison" with { path: "../bison" };
-import m4 from "tg:m4" with { path: "../m4" };
-import perl from "tg:perl" with { path: "../perl" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as m4 from "tg:m4" with { path: "../m4" };
+import * as perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/autoconf/",
@@ -24,34 +24,52 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		bison?: bison.Arg;
+		m4?: m4.Arg;
+		perl?: perl.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
+export let autoconf = tg.target(async (...args: std.Args<Arg>) => {
+	let arg = await std.args.apply<Arg>(...args);
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			bison: bisonArg = {},
+			m4: m4Arg = {},
+			perl: perlArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = arg;
 
-	let perlArtifact = await perl(arg);
-	let dependencies = [perlArtifact, bison(arg), m4(arg), zlib(arg)];
-	let env = [...dependencies, env_];
+	let perlArtifact = await perl.perl(perlArg);
+	let dependencies = [
+		perlArtifact,
+		bison.bison(bisonArg),
+		m4.m4(m4Arg),
+		zlib.zlib(zlibArg),
+	];
+	let env = std.env.arg(...dependencies, env_);
 
 	let autoconf = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -169,7 +187,7 @@ export let patchAutom4teCfg = tg.target(
 			cat <<'EOF' | tee $OUTPUT
 			${contents}
 		`,
-				{ env: await std.env.object(env) },
+				{ env: await std.env.arg(env) },
 			),
 		);
 
@@ -179,11 +197,11 @@ export let patchAutom4teCfg = tg.target(
 	},
 );
 
-export default build;
+export default autoconf;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		buildFunction: autoconf,
 		binaries: ["autoconf"],
 		metadata,
 	});

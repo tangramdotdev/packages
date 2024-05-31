@@ -1,10 +1,10 @@
-import autoconf from "tg:autoconf" with { path: "../autoconf" };
-import bison from "tg:bison" with { path: "../bison" };
-import m4 from "tg:m4" with { path: "../m4" };
-import perl from "tg:perl" with { path: "../perl" };
+import * as autoconf from "tg:autoconf" with { path: "../autoconf" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as m4 from "tg:m4" with { path: "../m4" };
+import * as perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
-import texinfo from "tg:texinfo" with { path: "../texinfo" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as texinfo from "tg:texinfo" with { path: "../texinfo" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/help2man/",
@@ -26,44 +26,60 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		autoconf?: autoconf.Arg;
+		bison?: bison.Arg;
+		m4?: m4.Arg;
+		perl?: perl.Arg;
+		texinfo?: texinfo.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
+export let help2man = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
+		dependencies: {
+			autoconf: autoconfArg = {},
+			bison: bisonArg = {},
+			m4: m4Arg = {},
+			perl: perlArg = {},
+			texinfo: texinfoArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
-	let perlArtifact = await perl(arg);
+	let perlArtifact = await perl.perl(perlArg);
 	let interpreter = tg.symlink({
 		artifact: perlArtifact,
 		path: tg.Path.new("bin/perl"),
 	});
 	let dependencies = [
-		autoconf(arg),
-		bison(arg),
-		m4(arg),
+		autoconf.autoconf(autoconfArg),
+		bison.bison(bisonArg),
+		m4.m4(m4Arg),
 		perlArtifact,
-		texinfo(arg),
-		zlib(arg),
+		texinfo.texinfo(texinfoArg),
+		zlib.zlib(zlibArg),
 	];
-	let env = [...dependencies, env_];
+	let env = std.env.arg(...dependencies, env_);
 	let artifact = std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -81,11 +97,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default build;
+export default help2man;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		buildFunction: help2man,
 		binaries: ["help2man"],
 		metadata,
 	});

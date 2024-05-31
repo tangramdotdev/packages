@@ -1,4 +1,4 @@
-import gmp from "tg:gmp" with { path: "../gmp" };
+import * as gmp from "tg:gmp" with { path: "../gmp" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -13,26 +13,30 @@ export let source = tg.target(() => {
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		gmp?: gmp.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let nettle = tg.target(async (arg?: Arg) => {
+export let nettle = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: { gmp: gmpArg = {} } = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
-	let env = [gmp(arg), env_];
+	let env = [gmp.gmp(gmpArg), env_];
 
 	let configure = {
 		args: [
@@ -45,10 +49,10 @@ export let nettle = tg.target(async (arg?: Arg) => {
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -70,6 +74,6 @@ export let test = tg.target(() => {
 			echo "Checking if we can link against nettle and hogweed."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp
 		`,
-		{ env: [std.sdk(), nettle(), gmp()] },
+		{ env: std.env.arg(std.sdk(), nettle(), gmp.gmp()) },
 	);
 });

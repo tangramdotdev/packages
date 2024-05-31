@@ -1,11 +1,11 @@
-import autoconf from "tg:autoconf" with { path: "../autoconf" };
-import bison from "tg:bison" with { path: "../bison" };
-import help2man from "tg:help2man" with { path: "../help2man" };
-import m4 from "tg:m4" with { path: "../m4" };
-import perl from "tg:perl" with { path: "../perl" };
-import pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
+import * as autoconf from "tg:autoconf" with { path: "../autoconf" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as help2man from "tg:help2man" with { path: "../help2man" };
+import * as m4 from "tg:m4" with { path: "../m4" };
+import * as perl from "tg:perl" with { path: "../perl" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/automake/",
@@ -27,26 +27,44 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		autoconf?: autoconf.Arg;
+		bison?: bison.Arg;
+		help2man?: help2man.Arg;
+		m4?: m4.Arg;
+		perl?: perl.Arg;
+		pkgconfig?: pkgconfig.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let automake = tg.target(async (arg?: Arg) => {
+export let automake = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			autoconf: autoconfArg = {},
+			bison: bisonArg = {},
+			help2man: help2manArg = {},
+			m4: m4Arg = {},
+			perl: perlArg = {},
+			pkgconfig: pkgconfigArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
-	let perlArtifact = await perl(arg);
+	let perlArtifact = await perl.perl(perlArg);
 
 	let perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
@@ -57,22 +75,22 @@ export let automake = tg.target(async (arg?: Arg) => {
 	let version = "1.16";
 	let binDirectory = tg.directory({});
 	let dependencies = [
-		autoconf(arg),
-		bison(arg),
-		help2man(arg),
-		m4(arg),
-		pkgconfig(arg),
+		autoconf.autoconf(autoconfArg),
+		bison.bison(bisonArg),
+		help2man.help2man(help2manArg),
+		m4.m4(m4Arg),
+		pkgconfig.pkgconfig(pkgconfigArg),
 		perlArtifact,
-		zlib(arg),
+		zlib.zlib(zlibArg),
 	];
 
-	let env = [env_, std.utils.env(arg), ...dependencies];
+	let env = std.env.arg(env_, ...dependencies);
 
 	let automake = await std.utils.buildUtil(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

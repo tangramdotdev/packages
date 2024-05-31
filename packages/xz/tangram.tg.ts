@@ -17,27 +17,30 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:aeba3e03bf8140ddedf62a0a367158340520f6b384f75ca6045ccc6c0d43fd5c";
 	let url = `https://downloads.sourceforge.net/project/lzmautils/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(outer);
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let xz = tg.target(async (arg?: Arg) => {
+export let xz = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		env,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -52,9 +55,10 @@ export let xz = tg.target(async (arg?: Arg) => {
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
+			env,
 			phases: { configure },
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

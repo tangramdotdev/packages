@@ -27,20 +27,20 @@ export let source = tg.target(async () => {
 type Arg = {
 	build?: string;
 	env?: std.env.Arg;
-	rust?: tg.MaybeNestedArray<rust.Arg>;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
-	source?: tg.Directory;
 	host?: string;
+	rust?: rust.Arg;
+	sdk?: std.sdk.Arg;
+	source?: tg.Directory;
 };
 
-export let b3sum = tg.target(async (arg?: Arg) => {
+export let b3sum = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build,
 		host,
-		rust: rustArgs = [],
+		rust: rustArgs = {},
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	// Point to the b3sum subdirectory of the blake3 source.
 	let sourceDir = tg.Directory.expect(source_ ?? (await source()));
@@ -48,8 +48,8 @@ export let b3sum = tg.target(async (arg?: Arg) => {
 
 	return rust.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
+			sdk,
 			source: b3sumSource,
 		},
 		rustArgs,

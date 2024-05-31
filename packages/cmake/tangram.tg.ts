@@ -1,8 +1,8 @@
 import * as std from "tg:std" with { path: "../std" };
-import curl from "tg:curl" with { path: "../curl" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
-import openssl from "tg:openssl" with { path: "../openssl" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as curl from "tg:curl" with { path: "../curl" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 import ninja, { test as testNinja } from "./ninja.tg.ts";
 
@@ -32,30 +32,42 @@ export let source = tg.target(() => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		curl?: curl.Arg;
+		openssl?: openssl.Arg;
+		pkgconfig?: pkgconfig.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 /** Build `cmake`. */
-export let cmake = tg.target(async (arg?: Arg) => {
+export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build: build_,
+		dependencies: {
+			curl: curlArg = {},
+			openssl: opensslArg = {},
+			pkgconfig: pkgconfigArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
-	let opensslDir = openssl({ ...rest, build, env: env_, host });
-	let zlibDir = zlib({ ...rest, build, env: env_, host });
+	let opensslDir = openssl.openssl(opensslArg);
+	let zlibDir = zlib.zlib(zlibArg);
 
 	let configure = {
 		command: `./bootstrap`,
@@ -72,19 +84,19 @@ export let cmake = tg.target(async (arg?: Arg) => {
 	};
 
 	let deps = [
-		curl({ ...rest, build, env: env_, host }),
-		pkgconfig({ ...rest, build, env: env_, host }),
+		curl.curl(curlArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
 		opensslDir,
 		zlibDir,
 	];
 	let env = [...deps, env_];
 
 	let result = std.autotools.build({
-		...rest,
 		...std.triple.rotate({ build, host }),
 		buildInTree: true,
-		env,
+		env: std.env.arg(env),
 		phases: { configure },
+		sdk,
 		source: sourceDir,
 	});
 
@@ -150,147 +162,70 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export let target = async (...args: std.Args<BuildArg>) => {
-	type Apply = {
-		debug: boolean;
-		defaultCFlags: boolean;
-		fullRelro: boolean;
-		generator: "Ninja" | "Unix Makefiles";
-		hardeningCFlags: boolean;
-		host: string;
-		march: string;
-		mtune: string;
-		opt: "1" | "2" | "3" | "s" | "z" | "fast";
-		parallel: boolean | number;
-		phases: Array<std.phases.Arg>;
-		prefixPath: tg.Template.Arg;
-		sdkArgs?: Array<boolean | std.sdk.Arg>;
-		source: tg.Template.Arg;
-		stripExecutables: boolean;
-		target: string;
-	};
-
+export let target = tg.target(async (...args: std.Args<BuildArg>) => {
+	let mutationArgs = await std.args.createMutations<
+		BuildArg,
+		std.args.MakeArrayKeys<BuildArg, "env" | "phases" | "sdk">
+	>(std.flatten(args), {
+		env: "append",
+		generator: "set",
+		phases: "append",
+		sdk: (arg) => {
+			if (arg === false) {
+				return tg.Mutation.append(false);
+			} else if (arg === true) {
+				return tg.Mutation.append({});
+			} else {
+				return tg.Mutation.append<boolean | std.sdk.Arg>(arg as std.sdk.Arg);
+			}
+		},
+		source: "set",
+	});
 	let {
 		debug = false,
 		defaultCFlags = true,
+		env: userEnv,
 		fullRelro = true,
 		generator = "Ninja",
 		hardeningCFlags = true,
 		host: host_,
 		march,
 		mtune = "generic",
-		opt = 2,
+		opt = "2",
 		parallel = true,
 		phases,
-		prefixPath = "$OUTPUT",
-		sdkArgs: sdkArgs_,
+		prefixPath = `$OUTPUT`,
+		sdk: sdkArgs_,
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await std.Args.apply<BuildArg, Apply>(args, async (arg) => {
-		if (arg === undefined) {
-			return {};
-		} else if (typeof arg === "object") {
-			let object: tg.MutationMap<Apply> = {};
-			let phasesArgs: Array<std.phases.Arg> = [];
-			if (arg.checksum !== undefined) {
-				phasesArgs.push({ checksum: arg.checksum });
-			}
-			if (arg.debug !== undefined) {
-				object.debug = arg.debug;
-			}
-			if (arg.defaultCFlags !== undefined) {
-				object.defaultCFlags = arg.defaultCFlags;
-			}
-			if (arg.hardeningCFlags !== undefined) {
-				object.hardeningCFlags = arg.hardeningCFlags;
-			}
-			if (arg.env !== undefined) {
-				phasesArgs.push({ env: arg.env });
-			}
-			if (arg.fullRelro !== undefined) {
-				object.fullRelro = arg.fullRelro;
-			}
-			if (arg.generator !== undefined) {
-				object.generator = arg.generator;
-			}
-			if (arg.host !== undefined) {
-				object.host = arg.host;
-			}
-			if (arg.opt !== undefined) {
-				object.opt = arg.opt;
-			}
-			if (arg.march !== undefined) {
-				object.march = arg.march;
-			}
-			if (arg.mtune !== undefined) {
-				object.mtune = arg.mtune;
-			}
-			if (arg.parallel !== undefined) {
-				object.parallel = arg.parallel;
-			}
-			if (arg.prefixPath !== undefined) {
-				object.prefixPath = arg.prefixPath;
-			}
-			if (arg.source !== undefined) {
-				object.source = arg.source;
-			}
-			if (arg.phases !== undefined) {
-				if (arg.phases instanceof tg.Mutation) {
-					object.phases = arg.phases;
-				} else {
-					phasesArgs.push(arg.phases);
-				}
-			}
-			if (arg.sdk !== undefined) {
-				if (arg.sdk instanceof tg.Mutation) {
-					object.sdkArgs = arg.sdk;
-				} else {
-					if (typeof arg.sdk === "boolean") {
-						if (arg.sdk === false) {
-							// If the user set this to `false`, pass it through. Ignore `true`.
-							object.sdkArgs = await tg.Mutation.append<boolean | std.sdk.Arg>(
-								false,
-							);
-						}
-					} else {
-						object.sdkArgs = await tg.Mutation.append<boolean | std.sdk.Arg>(
-							arg.sdk,
-						);
-					}
-				}
-			}
-			if (arg.stripExecutables !== undefined) {
-				object.stripExecutables = arg.stripExecutables;
-			}
-			if (arg.target !== undefined) {
-				object.target = arg.target;
-			}
-			object.phases = await tg.Mutation.append(phasesArgs);
-			return object;
-		} else {
-			return tg.unreachable();
-		}
-	});
+	} = await std.args.applyMutations(mutationArgs);
 
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
-
-	// Determine SDK configuration.
-	let sdkArgs: Array<std.sdk.Arg> | undefined = undefined;
-	// If any SDk arg is `false`, we don't want to include the SDK.
-	let includeSdk = !sdkArgs_?.some((arg) => arg === false);
-	// If we are including the SDK, omit any booleans from the array.
-	if (includeSdk) {
-		sdkArgs =
-			sdkArgs_?.filter((arg): arg is std.sdk.Arg => typeof arg !== "boolean") ??
-			([] as Array<std.sdk.Arg>);
-	}
 
 	// Detect the host system from the environment.
 	let host = host_ ?? (await std.triple.host());
 	let target = target_ ?? host;
 	let os = std.triple.os(host);
+
+	// Determine SDK configuration.
+	let sdkArgs: Array<std.sdk.ArgObject> | undefined = undefined;
+	// If any SDk arg is `false`, we don't want to include the SDK.
+	let includeSdk = !sdkArgs_?.some((arg) => arg === false);
+	// If we are including the SDK, omit any booleans from the array.
+	if (includeSdk) {
+		sdkArgs =
+			sdkArgs_?.filter(
+				(arg): arg is std.sdk.ArgObject => typeof arg !== "boolean",
+			) ?? [];
+		if (
+			sdkArgs.length === 0 ||
+			sdkArgs.every((arg) => arg?.host === undefined)
+		) {
+			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
+		}
+	}
 
 	// Set up env.
 	let env: std.env.Arg = {};
@@ -354,25 +289,20 @@ export let target = async (...args: std.Args<BuildArg>) => {
 	}
 
 	// Add cmake to env.
-	env = [await cmake({ host }), env];
+	env = await std.env.arg(await cmake({ host }), env);
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		env = [await ninja({ host }), env];
+		env = await std.env.arg(await ninja({ host }), env);
 	}
 
 	if (includeSdk) {
-		// Set up the SDK, add it to the environment.
-		tg.assert(Array.isArray(sdkArgs));
-		if (!sdkArgs.some((arg) => arg?.host)) {
-			sdkArgs.push({ host });
-		}
-		if (host !== target && !sdkArgs.some((arg) => arg?.target)) {
-			sdkArgs.push({ target });
-		}
 		let sdk = await std.sdk(sdkArgs);
-		env = [sdk, env];
+		env = await std.env.arg(sdk, env);
 	}
+
+	// Include any user-defined env with higher precedence than the SDK and autotools settings.
+	env = await std.env.arg(env, userEnv);
 
 	// Define default phases.
 	let configureArgs = [
@@ -413,6 +343,9 @@ export let target = async (...args: std.Args<BuildArg>) => {
 	}
 
 	let system = std.triple.archAndOs(host);
+	let phaseArgs = (phases ?? []).filter(
+		(arg): arg is std.phases.Arg => arg !== undefined,
+	);
 	return await std.phases.target(
 		{
 			debug,
@@ -420,16 +353,16 @@ export let target = async (...args: std.Args<BuildArg>) => {
 			env,
 			target: { env: { TANGRAM_HOST: system }, host: system },
 		},
-		...(phases ?? []),
+		...phaseArgs,
 	);
-};
+});
 
 /** Build a cmake package. */
-export let build = async (
-	...args: std.Args<BuildArg>
-): Promise<tg.Directory> => {
-	return tg.Directory.expect(await (await target(...args)).build());
-};
+export let build = tg.target(
+	async (...args: std.Args<BuildArg>): Promise<tg.Directory> => {
+		return tg.Directory.expect(await (await target(...args)).output());
+	},
+);
 
 export let pushOrSet = (
 	obj: { [key: string]: unknown },

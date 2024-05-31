@@ -1,7 +1,10 @@
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://jqlang.github.io/jq/",
 	name: "jq",
+	license: "https://github.com/jqlang/jq?tab=License-1-ov-file#readme",
+	repository: "https://github.com/jqlang/jq",
 	version: "1.7",
 };
 
@@ -16,20 +19,30 @@ export let source = tg.target(async () => {
 		extension,
 	});
 	let url = `https://github.com/stedolan/${name}/releases/download/${name}-${version}/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(download);
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
-export let jq = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+
+export let jq = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = [],
+		build,
+		env,
+		host,
+		sdk,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	let configure = {
 		args: ["--without-oniguruma", "--disable-maintainer-mode"],
@@ -38,10 +51,11 @@ export let jq = tg.target(async (arg?: Arg) => {
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			source: source_ ?? source(),
+			env,
 			phases,
+			sdk,
+			source: source_ ?? source(),
 		},
 		autotools,
 	);

@@ -1,4 +1,4 @@
-import gperf from "tg:gperf" with { path: "../gperf" };
+import * as gperf from "tg:gperf" with { path: "../gperf" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -26,30 +26,34 @@ export let source = tg.target(async () => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
+	dependencies?: {
+		gperf: gperf.Arg;
+	};
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let libseccomp = tg.target(async (arg?: Arg) => {
+export let libseccomp = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: { gperf: gperfArg = {} } = {},
 		env: env_,
 		host,
 		source: source_,
 		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let configure = {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = [gperf(arg), env_];
+	let env = std.env.arg(gperf.gperf(gperfArg), env_);
 
 	return std.autotools.build(
 		{

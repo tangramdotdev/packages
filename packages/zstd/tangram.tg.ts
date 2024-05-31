@@ -26,38 +26,47 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, source: source_, ...rest } = arg ?? {};
+export let zstd = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = {},
+		build,
+		host,
+		sdk,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	let sourceDir = source_ ?? source();
 
 	let install = `make install PREFIX=$OUTPUT`;
 	let phases = { install };
 
-	return std.autotools.build({
-		...rest,
-		...std.triple.rotate({ build, host }),
-		buildInTree: true,
-		phases: { phases, order: ["prepare", "build", "install"] },
-		prefixArg: "none",
-		source: sourceDir,
-	});
+	return std.autotools.build(
+		{
+			...std.triple.rotate({ build, host }),
+			buildInTree: true,
+			phases: { phases, order: ["prepare", "build", "install"] },
+			prefixArg: "none",
+			sdk,
+			source: sourceDir,
+		},
+		autotools,
+	);
 });
 
-export default build;
+export default zstd;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		buildFunction: zstd,
 		binaries: ["zstd"],
 		libraries: ["zstd"],
 	});

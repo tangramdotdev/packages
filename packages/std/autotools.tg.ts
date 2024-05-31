@@ -50,7 +50,7 @@ export type Arg = {
 	prefixPath?: tg.Template.Arg;
 
 	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source: tg.Directory;

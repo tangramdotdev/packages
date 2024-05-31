@@ -1,9 +1,9 @@
-import acl from "tg:acl" with { path: "../acl" };
-import attr from "tg:attr" with { path: "../attr" };
-import libiconv from "tg:libiconv" with { path: "../libiconv" };
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import perl from "tg:perl" with { path: "../perl" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as acl from "tg:acl" with { path: "../acl" };
+import * as attr from "tg:attr" with { path: "../attr" };
+import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as perl from "tg:perl" with { path: "../perl" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -26,24 +26,40 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		acl?: acl.Arg;
+		attr?: attr.Arg;
+		libiconv: libiconv.Arg;
+		ncurses: ncurses.Arg;
+		perl: perl.Arg;
+		pkgconfig: pkgconfig.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let gettext = tg.target(async (arg?: Arg) => {
+export let gettext = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			acl: aclArg = {},
+			attr: attrArg = {},
+			libiconv: libiconvArg = {},
+			ncurses: ncursesArg = {},
+			perl: perlArg = {},
+			pkgconfig: pkgconfigArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -59,20 +75,20 @@ export let gettext = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let ncursesArtifact = await ncurses({ build, env: env_, host, sdk });
+	let ncursesArtifact = await ncurses.ncurses(ncursesArg);
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
 		ncursesArtifact,
-		perl({ build, env: env_, host, sdk }),
-		pkgconfig({ build, env: env_, host, sdk }),
+		perl.perl(perlArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
 	];
 	let aclArtifact = undefined;
 	let attrArtifact = undefined;
 
-	let libiconvArtifact = await libiconv({ build, env: env_, host, sdk });
+	let libiconvArtifact = await libiconv.libiconv(libiconvArg);
 	dependencies.push(libiconvArtifact);
 	if (os === "linux") {
-		aclArtifact = await acl({ build, env: env_, host, sdk });
-		attrArtifact = await attr({ build, env: env_, host, sdk });
+		aclArtifact = await acl.acl(aclArg);
+		attrArtifact = await attr.attr(attrArg);
 		dependencies.push(aclArtifact);
 		dependencies.push(attrArtifact);
 	}

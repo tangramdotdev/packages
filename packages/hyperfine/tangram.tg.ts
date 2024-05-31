@@ -28,25 +28,27 @@ export let source = tg.target(async () => {
 type Arg = {
 	build?: string;
 	env?: std.env.Arg;
-	rust?: tg.MaybeNestedArray<rust.Arg>;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	rust?: rust.Arg;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	host?: string;
 };
 
-export let hyperfine = tg.target(async (arg?: Arg) => {
+export let hyperfine = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build,
+		env,
 		host,
-		rust: rustArgs = [],
+		rust: rustArgs = {},
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	return rust.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
+			env,
+			sdk,
 			source: source_ ?? source(),
 		},
 		rustArgs,

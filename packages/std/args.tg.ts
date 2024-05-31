@@ -2,12 +2,14 @@ import * as std from "./tangram.tg.ts";
 
 /** Standard values that packages pass to their dependencies */
 export type PackageArg = { [key: string]: tg.Value } & {
-	build?: string;
-	dependencies?: { [key: string]: tg.Value };
+	build?: string | undefined;
+	dependencies?: DependencyArgs;
 	env?: std.env.Arg;
-	host?: string;
+	host?: string | undefined;
 	sdk?: std.sdk.Arg;
 };
+
+type DependencyArgs = { [key: string]: PackageArg };
 
 /** Variadic argument type. */
 export type Args<T extends tg.Value = tg.Value> = Array<
@@ -19,102 +21,50 @@ export type UnresolvedArgs<T extends tg.Value = tg.Value> = Array<
 	tg.Unresolved<tg.MaybeNestedArray<ValueOrMaybeMutationMap<T>>>
 >;
 
-// /** Coalesce variadic arguments into a single argument, propogating the known keys to any dependencies. */
-// export let apply = async <T extends PackageArg>(
-// 	...args: std.Args<T>
-// ): Promise<T> => {
-// 	// Coalesce top-level ones, and ensure dependencies receive relevent arguments.
+/** Produce a single argument object from a variadic list of arguments with mutation handling. */
+export let apply = async <T extends PackageArg>(
+	...args: Args<T>
+): Promise<T> => {
+	let flattened = std.flatten(args);
+	type Collect = MakeArrayKeys<T, "dependencies" | "env" | "sdk">;
+	let mutations = await createMutations<
+		T,
+		MakeArrayKeys<T, "dependencies" | "env" | "sdk">
+	>(flattened, {
+		dependencies: "append",
+		env: "append",
+		sdk: "append",
+	} as Rules<T>);
+	let arg = await applyMutations<Collect>(mutations);
 
-// 	type Apply = { [key: string]: tg.Value } & {
-// 		build?: string;
-// 		env?: Array<std.env.Arg>;
-// 		host?: string;
-// 		sdk?: Array<std.sdk.Arg>;
-// 		dependencies?: { [key: string]: Array<PackageArg> };
-// 	};
-// 	let intermediate = await std.Args.apply<T, Apply>(args, async (arg) => {
-// 		let object: tg.MutationMap<Apply> = {};
+	let env = await std.env.arg(arg.env);
+	let sdk = await std.sdk.arg(arg.sdk);
 
-// 		// Handle known keys.
-// 		if (arg.build !== undefined) {
-// 			object.build = arg.build;
-// 		}
-// 		if (arg.env !== undefined) {
-// 			if (arg.env instanceof tg.Mutation) {
-// 				object.env = arg.env;
-// 			} else {
-// 				object.env = await tg.Mutation.append<std.env.Arg>(arg.env);
-// 			}
-// 		}
-// 		if (arg.host !== undefined) {
-// 			object.host = arg.host;
-// 		}
-// 		if (arg.sdk !== undefined) {
-// 			if (arg.sdk instanceof tg.Mutation) {
-// 				object.sdk = arg.sdk;
-// 			} else {
-// 				object.sdk = await tg.Mutation.append<std.sdk.Arg>(arg.sdk);
-// 			}
-// 		}
+	// Process dependency args.
+	let dependencyArgs = arg.dependencies ?? [];
+	let dependencies: DependencyArgs = {};
+	for (let dependency of dependencyArgs) {
+		if (dependency === undefined) {
+			continue;
+		}
+		for (let [key, value] of Object.entries(dependency)) {
+			dependencies[key] = {
+				...value,
+				build: value.build ?? arg.build,
+				env: await std.env.arg(value.env, env),
+				host: value.host ?? arg.host,
+				sdk: await std.sdk.arg(value.sdk, sdk),
+			};
+		}
+	}
 
-// 		// Handle unknown non-dependency keys.
-// 		let knownKeys = ["build", "env", "host", "sdk", "dependencies"];
-// 		let remainingKeys = Object.keys(arg).filter(
-// 			(key) => !knownKeys.includes(key),
-// 		);
-// 		for (let key of remainingKeys) {
-// 			if (arg[key] !== undefined) {
-// 				object[key] = arg[key];
-// 			}
-// 		}
-
-// 		// Handle dependencies.
-// 		if (arg.dependencies !== undefined) {
-// 			let argDependencies = arg.dependencies as tg.MutationMap<{
-// 				[key: string]: PackageArg;
-// 			}>;
-// 			let keys = Object.keys(argDependencies);
-// 			let dependencies: tg.MutationMap<{ [key: string]: Array<PackageArg> }> =
-// 				{};
-// 			object.dependencies = dependencies;
-// 			for (let key of keys) {
-// 				let dependencyArg = argDependencies[key];
-// 				if (dependencyArg instanceof tg.Mutation) {
-// 					object.dependencies[key] = dependencyArg;
-// 				} else {
-// 					dependencies[key] = await tg.Mutation.append(dependencyArg);
-// 				}
-// 			}
-// 		}
-
-// 		return object;
-// 	});
-
-// 	// Combine env.
-// 	let env = await std.env.arg(intermediate.env);
-// 	// Combine sdk args.
-// 	let sdk = await std.sdk.arg(intermediate.sdk);
-// 	// Add build and host.
-// 	let build = intermediate.build;
-// 	let host = intermediate.host;
-// 	let propagatedArgs = {
-// 		build,
-// 		env,
-// 		host,
-// 		sdk,
-// 	};
-// 	// Prepend the above to each dependency.
-// 	let dependenciesArrarys: { [key: string]: Array<PackageArg> } = {};
-// 	let dependencies: { [key: string]: PackageArg } = {};
-// 	let intermediateDependencies = intermediate.dependencies ?? {};
-// 	let keys = Object.keys(intermediateDependencies);
-// 	for (let key of keys) {
-// 		let dependencyArgs = intermediateDependencies[key] ?? [];
-// 		dependencies[key] = std.flatten([propagatedArgs, dependencyArgs]);
-// 	}
-
-// 	return { ...intermediate, build, env, host, sdk, dependencies } as T;
-// };
+	return {
+		...arg,
+		dependencies,
+		env,
+		sdk,
+	} as T;
+};
 
 export let createMutations = async <
 	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },

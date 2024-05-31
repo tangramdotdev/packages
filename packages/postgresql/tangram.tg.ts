@@ -1,13 +1,13 @@
-import icu from "tg:icu" with { path: "../icu" };
-import lz4 from "tg:lz4" with { path: "../lz4" };
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import openssl from "tg:openssl" with { path: "../openssl" };
-import perl from "tg:perl" with { path: "../perl" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
-import readline from "tg:readline" with { path: "../readline" };
+import * as icu from "tg:icu" with { path: "../icu" };
+import * as lz4 from "tg:lz4" with { path: "../lz4" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
+import * as perl from "tg:perl" with { path: "../perl" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as readline from "tg:readline" with { path: "../readline" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
-import zstd from "tg:zstd" with { path: "../zstd" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as zstd from "tg:zstd" with { path: "../zstd" };
 
 import pwdPatchLinux from "./dont_use_bin_pwd_linux.patch" with {
 	type: "file",
@@ -43,43 +43,64 @@ export let source = tg.target(async (os: string) => {
 
 	return source;
 });
-
 type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		icu: icu.Arg;
+		lz4: lz4.Arg;
+		ncurses: ncurses.Arg;
+		openssl: openssl.Arg;
+		perl: perl.Arg;
+		pkgconfig: pkgconfig.Arg;
+		readline: readline.Arg;
+		zlib: zlib.Arg;
+		zstd: zstd.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let postgresql = tg.target(async (arg?: Arg) => {
+export let postgresql = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			icu: icuArg = {},
+			lz4: lz4Arg = {},
+			ncurses: ncursesArg = {},
+			openssl: opensslArg = {},
+			perl: perlArg = {},
+			pkgconfig: pkgconfigArg = {},
+			readline: readlineArg = {},
+			zlib: zlibArg = {},
+			zstd: zstdArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
-	let icuArtifact = icu({ build, host, sdk });
-	let lz4Artifact = lz4({ build, host, sdk });
-	let ncursesArtifact = ncurses({ build, host, sdk });
-	let readlineArtifact = readline({ build, host, sdk });
-	let zlibArtifact = zlib({ build, host, sdk });
-	let zstdArtifact = zstd({ build, host, sdk });
+	let icuArtifact = icu.icu(icuArg);
+	let lz4Artifact = lz4.lz4(lz4Arg);
+	let ncursesArtifact = ncurses.ncurses(ncursesArg);
+	let readlineArtifact = readline.readline(readlineArg);
+	let zlibArtifact = zlib.zlib(zlibArg);
+	let zstdArtifact = zstd.zstd(zstdArg);
 	let env: tg.Unresolved<Array<std.env.Arg>> = [
 		icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
-		openssl({ build, env: env_, host, sdk }),
-		perl({ build, env: env_, host, sdk }),
-		pkgconfig({ build, env: env_, host, sdk }),
+		openssl.openssl(opensslArg),
+		perl.perl(perlArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
 		readlineArtifact,
 		zlibArtifact,
 		zstdArtifact,

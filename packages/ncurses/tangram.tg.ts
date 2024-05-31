@@ -14,7 +14,7 @@ export let source = tg.target(() => {
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
@@ -23,14 +23,14 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let ncurses = tg.target(async (arg?: Arg) => {
+export let ncurses = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let os = std.triple.os(host);

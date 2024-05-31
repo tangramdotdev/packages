@@ -1,12 +1,12 @@
 import * as std from "tg:std" with { path: "../std" };
-import icu from "tg:icu" with { path: "../icu" };
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
-import perl from "tg:perl" with { path: "../perl" };
-import python from "tg:python" with { path: "../python" };
-import readline from "tg:readline" with { path: "../readline" };
-import xz from "tg:xz" with { path: "../xz" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as icu from "tg:icu" with { path: "../icu" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as perl from "tg:perl" with { path: "../perl" };
+import * as python from "tg:python" with { path: "../python" };
+import * as readline from "tg:readline" with { path: "../readline" };
+import * as xz from "tg:xz" with { path: "../xz" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://gitlab.gnome.org/GNOME/libxml2/-/wikis/home",
@@ -32,23 +32,43 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		icu: icu.Arg;
+		ncurses: ncurses.Arg;
+		perl: perl.Arg;
+		pkgconfig: pkgconfig.Arg;
+		python: python.Arg;
+		readline: readline.Arg;
+		xz: xz.Arg;
+		zlib: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let libxml2 = tg.target(async (arg?: Arg) => {
+export let libxml2 = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			icu: icuArg = {},
+			ncurses: ncursesArg = {},
+			perl: perlArg = {},
+			pkgconfig: pkgconfigArg = {},
+			python: pythonArg = {},
+			readline: readlineArg = {},
+			xz: xzArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let prepare = "export LD_LIBRARY_PATH=$LIBRARY_PATH";
 	let configure = {
@@ -62,23 +82,23 @@ export let libxml2 = tg.target(async (arg?: Arg) => {
 	};
 
 	let deps = [
-		icu({ ...rest, build, env: env_, host }),
-		ncurses({ ...rest, build, env: env_, host }),
-		perl({ ...rest, build, env: env_, host }),
-		pkgconfig({ ...rest, build, env: env_, host }),
-		python({ ...rest, build, env: env_, host }),
-		readline({ ...rest, build, env: env_, host }),
-		xz({ ...rest, build, env: env_, host }),
-		zlib({ ...rest, build, env: env_, host }),
+		icu.icu(icuArg),
+		ncurses.ncurses(ncursesArg),
+		perl.perl(perlArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
+		python.python(pythonArg),
+		readline.readline(readlineArg),
+		xz.xz(xzArg),
+		zlib.zlib(zlibArg),
 	];
 	let env = [...deps, env_];
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases: { prepare, configure },
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

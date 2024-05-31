@@ -1,7 +1,7 @@
-import help2man from "tg:help2man" with { path: "../help2man" };
-import m4 from "tg:m4" with { path: "../m4" };
+import * as help2man from "tg:help2man" with { path: "../help2man" };
+import * as m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
-import texinfo from "tg:texinfo" with { path: "../texinfo" };
+import * as texinfo from "tg:texinfo" with { path: "../texinfo" };
 
 export let metadata = {
 	homepage: "https://github.com/westes/flex",
@@ -28,33 +28,47 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		help2man?: help2man.Arg;
+		m4?: m4.Arg;
+		texinfo?: texinfo.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let flex = tg.target(async (arg?: Arg) => {
+export let flex = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			help2man: help2manArg = {},
+			m4: m4Arg = {},
+			texinfo: texinfoArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
-	let dependencies = [help2man(arg), m4(arg), texinfo(arg)];
-	let env = [...dependencies, env_];
+	let dependencies = [
+		help2man.help2man(help2manArg),
+		m4.m4(m4Arg),
+		texinfo.texinfo(texinfoArg),
+	];
+	let env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

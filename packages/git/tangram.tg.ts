@@ -1,7 +1,7 @@
-import gettext from "tg:gettext" with { path: "../gettext" };
-import openssl from "tg:openssl" with { path: "../openssl" };
+import * as gettext from "tg:gettext" with { path: "../gettext" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://git-scm.com/",
@@ -27,23 +27,33 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		gettext: gettext.Arg;
+		openssl: openssl.Arg;
+		zlib: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let git = tg.target(async (arg?: Arg) => {
+export let git = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			gettext: gettextArg = {},
+			openssl: opensslArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let sourceDir = source_ ?? source();
 
@@ -59,19 +69,19 @@ export let git = tg.target(async (arg?: Arg) => {
 		configure,
 	};
 
-	let env = [
-		gettext({ ...rest, build, env: env_, host }),
-		openssl({ ...rest, build, env: env_, host }),
-		zlib({ ...rest, build, env: env_, host }),
+	let env = std.env.arg(
+		gettext.gettext(gettextArg),
+		openssl.openssl(opensslArg),
+		zlib.zlib(zlibArg),
 		env_,
-	];
+	);
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env,
 			phases,
+			sdk,
 			source: sourceDir,
 		},
 		autotools,

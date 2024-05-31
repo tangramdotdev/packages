@@ -1,16 +1,16 @@
 import * as std from "tg:std" with { path: "../std" };
 
-import bison from "tg:bison" with { path: "../bison" };
-import bzip2 from "tg:bzip2" with { path: "../bzip2" };
-import libffi from "tg:libffi" with { path: "../libffi" };
-import libxcrypt from "tg:libxcrypt" with { path: "../libxcrypt" };
-import m4 from "tg:m4" with { path: "../m4" };
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import openssl from "tg:openssl" with { path: "../openssl" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
-import readline from "tg:readline" with { path: "../readline" };
-import sqlite from "tg:sqlite" with { path: "../sqlite" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as bzip2 from "tg:bzip2" with { path: "../bzip2" };
+import * as libffi from "tg:libffi" with { path: "../libffi" };
+import * as libxcrypt from "tg:libxcrypt" with { path: "../libxcrypt" };
+import * as m4 from "tg:m4" with { path: "../m4" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as readline from "tg:readline" with { path: "../readline" };
+import * as sqlite from "tg:sqlite" with { path: "../sqlite" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 import patches from "./patches" with { type: "directory" };
 
@@ -56,9 +56,24 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	return std.patch(source, ...(await Promise.all(patchFiles)));
 });
 
-type ToolchainArg = {
+export type Arg = {
 	/** Optional autotools configuration. */
 	autotools?: std.autotools.Arg;
+
+	/** Args for dependencies. */
+	dependencies: {
+		bison?: bison.Arg;
+		bzip2?: bzip2.Arg;
+		libffi?: libffi.Arg;
+		libxcrypt?: libxcrypt.Arg;
+		m4?: m4.Arg;
+		ncurses?: ncurses.Arg;
+		openssl?: openssl.Arg;
+		pkgconfig?: pkgconfig.Arg;
+		readline?: readline.Arg;
+		sqlite?: sqlite.Arg;
+		zlib?: zlib.Arg;
+	};
 
 	/** Optional environment variables to set. */
 	env?: std.env.Arg;
@@ -83,33 +98,46 @@ type ToolchainArg = {
 };
 
 /** Build and create a python environment. */
-export let python = tg.target(async (arg?: ToolchainArg) => {
+export let python = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
+		dependencies: {
+			bison: bisonArg = {},
+			bzip2: bzip2Arg = {},
+			libffi: libffiArg = {},
+			libxcrypt: libxcryptArg = {},
+			m4: m4Arg = {},
+			ncurses: ncursesArg = {},
+			openssl: opensslArg = {},
+			pkgconfig: pkgconfigArg = {},
+			readline: readlineArg = {},
+			sqlite: sqliteArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		requirements: requirementsArg,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
 	let dependencies = [
-		bison({ build, env: env_, host, sdk }),
-		bzip2({ build, env: env_, host, sdk }),
-		libffi({ build, env: env_, host, sdk }),
-		libxcrypt({ build, env: env_, host, sdk }),
-		m4({ build, env: env_, host, sdk }),
-		ncurses({ build, env: env_, host, sdk }),
-		openssl({ build, env: env_, host, sdk }),
-		pkgconfig({ build, env: env_, host, sdk }),
-		readline({ build, env: env_, host, sdk }),
-		sqlite({ build, env: env_, host, sdk }),
-		zlib({ build, env: env_, host, sdk }),
+		bison.bison(bisonArg),
+		bzip2.bzip2(bzip2Arg),
+		libffi.libffi(libffiArg),
+		libxcrypt.libxcrypt(libxcryptArg),
+		m4.m4(m4Arg),
+		ncurses.ncurses(ncursesArg),
+		openssl.openssl(opensslArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
+		readline.readline(readlineArg),
+		sqlite.sqlite(sqliteArg),
+		zlib.zlib(zlibArg),
 	];
 	let env = [
 		...dependencies,
@@ -134,14 +162,8 @@ export let python = tg.target(async (arg?: ToolchainArg) => {
 	if (
 		std.triple.os(build) === "darwin" ||
 		((await std.env.tryWhich({ env: env_, name: "clang" })) === undefined &&
-			std
-				.flatten(sdk ?? [])
-				.filter(
-					(sdk) =>
-						sdk !== undefined &&
-						typeof sdk === "object" &&
-						sdk?.toolchain === "llvm",
-				).length === 0)
+			std.flatten(sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
+				.length === 0)
 	) {
 		configure.args.push("--enable-optimizations");
 	}
@@ -242,7 +264,7 @@ let isPythonScript = (metadata: std.file.ExecutableMetadata): boolean => {
 	}
 };
 
-export type Arg = {
+export type BuildArg = {
 	/** The machine this package will build on. */
 	build?: string;
 
@@ -256,11 +278,13 @@ export type Arg = {
 	source: tg.Directory;
 
 	/** Optional overides to the python environment. */
-	python?: ToolchainArg;
+	python?: Arg;
 };
 
-export let build = tg.target(async (...args: std.Args<Arg>) => {
-	let mutationArgs = await std.args.createMutations<Arg>(std.flatten(args));
+export let build = tg.target(async (...args: std.Args<BuildArg>) => {
+	let mutationArgs = await std.args.createMutations<BuildArg>(
+		std.flatten(args),
+	);
 	let {
 		build: buildTriple_,
 		host: host_,

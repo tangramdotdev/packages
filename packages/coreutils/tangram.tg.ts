@@ -1,6 +1,6 @@
-import acl from "tg:acl" with { path: "../acl" };
-import attr from "tg:attr" with { path: "../attr" };
-import libcap from "tg:libcap" with { path: "../libcap" };
+import * as acl from "tg:acl" with { path: "../acl" };
+import * as attr from "tg:attr" with { path: "../attr" };
+import * as libcap from "tg:libcap" with { path: "../libcap" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -26,32 +26,46 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		acl?: acl.Arg;
+		attr?: attr.Arg;
+		libcap?: libcap.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let coreutils = tg.target(async (arg?: Arg) => {
+export let coreutils = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			acl: aclArg = {},
+			attr: attrArg = {},
+			libcap: libcapArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
-	let dependencies = [acl(arg), attr(arg), libcap(arg)];
+	let dependencies = [
+		acl.acl(aclArg),
+		attr.attr(attrArg),
+		libcap.libcap(libcapArg),
+	];
 	let env = [...dependencies, env_];
 
 	return std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

@@ -25,7 +25,7 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	});
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
@@ -34,8 +34,14 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let libffi = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, sdk, source: source_ } = arg ?? {};
+export let libffi = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = [],
+		build,
+		host,
+		sdk,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	let configure = {
 		args: [

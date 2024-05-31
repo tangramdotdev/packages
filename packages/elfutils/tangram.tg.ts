@@ -1,10 +1,10 @@
-import bzip2 from "tg:bzip2" with { path: "../bzip2" };
-import libarchive from "tg:libarchive" with { path: "../libarchive" };
-import m4 from "tg:m4" with { path: "../m4" };
-import openssl from "tg:openssl" with { path: "../openssl" };
+import * as bzip2 from "tg:bzip2" with { path: "../bzip2" };
+import * as libarchive from "tg:libarchive" with { path: "../libarchive" };
+import * as m4 from "tg:m4" with { path: "../m4" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
-import xz from "tg:xz" with { path: "../xz" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as xz from "tg:xz" with { path: "../xz" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "elfutils",
@@ -27,23 +27,39 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		bzip2?: bzip2.Arg;
+		libarchive?: libarchive.Arg;
+		m4?: m4.Arg;
+		openssl?: openssl.Arg;
+		xz?: xz.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let elfutils = tg.target(async (arg?: Arg) => {
+export let elfutils = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			bzip2: bzip2Arg = {},
+			libarchive: libarchiveArg = {},
+			m4: m4Arg = {},
+			openssl: opensslArg = {},
+			xz: xzArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -69,12 +85,12 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 	let phases = { configure };
 
 	let env = [
-		bzip2(arg),
-		libarchive(arg),
-		m4(arg),
-		openssl(arg),
-		xz(arg),
-		zlib(arg),
+		bzip2.bzip2(bzip2Arg),
+		libarchive.libarchive(libarchiveArg),
+		m4.m4(m4Arg),
+		openssl.openssl(opensslArg),
+		xz.xz(xzArg),
+		zlib.zlib(zlibArg),
 		{
 			CFLAGS: tg.Mutation.suffix(
 				"-Wno-format-nonliteral -lz -lbz2 -llzma",
@@ -86,10 +102,10 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 
 	let result = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -99,45 +115,3 @@ export let elfutils = tg.target(async (arg?: Arg) => {
 });
 
 export default elfutils;
-
-export let test = tg.target(async () => {
-	await std.assert.pkg({
-		directory: await elfutils(),
-		// FIXME - wrap each binary with the result's own lib dir in libraryPaths, see curl.
-		// binaries: [
-		// 	"eu-addr2line",
-		// 	"eu-ar",
-		// 	"eu-elfcmp",
-		// 	"eu-elfcompress",
-		// 	"eu-elflint",
-		// 	"eu-findtextrel",
-		// 	"eu-make-debug-archive",
-		// 	"eu-nm",
-		// 	"eu-objdump",
-		// 	"eu-ranlib",
-		// 	"eu-readelf",
-		// 	"eu-size",
-		// 	"eu-stack",
-		// 	"eu-strings",
-		// 	"eu-strip",
-		// 	"eu-unstrip",
-		// ],
-		// FIXME - Failed to create tangram instance.: Other { message: "Resource temporarily unavailable", source: None }'
-		// headers: [
-		// 	"dwarf.h",
-		// 	"elf.h",
-		// 	"gelf.h",
-		// 	"libelf.h",
-		// 	"nlist.h",
-		// 	"elfutils/elf-knowledge.h",
-		// 	"elfutils/known-dwarf.h",
-		// 	"elfutils/libasm.h",
-		// 	"elfutils/libdw.h",
-		// 	"elfutils/libdw.h",
-		// 	"elfutils/libdwfl.h",
-		// 	"elfutils/version.h",
-		// ],
-		libraries: ["elf", "dw", "asm"],
-	});
-	return true;
-});

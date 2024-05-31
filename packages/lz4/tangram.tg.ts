@@ -26,7 +26,7 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
@@ -35,8 +35,14 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let lz4 = tg.target(async (arg?: Arg) => {
-	let { autotools = {}, build, host, sdk, source: source_ } = arg ?? {};
+export let lz4 = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = {},
+		build,
+		host,
+		sdk,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	let sourceDir = source_ ?? source();
 

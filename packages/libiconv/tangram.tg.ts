@@ -24,8 +24,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let libiconv = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, sdk, source: source_ } = arg ?? {};
+export let libiconv = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = {},
+		build,
+		host,
+		sdk,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	let output = await std.autotools.build(
 		{

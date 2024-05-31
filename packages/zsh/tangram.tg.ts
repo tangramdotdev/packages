@@ -1,5 +1,5 @@
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import pcre2 from "tg:pcre2" with { path: "../pcre2" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -24,21 +24,26 @@ export let source = tg.target(async (arg?: Arg) => {
 type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		ncurses: ncurses.Arg;
+		pcre2: pcre2.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let zsh = tg.target(async (arg?: Arg) => {
+export let zsh = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: { ncurses: ncursesArg = {}, pcre2: pcre2Arg = {} } = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -52,18 +57,15 @@ export let zsh = tg.target(async (arg?: Arg) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [
-		pcre2({ build, env: env_, host, sdk }),
-		ncurses({ build, env: env_, host, sdk }),
-	];
-	let env = [
+	let dependencies = [pcre2.pcre2(pcre2Arg), ncurses.ncurses(ncursesArg)];
+	let env = std.env.arg(
 		...dependencies,
 		{
 			// Necessary to get the `boolcodes` configure test to pass, preventing a build failure in the termcap module later when it attempts to use a conflicting type.
 			CFLAGS: tg.Mutation.prefix(`-Wno-incompatible-pointer-types`, " "),
 		},
 		env_,
-	];
+	);
 
 	return std.autotools.build(
 		{

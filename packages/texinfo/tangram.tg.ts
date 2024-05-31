@@ -1,10 +1,10 @@
 import * as bash from "tg:bash" with { path: "../bash" };
-import bison from "tg:bison" with { path: "../bison" };
-import m4 from "tg:m4" with { path: "../m4" };
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import perl from "tg:perl" with { path: "../perl" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as m4 from "tg:m4" with { path: "../m4" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/texinfo/",
@@ -26,35 +26,51 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		bash: bash.Arg;
+		bison: bison.Arg;
+		m4: m4.Arg;
+		ncurses: ncurses.Arg;
+		perl: perl.Arg;
+		zlib: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let texinfo = tg.target(async (arg?: Arg) => {
+export let texinfo = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			bash: bashArg = {},
+			bison: bisonArg = {},
+			m4: m4Arg = {},
+			ncurses: ncursesArg = {},
+			perl: perlArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
-	let perlArtifact = await perl({ build, env: env_, host, sdk });
+	let perlArtifact = await perl.perl(perlArg);
 	let dependencies = [
-		bison({ build, env: env_, host, sdk }),
-		m4({ build, env: env_, host, sdk }),
-		ncurses({ build, env: env_, host, sdk }),
+		bison.bison(bisonArg),
+		m4.m4(m4Arg),
+		ncurses.ncurses(ncursesArg),
 		perlArtifact,
-		zlib({ build, env: env_, host, sdk }),
+		zlib.zlib(zlibArg),
 	];
 	let env = [...dependencies, env_];
 

@@ -1,8 +1,8 @@
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
-import readline from "tg:readline" with { path: "../readline" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as readline from "tg:readline" with { path: "../readline" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://www.sqlite.org/",
@@ -32,33 +32,45 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(download);
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies: {
+		ncurses: ncurses.Arg;
+		pkgconfig: pkgconfig.Arg;
+		readline: readline.Arg;
+		zlib: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let sqlite = tg.target(async (arg?: Arg) => {
+export let sqlite = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			ncurses: ncursesArg = {},
+			pkgconfig: pkgconfigArg = {},
+			readline: readlineArg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let dependencies = [
-		ncurses({ build, env: env_, host, sdk }),
-		pkgconfig({ build, env: env_, host, sdk }),
-		readline({ build, env: env_, host, sdk }),
-		zlib({ build, env: env_, host, sdk }),
+		ncurses.ncurses(ncursesArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
+		readline.readline(readlineArg),
+		zlib.zlib(zlibArg),
 	];
 	let env = [...dependencies, env_];
 

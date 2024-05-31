@@ -19,28 +19,30 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:c3e02c948d51f3ca9cdb23e011050d2d3a48226c581e0749ed7cbac413ce5461";
 	let url = `https://git.gavinhoward.com/gavin/${name}/releases/download/${version}/${packageName}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(outer);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let bc = tg.target(async (arg?: Arg) => {
+export let bc = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -55,16 +57,16 @@ export let bc = tg.target(async (arg?: Arg) => {
 	// Define environment.
 	let ccCommand =
 		std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
-	let env = [{ CC: tg.Mutation.setIfUnset(ccCommand) }, env_];
+	let env = std.env.arg({ CC: tg.Mutation.setIfUnset(ccCommand) }, env_);
 
 	let output = std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			buildInTree: true,
 			env,
 			opt: "3",
 			phases: { configure },
+			sdk,
 			source: sourceDir,
 		},
 		autotools,

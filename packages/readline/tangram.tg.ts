@@ -1,5 +1,5 @@
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -17,31 +17,39 @@ export let source = tg.target(() => {
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		ncurses?: ncurses.Arg;
+		pkgconfig?: pkgconfig.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let readline = tg.target(async (arg?: Arg) => {
+export let readline = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			ncurses: ncursesArg = {},
+			pkgconfig: pkgconfigArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let env = std.env.arg(
-		ncurses({ build, env: env_, host, sdk }),
-		pkgconfig({ build, env: env_, host, sdk }),
+		ncurses.ncurses(ncursesArg),
+		pkgconfig.pkgconfig(pkgconfigArg),
 		env_,
 	);
 

@@ -15,13 +15,13 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 
 export namespace sdk {
 	/** The possible types to pass to `std.sdk()`. Pass `undefined` or `true` to get the default SDK, `false` for an empty env, or use the `ArgObject` to configure the provided env. */
-	export type Arg = undefined | boolean | ArgObject;
+	export type Arg = undefined | ArgObject;
 
 	export type ArgObject = {
 		/** The machine this SDK will compile on. */
 		host?: string;
 		/** An alternate linker to use. */
-		linker?: LinkerKind;
+		linker?: LinkerKind | undefined;
 		/** Which components should get proxied. Use `true` or `false` as a shorthand for enabling or disabling all proxies. If not provided, the default behavior is to proxy the linker but not the compiler. */
 		proxy?: Partial<proxy.Arg> | boolean;
 		/** The machine this SDK produces executables for. */
@@ -165,8 +165,6 @@ export namespace sdk {
 			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
 				if (arg === undefined) {
 					return {};
-				} else if (typeof arg === "boolean") {
-					return tg.unimplemented("SDK shorthand not yet implemented.");
 				} else {
 					return arg;
 				}
@@ -707,12 +705,7 @@ export namespace sdk {
 	};
 
 	/** Assert the given env provides everything it should for a particuar arg. */
-	export let assertValid = async (env: std.env.Arg, sdkArg?: sdk.Arg) => {
-		if (sdkArg === false) {
-			// If the SDK is set to `false`, this should always fail.
-			return false;
-		}
-		let arg = sdkArg === true ? {} : sdkArg;
+	export let assertValid = async (env: std.env.Arg, arg: sdk.Arg) => {
 		let expected = await resolveHostAndTarget(arg);
 
 		// Check that the env provides a host toolchain.
@@ -1146,9 +1139,8 @@ export let nativeProxiedSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 	}
 
 	let hostGnu = sdk.canonicalTriple(detectedHost);
-	let hostMusl = std.triple.create(hostGnu, { environment: "musl" });
 
-	return [{}, { host: hostMusl }, { toolchain: "llvm" }, { linker: "mold" }];
+	return [{}, { toolchain: "llvm" }, { linker: "mold" }];
 };
 
 export let allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {

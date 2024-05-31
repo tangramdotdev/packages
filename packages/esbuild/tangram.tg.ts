@@ -27,13 +27,22 @@ export let source = tg.target(async () => {
 });
 
 export type Arg = {
+	dependencies?: {
+		go: go.Arg;
+		nodejs: nodejs.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	source?: tg.Directory;
 };
 
-export let esbuild = tg.target((arg?: Arg) => {
-	let { env: env_, host: host_, source: source_ } = arg ?? {};
+export let esbuild = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		dependencies: { go: goArg = {}, nodejs: nodejsArg = {} } = {},
+		env: env_,
+		host: host_,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? std.triple.host();
 
 	let sourceDir = source_ ?? source();
@@ -51,8 +60,8 @@ export let esbuild = tg.target((arg?: Arg) => {
 
 	let env = std.env.arg(
 		std.sdk({ host }),
-		go.toolchain({ host }),
-		nodejs.nodejs({ host }),
+		go.toolchain(goArg),
+		nodejs.nodejs(nodejsArg),
 		{
 			SSL_CERT_FILE: certFile,
 		},

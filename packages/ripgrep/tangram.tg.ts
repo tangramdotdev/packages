@@ -27,33 +27,35 @@ export let source = tg.target(async () => {
 });
 
 export type Arg = {
-	// Common args
 	build?: string;
+	dependencies?: {
+		pcre2?: pcre2.Arg;
+		pkgconfig?: pkgconfig.Arg;
+	};
 	env?: std.env.Arg;
-	sdk?: std.sdk.Arg;
 	host?: string;
-	// Source
-	source?: tg.Directory;
-	// Builder
 	rust?: rust.Arg;
+	sdk?: std.sdk.Arg;
+	source?: tg.Directory;
 };
 
-export let ripgrep = tg.target(async (arg?: Arg) => {
+export let ripgrep = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build: build_,
+		dependencies: { pcre2: pcre2Arg = {}, pkgconfig: pkgconfigArg = {} } = {},
 		env: env_,
 		host: host_,
 		rust: rustArg = {},
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let env = std.env.arg(
-		pkgconfig.build({ build, env: env_, host, sdk }),
-		pcre2.build({ build, env: env_, host, sdk }),
+		pkgconfig.pkgconfig(pkgconfigArg),
+		pcre2.pcre2(pcre2Arg),
 		env_,
 	);
 

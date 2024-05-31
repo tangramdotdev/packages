@@ -72,7 +72,7 @@ export let image = tg.target(
 					let executableMetadata = await std.file.executableMetadata(file);
 					if (executableMetadata) {
 						return {
-							entrypointArtifact: await std.wrap(arg),
+							entrypointArtifact: file,
 						};
 					} else {
 						let id = arg.id();
@@ -195,7 +195,7 @@ export let imageFromLayers = async (
 
 	let addBlob = async (file: tg.File) => {
 		let bytes = await file.bytes();
-		let checksum = tg.checksum("sha256", bytes);
+		let checksum = await tg.checksum(bytes, "sha256");
 		blobs = tg.directory(blobs, {
 			[checksum.replace(":", "/")]: file,
 		});
@@ -313,7 +313,7 @@ export let layer = tg.target(
 		let tar = await std.build(tg`tar -cf $OUTPUT -C ${bundle} .`);
 		tg.File.assert(tar);
 		let bytes = await tar.bytes();
-		let diffId = tg.checksum("sha256", bytes);
+		let diffId = await tg.checksum(bytes, "sha256");
 		return { tar, diffId };
 	},
 );

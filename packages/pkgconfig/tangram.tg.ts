@@ -30,30 +30,35 @@ export let source = tg.target(() => {
 });
 
 export type Arg = {
-	// Common args
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		bison?: bison.Arg;
+		m4?: m4.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
-	// Source
 	source?: tg.Directory;
-	// Builder
-	autotools?: std.autotools.Arg;
-	// Package-specific args
 	proxy?: boolean;
-	// Dependencies
 };
 
-export let build = tg.target(async (arg?: Arg) => {
+export let pkgconfig = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
+		dependencies: {
+			bison: bisonArg = {},
+			m4: m4Arg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		proxy = true,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -67,9 +72,9 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let phases = { configure };
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		bison.bison({ build, env: env_, sdk, host }),
-		m4.m4({ build, env: env_, sdk, host }),
-		zlib.zlib({ build, env: env_, sdk, host }),
+		bison.bison(bisonArg),
+		m4.m4(m4Arg),
+		zlib.zlib(zlibArg),
 	];
 	let additionalLibDirs = [];
 	if (std.triple.os(build) === "darwin") {
@@ -162,13 +167,13 @@ export let path = tg.target(
 	},
 );
 
-export default build;
+export default pkgconfig;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		buildFunction: pkgconfig,
 		binaries: ["pkg-config"],
 		metadata,
 	});
-	return build();
+	return pkgconfig();
 });

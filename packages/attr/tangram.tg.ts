@@ -16,11 +16,13 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
 	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return await std.directory.unwrap(outer);
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
@@ -29,8 +31,14 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let attr = tg.target(async (arg?: Arg) => {
-	let { autotools = [], build, host, sdk, source: source_ } = arg ?? {};
+export let attr = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		autotools = {},
+		build,
+		host,
+		sdk,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	let configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath", "--with-pic"],

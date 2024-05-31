@@ -1,8 +1,8 @@
-import bison from "tg:bison" with { path: "../bison" };
-import libseccomp from "tg:libseccomp" with { path: "../libseccomp" };
-import m4 from "tg:m4" with { path: "../m4" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as libseccomp from "tg:libseccomp" with { path: "../libseccomp" };
+import * as m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://www.darwinsys.com/file/",
@@ -23,44 +23,63 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:fc97f51029bb0e2c9f4e3bffefdaf678f0e039ee872b9de5c002a6d09c784d82";
 	let url = `https://astron.com/pub/file/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return await std.directory.unwrap(outer);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		bison?: bison.Arg;
+		libseccomp?: libseccomp.Arg;
+		m4?: m4.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let file = tg.target(async (arg?: Arg) => {
+export let file = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
+		dependencies: {
+			bison: bisonArg = {},
+			libseccomp: libseccompArg = {},
+			m4: m4Arg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
 	let configure = {
 		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 	};
-	let dependencies = [bison(arg), libseccomp(arg), m4(arg), zlib(arg)];
+	let dependencies = [
+		bison.bison(bisonArg),
+		libseccomp.libseccomp(libseccompArg),
+		m4.m4(m4Arg),
+		zlib.zlib(zlibArg),
+	];
 	let env = [...dependencies, env_];
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			hardeningCFlags: false,
 			phases: { configure },
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
