@@ -165,15 +165,18 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	let env = await std.env.arg(env_);
 
 	// Produce a target arg with the env and optionally the shell executable.
-	let targetArg;
 	if (maybeShellExe === undefined) {
-		targetArg = { env };
+		return tg.target(script, { env }, ...(targetArgs ?? []));
 	} else {
-		targetArg = { executable: maybeShellExe, args: ["-eu"], env };
+		return tg.target(
+			{
+				executable: maybeShellExe,
+				args: ["-euc", script],
+				env,
+			},
+			...(targetArgs ?? []),
+		);
 	}
-
-	// Build the script, passing all target args through.
-	return tg.target(script, targetArg, ...(targetArgs ?? []));
 });
 
 export let build = async (...args: std.args.UnresolvedArgs<Arg>) => {
