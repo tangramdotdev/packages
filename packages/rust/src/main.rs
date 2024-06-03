@@ -167,7 +167,7 @@ async fn main_inner() -> tg::Result<()> {
         executable,
         references,
     };
-    let executable = tg::File::with_object(object).into();
+    let executable = Some(tg::File::with_object(object).into());
 
     // Unrender the environment.
     // Get the artifacts directory.
@@ -255,12 +255,12 @@ async fn main_inner() -> tg::Result<()> {
         checksum,
     };
     let target = tg::Target::with_object(object);
-    let target_id = target.id(tg, None).await?;
+    let target_id = target.id(tg).await?;
 
     // Create the build and mark it as a child.
     let build_options = tg::target::build::Arg {
         parent: None,
-        remote: false,
+        remote: None,
         retry: tg::build::Retry::Failed,
     };
     let build_output = tg.build_target(&target_id, build_options).await?;
@@ -321,7 +321,7 @@ async fn main_inner() -> tg::Result<()> {
     let output_directory = args
         .tangram_path
         .join("artifacts")
-        .join(output.id(tg, None).await?.to_string())
+        .join(output.id(tg).await?.to_string())
         .join("build");
 
     // Copy output files from $OUTPUT to the path specified.

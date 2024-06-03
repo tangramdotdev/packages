@@ -280,7 +280,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			futures::future::try_join_all(library_paths.into_iter().map(|symlink_data| async {
 				let object = tg::symlink::Object::try_from(symlink_data).unwrap();
 				let symlink = tg::Symlink::with_object(object);
-				let id = symlink.id(&tg, None).await?;
+				let id = symlink.id(&tg).await?;
 				Ok::<_, tg::Error>(id.clone())
 			}))
 			.await?
@@ -325,7 +325,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Handle an executable or a library.
 	let output_file = if is_executable {
 		// Obtain the output artifact ID.
-		let output_artifact_id = output_file.id(&tg, None).await?.clone().into();
+		let output_artifact_id = output_file.id(&tg).await?.clone().into();
 
 		// Create the manifest.
 		let manifest =
@@ -358,7 +358,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let manifest = Bytes::from(manifest);
 
 		// Create the manifest blob.
-		let manifest_leaf_id = tg::Leaf::from(manifest).id(&tg, None).await?;
+		let manifest_leaf_id = tg::Leaf::from(manifest).id(&tg).await?;
 		let manifest_blob = tg::Blob::with_id(manifest_leaf_id.into());
 		let manifest_size = manifest_blob.size(&tg).await?;
 
@@ -419,7 +419,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	};
 
 	// Store the new file.
-	output_file.store(&tg, None).await?;
+	output_file.store(&tg).await?;
 
 	Ok(())
 }
@@ -457,7 +457,7 @@ async fn create_manifest<H: BuildHasher>(
 		let library_paths = if let Some(library_paths) = library_paths {
 			let result = futures::future::try_join_all(library_paths.into_iter().map(|id| async {
 				let symlink = tg::Symlink::with_id(id);
-				let data = symlink.data(tg, None).await?;
+				let data = symlink.data(tg).await?;
 				Ok::<_, tg::Error>(data)
 			}))
 			.await?;
@@ -657,7 +657,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		}
 	}
 	let directory = tg::Directory::new(entries);
-	let dir_id = directory.id(tg, None).await?;
+	let dir_id = directory.id(tg).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
 	return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;
@@ -724,7 +724,7 @@ async fn resolve_paths<H: BuildHasher + Default>(
 		futures::future::try_join_all(unresolved_paths.iter().map(|symlink_id| async {
 			let symlink = tg::Symlink::with_id(symlink_id.clone());
 			if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
-				let dir_id = directory.id(tg, None).await?;
+				let dir_id = directory.id(tg).await?;
 				Ok::<_, tg::Error>(Some(dir_id.clone()))
 			} else {
 				Ok(None)
@@ -745,7 +745,7 @@ async fn store_dirs_as_symlinks<H: BuildHasher + Default>(
 	let result = try_join_all(dirs.iter().map(|dir_id| async {
 		let directory = tg::Directory::with_id(dir_id.clone());
 		let symlink = tg::Symlink::new(Some(directory.into()), None);
-		let symlink_id = symlink.id(tg, None).await?;
+		let symlink_id = symlink.id(tg).await?;
 		Ok::<_, tg::Error>(symlink_id.clone())
 	}))
 	.await?
@@ -1056,7 +1056,7 @@ async fn unrender(tg: &impl tg::Handle, string: &str) -> tg::template::Data {
 		string,
 	)
 	.expect("Failed to unrender template")
-	.data(tg, None)
+	.data(tg)
 	.await
 	.expect("Failed to produce template data from template")
 }

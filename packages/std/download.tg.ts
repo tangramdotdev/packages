@@ -26,8 +26,7 @@ export let download_ = tg.target(async (arg: Arg) => {
 	} = arg;
 
 	// Perform the download.
-	let blob = await download.memoized.download(url, checksum);
-	// TODO - always do an unsafe download, then verify the checksum afterward, so the download itself is still a cache hit.
+	let blob = await tg.download(url, checksum);
 
 	// If there's nothing to unpack, return the blob.
 	if (!decompress_ && !extract_) {
@@ -169,12 +168,12 @@ export namespace download {
 
 		// Decompress if necessary.
 		if (decompress) {
-			blob = await download.memoized.decompress(blob, decompress);
+			blob = await tg.Blob.decompress(blob, decompress);
 		}
 
 		// Unpack if necessary.
 		if (extract) {
-			return download.memoized.extract(blob, extract);
+			return tg.Artifact.extract(blob, extract);
 		} else {
 			return tg.file(blob);
 		}
@@ -269,84 +268,4 @@ export namespace download {
 		);
 		return ret;
 	};
-
-	export namespace memoized {
-		/** Utiltity to memoize the result of the raw `tg.download` call. */
-		export let download = async (
-			url: string,
-			checksum: string,
-		): Promise<tg.Blob> => {
-			// Perform the unsafe download.
-			let target = await tg.target({
-				host: "js",
-				executable: tg.file(
-					`export default tg.target((...args) => tg.download(...args));`,
-				),
-				args: ["default", url, "unsafe"],
-				env: tg.current.env(),
-				lock: tg.lock(),
-			});
-			let blob = await target.output();
-			tg.assert(blob instanceof tg.Leaf || blob instanceof tg.Branch);
-
-			// Verify the checksum.
-			if (checksum === "unsafe") {
-				return blob;
-			}
-			let algorithm = checksum.split(":")[0];
-			let algorithms = ["blake3", "sha256", "sha512"];
-			tg.assert(
-				algorithm && algorithms.includes(algorithm),
-				`unsupported algorithm: ${algorithm}`,
-			);
-			let actual = await tg.Blob.checksum(
-				blob,
-				algorithm as tg.Checksum.Algorithm,
-			);
-			if (actual !== checksum) {
-				throw new Error(
-					`Checksum mismatch for download from ${url}. Expected ${checksum}, got ${actual}.`,
-				);
-			}
-			return blob;
-		};
-
-		/** Utiltity to memoize the result of the raw `tg.Blob.decompress` call. */
-		export let decompress = async (
-			blob: tg.Blob,
-			compressionFormat: tg.Blob.CompressionFormat,
-		): Promise<tg.Blob> => {
-			let target = await tg.target({
-				host: "js",
-				executable: tg.file(
-					`export default tg.target((...args) => tg.Blob.decompress(...args));`,
-				),
-				args: ["default", blob, compressionFormat],
-				env: tg.current.env(),
-				lock: tg.lock(),
-			});
-			let result = await target.output();
-			tg.assert(result instanceof tg.Leaf || result instanceof tg.Branch);
-			return result;
-		};
-
-		/** Utiltity to memoize the result of the raw `tg.Artifact.extract` call. */
-		export let extract = async (
-			blob: tg.Blob,
-			format: tg.Artifact.ArchiveFormat,
-		): Promise<tg.Artifact> => {
-			let target = await tg.target({
-				host: "js",
-				executable: tg.file(
-					`export default tg.target((...args) => tg.Artifact.extract(...args));`,
-				),
-				args: ["default", blob, format],
-				env: tg.current.env(),
-				lock: tg.lock(),
-			});
-			let result = await target.output();
-			tg.Artifact.assert(result);
-			return result;
-		};
-	}
 }

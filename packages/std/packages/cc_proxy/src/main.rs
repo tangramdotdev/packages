@@ -313,12 +313,14 @@ async fn main_inner() -> tg::Result<()> {
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
-	let executable = tg::File::with_object(tg::file::Object {
-		contents,
-		executable: true,
-		references: Vec::new(),
-	})
-	.into();
+	let executable = Some(
+		tg::File::with_object(tg::file::Object {
+			contents,
+			executable: true,
+			references: Vec::new(),
+		})
+		.into(),
+	);
 
 	// Create the remapping table.
 	let remappings = create_remapping_table(tg, remap_targets).await?;
@@ -354,10 +356,10 @@ async fn main_inner() -> tg::Result<()> {
 	});
 
 	// Create a build.
-	let id = target.id(tg, None).await?;
+	let id = target.id(tg).await?;
 	let build_arg = tg::target::build::Arg {
 		parent: None,
-		remote: false,
+		remote: None,
 		retry: tg::build::Retry::Canceled,
 	};
 	let build_output = tg.build_target(&id, build_arg).await?;
@@ -414,7 +416,7 @@ async fn main_inner() -> tg::Result<()> {
 	}
 	let artifact_path = tangram_path
 		.join(".tangram/artifacts")
-		.join(output_file.id(tg, None).await?.to_string());
+		.join(output_file.id(tg).await?.to_string());
 	eprintln!("Copying {artifact_path:#?} to {output:#?}");
 	std::fs::copy(artifact_path, output)
 		.map_err(|error| tg::error!(source = error, "failed to copy file"))?;
