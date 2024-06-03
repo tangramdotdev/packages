@@ -27,8 +27,10 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	});
 	let majorMinor = version.split(".").slice(0, 2).join(".");
 	let url = `https://download.gnome.org/sources/${name}/${majorMinor}/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(outer);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {
@@ -50,7 +52,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let libxml2 = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -82,14 +84,14 @@ export let libxml2 = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let deps = [
-		icu.icu(icuArg),
-		ncurses.ncurses(ncursesArg),
-		perl.perl(perlArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
-		python.python(pythonArg),
-		readline.readline(readlineArg),
-		xz.xz(xzArg),
-		zlib.zlib(zlibArg),
+		icu.build(icuArg),
+		ncurses.build(ncursesArg),
+		perl.build(perlArg),
+		pkgconfig.build(pkgconfigArg),
+		python.toolchain(pythonArg),
+		readline.build(readlineArg),
+		xz.build(xzArg),
+		zlib.build(zlibArg),
 	];
 	let env = [...deps, env_];
 
@@ -105,11 +107,9 @@ export let libxml2 = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default libxml2;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: libxml2,
+		buildFunction: build,
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],
 	});

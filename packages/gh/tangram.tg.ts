@@ -28,7 +28,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let gh = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let { go: goArg = [], build, host, source: source_, ...rest } = arg ?? {};
 	return go.build(
 		{
@@ -45,11 +45,9 @@ export let gh = tg.target(async (arg?: Arg) => {
 	);
 });
 
-export default gh;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await gh(),
+		directory: await build(),
 		binaries: [
 			{ name: "gh", testPredicate: (stdout) => stdout.includes(metadata.name) },
 		],

@@ -38,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let openssl = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -71,7 +71,7 @@ export let openssl = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { prepare, configure, install };
 
-	let env = std.env.arg(perl.perl(perlArg), env_);
+	let env = std.env.arg(perl.build(perlArg), env_);
 
 	let openssl = await std.autotools.build(
 		{
@@ -96,8 +96,6 @@ export let openssl = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default openssl;
-
 export let test = tg.target(async () => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
@@ -115,6 +113,6 @@ export let test = tg.target(async () => {
 			echo "Checking if we can link against libssl."
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto
 		`,
-		{ env: std.env.arg(std.sdk(sdkArg), openssl({ sdk: sdkArg })) },
+		{ env: std.env.arg(std.sdk(sdkArg), build({ sdk: sdkArg })) },
 	);
 });

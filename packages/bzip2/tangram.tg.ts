@@ -34,7 +34,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let bzip2 = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -115,13 +115,11 @@ export let bzip2 = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default bzip2;
-
 export let test = tg.target(async () => {
 	let host = await std.triple.host();
 	let os = std.triple.os(host);
 	await std.assert.pkg({
-		buildFunction: bzip2,
+		buildFunction: build,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
 		libraries:
 			os === "darwin"

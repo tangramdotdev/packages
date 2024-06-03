@@ -34,7 +34,7 @@ type Arg = {
 	host?: string;
 };
 
-export let hyperfine = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build,
 		env,
@@ -55,12 +55,10 @@ export let hyperfine = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default hyperfine;
-
 export let test = tg.target(async () => {
-	let artifact = hyperfine();
+	let artifact = build();
 	await std.assert.pkg({
-		buildFunction: hyperfine,
+		buildFunction: build,
 		binaries: ["hyperfine"],
 		metadata,
 	});

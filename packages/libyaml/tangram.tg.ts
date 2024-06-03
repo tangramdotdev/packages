@@ -24,7 +24,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let libyaml = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -45,8 +45,6 @@ export let libyaml = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default libyaml;
-
 export let test = tg.target(async () => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
@@ -60,6 +58,6 @@ export let test = tg.target(async () => {
 			echo "Checking if we can link against libyaml."
 			cc ${source}/main.c -o $OUTPUT -lyaml
 		`,
-		{ env: std.env.arg(std.sdk(), libyaml()) },
+		{ env: std.env.arg(std.sdk(), build()) },
 	);
 });

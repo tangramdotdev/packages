@@ -38,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let libseccomp = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -53,7 +53,7 @@ export let libseccomp = tg.target(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = std.env.arg(gperf.gperf(gperfArg), env_);
+	let env = std.env.arg(gperf.build(gperfArg), env_);
 
 	return std.autotools.build(
 		{
@@ -67,11 +67,9 @@ export let libseccomp = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default libseccomp;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: libseccomp,
+		buildFunction: build,
 		libraries: ["seccomp"],
 	});
 	return true;

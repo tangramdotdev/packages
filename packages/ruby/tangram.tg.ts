@@ -1,11 +1,11 @@
 import * as std from "tg:std" with { path: "../std" };
 
-import libffi from "tg:libffi" with { path: "../libffi" };
-import libyaml from "tg:libyaml" with { path: "../libyaml" };
-import ncurses from "tg:ncurses" with { path: "../ncurses" };
-import openssl from "tg:openssl" with { path: "../openssl" };
-import readline from "tg:readline" with { path: "../readline" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as libffi from "tg:libffi" with { path: "../libffi" };
+import * as libyaml from "tg:libyaml" with { path: "../libyaml" };
+import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
+import * as readline from "tg:readline" with { path: "../readline" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
 
@@ -40,7 +40,7 @@ type Arg = {
 	host?: string;
 };
 
-export let ruby = tg.target(async (...args: std.Args<Arg>) => {
+export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	let mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "phases">
@@ -74,12 +74,12 @@ export let ruby = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let env_ = [
-		libffi({ host }),
-		libyaml({ host }),
-		ncurses({ host }),
-		openssl({ host }),
-		readline({ host }),
-		zlib({ host }),
+		libffi.build({ host }),
+		libyaml.build({ host }),
+		ncurses.build({ host }),
+		openssl.build({ host }),
+		readline.build({ host }),
+		zlib.build({ host }),
 		bootstrap.ruby(host),
 		envs,
 	];
@@ -263,8 +263,6 @@ let bundledGems = (): Promise<tg.Directory> => {
 	return tg.directory(...args.map(downloadGem));
 };
 
-export default ruby;
-
 export let test = tg.target(() => {
 	return std.build(
 		tg`
@@ -272,6 +270,6 @@ export let test = tg.target(() => {
 			ruby -e 'puts "Hello, tangram!"'
 			gem --version
 		`,
-		{ env: ruby() },
+		{ env: toolchain() },
 	);
 });

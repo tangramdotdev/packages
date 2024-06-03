@@ -33,7 +33,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let b3sum = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build,
 		host,
@@ -56,13 +56,11 @@ export let b3sum = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default b3sum;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: b3sum,
+		buildFunction: build,
 		binaries: ["b3sum"],
 		metadata,
 	});
-	return b3sum();
+	return build();
 });

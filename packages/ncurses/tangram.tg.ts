@@ -23,7 +23,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let ncurses = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -106,12 +106,10 @@ export let ncurses = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
-export default ncurses;
-
 export let test = tg.target(async () => {
-	let artifact = ncurses();
+	let artifact = build();
 	await std.assert.pkg({
-		buildFunction: ncurses,
+		buildFunction: build,
 		metadata,
 	});
 	return artifact;

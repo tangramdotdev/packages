@@ -47,7 +47,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let sqlite = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -67,10 +67,10 @@ export let sqlite = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let dependencies = [
-		ncurses.ncurses(ncursesArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
-		readline.readline(readlineArg),
-		zlib.zlib(zlibArg),
+		ncurses.build(ncursesArg),
+		pkgconfig.build(pkgconfigArg),
+		readline.build(readlineArg),
+		zlib.build(zlibArg),
 	];
 	let env = [...dependencies, env_];
 
@@ -85,11 +85,9 @@ export let sqlite = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default sqlite;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: sqlite,
+		buildFunction: build,
 		binaries: ["sqlite3"],
 		libraries: ["sqlite3"],
 		metadata,

@@ -26,7 +26,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let diffutils = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -46,8 +46,6 @@ export let diffutils = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default diffutils;
-
 export let test = tg.target(() => {
 	return std.build(
 		`
@@ -56,6 +54,6 @@ export let test = tg.target(() => {
 			diff3 --version | tee -a $OUTPUT
 			cmp --version | tee -a $OUTPUT
 		`,
-		{ env: diffutils() },
+		{ env: build() },
 	);
 });

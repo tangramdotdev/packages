@@ -1,6 +1,6 @@
 import * as std from "tg:std" with { path: "../std" };
 
-import { build, rust } from "./tangram.tg.ts";
+import { build, toolchain } from "./tangram.tg.ts";
 
 import cargoToml from "./Cargo.toml" with { type: "file" };
 import cargoLock from "./Cargo.lock" with { type: "file" };
@@ -28,6 +28,6 @@ export let test = tg.target(async () => {
 		touch $OUTPUT
 		tangram_rustc rustc - --version
 	`,
-		{ env: std.env.arg(proxy(), rust()) },
+		{ env: std.env.arg(proxy(), toolchain()) },
 	);
 });

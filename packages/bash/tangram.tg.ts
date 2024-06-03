@@ -51,7 +51,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let bash = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -75,9 +75,9 @@ export let bash = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure };
 
 	let dependencies = [
-		gettext.gettext(gettextArg),
-		ncurses.ncurses(ncursesArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
+		gettext.build(gettextArg),
+		ncurses.build(ncursesArg),
+		pkgconfig.build(pkgconfigArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 
@@ -93,8 +93,6 @@ export let bash = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default bash;
-
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
 export let wrapScript = async (script: tg.File) => {
 	let scriptMetadata = await std.file.executableMetadata(script);
@@ -104,13 +102,13 @@ export let wrapScript = async (script: tg.File) => {
 	) {
 		throw new Error("Expected a shebang sh or bash script");
 	}
-	let interpreter = tg.File.expect(await (await bash()).get("bin/bash"));
+	let interpreter = tg.File.expect(await (await build()).get("bin/bash"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: bash,
+		buildFunction: build,
 		binaries: ["bash"],
 		metadata,
 	});

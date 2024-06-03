@@ -34,7 +34,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let libffi = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -62,11 +62,9 @@ export let libffi = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default libffi;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: libffi,
+		buildFunction: build,
 		libraries: ["ffi"],
 	});
 	return true;

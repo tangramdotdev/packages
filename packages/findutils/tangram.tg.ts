@@ -21,7 +21,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let findutils = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -42,8 +42,6 @@ export let findutils = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default findutils;
-
 export let test = tg.target(() => {
 	return std.build(
 		`
@@ -53,6 +51,6 @@ export let test = tg.target(() => {
 			updatedb --version | tee -a $OUTPUT
 			xargs --version | tee -a $OUTPUT
 		`,
-		{ env: findutils() },
+		{ env: build() },
 	);
 });

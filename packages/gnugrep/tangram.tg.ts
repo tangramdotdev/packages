@@ -21,7 +21,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let gnugrep = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -48,12 +48,10 @@ export let gnugrep = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default gnugrep;
-
 export let test = tg.target(async () => {
 	await std.build(tg`
 		echo "Checking that we can run grep." | tee $OUTPUT
-		${gnugrep()}/bin/grep --version | tee -a $OUTPUT
+		${build()}/bin/grep --version | tee -a $OUTPUT
 	`);
 	return true;
 });

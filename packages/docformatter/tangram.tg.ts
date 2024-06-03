@@ -30,7 +30,7 @@ type Arg = {
 	target?: string;
 };
 
-export let docformatter = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	return poetry.build({
 		source: arg?.source ?? source(),
 		lockfile: poetryLock,
@@ -39,11 +39,9 @@ export let docformatter = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default docformatter;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: docformatter,
+		buildFunction: build,
 		binaries: ["docformatter"],
 		metadata,
 	});

@@ -25,7 +25,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let nettle = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -59,8 +59,6 @@ export let nettle = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default nettle;
-
 export let test = tg.target(() => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
@@ -74,6 +72,6 @@ export let test = tg.target(() => {
 			echo "Checking if we can link against nettle and hogweed."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp
 		`,
-		{ env: std.env.arg(std.sdk(), nettle(), gmp.gmp()) },
+		{ env: std.env.arg(std.sdk(), build(), gmp.build()) },
 	);
 });

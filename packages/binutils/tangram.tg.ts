@@ -48,7 +48,7 @@ type Arg = {
 	target?: string;
 };
 
-export let binutils = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -97,7 +97,7 @@ export let binutils = tg.target(async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	let deps = [texinfo.texinfo(texinfoArg)];
+	let deps = [texinfo.build(texinfoArg)];
 	let env = [...deps, additionalEnv, env_];
 
 	// Collect configuration.
@@ -131,8 +131,6 @@ export let binutils = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default binutils;
-
 export let test = tg.target(async () => {
 	let binaries = [
 		"ar",
@@ -146,7 +144,7 @@ export let test = tg.target(async () => {
 	];
 
 	await std.assert.pkg({
-		buildFunction: binutils,
+		buildFunction: build,
 		binaries,
 		metadata,
 	});

@@ -34,7 +34,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let zsh = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -57,7 +57,7 @@ export let zsh = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [pcre2.pcre2(pcre2Arg), ncurses.ncurses(ncursesArg)];
+	let dependencies = [pcre2.build(pcre2Arg), ncurses.build(ncursesArg)];
 	let env = std.env.arg(
 		...dependencies,
 		{
@@ -79,8 +79,6 @@ export let zsh = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default zsh;
-
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
 export let wrapScript = async (script: tg.File) => {
 	let scriptMetadata = await std.file.executableMetadata(script);
@@ -96,7 +94,7 @@ export let wrapScript = async (script: tg.File) => {
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: zsh,
+		buildFunction: build,
 		binaries: ["zsh"],
 		metadata,
 	});

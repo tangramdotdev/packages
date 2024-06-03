@@ -36,7 +36,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let fftw = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -87,12 +87,10 @@ export let fftw = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default fftw;
-
 export let test = tg.target(async () => {
-	let artifact = fftw();
+	let artifact = build();
 	await std.assert.pkg({
-		buildFunction: fftw,
+		buildFunction: build,
 		binaries: ["fftw-wisdom", "fftw-wisdom-to-conf"],
 		libraries: ["fftw3"],
 	});

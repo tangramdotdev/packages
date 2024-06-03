@@ -46,7 +46,7 @@ export let source = tg.target(async (os: string) => {
 type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies: {
+	dependencies?: {
 		icu: icu.Arg;
 		lz4: lz4.Arg;
 		ncurses: ncurses.Arg;
@@ -63,7 +63,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let postgresql = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -88,19 +88,19 @@ export let postgresql = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
-	let icuArtifact = icu.icu(icuArg);
-	let lz4Artifact = lz4.lz4(lz4Arg);
-	let ncursesArtifact = ncurses.ncurses(ncursesArg);
-	let readlineArtifact = readline.readline(readlineArg);
-	let zlibArtifact = zlib.zlib(zlibArg);
-	let zstdArtifact = zstd.zstd(zstdArg);
-	let env: tg.Unresolved<Array<std.env.Arg>> = [
+	let icuArtifact = icu.build(icuArg);
+	let lz4Artifact = lz4.build(lz4Arg);
+	let ncursesArtifact = ncurses.build(ncursesArg);
+	let readlineArtifact = readline.build(readlineArg);
+	let zlibArtifact = zlib.build(zlibArg);
+	let zstdArtifact = zstd.build(zstdArg);
+	let env = [
 		icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
-		openssl.openssl(opensslArg),
-		perl.perl(perlArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
+		openssl.build(opensslArg),
+		perl.build(perlArg),
+		pkgconfig.build(pkgconfigArg),
 		readlineArtifact,
 		zlibArtifact,
 		zstdArtifact,
@@ -164,12 +164,10 @@ export let postgresql = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default postgresql;
-
 export let test = tg.target(async () => {
-	let artifact = postgresql();
+	let artifact = build();
 	await std.assert.pkg({
-		buildFunction: postgresql,
+		buildFunction: build,
 		binaries: ["psql"],
 		libraries: ["pq"],
 		metadata,

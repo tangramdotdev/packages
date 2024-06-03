@@ -44,7 +44,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let curl = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -65,12 +65,12 @@ export let curl = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let openSslDir = await openssl.openssl(opensslArg);
-	let zlibDir = await zlib.zlib(zlibArg);
+	let openSslDir = await openssl.build(opensslArg);
+	let zlibDir = await zlib.build(zlibArg);
 
 	let env = [
-		perl.perl(perlArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
+		perl.build(perlArg),
+		pkgconfig.build(pkgconfigArg),
 		openSslDir,
 		zlibDir,
 		env_,
@@ -104,11 +104,9 @@ export let curl = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default curl;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: curl,
+		buildFunction: build,
 		binaries: ["curl"],
 		metadata,
 	});

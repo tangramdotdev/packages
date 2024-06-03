@@ -66,8 +66,8 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	let sourceDir = source_ ?? source();
 
-	let opensslDir = openssl.openssl(opensslArg);
-	let zlibDir = zlib.zlib(zlibArg);
+	let opensslDir = openssl.build(opensslArg);
+	let zlibDir = zlib.build(zlibArg);
 
 	let configure = {
 		command: `./bootstrap`,
@@ -85,7 +85,7 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	let deps = [
 		curl.curl(curlArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
+		pkgconfig.build(pkgconfigArg),
 		opensslDir,
 		zlibDir,
 	];

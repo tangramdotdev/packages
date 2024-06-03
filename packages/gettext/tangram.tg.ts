@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let gettext = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -75,20 +75,20 @@ export let gettext = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let ncursesArtifact = await ncurses.ncurses(ncursesArg);
+	let ncursesArtifact = await ncurses.build(ncursesArg);
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
 		ncursesArtifact,
-		perl.perl(perlArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
+		perl.build(perlArg),
+		pkgconfig.build(pkgconfigArg),
 	];
 	let aclArtifact = undefined;
 	let attrArtifact = undefined;
 
-	let libiconvArtifact = await libiconv.libiconv(libiconvArg);
+	let libiconvArtifact = await libiconv.build(libiconvArg);
 	dependencies.push(libiconvArtifact);
 	if (os === "linux") {
-		aclArtifact = await acl.acl(aclArg);
-		attrArtifact = await attr.attr(attrArg);
+		aclArtifact = await acl.build(aclArg);
+		attrArtifact = await attr.build(attrArg);
 		dependencies.push(aclArtifact);
 		dependencies.push(attrArtifact);
 	}
@@ -133,11 +133,9 @@ export let gettext = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default gettext;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: gettext,
+		buildFunction: build,
 		binaries: ["msgfmt", "msgmerge", "xgettext"],
 		metadata,
 	});

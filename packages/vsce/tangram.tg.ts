@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let vsce = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let { nodejs = [], source: source_, ...rest } = arg ?? {};
 
 	return node.build(
@@ -44,14 +44,12 @@ export let vsce = tg.target(async (arg?: Arg) => {
 	);
 });
 
-export default vsce;
-
 export let test = tg.target(() => {
 	return std.build(
 		`
 			echo "Checking that we can run vsce." | tee $OUTPUT
 			vsce --version | tee -a $OUTPUT
 		`,
-		{ env: vsce() },
+		{ env: build() },
 	);
 });

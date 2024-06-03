@@ -1,6 +1,6 @@
-import openssl from "tg:openssl" with { path: "../openssl" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
@@ -18,7 +18,7 @@ type ToolchainArg = {
 	targets?: Array<string>;
 };
 
-export let rust = tg.target(async (arg?: ToolchainArg) => {
+export let toolchain = tg.target(async (arg?: ToolchainArg) => {
 	// Determine the list of target triples to support other than the inferred host.
 	let detectedHost = await std.triple.host();
 	let host = rustTriple(detectedHost);
@@ -117,7 +117,7 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 
 	let artifact = tg.directory();
 
-	let zlibArtifact = await zlib({ host });
+	let zlibArtifact = await zlib.build({ host });
 
 	for (let executable of executables) {
 		let wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
@@ -134,8 +134,6 @@ export let rust = tg.target(async (arg?: ToolchainArg) => {
 
 	return artifact;
 });
-
-export default rust;
 
 export type Arg = {
 	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
@@ -160,7 +158,7 @@ export type Arg = {
 	proxy?: boolean;
 
 	/** SDK configuration to use during the build. */
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 
 	/** Source directory containing the Cargo.toml. */
 	source?: tg.Artifact;
@@ -217,20 +215,15 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Obtain handles to the SDK and Rust artifacts.
 	// NOTE - pulls an SDK assuming the selected target is the intended host. Forces GCC on Linux, as rustc expects libgcc_s.
-	let sdkArgs: Array<std.sdk.Arg> = [{ host, target }, ...(sdk_ ?? [])];
+	let sdkArgs: Array<std.sdk.Arg> = [{ host, target }];
 	if (
 		os === "linux" &&
-		sdkArgs.filter(
-			(arg) =>
-				arg !== undefined &&
-				typeof arg === "object" &&
-				arg?.toolchain === "llvm",
-		).length > 0
+		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
 	) {
 		sdkArgs.push({ toolchain: "gcc" });
 	}
 	let sdk = std.sdk(...sdkArgs);
-	let rustArtifact = rust({ target });
+	let rustArtifact = toolchain({ target });
 
 	// Download the dependencies using the cargo vendor.
 	tg.assert(source, "Must provide a source directory.");
@@ -365,7 +358,7 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 			cd "$OUTPUT"
 			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml tg_vendor_dir > "$OUTPUT/config"
 		`;
-		let rustArtifact = rust();
+		let rustArtifact = toolchain();
 		let sdk = std.sdk();
 		let result = await std.build(vendorScript, {
 			checksum: "unsafe",
@@ -566,7 +559,7 @@ export let test = tg.target(async () => {
 });
 
 export let testHost = tg.target(async () => {
-	let rustArtifact = await rust();
+	let rustArtifact = await toolchain();
 
 	let script = tg`
 		${rustArtifact}/bin/rustc --version
@@ -591,7 +584,7 @@ export let testCross = tg.target(async () => {
 		environment: "gnu",
 	});
 
-	let crossRust = await rust({ targets: [target] });
+	let crossRust = await toolchain({ targets: [target] });
 
 	let script = tg`
 		${crossRust}/bin/rustc --version
@@ -613,7 +606,7 @@ export let testProxy = tg.target(async () => {
 
 	let helloOpenssl = build({
 		source: tests.get("hello-openssl"),
-		env: std.env.arg(await openssl(), await build()),
+		env: std.env.arg(await openssl.build(), await toolchain()),
 		proxy: true,
 	});
 
@@ -636,7 +629,7 @@ export let testVendorDependencies = tg.target(async () => {
 		SOURCE="$(realpath ${sourceDirectory})"
 		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
 	`;
-	let rustArtifact = rust();
+	let rustArtifact = toolchain();
 	let sdk = std.sdk();
 	let executable = std.wrap(vendorScript, {
 		env: std.env(sdk, {

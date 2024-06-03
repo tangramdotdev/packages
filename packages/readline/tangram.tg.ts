@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let readline = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -48,8 +48,8 @@ export let readline = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let env = std.env.arg(
-		ncurses.ncurses(ncursesArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
+		ncurses.build(ncursesArg),
+		pkgconfig.build(pkgconfigArg),
 		env_,
 	);
 
@@ -74,12 +74,10 @@ export let readline = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default readline;
-
 export let test = tg.target(async () => {
-	let artifact = readline();
+	let artifact = build();
 	await std.assert.pkg({
-		buildFunction: readline,
+		buildFunction: build,
 		metadata,
 	});
 	return artifact;

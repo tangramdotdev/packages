@@ -43,7 +43,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let elfutils = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -85,12 +85,12 @@ export let elfutils = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure };
 
 	let env = [
-		bzip2.bzip2(bzip2Arg),
-		libarchive.libarchive(libarchiveArg),
-		m4.m4(m4Arg),
-		openssl.openssl(opensslArg),
-		xz.xz(xzArg),
-		zlib.zlib(zlibArg),
+		bzip2.build(bzip2Arg),
+		libarchive.build(libarchiveArg),
+		m4.build(m4Arg),
+		openssl.build(opensslArg),
+		xz.build(xzArg),
+		zlib.build(zlibArg),
 		{
 			CFLAGS: tg.Mutation.suffix(
 				"-Wno-format-nonliteral -lz -lbz2 -llzma",
@@ -113,5 +113,3 @@ export let elfutils = tg.target(async (...args: std.Args<Arg>) => {
 
 	return result;
 });
-
-export default elfutils;

@@ -98,7 +98,7 @@ export type Arg = {
 };
 
 /** Build and create a python environment. */
-export let python = tg.target(async (...args: std.Args<Arg>) => {
+export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -127,17 +127,17 @@ export let python = tg.target(async (...args: std.Args<Arg>) => {
 	let os = std.triple.os(host);
 
 	let dependencies = [
-		bison.bison(bisonArg),
-		bzip2.bzip2(bzip2Arg),
-		libffi.libffi(libffiArg),
-		libxcrypt.libxcrypt(libxcryptArg),
-		m4.m4(m4Arg),
-		ncurses.ncurses(ncursesArg),
-		openssl.openssl(opensslArg),
-		pkgconfig.pkgconfig(pkgconfigArg),
-		readline.readline(readlineArg),
-		sqlite.sqlite(sqliteArg),
-		zlib.zlib(zlibArg),
+		bison.build(bisonArg),
+		bzip2.build(bzip2Arg),
+		libffi.build(libffiArg),
+		libxcrypt.build(libxcryptArg),
+		m4.build(m4Arg),
+		ncurses.build(ncursesArg),
+		openssl.build(opensslArg),
+		pkgconfig.build(pkgconfigArg),
+		readline.build(readlineArg),
+		sqlite.build(sqliteArg),
+		zlib.build(zlibArg),
 	];
 	let env = [
 		...dependencies,
@@ -215,8 +215,6 @@ export let python = tg.target(async (...args: std.Args<Arg>) => {
 
 	return python;
 });
-
-export default python;
 
 /** Internal: wrap a directory containing a /bin subdirectory with python scripts. */
 export let wrapScripts = async (
@@ -313,7 +311,7 @@ export let build = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// Construct the python environment.
 	let pythonArtifact = await tg.directory(
-		python({ ...pythonArg, build: buildTriple, host }),
+		toolchain({ ...pythonArg, build: buildTriple, host }),
 		{
 			["lib/python3/site-packages"]: {
 				[name]: tg.symlink(tg`${source}/${name}`),
@@ -425,6 +423,6 @@ export let test = tg.target(async () => {
 				echo "Checking that we can create virtual envs."
 				python -m venv $OUTPUT || true
 			`,
-		{ env: python() },
+		{ env: toolchain() },
 	);
 });

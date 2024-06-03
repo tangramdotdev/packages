@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let texinfo = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -64,13 +64,13 @@ export let texinfo = tg.target(async (...args: std.Args<Arg>) => {
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
-	let perlArtifact = await perl.perl(perlArg);
+	let perlArtifact = await perl.build(perlArg);
 	let dependencies = [
-		bison.bison(bisonArg),
-		m4.m4(m4Arg),
-		ncurses.ncurses(ncursesArg),
+		bison.build(bisonArg),
+		m4.build(m4Arg),
+		ncurses.build(ncursesArg),
 		perlArtifact,
-		zlib.zlib(zlibArg),
+		zlib.build(zlibArg),
 	];
 	let env = [...dependencies, env_];
 
@@ -124,8 +124,6 @@ export let texinfo = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default texinfo;
-
 export let test = tg.target(() => {
 	return tg.build(
 		tg`
@@ -140,7 +138,7 @@ export let test = tg.target(() => {
 				texindex --version
 			`,
 		{
-			env: std.env.arg(texinfo()),
+			env: std.env.arg(build()),
 		},
 	);
 });

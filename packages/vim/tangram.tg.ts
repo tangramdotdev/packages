@@ -38,7 +38,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let vim = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -49,7 +49,7 @@ export let vim = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let dependencies = [ncurses.ncurses(ncursesArg)];
+	let dependencies = [ncurses.build(ncursesArg)];
 	let env = [...dependencies, env_];
 
 	let output = await std.autotools.build(
@@ -66,11 +66,9 @@ export let vim = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default vim;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: vim,
+		buildFunction: build,
 		binaries: ["vim"],
 		metadata,
 	});

@@ -39,7 +39,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let coreutils = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -55,9 +55,9 @@ export let coreutils = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let dependencies = [
-		acl.acl(aclArg),
-		attr.attr(attrArg),
-		libcap.libcap(libcapArg),
+		acl.build(aclArg),
+		attr.build(attrArg),
+		libcap.build(libcapArg),
 	];
 	let env = [...dependencies, env_];
 
@@ -72,11 +72,9 @@ export let coreutils = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default coreutils;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: coreutils,
+		buildFunction: build,
 		binaries: [
 			"cp",
 			"ls",

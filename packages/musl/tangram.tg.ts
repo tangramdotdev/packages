@@ -40,7 +40,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let musl = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -92,7 +92,7 @@ export let musl = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases,
 			prefixPath: "/",
 			source: source_ ?? source(),
@@ -107,8 +107,6 @@ export let musl = tg.target(async (arg?: Arg) => {
 
 	return result;
 });
-
-export default musl;
 
 export let interpreterName = (triple: string) => {
 	let arch = std.triple.arch(triple);

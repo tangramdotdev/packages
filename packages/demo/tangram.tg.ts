@@ -1,6 +1,6 @@
-import nodejs from "tg:nodejs" with { path: "../nodejs" };
-import postgresql from "tg:postgresql" with { path: "../postgresql" };
-import ripgrep from "tg:ripgrep" with { path: "../ripgrep" };
+import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
+import * as postgresql from "tg:postgresql" with { path: "../postgresql" };
+import * as ripgrep from "tg:ripgrep" with { path: "../ripgrep" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -26,7 +26,7 @@ export let executable = tg.target((arg?: Arg) =>
 
 let packages = (arg?: Arg) => {
 	let arg_ = arg ?? {};
-	return [nodejs(arg_), postgresql(arg_), ripgrep(arg_)];
+	return [nodejs.toolchain(arg_), postgresql.build(arg_), ripgrep.build(arg_)];
 };
 
 export let script = `

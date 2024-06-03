@@ -45,7 +45,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let automake = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -64,7 +64,7 @@ export let automake = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let perlArtifact = await perl.perl(perlArg);
+	let perlArtifact = await perl.build(perlArg);
 
 	let perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
@@ -75,13 +75,13 @@ export let automake = tg.target(async (...args: std.Args<Arg>) => {
 	let version = "1.16";
 	let binDirectory = tg.directory({});
 	let dependencies = [
-		autoconf.autoconf(autoconfArg),
-		bison.bison(bisonArg),
-		help2man.help2man(help2manArg),
-		m4.m4(m4Arg),
-		pkgconfig.pkgconfig(pkgconfigArg),
+		autoconf.build(autoconfArg),
+		bison.build(bisonArg),
+		help2man.build(help2manArg),
+		m4.build(m4Arg),
+		pkgconfig.build(pkgconfigArg),
 		perlArtifact,
-		zlib.zlib(zlibArg),
+		zlib.build(zlibArg),
 	];
 
 	let env = std.env.arg(env_, ...dependencies);
@@ -142,11 +142,9 @@ export let automake = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default automake;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: automake,
+		buildFunction: build,
 		binaries: ["automake"],
 		metadata,
 	});

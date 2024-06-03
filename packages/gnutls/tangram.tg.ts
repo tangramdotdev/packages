@@ -23,7 +23,7 @@ export let source = tg.target(async () => {
 	return std.directory.unwrap(download);
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
@@ -37,7 +37,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let gnutls = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -53,9 +53,9 @@ export let gnutls = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let env = [
-		gmp.gmp(gmpArg),
-		nettle.nettle(nettleArg),
-		zlib.zlib(zlibArg),
+		gmp.build(gmpArg),
+		nettle.build(nettleArg),
+		zlib.build(zlibArg),
 		env_,
 	];
 
@@ -82,8 +82,6 @@ export let gnutls = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default gnutls;
-
 export let test = tg.target(() => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
@@ -100,10 +98,10 @@ export let test = tg.target(() => {
 		{
 			env: std.env.arg(
 				std.sdk(),
-				gnutls(),
+				build(),
 				nettle.nettle(),
 				gmp.gmp(),
-				zlib.zlib(),
+				zlib.build(),
 			),
 		},
 	);

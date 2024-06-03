@@ -29,7 +29,7 @@ type Arg = {
 	target?: string;
 };
 
-export let isort = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let sourceArtifact = arg?.source ?? (await source());
 	let lockfile = tg.File.expect(await sourceArtifact.get("poetry.lock"));
 
@@ -41,11 +41,9 @@ export let isort = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default isort;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await isort(),
+		buildFunction: build,
 		binaries: ["isort"],
 		metadata,
 	});

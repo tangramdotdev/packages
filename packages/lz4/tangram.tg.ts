@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let lz4 = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -66,12 +66,10 @@ export let lz4 = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default lz4;
-
 export let test = tg.target(async () => {
-	let artifact = lz4();
+	let artifact = build();
 	await std.assert.pkg({
-		buildFunction: lz4,
+		buildFunction: build,
 		binaries: ["lz4"],
 		libraries: ["lz4"],
 	});

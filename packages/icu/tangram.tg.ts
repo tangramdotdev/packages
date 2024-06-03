@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let icu = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -52,7 +52,7 @@ export let icu = tg.target(async (...args: std.Args<Arg>) => {
 
 	let sourceDir = source_ ?? source();
 
-	let dependencies = [python.python(pythonArg)];
+	let dependencies = [python.toolchain(pythonArg)];
 	let env = [...dependencies, env_];
 
 	// On Linux with LLVM, use the filter option to prevent dropping libm.so.1 from the proxied library paths.
@@ -100,11 +100,9 @@ export let icu = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default icu;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: icu,
+		buildFunction: build,
 		binaries: [
 			"derb",
 			"genbrk",

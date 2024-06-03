@@ -40,7 +40,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let git = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -70,9 +70,9 @@ export let git = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let env = std.env.arg(
-		gettext.gettext(gettextArg),
-		openssl.openssl(opensslArg),
-		zlib.zlib(zlibArg),
+		gettext.build(gettextArg),
+		openssl.build(opensslArg),
+		zlib.build(zlibArg),
 		env_,
 	);
 
@@ -88,11 +88,9 @@ export let git = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default git;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: git,
+		buildFunction: build,
 		binaries: ["git"],
 		metadata,
 	});

@@ -30,12 +30,12 @@ export let source = tg.target(() => {
 type Arg = {
 	build?: string;
 	env?: std.env.Arg;
-	python?: tg.MaybeNestedArray<python.Arg>;
+	python?: python.Arg;
 	host?: string;
 	source?: tg.Directory;
 };
 
-export let sphinx = tg.target((arg?: Arg) => {
+export let build = tg.target((arg?: Arg) => {
 	let sourceArtifact = arg?.source ?? source();
 
 	let pythonEnv = python.build(
@@ -66,13 +66,11 @@ export let sphinx = tg.target((arg?: Arg) => {
 	});
 });
 
-export default sphinx;
-
 export let test = tg.target(() => {
 	return std.build(
 		tg`
 				sphinx --help
 			`,
-		{ env: sphinx() },
+		{ env: build() },
 	);
 });

@@ -41,7 +41,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let libarchive = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -71,11 +71,11 @@ export let libarchive = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure };
 
 	let env = std.env.arg(
-		bzip2.bzip2(bzip2Arg),
-		libiconv.libiconv(libiconvArg),
-		openssl.openssl(opensslArg),
-		xz.xz(xzArg),
-		zlib.zlib(zlibArg),
+		bzip2.build(bzip2Arg),
+		libiconv.build(libiconvArg),
+		openssl.build(opensslArg),
+		xz.build(xzArg),
+		zlib.build(zlibArg),
 		env_,
 	);
 
@@ -90,8 +90,6 @@ export let libarchive = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 });
-
-export default libarchive;
 
 export let test = tg.target(async () => {
 	let source = tg.directory({
@@ -109,12 +107,12 @@ export let test = tg.target(async () => {
 		{
 			env: std.env.arg(
 				std.sdk(),
-				bzip2.bzip2(),
-				libiconv.libiconv(),
-				openssl.openssl(),
+				bzip2.build(),
+				libiconv.build(),
+				openssl.build(),
 				libarchive(),
 				xz.xz(),
-				zlib.zlib(),
+				zlib.build(),
 			),
 		},
 	);

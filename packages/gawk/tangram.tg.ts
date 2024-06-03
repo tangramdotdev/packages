@@ -24,7 +24,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let gawk = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -45,14 +45,12 @@ export let gawk = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default gawk;
-
 export let test = tg.target(() => {
 	return std.build(
 		tg`
 		echo "Checking that we can run awk." | tee $OUTPUT
 		awk --version | tee -a $OUTPUT
 	`,
-		{ env: gawk() },
+		{ env: build() },
 	);
 });

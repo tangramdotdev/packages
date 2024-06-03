@@ -29,12 +29,12 @@ export let source = tg.target(async () => {
 type Arg = {
 	build?: string;
 	env?: std.env.Arg;
-	python?: tg.MaybeNestedArray<python.Arg>;
+	python?: python.Arg;
 	host?: string;
 	source?: tg.Directory;
 };
 
-export let httpie = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let sourceArtifact = arg?.source ?? (await source());
 	let main = await sourceArtifact.get("httpie/__main__.py");
 
@@ -55,11 +55,11 @@ export let httpie = tg.target(async (arg?: Arg) => {
 	return build;
 });
 
-export default httpie;
+export default build;
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await httpie(),
+		buildFunction: build,
 		binaries: ["http", "https", "httpie"],
 		metadata,
 	});

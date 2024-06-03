@@ -21,7 +21,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let make = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -42,12 +42,10 @@ export let make = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default make;
-
 export let test = tg.target(() => {
 	return std.build(tg`
 		mkdir -p $OUTPUT
 		echo "Checking that we can run GNU Make.
-		${make()}/bin/make --version
+		${build()}/bin/make --version
 	`);
 });

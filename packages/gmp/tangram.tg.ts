@@ -29,7 +29,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let gmp = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -51,8 +51,6 @@ export let gmp = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default gmp;
-
 export let test = tg.target(() => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
@@ -66,6 +64,6 @@ export let test = tg.target(() => {
 			echo "Checking if we can link against libgmp."
 			cc ${source}/main.c -o $OUTPUT -lgmp
 		`,
-		{ env: std.env.arg(std.sdk(), gmp()) },
+		{ env: std.env.arg(std.sdk(), build()) },
 	);
 });

@@ -61,18 +61,18 @@ export let help2man = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let perlArtifact = await perl.perl(perlArg);
+	let perlArtifact = await perl.build(perlArg);
 	let interpreter = tg.symlink({
 		artifact: perlArtifact,
 		path: tg.Path.new("bin/perl"),
 	});
 	let dependencies = [
 		autoconf.autoconf(autoconfArg),
-		bison.bison(bisonArg),
-		m4.m4(m4Arg),
+		bison.build(bisonArg),
+		m4.build(m4Arg),
 		perlArtifact,
-		texinfo.texinfo(texinfoArg),
-		zlib.zlib(zlibArg),
+		texinfo.build(texinfoArg),
+		zlib.build(zlibArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 	let artifact = std.autotools.build(

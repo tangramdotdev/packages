@@ -32,7 +32,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let httpServer = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let { nodejs: nodeArgs = [], source: source_, ...rest } = arg ?? {};
 
 	return nodejs.build(
@@ -45,14 +45,12 @@ export let httpServer = tg.target(async (arg?: Arg) => {
 	);
 });
 
-export default httpServer;
-
 export let test = tg.target(async () => {
 	await std.build(
 		tg`
 			http-server --version | tee $OUTPUT
 		`,
-		{ env: httpServer() },
+		{ env: build() },
 	);
 	return true;
 });

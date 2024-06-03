@@ -33,7 +33,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let bison = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -57,7 +57,7 @@ export let bison = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let env = std.env.arg(m4.m4(m4Arg), env_);
+	let env = std.env.arg(m4.build(m4Arg), env_);
 
 	return std.autotools.build(
 		{
@@ -71,11 +71,9 @@ export let bison = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default bison;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: bison,
+		buildFunction: build,
 		binaries: ["bison"],
 		metadata,
 	});

@@ -33,7 +33,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let acl = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -52,7 +52,7 @@ export let acl = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let env = [attr.attr(attrArg), env_];
+	let env = [attr.build(attrArg), env_];
 
 	let output = await std.autotools.build(
 		{
@@ -82,8 +82,6 @@ export let acl = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default acl;
-
 export let test = tg.target(async () => {
 	let binTest = (name: string) => {
 		return {
@@ -96,7 +94,7 @@ export let test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		buildFunction: acl,
+		buildFunction: build,
 		libraries: ["acl"],
 		metadata,
 	});

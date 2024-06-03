@@ -21,7 +21,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let hello = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -48,12 +48,10 @@ export let hello = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default hello;
-
 export let test = tg.target(() => {
 	return std.build(tg`
 		mkdir -p $OUTPUT
 		echo "Checking that we can run gnu hello."
-		${hello()}/bin/hello
+		${build()}/bin/hello
 	`);
 });

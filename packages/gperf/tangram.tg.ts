@@ -24,7 +24,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let gperf = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -51,11 +51,9 @@ export let gperf = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default gperf;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: gperf,
+		buildFunction: build,
 		binaries: ["gperf"],
 		metadata,
 	});

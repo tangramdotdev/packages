@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let ripgrep = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build: build_,
 		dependencies: { pcre2: pcre2Arg = {}, pkgconfig: pkgconfigArg = {} } = {},
@@ -54,8 +54,8 @@ export let ripgrep = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let env = std.env.arg(
-		pkgconfig.pkgconfig(pkgconfigArg),
-		pcre2.pcre2(pcre2Arg),
+		pkgconfig.build(pkgconfigArg),
+		pcre2.build(pcre2Arg),
 		env_,
 	);
 
@@ -71,11 +71,9 @@ export let ripgrep = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default ripgrep;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: ripgrep,
+		buildFunction: build,
 		binaries: ["rg"],
 		metadata,
 	});

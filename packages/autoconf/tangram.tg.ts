@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let autoconf = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let arg = await std.args.apply<Arg>(...args);
 	let {
 		autotools = {},
@@ -56,12 +56,12 @@ export let autoconf = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = arg;
 
-	let perlArtifact = await perl.perl(perlArg);
+	let perlArtifact = await perl.build(perlArg);
 	let dependencies = [
 		perlArtifact,
-		bison.bison(bisonArg),
-		m4.m4(m4Arg),
-		zlib.zlib(zlibArg),
+		bison.build(bisonArg),
+		m4.build(m4Arg),
+		zlib.build(zlibArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 
@@ -197,11 +197,9 @@ export let patchAutom4teCfg = tg.target(
 	},
 );
 
-export default autoconf;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: autoconf,
+		buildFunction: build,
 		binaries: ["autoconf"],
 		metadata,
 	});

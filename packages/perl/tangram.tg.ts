@@ -1,8 +1,8 @@
-import bison from "tg:bison" with { path: "../bison" };
-import libffi from "tg:libffi" with { path: "../libffi" };
-import m4 from "tg:m4" with { path: "../m4" };
+import * as bison from "tg:bison" with { path: "../bison" };
+import * as libffi from "tg:libffi" with { path: "../libffi" };
+import * as m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 import patches from "./patches" with { type: "directory" };
 
 export let metadata = {
@@ -49,15 +49,15 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let perl = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -82,13 +82,12 @@ export let perl = tg.target(async (arg?: Arg) => {
 	};
 
 	let dependencies = [
-		bison({ build, env: env_, host, sdk }),
-		libffi({ build, env: env_, host, sdk }),
-		m4({ build, env: env_, host, sdk }),
-		zlib({ build, env: env_, host, sdk }),
+		bison.build({ build, env: env_, host, sdk }),
+		libffi.build({ build, env: env_, host, sdk }),
+		m4.build({ build, env: env_, host, sdk }),
+		zlib.build({ build, env: env_, host, sdk }),
 	];
-	let env = std.env.arg(...dependencies, env_, { WATERMARK: "1" });
-	console.log("env", await env);
+	let env = std.env.arg(...dependencies, env_);
 
 	let perlArtifact = await std.autotools.build(
 		{
@@ -154,8 +153,6 @@ export let perl = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default perl;
-
 /** Wrap a shebang'd perl script to use this package's bach as the interpreter.. */
 export let wrapScript = async (script: tg.File) => {
 	let scriptMetadata = await std.file.executableMetadata(script);
@@ -165,13 +162,13 @@ export let wrapScript = async (script: tg.File) => {
 	) {
 		throw new Error("Expected a shebang sh or bash script");
 	}
-	let interpreter = tg.File.expect(await (await perl()).get("bin/bash"));
+	let interpreter = tg.File.expect(await (await build()).get("bin/bash"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: perl,
+		buildFunction: build,
 		binaries: ["perl"],
 		metadata,
 	});

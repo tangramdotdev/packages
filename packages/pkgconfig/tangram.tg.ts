@@ -44,7 +44,7 @@ export type Arg = {
 	proxy?: boolean;
 };
 
-export let pkgconfig = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build: build_,
@@ -72,13 +72,13 @@ export let pkgconfig = tg.target(async (...args: std.Args<Arg>) => {
 
 	let phases = { configure };
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		bison.bison(bisonArg),
-		m4.m4(m4Arg),
-		zlib.zlib(zlibArg),
+		bison.build(bisonArg),
+		m4.build(m4Arg),
+		zlib.build(zlibArg),
 	];
 	let additionalLibDirs = [];
 	if (std.triple.os(build) === "darwin") {
-		let libiconvArtifact = await libiconv.libiconv({ build, host });
+		let libiconvArtifact = await libiconv.build({ build, host });
 		dependencies.push(libiconvArtifact);
 		additionalLibDirs.push(
 			tg.Directory.expect(await libiconvArtifact.get("lib")),
@@ -167,13 +167,11 @@ export let path = tg.target(
 	},
 );
 
-export default pkgconfig;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: pkgconfig,
+		buildFunction: build,
 		binaries: ["pkg-config"],
 		metadata,
 	});
-	return pkgconfig();
+	return build();
 });

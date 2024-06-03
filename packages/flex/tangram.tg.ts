@@ -42,7 +42,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let flex = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -58,9 +58,9 @@ export let flex = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let dependencies = [
-		help2man.help2man(help2manArg),
-		m4.m4(m4Arg),
-		texinfo.texinfo(texinfoArg),
+		help2man.build(help2manArg),
+		m4.build(m4Arg),
+		texinfo.build(texinfoArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 
@@ -75,11 +75,9 @@ export let flex = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default flex;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: flex,
+		buildFunction: build,
 		binaries: ["flex"],
 		metadata,
 	});

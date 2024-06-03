@@ -34,7 +34,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let jq = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -64,8 +64,6 @@ export let jq = tg.target(async (...args: std.Args<Arg>) => {
 export let test = tg.target(async () => {
 	return std.build(tg`
 		echo "Checking that we can run jq." | tee $OUTPUT
-		${jq()}/bin/jq --version | tee -a $OUTPUT
+		${build()}/bin/jq --version | tee -a $OUTPUT
 	`);
 });
-
-export default jq;

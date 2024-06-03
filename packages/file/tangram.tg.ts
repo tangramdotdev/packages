@@ -44,7 +44,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let file = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
@@ -66,10 +66,10 @@ export let file = tg.target(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 	};
 	let dependencies = [
-		bison.bison(bisonArg),
-		libseccomp.libseccomp(libseccompArg),
-		m4.m4(m4Arg),
-		zlib.zlib(zlibArg),
+		bison.build(bisonArg),
+		libseccomp.build(libseccompArg),
+		m4.build(m4Arg),
+		zlib.build(zlibArg),
 	];
 	let env = [...dependencies, env_];
 
@@ -101,11 +101,9 @@ export let file = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default file;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: file,
+		buildFunction: build,
 		binaries: ["file"],
 		metadata,
 	});

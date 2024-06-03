@@ -21,7 +21,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let sed = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = [],
 		build,
@@ -48,11 +48,9 @@ export let sed = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default sed;
-
 export let test = tg.target(async () => {
 	return std.build(tg`
 		echo "Checking that we can run sed."
-		${sed()}/bin/sed --version
+		${build()}/bin/sed --version
 	`);
 });

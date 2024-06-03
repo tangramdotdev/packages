@@ -1,9 +1,9 @@
-import gmp from "tg:gmp" with { path: "../gmp" };
-import gnutls from "tg:gnutls" with { path: "../gnutls" };
-import nettle from "tg:nettle" with { path: "../nettle" };
-import pcre2 from "tg:pcre2" with { path: "../pcre2" };
+import * as gmp from "tg:gmp" with { path: "../gmp" };
+import * as gnutls from "tg:gnutls" with { path: "../gnutls" };
+import * as nettle from "tg:nettle" with { path: "../nettle" };
+import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
 import * as std from "tg:std" with { path: "../std" };
-import zlib from "tg:zlib" with { path: "../zlib" };
+import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
 	name: "wget",
@@ -18,30 +18,44 @@ export let source = tg.target(() => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		gmp?: gmp.Arg;
+		gnutls?: gnutls.Arg;
+		nettle?: nettle.Arg;
+		pcre2?: pcre2.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let wget = tg.target(async (arg?: Arg) => {
+export let wget = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
+		dependencies: {
+			gmp: gmpArg = {},
+			gnutls: gnutlsArg = {},
+			nettle: nettleArg = {},
+			pcre2: pcre2Arg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
 	let env = [
-		gmp(arg),
-		gnutls(arg),
-		nettle(arg),
-		pcre2(arg),
-		zlib(arg),
+		gmp.build(gmpArg),
+		gnutls.build(gnutlsArg),
+		nettle.build(nettleArg),
+		pcre2.build(pcre2Arg),
+		zlib.build(zlibArg),
 		{
 			LDFLAGS: tg.Mutation.suffix(
 				"-lnettle -lhogweed -lpcre2-8 -lgmp -lgnutls -lz",
@@ -53,9 +67,9 @@ export let wget = tg.target(async (arg?: Arg) => {
 
 	let output = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

@@ -1,7 +1,7 @@
 import * as std from "tg:std" with { path: "../std" };
 import * as cmake from "tg:cmake" with { path: "../cmake" };
-import pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
-import zstd from "tg:zstd" with { path: "../zstd" };
+import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as zstd from "tg:zstd" with { path: "../zstd" };
 
 export let metadata = {
 	homepage: "https://github.com/rui314/mold",
@@ -28,22 +28,23 @@ export let source = () => {
 };
 
 type Arg = {
-	cmake?: tg.MaybeNestedArray<cmake.BuildArg>;
+	cmake?: cmake.BuildArg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
-export let mold = tg.target(async (arg?: Arg) => {
+
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		cmake: cmake_ = [],
+		cmake: cmake_ = {},
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
@@ -52,8 +53,8 @@ export let mold = tg.target(async (arg?: Arg) => {
 	};
 
 	let deps = [
-		pkgconfig({ ...rest, build, env: env_, host }),
-		zstd({ ...rest, build, env: env_, host }),
+		pkgconfig.build({ ...rest, build, env: env_, host }),
+		zstd.build({ ...rest, build, env: env_, host }),
 	];
 	let env = [...deps, env_];
 
@@ -61,8 +62,9 @@ export let mold = tg.target(async (arg?: Arg) => {
 		{
 			...rest,
 			...std.triple.rotate({ build, host }),
-			env,
+			env: std.env.arg(env),
 			phases: { configure },
+			sdk,
 			source: source_ ?? source(),
 		},
 		cmake_,
@@ -71,11 +73,9 @@ export let mold = tg.target(async (arg?: Arg) => {
 	return result;
 });
 
-export default mold;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: mold,
+		buildFunction: build,
 		binaries: ["mold"],
 		metadata,
 	});

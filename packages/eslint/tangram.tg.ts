@@ -30,12 +30,16 @@ export let source = tg.target(async () => {
 export type Arg = {
 	env?: std.env.Arg;
 	host?: string;
-	nodejs?: tg.MaybeNestedArray<node.Arg>;
+	nodejs?: node.Arg;
 	source?: tg.Directory;
 };
 
-export let eslint = tg.target((arg?: Arg) => {
-	let { nodejs = [], source: source_, ...rest } = arg ?? {};
+export let build = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		nodejs = {},
+		source: source_,
+		...rest
+	} = await std.args.apply<Arg>(...args);
 	let phases = { build: tg.Mutation.unset() };
 
 	// Build the binaries provided by eslint.
@@ -50,14 +54,12 @@ export let eslint = tg.target((arg?: Arg) => {
 	);
 });
 
-export default eslint;
-
 export let test = tg.target(() => {
 	return std.build(
 		`
 			echo "Checking that we can run eslint." | tee $OUTPUT
 			echo "$(eslint --version)" | tee -a $OUTPUT
 		`,
-		{ env: eslint() },
+		{ env: build() },
 	);
 });

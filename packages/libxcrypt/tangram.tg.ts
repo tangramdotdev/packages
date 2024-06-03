@@ -40,7 +40,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let libxcrypt = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -56,7 +56,7 @@ export let libxcrypt = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [perl.perl(perlArg)];
+	let dependencies = [perl.build(perlArg)];
 	let env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
@@ -71,11 +71,9 @@ export let libxcrypt = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default libxcrypt;
-
 export let test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: libxcrypt,
+		buildFunction: build,
 		libraries: ["crypt"],
 	});
 	return true;
