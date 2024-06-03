@@ -97,9 +97,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	);
 
 	// Construct the phases in order.
-	// let empty = tg``;
-	// FIXME: On Linux, some configure scripts fail using stdin redirection, "bad file descriptor".  As a workaround, we redirect stdin from /dev/null first to force the file descriptor to be valid.  I don't know why this is happenening now, it is likely related to Linux sandboxing.
-	let empty = tg`exec 0</dev/null`;
+	let empty = tg.template();
 	let order = order_ ?? defaultOrder();
 	let script = empty;
 	if (debug) {
