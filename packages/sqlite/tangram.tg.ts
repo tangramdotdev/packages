@@ -35,11 +35,11 @@ export let source = tg.target(async () => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies: {
-		ncurses: ncurses.Arg;
-		pkgconfig: pkgconfig.Arg;
-		readline: readline.Arg;
-		zlib: zlib.Arg;
+	dependencies?: {
+		ncurses?: ncurses.Arg;
+		pkgconfig?: pkgconfig.Arg;
+		readline?: readline.Arg;
+		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

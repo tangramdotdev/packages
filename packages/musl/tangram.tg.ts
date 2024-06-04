@@ -30,26 +30,26 @@ export let source = tg.target(async () => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
 	/* Optionally point to a specific implementation of libcc. */
 	libcc?: tg.File;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		env: env_,
 		host: host_,
 		libcc = false,
+		sdk,
 		source: source_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	if (std.triple.os(host) !== "linux") {
@@ -70,7 +70,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		: [];
 
 	if (libcc) {
-		additionalFlags.push(await tg`LIBCC="${arg?.libcc}"`);
+		additionalFlags.push(await tg`LIBCC="${libcc}"`);
 	}
 
 	let configure = {
@@ -90,11 +90,11 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let result = await std.autotools.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
 			env: std.env.arg(env),
 			phases,
 			prefixPath: "/",
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

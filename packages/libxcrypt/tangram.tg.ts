@@ -32,7 +32,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		perl: perl.Arg;
+		perl?: perl.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

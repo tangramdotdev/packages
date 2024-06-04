@@ -67,7 +67,6 @@ export let cmake = tg.target(async (arg?: Arg) => {
 			CC: "cc -static",
 			CXX: "c++ -static",
 			TANGRAM_LINKER_PASSTHROUGH: "1",
-			WATERMARK: "1",
 		},
 		env_,
 	);
@@ -111,7 +110,7 @@ export type BuildArg = {
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
 	march?: string;
 
-	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
+	/** The value to pass to `-mtune` in the default CFLAGS. Default: undefined. */
 	mtune?: string;
 
 	/** The optlevel to pass. Defaults to "2" */
@@ -168,7 +167,7 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 		hardeningCFlags = true,
 		host: host_,
 		march,
-		mtune = "generic",
+		mtune,
 		opt = "2",
 		parallel = true,
 		phases,
@@ -216,7 +215,8 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 	}
 	if (defaultCFlags) {
 		let mArchFlag = march ? `-march=${march} ` : "";
-		let defaultCFlags = `${mArchFlag}-mtune=${mtune} -pipe`;
+		let mTuneFlag = mtune ? `-mtune=${mtune} ` : "";
+		let defaultCFlags = `${mArchFlag}${mTuneFlag}-pipe`;
 		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
 	if (hardeningCFlags) {

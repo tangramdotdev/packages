@@ -36,15 +36,15 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies: {
-		icu: icu.Arg;
-		ncurses: ncurses.Arg;
-		perl: perl.Arg;
-		pkgconfig: pkgconfig.Arg;
-		python: python.Arg;
-		readline: readline.Arg;
-		xz: xz.Arg;
-		zlib: zlib.Arg;
+	dependencies?: {
+		icu?: icu.Arg;
+		ncurses?: ncurses.Arg;
+		perl?: perl.Arg;
+		pkgconfig?: pkgconfig.Arg;
+		python?: python.Arg;
+		readline?: readline.Arg;
+		xz?: xz.Arg;
+		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

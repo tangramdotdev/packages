@@ -54,6 +54,7 @@ export let mold = async (arg?: Arg) => {
 	let result = cmake.build({
 		...std.triple.rotate({ build, host }),
 		env,
+		mtune: tg.Mutation.unset(),
 		phases: { configure },
 		sdk,
 		source: source_ ?? source(),

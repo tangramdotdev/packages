@@ -41,9 +41,9 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		gettext: gettext.Arg;
-		ncurses: ncurses.Arg;
-		pkgconfig: pkgconfig.Arg;
+		gettext?: gettext.Arg;
+		ncurses?: ncurses.Arg;
+		pkgconfig?: pkgconfig.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

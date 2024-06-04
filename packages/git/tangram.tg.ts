@@ -30,9 +30,9 @@ type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		gettext: gettext.Arg;
-		openssl: openssl.Arg;
-		zlib: zlib.Arg;
+		gettext?: gettext.Arg;
+		openssl?: openssl.Arg;
+		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

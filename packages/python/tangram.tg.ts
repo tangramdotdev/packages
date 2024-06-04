@@ -61,7 +61,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 
 	/** Args for dependencies. */
-	dependencies: {
+	dependencies?: {
 		bison?: bison.Arg;
 		bzip2?: bzip2.Arg;
 		libffi?: libffi.Arg;

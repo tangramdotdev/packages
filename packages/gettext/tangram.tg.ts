@@ -29,13 +29,13 @@ export let source = tg.target(() => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies: {
+	dependencies?: {
 		acl?: acl.Arg;
 		attr?: attr.Arg;
-		libiconv: libiconv.Arg;
-		ncurses: ncurses.Arg;
-		perl: perl.Arg;
-		pkgconfig: pkgconfig.Arg;
+		libiconv?: libiconv.Arg;
+		ncurses?: ncurses.Arg;
+		perl?: perl.Arg;
+		pkgconfig?: pkgconfig.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

@@ -4,7 +4,7 @@ import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
-import ninja, { test as testNinja } from "./ninja.tg.ts";
+import * as ninja from "./ninja.tg.ts";
 
 export let metadata = {
 	homepage: "https://cmake.org/",
@@ -34,7 +34,7 @@ export let source = tg.target(() => {
 type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies: {
+	dependencies?: {
 		curl?: curl.Arg;
 		openssl?: openssl.Arg;
 		pkgconfig?: pkgconfig.Arg;
@@ -84,7 +84,7 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let deps = [
-		curl.curl(curlArg),
+		curl.build(curlArg),
 		pkgconfig.build(pkgconfigArg),
 		opensslDir,
 		zlibDir,
@@ -133,7 +133,7 @@ export type BuildArg = {
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
 	march?: string;
 
-	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
+	/** The value to pass to `-mtune` in the default CFLAGS. Default: undefined. */
 	mtune?: string;
 
 	/** The optlevel to pass. Defaults to "2" */
@@ -190,7 +190,7 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 		hardeningCFlags = true,
 		host: host_,
 		march,
-		mtune = "generic",
+		mtune,
 		opt = "2",
 		parallel = true,
 		phases,
@@ -238,7 +238,8 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 	}
 	if (defaultCFlags) {
 		let mArchFlag = march ? `-march=${march} ` : "";
-		let defaultCFlags = `${mArchFlag}-mtune=${mtune} -pipe`;
+		let mTuneFlag = mtune ? `-mtune=${mtune} ` : "";
+		let defaultCFlags = `${mArchFlag}${mTuneFlag}-pipe`;
 		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
 	if (hardeningCFlags) {
@@ -293,7 +294,7 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		env = await std.env.arg(await ninja({ host }), env);
+		env = await std.env.arg(await ninja.build({ host }), env);
 	}
 
 	if (includeSdk) {
@@ -392,7 +393,7 @@ export let test = tg.target(async () => {
 		metadata,
 	});
 
-	await testNinja();
+	await ninja.test();
 
 	return true;
 });

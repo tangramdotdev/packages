@@ -28,8 +28,8 @@ export let source = tg.target(async () => {
 
 export type Arg = {
 	dependencies?: {
-		go: go.Arg;
-		nodejs: nodejs.Arg;
+		go?: go.Arg;
+		nodejs?: nodejs.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

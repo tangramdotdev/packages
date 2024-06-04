@@ -29,8 +29,8 @@ export let source = tg.target(async () => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies: {
-		perl: perl.Arg;
+	dependencies?: {
+		perl?: perl.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

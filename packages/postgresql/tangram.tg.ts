@@ -47,15 +47,15 @@ type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		icu: icu.Arg;
-		lz4: lz4.Arg;
-		ncurses: ncurses.Arg;
-		openssl: openssl.Arg;
-		perl: perl.Arg;
-		pkgconfig: pkgconfig.Arg;
-		readline: readline.Arg;
-		zlib: zlib.Arg;
-		zstd: zstd.Arg;
+		icu?: icu.Arg;
+		lz4?: lz4.Arg;
+		ncurses?: ncurses.Arg;
+		openssl?: openssl.Arg;
+		perl?: perl.Arg;
+		pkgconfig?: pkgconfig.Arg;
+		readline?: readline.Arg;
+		zlib?: zlib.Arg;
+		zstd?: zstd.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

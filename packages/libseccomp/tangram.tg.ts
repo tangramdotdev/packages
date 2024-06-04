@@ -31,7 +31,7 @@ export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	dependencies?: {
-		gperf: gperf.Arg;
+		gperf?: gperf.Arg;
 	};
 	host?: string;
 	sdk?: std.sdk.Arg;

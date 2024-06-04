@@ -22,18 +22,26 @@ export let source = tg.target(() => {
 type Arg = {
 	build?: string;
 	env?: std.env.Arg;
-	go?: tg.MaybeNestedArray<go.Arg>;
+	go?: go.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let { go: goArg = [], build, host, source: source_, ...rest } = arg ?? {};
+export let build = tg.target(async (...args: std.Args<Arg>) => {
+	let {
+		go: goArg = {},
+		build,
+		env,
+		host,
+		sdk,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 	return go.build(
 		{
-			...rest,
 			...std.triple.rotate({ build, host }),
+			env,
+			sdk,
 			source: source_ ?? source(),
 			install: {
 				command: tg`

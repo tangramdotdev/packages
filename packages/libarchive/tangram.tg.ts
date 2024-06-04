@@ -29,11 +29,11 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bzip2: bzip2.Arg;
-		libiconv: libiconv.Arg;
-		openssl: openssl.Arg;
-		xz: xz.Arg;
-		zlib: zlib.Arg;
+		bzip2?: bzip2.Arg;
+		libiconv?: libiconv.Arg;
+		openssl?: openssl.Arg;
+		xz?: xz.Arg;
+		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;

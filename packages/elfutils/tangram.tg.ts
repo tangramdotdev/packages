@@ -29,7 +29,7 @@ export let source = tg.target(async () => {
 type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies: {
+	dependencies?: {
 		bzip2?: bzip2.Arg;
 		libarchive?: libarchive.Arg;
 		m4?: m4.Arg;

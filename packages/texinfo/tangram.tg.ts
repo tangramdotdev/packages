@@ -30,12 +30,12 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bash: bash.Arg;
-		bison: bison.Arg;
-		m4: m4.Arg;
-		ncurses: ncurses.Arg;
-		perl: perl.Arg;
-		zlib: zlib.Arg;
+		bash?: bash.Arg;
+		bison?: bison.Arg;
+		m4?: m4.Arg;
+		ncurses?: ncurses.Arg;
+		perl?: perl.Arg;
+		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
