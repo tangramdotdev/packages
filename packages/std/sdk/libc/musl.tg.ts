@@ -29,7 +29,7 @@ export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 	libcc?: tg.File;
 };
@@ -83,7 +83,11 @@ export default tg.target(async (arg?: Arg) => {
 			host: build,
 		}),
 	);
-	env = env.concat([{ CPATH: tg.Mutation.unset() }]);
+	env.push({
+		CPATH: tg.Mutation.unset(),
+		LIBRARY_PATH: tg.Mutation.unset(),
+		TANGRAM_LINKER_PASSTHROUGH: true,
+	});
 
 	let result = await std.autotools.build({
 		...std.triple.rotate({ build, host }),

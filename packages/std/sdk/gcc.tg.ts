@@ -29,7 +29,7 @@ export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 	sysroot: tg.Directory;
 	target?: string;

@@ -66,7 +66,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 		{
 			CC: "cc -static",
 			CXX: "c++ -static",
-			TANGRAM_LINKER_PASSTHROUGH: "1",
+			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
 		env_,
 	);

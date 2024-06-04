@@ -12,7 +12,7 @@ export type ToolchainArg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 	target?: string;
 };
@@ -55,7 +55,7 @@ export type CrossToolchainArg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 	sysroot?: tg.Directory;
 	target: string;
@@ -127,7 +127,7 @@ export type BuildSysrootArg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 };
 
 export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {

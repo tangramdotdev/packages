@@ -29,7 +29,7 @@ export type Arg = {
 	env?: std.env.Arg;
 	host?: string;
 	phases?: tg.MaybeNestedArray<std.phases.Arg>;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 

@@ -2,6 +2,10 @@ import * as std from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import zstd from "./dependencies/zstd.tg.ts";
 
+import blake3DisableNeonFlag from "./mold_blake3_disable_neon_flag.patch" with {
+	type: "file",
+};
+
 export let metadata = {
 	homepage: "https://github.com/rui314/mold",
 	license: "MIT",
@@ -10,7 +14,7 @@ export let metadata = {
 	version: "2.31.0",
 };
 
-export let source = () => {
+export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:3dc3af83a5d22a4b29971bfad17261851d426961c665480e2ca294e5c74aa1e5";
@@ -24,7 +28,7 @@ export let source = () => {
 		source: "tag",
 		tag,
 	});
-};
+});
 
 export type Arg = {
 	build?: string | undefined;
@@ -34,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let mold = async (arg?: Arg) => {
+export let mold = tg.target(async (arg?: Arg) => {
 	let {
 		build: build_,
 		env: env_,
@@ -49,19 +53,24 @@ export let mold = async (arg?: Arg) => {
 		args: ["-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_LIBDIR=lib"],
 	};
 
+	let sourceDir = source_ ?? (await source());
+	// On aarch64, disable neon flag in blake3 build.
+	if (std.triple.arch(host) === "aarch64") {
+		sourceDir = await std.patch(sourceDir, blake3DisableNeonFlag);
+	}
+
 	let env = await std.env.arg(zstd({ build, host }), env_);
 
 	let result = cmake.build({
 		...std.triple.rotate({ build, host }),
 		env,
-		mtune: tg.Mutation.unset(),
 		phases: { configure },
 		sdk,
-		source: source_ ?? source(),
+		source: sourceDir,
 	});
 
 	return result;
-};
+});
 
 export default mold;
 

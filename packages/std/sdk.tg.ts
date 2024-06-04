@@ -799,7 +799,9 @@ export namespace sdk {
 						mold,
 						parameters: testCParameters,
 						proxiedLinker: false,
-						sdkEnv: await std.env.arg(env, { TANGRAM_LINKER_PASSTHROUGH: "1" }),
+						sdkEnv: await std.env.arg(env, {
+							TANGRAM_LINKER_PASSTHROUGH: true,
+						}),
 						host: expected.host,
 						target,
 					});
@@ -820,7 +822,9 @@ export namespace sdk {
 						mold,
 						parameters: testCxxParameters,
 						proxiedLinker: false,
-						sdkEnv: await std.env.arg(env, { TANGRAM_LINKER_PASSTHROUGH: "1" }),
+						sdkEnv: await std.env.arg(env, {
+							TANGRAM_LINKER_PASSTHROUGH: true,
+						}),
 						host: expected.host,
 						target,
 					});
@@ -843,7 +847,7 @@ export namespace sdk {
 							parameters: testFortranParameters,
 							proxiedLinker: false,
 							sdkEnv: await std.env.arg(env, {
-								TANGRAM_LINKER_PASSTHROUGH: "1",
+								TANGRAM_LINKER_PASSTHROUGH: true,
 							}),
 							host: expected.host,
 							target,
@@ -1040,6 +1044,21 @@ export let testMuslSdk = tg.target(async () => {
 	}
 	let muslHost = std.triple.create(host, { environment: "musl" });
 	let sdkArg = { host: muslHost };
+	let env = await sdk(sdkArg);
+	await sdk.assertValid(env, sdkArg);
+	return env;
+});
+
+export let testCrossGccSdk = tg.target(async () => {
+	let detectedHost = await std.triple.host();
+	let detectedOs = std.triple.os(detectedHost);
+	if (detectedOs === "darwin") {
+		throw new Error(`Cross-compilation is not supported on Darwin`);
+	}
+	let detectedArch = std.triple.arch(detectedHost);
+	let crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
+	let crossTarget = std.triple.create(detectedHost, { arch: crossArch });
+	let sdkArg = { host: detectedHost, target: crossTarget };
 	let env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;

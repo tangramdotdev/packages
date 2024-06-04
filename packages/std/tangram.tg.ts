@@ -297,6 +297,7 @@ export let testNcurses = tg.target(async () => {
 
 import {
 	testExplicitGlibcVersionSdk,
+	testCrossGccSdk,
 	testLLVMMoldSdk,
 	testLLVMMuslSdk,
 	testLLVMSdk,
@@ -312,6 +313,9 @@ export let testMusl = tg.target(async () => {
 });
 export let testExplicitGlibcVersion = tg.target(async () => {
 	return await testExplicitGlibcVersionSdk();
+});
+export let testCrossGcc = tg.target(async () => {
+	return await testCrossGccSdk();
 });
 
 import * as git from "./sdk/llvm/git.tg.ts";

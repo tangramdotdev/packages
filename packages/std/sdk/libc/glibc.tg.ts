@@ -29,7 +29,7 @@ export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 	linuxHeaders: tg.Directory;
 	version?: GlibcVersion;
@@ -101,7 +101,7 @@ export default tg.target(async (arg: Arg) => {
 	env.push({
 		CPATH: tg.Mutation.unset(),
 		LIBRARY_PATH: tg.Mutation.unset(),
-		TANGRAM_LINKER_PASSTHROUGH: "1",
+		TANGRAM_LINKER_PASSTHROUGH: true,
 	});
 
 	let result = await std.autotools.build({
