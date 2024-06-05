@@ -5,13 +5,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.9.1",
+	version: "6.9.3",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:01b414ba98fd189ecd544435caf3860ae2a790e3ec48f5aa70fdf42dc4c5c04a";
+		"sha256:c321c46401368774fc236f57095b205a5da57415f9a6008018902f9fd5eddfae";
 	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
 		name,
@@ -84,7 +84,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let result = tg.Directory.expect(
 		await std.phases.build(
 			{
-				env,
+				env: std.env.arg(env),
 				phases: { prepare, build, install },
 				order,
 				target: { host: system },

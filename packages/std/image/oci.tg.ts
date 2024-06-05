@@ -127,7 +127,7 @@ export let image = tg.target(
 		let {
 			cmdString = [],
 			entrypointArtifact: entrypointArtifact_,
-			entrypointString = [],
+			entrypointString,
 			layerCompression = "zstd",
 			rootDir: rootDirs,
 			system: system_,
@@ -177,7 +177,7 @@ export let image = tg.target(
 				diff_ids: layers.map((l) => l.diffId),
 			},
 			config: {
-				Entrypoint: entrypointString,
+				Entrypoint: entrypointString ?? [],
 				Cmd: cmdString,
 			},
 		};

@@ -1520,12 +1520,7 @@ async function* manifestExecutableReferences(
 async function* manifestSymlinkReferences(
 	symlink: wrap.Manifest.Symlink,
 ): AsyncGenerator<tg.Artifact> {
-	let s = await symlinkFromManifestSymlink(symlink);
-	yield s;
-	let artifact = await s.artifact();
-	if (artifact) {
-		yield artifact;
-	}
+	yield* symlinkReferences(await symlinkFromManifestSymlink(symlink));
 }
 
 /** Yield the artifacts referenced by a template. */
@@ -1534,8 +1529,51 @@ async function* manifestTemplateReferences(
 ): AsyncGenerator<tg.Artifact> {
 	for (let component of template.components) {
 		if (component.kind === "artifact") {
-			yield tg.Artifact.withId(component.value);
+			yield* artifactReferences(tg.Artifact.withId(component.value));
 		}
+	}
+}
+
+/** Yield the artifacts referenced by an artifact. */
+async function* artifactReferences(
+	artifact: tg.Artifact,
+): AsyncGenerator<tg.Artifact> {
+	if (artifact instanceof tg.File) {
+		yield artifact;
+	} else if (artifact instanceof tg.Directory) {
+		yield artifact;
+		yield* directoryReferences(artifact);
+	} else if (artifact instanceof tg.Symlink) {
+		yield* symlinkReferences(artifact);
+	} else {
+		return tg.unreachable();
+	}
+}
+
+/** Yield the artifacts referenced by a directory. */
+async function* directoryReferences(
+	directory: tg.Directory,
+): AsyncGenerator<tg.Artifact> {
+	for await (let [_, artifact] of directory) {
+		if (artifact instanceof tg.Directory) {
+			yield* directoryReferences(artifact);
+		} else if (artifact instanceof tg.File) {
+			let manifest = await wrap.Manifest.read(artifact);
+			if (manifest) {
+				yield* manifestReferences(manifest);
+			}
+		}
+	}
+}
+
+/** Yield any references found from resolving a symlink. */
+async function* symlinkReferences(
+	symlink: tg.Symlink,
+): AsyncGenerator<tg.Artifact> {
+	yield symlink;
+	let artifact = await symlink.artifact();
+	if (artifact) {
+		yield artifact;
 	}
 }
 
