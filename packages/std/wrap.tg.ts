@@ -1520,7 +1520,7 @@ async function* manifestExecutableReferences(
 async function* manifestSymlinkReferences(
 	symlink: wrap.Manifest.Symlink,
 ): AsyncGenerator<tg.Artifact> {
-	yield* symlinkReferences(await symlinkFromManifestSymlink(symlink));
+	yield await symlinkFromManifestSymlink(symlink);
 }
 
 /** Yield the artifacts referenced by a template. */
@@ -1529,51 +1529,8 @@ async function* manifestTemplateReferences(
 ): AsyncGenerator<tg.Artifact> {
 	for (let component of template.components) {
 		if (component.kind === "artifact") {
-			yield* artifactReferences(tg.Artifact.withId(component.value));
+			yield tg.Artifact.withId(component.value);
 		}
-	}
-}
-
-/** Yield the artifacts referenced by an artifact. */
-async function* artifactReferences(
-	artifact: tg.Artifact,
-): AsyncGenerator<tg.Artifact> {
-	if (artifact instanceof tg.File) {
-		yield artifact;
-	} else if (artifact instanceof tg.Directory) {
-		yield artifact;
-		yield* directoryReferences(artifact);
-	} else if (artifact instanceof tg.Symlink) {
-		yield* symlinkReferences(artifact);
-	} else {
-		return tg.unreachable();
-	}
-}
-
-/** Yield the artifacts referenced by a directory. */
-async function* directoryReferences(
-	directory: tg.Directory,
-): AsyncGenerator<tg.Artifact> {
-	for await (let [_, artifact] of directory) {
-		if (artifact instanceof tg.Directory) {
-			yield* directoryReferences(artifact);
-		} else if (artifact instanceof tg.File) {
-			let manifest = await wrap.Manifest.read(artifact);
-			if (manifest) {
-				yield* manifestReferences(manifest);
-			}
-		}
-	}
-}
-
-/** Yield any references found from resolving a symlink. */
-async function* symlinkReferences(
-	symlink: tg.Symlink,
-): AsyncGenerator<tg.Artifact> {
-	yield symlink;
-	let artifact = await symlink.artifact();
-	if (artifact) {
-		yield artifact;
 	}
 }
 
@@ -1698,4 +1655,36 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
 
 	return wrapper;
+});
+
+export let testReferences = tg.target(async () => {
+	let transitiveReference = await tg.file("I'm a transitive reference");
+	console.log("transitiveReference", await transitiveReference.id());
+	let binDir = await tg.directory({
+		bin: {
+			foo: tg.file("hi", {
+				executable: true,
+				references: [transitiveReference],
+			}),
+		},
+	});
+	console.log("binDir", await binDir.id());
+
+	let bootstrapShell = await bootstrap.shell();
+	let shellExe = await bootstrapShell.get("bin/sh").then(tg.File.expect);
+
+	let wrapper = await std.wrap({
+		executable: shellExe,
+		env: {
+			PATH: tg`${binDir}/bin`,
+		},
+	});
+	console.log("wrapper", await wrapper.id());
+	let wrapperReferences = await wrapper.references();
+	console.log("wrapperReferences", wrapperReferences);
+
+	// return wrapper;
+
+	let bundle = tg.Artifact.bundle(wrapper);
+	return bundle;
 });

@@ -111,11 +111,18 @@ export let testPhasesEnv = tg.target(async () => {
 	return await phases.envTest();
 });
 
-import { testSingleArgObjectNoMutations, wrap } from "./wrap.tg.ts";
+import {
+	testSingleArgObjectNoMutations,
+	testReferences,
+	wrap,
+} from "./wrap.tg.ts";
 export let testWrap = tg.target(async () => {
 	let shell = await bootstrap.shell();
 	let exe = tg.File.expect(await shell.get("bin/dash"));
 	return await wrap(exe, { env: { HELLO: tg.Mutation.set(`hi`) } });
+});
+export let testWrapReferences = tg.target(async () => {
+	return await testReferences();
 });
 export let testMuslWrapper = tg.target(async () => {
 	return await testSingleArgObjectNoMutations();
