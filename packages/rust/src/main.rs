@@ -259,6 +259,7 @@ async fn main_inner() -> tg::Result<()> {
 
     // Create the build and mark it as a child.
     let build_options = tg::target::build::Arg {
+        create: true,
         parent: None,
         remote: None,
         retry: tg::build::Retry::Failed,

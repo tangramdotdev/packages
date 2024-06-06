@@ -358,6 +358,7 @@ async fn main_inner() -> tg::Result<()> {
 	// Create a build.
 	let id = target.id(tg).await?;
 	let build_arg = tg::target::build::Arg {
+		create: true,
 		parent: None,
 		remote: None,
 		retry: tg::build::Retry::Canceled,
