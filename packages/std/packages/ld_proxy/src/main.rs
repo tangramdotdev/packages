@@ -4,8 +4,6 @@ use itertools::Itertools;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	hash::BuildHasher,
-	io::Write as _,
-	os::unix::fs::PermissionsExt as _,
 	path::PathBuf,
 	str::FromStr,
 };
@@ -381,29 +379,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		]);
 
 		// Create a file with the new blob and references.
-		let output_file = tg::File::builder(output_blob)
-			.executable(true)
-			.references(references.into_iter().map(Into::into).collect_vec())
-			.build();
-
-		// Create the new file at the output path.
-		let new_contents = output_file.bytes(&tg).await?;
-		std::fs::remove_file(&options.output_path).ok();
-		let mut file = std::fs::File::create(&options.output_path)
-			.map_err(|error| tg::error!(source = error, "failed to create the output file"))?;
-		file.write_all(&new_contents)
-			.map_err(|error| tg::error!(source = error, "failed to write the output file"))?;
-
-		// Set to executable.
-		let mut perms = file
-			.metadata()
-			.map_err(|error| tg::error!(source = error, "could not get file metadata"))?
-			.permissions();
-		perms.set_mode(0o755);
-		file.set_permissions(perms)
-			.map_err(|error| tg::error!(source = error, "could not set file permissions"))?;
-
-		output_file
+		Some(
+			tg::File::builder(output_blob)
+				.executable(true)
+				.references(references.into_iter().map(Into::into).collect_vec())
+				.build(),
+		)
 	} else {
 		// If the linker generated a library, then add the library paths to its references.
 		if library_paths.is_some() {
@@ -415,17 +396,39 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			let output_file_contents = output_file.contents(&tg).await?;
 			// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
 			let output_file_executable = output_file.executable(&tg).await?;
-			tg::File::builder(output_file_contents)
-				.executable(output_file_executable)
-				.references(references)
-				.build()
+			Some(
+				tg::File::builder(output_file_contents)
+					.executable(output_file_executable)
+					.references(references)
+					.build(),
+			)
 		} else {
-			output_file
+			None
 		}
 	};
 
-	// Store the new file.
-	output_file.store(&tg).await?;
+	if let Some(output_file) = output_file {
+		// Remove the existing file.
+		tokio::fs::remove_file(&options.output_path)
+			.await
+			.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
+
+		// Check out the new output file.
+		let cwd = std::env::current_dir()
+			.map_err(|error| tg::error!(source = error, "failed to get the current directory"))?;
+		let output_path = cwd.join(&options.output_path);
+		tg::Artifact::from(output_file)
+			.check_out(
+				&tg,
+				tg::artifact::checkout::Arg {
+					bundle: false,
+					force: true,
+					path: Some(output_path.try_into()?),
+					references: false,
+				},
+			)
+			.await?;
+	}
 
 	Ok(())
 }

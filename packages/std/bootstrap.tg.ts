@@ -17,7 +17,9 @@ export let bootstrap = async (arg?: Arg) => {
 	if (triple.os(host) === "darwin") {
 		host = "universal_darwin";
 	}
-	let hostFilename = host.replace("-", "_");
+	let hostFilename = arg?.component?.includes("sdk")
+		? undefined
+		: host?.replace("-", "_");
 	if (!arg?.component) {
 		// Download all and aggregate.
 		let allComponents = await componentList({ host });
@@ -31,7 +33,9 @@ export let bootstrap = async (arg?: Arg) => {
 		);
 		return tg.directory(dirObject);
 	}
-	let requestedComponentName = `${arg.component}_${hostFilename}`;
+	let requestedComponentName = hostFilename
+		? `${arg.component}_${hostFilename}`
+		: arg.component;
 	return remoteComponent(requestedComponentName);
 };
 
@@ -100,7 +104,7 @@ export let LatestSdkVersion: SdkVersion = "14.4" as const;
 export let macOsSdk = (versionArg?: SdkVersion) => {
 	let version = versionArg ?? LatestSdkVersion;
 	// NOTE - the host doesn't matter, any host can request this component.
-	return bootstrap({ component: `sdk_${version}`, host: "aarch64-darwin" });
+	return bootstrap({ component: `macos_sdk_${version}` });
 };
 
 /** Apply one or more patches to a directory using the bootstrap utils. */
@@ -168,10 +172,10 @@ export let componentList = async (arg?: Arg) => {
 	};
 	let darwinComponents = [
 		"dash_universal_darwin",
-		"sdk_12.1_universal_darwin",
-		"sdk_12.3_universal_darwin",
-		"sdk_13.3_universal_darwin",
-		"sdk_14.4_universal_darwin",
+		"macos_sdk_12.1",
+		"macos_sdk_12.3",
+		"macos_sdk_13.3",
+		"macos_sdk_14.4",
 		"toolchain_universal_darwin",
 		"utils_universal_darwin",
 	];
@@ -213,14 +217,14 @@ export let test = tg.target(async () => {
 });
 
 let checksums: Record<string, tg.Checksum> = {
-	"sdk_12.1_universal_darwin":
-		"sha256:bc053e15004a8aabfa236e515ed6deb9161906abb8a01862e9a72f529e0df83b",
-	"sdk_12.3_universal_darwin":
-		"sha256:16ab0c38c0817b805511b729c8ef070dc0e60e81b6a0c28600f004597b1e9297",
-	"sdk_13.3_universal_darwin":
-		"sha256:95c16a2cda5a68451d1ed9464d3c3bb8d5f2d484406e12f714e24214de4e7871",
-	"sdk_14.4_universal_darwin":
-		"sha256:bdf2ff1a471c4a47c5676a116eaa9534c78912aee26999f3d8dd075d43c295b1",
+	"macos_sdk_12.1":
+		"sha256:f43a9d4923dd06b74c1c9777743e44fffcbbdd5e7cbb6a66133c302b9742f01f",
+	"macos_sdk_12.3":
+		"sha256:6aff63af47ea70a285109448e0d7565d7f9855d8d7bf0b54144a853e0649025e",
+	"macos_sdk_13.3":
+		"sha256:b7960164aea7559d2c4dfcb10ea9a1c9a2658c12d3fc420b6f4f4658a7e795be",
+	"macos_sdk_14.4":
+		"sha256:fd3668ea4091c7f0d851016b18916b924900a253bf8dc28a6178bb44a1367833",
 	dash_aarch64_linux:
 		"sha256:89a1cab57834f81cdb188d5f40b2e98aaff2a5bdae4e8a5d74ad0b2a7672d36b",
 	dash_universal_darwin:
