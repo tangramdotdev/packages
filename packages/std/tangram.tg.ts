@@ -6,6 +6,7 @@ export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
+export { $ } from "./dollar.tg.ts";
 export { download } from "./download.tg.ts";
 export { env } from "./env.tg.ts";
 export * as file from "./file.tg.ts";
@@ -367,4 +368,9 @@ export let testOciBasicEnv = tg.target(async () => {
 });
 export let testOciBasicEnvImage = tg.target(async () => {
 	return await image.testBasicEnvImage();
+});
+
+import { test as testDollar_ } from "./dollar.tg.ts";
+export let testDollar = tg.target(async () => {
+	return await testDollar_();
 });
