@@ -182,7 +182,7 @@ export let patchAutom4teCfg = tg.target(
 		let env = [arg?.env, std.sdk(arg?.sdk)];
 
 		let patchedAutom4teCfg = tg.File.expect(
-			await tg.build(
+			await std.build(
 				tg`
 			cat <<'EOF' | tee $OUTPUT
 			${contents}

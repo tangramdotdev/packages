@@ -29,7 +29,7 @@ export let source = tg.target(async (arg?: Arg) => {
 		sed -i 's/if test $bash_cv_func_strtoimax = yes; then/if test $bash_cv_func_strtoimax = no ; then/' $OUTPUT/configure
 	`;
 	let patchedSource = tg.Directory.expect(
-		await tg.build(script, {
+		await std.build(script, {
 			env,
 			host: std.triple.archAndOs(build),
 		}),

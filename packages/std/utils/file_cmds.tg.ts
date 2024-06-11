@@ -99,16 +99,18 @@ export let compileUtil = async (arg: UtilArg) => {
 	let dependencies = [toolchainArtifact, dashArtifact];
 
 	let util = tg.File.expect(
-		await tg.build(await tg.template(script), {
-			host: std.triple.archAndOs(build),
-			env: std.env.arg(
-				arg.env ?? {},
-				{
-					SDKROOT: macOsSdk,
-				},
-				...dependencies,
-			),
-		}),
+		await (
+			await tg.target(await tg.template(script), {
+				host: std.triple.archAndOs(build),
+				env: std.env.arg(
+					arg.env ?? {},
+					{
+						SDKROOT: macOsSdk,
+					},
+					...dependencies,
+				),
+			})
+		).output(),
 	);
 
 	// Combine with destination.

@@ -100,10 +100,12 @@ export let macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 	// Combine into universal dylib.
 	let system = std.triple.archAndOs(host);
 	let injection = tg.File.expect(
-		await tg.build(
-			tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
-			{ host: system, env: std.env.arg(arg.buildToolchain, env) },
-		),
+		await (
+			await tg.target(
+				tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
+				{ host: system, env: std.env.arg(arg.buildToolchain, env) },
+			)
+		).output(),
 	);
 	return injection;
 });
@@ -136,8 +138,9 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let system = std.triple.archAndOs(host);
 	let env = std.env.arg(arg.buildToolchain, arg.env);
 	let output = tg.File.expect(
-		await tg.build(
-			tg`${executable}                               \
+		await (
+			await tg.target(
+				tg`${executable}                             \
 				-xc ${arg.source}                            \
 				-o $OUTPUT                                   \
 				-shared                                      \
@@ -152,11 +155,12 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 				-mno-omit-leaf-frame-pointer                 \
 				-fstack-protector-strong                     \
 				${tg.Template.join(" ", ...additionalArgs)}`,
-			{
-				host: system,
-				env,
-			},
-		),
+				{
+					host: system,
+					env,
+				},
+			)
+		).output(),
 	);
 	return output;
 };

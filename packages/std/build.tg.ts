@@ -61,11 +61,13 @@ export namespace build {
 
 		// Run.
 		return tg.Artifact.expect(
-			await tg.build({
-				checksum,
-				executable,
-				host,
-			}),
+			await (
+				await tg.target({
+					checksum,
+					executable,
+					host,
+				})
+			).output(),
 		);
 	});
 }

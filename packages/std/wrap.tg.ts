@@ -1597,9 +1597,9 @@ export let argAndEnvDump = tg.target(async () => {
 	let sdkEnv = await std.env.arg(bootstrap.sdk.env());
 
 	return tg.File.expect(
-		await tg.build(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
+		await (await tg.target(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
 			env: sdkEnv,
-		}),
+		})).output(),
 	);
 });
 
@@ -1634,7 +1634,7 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	let output = tg.File.expect(await tg.build(tg`${wrapper} > $OUTPUT`));
+	let output = tg.File.expect((await tg.target(tg`${wrapper} > $OUTPUT`)).output());
 	let text = await output.text();
 	tg.assert(
 		text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),

@@ -566,7 +566,7 @@ export let testHost = tg.target(async () => {
 		${rustArtifact}/bin/cargo --version
 	`;
 
-	await tg.build(script);
+	await std.build(script);
 	return rustArtifact;
 });
 
@@ -591,7 +591,7 @@ export let testCross = tg.target(async () => {
 		${crossRust}/bin/cargo --version
 	`;
 
-	await tg.build(script);
+	await std.build(script);
 	return true;
 });
 
@@ -610,7 +610,7 @@ export let testProxy = tg.target(async () => {
 		proxy: true,
 	});
 
-	return tg.build(tg`
+	return std.build(tg`
 		${helloWorld}/bin/hello-world     >> $OUTPUT
 		${helloOpenssl}/bin/hello-openssl >> $OUTPUT
 	`);

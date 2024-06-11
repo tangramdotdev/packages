@@ -233,9 +233,11 @@ export let test = tg.target(async () => {
 			? libiconv({ host, sdk: sdkArg })
 			: attr({ host, sdk: sdkArg });
 	let output = tg.File.expect(
-		await tg.build(script, {
-			env: std.env.arg(platformSupportLib, coreutils),
-		}),
+		await (
+			await tg.target(script, {
+				env: std.env.arg(platformSupportLib, coreutils),
+			})
+		).output(),
 	);
 
 	let contents = (await output.text()).trim();

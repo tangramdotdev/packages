@@ -180,12 +180,14 @@ export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 	`);
 
 	tg.File.expect(
-		await tg.build(
-			tg`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`,
-			{
-				env: std.env.arg([bootstrap.sdk(), arg.directory, arg.env ?? {}]),
-			},
-		),
+		await (
+			await tg.target(
+				tg`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`,
+				{
+					env: std.env.arg([bootstrap.sdk(), arg.directory, arg.env ?? {}]),
+				},
+			)
+		).output(),
 	);
 	return true;
 });
@@ -251,7 +253,9 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 	)} > $OUTPUT 2>&1 || true`;
 
 	let output = tg.File.expect(
-		await tg.build(executable, { env: await std.env.arg(env) }),
+		await (
+			await tg.target(executable, { env: await std.env.arg(env) })
+		).output(),
 	);
 	let stdout = await output.text();
 	tg.assert(
@@ -437,17 +441,19 @@ export let dlopen = async (arg: DlopenArg) => {
 	let linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
 	let sdkEnv = std.sdk(arg?.sdk);
 	let _program = tg.File.expect(
-		await tg.build(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
-			env: std.env.arg(
-				sdkEnv,
-				directory,
-				...arg.runtimeDepDirs,
-				{
-					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-				},
-				arg.env,
-			),
-		}),
+		await (
+			await tg.target(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
+				env: std.env.arg(
+					sdkEnv,
+					directory,
+					...arg.runtimeDepDirs,
+					{
+						TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+					},
+					arg.env,
+				),
+			})
+		).output(),
 	);
 
 	// // Run the program.

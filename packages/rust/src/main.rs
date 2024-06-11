@@ -150,10 +150,23 @@ async fn main_inner() -> tg::Result<()> {
     let tg = &tg;
 
     // Check in the source and output directories.
-    let source_directory =
-        tg::Artifact::check_in(tg, args.cargo_manifest_directory.parse().unwrap()).await?;
+    let source_directory = tg::Artifact::check_in(
+        tg,
+        tg::artifact::checkin::Arg {
+            destructive: false,
+            path: args.cargo_manifest_directory.parse().unwrap(),
+        },
+    )
+    .await?;
     let out_dir = if let Some(path) = &args.cargo_out_directory {
-        tg::Artifact::check_in(tg, path.parse().unwrap()).await?
+        tg::Artifact::check_in(
+            tg,
+            tg::artifact::checkin::Arg {
+                destructive: false,
+                path: path.parse().unwrap(),
+            },
+        )
+        .await?
     } else {
         tg::Directory::new(BTreeMap::new()).into()
     };
@@ -213,7 +226,14 @@ async fn main_inner() -> tg::Result<()> {
 
     // Check in any -L dependency=PATH directories, and splice any matching --extern name=PATH args.
     for dependency in &args.dependencies {
-        let directory = tg::Artifact::check_in(tg, dependency.parse().unwrap()).await?;
+        let directory = tg::Artifact::check_in(
+            tg,
+            tg::artifact::checkin::Arg {
+                destructive: false,
+                path: dependency.parse().unwrap(),
+            },
+        )
+        .await?;
         let template = tg::Template {
             components: vec!["dependency=".to_owned().into(), directory.clone().into()],
         };

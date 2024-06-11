@@ -566,7 +566,14 @@ async fn check_in_source_tree(
 
 			// Check if we're remapping a file, and check it in first.
 			if !is_directory {
-				let artifact = tg::Artifact::check_in(tg, path).await?;
+				let artifact = tg::Artifact::check_in(
+					tg,
+					tg::artifact::checkin::Arg {
+						destructive: false,
+						path,
+					},
+				)
+				.await?;
 				builder = builder
 					.add(tg, &subpath, artifact.clone())
 					.await

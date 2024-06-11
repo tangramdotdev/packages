@@ -303,28 +303,32 @@ int main() {
 }
 	`);
 	let output = tg.File.expect(
-		await tg.build(
-			tg`
+		await (
+			await tg.target(
+				tg`
 				set -x
 				/usr/bin/env
 				cc -v -xc ${helloSource} -o $OUTPUT`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-					TANGRAM_WRAPPER_TRACING: "tangram=trace",
-				}),
-			},
-		),
+				{
+					env: await std.env.arg(bootstrapSDK, {
+						TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+						TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+						TANGRAM_WRAPPER_TRACING: "tangram=trace",
+					}),
+				},
+			)
+		).output(),
 	);
 	let manifest = await std.wrap.Manifest.read(output);
 	console.log("\n\nMANIFEST", manifest);
 	let result = tg.File.expect(
-		await tg.build(tg`${output} > $OUTPUT`, {
-			env: {
-				TANGRAM_WRAPPER_TRACING: "tangram=trace",
-			},
-		}),
+		await (
+			await tg.target(tg`${output} > $OUTPUT`, {
+				env: {
+					TANGRAM_WRAPPER_TRACING: "tangram=trace",
+				},
+			})
+		).output(),
 	);
 	let text = await result.text();
 	tg.assert(text.includes("Hello from a TGLD-wrapped binary!"));

@@ -133,14 +133,16 @@ export let patch = async (
 	let utilsArtifact = utils(host);
 
 	let patchedSource = tg.Directory.expect(
-		await tg.build({
-			executable: shellExecutable,
-			args: ["-eu", "-c", script],
-			env: {
-				PATH: tg`${utilsArtifact}/bin:${shellArtifact}/bin`,
-			},
-			host,
-		}),
+		await (
+			await tg.target({
+				executable: shellExecutable,
+				args: ["-eu", "-c", script],
+				env: {
+					PATH: tg`${utilsArtifact}/bin:${shellArtifact}/bin`,
+				},
+				host,
+			})
+		).output(),
 	);
 
 	return patchedSource;

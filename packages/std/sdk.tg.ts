@@ -578,10 +578,12 @@ export namespace sdk {
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		let output = tg.File.expect(
-			await tg.build(tg`${cmd} -dumpmachine > $OUTPUT`, {
-				env: std.env.arg(env),
-				host: std.triple.archAndOs(detectedHost),
-			}),
+			await (
+				await tg.target(tg`${cmd} -dumpmachine > $OUTPUT`, {
+					env: std.env.arg(env),
+					host: std.triple.archAndOs(detectedHost),
+				})
+			).output(),
 		);
 		let host = (await output.text()).trim();
 		std.triple.assert(host);
@@ -645,15 +647,17 @@ export namespace sdk {
 			langStr = "f95";
 		}
 		let compiledProgram = tg.File.expect(
-			await tg.build(
-				tg`echo "testing ${lang}"
+			await (
+				await tg.target(
+					tg`echo "testing ${lang}"
 				set -x
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
-				{
-					env: std.env.arg(arg.sdkEnv),
-					host: std.triple.archAndOs(expectedHost),
-				},
-			),
+					{
+						env: std.env.arg(arg.sdkEnv),
+						host: std.triple.archAndOs(expectedHost),
+					},
+				)
+			).output(),
 		);
 
 		// Assert the resulting program was compiled for the expected target.
@@ -693,10 +697,12 @@ export namespace sdk {
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
 			let testOutput = tg.File.expect(
-				await tg.build(tg`${compiledProgram} > $OUTPUT`, {
-					host: std.triple.archAndOs(expectedHost),
-					env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
-				}),
+				await (
+					await tg.target(tg`${compiledProgram} > $OUTPUT`, {
+						host: std.triple.archAndOs(expectedHost),
+						env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+					})
+				).output(),
 			);
 			let outputText = (await testOutput.text()).trim();
 			tg.assert(outputText === expectedOutput);
@@ -960,9 +966,11 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 
 export let assertMoldComment = async (exe: tg.File, toolchain: std.env.Arg) => {
 	let elfComment = tg.File.expect(
-		await tg.build(tg`readelf -p .comment ${exe} | grep mold > $OUTPUT`, {
-			env: await std.env.arg(toolchain),
-		}),
+		await (
+			await tg.target(tg`readelf -p .comment ${exe} | grep mold > $OUTPUT`, {
+				env: await std.env.arg(toolchain),
+			})
+		).output(),
 	);
 	let text = await elfComment.text();
 	tg.assert(text.includes("mold"));
@@ -1096,15 +1104,22 @@ export let testLLVMMoldSdk = tg.target(async () => {
 		}
 	`);
 	let output = tg.File.expect(
-		await tg.build(tg`cc -v -xc ${source} -o $OUTPUT`, {
-			env: await std.env.arg(moldSdk),
-		}),
+		await (
+			await tg.target(tg`cc -v -xc ${source} -o $OUTPUT`, {
+				env: await std.env.arg(moldSdk),
+			})
+		).output(),
 	);
 	let innerExe = tg.File.expect(await std.wrap.unwrap(output));
 	let elfComment = tg.File.expect(
-		await tg.build(tg`readelf -p .comment ${innerExe} | grep mold > $OUTPUT`, {
-			env: await std.env.arg(moldSdk),
-		}),
+		await (
+			await tg.target(
+				tg`readelf -p .comment ${innerExe} | grep mold > $OUTPUT`,
+				{
+					env: await std.env.arg(moldSdk),
+				},
+			)
+		).output(),
 	);
 	let text = await elfComment.text();
 	tg.assert(text.includes("mold"));

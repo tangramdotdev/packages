@@ -322,6 +322,8 @@ async function getGccVersion(
 	let script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
 	let envObject = std.env.arg(bootstrap.utils(), env);
-	let result = tg.File.expect(await tg.build(script, { env: envObject }));
+	let result = tg.File.expect(
+		await (await tg.target(script, { env: envObject })).output(),
+	);
 	return (await result.text()).trim();
 }

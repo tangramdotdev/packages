@@ -94,9 +94,11 @@ export let testAllBootstrapComponents = tg.target(async () => {
 });
 export let testPlainBootstrapSdk = tg.target(async () => {
 	let bootstrapSdk = await bootstrap.sdk.env();
-	let ret = await tg.build(tg`touch $OUTPUT && env && ar --version`, {
-		env: bootstrapSdk,
-	});
+	let ret = await (
+		await tg.target(tg`touch $OUTPUT && env && ar --version`, {
+			env: bootstrapSdk,
+		})
+	).output();
 	return ret;
 });
 

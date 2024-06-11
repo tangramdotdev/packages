@@ -1404,7 +1404,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=221475aef5486309432a74a419eb1977dd06d063#221475aef5486309432a74a419eb1977dd06d063"
+source = "git+https://github.com/tangramdotdev/tangram?rev=50f19d333249a36f790956df69adf2a0054c32ce#50f19d333249a36f790956df69adf2a0054c32ce"
 dependencies = [
  "blake3",
  "bytes",
@@ -1443,7 +1443,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=221475aef5486309432a74a419eb1977dd06d063#221475aef5486309432a74a419eb1977dd06d063"
+source = "git+https://github.com/tangramdotdev/tangram?rev=50f19d333249a36f790956df69adf2a0054c32ce#50f19d333249a36f790956df69adf2a0054c32ce"
 dependencies = [
  "bytes",
  "erased-serde",

@@ -124,9 +124,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export let test = tg.target(() => {
-	return tg.build(
-		tg`
+export let test = tg.target(async () => {
+	return (
+		await tg.target(
+			tg`
 				echo "Checking that we can run texinfo."
 				install-info --version
 				makeinfo --version
@@ -137,8 +138,9 @@ export let test = tg.target(() => {
 				texi2pdf --version
 				texindex --version
 			`,
-		{
-			env: std.env.arg(build()),
-		},
-	);
+			{
+				env: std.env.arg(build()),
+			},
+		)
+	).output();
 });
