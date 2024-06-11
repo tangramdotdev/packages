@@ -53,7 +53,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg | boolean;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
-	source: tg.Directory;
+	source?: tg.Directory;
 
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean;

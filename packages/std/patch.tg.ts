@@ -1,6 +1,6 @@
 import * as std from "./tangram.tg.ts";
 
-export let patch = async (
+export let patch = tg.target(async (
 	source: tg.Directory,
 	...patches: Array<tg.File | tg.Symlink>
 ): Promise<tg.Directory> => {
@@ -13,4 +13,4 @@ export let patch = async (
 				cat ${patchFiles} | patch -p1 -d $OUTPUT`,
 		),
 	);
-};
+});

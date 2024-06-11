@@ -5,13 +5,13 @@ export let metadata = {
 	name: "jq",
 	license: "https://github.com/jqlang/jq?tab=License-1-ov-file#readme",
 	repository: "https://github.com/jqlang/jq",
-	version: "1.7",
+	version: "1.7.1",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:402a0d6975d946e6f4e484d1a84320414a0ff8eb6cf49d2c11d144d4d344db62";
+		"sha256:478c9ca129fd2e3443fe27314b455e211e0d8c60bc8ff7df703873deeee580c2";
 	let extension = ".tar.gz";
 	let packageArchive = std.download.packageArchive({
 		name,
@@ -36,7 +36,7 @@ type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
 		env,
 		host,
