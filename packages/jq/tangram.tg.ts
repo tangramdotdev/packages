@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://jqlang.github.io/jq/",
@@ -62,8 +63,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export let test = tg.target(async () => {
-	return std.build(tg`
+	return await $`
 		echo "Checking that we can run jq." | tee $OUTPUT
 		${build()}/bin/jq --version | tee -a $OUTPUT
-	`);
+	`;
 });

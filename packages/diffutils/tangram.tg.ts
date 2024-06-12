@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "diffutils",
@@ -46,14 +47,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
-	return std.build(
-		`
+export let test = tg.target(async () => {
+	return await $`
 			echo "Checking that we can run diffutils." | tee $OUTPUT
 			diff --version | tee -a $OUTPUT
 			diff3 --version | tee -a $OUTPUT
 			cmp --version | tee -a $OUTPUT
-		`,
-		{ env: build() },
-	);
+		`.env(build());
 });

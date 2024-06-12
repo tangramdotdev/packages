@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/gawk/",
@@ -11,7 +12,7 @@ export let metadata = {
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b";
+		"sha256:378f8864ec21cfceaa048f7e1869ac9b4597b449087caf1eb55e440d30273336";
 	return std.download.fromGnu({ name, version, checksum });
 });
 
@@ -26,7 +27,7 @@ type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
 		env,
 		host,
@@ -45,12 +46,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
-	return std.build(
-		tg`
+export let test = tg.target(async () => {
+	return await $`
 		echo "Checking that we can run awk." | tee $OUTPUT
 		awk --version | tee -a $OUTPUT
-	`,
-		{ env: build() },
-	);
+	`.env(build());
 });

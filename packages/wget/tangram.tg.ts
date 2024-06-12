@@ -3,6 +3,7 @@ import * as gnutls from "tg:gnutls" with { path: "../gnutls" };
 import * as nettle from "tg:nettle" with { path: "../nettle" };
 import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
@@ -89,13 +90,12 @@ export let wget = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export let test = tg.target(async () => {
-	return std.build(
-		tg`
+	return await $`
 		echo "Checking that we can run wget."
 		wget --version
 		echo "Checking that we can download a file."
 		wget -O - https://tangram.dev > $OUTPUT
-	`,
-		{ env: wget(), checksum: "unsafe" },
-	);
+	`
+		.env(wget())
+		.checksum("unsafe");
 });

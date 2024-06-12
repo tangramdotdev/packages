@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "make",
@@ -42,10 +43,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
-	return std.build(tg`
+export let test = tg.target(async () => {
+	return await $`
 		mkdir -p $OUTPUT
-		echo "Checking that we can run GNU Make.
+		echo "Checking that we can run GNU Make."
 		${build()}/bin/make --version
-	`);
+	`;
 });

@@ -1,4 +1,5 @@
 import * as std from "../tangram.tg.ts";
+import { $ } from "../tangram.tg.ts";
 import zstd from "../sdk/dependencies/zstd.tg.ts";
 
 /*
@@ -224,14 +225,12 @@ export let imageFromLayers = async (
 		layerCompression === "gzip"
 			? MediaTypeV1.imageLayerTarGzip
 			: MediaTypeV1.imageLayerTarZstd;
-	let additionalArgs = layerCompression === "gzip" ? [] : [{ env: zstd() }];
+	let additionalEnv = layerCompression === "gzip" ? [] : [zstd()];
 	let layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
-			let file = await std.build(
-				tg`${compressionCmd} ${layer.tar} > $OUTPUT`,
-				...additionalArgs,
-			);
-			tg.File.assert(file);
+			let file = await $`${compressionCmd} ${layer.tar} > $OUTPUT`
+				.env(additionalEnv)
+				.then(tg.File.expect);
 			let descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,
 				platform,
@@ -274,9 +273,7 @@ export let imageFromLayers = async (
 	});
 
 	// Tar the result and return it.
-	let image = await std.build(tg`tar -cf $OUTPUT -C ${directory} .`);
-	tg.File.assert(image);
-	return image;
+	return await $`tar -cf $OUTPUT -C ${directory} .`.then(tg.File.expect);
 };
 
 /**
@@ -310,8 +307,7 @@ export type Layer = {
 export let layer = tg.target(
 	async (directory: tg.Directory): Promise<Layer> => {
 		let bundle = tg.Artifact.bundle(directory);
-		let tar = await std.build(tg`tar -cf $OUTPUT -C ${bundle} .`);
-		tg.File.assert(tar);
+		let tar = await $`tar -cf $OUTPUT -C ${bundle} .`.then(tg.File.expect);
 		let bytes = await tar.bytes();
 		let diffId = await tg.checksum(bytes, "sha256");
 		return { tar, diffId };

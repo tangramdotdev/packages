@@ -2,6 +2,7 @@ import * as bzip2 from "tg:bzip2" with { path: "../bzip2" };
 import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
 import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 import * as xz from "tg:xz" with { path: "../xz" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
@@ -99,21 +100,16 @@ export let test = tg.target(async () => {
 		`),
 	});
 
-	return std.build(
-		tg`
+	return await $`
 			echo "Checking if we can link against libarchive."
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto -larchive -lz -lbz2 -liconv -llzma
-		`,
-		{
-			env: std.env.arg(
-				std.sdk(),
-				bzip2.build(),
-				libiconv.build(),
-				openssl.build(),
-				libarchive(),
-				xz.xz(),
-				zlib.build(),
-			),
-		},
+		`.env(
+		std.sdk(),
+		build(),
+		bzip2.build(),
+		libiconv.build(),
+		openssl.build(),
+		xz.build(),
+		zlib.build(),
 	);
 });

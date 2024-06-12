@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "hello",
@@ -23,7 +24,7 @@ type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
 		env,
 		host,
@@ -48,10 +49,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
-	return std.build(tg`
+export let test = tg.target(async () => {
+	return await $`
 		mkdir -p $OUTPUT
 		echo "Checking that we can run gnu hello."
 		${build()}/bin/hello
-	`);
+	`;
 });

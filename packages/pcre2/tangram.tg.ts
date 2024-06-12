@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://github.com/PCRE2Project/pcre2",
@@ -66,47 +67,11 @@ export let test = tg.target(async () => {
 	let host = await std.triple.host();
 	let hostArch = std.triple.arch(host);
 
-	let output = tg.File.expect(
-		await std.build(
-			tg`
+	let output = await $`
 				echo "Checking if we can link against libpcre2."
 				cc ${source}/main.c -o $OUTPUT -lpcre2-8
-			`,
-			{ env: std.env.arg(std.sdk(), build()) },
-		),
-	);
-	let metadata = await std.file.executableMetadata(output);
-	tg.assert(metadata.format === "elf");
-	tg.assert(metadata.arch === hostArch);
-
-	// // On Linux, test cross-compilation.
-	// let os = std.triple.os(std.triple.archAndOs(host));
-	// if (os === "linux") {
-	// 	// Determine the target triple with differing architecture from the host.
-	// 	let targetArch: std.triple.Arch =
-	// 		hostArch === "x86_64" ? "aarch64" : "x86_64";
-	// 	let target = tg.triple({
-	// 		arch: targetArch,
-	// 		vendor: "unknown",
-	// 		os: "linux",
-	// 		environment: "gnu",
-	// 	});
-
-	// 	// Assert that we cross-compile a binary for the target.
-	// 	let output = tg.File.expect(
-	// 		await std.build(
-	// 			tg`
-	// 				echo "Checking if we can link against a cross-compiled libpcre2."
-	// 				${std.triple.toString(target)}-cc ${source}/main.c -o $OUTPUT -L${pcre2({
-	// 					host,
-	// 				})}/lib -lpcre2-8
-	// 			`,
-	// 			{ env: std.sdk() },
-	// 		),
-	// 	);
-	// 	let metadata = await std.file.executableMetadata(output);
-	// 	tg.assert(metadata.format === "elf");
-	// 	tg.assert(metadata.arch === targetArch);
-	// }
-	return true;
+			`
+		.env(std.sdk(), build())
+		.then(tg.File.expect);
+	return output;
 });

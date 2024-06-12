@@ -2,6 +2,7 @@ import * as bison from "tg:bison" with { path: "../bison" };
 import * as m4 from "tg:m4" with { path: "../m4" };
 import * as perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
@@ -179,17 +180,12 @@ export let patchAutom4teCfg = tg.target(
 			contents = tg`${contents}${newLine}\n`;
 		}
 
-		let env = [arg?.env, std.sdk(arg?.sdk)];
-
-		let patchedAutom4teCfg = tg.File.expect(
-			await std.build(
-				tg`
+		let patchedAutom4teCfg = await $`
 			cat <<'EOF' | tee $OUTPUT
 			${contents}
-		`,
-				{ env: await std.env.arg(env) },
-			),
-		);
+		`
+			.env(arg?.env, std.sdk(arg?.sdk))
+			.then(tg.File.expect);
 
 		return tg.directory(autoconf, {
 			["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,

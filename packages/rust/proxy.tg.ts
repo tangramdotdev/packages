@@ -1,4 +1,4 @@
-import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import { build, toolchain } from "./tangram.tg.ts";
 
@@ -23,11 +23,8 @@ export let proxy = tg.target(async () => {
 });
 
 export let test = tg.target(async () => {
-	return std.build(
-		tg`
+	return await $`
 		touch $OUTPUT
 		tangram_rustc rustc - --version
-	`,
-		{ env: std.env.arg(proxy(), toolchain()) },
-	);
+	`.env(proxy(), toolchain());
 });

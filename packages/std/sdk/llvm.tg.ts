@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
+import { $ } from "../tangram.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import git from "./llvm/git.tg.ts";
@@ -223,15 +224,12 @@ export let test = async () => {
 			return 0;
 		}
 	`);
-	let cScript = tg`
+	let cOut = await $`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
-	`;
-	let cOut = tg.File.expect(
-		await std.build(cScript, {
-			env: directory,
-			host,
-		}),
-	);
+	`
+		.env(directory)
+		.host(host)
+		.then(tg.File.expect);
 
 	let cMetadata = await std.file.executableMetadata(cOut);
 	if (os === "linux") {
@@ -249,15 +247,12 @@ export let test = async () => {
 			return 0;
 		}
 	`);
-	let cxxScript = tg`
+	let cxxOut = await $`
 		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
-	`;
-	let cxxOut = tg.File.expect(
-		await std.build(cxxScript, {
-			env: directory,
-			host,
-		}),
-	);
+	`
+		.env(directory)
+		.host(host)
+		.then(tg.File.expect);
 
 	let cxxMetadata = await std.file.executableMetadata(cxxOut);
 	if (os === "linux") {

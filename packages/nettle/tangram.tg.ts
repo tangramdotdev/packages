@@ -1,5 +1,6 @@
 import * as gmp from "tg:gmp" with { path: "../gmp" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "nettle",
@@ -36,7 +37,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let env = [gmp.gmp(gmpArg), env_];
+	let env = [gmp.build(gmpArg), env_];
 
 	let configure = {
 		args: [
@@ -59,7 +60,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
+export let test = tg.target(async () => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
 			#include <stdio.h>
@@ -67,11 +68,8 @@ export let test = tg.target(() => {
 		`),
 	});
 
-	return std.build(
-		tg`
+	return await $`
 			echo "Checking if we can link against nettle and hogweed."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp
-		`,
-		{ env: std.env.arg(std.sdk(), build(), gmp.build()) },
-	);
+		`.env(std.sdk(), build(), gmp.build());
 });

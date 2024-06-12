@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "sed",
@@ -23,7 +24,7 @@ type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
 		env,
 		host,
@@ -49,8 +50,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export let test = tg.target(async () => {
-	return std.build(tg`
+	return await $`
 		echo "Checking that we can run sed."
 		${build()}/bin/sed --version
-	`);
+	`;
 });

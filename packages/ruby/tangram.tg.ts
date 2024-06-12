@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import * as libffi from "tg:libffi" with { path: "../libffi" };
 import * as libyaml from "tg:libyaml" with { path: "../libyaml" };
@@ -263,13 +264,10 @@ let bundledGems = (): Promise<tg.Directory> => {
 	return tg.directory(...args.map(downloadGem));
 };
 
-export let test = tg.target(() => {
-	return std.build(
-		tg`
+export let test = tg.target(async () => {
+	return await $`
 			echo "Checking that we can run Ruby and Rubygems."
 			ruby -e 'puts "Hello, tangram!"'
 			gem --version
-		`,
-		{ env: toolchain() },
-	);
+		`.env(toolchain());
 });

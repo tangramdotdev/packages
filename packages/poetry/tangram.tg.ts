@@ -1,5 +1,6 @@
 import * as python from "tg:python" with { path: "../python" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import * as lockfile from "./lockfile.tg.ts";
 import requirements from "./requirements.txt" with { type: "file" };
@@ -36,7 +37,7 @@ export type Arg = {
 /** Create an environment with poetry installed. */
 export let poetry = tg.target(async (arg?: Arg) => {
 	let sourceArtifact = arg?.source ?? (await source());
-	return python.python({
+	return python.toolchain({
 		requirements,
 	});
 });
@@ -82,24 +83,20 @@ export let build = tg.target(async (args: BuildArgs) => {
 		["poetry.lock"]: args.lockfile,
 	});
 
-	let sdist = await std.build(
-		tg`
+	let sdist = await $`
 				# Create the virtual env to install to.
 				python3 -m venv $OUTPUT || true
 				export VIRTUAL_ENV=$OUTPUT
 
 				poetry install --only-root --directory ${source}
-			`,
-		{
-			env: std.env(poetryArtifact, {
-				PYTHONPATH: tg.Mutation.suffix(
-					tg`${installedRequirements}/lib/python3/site-packages}`,
-					":",
-				),
-			}),
-		},
-	);
-	tg.Directory.assert(sdist);
+			`
+		.env(poetryArtifact, {
+			PYTHONPATH: tg.Mutation.suffix(
+				tg`${installedRequirements}/lib/python3/site-packages}`,
+				":",
+			),
+		})
+		.then(tg.Directory.expect);
 
 	// Merge the installed sdist with the requirements.
 	let installed = await tg.directory(installedRequirements, sdist);
@@ -113,13 +110,9 @@ export let build = tg.target(async (args: BuildArgs) => {
 });
 
 export let test = tg.target(async () => {
-	await std.build(
-		tg`
+	return await $`
 				mkdir -p $OUTPUT
 				echo "Checking that we can run poetry: ${poetry()}."
 				poetry --version
-			`,
-		{ env: poetry() },
-	);
-	return true;
+			`.env(poetry());
 });

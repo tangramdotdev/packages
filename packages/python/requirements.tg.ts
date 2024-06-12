@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import { versionString, wrapScripts } from "./tangram.tg.ts";
 export type Arg = tg.File;
@@ -6,8 +7,7 @@ export type Arg = tg.File;
 export let install = tg.target(
 	async (pythonArtifact: tg.Directory, requirements: Arg) => {
 		// Download the requirements specified in any requirements.txt files.
-		let downloads = await std.build(
-			tg`
+		let downloads = await $`
 					mkdir -p $OUTPUT
 
 					# Download dependencies using the requirements.txt file.
@@ -18,21 +18,17 @@ export let install = tg.target(
 						--require-hashes \\
 						--disable-pip-version-check \\
 						-r ${requirements}
-				`,
-			{
-				env: pythonArtifact,
-				checksum: "unsafe",
-			},
-		);
-		tg.Directory.assert(downloads);
+				`
+			.env(pythonArtifact)
+			.checksum("unsafe")
+			.then(tg.Directory.expect);
 
 		let installedBins = tg.directory();
 		let installedSitePackages = await tg.directory();
 
 		// For each download, install to a local directory.
 		for await (let [name, file] of downloads) {
-			let installed = await std.build(
-				tg`
+			let installed = await $`
 						cp "${file}" "${name}"
 						export PYTHONUSERBASE=$OUTPUT
 						mkdir -p $OUTPUT
@@ -43,10 +39,9 @@ export let install = tg.target(
 							--user                      \\
 							--no-deps                   \\
 						${name} || true # allow failure, needed to skip unnecessary errors in pip install.
-					`,
-				{ env: pythonArtifact },
-			);
-			tg.Directory.assert(installed);
+					`
+				.env(pythonArtifact)
+				.then(tg.Directory.expect);
 
 			// Get any site-packages or bin directories that were installed by pip.
 			let sitePackages = await installed.tryGet(

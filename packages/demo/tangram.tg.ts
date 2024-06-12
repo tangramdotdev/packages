@@ -2,6 +2,7 @@ import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
 import * as postgresql from "tg:postgresql" with { path: "../postgresql" };
 import * as ripgrep from "tg:ripgrep" with { path: "../ripgrep" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "demo",
@@ -35,8 +36,8 @@ export let script = `
 	echo "PostgreSQL version: $(psql --version)" | tee -a $OUTPUT
 `;
 
-export let test = tg.target(() => {
-	return std.build(executable());
+export let test = tg.target(async () => {
+	return await $`${executable()}`.then(tg.File.expect);
 });
 
 export let testGccMusl = tg.target(async () => {
@@ -45,7 +46,7 @@ export let testGccMusl = tg.target(async () => {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
 	let muslHost = std.triple.create(host, { environment: "musl" });
-	return std.build(executable({ build: muslHost, host: muslHost }));
+	return $`${executable({ build: muslHost, host: muslHost })}`;
 });
 
 export let testGccMold = tg.target(async () => {
@@ -53,12 +54,12 @@ export let testGccMold = tg.target(async () => {
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
-	return std.build(executable({ sdk: { linker: "mold" } }));
+	return $`${executable({ sdk: { linker: "mold" } })}`;
 });
 
 export let testLlvm = tg.target(async () => {
 	// NOTE - this is the default on macOS.
-	return std.build(executable({ sdk: { toolchain: "llvm" } }));
+	return $`${executable({ sdk: { toolchain: "llvm" } })}`;
 });
 
 export let testLlvmMusl = tg.target(async () => {
@@ -67,7 +68,7 @@ export let testLlvmMusl = tg.target(async () => {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
 	let muslHost = std.triple.create(host, { environment: "musl" });
-	return std.build(executable({ host: muslHost, sdk: { toolchain: "llvm" } }));
+	return $`${executable({ host: muslHost, sdk: { toolchain: "llvm" } })}`;
 });
 
 export let testLlvmMold = tg.target(async () => {
@@ -75,7 +76,7 @@ export let testLlvmMold = tg.target(async () => {
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
-	return std.build(executable({ sdk: { toolchain: "llvm", linker: "mold" } }));
+	return await $`${executable({ sdk: { toolchain: "llvm", linker: "mold" } })}`;
 });
 
 export let testLinuxCross = tg.target(async () => {
@@ -87,7 +88,7 @@ export let testLinuxCross = tg.target(async () => {
 	let crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
 	let host = std.triple.create(build, { arch: crossArch });
 
-	return std.build(executable({ build: build, host: host }));
+	return $`${executable({ build: build, host: host })}`;
 });
 
 export let testLinuxToDarwinCross = tg.target(async () => {
@@ -98,7 +99,6 @@ export let testLinuxToDarwinCross = tg.target(async () => {
 	let detectedArch = std.triple.arch(build);
 	let host = `${detectedArch}-apple-darwin`;
 
-	return std.build(
-		executable({ build: build, host: host, sdk: { toolchain: "llvm" } }),
-	);
+	return $`
+		${executable({ build: build, host: host, sdk: { toolchain: "llvm" } })}`;
 });

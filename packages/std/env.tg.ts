@@ -14,7 +14,7 @@ export namespace env {
 		| UtilsToggle
 		| tg.MaybeMutation<ArgObject>;
 
-	/** An object containing values or potentially nested mutations.  Suitable for use with `std.env`/`std.wrap`/`std.build`, but not directly with `tg.target`. */
+	/** An object containing values or potentially nested mutations. */
 	export type ArgObject = std.args.MaybeMutationMap<
 		Record<
 			string,

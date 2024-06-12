@@ -2,6 +2,7 @@ import * as gettext from "tg:gettext" with { path: "../gettext" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
 import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/bash/",
@@ -22,19 +23,15 @@ export let source = tg.target(async (arg?: Arg) => {
 	// See https://lists.gnu.org/archive/html/bug-bash/2022-10/msg00000.html
 	// We don't have autoreconf available so we additionally manually resolve the configure script change. The m4 change isn't used, just here for completeness.
 	// Once this fix is adopted upstream, we can remove this workaround.
-	let script = tg`
+	return await $`
 		cp -R ${source} $OUTPUT
 		chmod -R u+w $OUTPUT
 		sed -i 's/if test $bash_cv_func_strtoimax = yes; then/if test $bash_cv_func_strtoimax = no; then/' $OUTPUT/m4/strtoimax.m4
 		sed -i 's/if test $bash_cv_func_strtoimax = yes; then/if test $bash_cv_func_strtoimax = no ; then/' $OUTPUT/configure
-	`;
-	let patchedSource = tg.Directory.expect(
-		await std.build(script, {
-			env,
-			host: std.triple.archAndOs(build),
-		}),
-	);
-	return patchedSource;
+	`
+		.env(env)
+		.host(std.triple.archAndOs(build))
+		.then(tg.Directory.expect);
 });
 
 export type Arg = {

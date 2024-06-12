@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import * as bison from "tg:bison" with { path: "../bison" };
 import * as bzip2 from "tg:bzip2" with { path: "../bzip2" };
@@ -410,8 +411,7 @@ sys.exit(${attribute}())
 };
 
 export let test = tg.target(async () => {
-	return std.build(
-		tg`
+	return await $`
 				set -e
 
 				echo "Checking that we can run python scripts."
@@ -422,7 +422,5 @@ export let test = tg.target(async () => {
 
 				echo "Checking that we can create virtual envs."
 				python -m venv $OUTPUT || true
-			`,
-		{ env: toolchain() },
-	);
+			`.env(toolchain());
 });
