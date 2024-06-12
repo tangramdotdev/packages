@@ -1,6 +1,6 @@
 import * as gettext from "tg:gettext" with { path: "../gettext" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 

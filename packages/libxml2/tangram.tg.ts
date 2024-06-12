@@ -1,7 +1,7 @@
 import * as std from "tg:std" with { path: "../std" };
 import * as icu from "tg:icu" with { path: "../icu" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as perl from "tg:perl" with { path: "../perl" };
 import * as python from "tg:python" with { path: "../python" };
 import * as readline from "tg:readline" with { path: "../readline" };

@@ -8,7 +8,7 @@ import * as libxcrypt from "tg:libxcrypt" with { path: "../libxcrypt" };
 import * as m4 from "tg:m4" with { path: "../m4" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
 import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as readline from "tg:readline" with { path: "../readline" };
 import * as sqlite from "tg:sqlite" with { path: "../sqlite" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };

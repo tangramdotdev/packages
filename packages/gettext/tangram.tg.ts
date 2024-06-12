@@ -3,7 +3,7 @@ import * as attr from "tg:attr" with { path: "../attr" };
 import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
 import * as perl from "tg:perl" with { path: "../perl" };
-import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {

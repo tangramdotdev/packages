@@ -1,5 +1,5 @@
 import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
-import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as rust from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 

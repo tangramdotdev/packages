@@ -1,6 +1,6 @@
 import * as std from "tg:std" with { path: "../std" };
 import * as cmake from "tg:cmake" with { path: "../cmake" };
-import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as zstd from "tg:zstd" with { path: "../zstd" };
 
 export let metadata = {

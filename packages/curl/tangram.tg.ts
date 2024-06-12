@@ -1,6 +1,6 @@
 import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as perl from "tg:perl" with { path: "../perl" };
-import * as pkgconfig from "tg:pkgconfig" with { path: "../pkgconfig" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 import * as std from "tg:std" with { path: "../std" };
 
