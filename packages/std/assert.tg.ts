@@ -319,14 +319,12 @@ export let headerExists = tg.target(async (arg: HeaderArg) => {
 	`);
 
 	// Compile the program, ensuring the env properly made the header discoverable.
-	let program = tg.File.expect(
-		await std.build(tg`env && cc -xc "${source}" -o $OUTPUT`, {
-			env: std.env.arg(std.sdk(), arg.directory),
-		}),
-	);
+	let program = await $`env && cc -xc "${source}" -o $OUTPUT`
+		.env(std.sdk(), arg.directory)
+		.then(tg.File.expect);
 
 	// Run the program.
-	await std.build(program);
+	await $`${program}`;
 	return true;
 });
 
@@ -434,7 +432,7 @@ export let dlopen = async (arg: DlopenArg) => {
 	// Compile the program.
 	let linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
 	let sdkEnv = std.sdk(arg?.sdk);
-	let _program = tg.File.expect(
+	tg.File.expect(
 		await (
 			await tg.target(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
 				env: std.env.arg(
@@ -450,8 +448,6 @@ export let dlopen = async (arg: DlopenArg) => {
 		).output(),
 	);
 
-	// // Run the program.
-	// await std.build(program);
 	return true;
 };
 

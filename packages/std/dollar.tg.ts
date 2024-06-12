@@ -120,6 +120,8 @@ export let test = tg.target(async () => {
 		echo $NAME >> $OUTPUT
 		echo $TOOL >> $OUTPUT`
 		.env({ NAME: "ben" })
-		.env({ TOOL: "tangram" });
+		.env({ TOOL: "tangram" })
+		.env({ NAME: tg.Mutation.suffix("L.", " ") })
+		.then(tg.File.expect);
 	return output;
 });
