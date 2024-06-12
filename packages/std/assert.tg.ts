@@ -1,5 +1,6 @@
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.tg.ts";
+import { $ } from "./tangram.tg.ts";
 import { nativeProxiedSdkArgs } from "./sdk.tg.ts";
 import { manifestReferences, wrap } from "./wrap.tg.ts";
 
@@ -179,16 +180,9 @@ export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 		}
 	`);
 
-	tg.File.expect(
-		await (
-			await tg.target(
-				tg`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`,
-				{
-					env: std.env.arg([bootstrap.sdk(), arg.directory, arg.env ?? {}]),
-				},
-			)
-		).output(),
-	);
+	await $`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`
+		.env(bootstrap.sdk(), arg.directory, arg.env ?? {})
+		.then(tg.File.expect);
 	return true;
 });
 

@@ -2,30 +2,51 @@ import * as std from "./tangram.tg.ts";
 
 export function $(
 	strings: TemplateStringsArray,
-	...placeholders: std.Args<tg.Template.Arg>
+	...placeholders: std.args.UnresolvedArgs<tg.Template.Arg>
 ): Dollar {
 	return new Dollar(strings, placeholders);
 }
 
 class Dollar {
 	#strings: TemplateStringsArray;
-	#placeholders: std.Args<tg.Template.Arg>;
+	#placeholders: std.args.UnresolvedArgs<tg.Template.Arg>;
 	#host?: string;
 	#executable?: tg.Artifact | undefined;
 	#args?: Array<tg.Value>;
-	#env?: { [key: string]: tg.Value };
+	#env?: std.args.UnresolvedArgs<std.env.Arg>;
 	#lock?: tg.Lock | undefined;
 	#checksum?: tg.Checksum | undefined;
 
 	constructor(
 		strings: TemplateStringsArray,
-		...placeholders: std.Args<tg.Template.Arg>
+		...placeholders: std.args.UnresolvedArgs<tg.Template.Arg>
 	) {
 		this.#strings = strings;
 		this.#placeholders = placeholders;
 	}
 
-	env(): Dollar {
+	checksum(checksum: tg.Checksum): Dollar {
+		this.#checksum = checksum;
+		return this;
+	}
+
+	env(...envArgs: std.args.UnresolvedArgs<std.env.Arg>): Dollar {
+		this.#env = std.flatten([this.#env, ...envArgs]);
+		return this;
+	}
+
+	executable(executable: tg.Artifact): Dollar {
+		this.#executable = executable;
+		return this;
+	}
+
+	host(host: string): Dollar {
+		this.#host = host;
+		return this;
+	}
+
+	lock(lock: tg.Lock): Dollar {
+		this.#lock = lock;
 		return this;
 	}
 
@@ -38,17 +59,32 @@ class Dollar {
 		if (this.#host !== undefined) {
 			arg.host = this.#host;
 		}
+		// If the user specified a custom executable, use that.
 		if (this.#executable !== undefined) {
 			arg.executable = this.#executable;
 		} else {
-			arg.executable = await tg.symlink({ path: tg.path("/bin/sh") });
+			// Otherwise, use the default bash executable from the standard utils.
+			arg.executable = await std.utils.bash
+				.build()
+				.then((dir) => dir.get("bin/bash"))
+				.then(tg.File.expect);
 		}
-		arg.args = ["-c", await tg(this.#strings, this.#placeholders)];
+		// If we're using the default executable, add extra flags to make it more strict.
+		let prefixArgs = this.#args ? [] : ["-euo", "pipefail"];
+		arg.args = [
+			...prefixArgs,
+			"-c",
+			await tg(this.#strings, this.#placeholders),
+		];
 		if (this.#args !== undefined) {
 			arg.args.push(...this.#args);
 		}
+		// Ensure the standard utils are provided in the env.
+		let env_ = std.utils.env();
 		if (this.#env !== undefined) {
-			arg.env = this.#env;
+			arg.env = await std.env.arg(env_, this.#env);
+		} else {
+			arg.env = await env_;
 		}
 		if (this.#lock !== undefined) {
 			arg.lock = this.#lock;
@@ -79,6 +115,11 @@ class Dollar {
 }
 
 export let test = tg.target(async () => {
-	let output = await $`echo 'hi from dollar!!' > $OUTPUT`;
+	let f = tg.file("hello there!!!");
+	let output = await $`cat ${f} > $OUTPUT
+		echo $NAME >> $OUTPUT
+		echo $TOOL >> $OUTPUT`
+		.env({ NAME: "ben" })
+		.env({ TOOL: "tangram" });
 	return output;
 });
