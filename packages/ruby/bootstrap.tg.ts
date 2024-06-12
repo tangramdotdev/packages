@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 /** Source code for the version of Ruby to bootstrap. Use 2.5.0, the earliest supported. */
 export let source = tg.target(async () => {
@@ -13,15 +14,13 @@ export let source = tg.target(async () => {
 
 /** Returns an older version of Ruby that is only used to bootstrap it. */
 export let ruby = tg.target(async (host: string) => {
-	let build = await std.build(
-		tg`
+	let build = await $`
 			${source()}/configure --prefix $OUTPUT
 			make install
-		`,
-		{ env: std.sdk() },
-	);
+		`
+		.env(std.sdk())
+		.then(tg.Directory.expect);
 
-	tg.Directory.assert(build);
 	let { arch: hostArch, os: hostOs } = std.triple.components(host);
 	let rubylib = tg.Template.join(
 		":",

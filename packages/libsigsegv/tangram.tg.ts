@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "libsigsegv",
@@ -43,7 +44,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
+export let test = tg.target(async () => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
 			#include <stdio.h>
@@ -51,11 +52,8 @@ export let test = tg.target(() => {
 		`),
 	});
 
-	return std.build(
-		tg`
+	return await $`
 			echo "Checking if we can link against libsigsegv."
 			cc ${source}/main.c -o $OUTPUT -lsigsegv
-		`,
-		{ env: std.env.arg(std.sdk(), build()) },
-	);
+		`.env(std.sdk(), build());
 });

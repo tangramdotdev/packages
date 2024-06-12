@@ -1,6 +1,7 @@
 import * as gmp from "tg:gmp" with { path: "../gmp" };
 import * as nettle from "tg:nettle" with { path: "../nettle" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
@@ -82,7 +83,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
+export let test = tg.target(async () => {
 	let source = tg.directory({
 		["main.c"]: tg.file(`
 			#include <stdio.h>
@@ -90,19 +91,8 @@ export let test = tg.target(() => {
 		`),
 	});
 
-	return std.build(
-		tg`
+	return await $`
 			echo "Checking if we can link against gnutls."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp -lgnutls -lz
-		`,
-		{
-			env: std.env.arg(
-				std.sdk(),
-				build(),
-				nettle.nettle(),
-				gmp.gmp(),
-				zlib.build(),
-			),
-		},
-	);
+		`.env(std.sdk(), build(), nettle.build(), gmp.build(), zlib.build());
 });

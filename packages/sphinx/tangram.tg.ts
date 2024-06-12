@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import * as python from "tg:python" with { path: "../python" };
 
@@ -66,11 +67,8 @@ export let build = tg.target((arg?: Arg) => {
 	});
 });
 
-export let test = tg.target(() => {
-	return std.build(
-		tg`
+export let test = tg.target(async () => {
+	return await $`
 				sphinx --help
-			`,
-		{ env: build() },
-	);
+			`.env(build());
 });

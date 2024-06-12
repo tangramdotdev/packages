@@ -25,7 +25,7 @@ class Dollar {
 		this.#placeholders = placeholders;
 	}
 
-	checksum(checksum: tg.Checksum): Dollar {
+	checksum(checksum: tg.Checksum | undefined): Dollar {
 		this.#checksum = checksum;
 		return this;
 	}

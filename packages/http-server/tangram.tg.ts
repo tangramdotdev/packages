@@ -1,5 +1,6 @@
 import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import packageLock from "./package-lock.json" with { type: "file" };
 
@@ -46,11 +47,7 @@ export let build = tg.target(async (arg?: Arg) => {
 });
 
 export let test = tg.target(async () => {
-	await std.build(
-		tg`
+	return await $`
 			http-server --version | tee $OUTPUT
-		`,
-		{ env: build() },
-	);
-	return true;
+		`.env(build());
 });

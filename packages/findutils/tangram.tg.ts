@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "findutils",
@@ -42,15 +43,12 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let test = tg.target(() => {
-	return std.build(
-		`
+export let test = tg.target(async () => {
+	return await $`
 			echo "Checking that we can run findutils." | tee $OUTPUT
 			find --version | tee -a $OUTPUT
 			locate --version | tee -a $OUTPUT
 			updatedb --version | tee -a $OUTPUT
 			xargs --version | tee -a $OUTPUT
-		`,
-		{ env: build() },
-	);
+		`.env(build());
 });

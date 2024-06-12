@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "grep",
@@ -23,7 +24,7 @@ type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
 		env,
 		host,
@@ -49,9 +50,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export let test = tg.target(async () => {
-	await std.build(tg`
+	return await $`
 		echo "Checking that we can run grep." | tee $OUTPUT
 		${build()}/bin/grep --version | tee -a $OUTPUT
-	`);
-	return true;
+	`;
 });

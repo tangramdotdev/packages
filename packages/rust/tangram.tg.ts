@@ -1,5 +1,6 @@
 import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 import * as proxy_ from "./proxy.tg.ts";
@@ -89,21 +90,15 @@ export let toolchain = tg.target(async (arg?: ToolchainArg) => {
 	let sdk = await std.sdk({ host, targets });
 
 	// Install each package.
-	let rustInstall = await std.build(
-		tg`
+	let rustInstall = await $`
 			for package in ${packagesArtifact}/*/* ; do
 				echo "Installing $package"
 				bash "$package/install.sh" --prefix="$OUTPUT"
 				chmod -R +w "$OUTPUT"
 			done
-		`,
-		{ env: sdk },
-	);
-
-	tg.assert(
-		rustInstall instanceof tg.Directory,
-		`Expected rust installation to be a directory.`,
-	);
+		`
+		.env(sdk)
+		.then(tg.Directory.expect);
 
 	// Wrap the Rust binaries.
 	let executables = [
@@ -293,9 +288,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		};
 	}
 
-	let artifact = await std.build(buildScript, {
-		checksum,
-		env: std.env.arg(
+	let artifact = await $`${buildScript}`
+		.checksum(checksum)
+		.env(
 			sdk,
 			rustArtifact,
 			{
@@ -308,15 +303,13 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			verbosityEnv,
 			{ TANGRAM_HOST: std.triple.archAndOs(host) },
 			env,
-		),
-	});
-
-	// Ensure the output artifact matches the expected structure.
-	tg.assert(artifact instanceof tg.Directory);
+		)
+		.then(tg.Directory.expect);
 
 	// Store a handle to the release directory containing Tangram bundles.
-	let releaseDir = await artifact.get(`target/${target}/release`);
-	tg.assert(releaseDir instanceof tg.Directory);
+	let releaseDir = await artifact
+		.get(`target/${target}/release`)
+		.then(tg.Directory.expect);
 
 	// Grab the bins from the release dir.
 	let bins: Record<string, tg.Artifact> = {};
@@ -360,23 +353,21 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 		`;
 		let rustArtifact = toolchain();
 		let sdk = std.sdk();
-		let result = await std.build(vendorScript, {
-			checksum: "unsafe",
-			env: std.env.arg(sdk, {
+		let result = await $`${vendorScript}`
+			.checksum("unsafe")
+			.env(sdk, rustArtifact, {
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 				CARGO_HTTP_CAINFO: certFile,
-				PATH: tg`${rustArtifact}/bin`,
 				RUST_TARGET: rustTarget,
 				SSL_CERT_FILE: certFile,
-			}),
-		});
+			})
+			.then(tg.Directory.expect);
 
 		// Get the output.
-		tg.assert(result instanceof tg.Directory);
-		let vendoredSources = await result.get("tg_vendor_dir");
-		tg.assert(vendoredSources instanceof tg.Directory);
-		let config = await result.get("config");
-		tg.assert(config instanceof tg.File);
+		let vendoredSources = await result
+			.get("tg_vendor_dir")
+			.then(tg.Directory.expect);
+		let config = await result.get("config").then(tg.File.expect);
 
 		let text = await config.text();
 		let match = /tg_vendor_dir/g.exec(text);
@@ -566,7 +557,7 @@ export let testHost = tg.target(async () => {
 		${rustArtifact}/bin/cargo --version
 	`;
 
-	await std.build(script);
+	await $`${script}`;
 	return rustArtifact;
 });
 
@@ -591,7 +582,7 @@ export let testCross = tg.target(async () => {
 		${crossRust}/bin/cargo --version
 	`;
 
-	await std.build(script);
+	await $`${script}`;
 	return true;
 });
 
@@ -610,10 +601,10 @@ export let testProxy = tg.target(async () => {
 		proxy: true,
 	});
 
-	return std.build(tg`
+	return await $`
 		${helloWorld}/bin/hello-world     >> $OUTPUT
 		${helloOpenssl}/bin/hello-openssl >> $OUTPUT
-	`);
+	`;
 });
 
 // Compare the results of cargo vendor and vendorDependencies.
@@ -631,19 +622,16 @@ export let testVendorDependencies = tg.target(async () => {
 	`;
 	let rustArtifact = toolchain();
 	let sdk = std.sdk();
-	let executable = std.wrap(vendorScript, {
-		env: std.env(sdk, {
+
+	let cargoVendored = await $`${vendorScript}`
+		.checksum("unsafe")
+		.env(sdk, rustArtifact, {
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 			CARGO_HTTP_CAINFO: certFile,
-			PATH: tg`${rustArtifact}/bin`,
 			RUST_TARGET: "x86_64-linux-unknown-gnu",
 			SSL_CERT_FILE: certFile,
-		}),
-	});
-	let cargoVendored = await std.build({
-		executable,
-		checksum: "unsafe",
-	});
+		})
+		.then(tg.Directory.expect);
 	return tg.directory({
 		tgVendored,
 		cargoVendored,

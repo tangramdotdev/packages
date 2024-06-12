@@ -1,5 +1,6 @@
 import * as node from "tg:nodejs" with { path: "../nodejs" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 import packageLock from "./package-lock.json" with { type: "file" };
 
@@ -44,12 +45,9 @@ export let build = tg.target(async (arg?: Arg) => {
 	);
 });
 
-export let test = tg.target(() => {
-	return std.build(
-		`
+export let test = tg.target(async () => {
+	return await $`
 			echo "Checking that we can run vsce." | tee $OUTPUT
 			vsce --version | tee -a $OUTPUT
-		`,
-		{ env: build() },
-	);
+		`.env(build());
 });

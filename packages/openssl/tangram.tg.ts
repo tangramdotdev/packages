@@ -1,5 +1,6 @@
 import * as perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://openssl.org/",
@@ -40,7 +41,7 @@ export type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		dependencies: { perl: perlArg = {} } = {},
 		env: env_,
@@ -106,13 +107,10 @@ export let test = tg.target(async () => {
 
 	let sdkArg: std.sdk.Arg = { toolchain: "llvm" };
 
-	return std.build(
-		tg`
+	return await $`
 		 	echo "Checking if we can run openssl"
 			openssl --version
 			echo "Checking if we can link against libssl."
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto
-		`,
-		{ env: std.env.arg(std.sdk(sdkArg), build({ sdk: sdkArg })) },
-	);
+		`.env(std.sdk(sdkArg), build({ sdk: sdkArg }));
 });

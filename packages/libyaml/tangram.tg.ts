@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	name: "libyaml",
@@ -6,13 +7,15 @@ export let metadata = {
 };
 
 export let source = tg.target(async () => {
-	let { name, version } = metadata;
+	let { version } = metadata;
 	let checksum =
 		"sha256:c642ae9b75fee120b2d96c712538bd2cf283228d2337df2cf2988e3c02678ef4";
 	let extension = ".tar.gz";
 	let url = `https://github.com/yaml/libyaml/releases/download/${version}/yaml-${version}${extension}`;
-	let download = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(download);
+	return await std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {
@@ -26,7 +29,7 @@ type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
+		autotools = {},
 		build,
 		env,
 		host,
@@ -53,11 +56,8 @@ export let test = tg.target(async () => {
 		`),
 	});
 
-	return std.build(
-		tg`
+	return await $`
 			echo "Checking if we can link against libyaml."
 			cc ${source}/main.c -o $OUTPUT -lyaml
-		`,
-		{ env: std.env.arg(std.sdk(), build()) },
-	);
+		`.env(std.sdk(), build());
 });

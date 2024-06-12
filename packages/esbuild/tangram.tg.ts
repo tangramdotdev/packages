@@ -1,6 +1,7 @@
 import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
 import * as go from "tg:go" with { path: "../go" };
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	home: "https://esbuild.github.io",
@@ -78,12 +79,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		.then(tg.Directory.expect);
 });
 
-export let test = tg.target(() => {
-	return std.build(
-		`
+export let test = tg.target(async () => {
+	return await $`
 			echo "Checking that we can run esbuild." | tee $OUTPUT
 			echo "$(esbuild --version)" | tee -a $OUTPUT
-		`,
-		{ env: build() },
-	);
+		`.env(build());
 });

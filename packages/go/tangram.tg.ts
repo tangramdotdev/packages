@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://go.dev/",
@@ -211,8 +212,7 @@ export let build = tg.target(
 			env_,
 		);
 
-		let output = await std.build(
-			tg`
+		let output = await $`
 				set -x
 				# Copy the build tree into the working directory
 				cp -rT ${source}/. .
@@ -228,19 +228,14 @@ export let build = tg.target(
 				# Build Go.
 				${generateCommand}
 				${installCommand}
-			`,
-			{
-				host,
-				env,
-				checksum,
-			},
-		);
-
-		tg.assert(output instanceof tg.Directory);
+			`
+			.env(env)
+			.host(host)
+			.checksum(checksum)
+			.then(tg.Directory.expect);
 
 		// Get a list of all dynamically-linked binaries in the output.
-		let binDir = await output.get("bin");
-		tg.assert(binDir instanceof tg.Directory);
+		let binDir = await output.get("bin").then(tg.Directory.expect);
 
 		// Wrap each executable in the /bin directory.
 		for await (let [name, file] of binDir) {
@@ -274,8 +269,7 @@ export let vendor = async ({
 	let pruned = source;
 
 	let command = optionalCommand ?? tg`go mod vendor -v`;
-	let result = await std.build(
-		tg`
+	return await $`
 				export GOMODCACHE="$(mktemp -d)"
 
 				# Create a writable temp dir.
@@ -285,18 +279,12 @@ export let vendor = async ({
 				${command}
 
 				mv -T ./vendor "$OUTPUT"
-			`,
-		{
-			env: std.env.arg(toolchain(), {
-				SSL_CERT_DIR: std.caCertificates(),
-			}),
-		},
-	);
-
-	return tg.Directory.expect(result);
+			`
+		.env(toolchain(), { SSL_CERT_DIR: std.caCertificates() })
+		.then(tg.Directory.expect);
 };
 
-export let test = tg.target(() => {
+export let test = tg.target(async () => {
 	let source = tg.directory({
 		["main.go"]: tg.file(`
 			package main
@@ -326,17 +314,14 @@ export let test = tg.target(() => {
 		`),
 	});
 
-	return std.build(
-		tg`
+	return await $`
 				mkdir -p $OUTPUT
-				cp -r ${source}/. .
+				cp -R ${source}/. .
 				chmod -R u+w .
 				go env
 				go mod init main.go
 				go mod tidy
 				go run main.go
 				go run ./subcommand.go
-			`,
-		{ env: std.env.arg(std.sdk(), toolchain()) },
-	);
+			`.env(std.sdk(), toolchain());
 });

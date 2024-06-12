@@ -1,4 +1,5 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://nodejs.org/en",
@@ -88,17 +89,14 @@ export let toolchain = tg.target(async (args?: ToolchainArg) => {
 
 export let test = tg.target(async () => {
 	let node = toolchain();
-	return std.build(
-		tg`
+	return await $`
 		set -x
 		mkdir -p $OUTPUT
 		echo "node: " ${node}
 		node --version
 		echo "Checking if we can run node scripts."
 		node -e 'console.log("Hello, world!!!")'
-	`,
-		{ env: node },
-	);
+	`.env(node);
 });
 
 type PackageJson = {
@@ -354,14 +352,13 @@ let installPackages = async (
 				return undefined;
 			}
 
-			let installed = await std.build(
-				tg`
+			let installed = await $`
 				echo "Installing ${path}"
 				mkdir -p $OUTPUT
 				tar -xf ${tarball} --strip-components=1 --warning=no-unknown-keyword -C $OUTPUT
-			`,
-				{ env: std.sdk() },
-			);
+			`
+				.env(std.sdk())
+				.then(tg.Directory.expect);
 
 			return [path, installed] as [string, tg.Directory];
 		}),
