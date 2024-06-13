@@ -11,13 +11,6 @@ export type Arg = {
 
 /** Wrapper around tg.download that can optionally decompress and unpack tarballs. */
 export async function download(arg: Arg): Promise<tg.Artifact> {
-	return await download_(arg);
-}
-
-export default download;
-
-/** Inner definition of std.download. */
-export let download_ = tg.target(async (arg: Arg) => {
 	let {
 		checksum,
 		decompress: decompress_ = true,
@@ -58,7 +51,9 @@ export let download_ = tg.target(async (arg: Arg) => {
 				: undefined
 			: extract_;
 	return await download.unpackBlob({ decompress, extract, blob });
-});
+}
+
+export default download;
 
 export namespace download {
 	export type fromGitHubArg = GithubSource & {
