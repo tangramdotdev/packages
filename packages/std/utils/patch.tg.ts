@@ -27,8 +27,16 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target((arg?: Arg) => {
-	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
+export let build = tg.target(async (arg?: Arg) => {
+	let {
+		build: build_,
+		env: env_,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ?? {};
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
 
 	let configure = {
 		args: ["--disable-dependency-tracking"],
