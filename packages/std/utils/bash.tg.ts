@@ -62,7 +62,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: configureArgs,
 	};
-	let phases = { configure };
+	let phases = {
+		configure,
+		build: { args: tg.Mutation.prepend(["NO_GETTEXT=1"]) },
+		install: { args: tg.Mutation.prepend(["NO_GETTEXT=1"]) },
+	};
 
 	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	env.push(prerequisites(host));
@@ -73,6 +77,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let output = buildUtil({
 		...std.triple.rotate({ build, host }),
+		debug: true,
 		env: std.env.arg(env),
 		phases,
 		sdk,

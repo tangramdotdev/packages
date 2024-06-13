@@ -18,7 +18,7 @@ export { default as wrap } from "./wrap.tg.ts";
 
 export let metadata = {
 	name: "std",
-	version: "0.0.1",
+	version: "0.0.2",
 };
 
 export let flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {

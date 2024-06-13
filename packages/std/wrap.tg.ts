@@ -14,7 +14,7 @@ import inspectProcessSource from "./wrap/inspectProcess.c" with {
 export async function wrap(
 	...args: std.args.UnresolvedArgs<wrap.Arg>
 ): Promise<tg.File> {
-	return await wrap.target(...args);
+	return await wrap.inner(...args);
 }
 
 export default wrap;
@@ -204,7 +204,7 @@ export namespace wrap {
 		};
 	};
 
-	export let target = tg.target(async (...args: std.Args<wrap.Arg>) => {
+	export let inner = async (...args: std.args.UnresolvedArgs<wrap.Arg>) => {
 		let arg = await wrap.arg(...args);
 
 		tg.assert(arg.executable !== undefined, "No executable was provided.");
@@ -285,7 +285,7 @@ export namespace wrap {
 		// Write the manifest to the wrapper and return.
 		let output = await wrap.Manifest.write(wrapper, manifest);
 		return output;
-	});
+	};
 
 	export let envArgFromManifestEnv = async (
 		mutation: wrap.Manifest.Mutation | undefined,
@@ -1597,9 +1597,11 @@ export let argAndEnvDump = tg.target(async () => {
 	let sdkEnv = await std.env.arg(bootstrap.sdk.env());
 
 	return tg.File.expect(
-		await (await tg.target(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
-			env: sdkEnv,
-		})).output(),
+		await (
+			await tg.target(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
+				env: sdkEnv,
+			})
+		).output(),
 	);
 });
 
@@ -1634,7 +1636,9 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	let output = tg.File.expect((await tg.target(tg`${wrapper} > $OUTPUT`)).output());
+	let output = tg.File.expect(
+		(await tg.target(tg`${wrapper} > $OUTPUT`)).output(),
+	);
 	let text = await output.text();
 	tg.assert(
 		text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),

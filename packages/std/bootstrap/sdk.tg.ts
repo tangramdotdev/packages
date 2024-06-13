@@ -97,10 +97,10 @@ export namespace sdk {
 		return ret;
 	};
 
-	export let test = tg.target(async () => {
+	export let test = async () => {
 		let sdkEnv = await sdk();
 		let arg = await sdk.arg();
 		await std.sdk.assertValid(sdkEnv, arg);
 		return sdkEnv;
-	});
+	};
 }

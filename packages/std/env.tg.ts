@@ -4,7 +4,7 @@ import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: std.args.UnresolvedArgs<env.Arg>) {
-	return await env.target(...args);
+	return await env.inner(...args);
 }
 
 export namespace env {
@@ -30,7 +30,7 @@ export namespace env {
 	/** An object containing only a `utils` boolean field and no other members. */
 	export type UtilsToggle = { utils: boolean } & Record<string, never>;
 
-	export let target = tg.target(async (...args: std.Args<Arg>) => {
+	export let inner = async (...args: std.args.UnresolvedArgs<Arg>) => {
 		// Check if the user requested to omit the standard utils.
 		let utils = args.reduce((acc, arg) => {
 			if (isUtilsToggle(arg)) {
@@ -54,7 +54,7 @@ export namespace env {
 			buildToolchain,
 			env: std.env.arg(objectArgs),
 		});
-	});
+	};
 
 	/** Produce a single env object from a potentially nested array of env args. */
 	export let arg = async (
