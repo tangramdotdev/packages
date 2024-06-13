@@ -86,14 +86,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
-	let env = [
-		env_,
-		...dependencies,
-		{
-			// Don't use the "combine" LD proxy library path optimization. The newly created path won't be available during the build, but the existing library paths are.
-			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "none",
-		},
-	];
+	let env = [env_, ...dependencies];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
 	}

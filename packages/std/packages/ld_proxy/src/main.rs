@@ -307,20 +307,16 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// If any tracing level is set, enable verifying missing libraries.
 		let report_missing = options.tracing_level.is_some();
 
-		let library_paths = if is_executable {
-			optimize_library_paths(
-				&tg,
-				&output_file,
-				library_paths,
-				&mut needed_libraries,
-				options.library_path_optimization,
-				report_missing,
-				options.max_depth,
-			)
-			.await?
-		} else {
-			library_paths
-		};
+		let library_paths = optimize_library_paths(
+			&tg,
+			&output_file,
+			library_paths,
+			&mut needed_libraries,
+			options.library_path_optimization,
+			report_missing,
+			options.max_depth,
+		)
+		.await?;
 
 		tracing::trace!(
 			?library_paths,
@@ -525,12 +521,18 @@ async fn create_manifest<H: BuildHasher>(
 			None
 		}
 	} else if cfg!(target_os = "macos") {
-		// Unrender the library paths.
-		let library_paths = options
-			.library_paths
-			.iter()
-			.map(|library_path| template_data_to_symlink_data(unrender(tg, library_path)));
-		let library_paths = Some(futures::future::try_join_all(library_paths).await?);
+		// Render the library paths.
+		let library_paths = if let Some(library_paths) = library_paths {
+			let result = futures::future::try_join_all(library_paths.into_iter().map(|id| async {
+				let symlink = tg::Symlink::with_id(id);
+				let data = symlink.data(tg).await?;
+				Ok::<_, tg::Error>(data)
+			}))
+			.await?;
+			Some(result)
+		} else {
+			None
+		};
 		let mut preloads = None;
 		if let Some(injection_path) = options.injection_path.as_deref() {
 			preloads = Some(

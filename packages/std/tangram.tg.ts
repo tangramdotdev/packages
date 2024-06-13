@@ -18,7 +18,7 @@ export { default as wrap } from "./wrap.tg.ts";
 
 export let metadata = {
 	name: "std",
-	version: "0.0.0",
+	version: "0.0.1",
 };
 
 export let flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
@@ -372,4 +372,9 @@ export let testOciBasicEnvImage = tg.target(async () => {
 import { test as testDollar_ } from "./dollar.tg.ts";
 export let testDollar = tg.target(async () => {
 	return await testDollar_();
+});
+
+import { env as stdEnv } from "./env.tg.ts";
+export let testBaseEnv = tg.target(async () => {
+	return await stdEnv({ FOO: "bar" });
 });
