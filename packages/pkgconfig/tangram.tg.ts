@@ -1,5 +1,4 @@
 import * as bison from "tg:bison" with { path: "../bison" };
-import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
 import * as m4 from "tg:m4" with { path: "../m4" };
 import * as std from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
@@ -76,17 +75,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		m4.build(m4Arg),
 		zlib.build(zlibArg),
 	];
-	let additionalLibDirs = [];
-	if (std.triple.os(build) === "darwin") {
-		let libiconvArtifact = await libiconv.build({ build, host });
-		dependencies.push(libiconvArtifact);
-		additionalLibDirs.push(
-			tg.Directory.expect(await libiconvArtifact.get("lib")),
-		);
-		dependencies.push({
-			LDFLAGS: await tg.Mutation.prefix(tg`-L${libiconvArtifact}/lib`, " "),
-		});
-	}
 	let env = [...dependencies, env_];
 
 	env.push({
@@ -109,8 +97,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		await pkgConfigBuild.get("bin/pkg-config"),
 	);
 	if (proxy) {
-		pkgConfig = await tg`
-			#!/usr/bin/env sh
+		pkgConfig = await tg`#!/usr/bin/env sh
 			set -eu
 
 			PKG_CONFIG_PATH=""
@@ -135,9 +122,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		`;
 	}
 
-	let wrappedBin = std.wrap(pkgConfig, {
-		libraryPaths: additionalLibDirs,
-	});
+	let wrappedBin = std.wrap(pkgConfig);
 
 	return tg.directory(pkgConfigBuild, {
 		["bin/pkg-config"]: wrappedBin,
