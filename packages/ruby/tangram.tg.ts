@@ -161,6 +161,8 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
+export default toolchain;
+
 export type DownloadGemArg = {
 	/** The name of the gem. */
 	name: string;

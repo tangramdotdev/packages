@@ -62,6 +62,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
+export default build;
+
 export let test = tg.target(async () => {
 	return await $`
 		echo "Checking that we can run jq." | tee $OUTPUT

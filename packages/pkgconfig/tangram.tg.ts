@@ -129,6 +129,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
+export default build;
+
 export let path = tg.target(
 	async (
 		dependencies: Array<tg.Artifact>,

@@ -39,6 +39,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	});
 });
 
+export default build;
+
 export let test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFunction: build,

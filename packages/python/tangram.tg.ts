@@ -217,6 +217,8 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	return python;
 });
 
+export default toolchain;
+
 /** Internal: wrap a directory containing a /bin subdirectory with python scripts. */
 export let wrapScripts = async (
 	pythonInterpreter: tg.Symlink | tg.File,

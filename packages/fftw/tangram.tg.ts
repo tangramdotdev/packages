@@ -87,6 +87,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
+export default build;
+
 export let test = tg.target(async () => {
 	let artifact = build();
 	await std.assert.pkg({

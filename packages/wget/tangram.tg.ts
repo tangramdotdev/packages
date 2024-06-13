@@ -34,7 +34,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let wget = tg.target(async (...args: std.Args<Arg>) => {
+export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -88,6 +88,8 @@ export let wget = tg.target(async (...args: std.Args<Arg>) => {
 	});
 	return output;
 });
+
+export default build;
 
 export let test = tg.target(async () => {
 	return await $`

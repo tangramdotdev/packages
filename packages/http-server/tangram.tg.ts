@@ -46,6 +46,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	);
 });
 
+export default build;
+
 export let test = tg.target(async () => {
 	return await $`
 			http-server --version | tee $OUTPUT

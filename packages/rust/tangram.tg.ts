@@ -130,6 +130,8 @@ export let toolchain = tg.target(async (arg?: ToolchainArg) => {
 	return artifact;
 });
 
+export default toolchain;
+
 export type Arg = {
 	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
 	checksum?: tg.Checksum;

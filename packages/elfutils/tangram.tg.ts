@@ -113,3 +113,5 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	return result;
 });
+
+export default build;

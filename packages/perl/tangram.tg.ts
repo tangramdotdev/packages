@@ -153,6 +153,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
+export default build;
+
 /** Wrap a shebang'd perl script to use this package's bach as the interpreter.. */
 export let wrapScript = async (script: tg.File) => {
 	let scriptMetadata = await std.file.executableMetadata(script);

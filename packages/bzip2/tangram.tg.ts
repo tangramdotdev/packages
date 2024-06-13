@@ -115,6 +115,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
+export default build;
+
 export let test = tg.target(async () => {
 	let host = await std.triple.host();
 	let os = std.triple.os(host);

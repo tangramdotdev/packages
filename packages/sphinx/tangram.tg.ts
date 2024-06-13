@@ -67,6 +67,8 @@ export let build = tg.target((arg?: Arg) => {
 	});
 });
 
+export default build;
+
 export let test = tg.target(async () => {
 	return await $`
 				sphinx --help

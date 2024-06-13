@@ -108,6 +108,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
+export default build;
+
 export let interpreterName = (triple: string) => {
 	let arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;

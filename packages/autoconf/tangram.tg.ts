@@ -193,6 +193,8 @@ export let patchAutom4teCfg = tg.target(
 	},
 );
 
+export default build;
+
 export let test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFunction: build,
