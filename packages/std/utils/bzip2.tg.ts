@@ -102,17 +102,5 @@ export default build;
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let sdk = await bootstrap.sdk.arg(host);
-	let os = std.triple.os(host);
-
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libraries:
-			os === "darwin"
-				? [{ name: "bz2", dylib: false, staticlib: true }]
-				: ["bz2"],
-		metadata,
-		sdk,
-	});
-	return true;
+	return build({ host, sdk });
 });

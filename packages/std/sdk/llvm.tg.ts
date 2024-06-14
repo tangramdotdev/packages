@@ -15,13 +15,13 @@ export let metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "18.1.6",
+	version: "18.1.7",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:bd4b4cb6374bcd5fc5a3ba60cb80425d29da34f316b8821abc12c0db225cf6b4";
+		"sha256:74446ab6943f686391954cbda0d77ae92e8a60c432eff437b8666e121d748ec4";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;
@@ -37,6 +37,7 @@ export type LLVMArg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
+	lto?: boolean;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
@@ -46,6 +47,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		build: build_,
 		env: env_,
 		host: host_,
+		lto = false,
 		sdk,
 		source: source_,
 	} = arg ?? {};
@@ -99,6 +101,9 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			tg`${cmakeCacheDir}/Distribution.cmake`,
 		],
 	};
+	if (lto) {
+		configure.args.push("-DLLVM_ENABLE_LTO=1");
+	}
 
 	let buildPhase = {
 		command: "ninja",

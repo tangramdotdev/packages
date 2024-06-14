@@ -146,6 +146,9 @@ export let applyMutations = async <
 ): Promise<T> => {
 	return await args.reduce(
 		async (object, mutations) => {
+			if (mutations === undefined) {
+				return Promise.resolve({}) as Promise<T>;
+			}
 			for (let [key, mutation] of Object.entries(mutations)) {
 				await mutate(await object, key, mutation);
 			}

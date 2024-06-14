@@ -154,6 +154,9 @@ export let testUtilsBash = tg.target(async () => {
 export let testUtilsCoreutils = tg.target(async () => {
 	return await utils.coreutils.test();
 });
+export let testUtilsCoreutilsSource = tg.target(async () => {
+	return await utils.coreutils.source(triple.os(await triple.host()));
+});
 export let testStaticGnuEnv = tg.target(async () => {
 	return await utils.coreutils.gnuEnv();
 });

@@ -228,7 +228,7 @@ export let imageFromLayers = async (
 	let additionalEnv = layerCompression === "gzip" ? [] : [zstd()];
 	let layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
-			let file = await $`${compressionCmd} ${layer.tar} > $OUTPUT`
+			let file = await $`${compressionCmd} $(realpath ${layer.tar}) > $OUTPUT`
 				.env(additionalEnv)
 				.then(tg.File.expect);
 			let descriptor: ImageDescriptor<typeof mediaType> = {

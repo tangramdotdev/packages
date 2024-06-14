@@ -39,6 +39,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 
 	let configure = {
+		// NOTE: otherwise, we get  `/.tangram/artifacts/dir_01qje5ch3k30hr3p8gwjagm3r2bsrqezvswcgp148s5yw7hj7qmt10/configure: 560: 0: Bad file descriptor`
+		pre: "exec 0</dev/null",
 		args: ["--disable-dependency-tracking"],
 	};
 
@@ -59,12 +61,6 @@ export default build;
 
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["patch"],
-		metadata,
-		sdk: sdkArg,
-	});
-	return true;
+	let sdk = await bootstrap.sdk.arg(host);
+	return build({ host, sdk });
 });

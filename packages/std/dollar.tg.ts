@@ -74,7 +74,7 @@ class Dollar {
 		arg.args = [
 			...prefixArgs,
 			"-c",
-			await tg(this.#strings, this.#placeholders),
+			await tg(this.#strings, ...std.flatten(this.#placeholders)),
 		];
 		if (this.#args !== undefined) {
 			arg.args.push(...this.#args);
