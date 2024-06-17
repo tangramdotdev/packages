@@ -51,7 +51,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
-	let configureArgs = ["--without-bash-malloc", "--disable-nls"];
+	let configureArgs = ["--without-bash-malloc"];
 
 	// If the provided env has ncurses in the library path, use it instead of termcap.
 	let envArg = await std.env.arg(env_);
@@ -62,9 +62,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: configureArgs,
 	};
-	let phases = {
-		configure,
-	};
+	let phases = { configure };
 
 	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	env.push(prerequisites(host));

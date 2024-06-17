@@ -3,7 +3,7 @@ import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	name: "Python",
-	version: "3.12.3",
+	version: "3.12.4",
 };
 
 export let source = tg.target(async (os: string) => {
@@ -17,7 +17,7 @@ export let source = tg.target(async (os: string) => {
 	});
 
 	let checksum =
-		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
+		"sha256:f6d419a6d8743ab26700801b4908d26d97e8b986e14f95de31b32de2b0e79554";
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
 	return await std
 		.download({ url, checksum })

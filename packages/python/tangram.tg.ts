@@ -24,7 +24,7 @@ export let metadata = {
 	name: "Python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.12.3",
+	version: "3.12.4",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -37,7 +37,7 @@ export let versionString = () => {
 export let source = tg.target(async (): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:56bfef1fdfc1221ce6720e43a661e3eb41785dd914ce99698d8c7896af4bdaa1";
+		"sha256:f6d419a6d8743ab26700801b4908d26d97e8b986e14f95de31b32de2b0e79554";
 	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
 		name,

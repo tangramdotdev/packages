@@ -110,10 +110,6 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	let target = target_ ?? host;
 	let os = std.triple.os(host);
 
-	if (os === "darwin") {
-		buildInTree = true;
-	}
-
 	// Determine SDK configuration.
 	let sdkArgs: Array<std.sdk.ArgObject> | undefined = undefined;
 	// If any SDk arg is `false`, we don't want to include the SDK.
