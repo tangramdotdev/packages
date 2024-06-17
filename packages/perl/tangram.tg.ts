@@ -43,6 +43,12 @@ export let source = tg.target(async () => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		bison?: bison.Arg;
+		libffi?: libffi.Arg;
+		m4?: m4.Arg;
+		zlib?: zlib.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -53,6 +59,12 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
+		dependencies: {
+			bison: bisonArg = {},
+			libffi: libffiArg = {},
+			m4: m4Arg = {},
+			zlib: zlibArg = {},
+		} = {},
 		env: env_,
 		host: host_,
 		sdk,
@@ -63,7 +75,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
-	let prepare = tg`cp -r ${sourceDir}/. . && chmod -R u+w .`;
 
 	let configure = {
 		args: [
@@ -76,22 +87,20 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		command: "$SHELL Configure",
 	};
 
-	let phases = {
-		configure,
-		prepare,
-	};
+	let phases = { configure };
 
 	let dependencies = [
-		bison.build({ build, env: env_, host, sdk }),
-		libffi.build({ build, env: env_, host, sdk }),
-		m4.build({ build, env: env_, host, sdk }),
-		zlib.build({ build, env: env_, host, sdk }),
+		bison.build(bisonArg),
+		libffi.build(libffiArg),
+		m4.build(m4Arg),
+		zlib.build(zlibArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 
 	let perlArtifact = await std.autotools.build(
 		{
 			...std.triple.rotate({ build, host }),
+			buildInTree: true,
 			env,
 			phases,
 			prefixArg: "-Dprefix=",

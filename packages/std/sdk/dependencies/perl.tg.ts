@@ -44,7 +44,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
 
 	let sourceDir = source_ ?? source();
-	let prepare = tg`cp -r ${sourceDir}/. . && chmod -R u+w .`;
 
 	let configure = {
 		args: [
@@ -57,15 +56,13 @@ export let build = tg.target(async (arg?: Arg) => {
 		command: "$SHELL Configure",
 	};
 
-	let phases = {
-		configure,
-		prepare,
-	};
+	let phases = { configure };
 
 	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
 
 	let perlArtifact = await std.utils.buildUtil({
 		...std.triple.rotate({ build, host }),
+		buildInTree: true,
 		env,
 		phases,
 		prefixArg: "-Dprefix=",
