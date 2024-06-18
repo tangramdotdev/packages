@@ -13,8 +13,6 @@ import * as readline from "tg:readline" with { path: "../readline" };
 import * as sqlite from "tg:sqlite" with { path: "../sqlite" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
-import patches from "./patches" with { type: "directory" };
-
 import * as requirements from "./requirements.tg.ts";
 export { requirements };
 
@@ -45,18 +43,10 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 		extension,
 	});
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
-	let source = await std
+	return await std
 		.download({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-	// Apply patches.
-	let patchFiles = [];
-	for await (let [_, artifact] of patches) {
-		if (artifact instanceof tg.File) {
-			patchFiles.push(artifact);
-		}
-	}
-	return std.patch(source, ...(await Promise.all(patchFiles)));
 });
 
 export type Arg = {
@@ -142,23 +132,13 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		sqlite.build(sqliteArg),
 		zlib.build(zlibArg),
 	];
-	let env = [
-		...dependencies,
-		{
-			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "resolve",
-		},
-		env_,
-	];
+	let env = [...dependencies, env_];
 	if (os === "darwin") {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: "14.4" });
 	}
 
 	let configure = {
-		args: [
-			"--disable-test-modules",
-			"--with-pkg-config=yes",
-			"--without-c-locale-coercion",
-		],
+		args: ["--with-pkg-config=yes", "--without-c-locale-coercion"],
 	};
 
 	// Enable PGO on macOS and Linux only if the LLVm toolchain is not used.
@@ -171,7 +151,12 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		configure.args.push("--enable-optimizations");
 	}
 
-	let phases = { configure };
+	// Allow loading libraries from the compile-time library path.
+	let runtimeLibraryEnvVar =
+		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+	let prepare = `export ${runtimeLibraryEnvVar}=$LIBRARY_PATH`;
+
+	let phases = { prepare, configure };
 
 	let output = await std.autotools.build(
 		{

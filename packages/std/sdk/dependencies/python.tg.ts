@@ -46,9 +46,8 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 	let os = std.triple.os(build);
 
-	let additionalEnv: std.env.Arg = {
-		TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "none",
-	};
+	// Allow loading libraries from the compile-time library path.
+	let prepare = `export LD_LIBRARY_PATH=$LIBRARY_PATH`;
 
 	let configure = {
 		args: [
@@ -59,23 +58,20 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	// NOTE - the current llvm SDK does not support profiling required to enable PGO. For now, don't enable PGO if an explicit CC was passed.
+	let phases = { prepare, configure };
+
 	let providedCc = await std.env.tryGetKey({ env: env_, key: "CC" });
 	if (providedCc) {
 		configure.args.push(`CC="$CC"`);
 	}
 
-	let env = std.env.arg(
-		env_,
-		std.utils.env({ build, host, sdk }),
-		additionalEnv,
-	);
+	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
 
 	// Build python.
 	let result = std.autotools.build({
 		...std.triple.rotate({ build, host }),
 		env,
-		phases: { configure },
+		phases,
 		sdk,
 		source: source_ ?? source(os),
 	});
