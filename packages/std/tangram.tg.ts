@@ -116,6 +116,7 @@ export let testPhasesEnv = tg.target(async () => {
 import {
 	testSingleArgObjectNoMutations,
 	testReferences,
+	testDylibPath,
 	wrap,
 } from "./wrap.tg.ts";
 export let testWrap = tg.target(async () => {
@@ -125,6 +126,9 @@ export let testWrap = tg.target(async () => {
 });
 export let testWrapReferences = tg.target(async () => {
 	return await testReferences();
+});
+export let testWrapDylibPath = tg.target(async () => {
+	return await testDylibPath();
 });
 export let testMuslWrapper = tg.target(async () => {
 	return await testSingleArgObjectNoMutations();

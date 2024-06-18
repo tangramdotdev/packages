@@ -4,7 +4,7 @@ import { interpreterName } from "./sdk/libc.tg.ts";
 import * as std from "./tangram.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
-import inspectProcessSource from "./wrap/inspectProcess.c" with {
+import inspectProcessSource from "./wrap/test/inspectProcess.c" with {
 	type: "file",
 };
 
@@ -47,7 +47,7 @@ export namespace wrap {
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
 		libraryPaths?: Array<tg.Directory | tg.Symlink>;
 
-		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. Default: true. */
+		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
 	};
 
@@ -157,36 +157,42 @@ export namespace wrap {
 			host,
 			identity,
 			interpreter,
-			merge,
+			merge: merge_ = true,
 			libraryPaths,
 		} = await std.args.applyMutations(mutationArgs);
 
+		// If the executable arg is a wrapper, obtain its manifest.
+		let existingManifest =
+			await wrap.existingManifestFromExecutableArg(executable);
+
+		// Determine whether to try to merge this wrapper with an existing one. If the user specified `true`, only honor if an existing manifest was found.
+		let merge = merge_ && existingManifest !== undefined;
+
 		// If the executable is a file and the behavior is merge, try to read the manifest from it.
 		if (merge) {
-			if (!(executable instanceof tg.File)) {
+			if (existingManifest === undefined) {
+				let dbg = tg.Artifact.is(executable)
+					? await executable.id()
+					: executable;
 				throw new Error(
-					`Cannot merge a non-file executable.  Received ${executable}.`,
+					`Could not locate existing manifest to merge with.  Received ${dbg}.`,
 				);
 			}
 
-			// Try to read the manifest from it.
-			let existingManifest = await wrap.Manifest.read(executable);
-			if (existingManifest !== undefined) {
-				let env_ = await wrap.envArgFromManifestEnv(existingManifest.env);
-				let env =
-					env_ instanceof tg.Mutation ? env_ : await tg.Mutation.append(env_);
-				identity = existingManifest.identity;
-				interpreter = await wrap.interpreterFromManifestInterpreter(
-					existingManifest.interpreter,
-				);
-				executable = await wrap.executableFromManifestExecutable(
-					existingManifest.executable,
-				);
-				env = env;
-				args_ = await Promise.all(
-					(existingManifest.args ?? []).map(templateFromManifestTemplate),
-				);
-			}
+			let env_ = await wrap.envArgFromManifestEnv(existingManifest.env);
+			let env =
+				env_ instanceof tg.Mutation ? env_ : await tg.Mutation.append(env_);
+			identity = existingManifest.identity;
+			interpreter = await wrap.interpreterFromManifestInterpreter(
+				existingManifest.interpreter,
+			);
+			executable = await wrap.executableFromManifestExecutable(
+				existingManifest.executable,
+			);
+			env = env;
+			args_ = await Promise.all(
+				(existingManifest.args ?? []).map(templateFromManifestTemplate),
+			);
 		}
 
 		let env = await std.env.arg(env_ ?? []);
@@ -301,7 +307,10 @@ export namespace wrap {
 	export let interpreterFromManifestInterpreter = async (
 		manifestInterpreter: wrap.Manifest.Interpreter | undefined,
 	): Promise<wrap.Interpreter | undefined> => {
-		switch (manifestInterpreter?.kind) {
+		if (manifestInterpreter === undefined) {
+			return undefined;
+		}
+		switch (manifestInterpreter.kind) {
 			case "normal": {
 				return {
 					executable: await symlinkFromManifestSymlink(
@@ -394,6 +403,26 @@ export namespace wrap {
 				return tg.unreachable(`Unexpected interpreter ${manifestInterpreter}`);
 			}
 		}
+	};
+
+	/** Utility to retrieve the existing manifest from an exectuable arg, if it's a wrapper. If not, returns `undefined`. */
+	export let existingManifestFromExecutableArg = async (
+		executable: undefined | string | tg.Template | tg.File | tg.Symlink,
+	): Promise<wrap.Manifest | undefined> => {
+		let ret = undefined;
+		if (executable instanceof tg.File || executable instanceof tg.Symlink) {
+			let f =
+				executable instanceof tg.Symlink
+					? await executable.resolve()
+					: executable;
+			if (f instanceof tg.File) {
+				let manifest = await wrap.Manifest.read(f);
+				if (manifest) {
+					ret = manifest;
+				}
+			}
+		}
+		return ret;
 	};
 
 	export let executableFromManifestExecutable = async (
@@ -1691,4 +1720,50 @@ export let testReferences = tg.target(async () => {
 
 	let bundle = tg.Artifact.bundle(wrapper);
 	return bundle;
+});
+
+import libGreetSource from "./wrap/test/greet.c" with { type: "file" };
+import driverSource from "./wrap/test/driver.c" with { type: "file" };
+export let testDylibPath = tg.target(async () => {
+	let host = await std.triple.host();
+	let os = std.triple.os(host);
+	let dylibExt = os === "darwin" ? "dylib" : "so";
+
+	// Obtain a non-proxied toolchain env from the bootstrap
+	let bootstrapSdk = bootstrap.sdk.env();
+
+	// Compile the greet library
+	let sharedLibraryDir = await (
+		await tg.target(
+			tg`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`,
+			{ env: await std.env.arg(bootstrapSdk) },
+		)
+	)
+		.output()
+		.then(tg.Directory.expect);
+	console.log("sharedLibraryDir", await sharedLibraryDir.id());
+
+	// Compile the driver.
+	let driver = await (
+		await tg.target(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
+			env: await std.env.arg(bootstrapSdk),
+		})
+	)
+		.output()
+		.then(tg.File.expect);
+	console.log("unwrapped driver", await driver.id());
+
+	// Wrap the driver with just the interpreter.
+	let interpreterWrapper = await wrap(driver, {
+		buildToolchain: bootstrapSdk,
+	});
+	console.log("interpreterWrapper", await interpreterWrapper.id());
+
+	// Re-wrap the driver program with the library path.
+	let libraryPathWrapper = await wrap(interpreterWrapper, {
+		buildToolchain: bootstrapSdk,
+		libraryPaths: [tg.symlink(tg`${sharedLibraryDir}/lib`)],
+	});
+	console.log("libraryPathWrapper", await libraryPathWrapper.id());
+	return libraryPathWrapper;
 });

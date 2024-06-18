@@ -45,8 +45,10 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 		extension,
 	});
 	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ checksum, url }));
-	let source = await std.directory.unwrap(download);
+	let source = await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 	// Apply patches.
 	let patchFiles = [];
 	for await (let [_, artifact] of patches) {

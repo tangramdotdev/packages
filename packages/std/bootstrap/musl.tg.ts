@@ -41,13 +41,13 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 
 	let phases = {
-		prepare: "env",
 		configure,
 		install,
 	};
 
 	let env = std.env.arg(bootstrap.make.build(host), {
 		CPATH: tg.Mutation.unset(),
+		LIBRARY_PATH: tg.Mutation.unset(),
 	});
 
 	let result = await std.autotools.build({
@@ -59,7 +59,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source(),
 	});
 
-	// The ld-musl symlink installed by default points to a broken absolute path. Use a relativesymlink instead.
+	// The ld-musl symlink installed by default points to a broken absolute path. Use a relative symlink instead.
 	result = await tg.directory(result, {
 		[`lib/${interpreterName(hostSystem)}`]: tg.symlink("libc.so"),
 	});

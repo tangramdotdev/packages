@@ -7,7 +7,7 @@ export let metadata = {
 		"https://github.com/nodejs/node/blob/12fb157f79da8c094a54bc99370994941c28c235/LICENSE",
 	name: "nodejs",
 	repository: "https://github.com/nodejs/node",
-	version: "20.13.1",
+	version: "20.14.0",
 };
 
 type ToolchainArg = {
@@ -17,8 +17,8 @@ type ToolchainArg = {
 	target?: string;
 };
 
-// URLs taken from https://nodejs.org/dist/v${version}/.
-// Hashes taken from https://nodejs.org/dist/v${version}/SHASUM256.txt.asc
+// URLs taken from `https://nodejs.org/dist/v${version}/`.
+// Hashes taken from `https://nodejs.org/dist/v${version}/SHASUMS256.txt.asc`.
 let source = async (): Promise<tg.Directory> => {
 	// Known versions of NodeJS.
 	let version = metadata.version;
@@ -33,22 +33,22 @@ let source = async (): Promise<tg.Directory> => {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
-				"sha256:d251cda3ee0a539d8aea4ea2327e98998cb23487569073902e35efb0526d574b",
+				"sha256:8fb7012589850390ec658f58aaa11656031f64a7a8efb0b37607ca140cefe3a9",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
 			checksum:
-				"sha256:efc0f295dd878e510ab12ea36bbadc3db03c687ab30c07e86c7cdba7eed879a9",
+				"sha256:fedf8fa73b6f51c4ffcc5da8f86cd1ed381bc9dceae0829832c7d683a78b8e36",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
-				"sha256:e8a8e78b91485bc95d20f2aa86201485593685c828ee609245ce21c5680d07ce",
+				"sha256:63ee914bdbb1552213ec4e21ea83685e11d969d50fc7801d6db981089cd607fe",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:c83bffeb4eb793da6cb61a44c422b399048a73d7a9c5eb735d9c7f5b0e8659b6",
+				"sha256:78e05a047b61f312db2de5e0127aeeb1274753c7f215f8892f3e5f76a629a022",
 		},
 	};
 

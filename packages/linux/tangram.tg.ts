@@ -5,13 +5,13 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.9.4",
+	version: "6.9.5",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:272800e0d1a7d01a78bce95a3aaf5c80816f50eb15c517d7003e58355760ecc2";
+		"sha256:a51fb4ab5003a6149bd9bf4c18c9b1f0f4945c272549095ab154b9d1052f95b1";
 	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
 		name,

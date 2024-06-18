@@ -9,13 +9,6 @@ import * as std from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 import * as zstd from "tg:zstd" with { path: "../zstd" };
 
-import pwdPatchLinux from "./dont_use_bin_pwd_linux.patch" with {
-	type: "file",
-};
-import pwdPatchDarwin from "./dont_use_bin_pwd_darwin.patch" with {
-	type: "file",
-};
-
 export let metadata = {
 	homepage: "https://www.postgresql.org",
 	license: "https://www.postgresql.org/about/licence/",
@@ -35,15 +28,13 @@ export let source = tg.target(async (os: string) => {
 		extension,
 	});
 	let url = `https://ftp.postgresql.org/pub/source/v${version}/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ checksum, url }));
-	let source = await std.directory.unwrap(download);
-
-	let pwdPatch = os === "linux" ? pwdPatchLinux : pwdPatchDarwin;
-	source = await std.patch(source, pwdPatch);
-
-	return source;
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
-type Arg = {
+
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
@@ -125,6 +116,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let output = await std.autotools.build(
 		{
 			...std.triple.rotate({ build, host }),
+			buildInTree: true,
 			env: std.env.arg(...env),
 			phases,
 			sdk,
