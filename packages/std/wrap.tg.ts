@@ -152,7 +152,7 @@ export namespace wrap {
 		let {
 			args: args_,
 			buildToolchain,
-			env: env_,
+			env: env_ = [],
 			executable,
 			host,
 			identity,
@@ -179,9 +179,7 @@ export namespace wrap {
 				);
 			}
 
-			let env_ = await wrap.envArgFromManifestEnv(existingManifest.env);
-			let env =
-				env_ instanceof tg.Mutation ? env_ : await tg.Mutation.append(env_);
+			env_ = [await wrap.envArgFromManifestEnv(existingManifest.env), ...env_];
 			identity = existingManifest.identity;
 			interpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
@@ -189,13 +187,12 @@ export namespace wrap {
 			executable = await wrap.executableFromManifestExecutable(
 				existingManifest.executable,
 			);
-			env = env;
 			args_ = await Promise.all(
 				(existingManifest.args ?? []).map(templateFromManifestTemplate),
 			);
 		}
 
-		let env = await std.env.arg(env_ ?? []);
+		let env = await std.env.arg(...env_);
 
 		return {
 			args: args_,
@@ -1756,6 +1753,7 @@ export let testDylibPath = tg.target(async () => {
 	// Wrap the driver with just the interpreter.
 	let interpreterWrapper = await wrap(driver, {
 		buildToolchain: bootstrapSdk,
+		env: { FOO: "bar" },
 	});
 	console.log("interpreterWrapper", await interpreterWrapper.id());
 

@@ -69,10 +69,20 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		args: [
 			"--disable-dependency-tracking",
 			"--enable-relocatable",
+			"--with-included-glib",
+			"--with-included-libcroco",
+			"--with-included-libunistring",
+			"--with-included-libxml",
 			"--without-emacs",
 			"--without-git",
 		],
 	};
+	if (os === "darwin") {
+		// NOTE - this bundles libintl.h, which is provided on Linux by glibc.
+		configure.args.push("--with-included-gettext");
+		// Allow the build process to locate libraries from the compile-time library path.
+		configure.args.push("DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH");
+	}
 	let phases = { configure };
 
 	let ncursesArtifact = await ncurses.build(ncursesArg);
@@ -92,11 +102,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		dependencies.push(aclArtifact);
 		dependencies.push(attrArtifact);
 	}
-	let env = [
-		...dependencies,
-		{ TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter" },
-		env_,
-	];
+	let env = [...dependencies, env_];
 
 	let output = await std.autotools.build(
 		{
