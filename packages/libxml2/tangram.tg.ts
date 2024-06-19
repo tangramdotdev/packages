@@ -33,7 +33,7 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 		.then(std.directory.unwrap);
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {

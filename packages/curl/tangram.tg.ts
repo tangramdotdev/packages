@@ -9,13 +9,13 @@ export let metadata = {
 	license: "MIT",
 	name: "curl",
 	repository: "https://github.com/curl/curl",
-	version: "8.7.1",
+	version: "8.8.0",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:f91249c87f68ea00cf27c44fdfa5a78423e41e71b7d408e5901a9896d905c495";
+		"sha256:77c0e1cd35ab5b45b659645a93b46d660224d0024f1185e8a95cdb27ae3d787d";
 	let owner = name;
 	let repo = name;
 	let tag = `curl-${version.replace(/\./g, "_")}`;
@@ -47,7 +47,7 @@ export type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
-		build,
+		build: build_,
 		dependencies: {
 			openssl: opensslArg = {},
 			perl: perlArg = {},
@@ -55,15 +55,23 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			zlib: zlibArg = {},
 		} = {},
 		env: env_,
-		host,
+		host: host_,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+	let os = std.triple.os(host);
+
+	let runtimeLibEnvVar =
+		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+	let prepare = `export ${runtimeLibEnvVar}="$LIBRARY_PATH"`;
+
 	let configure = {
 		args: ["--with-openssl"],
 	};
-	let phases = { configure };
+	let phases = { prepare, configure };
 
 	let openSslDir = await openssl.build(opensslArg);
 	let zlibDir = await zlib.build(zlibArg);
