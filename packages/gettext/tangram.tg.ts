@@ -1,5 +1,6 @@
 import * as acl from "tg:acl" with { path: "../acl" };
 import * as attr from "tg:attr" with { path: "../attr" };
+import * as gzip from "tg:gzip" with { path: "../gzip" };
 import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
 import * as perl from "tg:perl" with { path: "../perl" };
@@ -32,6 +33,7 @@ export type Arg = {
 	dependencies?: {
 		acl?: acl.Arg;
 		attr?: attr.Arg;
+		gzip?: gzip.Arg;
 		libiconv?: libiconv.Arg;
 		ncurses?: ncurses.Arg;
 		perl?: perl.Arg;
@@ -50,6 +52,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		dependencies: {
 			acl: aclArg = {},
 			attr: attrArg = {},
+			gzip: gzipArg = {},
 			libiconv: libiconvArg = {},
 			ncurses: ncursesArg = {},
 			perl: perlArg = {},
@@ -87,6 +90,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let ncursesArtifact = await ncurses.build(ncursesArg);
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
+		gzip.build(gzipArg),
 		ncursesArtifact,
 		perl.build(perlArg),
 		pkgconfig.build(pkgconfigArg),
