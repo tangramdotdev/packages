@@ -2,6 +2,7 @@ import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as perl from "tg:perl" with { path: "../perl" };
 import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as zstd from "tg:zstd" with { path: "../zstd" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -37,6 +38,7 @@ export type Arg = {
 		perl?: perl.Arg;
 		pkgconfig?: pkgconfig.Arg;
 		zlib?: zlib.Arg;
+		zstd?: zstd.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -53,6 +55,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			perl: perlArg = {},
 			pkgconfig: pkgconfigArg = {},
 			zlib: zlibArg = {},
+			zstd: zstdArg = {},
 		} = {},
 		env: env_,
 		host: host_,
@@ -75,12 +78,14 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let openSslDir = await openssl.build(opensslArg);
 	let zlibDir = await zlib.build(zlibArg);
+	let zstdDir = await zstd.build(zstdArg);
 
 	let env = [
 		perl.build(perlArg),
 		pkgconfig.build(pkgconfigArg),
 		openSslDir,
 		zlibDir,
+		zstdDir,
 		env_,
 	];
 
@@ -100,11 +105,12 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let libDir = tg.Directory.expect(await output.get("lib"));
 	let openSslLibDir = tg.Directory.expect(await openSslDir.get("lib"));
 	let zlibLibDir = tg.Directory.expect(await zlibDir.get("lib"));
+	let zsdtLibDir = tg.Directory.expect(await zstdDir.get("lib"));
 	let wrappedCurl = std.wrap(curlExe, {
 		env: {
 			SSL_CERT_DIR: std.caCertificates(),
 		},
-		libraryPaths: [libDir, openSslLibDir, zlibLibDir],
+		libraryPaths: [libDir, openSslLibDir, zlibLibDir, zsdtLibDir],
 	});
 	output = await tg.directory(output, {
 		["bin/curl"]: wrappedCurl,
