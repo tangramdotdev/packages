@@ -12,7 +12,7 @@ export let metadata = {
 	version: "3.46.0",
 };
 
-export let source = tg.target(async () => {
+export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:6f8e6a7b335273748816f9b3b62bbdc372a889de8782d7f048c653a447417a7d";
@@ -28,8 +28,10 @@ export let source = tg.target(async () => {
 
 	let pkgName = `${name}-autoconf-${produceVersion(version)}`;
 	let url = `https://www.sqlite.org/2024/${pkgName}${extension}`;
-	let download = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(download);
+	return std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export type Arg = {

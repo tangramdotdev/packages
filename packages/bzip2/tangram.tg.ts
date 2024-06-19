@@ -1,6 +1,10 @@
 import * as bash from "tg:bash" with { path: "../bash" };
 import * as std from "tg:std" with { path: "../std" };
 
+import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
+	type: "file",
+};
+
 export let metadata = {
 	homepage: "https://sourceware.org/bzip2/",
 	license:
@@ -10,7 +14,7 @@ export let metadata = {
 	version: "1.0.8",
 };
 
-export let source = tg.target(async () => {
+export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
@@ -21,8 +25,11 @@ export let source = tg.target(async () => {
 		extension,
 	});
 	let url = `https://sourceware.org/pub/${name}/${packageArchive}`;
-	let artifact = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(artifact);
+	let source = std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
+	return std.patch(source, dylibDetectOsPatch);
 });
 
 export type Arg = {
@@ -46,48 +53,20 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let host = host_ ?? (await std.triple.host());
 
 	let os = std.triple.os(std.triple.archAndOs(host));
+	let dylibExt = os === "darwin" ? "dylib" : "so";
 
 	let sourceDir = source_ ?? source();
 
-	// Only build the shared library on Linux.
-	let buildCommand =
-		os === "linux"
-			? `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make clean && make CC="$CC" SHELL="$SHELL"`
-			: `make CC="cc $CFLAGS" SHELL="$SHELL"`;
-
-	let install =
-		os === "darwin"
-			? {
-					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL"`,
-					args: tg.Mutation.unset(),
-			  }
-			: {
-					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
-					args: tg.Mutation.unset(),
-			  };
-
-	let fixup =
-		os === "linux"
-			? `
-				chmod -R u+w $OUTPUT
-				cd $OUTPUT/lib
-				ln -sv libbz2.so.${metadata.version} libbz2.so
-				cd $OUTPUT/bin
-				rm bzcmp
-				ln -s bzdiff bzcmp
-				rm bzegrep bzfgrep
-				ln -s bzgrep bzegrep
-				ln -s bzgrep bzfgrep
-				rm bzless
-				ln -s bzmore bzless
-			`
-			: "";
-
+	// Define phases.
+	let buildPhase = `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
+	let install = {
+		command: `make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.${dylibExt}.* $OUTPUT/lib`,
+		args: tg.Mutation.unset(),
+	};
 	let phases = {
-		build: buildCommand,
 		configure: tg.Mutation.unset(),
+		build: buildPhase,
 		install,
-		fixup,
 	};
 
 	let output = await std.autotools.build(
@@ -112,6 +91,14 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		});
 	}
 
+	// Replace absolute symlinks with relative ones.
+	output = await tg.directory(output, {
+		["bin/bzcmp"]: tg.symlink("bzdiff"),
+		["bin/bzegrep"]: tg.symlink("bzgrep"),
+		["bin/bzfgrep"]: tg.symlink("bzgrep"),
+		["bin/bzless"]: tg.symlink("bzmore"),
+	});
+
 	return output;
 });
 
@@ -123,10 +110,7 @@ export let test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFunction: build,
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libraries:
-			os === "darwin"
-				? [{ name: "bz2", dylib: false, staticlib: true }]
-				: ["bz2"],
+		libraries: ["bz2"],
 		metadata,
 	});
 	return true;

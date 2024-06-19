@@ -32,6 +32,8 @@ export let flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
 
 export let test = tg.target(() => testDefaultSdk());
 
+export default test;
+
 import * as triple from "./triple.tg.ts";
 export let testHostSystem = tg.target(async () => {
 	return triple.host();
