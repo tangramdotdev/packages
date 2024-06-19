@@ -47,15 +47,12 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
-	let os = std.triple.os(host);
-	let dylibExt = os === "darwin" ? "dylib" : "so";
 	let sourceDir = source_ ?? source();
 
 	// Define phases.
 	let buildPhase = `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
 	let install = {
-		command: `make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.${dylibExt}.* $OUTPUT/lib`,
-		args: tg.Mutation.unset(),
+		args: [`PREFIX="$OUTPUT" SHELL="$SHELL"`],
 	};
 	let phases = {
 		configure: tg.Mutation.unset(),
@@ -65,7 +62,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env = std.env.arg(env_, prerequisites(host));
 
-	let output = await buildUtil({
+	return await buildUtil({
 		...std.triple.rotate({ build, host }),
 		buildInTree: true,
 		env,
@@ -74,16 +71,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: sourceDir,
 		wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],
 	});
-
-	// Replace absolute symlinks with relative ones.
-	output = await tg.directory(output, {
-		["bin/bzcmp"]: tg.symlink("bzdiff"),
-		["bin/bzegrep"]: tg.symlink("bzgrep"),
-		["bin/bzfgrep"]: tg.symlink("bzgrep"),
-		["bin/bzless"]: tg.symlink("bzmore"),
-	});
-
-	return output;
 });
 
 export default build;
