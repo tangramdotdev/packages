@@ -124,7 +124,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 			sdkArgs.length === 0 ||
 			sdkArgs.every((arg) => arg?.host === undefined)
 		) {
-			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
+			sdkArgs = std.flatten([{ host, target, utils: true }, sdkArgs]);
 		}
 	}
 
@@ -228,7 +228,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 
 	if (buildInTree) {
 		let defaultPrepare = {
-			command: tg`cp -R ${source}/. . && chmod -R u+w . && find . -exec touch -t 197001010000 {} +`,
+			command: tg`cp -R ${source}/. . && chmod -R u+w .`,
 		};
 		defaultPhases.prepare = defaultPrepare;
 	}

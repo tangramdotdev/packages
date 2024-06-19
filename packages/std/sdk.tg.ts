@@ -193,7 +193,7 @@ export namespace sdk {
 			target,
 			targets: targets_,
 			toolchain: toolchain_,
-			utils = true,
+			utils = false,
 		} = await std.args.applyMutations(mutationArgs);
 
 		tg.assert(typeof proxyArg_ === "object" || proxyArg_ === undefined);
@@ -741,25 +741,8 @@ export namespace sdk {
 		}
 
 		// Assert it provides at the utils. If utils was set to false, check for the smaller set, otherwise ensure we built all the utils.
-		if (arg?.utils ?? true) {
+		if (arg?.utils) {
 			await std.utils.assertProvides(env);
-		} else {
-			await std.env.assertProvides({
-				env,
-				names: [
-					"awk",
-					"cp",
-					"find",
-					"grep",
-					"patch",
-					"ls",
-					"mkdir",
-					"mv",
-					"sed",
-					"sh",
-					"tar",
-				],
-			});
 		}
 
 		// Assert it can compile and wrap for all requested targets.

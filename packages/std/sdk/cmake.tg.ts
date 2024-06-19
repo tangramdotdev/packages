@@ -200,7 +200,7 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 			sdkArgs.length === 0 ||
 			sdkArgs.every((arg) => arg?.host === undefined)
 		) {
-			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
+			sdkArgs = std.flatten([{ host, target, utils: true }, sdkArgs]);
 		}
 	}
 
