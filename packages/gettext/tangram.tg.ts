@@ -1,11 +1,11 @@
 import * as acl from "tg:acl" with { path: "../acl" };
 import * as attr from "tg:attr" with { path: "../attr" };
-import * as gzip from "tg:gzip" with { path: "../gzip" };
 import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
 import * as perl from "tg:perl" with { path: "../perl" };
 import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as std from "tg:std" with { path: "../std" };
+import * as xz from "tg:xz" with { path: "../xz" };
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/gettext",
@@ -33,11 +33,11 @@ export type Arg = {
 	dependencies?: {
 		acl?: acl.Arg;
 		attr?: attr.Arg;
-		gzip?: gzip.Arg;
 		libiconv?: libiconv.Arg;
 		ncurses?: ncurses.Arg;
 		perl?: perl.Arg;
 		pkgconfig?: pkgconfig.Arg;
+		xz?: xz.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -52,11 +52,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		dependencies: {
 			acl: aclArg = {},
 			attr: attrArg = {},
-			gzip: gzipArg = {},
 			libiconv: libiconvArg = {},
 			ncurses: ncursesArg = {},
 			perl: perlArg = {},
 			pkgconfig: pkgconfigArg = {},
+			xz: xzArg = {},
 		} = {},
 		env: env_,
 		host: host_,
@@ -90,10 +90,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let ncursesArtifact = await ncurses.build(ncursesArg);
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		gzip.build(gzipArg),
 		ncursesArtifact,
 		perl.build(perlArg),
 		pkgconfig.build(pkgconfigArg),
+		xz.build(xzArg),
 	];
 	let aclArtifact = undefined;
 	let attrArtifact = undefined;
