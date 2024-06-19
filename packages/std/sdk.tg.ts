@@ -193,7 +193,7 @@ export namespace sdk {
 			target,
 			targets: targets_,
 			toolchain: toolchain_,
-			utils = false,
+			utils,
 		} = await std.args.applyMutations(mutationArgs);
 
 		tg.assert(typeof proxyArg_ === "object" || proxyArg_ === undefined);

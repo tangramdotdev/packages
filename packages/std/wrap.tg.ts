@@ -1067,7 +1067,9 @@ export let defaultShellInterpreter = async (
 	// Provide bash for the detected host system.
 	let buildArg = undefined;
 	if (buildToolchainArg) {
-		buildArg = { env: buildToolchainArg };
+		buildArg = { sdk: false, env: buildToolchainArg };
+	} else {
+		buildArg = { sdk: false, env: std.sdk() };
 	}
 	let shellArtifact = await std.utils.bash.build(buildArg);
 	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));

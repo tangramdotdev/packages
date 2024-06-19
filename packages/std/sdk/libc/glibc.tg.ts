@@ -85,16 +85,16 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	let buildSdkArg = await bootstrap.sdk.arg(build);
 	env = env.concat([
-		std.utils.env({ host: build, sdk: buildSdkArg }),
 		dependencies.bison.build({
+			env: env_,
 			host: build,
-			sdk: buildSdkArg,
+			sdk,
 		}),
 		dependencies.python.build({
+			env: env_,
 			host: build,
-			sdk: buildSdkArg,
+			sdk,
 		}),
 	]);
 

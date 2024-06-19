@@ -90,9 +90,9 @@ export let prerequisites = tg.target(async (hostArg?: string) => {
 
 	// Add patched GNU coreutils.
 	let coreutilsArtifact = await coreutils({
-		env: makeArtifact,
+		env: std.env.arg(bootstrap.sdk(), makeArtifact),
 		host,
-		sdk: bootstrap.sdk.arg(),
+		sdk: false,
 		usePrerequisites: false,
 	});
 	components.push(coreutilsArtifact);
@@ -168,7 +168,7 @@ export let assertProvides = async (env: std.env.Arg) => {
 
 export let test = tg.target(async () => {
 	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let utilsEnv = await env({ host, sdk: bootstrap.sdk.arg() });
+	let utilsEnv = await env({ host, sdk: false, env: bootstrap.sdk() });
 	await assertProvides(utilsEnv);
 	return utilsEnv;
 });

@@ -21,7 +21,7 @@ export type Arg = {
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
@@ -32,7 +32,7 @@ export let build = tg.target((arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
+	let env = std.env.arg(env_);
 
 	let output = std.utils.buildUtil({
 		...std.triple.rotate({ build, host }),

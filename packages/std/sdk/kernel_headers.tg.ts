@@ -36,7 +36,7 @@ export type Arg = {
 export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let {
 		build: build_,
-		env: env_,
+		env,
 		host: host_,
 		phases: phasesArg = [],
 		sdk: sdk_,
@@ -46,9 +46,6 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let buildTriple = build_ ?? host;
 
 	let system = std.triple.archAndOs(buildTriple);
-
-	let sdk =
-		typeof sdk_ === "boolean" ? await bootstrap.sdk.arg(buildTriple) : sdk_;
 
 	let sourceDir = source_ ?? source();
 
@@ -66,15 +63,6 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		karch = "arm";
 	}
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	env.push(std.sdk(sdk));
-	env.push(
-		std.utils.env({
-			sdk,
-			host: buildTriple,
-		}),
-	);
-
 	let build = {
 		body: tg`make -C ${sourceDir} O="\$PWD" -j"\$(nproc)" ARCH=${karch} headers`,
 		post: "find usr/include -type f ! -name '*.h' -delete",
@@ -88,7 +76,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let result = tg.Directory.expect(
 		await std.phases.build(
 			{
-				env: std.env.arg(env),
+				env,
 				phases: { build, install },
 				order,
 				target: { host: system },

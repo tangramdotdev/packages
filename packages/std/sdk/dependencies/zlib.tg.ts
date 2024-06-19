@@ -27,14 +27,12 @@ export type Arg = {
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
 export let build = tg.target((arg?: Arg) => {
-	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
-
-	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
+	let { build, env, host, sdk, source: source_ } = arg ?? {};
 
 	let output = std.utils.buildUtil({
 		...std.triple.rotate({ build, host }),

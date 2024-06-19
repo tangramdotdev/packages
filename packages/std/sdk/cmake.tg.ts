@@ -200,7 +200,7 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 			sdkArgs.length === 0 ||
 			sdkArgs.every((arg) => arg?.host === undefined)
 		) {
-			sdkArgs = std.flatten([{ host, target, utils: true }, sdkArgs]);
+			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
 		}
 	}
 
@@ -276,7 +276,8 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	if (includeSdk) {
 		let sdk = await std.sdk(sdkArgs);
-		env = await std.env.arg(sdk, env);
+		let utils = await std.utils.env({ host, sdk: false, env: sdk });
+		env = await std.env.arg(sdk, utils, env);
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.

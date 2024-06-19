@@ -65,7 +65,7 @@ class Dollar {
 		} else {
 			// Otherwise, use the default bash executable from the standard utils.
 			arg.executable = await std.utils.bash
-				.build()
+				.build({ sdk: false, env: std.sdk(), host: arg.host })
 				.then((dir) => dir.get("bin/bash"))
 				.then(tg.File.expect);
 		}
@@ -80,7 +80,7 @@ class Dollar {
 			arg.args.push(...this.#args);
 		}
 		// Ensure the standard utils are provided in the env.
-		let env_ = std.utils.env();
+		let env_ = std.utils.env({ sdk: false, env: std.sdk(), host: arg.host });
 		if (this.#env !== undefined) {
 			arg.env = await std.env.arg(env_, this.#env);
 		} else {

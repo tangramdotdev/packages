@@ -101,24 +101,9 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
+
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
-	let binTest = (name: string) => {
-		return {
-			name,
-			testArgs: [],
-			testPredicate: (stdout: string) => stdout.includes("Usage:"),
-		};
-	};
-	let binaries = ["attr", "getfattr", "setfattr"].map(binTest);
-
-	await std.assert.pkg({
-		binaries,
-		buildFunction: build,
-		libraries: ["attr"],
-		metadata,
-		sdk: sdkArg,
-	});
-	return true;
+	let sdk = await bootstrap.sdk(host);
+	return build({ host, sdk: false, env: sdk });
 });

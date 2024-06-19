@@ -40,11 +40,12 @@ export let build = tg.target(async (arg?: string) => {
 	};
 
 	let output = std.autotools.build({
+		env: sdk(host),
 		host,
 		opt: "s",
 		phases,
 		prefixArg: "none",
-		sdk: sdk.arg(host),
+		sdk: false,
 		source: source(),
 	});
 

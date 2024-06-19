@@ -27,19 +27,17 @@ export type Arg = {
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
-	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
+	let { build, env, host, sdk, source: source_ } = arg ?? {};
 
 	let sourceDir = source_ ?? source();
 
 	let install = tg`make install PREFIX=$OUTPUT`;
 	let phases = { install };
-
-	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
 
 	let result = std.autotools.build({
 		...std.triple.rotate({ build, host }),

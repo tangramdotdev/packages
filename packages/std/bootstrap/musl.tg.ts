@@ -45,7 +45,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		install,
 	};
 
-	let env = std.env.arg(bootstrap.make.build(host), {
+	let env = std.env.arg(bootstrap.sdk(host), bootstrap.make.build(host), {
 		CPATH: tg.Mutation.unset(),
 		LIBRARY_PATH: tg.Mutation.unset(),
 	});
@@ -55,7 +55,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		host,
 		phases,
 		prefixPath: "/",
-		sdk: bootstrap.sdk.arg(host),
+		sdk: false,
 		source: source(),
 	});
 

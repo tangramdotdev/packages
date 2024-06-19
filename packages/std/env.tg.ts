@@ -45,7 +45,7 @@ export namespace env {
 		// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
 		let buildToolchain = undefined;
 		if (utils) {
-			objectArgs.push(await std.utils.env());
+			objectArgs.push(await std.utils.env({ sdk: false, env: std.sdk() }));
 		} else {
 			buildToolchain = await bootstrap.sdk();
 		}

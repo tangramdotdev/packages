@@ -29,18 +29,12 @@ export type Arg = {
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
 export let build = tg.target(async (arg?: Arg) => {
-	let {
-		build: build_,
-		env: env_,
-		host: host_,
-		sdk,
-		source: source_,
-	} = arg ?? {};
+	let { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -60,12 +54,10 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let phases = { prepare, configure };
 
-	let providedCc = await std.env.tryGetKey({ env: env_, key: "CC" });
+	let providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configure.args.push(`CC="$CC"`);
 	}
-
-	let env = std.env.arg(env_, std.utils.env({ build, host, sdk }));
 
 	// Build python.
 	let result = std.autotools.build({

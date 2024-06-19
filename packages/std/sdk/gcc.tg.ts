@@ -150,20 +150,21 @@ export let build = tg.target(async (arg: Arg) => {
 	let phases = { configure };
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	let buildSdkArg = bootstrap.sdk.arg(build);
 	env = env.concat([
-		std.utils.env({ sdk: buildSdkArg, host: build }),
 		dependencies.perl.build({
-			sdk: buildSdkArg,
+			env: env_,
 			host: build,
+			sdk,
 		}),
 		dependencies.python.build({
-			sdk: buildSdkArg,
+			env: env_,
 			host: build,
+			sdk,
 		}),
 		dependencies.zstd.build({
-			sdk: buildSdkArg,
+			env: env_,
 			host: build,
+			sdk,
 		}),
 	]);
 	env.push(additionalEnv);

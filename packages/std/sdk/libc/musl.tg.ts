@@ -77,12 +77,6 @@ export default tg.target(async (arg?: Arg) => {
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	env.push(
-		std.utils.env({
-			sdk: bootstrap.sdk.arg(build),
-			host: build,
-		}),
-	);
 	env.push({
 		CPATH: tg.Mutation.unset(),
 		LIBRARY_PATH: tg.Mutation.unset(),

@@ -22,7 +22,7 @@ export type Arg = {
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
@@ -38,10 +38,7 @@ export let build = tg.target((arg?: Arg) => {
 		],
 	};
 
-	let dependencies = [
-		std.utils.env({ build, host, sdk }),
-		m4({ build, host, sdk }),
-	];
+	let dependencies = [m4({ build, host, env: env_, sdk })];
 	let env = std.env.arg(env_, ...dependencies);
 
 	let output = std.utils.buildUtil({

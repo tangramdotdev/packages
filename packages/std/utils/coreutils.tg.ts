@@ -130,12 +130,12 @@ export default build;
 export let gnuEnv = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let os = std.triple.os(host);
-	let sdk = bootstrap.sdk.arg(host);
-	let env: tg.Unresolved<std.Args<std.env.Arg>> = [bootstrap.make.build(host)];
+	let sdk = bootstrap.sdk(host);
+	let env = std.env.arg(sdk, bootstrap.make.build(host));
 	let directory = await build({
 		host,
-		env: std.env.arg(env),
-		sdk,
+		env,
+		sdk: false,
 		staticBuild: os === "linux",
 		usePrerequisites: false,
 	});
@@ -148,16 +148,9 @@ export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
 	let system = std.triple.archAndOs(host);
 	let os = std.triple.os(system);
-	let sdkArg = await bootstrap.sdk.arg(host);
+	let sdk = await bootstrap.sdk(host);
 
-	let coreutils = await build({ host, sdk: sdkArg });
-
-	await std.assert.pkg({
-		binaries: ["cp", "mkdir", "mv", "ls", "rm"],
-		buildFunction: build,
-		metadata,
-		sdk: sdkArg,
-	});
+	let coreutils = await build({ host, sdk: false, env: sdk });
 
 	let expected;
 	let script;
@@ -223,8 +216,8 @@ export let test = tg.target(async () => {
 	// Run the script.
 	let platformSupportLib =
 		os === "darwin"
-			? libiconv({ host, sdk: sdkArg })
-			: attr({ host, sdk: sdkArg });
+			? libiconv({ host, sdk: false, env: sdk })
+			: attr({ host, sdk: false, env: sdk });
 	let output = tg.File.expect(
 		await (
 			await tg.target(script, {

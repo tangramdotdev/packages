@@ -80,8 +80,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		}
 	}
 
-	let deps = [std.utils.env({ host: build, sdk })];
-	let env = std.env.arg(env_, ...deps, additionalEnv);
+	let env = std.env.arg(env_, additionalEnv);
 
 	// Collect configuration.
 	let configure = {
