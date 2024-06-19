@@ -1,5 +1,5 @@
 diff --git a/Makefile-libbz2_so b/Makefile-libbz2_so
-index fb0f230..b28735f 100644
+index fb0f230..20a1e4a 100644
 --- a/Makefile-libbz2_so
 +++ b/Makefile-libbz2_so
 @@ -20,6 +20,21 @@
@@ -32,7 +32,7 @@ index fb0f230..b28735f 100644
 -	$(CC) $(CFLAGS) -o bzip2-shared bzip2.c libbz2.so.1.0.8
 -	rm -f libbz2.so.1.0
 -	ln -s libbz2.so.1.0.8 libbz2.so.1.0
-+	$(CC) -shared $(SOFLAG) -Wl,$(DYLIB_NAME).MAJOR_MINOR -o $(DYLIB_NAME).$(PKG_VERSION) $(OBJS)
++	$(CC) -shared $(SOFLAG) -Wl,$(DYLIB_NAME).$(MAJOR_MINOR) -o $(DYLIB_NAME).$(PKG_VERSION) $(OBJS)
 +	$(CC) $(CFLAGS) -o $(PKG_NAME)-shared bzip2.c $(DYLIB_NAME).$(PKG_VERSION)
 +	ln -s $(DYLIB_NAME).$(PKG_VERSION) $(DYLIB_NAME).$(MAJOR_MINOR)
  
