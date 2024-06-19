@@ -1,6 +1,9 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
+import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
+	type: "file",
+};
 
 export let metadata = {
 	name: "bzip2",
@@ -18,10 +21,11 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
 	let url = `https://sourceware.org/pub/bzip2/${packageArchive}`;
-	return await std
+	let source = await std
 		.download({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
+	return bootstrap.patch(source, dylibDetectOsPatch);
 });
 
 export type Arg = {
@@ -43,49 +47,22 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
-	let os = std.triple.os(host);
 	let sourceDir = source_ ?? source();
 
 	// Define phases.
-	let buildPhase =
-		os === "darwin"
-			? `make CC="$CC" SHELL="$SHELL"`
-			: `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
-	let install =
-		os === "darwin"
-			? {
-					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL"`,
-					args: tg.Mutation.unset(),
-			  }
-			: {
-					command: `make install PREFIX="$OUTPUT" SHELL="$SHELL" && cp libbz2.so.* $OUTPUT/lib`,
-					args: tg.Mutation.unset(),
-			  };
-	// NOTE - these symlinks get installed with absolute paths pointing to the ephermeral output directory. Use relative links instead.
-	let fixup = `
-		cd $OUTPUT/bin
-		rm bzcmp
-		ln -s bzdiff bzcmp
-		rm bzegrep bzfgrep
-		ln -s bzgrep bzegrep
-		ln -s bzgrep bzfgrep
-		rm bzless
-		ln -s bzmore bzless
-		cd $OUTPUT/lib
-	`;
-	if (os === "linux") {
-		fixup += `\nln -s libbz2.so.1.0 libbz2.so`;
-	}
+	let buildPhase = `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
+	let install = {
+		args: [`PREFIX="$OUTPUT" SHELL="$SHELL"`],
+	};
 	let phases = {
 		configure: tg.Mutation.unset(),
 		build: buildPhase,
 		install,
-		fixup,
 	};
 
 	let env = std.env.arg(env_, prerequisites(host));
 
-	let output = buildUtil({
+	return await buildUtil({
 		...std.triple.rotate({ build, host }),
 		buildInTree: true,
 		env,
@@ -94,7 +71,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: sourceDir,
 		wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],
 	});
-	return output;
 });
 
 export default build;
