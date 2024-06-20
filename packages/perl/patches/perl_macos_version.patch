@@ -6,7 +6,7 @@ diff -Naur perl-5.38.2/hints/darwin.sh perl-5.38.2_patched/hints/darwin.sh
      # "ProductVersion:    10.10.5"   "10.10"
      # "ProductVersion:    10.11"     "10.11"
 -        prodvers=`sw_vers|awk '/^ProductVersion:/{print $2}'|awk -F. '{print $1"."$2}'`
-+        prodvers="${MACOSX_DEPLOYMENT_TARGET:-14.4}"
++        prodvers="${MACOSX_DEPLOYMENT_TARGET:-14.5}"
      case "$prodvers" in
      [1-9][0-9].*)
        add_macosx_version_min ccflags $prodvers

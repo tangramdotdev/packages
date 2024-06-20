@@ -67,7 +67,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		path: tg.Path.new("bin/perl"),
 	});
 	let dependencies = [
-		autoconf.autoconf(autoconfArg),
+		autoconf.build(autoconfArg),
 		bison.build(bisonArg),
 		m4.build(m4Arg),
 		perlArtifact,

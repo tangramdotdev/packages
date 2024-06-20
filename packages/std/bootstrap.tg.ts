@@ -97,8 +97,16 @@ export let interpreterName = async (hostArg?: string) => {
 	}
 };
 
-export type SdkVersion = "12" | "12.1" | "12.3" | "13" | "13.3" | "14" | "14.4";
-export let LatestSdkVersion: SdkVersion = "14.4" as const;
+export type SdkVersion =
+	| "12"
+	| "12.1"
+	| "12.3"
+	| "13"
+	| "13.3"
+	| "14"
+	| "14.4"
+	| "14.5";
+export let LatestSdkVersion: SdkVersion = "14.5" as const;
 
 /** Retrieve a single version of the MacOSSDK */
 export let macOsSdk = (versionArg?: SdkVersion) => {
@@ -150,7 +158,7 @@ export let patch = async (
 
 /** Download a component tarball from the remote host. */
 export let remoteComponent = async (componentName: string) => {
-	let version = "v2024.04.02";
+	let version = "v2024.06.20";
 	let url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}.tar.zst`;
 	let checksum = checksums[componentName];
 	tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
@@ -178,6 +186,7 @@ export let componentList = async (arg?: Arg) => {
 		"macos_sdk_12.3",
 		"macos_sdk_13.3",
 		"macos_sdk_14.4",
+		"macos_sdk_14.5",
 		"toolchain_universal_darwin",
 		"utils_universal_darwin",
 	];
@@ -220,33 +229,35 @@ export let test = tg.target(async () => {
 
 let checksums: Record<string, tg.Checksum> = {
 	"macos_sdk_12.1":
-		"sha256:f43a9d4923dd06b74c1c9777743e44fffcbbdd5e7cbb6a66133c302b9742f01f",
+		"sha256:ec34c2b06b3e19829a101d34283ad6fab48481959a918ceb0583ce833075aede",
 	"macos_sdk_12.3":
-		"sha256:6aff63af47ea70a285109448e0d7565d7f9855d8d7bf0b54144a853e0649025e",
+		"sha256:fc19d39cb3bb4eb289a71c140f5b7b4de1c0d0b858fa6936ead47074becde4f6",
 	"macos_sdk_13.3":
-		"sha256:b7960164aea7559d2c4dfcb10ea9a1c9a2658c12d3fc420b6f4f4658a7e795be",
+		"sha256:0d2778863846b8c88fd6a26828d046c92e2f001c70459164a9fb214111d6454a",
 	"macos_sdk_14.4":
-		"sha256:fd3668ea4091c7f0d851016b18916b924900a253bf8dc28a6178bb44a1367833",
+		"sha256:11ac6a0b5a295238d215e68313d7d2a46485efafbb7a6106e495398bfd8dfc6a",
+	"macos_sdk_14.5":
+		"sha256:afc30888af86c1b4f80ea095c6ba2d580309ac016559e067e710682aebc233db",
 	dash_aarch64_linux:
-		"sha256:89a1cab57834f81cdb188d5f40b2e98aaff2a5bdae4e8a5d74ad0b2a7672d36b",
+		"sha256:7fd88a5e0e6800424b4ed36927861564eea99699ede9f81bc12729ec405ac193",
 	dash_universal_darwin:
-		"sha256:738409d7788da5a278cd58a43d6d0780be48a1a4d13ef6b87752472591ba5e41",
+		"sha256:d522cdef681f13a0f66e78a69db00e08b7c00bd2e65b967d52aa39e73b890add",
 	dash_x86_64_linux:
-		"sha256:899adb46ccf4cddc7bfeb7e83a6b2953124035c350d6f00f339365e3b01b920e",
+		"sha256:42afecad2eadf0d07745d9a047743931b270f555cc5ab8937f957e85e040dc02",
 	env_aarch64_linux:
-		"sha256:da4fed85cc4536de95b32f5a445e169381ca438e76decdbb4f117a1d115b0184",
+		"sha256:a3497e17fac0fb9fa8058157b5cd25d55c5c8379e317ce25c56dfd509d8dc4b4",
 	env_x86_64_linux:
-		"sha256:ea7b6f8ffa359519660847780a61665bb66748aee432dec8a35efb0855217b95",
+		"sha256:78a971736d9e66c7bdffa81a24a7f9842b566fdd1609fe7c628ac00dccc16dda",
 	toolchain_aarch64_linux:
-		"sha256:80dc8b9a596560959f074d18332143651132a147da9abbaf389b661d907c4d9e",
+		"sha256:6621ba7a5d6510e9db2e280fd4b69671e76398fa68fb4fb3740d1e4f332d463d",
 	toolchain_universal_darwin:
-		"sha256:6f2ea271a02d7306e15c01d6d97f56fea91e3115cc0be9fb1e3db24bd2d07051",
+		"sha256:7e5fd46f48d346bc3130495d7c083c643e52eeca200dd379c7b53e41051358f4",
 	toolchain_x86_64_linux:
-		"sha256:c70eb26d7664629a43c7a6fb91ef26578136e4da8a0d2b6e781c408616627551",
+		"sha256:63f543aac32a67b8cdd1c3274980db0495ba442d0763fdae9fc21e9af5ba4e19",
 	utils_aarch64_linux:
-		"sha256:f28077625374178017850db30c19b051dfbc9dad618d0b76394d3729b2a8eb25",
+		"sha256:45e5be2f4282d6f90a60516c0905ac72c630512918887762f8c74dbf2345cd54",
 	utils_universal_darwin:
-		"sha256:ccce6e34dc673c540d976020c1a0fcc05aa21638df370b12852a2aea80bee345",
+		"sha256:df10a8674a990d07f475da2f91777ab18e775181e64280bce2e2675ce6121515",
 	utils_x86_64_linux:
-		"sha256:96fb55fe25af716219cbf6247fd7345ab651ccc376e984f9279a37801c7f5dfe",
+		"sha256:4f69691d0976110088c0fd1019015a69d08493a7fcf4509f2484715ac1d11f1f",
 };

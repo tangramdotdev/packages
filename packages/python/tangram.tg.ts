@@ -134,7 +134,7 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	];
 	let env = [...dependencies, env_];
 	if (os === "darwin") {
-		env.push({ MACOSX_DEPLOYMENT_TARGET: "14.4" });
+		env.push({ MACOSX_DEPLOYMENT_TARGET: "14.5" });
 	}
 
 	let configure = {
