@@ -1,5 +1,6 @@
 /** This module provides environments ready to produce Tangram-wrapped executables from C and C++ code. */
 
+import * as bootstrap from "./bootstrap.tg.ts";
 import binutils from "./sdk/binutils.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
@@ -951,7 +952,7 @@ export let assertMoldComment = async (exe: tg.File, toolchain: std.env.Arg) => {
 	let elfComment = tg.File.expect(
 		await (
 			await tg.target(tg`readelf -p .comment ${exe} | grep mold > $OUTPUT`, {
-				env: await std.env.arg(toolchain),
+				env: await std.env.arg(toolchain, bootstrap.utils()),
 			})
 		).output(),
 	);
@@ -1094,19 +1095,7 @@ export let testLLVMMoldSdk = tg.target(async () => {
 		).output(),
 	);
 	let innerExe = tg.File.expect(await std.wrap.unwrap(output));
-	let elfComment = tg.File.expect(
-		await (
-			await tg.target(
-				tg`readelf -p .comment ${innerExe} | grep mold > $OUTPUT`,
-				{
-					env: await std.env.arg(moldSdk),
-				},
-			)
-		).output(),
-	);
-	let text = await elfComment.text();
-	tg.assert(text.includes("mold"));
-	tg.assert(text.includes(moldMetadata.version));
+	await assertMoldComment(innerExe, moldSdk);
 
 	return output;
 });

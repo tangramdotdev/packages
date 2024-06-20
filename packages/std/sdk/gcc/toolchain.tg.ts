@@ -104,8 +104,6 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 			sdk,
 		}));
 
-	console.log("sysroot", await sysroot.id());
-
 	// Produce a toolchain containing the sysroot and a cross-compiler.
 	let crossGCC = await gcc.build({
 		build: buildTriple,
