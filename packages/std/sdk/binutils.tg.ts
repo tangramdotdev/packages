@@ -89,6 +89,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			"--disable-dependency-tracking",
 			"--disable-nls",
 			"--disable-werror",
+			"--enable-deterministic-archives",
 			"--enable-gprofng=no",
 			`--build=${build}`,
 			`--host=${host}`,

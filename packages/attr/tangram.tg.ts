@@ -1,5 +1,7 @@
 import * as std from "tg:std" with { path: "../std" };
 
+import basenamePatch from "./basename.patch" with { type: "file" };
+
 export let metadata = {
 	name: "attr",
 	version: "2.5.2",
@@ -16,10 +18,13 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
 	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
-	return await std
+	let source = await std
 		.download({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
+
+	source = await std.patch(source, basenamePatch);
+	return source;
 });
 
 export type Arg = {

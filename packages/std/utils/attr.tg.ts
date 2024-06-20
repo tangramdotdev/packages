@@ -1,5 +1,7 @@
+import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
+import basenamePatch from "./attr_basename.patch" with { type: "file" };
 
 export let metadata = {
 	name: "attr",
@@ -17,10 +19,12 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
 	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
-	return await std
+	let source = await std
 		.download({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
+	source = await bootstrap.patch(source, basenamePatch);
+	return source;
 });
 
 export type Arg = {
@@ -99,8 +103,6 @@ export let build = tg.target(async (arg?: Arg) => {
 });
 
 export default build;
-
-import * as bootstrap from "../bootstrap.tg.ts";
 
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
