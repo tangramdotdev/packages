@@ -97,7 +97,9 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	);
 
 	// Construct the phases in order.
-	let empty = tg.template();
+	// FIXME: This is a hack to avoid the 0: Bad file descriptor in configure scripts on Linux.`
+	let empty = tg.template("exec 0</dev/null");
+	// let empty = tg.template();
 	let order = order_ ?? defaultOrder();
 	let script = empty;
 	if (debug) {

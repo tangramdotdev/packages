@@ -47,7 +47,7 @@ let binaryChecksums: { [key: string]: tg.Checksum } = {
 	["x86_64-linux"]:
 		"sha256:3cb191ed311dcb7b10dd2f6b2967bccfc823ae66fc493c983f36d13da25848f2",
 	["aarch64-darwin"]:
-		"sha256:4fa577079e2ba5d36617ad255f5dfb3dabbcd3e13fdb569297a2c26bee861eae:",
+		"sha256:4fa577079e2ba5d36617ad255f5dfb3dabbcd3e13fdb569297a2c26bee861eae",
 	["x86_64-darwin"]:
 		"sha256:a353568ee593c0841a98b1b5d1453b2dac19f6307c443b8b58929b08210875e5",
 };

@@ -104,6 +104,8 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 			sdk,
 		}));
 
+	console.log("sysroot", await sysroot.id());
+
 	// Produce a toolchain containing the sysroot and a cross-compiler.
 	let crossGCC = await gcc.build({
 		build: buildTriple,
@@ -183,10 +185,11 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 
 	// Create cross-toolchain from build to host.
 	let { env, sysroot } = await buildToHostCrossToolchain(host);
+	let utils = std.utils.env({ host, sdk: false, env: sdk });
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
-		env: std.env.arg(env, sdk),
+		env: std.env.arg(env, sdk, utils),
 		sdk: false,
 		build,
 		host,
@@ -196,7 +199,7 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 
 	let fullGCC = await gcc.build({
 		build,
-		env: std.env.arg(env, sdk, nativeHostBinutils),
+		env: std.env.arg(env, sdk, utils, nativeHostBinutils),
 		host,
 		sysroot,
 		sdk: false,
@@ -205,8 +208,8 @@ export let canadianCross = tg.target(async (hostArg?: string) => {
 	});
 
 	// Flatten the sysroot and combine into a native toolchain.
-	let innerSysroot = tg.Directory.expect(await sysroot.get(target));
-	let combined = await tg.directory(fullGCC, innerSysroot);
+	let innerSysroot = sysroot.get(target).then(tg.Directory.expect);
+	let combined = tg.directory(fullGCC, innerSysroot);
 	return std.env.arg(combined, nativeHostBinutils);
 });
 

@@ -78,7 +78,6 @@ export let build = tg.target(async (arg: Arg) => {
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
 	let additionalEnv = {};
-	let debug = false;
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (std.triple.environment(target) === "musl") {
@@ -127,7 +126,6 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-initfini-array",
 		];
 		additionalArgs.push(...stage1LimitedArgs);
-		debug = false;
 	}
 
 	if (variant === "stage2_full") {
@@ -145,7 +143,9 @@ export let build = tg.target(async (arg: Arg) => {
 		};
 	}
 
-	let configure = { args: [...commonArgs, ...additionalArgs] };
+	let configure = {
+		args: [...commonArgs, ...additionalArgs],
+	};
 
 	let phases = { configure };
 
@@ -171,7 +171,6 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let result = await std.autotools.build({
 		...std.triple.rotate({ build, host }),
-		debug,
 		env: std.env.arg(env),
 		fullRelro: false,
 		phases,

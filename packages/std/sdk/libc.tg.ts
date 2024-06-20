@@ -13,7 +13,7 @@ export type LibCArg = {
 };
 
 /** Obtain the proper standard C library for the given host triple. */
-export let libc = tg.target(async (arg: LibCArg) => {
+export let libc = async (arg: LibCArg) => {
 	let host = arg.host ?? (await std.triple.host());
 	// Libcs are built for a single target, which is referred to as the host in this context.
 	let kind = kindFromTriple(host);
@@ -26,7 +26,7 @@ export let libc = tg.target(async (arg: LibCArg) => {
 	} else {
 		return tg.unimplemented();
 	}
-});
+};
 
 export default libc;
 
@@ -75,7 +75,7 @@ export let linkerFlags = async (arg: LinkerFlagArg) => {
 export let constructSysroot = async (arg: LibCArg) => {
 	let host = arg.host ?? (await std.triple.host());
 	let linuxHeaders =
-		arg.linuxHeaders ?? tg.directory({ include: kernelHeaders(arg) });
+		arg.linuxHeaders ?? (await tg.directory({ include: kernelHeaders(arg) }));
 	let cLibrary = await libc({ ...arg, linuxHeaders });
 	let cLibInclude = tg.Directory.expect(await cLibrary.get(`${host}/include`));
 	let hostLinuxInclude = tg.Directory.expect(
