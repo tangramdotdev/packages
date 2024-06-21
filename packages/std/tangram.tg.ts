@@ -255,12 +255,7 @@ import {
 	testCanadianCross,
 	testCross,
 	testCrossRpi,
-	testStage1,
 } from "./sdk/gcc/toolchain.tg.ts";
-export let stage1 = tg.target(async () => {
-	await testStage1();
-	return true;
-});
 export let canadianCross = tg.target(async () => {
 	return testCanadianCross();
 });

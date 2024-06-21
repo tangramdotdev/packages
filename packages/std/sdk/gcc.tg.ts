@@ -149,24 +149,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let phases = { configure };
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	env = env.concat([
-		dependencies.perl.build({
-			env: env_,
-			host: build,
-			sdk,
-		}),
-		dependencies.python.build({
-			env: env_,
-			host: build,
-			sdk,
-		}),
-		dependencies.zstd.build({
-			env: env_,
-			host: build,
-			sdk,
-		}),
-	]);
+	let env = [env_];
 	env.push(additionalEnv);
 
 	let result = await std.autotools.build({

@@ -85,18 +85,6 @@ export default tg.target(async (arg: Arg) => {
 	};
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	env = env.concat([
-		dependencies.bison.build({
-			env: env_,
-			host: build,
-			sdk,
-		}),
-		dependencies.python.build({
-			env: env_,
-			host: build,
-			sdk,
-		}),
-	]);
 
 	env.push({
 		CC: `${host}-cc`,
