@@ -1,11 +1,12 @@
 import * as std from "tg:std" with { path: "../std" };
+import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
 	homepage: "https://bun.sh",
 	license: "MIT",
 	name: "bun",
 	repository: "https://github.com/oven-sh/bun",
-	version: "1.1.15",
+	version: "1.1.16",
 };
 
 export type Arg = {
@@ -40,14 +41,28 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 
 export default toolchain;
 
-// Taken from https://github.com/oven-sh/bun/releases/download/bun-v1.1.14/SHASUMS256.txt.asc
+// Taken from https://github.com/oven-sh/bun/releases/download/bun-v${version}/SHASUMS256.txt.asc
 let binaryChecksums: { [key: string]: tg.Checksum } = {
 	["aarch64-linux"]:
-		"sha256:7a459ca19c46b2ad40b412df973ce1550da554fc10b7ad58f3a3151ed149b144",
+		"sha256:fc528238c429f9b2951eb86f50b95a9ae6920bf295be4e2c155104ba8497eb3e",
 	["x86_64-linux"]:
-		"sha256:3cb191ed311dcb7b10dd2f6b2967bccfc823ae66fc493c983f36d13da25848f2",
+		"sha256:e82b9fcbbe84a67a4c0c2246571219d16b5f00b0fa891928efe3538491bdbf96",
 	["aarch64-darwin"]:
-		"sha256:4fa577079e2ba5d36617ad255f5dfb3dabbcd3e13fdb569297a2c26bee861eae",
+		"sha256:c2ffa8c149008b324ff621cb60509873fa8816efdce1b7870226dd1bdd31415d",
 	["x86_64-darwin"]:
-		"sha256:a353568ee593c0841a98b1b5d1453b2dac19f6307c443b8b58929b08210875e5",
+		"sha256:a748bc18f0faff981568da44a83b52554f223c22e8195765a68a38ebdfa93e9c",
 };
+
+export let test = tg.target(async () => {
+	let bun = toolchain();
+	let version = await $`bun --version | tee $OUTPUT`
+		.env(bun)
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((t) => t.trim());
+	tg.assert(
+		version === metadata.version,
+		`expected ${metadata.version}, got ${version}`,
+	);
+	return bun;
+});
