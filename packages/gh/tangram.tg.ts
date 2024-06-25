@@ -39,7 +39,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 	return go.build(
 		{
-			...std.triple.rotate({ build, host }),
+			...(await std.triple.rotate({ build, host })),
 			env,
 			sdk,
 			source: source_ ?? source(),

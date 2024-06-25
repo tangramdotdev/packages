@@ -95,7 +95,7 @@ export default tg.target(async (arg: Arg) => {
 	});
 
 	let result = await std.autotools.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		opt: "3",
 		phases,

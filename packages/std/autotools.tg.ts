@@ -193,8 +193,21 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
 		let sdk = await std.sdk(sdkArgs);
-		let utils = await std.utils.env({ host, sdk: false, env: sdk });
+		// Add a set of utils for the host, compiled with the default SDK to improve cache hits.
+		let utils = await std.utils.env({
+			host,
+			sdk: false,
+			env: std.sdk({ host }),
+		});
 		env = await std.env.arg(sdk, utils, env);
+	}
+
+	// If cross compiling, override CC/CXX to point to the correct compiler.
+	if (host !== target) {
+		env = await std.env.arg(env, {
+			CC: `${target}-cc`,
+			CXX: `${target}-c++`,
+		});
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.

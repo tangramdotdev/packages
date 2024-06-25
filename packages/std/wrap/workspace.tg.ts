@@ -192,9 +192,9 @@ export let build = async (arg: BuildArg) => {
 	let system = std.triple.archAndOs(host);
 	let os = std.triple.os(system);
 
-	let hostArch = std.triple.arch(host);
-	let targetArch = std.triple.arch(target);
-	let isCross = hostArch !== targetArch;
+	let isCross =
+		std.triple.arch(host_) !== std.triple.arch(target_) ||
+		std.triple.os(host_) !== std.triple.os(target_);
 	let prefix = ``;
 	let suffix = tg``;
 	if (isCross) {
@@ -212,9 +212,17 @@ export let build = async (arg: BuildArg) => {
 	if (os === "linux") {
 		if (!isCross) {
 			buildToolchain = await bootstrap.sdk.env(host_);
+			host_ = await bootstrap.toolchainTriple(host_);
+			target_ = host_;
 		} else {
 			buildToolchain = await gcc.toolchain({ host, target });
 			setSysroot = true;
+		}
+	} else {
+		if (isCross) {
+			buildToolchain = await gcc.toolchain({ host, target });
+		} else {
+			buildToolchain = await bootstrap.sdk.env(host_);
 		}
 	}
 
@@ -251,6 +259,11 @@ export let build = async (arg: BuildArg) => {
 			[`CXX_${tripleToEnvVar(target)}`]: tg`${prefix}c++${suffix}`,
 		},
 	];
+
+	// On macOS, if cross-compiling, include the default SDK as well.
+	if (os === "darwin" && isCross) {
+		env.push(std.sdk());
+	}
 
 	// Set up platform-specific environment.
 	let interpreter = tg``;

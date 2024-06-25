@@ -112,9 +112,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		start=$(date +%s)
 		echo "Running phases: ${order.join(", ")}\n" | tee "$buildlog"`;
 	} else {
-		script = tg`${empty}
-		set -eu
-		`;
+		script = empty;
 	}
 	if (phases !== undefined) {
 		script = order.reduce(async (ret, phaseName) => {

@@ -259,7 +259,6 @@ import {
 export let canadianCross = tg.target(async () => {
 	return testCanadianCross();
 });
-
 export let testCrossToolchain = tg.target(() => {
 	return testCross();
 });
@@ -269,7 +268,7 @@ export let testCrossToolchainRpi = tg.target(() => {
 
 // SDK tests.
 
-import { sdk, assertAllSdks } from "./sdk.tg.ts";
+import { sdk, assertAllSdks, testDarwinToLinux } from "./sdk.tg.ts";
 export let testBootstrapSdk = tg.target(async () => {
 	return await bootstrap.sdk.test();
 });
@@ -281,6 +280,9 @@ export let testDefaultSdk = tg.target(async () => {
 	return env;
 });
 
+export let darwinToLinux = tg.target(async () => {
+	return testDarwinToLinux();
+});
 export let testAllSdks = tg.target(async () => {
 	await assertAllSdks();
 	return true;

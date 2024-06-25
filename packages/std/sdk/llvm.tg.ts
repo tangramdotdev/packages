@@ -6,7 +6,10 @@ import * as dependencies from "./dependencies.tg.ts";
 import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import ncurses from "./llvm/ncurses.tg.ts";
-import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
+import {
+	buildToHostCrossToolchain,
+	buildToolsForHost,
+} from "./gcc/toolchain.tg.ts";
 import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
 export let metadata = {
@@ -62,7 +65,10 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let sourceDir = source_ ?? source();
 
 	// Use the internal GCC bootstrapping function to avoid needlesssly rebuilding glibc.
-	let { sysroot } = await buildToHostCrossToolchain(host);
+	let { sysroot } = await buildToHostCrossToolchain({
+		host,
+		env: await buildToolsForHost(host),
+	});
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
 	sysroot = tg.Directory.expect(await sysroot.get(host));
 
@@ -116,7 +122,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		phases,
 		sdk,

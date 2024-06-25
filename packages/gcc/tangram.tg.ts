@@ -105,7 +105,7 @@ export let gcc = tg.target(async (arg?: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...std.triple.rotate({ build, host }),
+			...(await std.triple.rotate({ build, host })),
 			env,
 			phases,
 			opt: "2",
@@ -212,7 +212,7 @@ export let libgcc = tg.target(async (arg?: Arg) => {
 	let result = await std.autotools.build(
 		{
 			...rest,
-			...std.triple.rotate({ build, host }),
+			...(await std.triple.rotate({ build, host })),
 			env,
 			phases,
 			opt: "2",

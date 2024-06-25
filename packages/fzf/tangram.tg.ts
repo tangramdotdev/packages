@@ -42,7 +42,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	return go.build(
 		{
 			...rest,
-			...std.triple.rotate({ build, host }),
+			...(await std.triple.rotate({ build, host })),
 			checksum: "unsafe",
 			source: source_ ?? source(),
 		},

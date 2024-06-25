@@ -73,7 +73,7 @@ class Dollar {
 		let prefixArgs = this.#args ? [] : ["-euo", "pipefail"];
 		arg.args = [
 			...prefixArgs,
-			"-c",
+			"-euc",
 			await tg(this.#strings, ...std.flatten(this.#placeholders)),
 		];
 		if (this.#args !== undefined) {

@@ -5,6 +5,8 @@ import binutils from "./sdk/binutils.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
+import injection from "./wrap/injection.tg.ts";
+import * as workspace from "./wrap/workspace.tg.ts";
 import mold, { metadata as moldMetadata } from "./sdk/mold.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 import * as std from "./tangram.tg.ts";
@@ -31,8 +33,6 @@ export namespace sdk {
 		targets?: Array<string>;
 		/** Env containing the compiler. If not provided, will default to a native GCC toolchain. */
 		toolchain?: sdk.ToolchainKind;
-		/** Should this SDK include the std.utils set, compiled with the specified host toolchain? Default: true. */
-		utils?: boolean;
 	};
 
 	export let inner = async (
@@ -44,7 +44,6 @@ export namespace sdk {
 			targets,
 			toolchain: toolchain_,
 			linker,
-			utils,
 		} = await sdk.arg(...args);
 
 		let hostOs = std.triple.os(host);
@@ -70,10 +69,12 @@ export namespace sdk {
 			env: toolchain,
 			host,
 		});
+
+		// Set CC/CXX.
 		if (flavor === "gcc") {
 			envs.push({
-				CC: tg.Mutation.setIfUnset("gcc"),
-				CXX: tg.Mutation.setIfUnset("g++"),
+				CC: tg.Mutation.setIfUnset(`gcc`),
+				CXX: tg.Mutation.setIfUnset(`g++`),
 			});
 		} else if (flavor === "llvm") {
 			envs.push({
@@ -125,17 +126,6 @@ export namespace sdk {
 			envs.push(linkerDir);
 		}
 
-		// Add host utils if requested.
-		if (utils) {
-			let hostUtils = await std.utils.env({
-				build: host,
-				host,
-				env: std.env.arg(envs),
-				sdk: false,
-			});
-			envs.push(hostUtils);
-		}
-
 		// Add cross compilers if requested.
 		for (let target of targets) {
 			if (host === target) {
@@ -155,6 +145,12 @@ export namespace sdk {
 				host: target,
 			});
 			envs.push(proxyEnv);
+			let targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
+			envs.push({
+				[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
+				[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
+				[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-g++`),
+			});
 		}
 
 		// Combine all envs.
@@ -194,7 +190,6 @@ export namespace sdk {
 			target,
 			targets: targets_,
 			toolchain: toolchain_,
-			utils,
 		} = await std.args.applyMutations(mutationArgs);
 
 		tg.assert(typeof proxyArg_ === "object" || proxyArg_ === undefined);
@@ -226,7 +221,6 @@ export namespace sdk {
 			targets,
 			toolchain: toolchain_,
 			linker,
-			utils,
 		};
 	};
 
@@ -260,9 +254,7 @@ export namespace sdk {
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
 		if (isCross) {
-			if (os !== "darwin") {
-				targetPrefix = `${target}-`;
-			}
+			targetPrefix = `${target}-`;
 		}
 		await std.env.assertProvides({
 			env,
@@ -274,7 +266,7 @@ export namespace sdk {
 		);
 		await std.env.assertProvides({
 			env,
-			names: compilerComponents,
+			names: compilerComponents.map((name) => `${targetPrefix}${name}`),
 		});
 		return true;
 	};
@@ -326,10 +318,18 @@ export namespace sdk {
 			target: targetTriple,
 		});
 
-		let host = await getTarget({ env, host: host_, target: targetTriple });
+		let host = await determineToolchainHost({
+			env,
+			host: host_,
+			target: targetTriple,
+		});
 		let os = std.triple.os(host);
 		let target = targetTriple ?? host;
-		let isCross = (host_ ?? (await std.triple.host())) !== target;
+		let detectedHost = await std.triple.host();
+		let host__ = host_ ?? detectedHost;
+		let isCross =
+			std.triple.arch(host__) !== std.triple.arch(target) ||
+			std.triple.os(host__) !== std.triple.os(target);
 		let targetPrefix = isCross ? `${target}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
@@ -404,7 +404,9 @@ export namespace sdk {
 		// Grab the linker from the same directory as the compiler, not just by using `Env.which`.
 		let linkerName =
 			os === "darwin"
-				? "ld"
+				? isCross
+					? `${targetPrefix}ld.bfd`
+					: "ld"
 				: flavor === "gcc"
 				  ? host !== target
 						? `${targetPrefix}ld`
@@ -447,7 +449,20 @@ export namespace sdk {
 				}
 			}
 		} else {
-			libDir = tg.Directory.expect(await directory.tryGet("lib"));
+			if (isCross) {
+				let sysroot = tg.Directory.expect(
+					await directory.tryGet(`${target}/sysroot`),
+				);
+				libDir = tg.Directory.expect(await sysroot.tryGet(`lib`));
+				if (std.triple.environment(target) === "gnu") {
+					let ldsoPath = libc.interpreterName(target);
+					ldso = tg.File.expect(await sysroot.tryGet(`lib/${ldsoPath}`));
+				} else {
+					ldso = tg.File.expect(await sysroot.tryGet(`usr/lib/libc.so`));
+				}
+			} else {
+				libDir = tg.Directory.expect(await directory.tryGet("lib"));
+			}
 		}
 		tg.assert(libDir, "could not find lib directory");
 
@@ -504,25 +519,10 @@ export namespace sdk {
 		return allTargets.some((t) => t === target);
 	};
 
-	/** Retreive the full range of targets an SDK supports. */
-	export let supportedTargets = async (
-		sdk: std.env.Arg,
-	): Promise<Array<string>> => {
-		// Collect all available `*cc` binaries.
-		let foundTargets: Set<string> = new Set();
-
-		for await (let [name, _] of std.env.binsInPath({
-			env: sdk,
-			predicate: (name) => name.endsWith("-cc"),
-		})) {
-			let triple = name.slice(0, -3);
-			foundTargets.add(triple);
-		}
-		return Array.from(foundTargets);
-	};
-
 	/** Obtain the host system for the compilers provided by this env. Throws an error if no compiler is found. */
-	export let getTarget = async (arg: ToolchainEnvArg): Promise<string> => {
+	export let determineToolchainHost = async (
+		arg: ToolchainEnvArg,
+	): Promise<string> => {
 		let { env, host: host_, target: target_ } = arg;
 		let detectedHost = host_ ?? (await std.triple.host());
 		let target = target_ ?? detectedHost;
@@ -589,6 +589,24 @@ export namespace sdk {
 		let host = (await output.text()).trim();
 		std.triple.assert(host);
 		return host;
+	};
+
+	/** Retreive the full range of targets an SDK supports. */
+	export let supportedTargets = async (
+		sdk: std.env.Arg,
+	): Promise<Array<string>> => {
+		// Collect all available `*cc` binaries.
+		let foundTargets: Set<string> = new Set();
+
+		for await (let [name, _] of std.env.binsInPath({
+			env: sdk,
+			predicate: (name) => name.endsWith("-cc"),
+		})) {
+			let triple = name.slice(0, -3);
+			foundTargets.add(triple);
+		}
+
+		return Array.from(foundTargets);
 	};
 
 	export let resolveHostAndTarget = async (
@@ -679,7 +697,7 @@ export namespace sdk {
 			}
 
 			tg.assert(metadata.format === "elf");
-			let expectedInterpreter = libc.interpreterName(expectedHost);
+			let expectedInterpreter = libc.interpreterName(expectedTarget);
 			let actualInterpreter = metadata.interpreter;
 			tg.assert(actualInterpreter, "File should have been dynamically linked.");
 			tg.assert(
@@ -719,7 +737,7 @@ export namespace sdk {
 		await sdk.assertProvidesToolchain({ env });
 
 		// Assert we can determine a host and it matches the expected.
-		let actualHost = await sdk.getTarget({ env });
+		let actualHost = await sdk.determineToolchainHost({ env });
 		let actualHostArch = std.triple.arch(actualHost);
 		let expectedHostArch = std.triple.arch(expected.host);
 		let actualHostOs = std.triple.os(actualHost);
@@ -741,16 +759,12 @@ export namespace sdk {
 			);
 		}
 
-		// Assert it provides at the utils. If utils was set to false, check for the smaller set, otherwise ensure we built all the utils.
-		if (arg?.utils) {
-			await std.utils.assertProvides(env);
-		}
-
 		// Assert it can compile and wrap for all requested targets.
-		let allTargets =
-			std.triple.os(actualHost) === "linux" && arg?.toolchain !== "llvm"
-				? await sdk.supportedTargets(env)
-				: [actualHost];
+		let allTargets = await sdk.supportedTargets(env);
+		// If there is an un-prefixed CC, add the host to the list.
+		if (await std.env.tryWhich({ env, name: "cc" })) {
+			allTargets.push(actualHost);
+		}
 		await Promise.all(
 			expected.targets.map(async (target) => {
 				// Make sure we found this target in the env.
@@ -898,8 +912,8 @@ let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
 	let hostOs = std.triple.os(host);
 	let targetOs = std.triple.os(target);
 
-	// The default darwin toolchain supports cross-compiling to other darwin architectures.
-	if (hostOs === "darwin" && targetOs === "darwin") {
+	// Darwin supports cross-compiling.
+	if (hostOs === "darwin") {
 		return true;
 	}
 
@@ -1122,6 +1136,31 @@ export let testLLVMMuslSdk = tg.target(async () => {
 	}
 	let muslHost = std.triple.create(host, { environment: "musl" });
 	let sdkArg = { host: muslHost, toolchain: "llvm" as const };
+	let env = await sdk(sdkArg);
+	await sdk.assertValid(env, sdkArg);
+	return env;
+});
+
+export let testDarwinToLinux = tg.target(async () => {
+	let targets = [
+		"aarch64-unknown-linux-gnu",
+		"aarch64-unknown-linux-musl",
+		"x86_64-unknown-linux-gnu",
+		"x86_64-unknown-linux-musl",
+	];
+	await Promise.all(
+		targets.map(async (target) => await testDarwinToLinuxSingle(target)),
+	);
+	return true;
+});
+
+export let testDarwinToLinuxSingle = tg.target(async (target: string) => {
+	let host = await std.triple.host();
+	if (std.triple.os(host) !== "darwin") {
+		throw new Error(`This test is only valid on Darwin`);
+	}
+
+	let sdkArg = { host, target };
 	let env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;

@@ -81,7 +81,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	}
 
 	let output = await buildUtil({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		phases,
 		opt: staticBuild ? "s" : undefined,

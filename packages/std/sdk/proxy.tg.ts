@@ -58,7 +58,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		ldso,
 	} = await std.sdk.toolchainComponents({
 		env: buildToolchain,
-		host,
+		host: build,
 		target: host,
 	});
 
@@ -78,7 +78,9 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 				arg.linkerExe === undefined
 					? os === "linux" && isLlvm
 						? await tg`${directory}/bin/ld.lld`
-						: ld
+						: os === "darwin" && isCross
+						  ? await tg`${directory}/bin/${host}-ld.bfd`
+						  : ld
 					: arg.linkerExe,
 			interpreter: ldso,
 			host,
@@ -109,17 +111,20 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
 					buildToolchain,
 					executable: cc,
+					host: build,
 				});
 				wrappedCXX = await std.wrap({
 					args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
 					buildToolchain,
 					executable: cxx,
+					host: build,
 				});
 				if (fortran) {
 					wrappedGFortran = await std.wrap({
 						args: [tg`-B${ldProxyDir}`, ...(fortranArgs ?? [])],
 						buildToolchain,
 						executable: fortran,
+						host: build,
 					});
 				}
 
@@ -176,6 +181,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					buildToolchain,
 					env,
 					executable: cc,
+					host: build,
 					merge,
 				});
 				wrappedCXX = std.wrap({
@@ -183,6 +189,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					buildToolchain,
 					env,
 					executable: cxx,
+					host: build,
 					merge,
 				});
 				binDir = tg.directory({
@@ -256,17 +263,21 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	let buildToolchain = arg.buildToolchain;
 
 	// Obtain wrapper components.
-	let injectionLibrary = await injection({
+
+	// The linker proxy is built for the build machine.
+	let buildLinkerProxy = await workspace.tgld({
+		buildToolchain,
+		build,
+		host: build,
+	});
+
+	// The injection library and wrapper are built for the host machine.
+	let hostInjectionLibrary = await injection({
 		buildToolchain,
 		build,
 		host,
 	});
-	let tgld = await workspace.tgld({
-		buildToolchain,
-		build,
-		host,
-	});
-	let wrapper = await workspace.wrapper({
+	let hostWrapper = await workspace.wrapper({
 		buildToolchain,
 		build,
 		host,
@@ -279,16 +290,18 @@ export let ldProxy = async (arg: LdProxyArg) => {
 			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(arg.linker),
-			TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.setIfUnset(injectionLibrary),
+			TANGRAM_LINKER_INJECTION_PATH:
+				tg.Mutation.setIfUnset(hostInjectionLibrary),
 			TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs
 				? tg.Mutation.setIfUnset(arg.interpreterArgs)
 				: undefined,
 			TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 				arg.interpreter ?? "none",
 			),
-			TANGRAM_LINKER_WRAPPER_ID: tg.Mutation.setIfUnset(await wrapper.id()),
+			TANGRAM_LINKER_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
 		},
-		executable: tgld,
+		executable: buildLinkerProxy,
+		host: build,
 		identity: "wrapper",
 	});
 };

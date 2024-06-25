@@ -97,7 +97,7 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 			},
 			//install: tg.Mutation.set("find ./bin -empty -delete && make install"),
 		},
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 	});
 
 	// Create the RUBYLIB environment variable.

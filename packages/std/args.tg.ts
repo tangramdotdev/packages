@@ -6,7 +6,7 @@ export type PackageArg = { [key: string]: tg.Value } & {
 	dependencies?: DependencyArgs;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | undefined;
 };
 
 type DependencyArgs = { [key: string]: PackageArg };
@@ -37,8 +37,13 @@ export let apply = async <T extends PackageArg>(
 	} as Rules<T>);
 	let arg = await applyMutations<Collect>(mutations);
 
+	// Determine build and host;
+	let build = arg.build ?? (await std.triple.host());
+	let host = arg.host ?? (await std.triple.host());
+
+	// Create env and SDK.
 	let env = await std.env.arg(arg.env);
-	let sdk = await std.sdk.arg(arg.sdk);
+	let sdk = await std.sdk.arg(std.triple.rotate({ build, host }), arg.sdk);
 
 	// Process dependency args.
 	let dependencyArgs = arg.dependencies ?? [];
@@ -60,8 +65,10 @@ export let apply = async <T extends PackageArg>(
 
 	return {
 		...arg,
+		build,
 		dependencies,
 		env,
+		host,
 		sdk,
 	} as T;
 };

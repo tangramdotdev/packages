@@ -26,7 +26,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target((arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let { build, env: env_, host, sdk, source: source_ } = arg ?? {};
 
 	let configure = {
@@ -42,7 +42,7 @@ export let build = tg.target((arg?: Arg) => {
 	let env = std.env.arg(env_, ...dependencies);
 
 	let output = std.utils.buildUtil({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
 		sdk,

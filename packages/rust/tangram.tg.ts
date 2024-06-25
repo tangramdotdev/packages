@@ -228,7 +228,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Create the build script.
 	let buildScript = tg`
-		set -eu
 		# Create the output directory
 		mkdir -p "$OUTPUT/target"
 

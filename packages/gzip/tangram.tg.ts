@@ -48,7 +48,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let env = std.env.arg(env_);
 
 	let output = await std.autotools.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
 		sdk,

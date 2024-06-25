@@ -92,7 +92,7 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 	let env = [...deps, env_];
 
 	let result = std.autotools.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env: std.env.arg(env),
 		phases: { configure },

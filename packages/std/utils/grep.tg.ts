@@ -50,7 +50,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let env = std.env.arg(env_, prerequisites(host));
 
 	let output = buildUtil({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
 		sdk,

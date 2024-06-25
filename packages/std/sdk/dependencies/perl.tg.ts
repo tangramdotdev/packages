@@ -59,7 +59,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let phases = { configure };
 
 	let perlArtifact = await std.utils.buildUtil({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,
 		phases,

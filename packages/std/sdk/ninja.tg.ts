@@ -40,7 +40,7 @@ export let ninja = async (arg?: Arg) => {
 	};
 
 	let result = cmake.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		generator: "Unix Makefiles",
 		phases: { configure },
 		sdk,

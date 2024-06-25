@@ -63,7 +63,7 @@ export let git = tg.target(async (arg?: Arg) => {
 	);
 
 	let result = std.autotools.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,
 		phases,

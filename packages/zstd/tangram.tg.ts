@@ -51,7 +51,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	return std.autotools.build(
 		{
-			...std.triple.rotate({ build, host }),
+			...(await std.triple.rotate({ build, host })),
 			buildInTree: true,
 			phases: { phases, order: ["prepare", "build", "install"] },
 			prefixArg: "none",

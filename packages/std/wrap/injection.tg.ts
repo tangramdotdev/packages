@@ -122,7 +122,7 @@ type DylibArg = {
 export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let host = arg.host ?? (await std.triple.host());
 	let build = arg.build ?? host;
-	let useTriplePrefix = build !== host && !(std.triple.os(build) === "darwin");
+	let useTriplePrefix = build !== host;
 
 	let additionalArgs = arg.additionalArgs ?? [];
 	if (std.triple.os(host) === "linux") {
@@ -135,7 +135,7 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let prefix = useTriplePrefix ? `${host}-` : "";
 	let executable = `${prefix}cc`;
 
-	let system = std.triple.archAndOs(host);
+	let system = std.triple.archAndOs(build);
 	let env = std.env.arg(arg.buildToolchain, arg.env);
 	let output = tg.File.expect(
 		await (

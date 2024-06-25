@@ -445,16 +445,15 @@ async fn create_manifest<H: BuildHasher>(
 	library_paths: Option<HashSet<tg::symlink::Id, H>>,
 ) -> tg::Result<Manifest> {
 	// Create the interpreter.
-	let interpreter = if cfg!(target_os = "linux") {
+	let interpreter = {
 		let config = match interpreter {
-			InterpreterRequirement::Default => {
+			InterpreterRequirement::Default(flavor) => {
 				let path = options
 					.interpreter_path
 					.as_ref()
 					.expect("TANGRAM_LINKER_INTERPRETER_PATH must be set.");
-				let interpreter_flavor = determine_interpreter_flavor(path).await?;
 
-				Some((path.clone(), interpreter_flavor))
+				Some((path.clone(), flavor))
 			},
 			InterpreterRequirement::Path(path) => {
 				let interpreter_flavor = determine_interpreter_flavor(&path).await?;
@@ -499,7 +498,13 @@ async fn create_manifest<H: BuildHasher>(
 			}
 
 			match interpreter_flavor {
-				LinuxInterpreterFlavor::Default => Some(manifest::Interpreter::LdLinux(
+				InterpreterFlavor::Dyld => {
+					Some(manifest::Interpreter::DyLd(manifest::DyLdInterpreter {
+						library_paths,
+						preloads,
+					}))
+				},
+				InterpreterFlavor::Gnu => Some(manifest::Interpreter::LdLinux(
 					manifest::LdLinuxInterpreter {
 						path,
 						library_paths,
@@ -507,7 +512,7 @@ async fn create_manifest<H: BuildHasher>(
 						args,
 					},
 				)),
-				LinuxInterpreterFlavor::Musl => {
+				InterpreterFlavor::Musl => {
 					Some(manifest::Interpreter::LdMusl(manifest::LdMuslInterpreter {
 						path,
 						library_paths,
@@ -520,35 +525,6 @@ async fn create_manifest<H: BuildHasher>(
 			// There was no interpreter specified. We are likely a statically linked executable.
 			None
 		}
-	} else if cfg!(target_os = "macos") {
-		// Render the library paths.
-		let library_paths = if let Some(library_paths) = library_paths {
-			let result = futures::future::try_join_all(library_paths.into_iter().map(|id| async {
-				let symlink = tg::Symlink::with_id(id);
-				let data = symlink.data(tg).await?;
-				Ok::<_, tg::Error>(data)
-			}))
-			.await?;
-			Some(result)
-		} else {
-			None
-		};
-		let mut preloads = None;
-		if let Some(injection_path) = options.injection_path.as_deref() {
-			preloads = Some(
-				futures::future::try_join_all(std::iter::once(template_data_to_symlink_data(
-					unrender(tg, injection_path),
-				)))
-				.await?,
-			);
-		}
-
-		Some(manifest::Interpreter::DyLd(manifest::DyLdInterpreter {
-			library_paths,
-			preloads,
-		}))
-	} else {
-		unreachable!();
 	};
 
 	// Create the executable.
@@ -588,7 +564,7 @@ enum InterpreterRequirement {
 	/// There is no interpreter needed to execute this file.
 	None,
 	/// Use the system default interpreter to execute this file.
-	Default,
+	Default(InterpreterFlavor),
 	/// Use the interpreter at the given path to execute this file.
 	Path(String),
 }
@@ -854,15 +830,16 @@ async fn analyze_output_file(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum LinuxInterpreterFlavor {
-	Default,
+enum InterpreterFlavor {
+	Dyld,
+	Gnu,
 	Musl,
 }
 
 /// Determine the flavor of the `ld-linux.so` executable at the given path, if it is one.
 async fn determine_interpreter_flavor(
 	path: impl AsRef<std::path::Path>,
-) -> tg::Result<LinuxInterpreterFlavor> {
+) -> tg::Result<InterpreterFlavor> {
 	let path = path.as_ref();
 	let path = std::fs::canonicalize(path).map_err(|error| {
 		tg::error!(
@@ -878,9 +855,9 @@ async fn determine_interpreter_flavor(
 		.map_err(|error| tg::error!(source = error, "failed to parse output file as an object"))?;
 	if let goblin::Object::Elf(elf) = object {
 		let flavor = if elf.soname.is_some() && elf.soname.unwrap().starts_with("ld-linux") {
-			LinuxInterpreterFlavor::Default
+			InterpreterFlavor::Gnu
 		} else {
-			LinuxInterpreterFlavor::Musl
+			InterpreterFlavor::Musl
 		};
 		Ok(flavor)
 	} else {
@@ -924,7 +901,11 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				if elf.interpreter.is_some() || (is_pie && !needed_libraries.is_empty()) {
 					let interpreter = elf.interpreter.unwrap();
 					if interpreter.starts_with("/lib") {
-						InterpreterRequirement::Default
+						if interpreter.contains("musl") {
+							InterpreterRequirement::Default(InterpreterFlavor::Musl)
+						} else {
+							InterpreterRequirement::Default(InterpreterFlavor::Gnu)
+						}
 					} else {
 						// If a path not in /lib is specified, then we need to retain it.
 						InterpreterRequirement::Path(interpreter.to_owned())
@@ -952,7 +933,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 
 				AnalyzeOutputFileOutput {
 					is_executable,
-					interpreter: InterpreterRequirement::Default,
+					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
 					needed_libraries,
 				}
 			},
@@ -973,7 +954,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 					});
 				AnalyzeOutputFileOutput {
 					is_executable,
-					interpreter: InterpreterRequirement::Default,
+					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
 					needed_libraries,
 				}
 			},

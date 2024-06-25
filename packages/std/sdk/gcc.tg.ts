@@ -153,7 +153,7 @@ export let build = tg.target(async (arg: Arg) => {
 	env.push(additionalEnv);
 
 	let result = await std.autotools.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		fullRelro: false,
 		phases,
@@ -274,21 +274,35 @@ type WrapArgsArg = {
 export let wrapArgs = async (arg: WrapArgsArg) => {
 	let { host, target: target_, toolchainDir } = arg;
 	let target = target_ ?? host;
+	let hostOs = std.triple.os(host);
 	let gccVersion = await getGccVersion(toolchainDir, host, target);
 	let isCross = host !== target;
-	let sysroot = isCross ? tg`${toolchainDir}/${target}` : toolchainDir;
+	let sysroot =
+		hostOs === "darwin"
+			? tg`${toolchainDir}/${target}/sysroot`
+			: isCross
+			  ? tg`${toolchainDir}/${target}`
+			  : toolchainDir;
 
 	let ccArgs = [
 		tg`--sysroot=${sysroot}`,
 		tg`-B${toolchainDir}/lib/gcc/${target}/${gccVersion}`,
 		tg`-B${toolchainDir}/libexec/gcc/${target}/${gccVersion}`,
 	];
+
+	// On Darwin, include the target tools bin dir as well.
+	if (hostOs === "darwin") {
+		ccArgs.push(tg`-B${toolchainDir}/${target}/bin`);
+	}
+
 	let fortranArgs = ccArgs;
 
+	let cxxHeaderRoot =
+		hostOs === "darwin" ? tg`${toolchainDir}/${target}` : sysroot;
 	let cxxArgs = [
 		...ccArgs,
-		tg`-isystem${sysroot}/include/c++/${gccVersion}`,
-		tg`-isystem${sysroot}/include/c++/${gccVersion}/${target}`,
+		tg`-isystem${cxxHeaderRoot}/include/c++/${gccVersion}`,
+		tg`-isystem${cxxHeaderRoot}/include/c++/${gccVersion}/${target}`,
 	];
 
 	return { ccArgs, cxxArgs, fortranArgs };

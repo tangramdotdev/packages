@@ -60,7 +60,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let result = await std.autotools.build(
 		{
-			...std.triple.rotate({ build, host }),
+			...(await std.triple.rotate({ build, host })),
 			phases,
 			sdk,
 			source: source_ ?? source(),

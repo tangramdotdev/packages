@@ -280,8 +280,15 @@ export namespace wrap {
 		};
 
 		// Get the wrapper executable.
+		let detectedBuild = await std.triple.host();
+		let detectedOs = std.triple.os(detectedBuild);
+		let build =
+			detectedOs === "linux"
+				? await bootstrap.toolchainTriple(detectedBuild)
+				: detectedBuild;
 		let wrapper = await workspace.wrapper({
 			buildToolchain,
+			build,
 			host,
 		});
 
@@ -967,20 +974,15 @@ let manifestInterpreterFromExecutableArg = async (
 		case "mach-o": {
 			let arch = std.triple.arch(await std.triple.host());
 			let host = std.triple.create({ os: "darwin", arch });
-			let buildToolchain = buildToolchainArg
-				? buildToolchainArg
-				: bootstrap.sdk.env(host);
+			let buildToolchain = bootstrap.sdk.env(host);
+			let injectionDylib = await injection.default({
+				buildToolchain,
+				host,
+			});
 			return {
 				kind: "dyld",
 				libraryPaths: undefined,
-				preloads: [
-					await manifestSymlinkFromArg(
-						await injection.default({
-							buildToolchain,
-							host,
-						}),
-					),
-				],
+				preloads: [await manifestSymlinkFromArg(injectionDylib)],
 			};
 		}
 		case "shebang": {

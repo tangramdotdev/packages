@@ -11,13 +11,7 @@ export namespace sdk {
 	export let arg = async (hostArg?: string): Promise<std.sdk.Arg> => {
 		let host = await bootstrap.toolchainTriple(hostArg);
 		let toolchain = await env(host);
-		// The toolchain env already includes the busybox utils.
-		let utils = false;
-		return {
-			host,
-			toolchain,
-			utils,
-		};
+		return { host, toolchain };
 	};
 
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxying. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */

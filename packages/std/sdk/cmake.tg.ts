@@ -72,7 +72,7 @@ export let cmake = tg.target(async (arg?: Arg) => {
 	);
 
 	let result = std.autotools.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,
 		phases: { configure },
@@ -276,8 +276,20 @@ export let target = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	if (includeSdk) {
 		let sdk = await std.sdk(sdkArgs);
-		let utils = await std.utils.env({ host, sdk: false, env: sdk });
+		let utils = await std.utils.env({
+			host,
+			sdk: false,
+			env: std.sdk({ host }),
+		});
 		env = await std.env.arg(sdk, utils, env);
+	}
+
+	// If cross compiling, override CC/CXX to point to the correct compiler.
+	if (host !== target) {
+		env = await std.env.arg(env, {
+			CC: `${target}-cc`,
+			CXX: `${target}-c++`,
+		});
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.

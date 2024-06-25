@@ -23,21 +23,12 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	let target = std.sdk.canonicalTriple(target_ ?? host);
 
+	if (std.triple.os(host) === "darwin") {
+		return darwinCrossToolchain({ host, target });
+	}
+
 	// Set up build environment tools.
-	let sdk = bootstrap.sdk(host);
-	let utils = std.utils.env({ host, sdk: false, env: sdk });
-	// This env is used to build the remaining dependencies only. It includes the bootstrap SDK.
-	let utilsEnv = std.env.arg(utils, sdk);
-	let additionalToolsArg = { host, sdk: false, env: utilsEnv };
-	let additionalTools = [
-		dependencies.m4.build(additionalToolsArg),
-		dependencies.bison.build(additionalToolsArg),
-		dependencies.perl.build(additionalToolsArg),
-		dependencies.python.build(additionalToolsArg),
-		dependencies.zstd.build(additionalToolsArg),
-	];
-	// This env contains the standard utils and additional tools, but NO SDK, so each build step can swap the compiler out accordingly.
-	let buildTools = std.env.arg(utils, ...additionalTools);
+	let buildTools = await buildToolsForHost(host);
 
 	// Always build a native toolchain.
 	let nativeToolchain = await canadianCross({ host, env: buildTools });
@@ -65,6 +56,23 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 
 	return env;
 });
+
+export let buildToolsForHost = (host: string) => {
+	let sdk = bootstrap.sdk(host);
+	let utils = std.utils.env({ host, sdk: false, env: sdk });
+	// This env is used to build the remaining dependencies only. It includes the bootstrap SDK.
+	let utilsEnv = std.env.arg(utils, sdk);
+	let additionalToolsArg = { host, sdk: false, env: utilsEnv };
+	let additionalTools = [
+		dependencies.m4.build(additionalToolsArg),
+		dependencies.bison.build(additionalToolsArg),
+		dependencies.perl.build(additionalToolsArg),
+		dependencies.python.build(additionalToolsArg),
+		dependencies.zstd.build(additionalToolsArg),
+	];
+	// This env contains the standard utils and additional tools, but NO SDK, so each build step can swap the compiler out accordingly.
+	return std.env.arg(utils, ...additionalTools);
+};
 
 export type CrossToolchainArg = {
 	build?: string;
@@ -248,6 +256,51 @@ export let buildToHostCrossToolchain = async (arg?: CanadianCrossArg) => {
 		target: host,
 		variant: "stage1_limited",
 	});
+};
+
+type DarwinCrossToolchainArg = {
+	host: string;
+	target: string;
+};
+
+let darwinCrossToolchain = async (arg: DarwinCrossToolchainArg) => {
+	let { host, target } = arg;
+	tg.assert(std.triple.os(host) === "darwin");
+
+	let tag = "v13.2.0";
+	let baseUrl = `https://github.com/messense/homebrew-macos-cross-toolchains/releases/download/${tag}`;
+
+	let checksums: { [key: string]: tg.Checksum } = {
+		["aarch64-unknown-linux-gnu-aarch64-darwin"]:
+			"sha256:a87669a9df908d8d8859849a0f9fc0fb287561a4e449c21dade10663d42d2ccb",
+		["aarch64-unknown-linux-gnu-x86_64-darwin"]:
+			"sha256:6979291e34064583ac8b12a8b6b99ec6829caf22f47bcb68b646365ec9e24690",
+		["aarch64-unknown-linux-musl-x86_64-darwin"]:
+			"sha256:15a7166de1b364e591d6b0206d127b67d15e88555f314170088f5e9ccf0ab068",
+		["aarch64-unknown-linux-musl-aarch64-darwin"]:
+			"sha256:3f60dbda3b2934857cc63b27e1e680e36b181f3df9bbae9ec207989f47b0e7aa",
+		["x86_64-unknown-linux-gnu-aarch64-darwin"]:
+			"sha256:bb59598afd84b4d850c32031a4fa64c928fb41f8ece4401553b6c23714efbc47",
+		["x86_64-unknown-linux-gnu-x86_64-darwin"]:
+			"sha256:86e28c979e5ca6d0d1019c9b991283f2ab430f65cee4dc1e4bdf85170ff7c4f2",
+		["x86_64-unknown-linux-musl-x86_64-darwin"]:
+			"sha256:ff0f635766f765050dc918764c856247614c38e9c4ad27c30f85c0af4b21e919",
+		["x86_64-unknown-linux-musl-aarch64-darwin"]:
+			"sha256:de0a12a677f3b91449e9c52a62f3d06c4c1a287aa26ba0bc36f86aaa57c24b55",
+	};
+
+	let hostArchAndOs = std.triple.archAndOs(host);
+	let canonicalTarget = std.sdk.canonicalTriple(target);
+	let toolchainDescription = `${canonicalTarget}-${hostArchAndOs}`;
+	let checksum = checksums[toolchainDescription];
+	tg.assert(checksum, `unsupported toolchain ${toolchainDescription}`);
+
+	let url = `${baseUrl}/${toolchainDescription}.tar.gz`;
+
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 };
 
 export let testCanadianCross = async () => {

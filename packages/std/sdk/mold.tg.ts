@@ -62,7 +62,7 @@ export let mold = tg.target(async (arg?: Arg) => {
 	let env = await std.env.arg(zstd({ build, host }), env_);
 
 	let result = cmake.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
 		sdk,

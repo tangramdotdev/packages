@@ -40,7 +40,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let phases = { install };
 
 	let result = std.autotools.build({
-		...std.triple.rotate({ build, host }),
+		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,
 		phases: { phases, order: ["prepare", "build", "install"] },

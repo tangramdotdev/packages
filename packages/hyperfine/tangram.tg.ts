@@ -46,7 +46,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	return rust.build(
 		{
-			...std.triple.rotate({ build, host }),
+			...(await std.triple.rotate({ build, host })),
 			env,
 			sdk,
 			source: source_ ?? source(),
