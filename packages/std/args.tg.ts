@@ -9,7 +9,17 @@ export type PackageArg = { [key: string]: tg.Value } & {
 	sdk?: std.sdk.Arg | undefined;
 };
 
-type DependencyArgs = { [key: string]: PackageArg };
+/** After application, the resulting type always has concrete values for build, host, and sdk. */
+export type ResolvedPackageArg<T extends PackageArg> = Omit<
+	T,
+	"build" | "host" | "sdk"
+> & {
+	build: string;
+	host: string;
+	sdk: std.sdk.Arg;
+};
+
+export type DependencyArgs = { [key: string]: PackageArg };
 
 /** Variadic argument type. */
 export type Args<T extends tg.Value = tg.Value> = Array<
@@ -24,7 +34,7 @@ export type UnresolvedArgs<T extends tg.Value = tg.Value> = Array<
 /** Produce a single argument object from a variadic list of arguments with mutation handling. */
 export let apply = async <T extends PackageArg>(
 	...args: Args<T>
-): Promise<T> => {
+): Promise<ResolvedPackageArg<T>> => {
 	let flattened = std.flatten(args);
 	type Collect = MakeArrayKeys<T, "dependencies" | "env" | "sdk">;
 	let mutations = await createMutations<
@@ -70,7 +80,7 @@ export let apply = async <T extends PackageArg>(
 		env,
 		host,
 		sdk,
-	} as T;
+	} as ResolvedPackageArg<T>;
 };
 
 export let createMutations = async <
