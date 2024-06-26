@@ -46,11 +46,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		autotools = {},
 		build,
 		env,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	let host = host_ ?? (await std.triple.host());
 
 	let sourceDir = source_ ?? source();
 

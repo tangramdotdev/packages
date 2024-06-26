@@ -23,20 +23,21 @@ export type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
-		build: build_,
+		autotools = {},
+		build,
 		env,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-
 	let configure = {
 		args: ["--disable-dependency-tracking"],
 	};
+	if (build !== host) {
+		configure.args.push(`--build=${build}`);
+		configure.args.push(`--host=${host}`);
+	}
 
 	return std.autotools.build(
 		{

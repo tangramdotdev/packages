@@ -858,9 +858,7 @@ let manifestInterpreterFromArg = async (
 		}
 		let arch = interpreterMetadata.arch;
 		let host = `${arch}-linux-musl`;
-		let buildToolchain = buildToolchainArg
-			? buildToolchainArg
-			: gcc.toolchain({ host });
+		let buildToolchain = bootstrap.sdk.env(host);
 		let injectionLibrary = await injection.default({
 			buildToolchain,
 			host,

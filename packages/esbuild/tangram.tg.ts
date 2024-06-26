@@ -41,10 +41,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		dependencies: { go: goArg = {}, nodejs: nodejsArg = {} } = {},
 		env: env_,
-		host: host_,
+		host,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	let host = host_ ?? std.triple.host();
 
 	let sourceDir = source_ ?? source();
 

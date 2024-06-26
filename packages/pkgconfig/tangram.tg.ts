@@ -45,22 +45,19 @@ export type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
-		build: build_,
+		autotools = {},
+		build,
 		dependencies: {
 			bison: bisonArg = {},
 			m4: m4Arg = {},
 			zlib: zlibArg = {},
 		} = {},
 		env: env_,
-		host: host_,
+		host,
 		proxy = true,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-
 	let configure = {
 		args: [
 			"--with-internal-glib",

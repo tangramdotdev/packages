@@ -38,14 +38,12 @@ type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
-		build: build_,
+		build,
 		env,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	let build = build_ ?? (await std.triple.host());
-	let host = host_ ?? build;
 
 	let configure = {
 		args: ["--without-oniguruma", "--disable-maintainer-mode"],

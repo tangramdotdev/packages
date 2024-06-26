@@ -81,3 +81,7 @@ export let test = tg.target(async () => {
 	});
 	return true;
 });
+
+export let cross = tg.target(async () => {
+	return await build({ host: "aarch64-unknown-linux-gnu" });
+});

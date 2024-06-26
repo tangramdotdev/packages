@@ -93,8 +93,8 @@ export type Arg = {
 /** Build and create a python environment. */
 export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	let {
-		autotools = [],
-		build: build_,
+		autotools = {},
+		build,
 		dependencies: {
 			bison: bisonArg = {},
 			bzip2: bzip2Arg = {},
@@ -109,14 +109,12 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 			zlib: zlibArg = {},
 		} = {},
 		env: env_,
-		host: host_,
+		host,
 		requirements: requirementsArg,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
 	let dependencies = [

@@ -45,7 +45,7 @@ export type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
-		build: build_,
+		build,
 		dependencies: {
 			bzip2: bzip2Arg = {},
 			libiconv: libiconvArg = {},
@@ -54,7 +54,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			zlib: zlibArg = {},
 		} = {},
 		env: env_,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);

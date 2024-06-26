@@ -329,7 +329,8 @@ export namespace sdk {
 		let host__ = host_ ?? detectedHost;
 		let isCross =
 			std.triple.arch(host__) !== std.triple.arch(target) ||
-			std.triple.os(host__) !== std.triple.os(target);
+			std.triple.os(host__) !== std.triple.os(target) ||
+			std.triple.environment(host__) !== std.triple.environment(target);
 		let targetPrefix = isCross ? `${target}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
@@ -429,7 +430,7 @@ export namespace sdk {
 		let ldso;
 		let libDir;
 		if (os !== "darwin") {
-			if (std.triple.arch(host) !== std.triple.arch(target)) {
+			if (isCross) {
 				libDir = tg.Directory.expect(await directory.tryGet(`${target}/lib`));
 				let ldsoPath = libc.interpreterName(target);
 				ldso = tg.File.expect(await libDir.tryGet(ldsoPath));

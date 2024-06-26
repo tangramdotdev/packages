@@ -26,13 +26,12 @@ export type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
-		build: build_,
-		host: host_,
+		build,
+		env,
+		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
 	let configure = {
@@ -61,6 +60,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let result = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			env,
 			phases,
 			sdk,
 			source: source_ ?? source(),

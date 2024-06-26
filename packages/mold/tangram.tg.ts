@@ -39,9 +39,9 @@ type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		cmake: cmake_ = {},
-		build: build_,
+		build,
 		env: env_,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);

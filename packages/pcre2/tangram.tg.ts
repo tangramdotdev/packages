@@ -39,14 +39,26 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
+		env,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	let phases = {};
+	if (build !== host) {
+		phases = {
+			configure: {
+				args: [`--build=${build}`, `--host=${host}`],
+			},
+		};
+	}
+
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			env,
+			phases,
 			sdk,
 			source: source_ ?? source(),
 		},
@@ -63,9 +75,6 @@ export let test = tg.target(async () => {
 			int main () {}
 		`),
 	});
-
-	let host = await std.triple.host();
-	let hostArch = std.triple.arch(host);
 
 	let output = await $`
 				echo "Checking if we can link against libpcre2."
