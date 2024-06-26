@@ -1,6 +1,5 @@
-import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
-import * as dependencies from "../dependencies.tg.ts";
+import * as kernelHeaders from "../kernel_headers.tg.ts";
 
 // Define supported versions.
 type GlibcVersion = "2.37" | "2.38" | "2.39";
@@ -49,6 +48,10 @@ export default tg.target(async (arg: Arg) => {
 	let build = build_ ?? host;
 
 	let additionalFlags = [];
+	let kernelVersion = kernelHeaders.metadata.version
+		.split(".")
+		.slice(0, 2)
+		.join(".");
 
 	// The 2.38 includes the deprecated libcrypt, which is disabled by default. We opt-in to enable it.
 	if (version === "2.38") {
@@ -65,7 +68,7 @@ export default tg.target(async (arg: Arg) => {
 		args: [
 			"--disable-nls",
 			"--disable-werror",
-			"--enable-kernel=4.14",
+			`--enable-kernel=${kernelVersion}`,
 			tg`--with-headers="${linuxHeaders}/include"`,
 			`--build=${build}`,
 			`--host=${host}`,

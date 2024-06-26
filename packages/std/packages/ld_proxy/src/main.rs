@@ -85,6 +85,9 @@ struct Options {
 	/// The library paths.
 	library_paths: Vec<String>,
 
+	/// Mandatory library paths. The directories here will be searched, and ALL found libraries will be referenced in the output wrappers.
+	mandatory_library_paths: Vec<String>,
+
 	/// The maximum number of transitive library path searches to perform during optimization. Defaults to 16.
 	max_depth: usize,
 
@@ -102,6 +105,7 @@ struct Options {
 }
 
 // Read the options from the environment and arguments.
+#[allow(clippy::too_many_lines)]
 fn read_options() -> Options {
 	// Create the output.
 	let mut command_args = Vec::new();
@@ -138,6 +142,17 @@ fn read_options() -> Options {
 				.collect_vec()
 		});
 
+	// Get any mandatory library paths.
+	let mut mandatory_library_paths = std::env::var("TANGRAM_LINKER_MANDATORY_LIBRARY_PATHS")
+		.ok()
+		.map(|combined| {
+			combined
+				.split(':')
+				.map(std::string::ToString::to_string)
+				.collect_vec()
+		})
+		.unwrap_or_default();
+
 	// Get the max depth.
 	let mut max_depth = std::env::var("TANGRAM_LINKER_MAX_DEPTH")
 		.ok()
@@ -171,6 +186,10 @@ fn read_options() -> Options {
 				let option = arg.strip_prefix("--tg-library-path-opt-level=").unwrap();
 				library_optimization_strategy =
 					LibraryPathOptimizationLevel::from_str(option).unwrap_or_default();
+			} else if arg.starts_with("--tg-mandatory-library-paths=") {
+				let option = arg.strip_prefix("--tg-mandatory-library-paths=").unwrap();
+				mandatory_library_paths
+					.extend(option.split(':').map(std::string::ToString::to_string));
 			} else if arg.starts_with("--tg-max-depth=") {
 				let option = arg.strip_prefix("--tg-max-depth=").unwrap();
 				if let Ok(max_depth_arg) = option.parse() {
@@ -220,6 +239,7 @@ fn read_options() -> Options {
 		interpreter_args,
 		injection_path,
 		library_paths,
+		mandatory_library_paths,
 		max_depth,
 		output_path,
 		passthrough,
@@ -249,9 +269,27 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		return Ok(());
 	}
 
+	let mut library_paths = options.library_paths.clone();
+	let mut initial_needed_libraries = initial_needed_libraries.clone();
+
+	// If mandatory library paths were passed, add each named library to the needed libraries and each directory to the list.
+	for library_path in &options.mandatory_library_paths {
+		tracing::info!(?library_path, "Adding mandatory library path.");
+		// Add the directory to the library paths.
+		library_paths.push(library_path.clone());
+
+		// Get the names of all libraries in the directory.
+		let symlink = template_data_to_symlink_data(unrender(&tg, library_path)).await?;
+		let directory_id = symlink.artifact.unwrap();
+		let directory = tg::Directory::with_id(directory_id.try_into().unwrap());
+		for (name, _) in directory.entries(&tg).await?.iter() {
+			tracing::debug!(?name, "Adding mandatory library.");
+			initial_needed_libraries.push(name.to_string());
+		}
+	}
+
 	// Unrender all library paths to symlinks.
-	let library_paths = options
-		.library_paths
+	let library_paths = library_paths
 		.iter()
 		.map(|library_path| template_data_to_symlink_data(unrender(&tg, library_path)));
 	let library_paths = futures::future::try_join_all(library_paths).await?;
@@ -354,13 +392,13 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 
 		// Add three 64-bit values (manifest length, version, magic number).
 		manifest.reserve_exact(3 * std::mem::size_of::<u64>());
-		manifest.extend(
-			(manifest.len() as u64)
-				.to_le_bytes()
-				.iter()
-				.chain(tangram_wrapper::manifest::VERSION.to_le_bytes().iter())
-				.chain(tangram_wrapper::manifest::MAGIC_NUMBER.iter()),
-		);
+		let suffix = u64::try_from(manifest.len())
+			.unwrap()
+			.to_le_bytes()
+			.into_iter()
+			.chain(tangram_wrapper::manifest::VERSION.to_le_bytes().into_iter())
+			.chain(tangram_wrapper::manifest::MAGIC_NUMBER.iter().copied());
+		manifest.extend(suffix);
 		let manifest = Bytes::from(manifest);
 
 		// Create the manifest blob.

@@ -31,7 +31,7 @@ export type Arg = {
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
 	march?: string;
 
-	/** The value to pass to `-mtune` in the default CFLAGS. Default: undefined. */
+	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
 	mtune?: string;
 
 	/** The optlevel to pass. Defaults to "2" */
@@ -90,7 +90,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		hardeningCFlags = true,
 		host: host_,
 		march,
-		mtune,
+		mtune = "generic",
 		opt = "2",
 		parallel = true,
 		phases,

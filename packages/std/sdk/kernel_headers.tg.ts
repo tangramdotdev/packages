@@ -6,22 +6,25 @@ export let metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.9.6",
+	version: "5.4.278",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:5d4366e2b89998f274abe03557ef3bc78b58e47fc62c102d51e6f49e5ed96b4b";
+		"sha256:e5a00606115545f444ef2766af5652f5539e3c96f46a9778bede89b98ffb8588";
 	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
 		name,
 		version,
 		extension,
 	});
-	let url = `https://cdn.kernel.org/pub/linux/kernel/v6.x/${packageArchive}`;
-	let source = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(source);
+	let majorVersion = version.split(".")[0];
+	let url = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x/${packageArchive}`;
+	return await std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export type Arg = {
@@ -29,7 +32,6 @@ export type Arg = {
 	env?: std.env.Arg;
 	host?: string;
 	phases?: tg.MaybeNestedArray<std.phases.Arg>;
-	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
@@ -39,7 +41,6 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		env,
 		host: host_,
 		phases: phasesArg = [],
-		sdk: sdk_,
 		source: source_,
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());

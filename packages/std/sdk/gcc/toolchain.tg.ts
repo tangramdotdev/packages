@@ -166,7 +166,6 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 			build: buildTriple,
 			env,
 			host: target,
-			sdk,
 		}),
 	});
 

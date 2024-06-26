@@ -124,11 +124,26 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let build = arg.build ?? host;
 	let useTriplePrefix = build !== host;
 
-	let additionalArgs = arg.additionalArgs ?? [];
+	let args: Array<tg.Template.Arg> = [
+		"-shared",
+		"-fPIC",
+		"-ldl",
+		"-O3",
+		"-pipe",
+		"-mtune=generic",
+		"-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3",
+		"-fasynchronous-unwind-tables",
+		"-fno-omit-frame-pointer",
+		"-mno-omit-leaf-frame-pointer",
+		"-fstack-protector-strong",
+	];
+	if (arg.additionalArgs) {
+		args = [...args, ...arg.additionalArgs];
+	}
 	if (std.triple.os(host) === "linux") {
-		additionalArgs.push("-fstack-clash-protection");
+		args.push("-fstack-clash-protection");
 		if (await std.env.tryWhich({ env: arg.buildToolchain, name: "clang" })) {
-			additionalArgs.push("-fuse-ld=lld");
+			args.push("-fuse-ld=lld");
 		}
 	}
 
@@ -136,25 +151,19 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 	let executable = `${prefix}cc`;
 
 	let system = std.triple.archAndOs(build);
-	let env = std.env.arg(arg.buildToolchain, arg.env);
+	let env = std.env.arg(
+		arg.buildToolchain,
+		{
+			// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
+			TANGRAM_LINKER_PASSTHROUGH: true,
+		},
+		arg.env,
+	);
 	let output = tg.File.expect(
 		await (
 			await tg.target(
-				tg`${executable}                             \
-				-xc ${arg.source}                            \
-				-o $OUTPUT                                   \
-				-shared                                      \
-				-fPIC                                        \
-				-ldl                                         \
-				-Os                                          \
-				-mtune=generic                               \
-				-pipe                                        \
-				-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3    \
-				-fasynchronous-unwind-tables                 \
-				-fno-omit-frame-pointer                      \
-				-mno-omit-leaf-frame-pointer                 \
-				-fstack-protector-strong                     \
-				${tg.Template.join(" ", ...additionalArgs)}`,
+				tg`${executable} -xc ${arg.source} -o $OUTPUT \
+				${tg.Template.join(" ", ...args)}`,
 				{
 					host: system,
 					env,

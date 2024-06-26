@@ -18,13 +18,13 @@ export let metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "18.1.7",
+	version: "18.1.8",
 };
 
 export let source = () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:74446ab6943f686391954cbda0d77ae92e8a60c432eff437b8666e121d748ec4";
+		"sha256:0b58557a6d32ceee97c8d533a59b9212d87e0fc4d2833924eb6c611247db2f2a";
 	let owner = name;
 	let repo = "llvm-project";
 	let tag = `llvmorg-${version}`;

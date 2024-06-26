@@ -70,6 +70,23 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let isCross = build !== host;
 		let prefix = isCross ? `${host}-` : ``;
 
+		// If this is a darwin-to-linux toolchain using GNU, add libdl.so.2 to the mandatory libraries.
+		let mandatoryLibraryPaths = [];
+		if (
+			std.triple.os(build) === "darwin" &&
+			os === "linux" &&
+			std.triple.environment(host) === "gnu"
+		) {
+			let libName = "libdl.so.2";
+			let libDl = await directory
+				.tryGet(`${host}/sysroot/lib/${libName}`)
+				.then(tg.File.expect);
+			let libDlDir = await tg.directory({
+				[`${libName}`]: libDl,
+			});
+			mandatoryLibraryPaths.push(libDlDir);
+		}
+
 		// Construct the ld proxy.
 		let ldProxyArtifact = await ldProxy({
 			buildToolchain,
@@ -79,11 +96,12 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					? os === "linux" && isLlvm
 						? await tg`${directory}/bin/ld.lld`
 						: os === "darwin" && isCross
-						  ? await tg`${directory}/bin/${host}-ld.bfd`
+						  ? await tg`${directory}/bin/${host}-ld.gold`
 						  : ld
 					: arg.linkerExe,
 			interpreter: ldso,
 			host,
+			mandatoryLibraryPaths,
 		});
 
 		if (isLlvm) {
@@ -253,6 +271,7 @@ type LdProxyArg = {
 	interpreter?: tg.File | undefined;
 	interpreterArgs?: Array<tg.Template.Arg>;
 	linker: tg.File | tg.Symlink | tg.Template;
+	mandatoryLibraryPaths?: Array<tg.Directory>;
 	host?: string;
 };
 
@@ -283,23 +302,33 @@ export let ldProxy = async (arg: LdProxyArg) => {
 		host,
 	});
 
+	// Define environment for the linker proxy.
+	let env: tg.Unresolved<std.env.Arg> = {
+		TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
+			tg.File | tg.Symlink | tg.Template
+		>(arg.linker),
+		TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.setIfUnset(hostInjectionLibrary),
+		TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs
+			? tg.Mutation.setIfUnset(arg.interpreterArgs)
+			: undefined,
+		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
+			arg.interpreter ?? "none",
+		),
+		TANGRAM_LINKER_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
+	};
+	if (arg.mandatoryLibraryPaths && arg.mandatoryLibraryPaths.length > 0) {
+		env = {
+			...env,
+			TANGRAM_LINKER_MANDATORY_LIBRARY_PATHS: tg.Mutation.setIfUnset(
+				tg.Template.join(":", ...arg.mandatoryLibraryPaths),
+			),
+		};
+	}
+
 	// Create the linker proxy.
 	return std.wrap({
 		buildToolchain,
-		env: {
-			TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
-				tg.File | tg.Symlink | tg.Template
-			>(arg.linker),
-			TANGRAM_LINKER_INJECTION_PATH:
-				tg.Mutation.setIfUnset(hostInjectionLibrary),
-			TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs
-				? tg.Mutation.setIfUnset(arg.interpreterArgs)
-				: undefined,
-			TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
-				arg.interpreter ?? "none",
-			),
-			TANGRAM_LINKER_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
-		},
+		env,
 		executable: buildLinkerProxy,
 		host: build,
 		identity: "wrapper",
