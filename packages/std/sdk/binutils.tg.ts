@@ -21,66 +21,29 @@ export let source = tg.target(async (build: string) => {
 });
 
 export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
-	staticBuild?: boolean;
 	target?: string;
 };
 
 /** Obtain the GNU binutils. */
 export let build = tg.target(async (arg?: Arg) => {
 	let {
+		autotools = {},
 		build: build_,
-		env: env_,
+		env,
 		host: host_,
 		sdk,
 		source: source_,
-		staticBuild,
 		target: target_,
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let target = target_ ?? host;
-
-	// NOTE: We could pull in `dependencies.texinfo` to avoid needing to set `MAKEINFO=true`, but we do not need the docs here and texinfo transitively adds more rebuilds than the other required dependencies, which would increase the total build time needlessly.
-	let buildPhase = staticBuild
-		? `make MAKEINFO=true configure-host && make MAKEINFO=true LDFLAGS=-all-static`
-		: `make MAKEINFO=true`;
-
-	let additionalEnv: std.env.Arg = {};
-	let additionalArgs: Array<string> = [];
-	if (staticBuild) {
-		additionalEnv = {
-			...additionalEnv,
-			CC: await tg`${target}-cc --static -fPIC`,
-			CC_FOR_BUILD: `cc --static -fPIC`,
-			CXX: await tg`${target}-c++ -static-libstdc++ -fPIC`,
-			CXX_FOR_BUILD: `c++ -static-libstdc++ -fPIC`,
-		};
-		additionalArgs = [
-			"--enable-shared=no",
-			"--enable-static=yes",
-			"--enable-static-link",
-			"--disable-shared-plugins",
-			"--disable-dynamicplugin",
-		];
-		if (std.triple.environment(target) === "musl") {
-			/*
-				Support musl >= 1.2.4 pending an upstream fix to binutils.
-				https://musl.libc.org/releases.html
-				"On the API level, the legacy "LFS64" ("large file support") interfaces, which were provided by macros remapping them to their standard names (#define stat64 stat and similar) have been deprecated and are no longer provided under the _GNU_SOURCE feature profile, only under explicit _LARGEFILE64_SOURCE. The latter will also be removed in a future version. Builds broken by this change can be fixed short-term by adding -D_LARGEFILE64_SOURCE to CFLAGS, but should be fixed to use the standard interfaces."
-			*/
-			additionalEnv = {
-				...additionalEnv,
-				CFLAGS: await tg.Mutation.prefix("-D_LARGEFILE64_SOURCE", " "),
-			};
-		}
-	}
-
-	let env = std.env.arg(env_, additionalEnv);
 
 	// Collect configuration.
 	let configure = {
@@ -94,26 +57,31 @@ export let build = tg.target(async (arg?: Arg) => {
 			`--build=${build}`,
 			`--host=${host}`,
 			`--target=${target}`,
-			...additionalArgs,
 		],
+	};
+
+	// NOTE: We could pull in `dependencies.texinfo` to avoid needing to set `MAKEINFO=true`, but we do not need the docs here and texinfo transitively adds more rebuilds than the other required dependencies, which would increase the total build time needlessly.
+	let makeinfoOverride = {
+		args: ["MAKEINFO=true"],
 	};
 
 	let phases = {
 		configure,
-		build: buildPhase,
-		install: tg.Mutation.set("make MAKEINFO=true install"),
+		build: makeinfoOverride,
+		install: makeinfoOverride,
 	};
 
-	let output = std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
-		env,
-		opt: "3",
-		phases,
-		sdk,
-		source: source_ ?? source(build),
-	});
-
-	return output;
+	return std.autotools.build(
+		{
+			...(await std.triple.rotate({ build, host })),
+			env,
+			opt: "3",
+			phases,
+			sdk,
+			source: source_ ?? source(build),
+		},
+		autotools,
+	);
 });
 
 export default build;

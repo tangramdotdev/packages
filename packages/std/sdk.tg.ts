@@ -5,15 +5,129 @@ import binutils from "./sdk/binutils.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
-import injection from "./wrap/injection.tg.ts";
-import * as workspace from "./wrap/workspace.tg.ts";
 import mold, { metadata as moldMetadata } from "./sdk/mold.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 import * as std from "./tangram.tg.ts";
 
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
 export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
-	return await sdk.inner(...args);
+	let {
+		host,
+		proxy: proxyArg,
+		targets,
+		toolchain: toolchain_,
+		linker,
+	} = await sdk.arg(...args);
+
+	let hostOs = std.triple.os(host);
+
+	// Create an array to collect all constituent envs.
+	let envs: tg.Unresolved<std.Args<std.env.Arg>> = [];
+
+	// Determine host toolchain.
+	let toolchain: std.env.Arg;
+	if (toolchain_ === "gcc") {
+		if (hostOs === "darwin") {
+			throw new Error(`The GCC toolchain is not available on macOS.`);
+		}
+		toolchain = await gcc.toolchain({ host });
+	} else if (toolchain_ === "llvm") {
+		toolchain = await llvm.toolchain({ host });
+	} else {
+		toolchain = toolchain_;
+	}
+	envs.push(toolchain);
+
+	let { flavor } = await std.sdk.toolchainComponents({
+		env: toolchain,
+		host,
+	});
+
+	// Set CC/CXX.
+	if (flavor === "gcc") {
+		envs.push({
+			CC: tg.Mutation.setIfUnset(`gcc`),
+			CXX: tg.Mutation.setIfUnset(`g++`),
+		});
+	} else if (flavor === "llvm") {
+		envs.push({
+			CC: tg.Mutation.setIfUnset("clang"),
+			CXX: tg.Mutation.setIfUnset("clang++"),
+		});
+	}
+
+	// Swap linker if requested.
+	let linkerDir: tg.Directory | undefined = undefined;
+	let linkerExe: tg.File | tg.Symlink | undefined = undefined;
+	if (linker) {
+		if (linker instanceof tg.Symlink || linker instanceof tg.File) {
+			linkerExe = linker;
+		} else {
+			switch (linker) {
+				case "lld": {
+					if (flavor === "gcc") {
+						return tg.unimplemented("lld support is not yet implemented.");
+					}
+					break;
+				}
+				case "mold": {
+					let moldArtifact = await mold({ host });
+					linkerDir = moldArtifact;
+					linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
+					break;
+				}
+				case "bfd": {
+					if (flavor === "llvm") {
+						let binutilsDir = await binutils({ host });
+						linkerDir = binutilsDir;
+						linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
+					}
+					break;
+				}
+			}
+		}
+	}
+
+	// Proxy the host toolchain.
+	proxyArg = { ...proxyArg, toolchain: toolchain, host };
+	if (linkerExe) {
+		proxyArg = { ...proxyArg, linkerExe };
+	}
+	let hostProxy = await proxy.env(proxyArg as proxy.Arg);
+	envs.push(hostProxy);
+	if (linkerDir) {
+		envs.push(linkerDir);
+	}
+
+	// Add cross compilers if requested.
+	for (let target of targets) {
+		if (host === target) {
+			continue;
+		}
+		if (!validateCrossTarget({ host, target })) {
+			throw new Error(
+				`Cross-compiling from ${host} to ${target} is not supported.`,
+			);
+		}
+		let crossToolchain = await gcc.toolchain({ host, target });
+		envs.push(crossToolchain);
+		let proxyEnv = await proxy.env({
+			...proxyArg,
+			toolchain: crossToolchain,
+			build: host,
+			host: target,
+		});
+		envs.push(proxyEnv);
+		let targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
+		envs.push({
+			[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
+			[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
+			[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-g++`),
+		});
+	}
+
+	// Combine all envs.
+	return await std.env.arg(...envs);
 }
 
 export namespace sdk {
@@ -33,128 +147,6 @@ export namespace sdk {
 		targets?: Array<string>;
 		/** Env containing the compiler. If not provided, will default to a native GCC toolchain. */
 		toolchain?: sdk.ToolchainKind;
-	};
-
-	export let inner = async (
-		...args: std.args.UnresolvedArgs<Arg>
-	): Promise<std.env.Arg> => {
-		let {
-			host,
-			proxy: proxyArg,
-			targets,
-			toolchain: toolchain_,
-			linker,
-		} = await sdk.arg(...args);
-
-		let hostOs = std.triple.os(host);
-
-		// Create an array to collect all constituent envs.
-		let envs: tg.Unresolved<std.Args<std.env.Arg>> = [];
-
-		// Determine host toolchain.
-		let toolchain: std.env.Arg;
-		if (toolchain_ === "gcc") {
-			if (hostOs === "darwin") {
-				throw new Error(`The GCC toolchain is not available on macOS.`);
-			}
-			toolchain = await gcc.toolchain({ host });
-		} else if (toolchain_ === "llvm") {
-			toolchain = await llvm.toolchain({ host });
-		} else {
-			toolchain = toolchain_;
-		}
-		envs.push(toolchain);
-
-		let { flavor } = await std.sdk.toolchainComponents({
-			env: toolchain,
-			host,
-		});
-
-		// Set CC/CXX.
-		if (flavor === "gcc") {
-			envs.push({
-				CC: tg.Mutation.setIfUnset(`gcc`),
-				CXX: tg.Mutation.setIfUnset(`g++`),
-			});
-		} else if (flavor === "llvm") {
-			envs.push({
-				CC: tg.Mutation.setIfUnset("clang"),
-				CXX: tg.Mutation.setIfUnset("clang++"),
-			});
-		}
-
-		// Swap linker if requested.
-		let linkerDir: tg.Directory | undefined = undefined;
-		let linkerExe: tg.File | tg.Symlink | undefined = undefined;
-		if (linker) {
-			if (linker instanceof tg.Symlink || linker instanceof tg.File) {
-				linkerExe = linker;
-			} else {
-				switch (linker) {
-					case "lld": {
-						if (flavor === "gcc") {
-							return tg.unimplemented("lld support is not yet implemented.");
-						}
-						break;
-					}
-					case "mold": {
-						let moldArtifact = await mold({ host });
-						linkerDir = moldArtifact;
-						linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
-						break;
-					}
-					case "bfd": {
-						if (flavor === "llvm") {
-							let binutilsDir = await binutils({ host });
-							linkerDir = binutilsDir;
-							linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
-						}
-						break;
-					}
-				}
-			}
-		}
-
-		// Proxy the host toolchain.
-		proxyArg = { ...proxyArg, buildToolchain: toolchain, host };
-		if (linkerExe) {
-			proxyArg = { ...proxyArg, linkerExe };
-		}
-		let hostProxy = await proxy.env(proxyArg as proxy.Arg);
-		envs.push(hostProxy);
-		if (linkerDir) {
-			envs.push(linkerDir);
-		}
-
-		// Add cross compilers if requested.
-		for (let target of targets) {
-			if (host === target) {
-				continue;
-			}
-			if (!validateCrossTarget({ host, target })) {
-				throw new Error(
-					`Cross-compiling from ${host} to ${target} is not supported.`,
-				);
-			}
-			let crossToolchain = await gcc.toolchain({ host, target });
-			envs.push(crossToolchain);
-			let proxyEnv = await proxy.env({
-				...proxyArg,
-				buildToolchain: crossToolchain,
-				build: host,
-				host: target,
-			});
-			envs.push(proxyEnv);
-			let targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
-			envs.push({
-				[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
-				[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
-				[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-g++`),
-			});
-		}
-
-		// Combine all envs.
-		return await std.env.arg(...envs);
 	};
 
 	export let arg = async (...args: std.args.UnresolvedArgs<Arg>) => {
@@ -395,6 +387,7 @@ export namespace sdk {
 		let compiler = flavor === "gcc" ? `${targetPrefix}${flavor}` : "clang";
 		let cxxCompiler = flavor === "gcc" ? `${targetPrefix}g++` : `clang++`;
 		let directory = await std.env.whichArtifact({ name: compiler, env });
+
 		tg.assert(directory, "Unable to find toolchain directory.");
 		cc = await tg.symlink(tg`${directory}/bin/${compiler}`);
 		cxx = await tg.symlink(tg`${directory}/bin/${cxxCompiler}`);

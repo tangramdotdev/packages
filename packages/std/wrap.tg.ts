@@ -14,7 +14,92 @@ import inspectProcessSource from "./wrap/test/inspectProcess.c" with {
 export async function wrap(
 	...args: std.args.UnresolvedArgs<wrap.Arg>
 ): Promise<tg.File> {
-	return await wrap.inner(...args);
+	let arg = await wrap.arg(...args);
+
+	tg.assert(arg.executable !== undefined, "No executable was provided.");
+
+	let executable = await manifestExecutableFromArg(arg.executable);
+
+	let identity = arg.identity ?? "executable";
+
+	let host = arg.host ?? (await std.triple.host());
+	std.triple.assert(host);
+	let buildToolchain = arg.buildToolchain
+		? arg.buildToolchain
+		: std.triple.os(host) === "linux"
+		  ? await gcc.toolchain({ host })
+		  : await bootstrap.sdk.env(host);
+
+	let manifestInterpreter = arg.interpreter
+		? await manifestInterpreterFromArg(arg.interpreter, buildToolchain)
+		: await manifestInterpreterFromExecutableArg(
+				arg.executable,
+				buildToolchain,
+		  );
+
+	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
+	if (
+		identity === "executable" &&
+		(executable instanceof tg.File || executable instanceof tg.Symlink)
+	) {
+		let file =
+			executable instanceof tg.Symlink
+				? await executable.resolve()
+				: executable;
+		if (!file || file instanceof tg.Directory) {
+			return tg.unreachable(
+				"Following the executable symlink either failed or returned a directory.",
+			);
+		}
+		let metadata = await std.file.executableMetadata(file);
+		if (metadata.format === "elf" && metadata.interpreter == undefined) {
+			throw new Error(
+				`Found a statically-linked executable but selected the "executable" identity.  This combination is not supported.  Please select the "wrapper" identity instead.`,
+			);
+		}
+	}
+
+	// Add remaining library paths.
+	if (manifestInterpreter && "libraryPaths" in manifestInterpreter) {
+		let paths = manifestInterpreter.libraryPaths ?? [];
+		if (arg.libraryPaths) {
+			paths = paths.concat(
+				await Promise.all(arg.libraryPaths.map(manifestSymlinkFromArg)),
+			);
+		}
+		manifestInterpreter.libraryPaths = paths;
+	}
+
+	let manifestEnv = await wrap.manifestEnvFromEnvObject(
+		arg.env as std.env.EnvObject,
+	);
+	let manifestArgs = await Promise.all(
+		(arg.args ?? []).map(manifestTemplateFromArg),
+	);
+
+	let manifest: wrap.Manifest = {
+		identity,
+		interpreter: manifestInterpreter,
+		executable,
+		env: manifestEnv,
+		args: manifestArgs,
+	};
+
+	// Get the wrapper executable.
+	let detectedBuild = await std.triple.host();
+	let detectedOs = std.triple.os(detectedBuild);
+	let build =
+		detectedOs === "linux"
+			? await bootstrap.toolchainTriple(detectedBuild)
+			: detectedBuild;
+	let wrapper = await workspace.wrapper({
+		buildToolchain,
+		build,
+		host,
+	});
+
+	// Write the manifest to the wrapper and return.
+	return await wrap.Manifest.write(wrapper, manifest);
 }
 
 export default wrap;
@@ -187,8 +272,10 @@ export namespace wrap {
 			executable = await wrap.executableFromManifestExecutable(
 				existingManifest.executable,
 			);
-			args_ = await Promise.all(
-				(existingManifest.args ?? []).map(templateFromManifestTemplate),
+			args_ = (args_ ?? []).concat(
+				await Promise.all(
+					(existingManifest.args ?? []).map(templateFromManifestTemplate),
+				),
 			);
 		}
 
@@ -205,96 +292,6 @@ export namespace wrap {
 			merge,
 			libraryPaths,
 		};
-	};
-
-	export let inner = async (...args: std.args.UnresolvedArgs<wrap.Arg>) => {
-		let arg = await wrap.arg(...args);
-
-		tg.assert(arg.executable !== undefined, "No executable was provided.");
-
-		let executable = await manifestExecutableFromArg(arg.executable);
-
-		let identity = arg.identity ?? "executable";
-
-		let host = arg.host ?? (await std.triple.host());
-		std.triple.assert(host);
-		let buildToolchain = arg.buildToolchain
-			? arg.buildToolchain
-			: std.triple.os(host) === "linux"
-			  ? await gcc.toolchain({ host })
-			  : await bootstrap.sdk.env(host);
-
-		let manifestInterpreter = arg.interpreter
-			? await manifestInterpreterFromArg(arg.interpreter, buildToolchain)
-			: await manifestInterpreterFromExecutableArg(
-					arg.executable,
-					buildToolchain,
-			  );
-
-		// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
-		if (
-			identity === "executable" &&
-			(executable instanceof tg.File || executable instanceof tg.Symlink)
-		) {
-			let file =
-				executable instanceof tg.Symlink
-					? await executable.resolve()
-					: executable;
-			if (!file || file instanceof tg.Directory) {
-				return tg.unreachable(
-					"Following the executable symlink either failed or returned a directory.",
-				);
-			}
-			let metadata = await std.file.executableMetadata(file);
-			if (metadata.format === "elf" && metadata.interpreter == undefined) {
-				throw new Error(
-					`Found a statically-linked executable but selected the "executable" identity.  This combination is not supported.  Please select the "wrapper" identity instead.`,
-				);
-			}
-		}
-
-		// Add remaining library paths.
-		if (manifestInterpreter && "libraryPaths" in manifestInterpreter) {
-			let paths = manifestInterpreter.libraryPaths ?? [];
-			if (arg.libraryPaths) {
-				paths = paths.concat(
-					await Promise.all(arg.libraryPaths.map(manifestSymlinkFromArg)),
-				);
-			}
-			manifestInterpreter.libraryPaths = paths;
-		}
-
-		let manifestEnv = await wrap.manifestEnvFromEnvObject(
-			arg.env as std.env.EnvObject,
-		);
-		let manifestArgs = await Promise.all(
-			(arg.args ?? []).map(manifestTemplateFromArg),
-		);
-
-		let manifest: wrap.Manifest = {
-			identity,
-			interpreter: manifestInterpreter,
-			executable,
-			env: manifestEnv,
-			args: manifestArgs,
-		};
-
-		// Get the wrapper executable.
-		let detectedBuild = await std.triple.host();
-		let detectedOs = std.triple.os(detectedBuild);
-		let build =
-			detectedOs === "linux"
-				? await bootstrap.toolchainTriple(detectedBuild)
-				: detectedBuild;
-		let wrapper = await workspace.wrapper({
-			buildToolchain,
-			build,
-			host,
-		});
-
-		// Write the manifest to the wrapper and return.
-		let output = await wrap.Manifest.write(wrapper, manifest);
-		return output;
 	};
 
 	export let envArgFromManifestEnv = async (

@@ -1,7 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import { mergeLibDirs } from "../sdk.tg.ts";
 import * as std from "../tangram.tg.ts";
-import * as dependencies from "./dependencies.tg.ts";
 import { interpreterName } from "./libc.tg.ts";
 import { defaultGlibcVersion } from "./libc/glibc.tg.ts";
 
@@ -26,6 +25,7 @@ export let source = tg.target(() =>
 );
 
 export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
@@ -43,6 +43,7 @@ export type Variant =
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
 export let build = tg.target(async (arg: Arg) => {
 	let {
+		autotools = {},
 		build: build_,
 		env: env_,
 		host: host_,
@@ -59,7 +60,6 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up configuration common to all GCC builds.
 	let commonArgs = [
-		"--disable-bootstrap",
 		"--disable-dependency-tracking",
 		"--disable-nls",
 		"--disable-multilib",
@@ -77,7 +77,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let additionalEnv = {};
+	let env = [env_];
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (std.triple.environment(target) === "musl") {
@@ -92,9 +92,12 @@ export let build = tg.target(async (arg: Arg) => {
 		additionalArgs.push("--enable-__cxa_atexit");
 	}
 
+	let sourceDir = source_ ?? source();
+
 	if (variant === "stage1_bootstrap") {
 		// Set args.
 		let stage1BootstrapArgs = [
+			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libquadmath",
@@ -117,6 +120,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage1_limited") {
 		let stage1LimitedArgs = [
+			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libvtv",
@@ -136,11 +140,6 @@ export let build = tg.target(async (arg: Arg) => {
 			"--with-build-config=bootstrap-lto",
 		];
 		additionalArgs.push(...stage2FullArgs);
-		additionalEnv = {
-			...additionalEnv,
-			CC: `cc -static -fPIC -flto`,
-			CXX: `c++ -static -fPIC -flto`,
-		};
 	}
 
 	let configure = {
@@ -149,18 +148,18 @@ export let build = tg.target(async (arg: Arg) => {
 
 	let phases = { configure };
 
-	let env = [env_];
-	env.push(additionalEnv);
-
-	let result = await std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(env),
-		fullRelro: false,
-		phases,
-		opt: "3",
-		sdk,
-		source: source_ ?? source(),
-	});
+	let result = await std.autotools.build(
+		{
+			...(await std.triple.rotate({ build, host })),
+			env: std.env.arg(env),
+			fullRelro: false,
+			phases,
+			opt: "3",
+			sdk,
+			source: sourceDir,
+		},
+		autotools,
+	);
 
 	result = await mergeLibDirs(result);
 

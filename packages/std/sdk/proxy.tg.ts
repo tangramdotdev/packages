@@ -5,11 +5,9 @@ import * as workspace from "../wrap/workspace.tg.ts";
 import * as gcc from "./gcc.tg.ts";
 import * as llvmToolchain from "./llvm.tg.ts";
 
-/** This module provides the Tangram proxy tools, which are used in conjunction with compilers and linkers to produce Tangram-ready artifacts. */
+/** This module is responsible for proxying compiler toolchains. It provides a linker proxy which produces Tangram-wrapped executables and ensure libraries reference all their needed dependencies, and a compiler proxy which schedules Tangram builds for each invocation. */
 
 export type Arg = {
-	/** The build environment to use to produce components. */
-	buildToolchain: std.env.Arg;
 	/** The target triple of the build machine. */
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
@@ -20,6 +18,8 @@ export type Arg = {
 	linkerExe?: tg.File | tg.Symlink;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
 	host?: string;
+	/** The build environment to be proxied. */
+	toolchain: std.env.Arg;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
@@ -30,7 +30,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let proxyCompiler = arg.compiler ?? false;
 	let proxyLinker = arg.linker ?? true;
-	let buildToolchain = arg.buildToolchain;
+	let buildToolchain = arg.toolchain;
 
 	if (!proxyCompiler && !proxyLinker) {
 		return;

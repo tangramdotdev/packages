@@ -67,6 +67,7 @@ export default tg.target(async (arg: Arg) => {
 	let configure = {
 		args: [
 			"--disable-nls",
+			"--disable-nscd",
 			"--disable-werror",
 			`--enable-kernel=${kernelVersion}`,
 			tg`--with-headers="${linuxHeaders}/include"`,

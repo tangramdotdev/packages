@@ -115,7 +115,7 @@ fn read_options() -> Options {
 		.expect("TANGRAM_LINKER_COMMAND_PATH must be set.");
 
 	// Get the passthrough flag.
-	let passthrough = std::env::var("TANGRAM_LINKER_PASSTHROUGH").is_ok();
+	let mut passthrough = std::env::var("TANGRAM_LINKER_PASSTHROUGH").is_ok();
 
 	// Get the wrapper path.
 	let wrapper_id = tg::file::Id::from_str(
@@ -178,6 +178,8 @@ fn read_options() -> Options {
 				} else {
 					tracing::warn!("Invalid max depth argument {option}. Using default.");
 				}
+			} else if arg.starts_with("--tg-passthrough") {
+				passthrough = true;
 			} else {
 				command_args.push(arg.clone());
 			}

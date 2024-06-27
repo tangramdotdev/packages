@@ -40,7 +40,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 
 	// If a cross-target was requested, build the components required using the native toolchain.
 	let nativeProxyEnv = await proxy.env({
-		buildToolchain: nativeToolchain,
+		toolchain: nativeToolchain,
 		build: host,
 		host,
 	});
@@ -205,7 +205,7 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 
 	let target = host;
-	let build = bootstrap.toolchainTriple(host);
+	let build = await bootstrap.toolchainTriple(host);
 
 	let sdk = bootstrap.sdk(host);
 
@@ -214,20 +214,32 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 		host,
 		env: await std.env.arg(sdk, env_),
 	});
+	let combinedUnproxiedEnv = std.env.arg(sdk, buildToHostCross, env_);
+
+	// Proxy the cross toolchain and produce a combined environment.
+	let crossProxyEnv = await proxy.env({
+		toolchain: buildToHostCross,
+		build,
+		host,
+	});
+	let combinedProxiedEnv = std.env.arg(combinedUnproxiedEnv, crossProxyEnv);
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
-		env: std.env.arg(sdk, buildToHostCross, env_),
+		env: combinedProxiedEnv,
 		sdk: false,
 		build,
 		host,
-		staticBuild: true,
 		target,
 	});
 
+	// Build a fully native GCC toolchain.
 	let fullGCC = await gcc.build({
 		build,
-		env: std.env.arg(sdk, buildToHostCross, env_, nativeHostBinutils),
+		env: std.env.arg(combinedUnproxiedEnv, nativeHostBinutils, {
+			CC: `cc -static`,
+			CXX: `c++ -static`,
+		}),
 		host,
 		sysroot,
 		sdk: false,
@@ -238,13 +250,14 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	// Flatten the sysroot and combine into a native toolchain.
 	let innerSysroot = sysroot.get(target).then(tg.Directory.expect);
 	let combined = tg.directory(fullGCC, innerSysroot);
+
 	return std.env.arg(combined, nativeHostBinutils);
 });
 
 export let buildToHostCrossToolchain = async (arg?: CanadianCrossArg) => {
 	let { host: host_, env } = arg ?? {};
 	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
-	let build = bootstrap.toolchainTriple(host);
+	let build = await bootstrap.toolchainTriple(host);
 
 	// Create cross-toolchain from build to host.
 	return crossToolchain({
@@ -266,26 +279,26 @@ let darwinCrossToolchain = async (arg: DarwinCrossToolchainArg) => {
 	let { host, target } = arg;
 	tg.assert(std.triple.os(host) === "darwin");
 
-	let tag = "v13.2.0";
-	let baseUrl = `https://github.com/messense/homebrew-macos-cross-toolchains/releases/download/${tag}`;
+	let tag = "v13.20.0-1";
+	let baseUrl = `https://github.com/deciduously/homebrew-macos-cross-toolchains/releases/download/${tag}`;
 
 	let checksums: { [key: string]: tg.Checksum } = {
 		["aarch64-unknown-linux-gnu-aarch64-darwin"]:
-			"sha256:a87669a9df908d8d8859849a0f9fc0fb287561a4e449c21dade10663d42d2ccb",
+			"sha256:d87efab534ca68814d7081fd001fbc2808a6dba09dbeefec38558203d521acae",
 		["aarch64-unknown-linux-gnu-x86_64-darwin"]:
-			"sha256:6979291e34064583ac8b12a8b6b99ec6829caf22f47bcb68b646365ec9e24690",
+			"sha256:03aede7b899bdcab7cd3c3b1b2e92bf21723eba35478feb5f6a241980498616f",
 		["aarch64-unknown-linux-musl-x86_64-darwin"]:
-			"sha256:15a7166de1b364e591d6b0206d127b67d15e88555f314170088f5e9ccf0ab068",
+			"sha256:902313390fb624c2301f92143968cf43abfc048f8c748aede0f9b33cab5be26b",
 		["aarch64-unknown-linux-musl-aarch64-darwin"]:
-			"sha256:3f60dbda3b2934857cc63b27e1e680e36b181f3df9bbae9ec207989f47b0e7aa",
+			"sha256:e293004542f6e6622d638192fd99f572e21ad896e2e567f135b8c533c5d78bf6",
 		["x86_64-unknown-linux-gnu-aarch64-darwin"]:
-			"sha256:bb59598afd84b4d850c32031a4fa64c928fb41f8ece4401553b6c23714efbc47",
+			"sha256:78be08eee3c3fba42f1cc99fbd0a39c9c79a415ad24d39cf8eb8fc0627b45c4a",
 		["x86_64-unknown-linux-gnu-x86_64-darwin"]:
-			"sha256:86e28c979e5ca6d0d1019c9b991283f2ab430f65cee4dc1e4bdf85170ff7c4f2",
+			"sha256:04e141d9968c6cf778442417cfd5769b080567692c14a856eaf90b7ab6aff018",
 		["x86_64-unknown-linux-musl-x86_64-darwin"]:
-			"sha256:ff0f635766f765050dc918764c856247614c38e9c4ad27c30f85c0af4b21e919",
+			"sha256:1194f4539cf4f48a321842264b04eaf4fbf68c7133d8cc6ff3f5a40e3a8b6f8b",
 		["x86_64-unknown-linux-musl-aarch64-darwin"]:
-			"sha256:de0a12a677f3b91449e9c52a62f3d06c4c1a287aa26ba0bc36f86aaa57c24b55",
+			"sha256:2ef10ee4c40aa1a536def1fc5eecec73bcd63d72ff86db258b297c0e477e48cc",
 	};
 
 	let hostArchAndOs = std.triple.archAndOs(host);

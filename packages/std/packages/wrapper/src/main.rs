@@ -24,10 +24,31 @@ fn main_inner() -> std::io::Result<()> {
 	// Read the manifest.
 	let manifest = Manifest::read(&wrapper_path)?.expect("Malformed manifest.");
 
-	// If the `--tangram-print-manifest` arg is passed, then print the manifest and exit.
-	if std::env::args().any(|arg| arg == "--tangram-print-manifest") {
-		println!("{}", serde_json::to_string_pretty(&manifest).unwrap());
-		return Ok(());
+	// Search args for known flags.
+	let mut suppress_args = false;
+	let mut suppress_env = false;
+	let args_os = std::env::args_os();
+	let num_args = args_os.len();
+	let mut filtered_args = Vec::with_capacity(num_args);
+	for arg in args_os {
+		if arg == "--tangram-print-manifest" {
+			println!("{}", serde_json::to_string_pretty(&manifest).unwrap());
+			return Ok(());
+		} else if arg == "--tangram-wrapper-suppress-args" {
+			suppress_args = true;
+		} else if arg == "--tangram-wrapper-suppress-env" {
+			suppress_env = true;
+		} else {
+			filtered_args.push(arg);
+		}
+	}
+
+	// Check env vars for known flags.
+	if !suppress_args && std::env::var("TANGRAM_WRAPPER_SUPPRESS_ARGS").is_ok() {
+		suppress_args = true;
+	}
+	if !suppress_env && std::env::var("TANGRAM_WRAPPER_SUPPRESS_ENV").is_ok() {
+		suppress_env = true;
 	}
 
 	// Get the artifacts directories.
@@ -36,7 +57,7 @@ fn main_inner() -> std::io::Result<()> {
 	tracing::trace!(?artifacts_directories);
 
 	// Get arg0 from the invocation.
-	let arg0 = std::env::args_os().next().unwrap();
+	let arg0 = &filtered_args[0];
 
 	// Render the interpreter.
 	let interpreter = handle_interpreter(
@@ -80,8 +101,10 @@ fn main_inner() -> std::io::Result<()> {
 	};
 
 	// Set the env.
-	if let Some(env) = &manifest.env {
-		mutate_env(env, &artifacts_directories);
+	if !suppress_env {
+		if let Some(env) = &manifest.env {
+			mutate_env(env, &artifacts_directories);
+		}
 	}
 
 	// Set `TANGRAM_INJECTION_IDENTITY_PATH` if necessary.
@@ -101,18 +124,20 @@ fn main_inner() -> std::io::Result<()> {
 	command.arg0(arg0);
 
 	// Add the args.
-	if let Some(args) = manifest.args {
-		let command_args = args
-			.iter()
-			.map(|arg| render_template(arg, &artifacts_directories))
-			.collect::<Vec<_>>();
-		#[cfg(feature = "tracing")]
-		tracing::trace!(?command_args);
-		command.args(command_args);
+	if !suppress_args {
+		if let Some(args) = manifest.args {
+			let command_args = args
+				.iter()
+				.map(|arg| render_template(arg, &artifacts_directories))
+				.collect::<Vec<_>>();
+			#[cfg(feature = "tracing")]
+			tracing::trace!(?command_args);
+			command.args(command_args);
+		}
 	}
 
 	// Add the wrapper args.
-	let wrapper_args = std::env::args_os().skip(1).collect::<Vec<_>>();
+	let wrapper_args = &filtered_args[1..];
 	#[cfg(feature = "tracing")]
 	tracing::trace!(?wrapper_args);
 	command.args(wrapper_args);
