@@ -57,8 +57,9 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	return env;
 });
 
-export let buildToolsForHost = (host: string) => {
-	let sdk = bootstrap.sdk(host);
+export let buildToolsForHost = async (hostArg: string) => {
+	let sdk = bootstrap.sdk(hostArg);
+	let host = await bootstrap.toolchainTriple(hostArg);
 	let utils = std.utils.env({ host, sdk: false, env: sdk });
 	// This env is used to build the remaining dependencies only. It includes the bootstrap SDK.
 	let utilsEnv = std.env.arg(utils, sdk);
@@ -71,7 +72,7 @@ export let buildToolsForHost = (host: string) => {
 		dependencies.zstd.build(additionalToolsArg),
 	];
 	// This env contains the standard utils and additional tools, but NO SDK, so each build step can swap the compiler out accordingly.
-	return std.env.arg(utils, ...additionalTools);
+	return await std.env.arg(utils, ...additionalTools);
 };
 
 export type CrossToolchainArg = {
@@ -236,10 +237,7 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	// Build a fully native GCC toolchain.
 	let fullGCC = await gcc.build({
 		build,
-		env: std.env.arg(combinedUnproxiedEnv, nativeHostBinutils, {
-			CC: `cc -static`,
-			CXX: `c++ -static`,
-		}),
+		env: std.env.arg(combinedUnproxiedEnv, nativeHostBinutils),
 		host,
 		sysroot,
 		sdk: false,

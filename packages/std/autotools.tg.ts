@@ -202,14 +202,6 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		env = await std.env.arg(sdk, utils, env);
 	}
 
-	// If cross compiling, override CC/CXX to point to the correct compiler.
-	if (host !== target) {
-		env = await std.env.arg(env, {
-			CC: `${target}-cc`,
-			CXX: `${target}-c++`,
-		});
-	}
-
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
 	env = await std.env.arg(env, userEnv);
 

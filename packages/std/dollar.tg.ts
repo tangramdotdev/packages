@@ -115,7 +115,7 @@ class Dollar {
 }
 
 export let test = tg.target(async () => {
-	let f = tg.file("hello there!!!");
+	let f = tg.file("hello there!!!\n");
 	let output = await $`cat ${f} > $OUTPUT
 		echo $NAME >> $OUTPUT
 		echo $TOOL >> $OUTPUT`
@@ -123,5 +123,8 @@ export let test = tg.target(async () => {
 		.env({ TOOL: "tangram" })
 		.env({ NAME: tg.Mutation.suffix("L.", " ") })
 		.then(tg.File.expect);
-	return output;
+	let actual = await output.text();
+	let expected = "hello there!!!\nben L.\ntangram\n";
+	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
+	return true;
 });
