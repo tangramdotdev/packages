@@ -196,7 +196,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		parallel = true,
 		pre,
 		proxy = false,
-		sdk: sdk_,
+		sdk: sdk_ = [],
 		source,
 		target: target_,
 		useCargoVendor = false,

@@ -69,6 +69,7 @@ export let build = tg.target(async (arg: Arg) => {
 		`--target=${target}`,
 		"--with-native-system-header-dir=/include",
 		tg`--with-sysroot=${sysroot}/${target}`,
+		"--with-system-zlib",
 	];
 
 	// Configure sysroot.

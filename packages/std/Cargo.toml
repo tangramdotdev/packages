@@ -29,7 +29,7 @@ itertools = "0.13"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "44c443c5a0812fd808eb592d074d9455716cc4bf" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "04a18d22bf94c0d554f3570efd4cff5d41b465b9" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "macros",

@@ -48,12 +48,13 @@ export let build = tg.target(async (arg?: Arg) => {
 	// Collect configuration.
 	let configure = {
 		args: [
-			`--with-sysroot=$OUTPUT`,
 			"--disable-dependency-tracking",
 			"--disable-nls",
 			"--disable-werror",
 			"--enable-deterministic-archives",
 			"--enable-gprofng=no",
+			"--with-sysroot=$OUTPUT",
+			"--with-system-zlib",
 			`--build=${build}`,
 			`--host=${host}`,
 			`--target=${target}`,

@@ -735,9 +735,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.21"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
+checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 
 [[package]]
 name = "lsp-types"
@@ -810,9 +810,9 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c165a9ab64cf766f73521c0dd2cfdff64f488b8f0b3e621face3462d3db536d7"
+checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
  "num-traits",
@@ -1244,7 +1244,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=44c443c5a0812fd808eb592d074d9455716cc4bf#44c443c5a0812fd808eb592d074d9455716cc4bf"
+source = "git+https://github.com/tangramdotdev/tangram?rev=04a18d22bf94c0d554f3570efd4cff5d41b465b9#04a18d22bf94c0d554f3570efd4cff5d41b465b9"
 dependencies = [
  "blake3",
  "bytes",
@@ -1278,12 +1278,13 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "winnow",
 ]
 
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=44c443c5a0812fd808eb592d074d9455716cc4bf#44c443c5a0812fd808eb592d074d9455716cc4bf"
+source = "git+https://github.com/tangramdotdev/tangram?rev=04a18d22bf94c0d554f3570efd4cff5d41b465b9#04a18d22bf94c0d554f3570efd4cff5d41b465b9"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1846,6 +1847,15 @@ name = "windows_x86_64_msvc"
 version = "0.52.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bec47e5bfd1bff0eeaf6d8b485cc1074891a197ab4225d504cb7a1ab88b02bf0"
+
+[[package]]
+name = "winnow"
+version = "0.6.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59b5e5f6c299a3c7890b876a2a587f3115162487e704907d9b6cd29473052ba1"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "zerocopy"

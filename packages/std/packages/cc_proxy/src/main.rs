@@ -580,7 +580,7 @@ async fn check_in_source_tree(
 					.map_err(|error| {
 						tg::error!(
 							source = error,
-							"failed to add {subpath}, {artifact} to directory"
+							"failed to add {subpath}, {artifact:?} to directory"
 						)
 					})?
 			}

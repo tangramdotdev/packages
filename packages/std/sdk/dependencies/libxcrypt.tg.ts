@@ -1,5 +1,4 @@
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as std from "tg:std" with { path: "../std" };
+import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	homepage: "https://github.com/besser82/libxcrypt",
@@ -30,33 +29,19 @@ export let source = tg.target(() => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies?: {
-		perl?: perl.Arg;
-	};
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (...args: std.Args<Arg>) => {
-	let {
-		autotools = {},
-		build,
-		dependencies: { perl: perlArg = {} } = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.args.apply<Arg>(...args);
+export let build = tg.target(async (arg?: Arg) => {
+	let { autotools = {}, build, env, host, sdk, source: source_ } = arg ?? {};
 
 	let configure = {
 		args: ["--disable-dependency-tracking"],
 	};
 	let phases = { configure };
-
-	let dependencies = [perl.build(perlArg)];
-	let env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
 		{
@@ -71,11 +56,3 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export let test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: build,
-		libraries: ["crypt"],
-	});
-	return true;
-});

@@ -6,7 +6,7 @@ export let metadata = {
 	version: "3.12.4",
 };
 
-export let source = tg.target(async (os: string) => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
 
 	let extension = ".tar.xz";
@@ -26,6 +26,7 @@ export let source = tg.target(async (os: string) => {
 });
 
 export type Arg = {
+	autotools?: std.autotools.Arg;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
@@ -34,7 +35,14 @@ export type Arg = {
 };
 
 export let build = tg.target(async (arg?: Arg) => {
-	let { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
+	let {
+		autotools = {},
+		build: build_,
+		env,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
@@ -60,13 +68,16 @@ export let build = tg.target(async (arg?: Arg) => {
 	}
 
 	// Build python.
-	let result = std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
-		env,
-		phases,
-		sdk,
-		source: source_ ?? source(os),
-	});
+	let result = std.autotools.build(
+		{
+			...(await std.triple.rotate({ build, host })),
+			env,
+			phases,
+			sdk,
+			source: source_ ?? source(),
+		},
+		autotools,
+	);
 
 	return result;
 });
