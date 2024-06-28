@@ -118,6 +118,81 @@ export let buildToolsForHost = async (arg?: BuildToolsArg) => {
 	);
 };
 
+type CanadianCrossArg = {
+	host?: string;
+	env?: std.env.Arg;
+};
+
+export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
+	let { host: host_, env: env_ } = arg ?? {};
+	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+
+	let target = host;
+	let build = await bootstrap.toolchainTriple(host);
+
+	let bootstrapSdk = bootstrap.sdk(host);
+
+	// Create cross-toolchain from build to host.
+	let { env: buildToHostCross, sysroot } = await buildToHostCrossToolchain({
+		host,
+		env: await std.env.arg(bootstrapSdk, env_),
+	});
+
+	// Proxy the cross toolchain and produce a combined environment.
+	let crossProxyEnv = await proxy.env({
+		toolchain: buildToHostCross,
+		build,
+		host,
+	});
+	let proxiedBuildToHostEnv = std.env.arg(
+		buildToHostCross,
+		crossProxyEnv,
+		env_,
+	);
+
+	// Create a native toolchain (host to host).
+	let nativeHostBinutils = await binutils({
+		env: proxiedBuildToHostEnv,
+		sdk: false,
+		build: host,
+		host,
+		target,
+	});
+
+	// Build a fully native GCC toolchain.
+	let fullGCC = await gcc.build({
+		build: host,
+		env: std.env.arg(proxiedBuildToHostEnv, nativeHostBinutils),
+		host,
+		sysroot,
+		sdk: false,
+		target,
+		variant: "stage2_full",
+	});
+
+	// Flatten the sysroot and combine into a native toolchain.
+	let innerSysroot = sysroot.get(target).then(tg.Directory.expect);
+	let combined = tg.directory(fullGCC, innerSysroot);
+
+	return std.env.arg(combined, nativeHostBinutils);
+});
+
+export let buildToHostCrossToolchain = async (arg?: CanadianCrossArg) => {
+	let { host: host_, env } = arg ?? {};
+	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	let build = await bootstrap.toolchainTriple(host);
+
+	// Create cross-toolchain from build to host.
+	return crossToolchain({
+		build,
+		env,
+		sdk: false,
+		host: build,
+		target: host,
+		variant: "stage1_limited",
+	});
+};
+
 export type CrossToolchainArg = {
 	build?: string;
 	env?: std.env.Arg;
@@ -240,78 +315,6 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	});
 	return sysroot;
 });
-
-type CanadianCrossArg = {
-	host?: string;
-	env?: std.env.Arg;
-};
-
-export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
-	let { host: host_, env: env_ } = arg ?? {};
-	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
-
-	let target = host;
-	let build = await bootstrap.toolchainTriple(host);
-
-	let sdk = bootstrap.sdk(host);
-
-	// Create cross-toolchain from build to host.
-	let { env: buildToHostCross, sysroot } = await buildToHostCrossToolchain({
-		host,
-		env: await std.env.arg(sdk, env_),
-	});
-	let combinedUnproxiedEnv = std.env.arg(sdk, buildToHostCross, env_);
-
-	// Proxy the cross toolchain and produce a combined environment.
-	let crossProxyEnv = await proxy.env({
-		toolchain: buildToHostCross,
-		build,
-		host,
-	});
-	let combinedProxiedEnv = std.env.arg(combinedUnproxiedEnv, crossProxyEnv);
-
-	// Create a native toolchain (host to host).
-	let nativeHostBinutils = await binutils({
-		env: combinedProxiedEnv,
-		sdk: false,
-		build,
-		host,
-		target,
-	});
-
-	// Build a fully native GCC toolchain.
-	let fullGCC = await gcc.build({
-		build,
-		env: std.env.arg(combinedUnproxiedEnv, nativeHostBinutils),
-		host,
-		sysroot,
-		sdk: false,
-		target,
-		variant: "stage2_full",
-	});
-
-	// Flatten the sysroot and combine into a native toolchain.
-	let innerSysroot = sysroot.get(target).then(tg.Directory.expect);
-	let combined = tg.directory(fullGCC, innerSysroot);
-
-	return std.env.arg(combined, nativeHostBinutils);
-});
-
-export let buildToHostCrossToolchain = async (arg?: CanadianCrossArg) => {
-	let { host: host_, env } = arg ?? {};
-	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
-	let build = await bootstrap.toolchainTriple(host);
-
-	// Create cross-toolchain from build to host.
-	return crossToolchain({
-		build,
-		env,
-		sdk: false,
-		host: build,
-		target: host,
-		variant: "stage1_limited",
-	});
-};
 
 type DarwinCrossToolchainArg = {
 	host: string;

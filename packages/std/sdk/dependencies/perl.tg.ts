@@ -70,15 +70,14 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let unwrappedPerl = tg.File.expect(await perlArtifact.get("bin/perl"));
 
-	let wrappedPerl = await std.wrap({
-		buildToolchain: bootstrap.sdk(),
+	let wrappedPerl = await std.wrap(unwrappedPerl, {
+		buildToolchain: env,
 		env: {
 			PERL5LIB: tg.Mutation.prefix(
 				tg`${perlArtifact}/lib/perl5/${metadata.version}`,
 				":",
 			),
 		},
-		executable: unwrappedPerl,
 	});
 
 	let scripts = [];
@@ -103,9 +102,8 @@ export let build = tg.target(async (arg?: Arg) => {
 				.then(tg.File.expect);
 
 			// Wrap it.
-			return await std.wrap({
-				buildToolchain: bootstrap.sdk(),
-				executable: scriptArtifact,
+			return await std.wrap(scriptArtifact, {
+				buildToolchain: env,
 				interpreter: wrappedPerl,
 			});
 		}),

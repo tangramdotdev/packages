@@ -69,7 +69,6 @@ export let build = tg.target(async (arg: Arg) => {
 		`--target=${target}`,
 		"--with-native-system-header-dir=/include",
 		tg`--with-sysroot=${sysroot}/${target}`,
-		"--with-system-zlib",
 	];
 
 	// Configure sysroot.
@@ -129,6 +128,7 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
+			tg`--with-build-sysroot=${sysroot}/${target}`,
 		];
 		additionalArgs.push(...stage1LimitedArgs);
 	}
