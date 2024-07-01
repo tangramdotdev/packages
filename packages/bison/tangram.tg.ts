@@ -61,7 +61,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	}
 	let phases = { configure };
 
-	let env = std.env.arg(m4.build(m4Arg), env_);
+	let env = std.env.arg(m4.build({ build, env: env_, host, sdk }, m4Arg), env_);
 
 	return std.autotools.build(
 		{
@@ -85,3 +85,22 @@ export let test = tg.target(async () => {
 	});
 	return true;
 });
+
+export let testCrossA = tg.target(() =>
+	build({ host: "x86_64-unknown-linux-gnu" }),
+);
+export let testCrossB = tg.target(() =>
+	build({
+		host: "x86_64-unknown-linux-gnu",
+		dependencies: { m4: { host: "x86_64-unknown-linux-musl" } },
+	}),
+);
+export let testCrossC = tg.target(() =>
+	build(
+		{
+			host: "x86_64-unknown-linux-gnu",
+			dependencies: { m4: { host: "x86_64-unknown-linux-musl" } },
+		},
+		{ dependencies: { m4: { host: "x86_64-unknown-linux-musl.2" } } },
+	),
+);

@@ -37,7 +37,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let env = [gmp.build(gmpArg), env_];
+	let env = [gmp.build({ build, env: env_, host, sdk }, gmpArg), env_];
 
 	let configure = {
 		args: [

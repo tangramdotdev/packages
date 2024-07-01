@@ -83,12 +83,12 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure };
 
 	let env = [
-		bzip2.build(bzip2Arg),
-		libarchive.build(libarchiveArg),
-		m4.build(m4Arg),
-		openssl.build(opensslArg),
-		xz.build(xzArg),
-		zlib.build(zlibArg),
+		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
+		libarchive.build({ build, env: env_, host, sdk }, libarchiveArg),
+		m4.build({ build, env: env_, host, sdk }, m4Arg),
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		xz.build({ build, env: env_, host, sdk }, xzArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 		{
 			CFLAGS: tg.Mutation.suffix(
 				"-Wno-format-nonliteral -lz -lbz2 -llzma",

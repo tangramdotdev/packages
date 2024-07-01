@@ -1068,7 +1068,7 @@ export let defaultShellInterpreter = async (
 	} else {
 		buildArg = { sdk: false, env: std.sdk() };
 	}
-	let shellArtifact = await std.utils.bash.build(buildArg);
+	let shellArtifact = await std.utils.bash.build({ build, env: env_, host, sdk }, buildArg);
 	let shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
 
 	//  Add the standard utils.

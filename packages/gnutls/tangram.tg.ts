@@ -54,9 +54,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let env = [
-		gmp.build(gmpArg),
-		nettle.build(nettleArg),
-		zlib.build(zlibArg),
+		gmp.build({ build, env: env_, host, sdk }, gmpArg),
+		nettle.build({ build, env: env_, host, sdk }, nettleArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 		env_,
 	];
 

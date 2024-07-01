@@ -49,7 +49,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let dependencies = [ncurses.build(ncursesArg)];
+	let dependencies = [ncurses.build({ build, env: env_, host, sdk }, ncursesArg)];
 	let env = [...dependencies, env_];
 
 	let output = await std.autotools.build(

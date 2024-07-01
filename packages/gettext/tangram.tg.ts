@@ -86,21 +86,21 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	}
 	let phases = { configure };
 
-	let ncursesArtifact = await ncurses.build(ncursesArg);
+	let ncursesArtifact = await ncurses.build({ build, env: env_, host, sdk }, ncursesArg);
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
 		ncursesArtifact,
-		perl.build(perlArg),
-		pkgconfig.build(pkgconfigArg),
-		xz.build(xzArg),
+		perl.build({ build, env: env_, host, sdk }, perlArg),
+		pkgconfig.build({ build, env: env_, host, sdk }, pkgconfigArg),
+		xz.build({ build, env: env_, host, sdk }, xzArg),
 	];
 	let aclArtifact = undefined;
 	let attrArtifact = undefined;
 
-	let libiconvArtifact = await libiconv.build(libiconvArg);
+	let libiconvArtifact = await libiconv.build({ build, env: env_, host, sdk }, libiconvArg);
 	dependencies.push(libiconvArtifact);
 	if (os === "linux") {
-		aclArtifact = await acl.build(aclArg);
-		attrArtifact = await attr.build(attrArg);
+		aclArtifact = await acl.build({ build, env: env_, host, sdk }, aclArg);
+		attrArtifact = await attr.build({ build, env: env_, host, sdk }, attrArg);
 		dependencies.push(aclArtifact);
 		dependencies.push(attrArtifact);
 	}

@@ -54,7 +54,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [pcre2.build(pcre2Arg), ncurses.build(ncursesArg)];
+	let dependencies = [pcre2.build({ build, env: env_, host, sdk }, pcre2Arg), ncurses.build(ncursesArg)];
 	let env = std.env.arg(
 		...dependencies,
 		{

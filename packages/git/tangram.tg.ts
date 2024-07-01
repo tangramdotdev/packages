@@ -70,9 +70,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let env = std.env.arg(
-		gettext.build(gettextArg),
-		openssl.build(opensslArg),
-		zlib.build(zlibArg),
+		gettext.build({ build, env: env_, host, sdk }, gettextArg),
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 		env_,
 	);
 

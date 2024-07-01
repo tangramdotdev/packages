@@ -53,7 +53,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let env = std.env.arg(gperf.build(gperfArg), env_);
+	let env = std.env.arg(gperf.build({ build, env: env_, host, sdk }, gperfArg), env_);
 
 	return std.autotools.build(
 		{

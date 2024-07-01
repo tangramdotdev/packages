@@ -68,9 +68,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let phases = { configure };
 	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		bison.build(bisonArg),
-		m4.build(m4Arg),
-		zlib.build(zlibArg),
+		bison.build({ build, env: env_, host, sdk }, bisonArg),
+		m4.build({ build, env: env_, host, sdk }, m4Arg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = [...dependencies, env_];
 

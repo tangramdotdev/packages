@@ -1,5 +1,44 @@
 import * as std from "./tangram.tg.ts";
 
+// type M4Arg = {
+// 	optional?: string;
+// };
+
+// type PerlArg = {
+// 	optional?: string;
+// };
+
+// type A = {
+// 	optional?: string;
+// 	otherOptional?: string;
+// 	dependencies?: {
+// 		m4?: M4Arg;
+// 	};
+// };
+
+// type B = {
+// 	optional?: string;
+// 	dependencies?: {
+// 		perl?: PerlArg;
+// 	};
+// };
+
+// type C = {
+// 	optional?: string;
+// 	dependencies?: {
+// 		m4?: M4Arg;
+// 		perl?: PerlArg;
+// 	};
+// };
+
+// let getDepNames = <T>(arg: T): Array<string> => {
+// 	return tg.unimplemented();
+// };
+
+// let aList = getDepNames<A>({}); // ["m4"]
+// let bList = getDepNames<B>({}); // ["perl"]
+// let cList = getDepNames<C>({}); // ["m4", "perl"]
+
 /** Standard values that packages pass to their dependencies */
 export type PackageArg = { [key: string]: tg.Value } & {
 	build?: string | undefined;
@@ -57,7 +96,7 @@ export let apply = async <T extends PackageArg>(
 
 	// Process dependency args.
 	let dependencyArgs = arg.dependencies ?? [];
-	let dependencies: DependencyArgs = {};
+	let dependencies: { [key: string]: Array<PackageArg> } = {};
 	for (let dependency of dependencyArgs) {
 		if (dependency === undefined) {
 			continue;

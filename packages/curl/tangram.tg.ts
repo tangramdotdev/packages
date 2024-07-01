@@ -74,13 +74,13 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { prepare, configure };
 
-	let openSslDir = await openssl.build(opensslArg);
-	let zlibDir = await zlib.build(zlibArg);
-	let zstdDir = await zstd.build(zstdArg);
+	let openSslDir = await openssl.build({ build, env: env_, host, sdk }, opensslArg);
+	let zlibDir = await zlib.build({ build, env: env_, host, sdk }, zlibArg);
+	let zstdDir = await zstd.build({ build, env: env_, host, sdk }, zstdArg);
 
 	let env = [
-		perl.build(perlArg),
-		pkgconfig.build(pkgconfigArg),
+		perl.build({ build, env: env_, host, sdk }, perlArg),
+		pkgconfig.build({ build, env: env_, host, sdk }, pkgconfigArg),
 		openSslDir,
 		zlibDir,
 		zstdDir,

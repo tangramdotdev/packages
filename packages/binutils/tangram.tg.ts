@@ -84,7 +84,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	let deps = [texinfo.build(texinfoArg)];
+	let deps = [texinfo.build({ build, env: env_, host, sdk }, texinfoArg)];
 	let env = [...deps, additionalEnv, env_];
 
 	// Collect configuration.
