@@ -99,7 +99,6 @@ export default tg.target(async (arg: Arg) => {
 	});
 
 	let result = await std.autotools.build({
-		debug: host === "x86_64-unknown-linux-gnu",
 		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		opt: "3",
@@ -108,7 +107,6 @@ export default tg.target(async (arg: Arg) => {
 		sdk,
 		source: source_ ?? source(version),
 	});
-	console.log("glibc out", await result.id());
 
 	// Fix libc.so.
 	result = await applySysrootFix({

@@ -130,13 +130,14 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	let target = host;
 	let build = await bootstrap.toolchainTriple(host);
 
-	let bootstrapSdk = bootstrap.sdk(host);
+	let sdk = bootstrap.sdk(host);
 
 	// Create cross-toolchain from build to host.
 	let { env: buildToHostCross, sysroot } = await buildToHostCrossToolchain({
 		host,
-		env: await std.env.arg(bootstrapSdk, env_),
+		env: await std.env.arg(sdk, env_),
 	});
+	let combinedUnproxiedEnv = std.env.arg(sdk, buildToHostCross, env_);
 
 	// Proxy the cross toolchain and produce a combined environment.
 	let crossProxyEnv = await proxy.env({
@@ -144,25 +145,21 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 		build,
 		host,
 	});
-	let proxiedBuildToHostEnv = std.env.arg(
-		buildToHostCross,
-		crossProxyEnv,
-		env_,
-	);
+	let combinedProxiedEnv = std.env.arg(combinedUnproxiedEnv, crossProxyEnv);
 
 	// Create a native toolchain (host to host).
 	let nativeHostBinutils = await binutils({
-		env: proxiedBuildToHostEnv,
+		env: combinedProxiedEnv,
 		sdk: false,
-		build: host,
+		build,
 		host,
 		target,
 	});
 
 	// Build a fully native GCC toolchain.
 	let fullGCC = await gcc.build({
-		build: host,
-		env: std.env.arg(proxiedBuildToHostEnv, nativeHostBinutils),
+		build,
+		env: std.env.arg(combinedUnproxiedEnv, nativeHostBinutils),
 		host,
 		sysroot,
 		sdk: false,

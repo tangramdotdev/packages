@@ -77,7 +77,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let additionalArgs = [];
-	let env = [env_];
+	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	if (std.triple.environment(target) === "musl") {

@@ -552,13 +552,7 @@ export let test = tg.target(async () => {
 
 export let testHost = tg.target(async () => {
 	let rustArtifact = await toolchain();
-
-	let script = tg`
-		${rustArtifact}/bin/rustc --version
-		${rustArtifact}/bin/cargo --version
-	`;
-
-	await $`${script}`;
+	await $`rustc --version && cargo --version`.env(rustArtifact);
 	return rustArtifact;
 });
 
@@ -578,13 +572,8 @@ export let testCross = tg.target(async () => {
 
 	let crossRust = await toolchain({ targets: [target] });
 
-	let script = tg`
-		${crossRust}/bin/rustc --version
-		${crossRust}/bin/cargo --version
-	`;
-
-	await $`${script}`;
-	return true;
+	await $`rustc --version && cargo --version`.env(crossRust);
+	return crossRust;
 });
 
 import tests from "./tests" with { type: "directory" };

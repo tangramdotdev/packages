@@ -319,10 +319,12 @@ export namespace sdk {
 		let target = targetTriple ?? host;
 		let detectedHost = await std.triple.host();
 		let host__ = host_ ?? detectedHost;
+		let standardizedHost = std.sdk.canonicalTriple(host__);
 		let isCross =
-			std.triple.arch(host__) !== std.triple.arch(target) ||
-			std.triple.os(host__) !== std.triple.os(target) ||
-			std.triple.environment(host__) !== std.triple.environment(target);
+			std.triple.arch(standardizedHost) !== std.triple.arch(target) ||
+			std.triple.os(standardizedHost) !== std.triple.os(target) ||
+			std.triple.environment(standardizedHost) !==
+				std.triple.environment(target);
 		let targetPrefix = isCross ? `${target}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
