@@ -41,6 +41,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	proxy?: boolean;
+	target?: string;
 };
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
@@ -57,7 +58,12 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		proxy = true,
 		sdk,
 		source: source_,
+		target: target_,
 	} = await std.args.apply<Arg>(...args);
+
+	// If the user did not supply a target machine, default to the host machine.
+	let target = target_ ?? host;
+
 	let configure = {
 		args: [
 			"--with-internal-glib",

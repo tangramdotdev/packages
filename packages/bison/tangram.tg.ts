@@ -35,7 +35,6 @@ export type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let resolved = await std.args.apply<Arg>(...args);
-	console.log("resolved", resolved);
 	let {
 		autotools = {},
 		build,
@@ -45,7 +44,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		sdk,
 		source: source_,
 	} = resolved;
-	console.log("m4Arg", m4Arg);
 
 	let configure = {
 		args: [
@@ -87,7 +85,7 @@ export let test = tg.target(async () => {
 });
 
 export let testCrossA = tg.target(() =>
-	build({ host: "x86_64-unknown-linux-gnu" }),
+	build({ host: "aarch64-unknown-linux-gnu" }),
 );
 export let testCrossB = tg.target(() =>
 	build({
@@ -99,8 +97,17 @@ export let testCrossC = tg.target(() =>
 	build(
 		{
 			host: "x86_64-unknown-linux-gnu",
-			dependencies: { m4: { host: "x86_64-unknown-linux-musl" } },
+			dependencies: {
+				m4: { host: "x86_64-unknown-linux-musl", env: { FOO: "bar" } },
+			},
 		},
-		{ dependencies: { m4: { host: "x86_64-unknown-linux-musl.2" } } },
+		{
+			dependencies: {
+				m4: {
+					host: "x86_64-unknown-linux-musl.2",
+					env: { FOO: tg.Mutation.setIfUnset("bar override"), BAZ: "qux" },
+				},
+			},
+		},
 	),
 );
