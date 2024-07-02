@@ -169,9 +169,11 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 
 	// Flatten the sysroot and combine into a native toolchain.
 	let innerSysroot = sysroot.get(target).then(tg.Directory.expect);
-	let combined = tg.directory(fullGCC, innerSysroot);
 
-	return std.env.arg(combined, nativeHostBinutils);
+	// Add the native binutils to the combined directory.
+	let combined = tg.directory(fullGCC, innerSysroot, nativeHostBinutils);
+
+	return combined;
 });
 
 export let buildToHostCrossToolchain = async (arg?: CanadianCrossArg) => {
@@ -216,7 +218,7 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let buildTriple = build_ ?? host;
 	let target = target_ ?? host;
 
-	// Produce the binutils for build and host.
+	// Produce the binutils for building the cross-toolchain.
 	let [buildBinutils, crossBinutils] = await Promise.all([
 		binutils({
 			build: buildTriple,
@@ -240,6 +242,7 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		sysroot_ ??
 		(await buildSysroot({
 			build: buildTriple,
+			crossBinutils,
 			env: binutilsEnv,
 			host: target,
 			sdk,
@@ -256,27 +259,38 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		variant,
 	});
 
-	let combined = await tg.directory(crossGCC, sysroot);
+	let combined = await tg.directory(crossGCC, sysroot, crossBinutils);
 
 	return {
-		env: await std.env.arg(combined, buildBinutils, crossBinutils),
+		env: combined,
 		sysroot,
 	};
 });
 
 export type BuildSysrootArg = {
 	build?: string;
+	crossBinutils?: tg.Directory;
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg | boolean;
 };
 
 export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
-	let { build: build_, env, host: host_, sdk } = arg ?? {};
+	let {
+		build: build_,
+		crossBinutils: crossBinutils_,
+		env,
+		host: host_,
+		sdk,
+	} = arg ?? {};
 
 	let host = host_ ?? (await std.triple.host());
 	let buildTriple = build_ ?? host;
 	let target = host;
+
+	let crossBinutils =
+		crossBinutils_ ??
+		(await binutils({ build: buildTriple, env, host, sdk, target }));
 
 	// Produce the linux headers.
 	let linuxHeaders = await tg.directory({
@@ -302,12 +316,15 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		variant: "stage1_bootstrap",
 	});
 
+	// Combine the compiler with the cross binutils.
+	let combined = await tg.directory(bootstrapGCC, crossBinutils);
+
 	// Produce a combined directory containing the correct C library for the host and the Linux headers.
 	let sysroot = await constructSysroot({
 		build: buildTriple,
 		host,
 		linuxHeaders,
-		env: await std.env.arg(env, bootstrapGCC),
+		env: await std.env.arg(env, combined),
 		sdk: false,
 	});
 	return sysroot;
@@ -368,6 +385,13 @@ export let testCross = async () => {
 	let hostArch = std.triple.arch(host);
 	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = std.triple.create(host, { arch: targetArch });
+	let dir = await toolchain({ host, target });
+	return dir;
+};
+
+export let testCrossMips = async () => {
+	let host = await std.triple.host();
+	let target = "mips-unknown-linux-gnu";
 	let dir = await toolchain({ host, target });
 	return dir;
 };

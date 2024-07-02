@@ -254,6 +254,7 @@ export let testGccSource = tg.target(async () => {
 import {
 	testCanadianCross,
 	testCross,
+	testCrossMips,
 	testCrossRpi,
 } from "./sdk/gcc/toolchain.tg.ts";
 export let canadianCross = tg.target(async () => {
@@ -261,6 +262,9 @@ export let canadianCross = tg.target(async () => {
 });
 export let testCrossToolchain = tg.target(() => {
 	return testCross();
+});
+export let testCrossToolchainMips = tg.target(() => {
+	return testCrossMips();
 });
 export let testCrossToolchainRpi = tg.target(() => {
 	return testCrossRpi();
