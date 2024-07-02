@@ -404,7 +404,7 @@ export namespace sdk {
 					? `${targetPrefix}ld.bfd`
 					: "ld"
 				: flavor === "gcc"
-				  ? host !== target
+				  ? isCross
 						? `${targetPrefix}ld`
 						: `ld`
 				  : "ld.lld";
