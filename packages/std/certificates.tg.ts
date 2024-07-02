@@ -1,8 +1,8 @@
 let metadata = {
 	checksum:
-		"sha256:1794c1d4f7055b7d02c2170337b61b48a2ef6c90d77e95444fd2596f4cac609f",
+		"sha256:1bf458412568e134a4514f5e170a328d11091e071c7110955c9884ed87972ac9",
 	name: "ca-certificates",
-	version: "2024-03-11",
+	version: "2024-07-02",
 	url: "https://curl.se/ca",
 };
 

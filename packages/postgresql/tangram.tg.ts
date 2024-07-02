@@ -75,8 +75,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
 	let os = std.triple.os(host);
 
 	let icuArtifact = icu.build(icuArg);
