@@ -199,19 +199,14 @@ export let gccSource = tg.target(async () => {
 export let gmpSource = tg.target(async () => {
 	let name = "gmp";
 	let version = "6.2.1";
-	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
 	let checksum =
 		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
-	let url = `https://gmplib.org/download/gmp/${packageArchive}`;
-	return await std
-		.download({ checksum, url })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
+	return std.download.fromGnu({
+		name,
+		version,
+		compressionFormat: "xz",
+		checksum,
+	});
 });
 
 export let islSource = tg.target(async () => {
