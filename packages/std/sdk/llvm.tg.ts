@@ -59,6 +59,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 
 	if (std.triple.os(host) === "darwin") {
 		// On macOS, just return the bootstrap toolchain, which provides Apple Clang.
+
 		return bootstrap.sdk.env(host);
 	}
 
@@ -67,7 +68,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	// Use the internal GCC bootstrapping function to avoid needlesssly rebuilding glibc.
 	let { sysroot } = await buildToHostCrossToolchain({
 		host,
-		env: await buildToolsForHost(host),
+		env: await std.env.arg(bootstrap.sdk(), buildToolsForHost({ host })),
 	});
 	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
 	sysroot = tg.Directory.expect(await sysroot.get(host));
@@ -93,6 +94,8 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
 	let prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
+
+	// Define default flags.
 	let configure = {
 		args: [
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
@@ -103,13 +106,16 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 			tg`-DBOOTSTRAP_Terminfo_ROOT=${ncursesArtifact}`,
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
-			"-C",
-			tg`${cmakeCacheDir}/Distribution.cmake`,
 		],
 	};
+
+	// Add additional flags from the target args.
 	if (lto) {
 		configure.args.push("-DLLVM_ENABLE_LTO=1");
 	}
+
+	// Add the cmake cache file last.
+	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
 	let buildPhase = {
 		command: "ninja",
@@ -220,11 +226,11 @@ export let test = async () => {
 	// Build a triple for the detected host.
 	let host = std.sdk.canonicalTriple(await std.triple.host());
 	let hostArch = std.triple.arch(host);
-	let os = std.triple.os(std.triple.archAndOs(host));
+	let system = std.triple.archAndOs(host);
+	let os = std.triple.os(system);
 
-	let libDir = std.triple.environment(host) === "musl" ? "lib" : "lib64";
 	let expectedInterpreter =
-		os === "darwin" ? undefined : `/${libDir}/${libc.interpreterName(host)}`;
+		os === "darwin" ? undefined : `/lib/${libc.interpreterName(host)}`;
 
 	let directory = await toolchain({ host });
 
@@ -239,16 +245,28 @@ export let test = async () => {
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
 	`
 		.env(directory)
-		.host(host)
+		.host(system)
 		.then(tg.File.expect);
 
 	let cMetadata = await std.file.executableMetadata(cOut);
 	if (os === "linux") {
-		tg.assert(cMetadata.format === "elf");
-		tg.assert(cMetadata.interpreter === expectedInterpreter);
-		tg.assert(cMetadata.arch === hostArch);
+		tg.assert(
+			cMetadata.format === "elf",
+			`expected elf, got ${cMetadata.format}`,
+		);
+		tg.assert(
+			cMetadata.interpreter === expectedInterpreter,
+			`expected ${expectedInterpreter}, got ${cMetadata.interpreter}`,
+		);
+		tg.assert(
+			cMetadata.arch === hostArch,
+			`expected ${hostArch}, got ${cMetadata.arch}`,
+		);
 	} else if (os === "darwin") {
-		tg.assert(cMetadata.format === "mach-o");
+		tg.assert(
+			cMetadata.format === "mach-o",
+			`expected mach-o, got ${cMetadata.format}`,
+		);
 	}
 
 	let testCXXSource = tg.file(`
@@ -262,16 +280,28 @@ export let test = async () => {
 		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`
 		.env(directory)
-		.host(host)
+		.host(system)
 		.then(tg.File.expect);
 
 	let cxxMetadata = await std.file.executableMetadata(cxxOut);
 	if (os === "linux") {
-		tg.assert(cxxMetadata.format === "elf");
-		tg.assert(cxxMetadata.interpreter === expectedInterpreter);
-		tg.assert(cxxMetadata.arch === hostArch);
+		tg.assert(
+			cxxMetadata.format === "elf",
+			`expected elf, got ${cxxMetadata.format}`,
+		);
+		tg.assert(
+			cxxMetadata.interpreter === expectedInterpreter,
+			`expected ${expectedInterpreter}, got ${cxxMetadata.interpreter}`,
+		);
+		tg.assert(
+			cxxMetadata.arch === hostArch,
+			`expected ${hostArch}, got ${cxxMetadata.arch}`,
+		);
 	} else if (os === "darwin") {
-		tg.assert(cxxMetadata.format === "mach-o");
+		tg.assert(
+			cxxMetadata.format === "mach-o",
+			`expected mach-o, got ${cxxMetadata.format}`,
+		);
 	}
 
 	return directory;
