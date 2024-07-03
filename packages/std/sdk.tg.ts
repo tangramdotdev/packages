@@ -226,6 +226,7 @@ export namespace sdk {
 
 	type ProvidesToolchainArg = {
 		env: std.env.Arg;
+		forcePrefix?: boolean;
 		host?: string | undefined;
 		target?: string | undefined;
 	};
@@ -241,7 +242,7 @@ export namespace sdk {
 
 	/** Assert that an env provides an toolchain. */
 	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
-		let { env, host: host_, target: target_ } = arg;
+		let { env, forcePrefix = false, host: host_, target: target_ } = arg;
 
 		let llvm = await std.env.provides({ env, names: ["clang"] });
 
@@ -251,7 +252,7 @@ export namespace sdk {
 		let isCross = host !== target;
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
-		if (isCross) {
+		if (forcePrefix || isCross) {
 			targetPrefix = `${target}-`;
 		}
 		await std.env.assertProvides({
@@ -273,11 +274,11 @@ export namespace sdk {
 	export let providesToolchain = async (
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
-		let { env, target } = arg;
+		let { env, forcePrefix, target } = arg;
 		let os = std.triple.os(target ?? (await std.triple.host()));
 		let targetPrefix = ``;
 		if (target) {
-			if (os !== "darwin") {
+			if (forcePrefix || os !== "darwin") {
 				targetPrefix = `${target}-`;
 			}
 		}
@@ -303,7 +304,12 @@ export namespace sdk {
 	export let toolchainComponents = async (
 		arg?: ToolchainEnvArg,
 	): Promise<ToolchainComponents> => {
-		let { env, host: host_, target: targetTriple } = arg ?? {};
+		let {
+			env,
+			forcePrefix = false,
+			host: host_,
+			target: targetTriple,
+		} = arg ?? {};
 
 		if (env === undefined) {
 			throw new Error("No environment provided.");
@@ -312,6 +318,7 @@ export namespace sdk {
 		// Make sure we have a toolchain.
 		await sdk.assertProvidesToolchain({
 			env,
+			forcePrefix,
 			host: host_,
 			target: targetTriple,
 		});
@@ -331,7 +338,7 @@ export namespace sdk {
 			std.triple.os(standardizedHost) !== std.triple.os(target) ||
 			std.triple.environment(standardizedHost) !==
 				std.triple.environment(target);
-		let targetPrefix = isCross ? `${target}-` : ``;
+		let targetPrefix = forcePrefix || isCross ? `${target}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
 		let flavor: "gcc" | "llvm" = os === "linux" ? "gcc" : "llvm";
@@ -410,9 +417,7 @@ export namespace sdk {
 					? `${targetPrefix}ld.bfd`
 					: "ld"
 				: flavor === "gcc"
-				  ? isCross
-						? `${targetPrefix}ld`
-						: `ld`
+				  ? `${targetPrefix}ld`
 				  : "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
@@ -431,7 +436,7 @@ export namespace sdk {
 		let ldso;
 		let libDir;
 		if (os !== "darwin") {
-			if (isCross) {
+			if (forcePrefix || isCross) {
 				libDir = tg.Directory.expect(await directory.tryGet(`${target}/lib`));
 				let ldsoPath = libc.interpreterName(target);
 				ldso = tg.File.expect(await libDir.tryGet(ldsoPath));
@@ -485,6 +490,8 @@ export namespace sdk {
 	type ToolchainEnvArg = {
 		/** The environment to ascertain the host from. */
 		env?: std.env.Arg | undefined;
+		/** Should we force the use of a target-triple prefix, regardless of host? Default: false */
+		forcePrefix?: boolean | undefined;
 		/** What machine is the compiler expecting to run on? */
 		host?: string | undefined;
 		/** If the environment is a cross-compiler, what target should we use to look for prefixes? */

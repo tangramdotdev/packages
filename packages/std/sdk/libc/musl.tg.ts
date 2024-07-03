@@ -46,7 +46,10 @@ export default tg.target(async (arg?: Arg) => {
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
-	let isCrossCompiling = build !== host;
+	let isCrossCompiling =
+		std.triple.arch(build) !== std.triple.arch(host) ||
+		std.triple.os(build) !== std.triple.os(host) ||
+		std.triple.environment(build) !== std.triple.environment(host);
 
 	let commonFlags = [
 		`--enable-debug`,

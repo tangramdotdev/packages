@@ -12,6 +12,8 @@ export type Arg = {
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
+	/** Should we look for a triple-prefixed toolchain, regardless of host? Default: false */
+	forcePrefix?: boolean;
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
@@ -47,6 +49,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	let host = arg.host ?? (await std.triple.host());
 	let build = arg.build ?? host;
 	let os = std.triple.os(host);
+	let forcePrefix = arg.forcePrefix ?? false;
 
 	let {
 		cc: cc_,
@@ -58,6 +61,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		ldso,
 	} = await std.sdk.toolchainComponents({
 		env: buildToolchain,
+		forcePrefix,
 		host: build,
 		target: host,
 	});

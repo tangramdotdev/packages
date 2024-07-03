@@ -143,6 +143,7 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	let crossProxyEnv = await proxy.env({
 		toolchain: buildToHostCross,
 		build,
+		forcePrefix: true,
 		host,
 	});
 	let combinedProxiedEnv = std.env.arg(combinedUnproxiedEnv, crossProxyEnv);

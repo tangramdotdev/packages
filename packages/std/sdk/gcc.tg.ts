@@ -80,10 +80,9 @@ export let build = tg.target(async (arg: Arg) => {
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
-	if (std.triple.environment(target) === "musl") {
+	let targetEnvironment = std.triple.environment(target);
+	if (targetEnvironment === "musl") {
 		additionalArgs.push("--disable-libsanitizer");
-		additionalArgs.push("--disable-libitm");
-		additionalArgs.push("--disable-libvtv");
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
@@ -129,6 +128,9 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-pie",
 			"--enable-initfini-array",
 		];
+		if (targetEnvironment === "musl") {
+			stage1LimitedArgs.push("--disable-lto");
+		}
 		additionalArgs.push(...stage1LimitedArgs);
 	}
 
@@ -137,8 +139,12 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
-			"--with-build-config=bootstrap-lto",
 		];
+		if (targetEnvironment === "musl") {
+			stage2FullArgs.push("--disable-lto");
+		} else {
+			stage2FullArgs.push("--with-build-config=bootstrap-lto");
+		}
 		additionalArgs.push(...stage2FullArgs);
 	}
 
