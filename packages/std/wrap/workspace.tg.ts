@@ -3,9 +3,7 @@ import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
-import ccProxyDir from "../packages/cc_proxy" with { type: "directory" };
-import ldProxyDir from "../packages/ld_proxy" with { type: "directory" };
-import wrapperDir from "../packages/wrapper" with { type: "directory" };
+import workspacePackages from "../packages" with { type: "directory" };
 
 type Arg = {
 	buildToolchain: std.env.Arg;
@@ -33,9 +31,7 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 		: await tg.directory({
 				"Cargo.toml": cargoToml,
 				"Cargo.lock": cargoLock,
-				"packages/cc_proxy": ccProxyDir,
-				"packages/ld_proxy": ldProxyDir,
-				"packages/wrapper": wrapperDir,
+				packages: workspacePackages,
 		  });
 
 	return build({
@@ -45,6 +41,17 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 		source,
 	});
 });
+
+// FIXME clean these all up, then()
+
+export let injection = async (unresolvedArg: tg.Unresolved<Arg>) => {
+	let arg = await tg.resolve(unresolvedArg);
+	let host = arg.host ?? (await std.triple.host());
+	let dylibExt = std.triple.os(host) === "darwin" ? "dylib" : "so";
+	return tg.File.expect(
+		await (await workspace(arg)).get(`lib/libtangram_injection.${dylibExt}`),
+	);
+};
 
 export let tgcc = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/cc_proxy"));
@@ -252,7 +259,7 @@ export let build = async (arg: BuildArg) => {
 			CARGO_HTTP_CAINFO: certFile,
 			RUST_TARGET: target,
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-			RUSTFLAGS: `-C target-feature=+crt-static`,
+			RUSTFLAGS: `-C target-feature=+crt-static -C link-args=-Wl,-undefined,dynamic_lookup`,
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}cc`,
 			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
 			[`CC_${tripleToEnvVar(target)}`]: tg`${prefix}cc${suffix}`,
@@ -325,12 +332,14 @@ export let build = async (arg: BuildArg) => {
 
 	let buildType = release ? "/release" : "/debug";
 
+	let dylibExt = os === "darwin" ? "dylib" : "so";
 	let install = {
-		pre: `mkdir -p $OUTPUT/bin`,
+		pre: `mkdir -p $OUTPUT/bin && mkdir -p $OUTPUT/lib`,
 		body: `
 			mv $TARGET/$RUST_TARGET${buildType}/tangram_cc_proxy $OUTPUT/bin/cc_proxy
 			mv $TARGET/$RUST_TARGET${buildType}/tangram_ld_proxy $OUTPUT/bin/ld_proxy
 			mv $TARGET/$RUST_TARGET${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
+			mv $TARGET/$RUST_TARGET${buildType}/libtangram_injection.${dylibExt} $OUTPUT/lib/libtangram_injection.${dylibExt}
 		`,
 	};
 

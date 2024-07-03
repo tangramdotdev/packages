@@ -1,5 +1,10 @@
 [workspace]
-members = ["packages/cc_proxy", "packages/ld_proxy", "packages/wrapper"]
+members = [
+  "packages/cc_proxy",
+  "packages/injection",
+  "packages/ld_proxy",
+  "packages/wrapper",
+]
 resolver = "2"
 
 [workspace.package]
@@ -42,6 +47,9 @@ tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 tangram_wrapper = { path = "packages/wrapper" }
 tangram_cc_proxy = { path = "packages/cc_proxy" }
 tangram_ld_proxy = { path = "packages/ld_proxy" }
+
+[profile.dev]
+panic = "abort"
 
 [profile.release]
 codegen-units = 1

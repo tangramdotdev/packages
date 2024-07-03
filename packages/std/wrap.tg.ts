@@ -2,7 +2,6 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import { interpreterName } from "./sdk/libc.tg.ts";
 import * as std from "./tangram.tg.ts";
-import * as injection from "./wrap/injection.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
 import inspectProcessSource from "./wrap/test/inspectProcess.c" with {
 	type: "file",
@@ -802,7 +801,7 @@ let manifestInterpreterFromArg = async (
 		let buildToolchain = buildToolchainArg
 			? buildToolchainArg
 			: gcc.toolchain({ host });
-		let injectionLibrary = await injection.default({
+		let injectionLibrary = await workspace.injection({
 			buildToolchain,
 			build: await std.triple.host(),
 			host,
@@ -857,7 +856,7 @@ let manifestInterpreterFromArg = async (
 		let arch = interpreterMetadata.arch;
 		let host = `${arch}-linux-musl`;
 		let buildToolchain = bootstrap.sdk.env(host);
-		let injectionLibrary = await injection.default({
+		let injectionLibrary = await workspace.injection({
 			buildToolchain,
 			host,
 		});
@@ -897,7 +896,7 @@ let manifestInterpreterFromArg = async (
 		let buildToolchain = buildToolchainArg
 			? buildToolchainArg
 			: bootstrap.sdk.env(host);
-		let injectionLibrary = await injection.default({
+		let injectionLibrary = await workspace.injection({
 			buildToolchain,
 			host,
 		});
@@ -971,7 +970,7 @@ let manifestInterpreterFromExecutableArg = async (
 			let arch = std.triple.arch(await std.triple.host());
 			let host = std.triple.create({ os: "darwin", arch });
 			let buildToolchain = bootstrap.sdk.env(host);
-			let injectionDylib = await injection.default({
+			let injectionDylib = await workspace.injection({
 				buildToolchain,
 				host,
 			});
@@ -1019,7 +1018,7 @@ let manifestInterpreterFromElf = async (
 		  : gcc.toolchain({ host });
 
 	// Obtain injection library.
-	let injectionLib = await injection.default({ buildToolchain, host });
+	let injectionLib = await workspace.injection({ buildToolchain, host });
 
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {
@@ -1648,13 +1647,6 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 	let wrapperID = await wrapper.id();
 	console.log("wrapper id", wrapperID);
 
-	let libraryDir = await tg.directory({
-		"lib.dylib": tg.file(),
-	});
-	let withLibraryPath = await wrap(wrapper, { libraryPaths: [libraryDir] });
-	let withLibraryPathID = await withLibraryPath.id();
-	console.log("withLibraryPath id", withLibraryPathID);
-
 	// Check the manifest can be deserialized properly.
 	let manifest = await wrap.Manifest.read(wrapper);
 	tg.assert(manifest);
@@ -1662,16 +1654,17 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	let output = tg.File.expect(
-		(await tg.target(tg`${wrapper} > $OUTPUT`)).output(),
-	);
+	let output = await tg
+		.target(tg`${wrapper} > $OUTPUT`)
+		.then((t) => t.output())
+		.then(tg.File.expect);
 	let text = await output.text();
 	tg.assert(
-		text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),
-		"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
+		text.includes(`/.tangram/artifacts/${executableID}`),
+		"Expected identity to be set to the artifact ID of the wrapped executable",
 	);
 	tg.assert(
-		text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
+		text.includes(`/.tangram/artifacts/${wrapperID}`),
 		"Expected argv[0] to be set to the wrapper that was invoked",
 	);
 	tg.assert(

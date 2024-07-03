@@ -43,15 +43,6 @@ export let testTriple = tg.target(async () => {
 });
 
 // std.wrap component tests
-
-import * as injection from "./wrap/injection.tg.ts";
-export let testCompileInjection = tg.target(async () => {
-	return await injection.test();
-});
-export let testCompileInjectionCross = tg.target(async () => {
-	return await injection.testCross();
-});
-
 import * as workspace from "./wrap/workspace.tg.ts";
 
 export let testEarlyRust = tg.target(async () => {
@@ -132,7 +123,7 @@ export let testWrapReferences = tg.target(async () => {
 export let testWrapDylibPath = tg.target(async () => {
 	return await testDylibPath();
 });
-export let testMuslWrapper = tg.target(async () => {
+export let testWrapExe = tg.target(async () => {
 	return await testSingleArgObjectNoMutations();
 });
 
