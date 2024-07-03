@@ -21,7 +21,7 @@ export let metadata = {
 	version: "18.1.8",
 };
 
-export let source = () => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:0b58557a6d32ceee97c8d533a59b9212d87e0fc4d2833924eb6c611247db2f2a";
@@ -34,7 +34,7 @@ export let source = () => {
 		.download({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+});
 
 export type LLVMArg = {
 	build?: string;
@@ -45,6 +45,7 @@ export type LLVMArg = {
 	source?: tg.Directory;
 };
 
+/** Produce a complete clang+lld distribution using a 2-stage bootstrapping build. */
 export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	let {
 		build: build_,
@@ -182,6 +183,14 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	}
 
 	return llvmArtifact;
+});
+
+/** Grab the LLD linker from the toolchain. */
+export let lld = tg.target(async (arg?: LLVMArg) => {
+	let toolchainDir = await toolchain(arg);
+	tg.assert(toolchainDir instanceof tg.Directory);
+	// Use a template instead of the file directly so the linker proxy invokes the linker by its full name.
+	return tg`${toolchainDir}/bin/ld.lld`;
 });
 
 export let llvmMajorVersion = () => {

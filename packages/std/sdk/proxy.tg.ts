@@ -15,7 +15,7 @@ export type Arg = {
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
-	linkerExe?: tg.File | tg.Symlink;
+	linkerExe?: tg.File | tg.Symlink | tg.Template;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
 	host?: string;
 	/** The build environment to be proxied. */

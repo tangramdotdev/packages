@@ -5,7 +5,7 @@ import binutils from "./sdk/binutils.tg.ts";
 import * as gcc from "./sdk/gcc.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
-import mold, { metadata as moldMetadata } from "./sdk/mold.tg.ts";
+import mold from "./sdk/mold.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 import * as std from "./tangram.tg.ts";
 
@@ -58,15 +58,23 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 
 	// Swap linker if requested.
 	let linkerDir: tg.Directory | undefined = undefined;
-	let linkerExe: tg.File | tg.Symlink | undefined = undefined;
+	let linkerExe: tg.File | tg.Symlink | tg.Template | undefined = undefined;
 	if (linker) {
 		if (linker instanceof tg.Symlink || linker instanceof tg.File) {
 			linkerExe = linker;
 		} else {
 			switch (linker) {
+				case "bfd": {
+					if (flavor === "llvm") {
+						let binutilsDir = await binutils({ host });
+						linkerDir = binutilsDir;
+						linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
+					}
+					break;
+				}
 				case "lld": {
 					if (flavor === "gcc") {
-						return tg.unimplemented("lld support is not yet implemented.");
+						linkerExe = await llvm.lld({ host });
 					}
 					break;
 				}
@@ -74,14 +82,6 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 					let moldArtifact = await mold({ host });
 					linkerDir = moldArtifact;
 					linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
-					break;
-				}
-				case "bfd": {
-					if (flavor === "llvm") {
-						let binutilsDir = await binutils({ host });
-						linkerDir = binutilsDir;
-						linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
-					}
 					break;
 				}
 			}
@@ -188,6 +188,12 @@ export namespace sdk {
 
 		// Obtain host and targets.
 		let host = host_ ?? (await std.triple.host());
+		let hostOs = std.triple.os(host);
+
+		if (hostOs === "darwin" && linker && linker !== "lld") {
+			throw new Error(`Alternate linkers are only available for Linux hosts.`);
+		}
+
 		let targets = targets_ ?? [];
 		if (target) {
 			targets.push(target);
@@ -198,7 +204,7 @@ export namespace sdk {
 
 		// Set the default toolchain if not provided.
 		if (toolchain_ === undefined) {
-			toolchain_ = std.triple.os(host) === "darwin" ? "llvm" : "gcc";
+			toolchain_ = hostOs === "darwin" ? "llvm" : "gcc";
 		}
 
 		// If we're building our own toolchain, canonicalize the host and targets.
@@ -623,10 +629,20 @@ export namespace sdk {
 		return { host, targets };
 	};
 
+	type ProxyTestArg = {
+		// Only the lld and mold linkers leave comments in the binary we can search for.
+		linkerFlavor?: "LLD" | "mold" | undefined;
+		parameters: ProxyTestParameters;
+		proxiedLinker?: boolean;
+		sdkEnv: std.env.Arg;
+		host?: string;
+		target?: string;
+	};
+
 	/** Compile a program and assert a correct wrapper for the target was produced. If `host == target`, ensure the wrapper execute and produces the expected output. */
 	export let assertCompiler = async (arg: ProxyTestArg) => {
 		let proxiedLinker = arg.proxiedLinker ?? false;
-		let mold = arg.mold ?? false;
+		let linkerFlavor = arg.linkerFlavor;
 		// Determine requested host and target.
 		let expected = await resolveHostAndTarget({
 			host: arg.host,
@@ -688,8 +704,8 @@ export namespace sdk {
 				executable = tg.File.expect(await std.wrap.unwrap(compiledProgram));
 				metadata = await std.file.executableMetadata(executable);
 			}
-			if (mold) {
-				await assertMoldComment(executable, arg.sdkEnv);
+			if (linkerFlavor) {
+				await assertComment(executable, arg.sdkEnv, linkerFlavor);
 			}
 
 			tg.assert(metadata.format === "elf");
@@ -782,11 +798,24 @@ export namespace sdk {
 				} else {
 					proxiedLinker = true;
 				}
-				let mold = arg?.linker === "mold";
+
+				// The mold and LLD linkers leave comments in the binary. Check for these if applicable.
+				let linkerFlavor = undefined;
+				if (
+					arg?.linker === "lld" ||
+					(actualHostOs === "linux" &&
+						arg?.toolchain === "llvm" &&
+						arg?.linker === undefined)
+				) {
+					linkerFlavor = "LLD" as const;
+				}
+				if (arg?.linker === "mold") {
+					linkerFlavor = "mold" as const;
+				}
 
 				// Test C.
 				await assertCompiler({
-					mold,
+					linkerFlavor,
 					parameters: testCParameters,
 					proxiedLinker,
 					sdkEnv: env,
@@ -796,7 +825,7 @@ export namespace sdk {
 				if (proxiedLinker) {
 					// Test C with linker proxy bypass.
 					await assertCompiler({
-						mold,
+						linkerFlavor,
 						parameters: testCParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.arg(env, {
@@ -809,7 +838,7 @@ export namespace sdk {
 
 				// Test C++.
 				await assertCompiler({
-					mold,
+					linkerFlavor,
 					parameters: testCxxParameters,
 					proxiedLinker,
 					sdkEnv: env,
@@ -819,7 +848,7 @@ export namespace sdk {
 				if (proxiedLinker) {
 					// Test C++ with linker proxy bypass.
 					await assertCompiler({
-						mold,
+						linkerFlavor,
 						parameters: testCxxParameters,
 						proxiedLinker: false,
 						sdkEnv: await std.env.arg(env, {
@@ -833,7 +862,7 @@ export namespace sdk {
 				// Test Fortran.
 				if (std.triple.os(target) !== "darwin" && arg?.toolchain !== "llvm") {
 					await assertCompiler({
-						mold,
+						linkerFlavor,
 						parameters: testFortranParameters,
 						proxiedLinker,
 						sdkEnv: env,
@@ -843,7 +872,7 @@ export namespace sdk {
 					if (proxiedLinker) {
 						// Test Fortran with linker proxy bypass.
 						await assertCompiler({
-							mold,
+							linkerFlavor,
 							parameters: testFortranParameters,
 							proxiedLinker: false,
 							sdkEnv: await std.env.arg(env, {
@@ -958,17 +987,24 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 	return dir;
 };
 
-export let assertMoldComment = async (exe: tg.File, toolchain: std.env.Arg) => {
+/** Assert the given ELF file contains a comment that includes the provided string. */
+export let assertComment = async (
+	exe: tg.File,
+	toolchain: std.env.Arg,
+	textToMatch: string,
+) => {
 	let elfComment = tg.File.expect(
 		await (
-			await tg.target(tg`readelf -p .comment ${exe} | grep mold > $OUTPUT`, {
-				env: await std.env.arg(toolchain, bootstrap.utils()),
-			})
+			await tg.target(
+				tg`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`,
+				{
+					env: await std.env.arg(toolchain, bootstrap.utils()),
+				},
+			)
 		).output(),
 	);
 	let text = await elfComment.text();
-	tg.assert(text.includes("mold"));
-	tg.assert(text.includes(moldMetadata.version));
+	tg.assert(text.includes(textToMatch));
 };
 
 //////// TESTS
@@ -1015,15 +1051,6 @@ type ProxyTestParameters = {
 	testProgram: tg.Unresolved<tg.File>;
 };
 
-type ProxyTestArg = {
-	mold?: boolean;
-	parameters: ProxyTestParameters;
-	proxiedLinker?: boolean;
-	sdkEnv: std.env.Arg;
-	host?: string;
-	target?: string;
-};
-
 export let testMoldSdk = tg.target(async () => {
 	let detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
@@ -1037,6 +1064,21 @@ export let testMoldSdk = tg.target(async () => {
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(moldSdk, sdkArg);
 	return moldSdk;
+});
+
+export let testGccLldSdk = tg.target(async () => {
+	let detectedHost = await std.triple.host();
+	if (std.triple.os(detectedHost) !== "linux") {
+		throw new Error(`mold is only available on Linux`);
+	}
+
+	let sdkArg = { host: detectedHost, linker: "lld" as const };
+
+	let lldSdk = await sdk(sdkArg);
+
+	// Ensure that the SDK is valid.
+	await sdk.assertValid(lldSdk, sdkArg);
+	return lldSdk;
 });
 
 export let testMuslSdk = tg.target(async () => {
@@ -1084,30 +1126,31 @@ export let testLLVMMoldSdk = tg.target(async () => {
 		toolchain: "llvm" as const,
 	};
 
-	let moldSdk = tg.File.expect(await sdk(sdkArg));
+	let moldSdk = await sdk(sdkArg);
 
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(moldSdk, sdkArg);
 
-	// Ensure that produced artifacts contain the `mold` ELF comment.
-	let source = tg.file(`
-		#include <stdio.h>
-		int main() {
-			printf("Hello, world!\\n");
-			return 0;
-		}
-	`);
-	let output = tg.File.expect(
-		await (
-			await tg.target(tg`cc -v -xc ${source} -o $OUTPUT`, {
-				env: await std.env.arg(moldSdk),
-			})
-		).output(),
-	);
-	let innerExe = tg.File.expect(await std.wrap.unwrap(output));
-	await assertMoldComment(innerExe, moldSdk);
+	return moldSdk;
+});
 
-	return output;
+export let testLLVMBfdSdk = tg.target(async () => {
+	let detectedHost = await std.triple.host();
+	if (std.triple.os(detectedHost) !== "linux") {
+		throw new Error(`bfd is only available on Linux`);
+	}
+
+	let sdkArg = {
+		host: detectedHost,
+		linker: "bfd" as const,
+		toolchain: "llvm" as const,
+	};
+
+	let bfdSdk = await sdk(sdkArg);
+
+	// Ensure that the SDK is valid.
+	await sdk.assertValid(bfdSdk, sdkArg);
+	return bfdSdk;
 });
 
 export let testExplicitGlibcVersionSdk = tg.target(async () => {
@@ -1160,6 +1203,10 @@ export let testDarwinToLinuxSingle = tg.target(async (target: string) => {
 	let env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
+});
+
+export let testLinuxToDarwin = tg.target(async () => {
+	return true;
 });
 
 export let testNativeProxiedSdks = async () => {

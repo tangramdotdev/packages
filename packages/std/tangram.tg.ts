@@ -272,7 +272,12 @@ export let testCrossToolchainRpi = tg.target(() => {
 
 // SDK tests.
 
-import { sdk, assertAllSdks, testDarwinToLinux } from "./sdk.tg.ts";
+import {
+	sdk,
+	assertAllSdks,
+	testDarwinToLinux as testDarwinToLinux_,
+	testLinuxToDarwin as testLinuxToDarwin_,
+} from "./sdk.tg.ts";
 export let testBootstrapSdk = tg.target(async () => {
 	return await bootstrap.sdk.test();
 });
@@ -284,8 +289,11 @@ export let testDefaultSdk = tg.target(async () => {
 	return env;
 });
 
-export let darwinToLinux = tg.target(async () => {
-	return testDarwinToLinux();
+export let testDarwinToLinux = tg.target(async () => {
+	return testDarwinToLinux_();
+});
+export let linuxToDarwin = tg.target(async () => {
+	return testLinuxToDarwin_();
 });
 export let testAllSdks = tg.target(async () => {
 	await assertAllSdks();
@@ -317,6 +325,8 @@ export let testNcurses = tg.target(async () => {
 import {
 	testExplicitGlibcVersionSdk,
 	testCrossGccSdk,
+	testGccLldSdk,
+	testLLVMBfdSdk,
 	testLLVMMoldSdk,
 	testLLVMMuslSdk,
 	testLLVMSdk,
@@ -324,6 +334,9 @@ import {
 	testMuslSdk,
 	testNativeProxiedSdks,
 } from "./sdk.tg.ts";
+export let testGccLld = tg.target(async () => {
+	return await testGccLldSdk();
+});
 export let testMold = tg.target(async () => {
 	return await testMoldSdk();
 });
@@ -351,6 +364,9 @@ export let testLlvmToolchain = tg.target(async () => {
 });
 export let testLlvm = tg.target(async () => {
 	return await testLLVMSdk();
+});
+export let testLlvmBfd = tg.target(async () => {
+	return await testLLVMBfdSdk();
 });
 export let testLlvmMold = tg.target(async () => {
 	return await testLLVMMoldSdk();
