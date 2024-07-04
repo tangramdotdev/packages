@@ -1,4 +1,4 @@
-use crate::{util, IDENTITY_PATH};
+use crate::{expect_success_unsafe, util, IDENTITY_PATH};
 
 /// Initialize the identity injection path and environment.
 #[no_mangle]
@@ -10,16 +10,19 @@ pub extern "C" fn tangram_injection() {
 
 		let dyld_library_path = libc::getenv(injection_dyld_library_path_varname.as_ptr());
 		if dyld_library_path.is_null() {
-			let result = libc::unsetenv(dyld_library_path_varname.as_ptr());
-			util::expect_success(result, c"Failed to unset $DYLD_LIBRARY_PATH.");
+			expect_success_unsafe!(
+				libc::unsetenv(dyld_library_path_varname.as_ptr()),
+				c"unsetenv $DYLD_LIBRARY_PATH"
+			);
 		} else {
-			let result = libc::setenv(dyld_library_path_varname.as_ptr(), dyld_library_path, 1);
-			util::expect_success(result, c"Failed to set $DYLD_LIBRARY_PATH.");
+			expect_success_unsafe!(
+				libc::setenv(dyld_library_path_varname.as_ptr(), dyld_library_path, 1),
+				c"setenv $DYLD_LIBRARY_PATH"
+			);
 		}
-		let result = libc::unsetenv(injection_dyld_library_path_varname.as_ptr());
-		util::expect_success(
-			result,
-			c"Failed to unset $TANGRAM_INJECTION_DYLD_LIBRARY_PATH.",
+		expect_success_unsafe!(
+			libc::unsetenv(injection_dyld_library_path_varname.as_ptr()),
+			c"unsetenv $TANGRAM_INJECTION_DYLD_LIBRARY_PATH"
 		);
 
 		// Reset $DYLD_INSERT_LIBRARIES
@@ -28,27 +31,30 @@ pub extern "C" fn tangram_injection() {
 
 		let dyld_insert_libraries = libc::getenv(injection_dyld_insert_libraries_varname.as_ptr());
 		if dyld_insert_libraries.is_null() {
-			let result = libc::unsetenv(dyld_insert_libraries_varname.as_ptr());
-			util::expect_success(result, c"Failed to unset $DYLD_INSERT_LIBRARIES.");
-		} else {
-			let result = libc::setenv(
-				dyld_insert_libraries_varname.as_ptr(),
-				dyld_insert_libraries,
-				1,
+			expect_success_unsafe!(
+				libc::unsetenv(dyld_insert_libraries_varname.as_ptr()),
+				c"unsetenv $DYLD_INSERT_LIBRARIES"
 			);
-			util::expect_success(result, c"Failed to set $DYLD_INSERT_LIBRARIES.");
+		} else {
+			expect_success_unsafe!(
+				libc::setenv(
+					dyld_insert_libraries_varname.as_ptr(),
+					dyld_insert_libraries,
+					1,
+				),
+				c"setenv $DYLD_INSERT_LIBRARIES"
+			);
 		}
-		let result = libc::unsetenv(injection_dyld_insert_libraries_varname.as_ptr());
-		util::expect_success(
-			result,
-			c"Failed to unset $TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES.",
+		expect_success_unsafe!(
+			libc::unsetenv(injection_dyld_insert_libraries_varname.as_ptr()),
+			c"unsetenv $TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES"
 		);
 
 		// Set the identity path
 		let tangram_identity_path_varname = c"TANGRAM_INJECTION_IDENTITY_PATH";
 		let identity_path_value = libc::getenv(tangram_identity_path_varname.as_ptr());
 		if identity_path_value.is_null() {
-			util::log_error(c"Error: TANGRAM_INJECTION_IDENTITY_PATH is not set.");
+			util::log_stderr(c"Error: TANGRAM_INJECTION_IDENTITY_PATH is not set.");
 			libc::exit(libc::EXIT_FAILURE);
 		}
 
@@ -58,10 +64,9 @@ pub extern "C" fn tangram_injection() {
 		let _ = libc::strcpy(IDENTITY_PATH, identity_path_value);
 
 		// Unset the injection identity path.
-		let result = libc::unsetenv(tangram_identity_path_varname.as_ptr());
-		util::expect_success(
-			result,
-			c"Failed to unset $TANGRAM_INJECTION_IDENTITY_PATH.\n",
+		expect_success_unsafe!(
+			libc::unsetenv(tangram_identity_path_varname.as_ptr()),
+			c"unsetenv $TANGRAM_INJECTION_IDENTITY_PATH"
 		);
 	}
 }

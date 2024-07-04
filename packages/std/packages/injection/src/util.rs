@@ -1,15 +1,18 @@
-/// Check the result of a libc function and print an error message and exit if it failed.
-pub(crate) fn expect_success(result: libc::c_int, error_message: impl AsRef<core::ffi::CStr>) {
-	if result != libc::EXIT_SUCCESS {
-		log_error(error_message);
-		unsafe {
+/// Check the result of a libc function, printing an error message and exiting on anything other than [`libc::EXIT_SUCCESS`]. The message needs to implement `AsRef<core::ffi::CStr>`.
+#[macro_export]
+macro_rules! expect_success_unsafe {
+	($func:expr, $error_message:expr) => {{
+		let result = $func;
+		if result != libc::EXIT_SUCCESS {
+			let error_message: &dyn AsRef<core::ffi::CStr> = &$error_message;
+			libc::perror(error_message.as_ref().as_ptr());
 			libc::exit(result);
 		}
-	}
+	}};
 }
 
-/// Write a message to stderr with a trailing newline.
-pub(crate) fn log_error(message: impl AsRef<core::ffi::CStr>) {
+/// Call [`checked_writeln`] using stderr.
+pub(crate) fn log_stderr(message: impl AsRef<core::ffi::CStr>) {
 	// Obtain the message bytes.
 	let message = message.as_ref().to_bytes_with_nul();
 	let buf = message.as_ptr().cast::<libc::c_char>();
