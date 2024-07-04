@@ -11,14 +11,14 @@ extern char **environ;
 int main(int argc, char *argv[]) {
 		char path[PATH_MAX];
 
-		#ifdef __APPLE__
+#ifdef __APPLE__
 		uint32_t len = sizeof(path);
 		if (_NSGetExecutablePath(path, &len) == -1) {
 			perror("_NSGetExecutablePath");
 			return EXIT_FAILURE;
 		}
 		printf("_NSGetExecutablePath: %s\n\n", path);
-		#else
+#else
 		ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
 		if (len == -1) {
 			perror("readlink");
@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 		}
 		path[len] = '\0';
 		printf("/proc/self/exe: %s\n\n", path);
-		#endif
+#endif
 
 
     printf("Command line arguments:\n");

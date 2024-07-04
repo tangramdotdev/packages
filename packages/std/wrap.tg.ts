@@ -1633,6 +1633,7 @@ export let argAndEnvDump = tg.target(async () => {
 export let testSingleArgObjectNoMutations = tg.target(async () => {
 	let executable = await argAndEnvDump();
 	let executableID = await executable.id();
+	console.log("executable", executableID);
 
 	let buildToolchain = await bootstrap.sdk.env();
 
@@ -1645,7 +1646,7 @@ export let testSingleArgObjectNoMutations = tg.target(async () => {
 		executable,
 	});
 	let wrapperID = await wrapper.id();
-	console.log("wrapper id", wrapperID);
+	console.log("wrapper", wrapperID);
 
 	// Check the manifest can be deserialized properly.
 	let manifest = await wrap.Manifest.read(wrapper);
