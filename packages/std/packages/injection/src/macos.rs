@@ -1,4 +1,4 @@
-use crate::{expect_success_unsafe, util, IDENTITY_PATH};
+use crate::{expect_success_unsafe, IDENTITY_PATH};
 
 /// Initialize the identity injection path and environment.
 #[no_mangle]
@@ -51,23 +51,7 @@ pub extern "C" fn tangram_injection() {
 		);
 
 		// Set the identity path
-		let tangram_identity_path_varname = c"TANGRAM_INJECTION_IDENTITY_PATH";
-		let identity_path_value = libc::getenv(tangram_identity_path_varname.as_ptr());
-		if identity_path_value.is_null() {
-			util::log_stderr(c"Error: TANGRAM_INJECTION_IDENTITY_PATH is not set.");
-			libc::exit(libc::EXIT_FAILURE);
-		}
-
-		// Copy the identity path.
-		let identity_path_value_len = libc::strlen(identity_path_value) + 1;
-		IDENTITY_PATH = libc::malloc(identity_path_value_len).cast::<libc::c_char>();
-		let _ = libc::strcpy(IDENTITY_PATH, identity_path_value);
-
-		// Unset the injection identity path.
-		expect_success_unsafe!(
-			libc::unsetenv(tangram_identity_path_varname.as_ptr()),
-			c"unsetenv $TANGRAM_INJECTION_IDENTITY_PATH"
-		);
+		crate::initialize_identity_path();
 	}
 }
 
@@ -79,13 +63,14 @@ static CONSTRUCTOR: extern "C" fn() = tangram_injection;
 /// Override `NSGetExecutablePath`. See <https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/dyld.3.html>.
 #[no_mangle]
 pub unsafe extern "C" fn _NSGetExecutablePath(buf: *mut libc::c_char, bufsize: *mut u32) -> i32 {
+	let identity_path = IDENTITY_PATH.wait().as_ptr();
 	// Note: MAXPATHLEN in bytes is 255 UTF-8 characters plus the null terminator.
-	let size = libc::strnlen(IDENTITY_PATH, 255 * 4) + 1;
+	let size = libc::strnlen(identity_path, 255 * 4) + 1;
 	let size = u32::try_from(size).unwrap();
 	if *bufsize < size {
 		*bufsize = size;
 		return -1;
 	}
-	libc::memcpy(buf.cast(), IDENTITY_PATH.cast(), size as usize);
+	libc::memcpy(buf.cast(), identity_path.cast(), size as usize);
 	libc::EXIT_SUCCESS
 }

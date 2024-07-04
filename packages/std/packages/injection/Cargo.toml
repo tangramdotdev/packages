@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 libc = { workspace = true }
+spin = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

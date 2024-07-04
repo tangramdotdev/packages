@@ -1,4 +1,5 @@
 /// Check the result of a libc function, printing an error message and exiting on anything other than [`libc::EXIT_SUCCESS`]. The message needs to implement `AsRef<core::ffi::CStr>`.
+/// // TODO - accept a fn name and then args, and then call the fn with the args and build the error message from that
 #[macro_export]
 macro_rules! expect_success_unsafe {
 	($func:expr, $error_message:expr) => {{
