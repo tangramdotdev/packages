@@ -64,10 +64,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 	};
 	let dependencies = [
-		bison.build(bisonArg),
-		libseccomp.build(libseccompArg),
-		m4.build(m4Arg),
-		zlib.build(zlibArg),
+		bison.build({ build, host: build }, bisonArg),
+		libseccomp.build({ build, env: env_, host, sdk }, libseccompArg),
+		m4.build({ build, host: build }, m4Arg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = [...dependencies, env_];
 

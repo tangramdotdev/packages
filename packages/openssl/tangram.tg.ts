@@ -51,7 +51,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 	let sourceDir = source_ ?? source();
 
-	let prepare = tg`cp -R ${sourceDir}/* . && chmod -R u+w .`;
 	let { arch: hostArch, os: hostOs } = std.triple.components(host);
 	let osCompiler =
 		hostOs === "darwin"
@@ -63,17 +62,23 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		command: tg`perl ./Configure ${osCompiler}`,
 		args: ["--libdir=lib"],
 	};
+	if (build !== host) {
+		configure.args.push(`--cross-compile-prefix=${host}-`);
+	}
 	// NOTE: The full `make install` consists of three steps. The final step installs documentation and take a disproportionately long time. We just build the first two steps to avoid this.
 	let install = {
 		args: tg.Mutation.set(["install_sw", "install_ssldirs"]),
 	};
-	let phases = { prepare, configure, install };
+	let phases = { configure, install };
 
-	let env = std.env.arg(perl.build(perlArg), env_);
+	let env = std.env.arg(perl.build({ build, host: build }, perlArg), env_);
 
 	let openssl = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			buildInTree: true,
+			defaultCrossArgs: false,
+			defaultCrossEnv: false,
 			env,
 			phases,
 			sdk,

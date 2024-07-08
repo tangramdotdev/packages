@@ -15,6 +15,7 @@ let VERSION = "1.79.0" as const;
 let PROFILE = "minimal" as const;
 
 type ToolchainArg = {
+	host?: string;
 	target?: string;
 	targets?: Array<string>;
 };
@@ -22,7 +23,7 @@ type ToolchainArg = {
 export let toolchain = tg.target(async (arg?: ToolchainArg) => {
 	// Determine the list of target triples to support other than the inferred host.
 	let detectedHost = await std.triple.host();
-	let host = rustTriple(detectedHost);
+	let host = rustTriple(arg?.host ?? detectedHost);
 	let targets = [];
 	if (arg?.target && arg.target !== host) {
 		targets.push(arg.target);
@@ -220,7 +221,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		sdkArgs.push({ toolchain: "gcc" });
 	}
 	let sdk = std.sdk(...sdkArgs);
-	let rustArtifact = toolchain({ target });
+	let rustArtifact = toolchain({ host, target });
 
 	// Download the dependencies using the cargo vendor.
 	tg.assert(source, "Must provide a source directory.");

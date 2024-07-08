@@ -55,7 +55,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [perl.build(perlArg)];
+	let dependencies = [perl.build({ build, host: build }, perlArg)];
 	let env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(

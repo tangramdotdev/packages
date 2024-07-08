@@ -34,10 +34,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let configure = {
 		args: ["--disable-dependency-tracking"],
 	};
-	if (build !== host) {
-		configure.args.push(`--build=${build}`);
-		configure.args.push(`--host=${host}`);
-	}
 
 	return std.autotools.build(
 		{

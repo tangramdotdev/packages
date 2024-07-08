@@ -55,9 +55,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let dependencies = [
-		acl.build(aclArg),
-		attr.build(attrArg),
-		libcap.build(libcapArg),
+		acl.build({ build, env: env_, host, sdk }, aclArg),
+		attr.build({ build, env: env_, host, sdk }, attrArg),
+		libcap.build({ build, env: env_, host, sdk }, libcapArg),
 	];
 	let env = [...dependencies, env_];
 

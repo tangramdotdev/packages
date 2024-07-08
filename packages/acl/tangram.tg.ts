@@ -49,7 +49,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let env = [attr.build(attrArg), env_];
+	let env = [attr.build({ build, env: env_, host, sdk }, attrArg), env_];
 
 	let output = await std.autotools.build(
 		{

@@ -61,13 +61,13 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let perlArtifact = await perl.build(perlArg);
+	let perlArtifact = await perl.build({ build, env: env_, host, sdk }, perlArg);
 	let dependencies = [
-		bison.build(bisonArg),
-		m4.build(m4Arg),
-		ncurses.build(ncursesArg),
+		bison.build({ build, host: build }, bisonArg),
+		m4.build({ build, host: build }, m4Arg),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
 		perlArtifact,
-		zlib.build(zlibArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = [...dependencies, env_];
 

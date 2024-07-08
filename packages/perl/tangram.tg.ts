@@ -90,10 +90,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure };
 
 	let dependencies = [
-		bison.build(bisonArg),
-		libffi.build(libffiArg),
-		m4.build(m4Arg),
-		zlib.build(zlibArg),
+		bison.build({ build, host: build }, bisonArg),
+		libffi.build({ build, env: env_, host, sdk }, libffiArg),
+		m4.build({ build, host: build }, m4Arg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 

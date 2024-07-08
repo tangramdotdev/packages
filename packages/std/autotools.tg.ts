@@ -13,6 +13,12 @@ export type Arg = {
 	/** Should we add the default CFLAGS? Will compile with `-mtune=generic -pipe`. Default: true */
 	defaultCFlags?: boolean;
 
+	/** Should we automatically add configure flags to support cross compilation when host !== target? If false, you must provide the necessary configuration manually. Default: true. */
+	defaultCrossArgs?: boolean;
+
+	/** Should we automatically set environment variables pointing to a cross toolchain when host !== target? If false, you must provide the necessary environment manually. Default: true. */
+	defaultCrossEnv?: boolean;
+
 	/** Should we run the check phase? Default: false */
 	doCheck?: boolean;
 
@@ -84,6 +90,8 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		buildInTree = false,
 		debug = false,
 		defaultCFlags = true,
+		defaultCrossArgs = true,
+		defaultCrossEnv = true,
 		doCheck = false,
 		env: userEnv,
 		fullRelro = true,
@@ -207,7 +215,15 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Define default phases.
 	let configureArgs =
-		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : undefined;
+		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : [];
+
+	if (defaultCrossArgs) {
+		if (host !== target) {
+			configureArgs.push(tg`--build=${host}`);
+			configureArgs.push(tg`--host=${target}`);
+		}
+	}
+
 	let defaultConfigurePath = buildInTree ? "." : source;
 	let defaultConfigure = {
 		command: tg`${defaultConfigurePath}/configure`,
@@ -232,11 +248,24 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		install: defaultInstall,
 	};
 
+	let defaultPrepare = undefined;
 	if (buildInTree) {
-		let defaultPrepare = {
+		defaultPrepare = {
 			command: tg`cp -R ${source}/. . && chmod -R u+w .`,
 		};
 		defaultPhases.prepare = defaultPrepare;
+	}
+
+	if (defaultCrossEnv) {
+		if (host !== target) {
+			let targetPrefix = `${target}-`;
+			defaultPrepare = {
+				command: tg`${
+					defaultPrepare?.command ?? ":"
+				} && export CC=${targetPrefix}cc && export CXX=${targetPrefix}c++ && export AR=${targetPrefix}ar`,
+			};
+			defaultPhases.prepare = defaultPrepare;
+		}
 	}
 
 	if (debug) {

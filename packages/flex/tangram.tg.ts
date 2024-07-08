@@ -58,9 +58,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let dependencies = [
-		help2man.build(help2manArg),
-		m4.build(m4Arg),
-		texinfo.build(texinfoArg),
+		help2man.build({ build, env: env_, host, sdk }, help2manArg),
+		m4.build({ build, env: env_, host, sdk }, m4Arg),
+		texinfo.build({ build, env: env_, host, sdk }, texinfoArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 

@@ -61,18 +61,18 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let perlArtifact = await perl.build(perlArg);
+	let perlArtifact = await perl.build({ build, host: build }, perlArg);
 	let interpreter = tg.symlink({
 		artifact: perlArtifact,
 		path: tg.Path.new("bin/perl"),
 	});
 	let dependencies = [
-		autoconf.build(autoconfArg),
-		bison.build(bisonArg),
-		m4.build(m4Arg),
+		autoconf.build({ build, env: env_, host, sdk }, autoconfArg),
+		bison.build({ build, host: build }, bisonArg),
+		m4.build({ build, host: build }, m4Arg),
 		perlArtifact,
-		texinfo.build(texinfoArg),
-		zlib.build(zlibArg),
+		texinfo.build({ build, host: build }, texinfoArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 	let artifact = std.autotools.build(

@@ -72,11 +72,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure };
 
 	let env = std.env.arg(
-		bzip2.build(bzip2Arg),
-		libiconv.build(libiconvArg),
-		openssl.build(opensslArg),
-		xz.build(xzArg),
-		zlib.build(zlibArg),
+		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
+		libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		xz.build({ build, env: env_, host, sdk }, xzArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 		env_,
 	);
 

@@ -45,8 +45,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let env = std.env.arg(
-		ncurses.build(ncursesArg),
-		pkgconfig.build(pkgconfigArg),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		pkgconfig.build({ build, host: build }, pkgconfigArg),
 		env_,
 	);
 

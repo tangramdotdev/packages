@@ -118,17 +118,17 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	let os = std.triple.os(host);
 
 	let dependencies = [
-		bison.build(bisonArg),
-		bzip2.build(bzip2Arg),
-		libffi.build(libffiArg),
-		libxcrypt.build(libxcryptArg),
-		m4.build(m4Arg),
-		ncurses.build(ncursesArg),
-		openssl.build(opensslArg),
-		pkgconfig.build(pkgconfigArg),
-		readline.build(readlineArg),
-		sqlite.build(sqliteArg),
-		zlib.build(zlibArg),
+		bison.build({ build, host: build }, bisonArg),
+		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
+		libffi.build({ build, env: env_, host, sdk }, libffiArg),
+		libxcrypt.build({ build, env: env_, host, sdk }, libxcryptArg),
+		m4.build({ build, host: build }, m4Arg),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		pkgconfig.build({ build, host: build }, pkgconfigArg),
+		readline.build({ build, env: env_, host, sdk }, readlineArg),
+		sqlite.build({ build, env: env_, host, sdk }, sqliteArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = [...dependencies, env_];
 	if (os === "darwin") {

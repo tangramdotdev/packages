@@ -35,7 +35,6 @@ export type Arg = {
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let resolved = await std.args.apply<Arg>(...args);
-	console.log("resolved", resolved);
 	let {
 		autotools = {},
 		build,
@@ -45,7 +44,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		sdk,
 		source: source_,
 	} = resolved;
-	console.log("m4Arg", m4Arg);
 
 	let configure = {
 		args: [
@@ -55,13 +53,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			"--enable-relocatable",
 		],
 	};
-	if (build !== host) {
-		configure.args.push(`--build=${build}`);
-		configure.args.push(`--host=${host}`);
-	}
 	let phases = { configure };
 
-	let env = std.env.arg(m4.build(m4Arg), env_);
+	let env = std.env.arg(m4.build({ build, host }, m4Arg), env_);
 
 	return std.autotools.build(
 		{

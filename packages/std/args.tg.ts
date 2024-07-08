@@ -63,12 +63,18 @@ export let apply = async <T extends PackageArg>(
 			continue;
 		}
 		for (let [key, value] of Object.entries(dependency)) {
+			if (dependencies[key] === undefined) {
+				dependencies[key] = {};
+			}
+
+			let existing = dependencies[key];
+
 			dependencies[key] = {
-				...value,
-				build: value.build ?? arg.build,
-				env: await std.env.arg(value.env, env),
-				host: value.host ?? arg.host,
-				sdk: await std.sdk.arg(value.sdk, sdk),
+				...existing,
+				build: value.build ?? existing?.build,
+				env: await std.env.arg(existing?.env, value.env),
+				host: value.host ?? existing?.host,
+				sdk: await std.sdk.arg(existing?.sdk, value.sdk),
 			};
 		}
 	}

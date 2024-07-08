@@ -52,11 +52,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let env = [
-		gmp.build(gmpArg),
-		gnutls.build(gnutlsArg),
-		nettle.build(nettleArg),
-		pcre2.build(pcre2Arg),
-		zlib.build(zlibArg),
+		gmp.build({ build, env: env_, host, sdk }, gmpArg),
+		gnutls.build({ build, env: env_, host, sdk }, gnutlsArg),
+		nettle.build({ build, env: env_, host, sdk }, nettleArg),
+		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 		{
 			LDFLAGS: tg.Mutation.suffix(
 				"-lnettle -lhogweed -lpcre2-8 -lgmp -lgnutls -lz",

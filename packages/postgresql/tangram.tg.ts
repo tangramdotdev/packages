@@ -77,19 +77,25 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let os = std.triple.os(host);
 
-	let icuArtifact = icu.build(icuArg);
-	let lz4Artifact = lz4.build(lz4Arg);
-	let ncursesArtifact = ncurses.build(ncursesArg);
-	let readlineArtifact = readline.build(readlineArg);
-	let zlibArtifact = zlib.build(zlibArg);
-	let zstdArtifact = zstd.build(zstdArg);
+	let icuArtifact = icu.build({ build, env: env_, host, sdk }, icuArg);
+	let lz4Artifact = lz4.build({ build, env: env_, host, sdk }, lz4Arg);
+	let ncursesArtifact = ncurses.build(
+		{ build, env: env_, host, sdk },
+		ncursesArg,
+	);
+	let readlineArtifact = readline.build(
+		{ build, env: env_, host, sdk },
+		readlineArg,
+	);
+	let zlibArtifact = zlib.build({ build, env: env_, host, sdk }, zlibArg);
+	let zstdArtifact = zstd.build({ build, env: env_, host, sdk }, zstdArg);
 	let env = [
 		icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
-		openssl.build(opensslArg),
-		perl.build(perlArg),
-		pkgconfig.build(pkgconfigArg),
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		perl.build({ build, host: build }, perlArg),
+		pkgconfig.build({ build, host: build }, pkgconfigArg),
 		readlineArtifact,
 		zlibArtifact,
 		zstdArtifact,

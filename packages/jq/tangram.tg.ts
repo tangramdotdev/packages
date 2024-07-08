@@ -48,10 +48,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let configure = {
 		args: ["--without-oniguruma", "--disable-maintainer-mode"],
 	};
-	if (build !== host) {
-		configure.args.push(`--build=${build}`);
-		configure.args.push(`--host=${host}`);
-	}
 
 	let phases = { configure };
 

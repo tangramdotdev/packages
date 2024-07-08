@@ -69,9 +69,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure };
 
 	let dependencies = [
-		gettext.build(gettextArg),
-		ncurses.build(ncursesArg),
-		pkgconfig.build(pkgconfigArg),
+		gettext.build({ build, env: env_, host, sdk }, gettextArg),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		pkgconfig.build({ build, host: build }, pkgconfigArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 

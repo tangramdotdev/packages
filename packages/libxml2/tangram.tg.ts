@@ -84,14 +84,14 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let deps = [
-		icu.build(icuArg),
-		ncurses.build(ncursesArg),
-		perl.build(perlArg),
-		pkgconfig.build(pkgconfigArg),
+		icu.build({ build, env: env_, host, sdk }, icuArg),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		perl.build({ build, host: build }, perlArg),
+		pkgconfig.build({ build, host: build }, pkgconfigArg),
 		python.toolchain(pythonArg),
-		readline.build(readlineArg),
-		xz.build(xzArg),
-		zlib.build(zlibArg),
+		readline.build({ build, env: env_, host, sdk }, readlineArg),
+		xz.build({ build, env: env_, host, sdk }, xzArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = [...deps, env_];
 

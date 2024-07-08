@@ -64,8 +64,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	`);
 	let phases = { configure: tg.Mutation.unset(), install };
 
-	let attrArtifact = await attr.build(attrArg);
-	let dependencies = [attrArtifact, perl.build(perlArg)];
+	let attrArtifact = await attr.build({ build, env: env_, host, sdk }, attrArg);
+	let dependencies = [attrArtifact, perl.build({ build, env: env_, host, sdk }, perlArg)];
 	let env = std.env.arg(
 		...dependencies,
 		{

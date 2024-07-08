@@ -54,8 +54,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let env = std.env.arg(
-		pkgconfig.build(pkgconfigArg),
-		pcre2.build(pcre2Arg),
+		pkgconfig.build({ build, host: build }, pkgconfigArg),
+		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
 		env_,
 	);
 

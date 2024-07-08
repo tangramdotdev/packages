@@ -63,6 +63,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			defaultCrossArgs: false,
+			defaultCrossEnv: false,
 			env: std.env.arg(env),
 			sdk,
 			source: source_ ?? source(),

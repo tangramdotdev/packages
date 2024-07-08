@@ -69,10 +69,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let dependencies = [
-		ncurses.build(ncursesArg),
-		pkgconfig.build(pkgconfigArg),
-		readline.build(readlineArg),
-		zlib.build(zlibArg),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		pkgconfig.build({ build, host: build }, pkgconfigArg),
+		readline.build({ build, env: env_, host, sdk }, readlineArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	let env = [...dependencies, env_];
 
