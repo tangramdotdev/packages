@@ -135,8 +135,11 @@ export let dylib = async (arg: DylibArg): Promise<tg.File> => {
 		"-fasynchronous-unwind-tables",
 		"-fno-omit-frame-pointer",
 		"-mno-omit-leaf-frame-pointer",
-		"-fstack-protector-strong",
 	];
+	if (!(std.triple.os(build) === "darwin" && std.triple.os(host) === "linux")) {
+		args.push("-fstack-protector-strong");
+	}
+
 	if (arg.additionalArgs) {
 		args = [...args, ...arg.additionalArgs];
 	}
