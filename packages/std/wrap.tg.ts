@@ -22,12 +22,13 @@ export async function wrap(
 
 	let identity = arg.identity ?? "executable";
 
+	let detectedBuild = await std.triple.host();
 	let host = arg.host ?? (await std.triple.host());
 	std.triple.assert(host);
 	let buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
-		  ? await gcc.toolchain({ host })
+		  ? await gcc.toolchain({ host: detectedBuild, target: host })
 		  : await bootstrap.sdk.env(host);
 
 	let manifestInterpreter = arg.interpreter
@@ -86,7 +87,6 @@ export async function wrap(
 	};
 
 	// Get the wrapper executable.
-	let detectedBuild = await std.triple.host();
 	let detectedOs = std.triple.os(detectedBuild);
 	let build =
 		detectedOs === "linux"
@@ -804,6 +804,7 @@ let manifestInterpreterFromArg = async (
 			: gcc.toolchain({ host });
 		let injectionLibrary = await injection.default({
 			buildToolchain,
+			build: await std.triple.host(),
 			host,
 		});
 

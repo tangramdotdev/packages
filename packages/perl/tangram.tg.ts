@@ -44,9 +44,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bison?: bison.Arg;
 		libffi?: libffi.Arg;
-		m4?: m4.Arg;
 		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
@@ -59,12 +57,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build: build_,
-		dependencies: {
-			bison: bisonArg = {},
-			libffi: libffiArg = {},
-			m4: m4Arg = {},
-			zlib: zlibArg = {},
-		} = {},
+		dependencies: { libffi: libffiArg = {}, zlib: zlibArg = {} } = {},
 		env: env_,
 		host: host_,
 		sdk,
@@ -75,6 +68,39 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let build = build_ ?? host;
 
 	let sourceDir = source_ ?? source();
+
+	// Set up default build dependencies.
+	let buildDependencies = [];
+	let m4ForBuild = m4.build({ build, host: build }).then((d) => {
+		return { M4: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(m4ForBuild);
+	let bisonForBuild = bison.build({ build, host: build }).then((d) => {
+		return { BISON: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(bisonForBuild);
+
+	// Set up host dependencies.
+	let hostDependencies = [];
+	let libffiForHost = await libffi
+		.build({ build, host, sdk }, libffiArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(libffiForHost);
+	let zlibForHost = await zlib
+		.build({ build, host, sdk }, zlibArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(zlibForHost);
+
+	// Resolve env.
+	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
+
+	// Add final build dependencies to environment.
+	let resolvedBuildDependencies = [];
+	let finalM4 = await std.env.getArtifactByKey({ env, key: "M4" });
+	resolvedBuildDependencies.push(finalM4);
+	let finalBison = await std.env.getArtifactByKey({ env, key: "BISON" });
+	resolvedBuildDependencies.push(finalBison);
+	env = await std.env.arg(env, ...resolvedBuildDependencies);
 
 	let configure = {
 		args: [
@@ -88,14 +114,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let phases = { configure };
-
-	let dependencies = [
-		bison.build({ build, host: build }, bisonArg),
-		libffi.build({ build, env: env_, host, sdk }, libffiArg),
-		m4.build({ build, host: build }, m4Arg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-	];
-	let env = std.env.arg(...dependencies, env_);
 
 	let perlArtifact = await std.autotools.build(
 		{

@@ -8,7 +8,7 @@ export let metadata = {
 	license: "GPL-2.0-only",
 	name: "git",
 	repository: "https://github.com/git/git",
-	version: "2.45.0",
+	version: "2.45.2",
 };
 
 export let source = tg.target(async () => {
@@ -21,7 +21,7 @@ export let source = tg.target(async () => {
 	});
 	let url = `https://mirrors.edge.kernel.org/pub/software/scm/git/${packageArchive}`;
 	let checksum =
-		"sha256:0aac200bd06476e7df1ff026eb123c6827bc10fe69d2823b4bf2ebebe5953429";
+		"sha256:51bfe87eb1c02fed1484051875365eeab229831d30d0cec5d89a14f9e40e9adb";
 	let outer = tg.Directory.expect(await std.download({ url, checksum }));
 	return std.directory.unwrap(outer);
 });

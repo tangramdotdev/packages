@@ -1,5 +1,6 @@
 import * as acl from "tg:acl" with { path: "../acl" };
 import * as attr from "tg:attr" with { path: "../attr" };
+import * as bison from "tg:bison" with { path: "../bison" };
 import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
 import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
 import * as perl from "tg:perl" with { path: "../perl" };
@@ -35,9 +36,6 @@ export type Arg = {
 		attr?: attr.Arg;
 		libiconv?: libiconv.Arg;
 		ncurses?: ncurses.Arg;
-		perl?: perl.Arg;
-		pkgconfig?: pkgconfig.Arg;
-		xz?: xz.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -54,9 +52,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			attr: attrArg = {},
 			libiconv: libiconvArg = {},
 			ncurses: ncursesArg = {},
-			perl: perlArg = {},
-			pkgconfig: pkgconfigArg = {},
-			xz: xzArg = {},
 		} = {},
 		env: env_,
 		host,
@@ -65,6 +60,66 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let os = std.triple.os(host);
+
+	// Set up default build dependencies.
+	let buildDependencies = [];
+	let bisonForBuild = bison.build({ build, host: build }).then((d) => {
+		return { BISON: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(bisonForBuild);
+	let pkgConfigForBuild = pkgconfig.build({ build, host: build }).then((d) => {
+		return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(pkgConfigForBuild);
+	let perlForBuild = perl.build({ build, host: build }).then((d) => {
+		return { PERL: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(perlForBuild);
+	let xzForBuild = xz.build({ build, host: build }).then((d) => {
+		return { XZ: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(xzForBuild);
+
+	// Set up host dependencies.
+	let hostDependencies = [];
+	let aclForHost = undefined;
+	let attrForHost = undefined;
+	if (os === "linux") {
+		aclForHost = await acl
+			.build({ build, host, sdk }, aclArg)
+			.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+		hostDependencies.push(aclForHost);
+		attrForHost = await attr
+			.build({ build, host, sdk }, attrArg)
+			.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+		hostDependencies.push(attrForHost);
+	}
+	let libiconvForHost = await libiconv
+		.build({ build, host, sdk }, libiconvArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(libiconvForHost);
+	let ncursesForHost = await ncurses
+		.build({ build, host, sdk }, ncursesArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(ncursesForHost);
+
+	// Resolve env.
+	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
+
+	// Add final build dependencies to env.
+	let resolvedBuildDependencies = [];
+	let finalBison = await std.env.getArtifactByKey({ env, key: "BISON" });
+	resolvedBuildDependencies.push(finalBison);
+	let finalPkgConfig = await std.env.getArtifactByKey({
+		env,
+		key: "PKGCONFIG",
+	});
+	resolvedBuildDependencies.push(finalPkgConfig);
+	let finalPerl = await std.env.getArtifactByKey({ env, key: "PERL" });
+	resolvedBuildDependencies.push(finalPerl);
+	let finalXz = await std.env.getArtifactByKey({ env, key: "XZ" });
+	resolvedBuildDependencies.push(finalXz);
+	env = await std.env.arg(env, ...resolvedBuildDependencies);
 
 	let configure = {
 		args: [
@@ -86,36 +141,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	}
 	let phases = { configure };
 
-	let ncursesArtifact = await ncurses.build(
-		{ build, env: env_, host, sdk },
-		ncursesArg,
-	);
-	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		ncursesArtifact,
-		perl.build({ build, host: build }, perlArg),
-		pkgconfig.build({ build, host: build }, pkgconfigArg),
-		xz.build({ build, host: build }, xzArg),
-	];
-	let aclArtifact = undefined;
-	let attrArtifact = undefined;
-
-	let libiconvArtifact = await libiconv.build(
-		{ build, env: env_, host, sdk },
-		libiconvArg,
-	);
-	dependencies.push(libiconvArtifact);
-	if (os === "linux") {
-		aclArtifact = await acl.build({ build, env: env_, host, sdk }, aclArg);
-		attrArtifact = await attr.build({ build, env: env_, host, sdk }, attrArg);
-		dependencies.push(aclArtifact);
-		dependencies.push(attrArtifact);
-	}
-	let env = [...dependencies, env_];
-
 	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env,
 			phases,
 			sdk,
 			source: source_ ?? source(),
@@ -127,15 +156,15 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let libDir = tg.Directory.expect(await output.get("lib"));
 	let libraryPaths = [
 		libDir,
-		tg.Directory.expect(await ncursesArtifact.get("lib")),
+		tg.Directory.expect(await ncursesForHost.get("lib")),
 	];
 	if (os === "linux") {
-		let aclDir = tg.Directory.expect(await aclArtifact?.get("lib"));
-		let attrDir = tg.Directory.expect(await attrArtifact?.get("lib"));
+		let aclDir = tg.Directory.expect(await aclForHost?.get("lib"));
+		let attrDir = tg.Directory.expect(await attrForHost?.get("lib"));
 		libraryPaths.push(aclDir);
 		libraryPaths.push(attrDir);
 	}
-	let libiconvDir = tg.Directory.expect(await libiconvArtifact.get("lib"));
+	let libiconvDir = tg.Directory.expect(await libiconvForHost.get("lib"));
 	libraryPaths.push(libiconvDir);
 	let binDir = tg.Directory.expect(await output.get("bin"));
 	for await (let [name, artifact] of binDir) {

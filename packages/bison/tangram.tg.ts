@@ -24,9 +24,6 @@ export let source = tg.target(() => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies?: {
-		m4?: m4.Arg;
-	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -38,13 +35,27 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
-		dependencies: { m4: m4Arg = {} } = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = resolved;
 
+	// Set up default build dependencies.
+	let buildDependencies = [];
+	let m4ForBuild = m4.build({ build, host: build }).then((d) => {
+		return { M4: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(m4ForBuild);
+
+	// Resolve environment.
+	let env = await std.env.arg(...buildDependencies, env_);
+
+	// Add final build dependencies to environment.
+	let finalM4 = await std.env.getArtifactByKey({ env, key: "M4" });
+	env = await std.env.arg(env, finalM4);
+
+	// Set up phases.
 	let configure = {
 		args: [
 			"--disable-dependency-tracking",
@@ -54,8 +65,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		],
 	};
 	let phases = { configure };
-
-	let env = std.env.arg(m4.build({ build, host }, m4Arg), env_);
 
 	return std.autotools.build(
 		{

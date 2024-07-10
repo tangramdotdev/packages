@@ -55,14 +55,11 @@ export type Arg = {
 
 	/** Args for dependencies. */
 	dependencies?: {
-		bison?: bison.Arg;
 		bzip2?: bzip2.Arg;
 		libffi?: libffi.Arg;
 		libxcrypt?: libxcrypt.Arg;
-		m4?: m4.Arg;
 		ncurses?: ncurses.Arg;
 		openssl?: openssl.Arg;
-		pkgconfig?: pkgconfig.Arg;
 		readline?: readline.Arg;
 		sqlite?: sqlite.Arg;
 		zlib?: zlib.Arg;
@@ -96,14 +93,11 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		autotools = {},
 		build,
 		dependencies: {
-			bison: bisonArg = {},
 			bzip2: bzip2Arg = {},
 			libffi: libffiArg = {},
 			libxcrypt: libxcryptArg = {},
-			m4: m4Arg = {},
 			ncurses: ncursesArg = {},
 			openssl: opensslArg = {},
-			pkgconfig: pkgconfigArg = {},
 			readline: readlineArg = {},
 			sqlite: sqliteArg = {},
 			zlib: zlibArg = {},
@@ -117,20 +111,82 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 
 	let os = std.triple.os(host);
 
-	let dependencies = [
-		bison.build({ build, host: build }, bisonArg),
-		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
-		libffi.build({ build, env: env_, host, sdk }, libffiArg),
-		libxcrypt.build({ build, env: env_, host, sdk }, libxcryptArg),
-		m4.build({ build, host: build }, m4Arg),
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		pkgconfig.build({ build, host: build }, pkgconfigArg),
-		readline.build({ build, env: env_, host, sdk }, readlineArg),
-		sqlite.build({ build, env: env_, host, sdk }, sqliteArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+	// Set up build dependencies.
+	let buildDependencies = [];
+	let bisonForBuild = bison.build({ build, host: build }).then((d) => {
+		return { BISON: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(bisonForBuild);
+	let m4ForBuild = m4.build({ build, host: build }).then((d) => {
+		return { M4: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(m4ForBuild);
+	let pkgConfigForBuild = pkgconfig.build({ build, host: build }).then((d) => {
+		return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(pkgConfigForBuild);
+
+	// Set yup host dependencies.
+	let hostDependencies = [];
+	let bzip2ForHost = await bzip2
+		.build({ build, host, sdk }, bzip2Arg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(bzip2ForHost);
+	let libffiForHost = await libffi
+		.build({ build, host, sdk }, libffiArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(libffiForHost);
+	let libxcryptForHost = await libxcrypt
+		.build({ build, host, sdk }, libxcryptArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(libxcryptForHost);
+	let ncursesForHost = await ncurses
+		.build({ build, host, sdk }, ncursesArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(ncursesForHost);
+	let opensslForHost = await openssl
+		.build({ build, host, sdk }, opensslArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(opensslForHost);
+	let readlineForHost = await readline
+		.build({ build, host, sdk }, readlineArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(readlineForHost);
+	let sqliteForHost = await sqlite
+		.build({ build, host, sdk }, sqliteArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(sqliteForHost);
+	let zlibForHost = await zlib
+		.build({ build, host, sdk }, zlibArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(zlibForHost);
+
+	// Resolve env.
+	let resolvedEnv = await std.env.arg(
+		...buildDependencies,
+		...hostDependencies,
+		env_,
+	);
+
+	// Add final build dependencies to env.
+	let resolvedBuildDependencies = [];
+	let finalBison = await std.env.getArtifactByKey({
+		env: resolvedEnv,
+		key: "BISON",
+	});
+	resolvedBuildDependencies.push(finalBison);
+	let finalM4 = await std.env.getArtifactByKey({ env: resolvedEnv, key: "M4" });
+	resolvedBuildDependencies.push(finalM4);
+	let finalPkgConfig = await std.env.getArtifactByKey({
+		env: resolvedEnv,
+		key: "PKGCONFIG",
+	});
+	resolvedBuildDependencies.push(finalPkgConfig);
+	let env: tg.Unresolved<Array<std.env.Arg>> = [
+		resolvedEnv,
+		...resolvedBuildDependencies,
 	];
-	let env = [...dependencies, env_];
+
 	if (os === "darwin") {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: "14.5" });
 	}

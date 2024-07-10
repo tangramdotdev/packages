@@ -39,7 +39,6 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		ncurses?: ncurses.Arg;
-		pkgconfig?: pkgconfig.Arg;
 		readline?: readline.Arg;
 		zlib?: zlib.Arg;
 	};
@@ -55,7 +54,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		build: build_,
 		dependencies: {
 			ncurses: ncursesArg = {},
-			pkgconfig: pkgconfigArg = {},
 			readline: readlineArg = {},
 			zlib: zlibArg = {},
 		} = {},
@@ -68,18 +66,44 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 
-	let dependencies = [
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		pkgconfig.build({ build, host: build }, pkgconfigArg),
-		readline.build({ build, env: env_, host, sdk }, readlineArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-	];
-	let env = [...dependencies, env_];
+	// Set up default build dependencies.
+	let buildDependencies = [];
+	let pkgConfigForBuild = pkgconfig.build({ build, host: build }).then((d) => {
+		return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(pkgConfigForBuild);
+
+	// Set up host dependencies.
+	let hostDependencies = [];
+	let ncursesForHost = await ncurses
+		.build({ build, host, sdk }, ncursesArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(ncursesForHost);
+	let readlineForHost = await readline
+		.build({ build, host, sdk }, readlineArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(readlineForHost);
+	let zlibForHost = await zlib
+		.build({ build, host, sdk }, zlibArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(zlibForHost);
+
+	// Resolve env.
+	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
+
+	// Add final build dependencies to env.
+	let resolvedBuildDependencies = [];
+	let finalPkgConfig = await std.env.getArtifactByKey({
+		env,
+		key: "PKGCONFIG",
+	});
+	resolvedBuildDependencies.push(finalPkgConfig);
+	env = await std.env.arg(env, ...resolvedBuildDependencies);
 
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env,
 			sdk,
 			source: source_ ?? source(),
 		},

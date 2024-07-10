@@ -82,7 +82,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	for (let script of bashScripts) {
 		let file = tg.File.expect(await output.get(`bin/${script}`));
 		output = await tg.directory(output, {
-			[`bin/${script}`]: bash.wrapScript(file),
+			[`bin/${script}`]: bash.wrapScript(file, host),
 		});
 	}
 

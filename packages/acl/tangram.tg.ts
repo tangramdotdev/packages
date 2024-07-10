@@ -44,17 +44,22 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	// Set up host dependencies.
+	let attrForHost = await attr
+		.build({ build, host, sdk }, attrArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+
+	let env = await std.env.arg(attrForHost, env_);
+
 	let configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 	let phases = { configure };
 
-	let env = [attr.build({ build, env: env_, host, sdk }, attrArg), env_];
-
 	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env,
 			phases,
 			sdk,
 			source: source_ ?? source(),

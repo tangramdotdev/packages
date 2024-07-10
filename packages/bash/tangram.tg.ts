@@ -38,9 +38,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		gettext?: gettext.Arg;
 		ncurses?: ncurses.Arg;
-		pkgconfig?: pkgconfig.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -52,33 +50,54 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
-		dependencies: {
-			gettext: gettextArg = {},
-			ncurses: ncursesArg = {},
-			pkgconfig: pkgconfigArg = {},
-		} = {},
+		dependencies: { ncurses: ncursesArg = {} } = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	// Set up default build dependencies.
+	let buildDependencies = [];
+	let pkgConfigForBuild = pkgconfig.build({ build, host: build }).then((d) => {
+		return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(pkgConfigForBuild);
+	let gettextForBuild = gettext.build({ build, host: build }).then((d) => {
+		return { GETTEXT: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(gettextForBuild);
+
+	// Set up host dependencies.
+	let hostDependencies = [];
+	let ncursesForHost = await ncurses
+		.build({ build, host, sdk }, ncursesArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(ncursesForHost);
+
+	// Resolve env.
+	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
+
+	// Add final build dependencies to env.
+	let resolvedBuildDependencies = [];
+	let finalPkgConfig = await std.env.getArtifactByKey({
+		env,
+		key: "PKGCONFIG",
+	});
+	resolvedBuildDependencies.push(finalPkgConfig);
+	let finalGettext = await std.env.getArtifactByKey({ env, key: "GETTEXT" });
+	resolvedBuildDependencies.push(finalGettext);
+	env = await std.env.arg(env, ...resolvedBuildDependencies);
+
 	let configure = {
 		args: ["--without-bash-malloc", "--with-curses"],
 	};
 	let phases = { configure };
 
-	let dependencies = [
-		gettext.build({ build, env: env_, host, sdk }, gettextArg),
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		pkgconfig.build({ build, host: build }, pkgconfigArg),
-	];
-	let env = std.env.arg(...dependencies, env_);
-
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env,
 			phases,
 			sdk,
 			source: source_ ?? source(),
@@ -90,7 +109,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
-export let wrapScript = async (script: tg.File) => {
+export let wrapScript = async (script: tg.File, host: string) => {
 	let scriptMetadata = await std.file.executableMetadata(script);
 	if (
 		scriptMetadata?.format !== "shebang" ||
@@ -98,7 +117,9 @@ export let wrapScript = async (script: tg.File) => {
 	) {
 		throw new Error("Expected a shebang sh or bash script");
 	}
-	let interpreter = tg.File.expect(await (await build()).get("bin/bash"));
+	let interpreter = tg.File.expect(
+		await (await build({ host })).get("bin/bash"),
+	);
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 

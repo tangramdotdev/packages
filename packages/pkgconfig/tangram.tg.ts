@@ -32,8 +32,6 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bison?: bison.Arg;
-		m4?: m4.Arg;
 		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
@@ -41,29 +39,55 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	proxy?: boolean;
-	target?: string;
 };
 
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
-		dependencies: {
-			bison: bisonArg = {},
-			m4: m4Arg = {},
-			zlib: zlibArg = {},
-		} = {},
+		dependencies: { zlib: zlibArg = {} } = {},
 		env: env_,
 		host,
 		proxy = true,
 		sdk,
 		source: source_,
-		target: target_,
 	} = await std.args.apply<Arg>(...args);
 
-	// If the user did not supply a target machine, default to the host machine.
-	let target = target_ ?? host;
+	// Set up default build dependencies.
+	let buildDependencies = [];
+	let m4ForBuild = m4.build({ build, host: build }).then((d) => {
+		return { M4: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(m4ForBuild);
+	let bisonForBuild = bison.build({ build, host: build }).then((d) => {
+		return { BISON: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(bisonForBuild);
 
+	// Set up host dependencies.
+	let zlibForHost = await zlib
+		.build({ build, host, sdk }, zlibArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+
+	// Resolve env.
+	let env = await std.env.arg(
+		...buildDependencies,
+		zlibForHost,
+		{
+			CFLAGS: tg.Mutation.prefix("-Wno-int-conversion", " "),
+		},
+		env_,
+	);
+
+	// Add final build dependencies to environment.
+	let resolvedBuildDependencies = [];
+	let finalM4 = await std.env.getArtifactByKey({ env, key: "M4" });
+	resolvedBuildDependencies.push(finalM4);
+	let finalBison = await std.env.getArtifactByKey({ env, key: "BISON" });
+	resolvedBuildDependencies.push(finalBison);
+	env = await std.env.arg(env, ...resolvedBuildDependencies);
+
+	// Set up phases.
 	let configure = {
 		args: [
 			"--with-internal-glib",
@@ -73,21 +97,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let phases = { configure };
-	let dependencies: tg.Unresolved<Array<std.env.Arg>> = [
-		bison.build({ build, host: build }, bisonArg),
-		m4.build({ build, host: build }, m4Arg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-	];
-	let env = [...dependencies, env_];
-
-	env.push({
-		CFLAGS: tg.Mutation.prefix("-Wno-int-conversion", " "),
-	});
 
 	let pkgConfigBuild = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env,
 			phases,
 			sdk,
 			source: source_ ?? source(),

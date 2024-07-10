@@ -71,7 +71,15 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure, install };
 
-	let env = std.env.arg(perl.build({ build, host: build }, perlArg), env_);
+	let env = [perl.build({ build, host: build }, perlArg), env_];
+
+	if (build !== host) {
+		// To ensure the cross-compile prefix picks up the correct cross compilers.
+		env.push({
+			CC: "cc",
+			CXX: "c++",
+		});
+	}
 
 	let openssl = await std.autotools.build(
 		{
@@ -79,13 +87,14 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			buildInTree: true,
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
-			env,
+			env: std.env.arg(env),
 			phases,
 			sdk,
 			source: sourceDir,
 		},
 		autotools,
 	);
+	console.log("openssl", await openssl.id());
 
 	return tg.directory(openssl, {
 		["bin/openssl"]: std.wrap(
@@ -93,6 +102,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			{
 				identity: "wrapper",
 				libraryPaths: [tg.symlink(tg`${openssl}/lib`)],
+				host,
 			},
 		),
 		["share/pkgconfig"]: tg.symlink("../lib/pkgconfig"),

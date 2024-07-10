@@ -22,7 +22,6 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		ncurses?: ncurses.Arg;
-		pkgconfig?: pkgconfig.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -34,21 +33,35 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
-		dependencies: {
-			ncurses: ncursesArg = {},
-			pkgconfig: pkgconfigArg = {},
-		} = {},
+		dependencies: { ncurses: ncursesArg = {} } = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let env = std.env.arg(
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		pkgconfig.build({ build, host: build }, pkgconfigArg),
-		env_,
-	);
+	// Set up default build dependencies.
+	let buildDependencies = [];
+	let pkgConfigForBuild = pkgconfig.build({ build, host: build }).then((d) => {
+		return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
+	});
+	buildDependencies.push(pkgConfigForBuild);
+
+	// Set up host dependencies.
+	let hostDependencies = [];
+	let ncursesForHost = await ncurses
+		.build({ build, host, sdk }, ncursesArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(ncursesForHost);
+
+	// Resolve env.
+	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
+
+	// Add final build dependencies to env.
+	let resolvedBuildDependencies = [];
+	let finalPkConfig = await std.env.getArtifactByKey({ env, key: "PKGCONFIG" });
+	resolvedBuildDependencies.push(finalPkConfig);
+	env = await std.env.arg(env, ...resolvedBuildDependencies);
 
 	let configure = {
 		args: [
