@@ -7,7 +7,7 @@ export let metadata = {
 		"https://github.com/nodejs/node/blob/12fb157f79da8c094a54bc99370994941c28c235/LICENSE",
 	name: "nodejs",
 	repository: "https://github.com/nodejs/node",
-	version: "20.14.0",
+	version: "20.15.1",
 };
 
 type ToolchainArg = {
@@ -33,22 +33,22 @@ let source = async (): Promise<tg.Directory> => {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
-				"sha256:8fb7012589850390ec658f58aaa11656031f64a7a8efb0b37607ca140cefe3a9",
+				"sha256:10d47a46ef208b3e4b226e4d595a82659123b22397ed77b7975d989114ec317e",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
 			checksum:
-				"sha256:fedf8fa73b6f51c4ffcc5da8f86cd1ed381bc9dceae0829832c7d683a78b8e36",
+				"sha256:26700f8d3e78112ad4a2618a9c8e2816e38a49ecf0213ece80e54c38cb02563f",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
-				"sha256:63ee914bdbb1552213ec4e21ea83685e11d969d50fc7801d6db981089cd607fe",
+				"sha256:106ad5288f1da94bf25cf9fba4a070b442e3213e25ce8af3ad35bf6e266213f6",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:78e05a047b61f312db2de5e0127aeeb1274753c7f215f8892f3e5f76a629a022",
+				"sha256:34ad01b42025f72d486f9775a2f170913ad6b9fe2d4ceb67746a08de0e475b88",
 		},
 	};
 

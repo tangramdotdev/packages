@@ -292,8 +292,15 @@ export let testDefaultSdk = tg.target(async () => {
 export let testDarwinToLinux = tg.target(async () => {
 	return testDarwinToLinux_();
 });
-export let linuxToDarwin = tg.target(async () => {
+export let testLinuxToDarwin = tg.target(async () => {
 	return testLinuxToDarwin_();
+});
+import { linuxToDarwin as linuxToDarwinToolchain } from "./sdk/llvm.tg.ts";
+export let testLinuxToDarwinToolchain = tg.target(async () => {
+	return await linuxToDarwinToolchain({
+		host: await triple.host(),
+		target: "aarch64-apple-darwin",
+	});
 });
 export let testAllSdks = tg.target(async () => {
 	await assertAllSdks();
@@ -403,4 +410,29 @@ export let testDollar = tg.target(async () => {
 import { env as stdEnv } from "./env.tg.ts";
 export let testBaseEnv = tg.target(async () => {
 	return await stdEnv({ FOO: "bar" });
+});
+
+import * as libtapi from "./sdk/llvm/apple_libtapi.tg.ts";
+export let testLibtapi = tg.target(async () => {
+	return await libtapi.build();
+});
+
+import * as cctools from "./sdk/llvm/cctools_port.tg.ts";
+export let testCctoolsPort = tg.target(async () => {
+	return await cctools.build();
+});
+
+import * as libdispatch from "./sdk/llvm/apple_libdispatch.tg.ts";
+export let testLibdispatch = tg.target(async () => {
+	return await libdispatch.build();
+});
+
+import * as libbsd from "./sdk/llvm/libbsd.tg.ts";
+export let testLibbsd = tg.target(async () => {
+	return await libbsd.build();
+});
+
+import * as libmd from "./sdk/llvm/libmd.tg.ts";
+export let testLibmd = tg.target(async () => {
+	return await libmd.build();
 });

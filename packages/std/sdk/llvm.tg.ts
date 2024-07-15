@@ -6,6 +6,7 @@ import * as dependencies from "./dependencies.tg.ts";
 import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import ncurses from "./llvm/ncurses.tg.ts";
+import cctools from "./llvm/cctools_port.tg.ts";
 import {
 	buildToHostCrossToolchain,
 	buildToolsForHost,
@@ -51,7 +52,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		build: build_,
 		env: env_,
 		host: host_,
-		lto = false,
+		lto = true,
 		sdk,
 		source: source_,
 	} = arg ?? {};
@@ -112,7 +113,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 
 	// Add additional flags from the target args.
 	if (lto) {
-		configure.args.push("-DLLVM_ENABLE_LTO=1");
+		configure.args.push("-DBOOTSTRAP_LLVM_ENABLE_LTO=Thin");
 	}
 
 	// Add the cmake cache file last.
@@ -193,6 +194,30 @@ export let lld = tg.target(async (arg?: LLVMArg) => {
 	return tg`${toolchainDir}/bin/ld.lld`;
 });
 
+type LinuxToDarwinArg = {
+	host: string;
+	target?: string;
+};
+
+/** Produce a linux to darwin toolchain. */
+import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
+export let linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
+	let { host, target: target_ } = arg;
+	let target = target_ ?? host;
+	let clangToolchain = await toolchain({ host });
+	let cctoolsForTarget = await cctools(std.triple.arch(target));
+	let macosSdk = await bootstrap.macOsSdk();
+	let combined = await std.env.arg(clangToolchain, cctoolsForTarget);
+	let f = await $`
+	set -x
+	clang --version
+	clang -v -xc ${testSource} --sysroot ${macosSdk} -target ${target} -o $OUTPUT
+	`
+		.env(combined)
+		.then(tg.File.expect);
+	return f;
+});
+
 export let llvmMajorVersion = () => {
 	return metadata.version.split(".")[0];
 };
@@ -220,12 +245,22 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 			SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 		};
 	} else {
-		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
-		clangxxArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/${version}`);
-		clangxxArgs.push(tg`-unwindlib=libunwind`);
-		clangxxArgs.push(tg`-L${toolchainDir}/lib/${target}`);
-		clangxxArgs.push(tg`-isystem${toolchainDir}/include/c++/v1`);
-		clangxxArgs.push(tg`-isystem${toolchainDir}/include/${target}/c++/v1`);
+		// Define common flags.
+		let commonFlags = [
+			tg`-resource-dir=${toolchainDir}/lib/clang/${version}`,
+			tg`-L${toolchainDir}/lib/${target}`,
+		];
+
+		// Set C flags.
+		clangArgs = clangArgs.concat(commonFlags);
+
+		// Set C++ flags.
+		let cxxFlags = [
+			"-unwindlib=libunwind",
+			tg`-isystem${toolchainDir}/include/c++/v1`,
+			tg`-isystem${toolchainDir}/include/${target}/c++/v1`,
+		];
+		clangxxArgs = clangxxArgs.concat(commonFlags, cxxFlags);
 	}
 
 	return { clangArgs, clangxxArgs, env };

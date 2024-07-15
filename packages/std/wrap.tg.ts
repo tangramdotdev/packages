@@ -799,12 +799,14 @@ let manifestInterpreterFromArg = async (
 		}
 		let arch = interpreterMetadata.arch;
 		let host = `${arch}-unknown-linux-gnu`;
+		let detectedBuild = await std.triple.host();
+		let buildOs = std.triple.os(detectedBuild);
 		let buildToolchain = buildToolchainArg
 			? buildToolchainArg
 			: gcc.toolchain({ host });
 		let injectionLibrary = await injection.default({
 			buildToolchain,
-			build: await std.triple.host(),
+			build: buildOs === "darwin" ? detectedBuild : undefined,
 			host,
 		});
 

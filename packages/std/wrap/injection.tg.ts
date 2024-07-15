@@ -4,7 +4,7 @@ import * as std from "../tangram.tg.ts";
 import injectionSource from "./injection" with { type: "directory" };
 
 type Arg = {
-	build?: string;
+	build?: string | undefined;
 	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;

@@ -109,7 +109,13 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 				`Cross-compiling from ${host} to ${target} is not supported.`,
 			);
 		}
-		let crossToolchain = await gcc.toolchain({ host, target });
+		let crossToolchain = undefined;
+		if (std.triple.os(host) === "linux" && std.triple.os(target) === "darwin") {
+			crossToolchain = await llvm.linuxToDarwin({ host, target });
+		} else {
+			crossToolchain = await gcc.toolchain({ host, target });
+		}
+		tg.assert(crossToolchain !== undefined);
 		envs.push(crossToolchain);
 		let proxyEnv = await proxy.env({
 			...proxyArg,
@@ -238,7 +244,7 @@ export namespace sdk {
 		return [cc, cxx, ld];
 	};
 
-	let requiredUtils = ["ar", "nm", "objdump", "ranlib", "strip"] as const;
+	let requiredUtils = ["ar", "nm", "ranlib", "strip"] as const;
 
 	/** Assert that an env provides an toolchain. */
 	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
@@ -949,8 +955,8 @@ let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
 		return true;
 	}
 
-	// Linux supports cross compiling to other linux architectures.
-	if (hostOs === "linux" && targetOs === "linux") {
+	// Linux supports cross compiling to other linux or darwin architectures.
+	if (hostOs === "linux" && (targetOs === "linux" || targetOs === "darwin")) {
 		return true;
 	}
 
@@ -1213,6 +1219,15 @@ export let testDarwinToLinuxSingle = tg.target(async (target: string) => {
 });
 
 export let testLinuxToDarwin = tg.target(async () => {
+	let host = await std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		throw new Error(`This test is only valid on Linux`);
+	}
+
+	let target = "aarch64-apple-darwin";
+	let sdkArg = { host, target };
+	let env = await sdk(sdkArg);
+	await sdk.assertValid(env, sdkArg);
 	return true;
 });
 

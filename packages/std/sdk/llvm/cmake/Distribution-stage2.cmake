@@ -37,6 +37,7 @@ set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")
 set(LLVM_TOOLCHAIN_TOOLS
   dsymutil
   llvm-ar
+  llvm-config
   llvm-cov
   llvm-dwarfdump
   llvm-nm

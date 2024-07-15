@@ -12,13 +12,13 @@ export let metadata = {
 	license: "GPL-2.0-or-later",
 	name: "automake",
 	repository: "https://git.savannah.gnu.org/git/automake.git",
-	version: "1.16.5",
+	version: "1.17",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:f01d58cd6d9d77fbdca9eb4bbd5ead1988228fdb73d6f7a201f5f8d6b118b469";
+		"sha256:8920c1fc411e13b90bf704ef9db6f29d540e76d232cb3b2c9f4dc4cc599bd990";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -72,7 +72,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	});
 	let scripts = ["automake", "aclocal"];
 
-	let version = "1.16";
+	let version = "1.17";
 	let binDirectory = tg.directory({});
 	let dependencies = [
 		autoconf.build({ build, env: env_, host, sdk }, autoconfArg),
@@ -86,7 +86,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	let env = std.env.arg(env_, ...dependencies);
 
-	let automake = await std.utils.buildUtil(
+	let automake = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,

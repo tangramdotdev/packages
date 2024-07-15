@@ -49,9 +49,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up host dependencies.
 	let hostDependencies = [];
-	let ncursesForHost = await ncurses
-		.build({ build, host, sdk }, ncursesArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	let ncursesForHost = await ncurses.build({ build, host, sdk }, ncursesArg);
 	hostDependencies.push(ncursesForHost);
 
 	// Resolve env.
