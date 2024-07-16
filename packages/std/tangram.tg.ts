@@ -215,6 +215,9 @@ import * as dependencies from "./sdk/dependencies.tg.ts";
 export let testDepsBison = tg.target(async () => {
 	return await dependencies.bison.test();
 });
+export let testDepsGmp = tg.target(async () => {
+	return await dependencies.gmp.test();
+});
 export let testDepsm4 = tg.target(async () => {
 	return await dependencies.m4.test();
 });
@@ -229,6 +232,9 @@ export let testDepsZlib = tg.target(async () => {
 });
 export let testDepsZstd = tg.target(async () => {
 	return await dependencies.zstd.test();
+});
+export let testDeps = tg.target(async () => {
+	return await dependencies.env();
 });
 
 // sdk stage tests

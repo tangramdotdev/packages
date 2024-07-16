@@ -1,20 +1,16 @@
 import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
-	name: "bison",
-	version: "3.8.2",
+	homepage: "https://www.multiprecision.org",
+	name: "mpc",
+	version: "1.3.1",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2";
-	return std.download.fromGnu({
-		name,
-		version,
-		compressionFormat: "xz",
-		checksum,
-	});
+		"sha256:ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8";
+	return std.download.fromGnu({ checksum, name, version });
 });
 
 export type Arg = {
@@ -29,12 +25,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let { build, env, host, sdk, source: source_ } = arg ?? {};
 
 	let configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-nls",
-			"--disable-rpath",
-			"--enable-relocatable",
-		],
+		args: ["--disable-dependency-tracking"],
 	};
 
 	let output = std.utils.buildUtil({
@@ -43,7 +34,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		phases: { configure },
 		sdk,
 		source: source_ ?? source(),
-		wrapBashScriptPaths: ["bin/yacc"],
 	});
 
 	return output;
@@ -54,12 +44,6 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["bison"],
-		metadata,
-		sdk: sdkArg,
-	});
-	return true;
+	let sdk = await bootstrap.sdk.arg(host);
+	return await build({ host, sdk });
 });

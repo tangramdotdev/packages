@@ -39,7 +39,7 @@ export type Command = {
 	args?: Array<tg.Template>;
 };
 
-type CommandArgObject = {
+export type CommandArgObject = {
 	command?: tg.MaybeMutation<tg.Template | tg.Artifact | string> | undefined;
 	args?:
 		| tg.MaybeNestedArray<tg.MaybeMutation<tg.Template | tg.Artifact | string>>

@@ -3,6 +3,7 @@ import { mergeLibDirs } from "../sdk.tg.ts";
 import * as std from "../tangram.tg.ts";
 import { interpreterName } from "./libc.tg.ts";
 import { defaultGlibcVersion } from "./libc/glibc.tg.ts";
+import * as dependencies from "./dependencies.tg.ts";
 
 export { toolchain, crossToolchain } from "./gcc/toolchain.tg.ts";
 
@@ -14,21 +15,46 @@ export let metadata = {
 	version: "14.1.0",
 };
 
-/* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
-export let source = tg.target(() =>
-	tg.directory(gccSource(), {
-		gmp: gmpSource(),
-		isl: islSource(),
-		mpfr: mpfrSource(),
-		mpc: mpcSource(),
-	}),
-);
+/** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
+export let source = tg.target((bundledSources?: boolean) => {
+	let { name, version } = metadata;
+
+	// Download and unpack the GCC source.
+	let extension = ".tar.xz";
+	let packageArchive = std.download.packageArchive({
+		name,
+		version,
+		extension,
+	});
+	let checksum =
+		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
+	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${packageArchive}`;
+	let sourceDir = std
+		.download({ checksum, url })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
+
+	// If requested, include the bundled sources as subdirectories.
+	if (bundledSources) {
+		sourceDir = tg.directory(sourceDir, {
+			gmp: dependencies.gmp.source(),
+			isl: dependencies.isl.source(),
+			mpfr: dependencies.mpfr.source(),
+			mpc: dependencies.mpc.source(),
+		});
+	}
+	return sourceDir;
+});
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	/** If this is true, add the gmp,mpfr, mpc, and isl source directories to the GCC source and build them all together. If false, these libraries must be available for the host in the env. */
+	bundledSources?: boolean;
 	env?: std.env.Arg;
 	host?: string;
+	/** If set, any directory here will be copied to $OUTPUT, and $OUTPUT/bin will be added to PATH before configuring. */
+	populatePrefix?: tg.Directory | undefined;
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 	sysroot: tg.Directory;
@@ -36,8 +62,9 @@ export type Arg = {
 	variant: Variant;
 };
 export type Variant =
-	| "stage1_bootstrap" // C only, no libraries.
-	| "stage1_limited" // C/C++ only, most libraries disabled, but inclded libgcc/libstdc++.
+	| "stage1_bootstrap" // C only, no libraries. Will produce an output directory with two folders, $OUTPUT/prefix with the installed compiler and $OUTPUT/build with the build artifacts.
+	| "stage1_libstdc++" // Produce libstdc++ and combine it with the output from stage1_bootstrap and the libc sysroot.
+	| "stage1_limited" // Produce a complete native `host === target` GCC toolchain with only C and C++ enabled and many features disabled.
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
@@ -45,8 +72,10 @@ export let build = tg.target(async (arg: Arg) => {
 	let {
 		autotools = {},
 		build: build_,
+		bundledSources = false,
 		env: env_,
 		host: host_,
+		populatePrefix,
 		sdk,
 		source: source_,
 		sysroot,
@@ -58,44 +87,71 @@ export let build = tg.target(async (arg: Arg) => {
 	let build = build_ ?? host;
 	let target = target_ ?? host;
 
-	// Set up configuration common to all GCC builds.
-	let commonArgs = [
-		"--disable-dependency-tracking",
-		"--disable-nls",
-		"--disable-multilib",
-		"--enable-host-pie",
-		`--build=${build}`,
-		`--host=${host}`,
-		`--target=${target}`,
-		"--with-native-system-header-dir=/include",
-		tg`--with-sysroot=${sysroot}/${target}`,
-	];
+	let prefixPath = undefined;
 
 	// Configure sysroot.
 	let isCross = host !== target;
 	let targetPrefix = isCross ? `${target}-` : "";
 
+	let configure: tg.Unresolved<std.phases.PhaseArgObject> = {
+		// pre: await tg`mkdir -p $OUTPUT && cp -R ${sysrootDir}/* $OUTPUT && chmod -R u+w $OUTPUT`,
+		pre: "mkdir -p $OUTPUT",
+		body: {
+			args: [
+				"--disable-dependency-tracking",
+				"--disable-nls",
+				"--disable-multilib",
+				"--enable-host-pie",
+				`--build=${build}`,
+				`--host=${host}`,
+				`--target=${target}`,
+				"--with-native-system-header-dir=/include",
+				tg`--with-sysroot=${sysroot}/${target}`,
+			],
+		},
+	};
+	tg.assert(
+		configure !== undefined &&
+			typeof configure === "object" &&
+			"body" in configure &&
+			typeof configure.body === "object" &&
+			"args" in configure.body &&
+			configure.body.args &&
+			Array.isArray(configure.body.args) &&
+			configure.body.args.length > 0 &&
+			"pre" in configure &&
+			typeof configure.pre === "string",
+	);
+
+	if (arg.populatePrefix) {
+		configure.pre = await tg.Template.join(
+			"\n",
+			configure.pre,
+			tg`cp -R ${arg.populatePrefix}/* $OUTPUT\nchmod -R u+w $OUTPUT\nexport PATH=$OUTPUT/bin:$PATH`,
+		);
+	}
+
+	let phases: tg.Unresolved<std.phases.Arg> = { configure };
+
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
-	let additionalArgs = [];
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	let targetEnvironment = std.triple.environment(target);
 	if (targetEnvironment === "musl") {
-		additionalArgs.push("--disable-libsanitizer");
+		configure.body.args.push("--disable-libsanitizer");
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
 	let hostEnvironment = std.triple.environment(host);
 	if (hostEnvironment === "gnu") {
-		additionalArgs.push("--enable-__cxa_atexit");
+		configure.body.args.push("--enable-__cxa_atexit");
 	}
 
-	let sourceDir = source_ ?? source();
+	let sourceDir = source_ ?? source(bundledSources);
 
 	if (variant === "stage1_bootstrap") {
-		// Set args.
-		let stage1BootstrapArgs = [
+		configure.body.args = configure.body.args.concat([
 			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
@@ -110,49 +166,65 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-languages=c,c++",
 			"--with-newlib",
 			"--without-headers",
-		];
+		]);
 		if (hostEnvironment === "gnu") {
-			stage1BootstrapArgs.push(`--with-glibc-version=${defaultGlibcVersion}`);
+			configure.body.args.push(`--with-glibc-version=${defaultGlibcVersion}`);
 		}
-		additionalArgs.push(...stage1BootstrapArgs);
+		phases.install = {
+			post: tg`cat ${sourceDir}/gcc/limitx.h ${sourceDir}/gcc/glimits.h ${sourceDir}/gcc/limity.h > $(dirname $($OUTPUT/bin/${target}-gcc -print-libgcc-file-name))/include/limits.h`,
+		};
+	}
+
+	if (variant === "stage1_libstdc++") {
+		tg.assert(
+			arg.populatePrefix,
+			"populatePrefix is required for stage1_libstdc++. Provide the result of stage1_bootstrap.",
+		);
+
+		configure.body.command = tg`${sourceDir}/libstdc++-v3/configure`;
+
+		configure.body.args = [
+			`--build=${build}`,
+			`--host=${host}`,
+			`--disable-multilib`,
+			"--disable-nls",
+			"--disable-libstdcxx-pch",
+			tg`--with-gxx-include-dir=$OUTPUT/${target}/include/c++/${metadata.version}`,
+		];
+
+		phases.install = {
+			post: "rm -v $OUTPUT/lib64/lib{stdc++{,exp,fs},supc++}.la",
+		};
+
+		env.push({
+			CC: `${host}-gcc`,
+			CXX: `${host}-g++`,
+		});
 	}
 
 	if (variant === "stage1_limited") {
-		let stage1LimitedArgs = [
-			"--disable-bootstrap",
+		configure.body.args = configure.body.args.concat([
 			"--disable-libatomic",
 			"--disable-libgomp",
+			"--disable-libquadmath",
+			"--disable-libssp",
 			"--disable-libvtv",
-			"--disable-werror",
-			"--enable-default-ssp",
 			"--enable-default-pie",
+			"--enable-default-ssp",
 			"--enable-initfini-array",
-		];
-		if (targetEnvironment === "musl") {
-			stage1LimitedArgs.push("--disable-lto");
-		}
-		additionalArgs.push(...stage1LimitedArgs);
+			tg`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
+			tg`--with-build-sysroot=${sysroot}/${target}`,
+		]);
 	}
 
 	if (variant === "stage2_full") {
-		let stage2FullArgs = [
+		configure.body.args = configure.body.args.concat([
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
-		];
-		if (targetEnvironment === "musl") {
-			stage2FullArgs.push("--disable-lto");
-		} else {
-			stage2FullArgs.push("--with-build-config=bootstrap-lto");
-		}
-		additionalArgs.push(...stage2FullArgs);
+		]);
+		configure.body.args.push("--with-build-config=bootstrap-lto");
 	}
-
-	let configure = {
-		args: [...commonArgs, ...additionalArgs],
-	};
-
-	let phases = { configure };
 
 	let result = await std.autotools.build(
 		{
@@ -161,6 +233,7 @@ export let build = tg.target(async (arg: Arg) => {
 			defaultCrossEnv: false,
 			env: std.env.arg(env),
 			fullRelro: false,
+			prefixPath,
 			phases,
 			opt: "3",
 			sdk,
@@ -172,88 +245,21 @@ export let build = tg.target(async (arg: Arg) => {
 	result = await mergeLibDirs(result);
 
 	// Add cc symlinks.
-	result = await tg.directory(result, {
-		[`bin/${targetPrefix}cc`]: tg.symlink(`./${targetPrefix}gcc`),
-	});
-	if (!isCross) {
+	if (variant !== "stage1_libstdc++") {
 		result = await tg.directory(result, {
-			[`bin/${host}-cc`]: tg.symlink(`./${host}-gcc`),
+			[`bin/${targetPrefix}cc`]: tg.symlink(`./${targetPrefix}gcc`),
 		});
+		if (!isCross) {
+			result = await tg.directory(result, {
+				[`bin/${host}-cc`]: tg.symlink(`./${host}-gcc`),
+			});
+		}
 	}
 
 	return result;
 });
 
 export default build;
-
-export let gccSource = tg.target(async () => {
-	let { name, version } = metadata;
-	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
-	let checksum =
-		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
-	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${packageArchive}`;
-	return await std
-		.download({ checksum, url })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-});
-
-export let gmpSource = tg.target(async () => {
-	let name = "gmp";
-	let version = "6.2.1";
-	let checksum =
-		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
-	return std.download.fromGnu({
-		name,
-		version,
-		compressionFormat: "xz",
-		checksum,
-	});
-});
-
-export let islSource = tg.target(async () => {
-	let name = "isl";
-	let version = "0.24";
-	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
-	let checksum =
-		"sha256:043105cc544f416b48736fff8caf077fb0663a717d06b1113f16e391ac99ebad";
-	let url = `https://libisl.sourceforge.io/${packageArchive}`;
-	return await std
-		.download({ checksum, url })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-});
-
-export let mpcSource = tg.target(() => {
-	let name = "mpc";
-	let version = "1.2.1";
-	let checksum =
-		"sha256:17503d2c395dfcf106b622dc142683c1199431d095367c6aacba6eec30340459";
-	return std.download.fromGnu({ checksum, name, version });
-});
-
-export let mpfrSource = tg.target(async () => {
-	let name = "mpfr";
-	let version = "4.1.0";
-	let checksum =
-		"sha256:feced2d430dd5a97805fa289fed3fc8ff2b094c02d05287fd6133e7f1f0ec926";
-	return std.download.fromGnu({
-		checksum,
-		name,
-		version,
-		compressionFormat: "bz2",
-	});
-});
 
 export let libPath = "lib";
 

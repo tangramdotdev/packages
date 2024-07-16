@@ -1,19 +1,20 @@
 import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
-	name: "bison",
-	version: "3.8.2",
+	homepage: "https://www.mpfr.org",
+	name: "mpfr",
+	version: "4.2.1",
 };
 
-export let source = tg.target(() => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2";
+		"sha256:277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2";
 	return std.download.fromGnu({
+		checksum,
 		name,
 		version,
 		compressionFormat: "xz",
-		checksum,
 	});
 });
 
@@ -28,23 +29,26 @@ export type Arg = {
 export let build = tg.target(async (arg?: Arg) => {
 	let { build, env, host, sdk, source: source_ } = arg ?? {};
 
-	let configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-nls",
-			"--disable-rpath",
-			"--enable-relocatable",
-		],
+	let configure: tg.Unresolved<std.phases.CommandArgObject> = {
+		args: ["--disable-dependency-tracking"],
 	};
 
-	let output = std.utils.buildUtil({
+	let output = await std.utils.buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
 		sdk,
 		source: source_ ?? source(),
-		wrapBashScriptPaths: ["bin/yacc"],
 	});
+
+	// Remove all libtool archives.
+	for await (let [path, _artifact] of output.walk()) {
+		if (path.toString().endsWith(".la")) {
+			output = await tg.directory(output, {
+				[`${path}`]: undefined,
+			});
+		}
+	}
 
 	return output;
 });
@@ -54,12 +58,6 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export let test = tg.target(async () => {
 	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["bison"],
-		metadata,
-		sdk: sdkArg,
-	});
-	return true;
+	let sdk = await bootstrap.sdk.arg(host);
+	return await build({ host, sdk });
 });

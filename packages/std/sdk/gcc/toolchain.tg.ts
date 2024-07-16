@@ -28,7 +28,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	}
 
 	// Set up build environment tools.
-	let bootstrapBuildTools = await buildToolsForHost({ host });
+	let bootstrapBuildTools = await dependencies.env({ host });
 
 	// Always build a native toolchain.
 	let nativeToolchain = await canadianCross({ host, env: bootstrapBuildTools });
@@ -54,7 +54,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	);
 
 	// Create a new set of build tools against the new native toolchain.
-	let nativeBuildTools = await buildToolsForHost({
+	let nativeBuildTools = await dependencies.env({
 		host,
 		buildToolchain: proxiedNativeToolchain,
 	});
@@ -71,52 +71,6 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 
 	return env;
 });
-
-export type BuildToolsArg = {
-	host?: string;
-	// If not provided, falls back to the bootstrap tools.
-	buildToolchain?: std.env.Arg;
-};
-
-export let buildToolsForHost = async (arg?: BuildToolsArg) => {
-	let { host: host_, buildToolchain } = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	if (buildToolchain === undefined) {
-		host = await bootstrap.toolchainTriple(host);
-		buildToolchain = await bootstrap.sdk(host);
-	}
-	let utils = std.utils.env({ host, sdk: false, env: buildToolchain });
-	// This env is used to build the remaining dependencies only. It includes the bootstrap SDK.
-	let utilsEnv = std.env.arg(utils, buildToolchain);
-
-	// Some dependencies depend on previous builds, so they are manually ordered here.
-	let m4 = dependencies.m4.build({ host, sdk: false, env: utilsEnv });
-	let zlib = dependencies.zlib.build({ host, sdk: false, env: utilsEnv });
-	let zstd = dependencies.zstd.build({ host, sdk: false, env: utilsEnv });
-	utilsEnv = std.env.arg(utilsEnv, m4);
-	let bison = dependencies.bison.build({ host, sdk: false, env: utilsEnv });
-	utilsEnv = std.env.arg(utilsEnv, bison);
-	let perl = dependencies.perl.build({ host, sdk: false, env: utilsEnv });
-	utilsEnv = std.env.arg(utilsEnv, perl);
-	let libxcrypt = dependencies.libxcrypt.build({
-		host,
-		sdk: false,
-		env: utilsEnv,
-	});
-	utilsEnv = std.env.arg(utilsEnv, libxcrypt);
-	let python = dependencies.python.build({ host, sdk: false, env: utilsEnv });
-	// This env contains the standard utils and additional tools, but NO SDK, so each build step can swap the compiler out accordingly.
-	return await std.env.arg(
-		utils,
-		m4,
-		bison,
-		perl,
-		libxcrypt,
-		python,
-		zlib,
-		zstd,
-	);
-};
 
 type CanadianCrossArg = {
 	host?: string;
@@ -149,7 +103,7 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	let combinedProxiedEnv = std.env.arg(combinedUnproxiedEnv, crossProxyEnv);
 
 	// Create a native toolchain (host to host).
-	let nativeHostBinutils = await binutils({
+	let nativeBinutils = await binutils({
 		env: combinedProxiedEnv,
 		sdk: false,
 		build,
@@ -158,10 +112,11 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	});
 
 	// Build a fully native GCC toolchain.
-	let fullGCC = await gcc.build({
+	let nativeGcc = await gcc.build({
 		build,
-		env: std.env.arg(combinedUnproxiedEnv, nativeHostBinutils),
+		env: combinedUnproxiedEnv,
 		host,
+		populatePrefix: nativeBinutils,
 		sysroot,
 		sdk: false,
 		target,
@@ -172,7 +127,7 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	let innerSysroot = sysroot.get(target).then(tg.Directory.expect);
 
 	// Add the native binutils to the combined directory.
-	let combined = tg.directory(fullGCC, innerSysroot, nativeHostBinutils);
+	let combined = tg.directory(nativeGcc, innerSysroot);
 
 	return combined;
 });
@@ -199,7 +154,6 @@ export type CrossToolchainArg = {
 	host?: string;
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
-	sysroot?: tg.Directory;
 	target: string;
 	variant?: gcc.Variant;
 };
@@ -210,7 +164,6 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		env: env_,
 		host: host_,
 		sdk,
-		sysroot: sysroot_,
 		target: target_,
 		variant = "stage2_full",
 	} = arg ?? {};
@@ -220,47 +173,37 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let target = target_ ?? host;
 
 	// Produce the binutils for building the cross-toolchain.
-	let [buildBinutils, crossBinutils] = await Promise.all([
-		binutils({
-			build: buildTriple,
-			env: env_,
-			host: buildTriple,
-			sdk,
-			target: buildTriple,
-		}),
-		binutils({
-			build: buildTriple,
-			env: env_,
-			host,
-			sdk,
-			target,
-		}),
-	]);
+	let crossBinutils = binutils({
+		build: buildTriple,
+		env: env_,
+		host,
+		sdk,
+		target,
+	});
 
-	let binutilsEnv = std.env.arg(env_, buildBinutils, crossBinutils);
+	let binutilsEnv = std.env.arg(env_, crossBinutils);
 
-	let sysroot =
-		sysroot_ ??
-		(await buildSysroot({
-			build: buildTriple,
-			crossBinutils,
-			env: binutilsEnv,
-			host: target,
-			sdk,
-		}));
+	let sysroot = await buildSysroot({
+		build: buildTriple,
+		crossBinutils,
+		env: binutilsEnv,
+		host: target,
+		sdk,
+	});
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
-	let crossGCC = await gcc.build({
+	let crossGcc = await gcc.build({
 		build: buildTriple,
-		env: binutilsEnv,
+		env: env_,
 		host,
+		populatePrefix: crossBinutils,
 		sdk,
 		sysroot,
 		target,
 		variant,
 	});
 
-	let combined = await tg.directory(crossGCC, sysroot, crossBinutils);
+	let combined = await tg.directory(crossGcc, sysroot);
 
 	return {
 		env: combined,
@@ -307,25 +250,23 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	});
 
 	// Produce the initial gcc required to build the standard C library.
-	let bootstrapGCC = await gcc.build({
+	let initialGccDir = await gcc.build({
 		build: buildTriple,
 		env,
 		host: buildTriple,
+		populatePrefix: crossBinutils,
 		sdk,
 		sysroot: linuxHeadersSysroot,
 		target,
 		variant: "stage1_bootstrap",
 	});
 
-	// Combine the compiler with the cross binutils.
-	let combined = await tg.directory(bootstrapGCC, crossBinutils);
-
 	// Produce a combined directory containing the correct C library for the host and the Linux headers.
 	let sysroot = await constructSysroot({
 		build: buildTriple,
 		host,
 		linuxHeaders,
-		env: await std.env.arg(env, combined),
+		env: await std.env.arg(env, initialGccDir),
 		sdk: false,
 	});
 	return sysroot;
