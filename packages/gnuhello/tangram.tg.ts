@@ -2,7 +2,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/hello/",
+	license: "GPL-3.0-or-later",
 	name: "hello",
+	repository: "https://git.savannah.gnu.org/cgit/hello.git",
 	version: "2.12.1",
 };
 

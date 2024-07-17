@@ -2,14 +2,16 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://gmplib.org",
+	license: "LGPL-3.0-or-later",
 	name: "gmp",
-	version: "6.2.1",
+	version: "6.3.0",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
+		"sha256:a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898";
 	let extension = ".tar.xz";
 	let packageArchive = std.download.packageArchive({
 		extension,

@@ -2,7 +2,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/grep/",
+	license: "GPL-2.0-or-later",
 	name: "grep",
+	repository: "https://git.savannah.gnu.org/cgit/grep.git",
 	version: "3.7",
 };
 

@@ -2,7 +2,10 @@ import * as go from "tg:go" with { path: "../go" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://junegunn.github.io/fzf/",
+	license: "MIT",
 	name: "fzf",
+	repository: "https://github.com/junegunn/fzf",
 	version: "0.50.0",
 };
 

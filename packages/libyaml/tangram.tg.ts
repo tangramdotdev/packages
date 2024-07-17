@@ -2,7 +2,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://pyyaml.org/wiki/LibYAML",
+	license: "MIT",
 	name: "libyaml",
+	repository: "https://github.com/yaml/libyaml",
 	version: "0.2.5",
 };
 

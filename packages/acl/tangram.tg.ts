@@ -2,23 +2,23 @@ import * as attr from "tg:attr" with { path: "../attr" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://savannah.nongnu.org/projects/acl",
+	license: "GPL-2.0-or-later",
 	name: "acl",
+	repository: "https://git.savannah.nongnu.org/cgit/acl.git",
 	version: "2.3.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:5f2bdbad629707aa7d85c623f994aa8a1d2dec55a73de5205bac0bf6058a2f7c";
-	let extension = ".tar.gz" as const;
-	let packageName = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
-	let url = `http://download.savannah.gnu.org/releases/${name}/${packageName}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(outer);
+		"sha256:97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd";
+	let base = `https://download.savannah.gnu.org/releases/${name}`;
+	let extension = ".tar.xz";
+	return std
+		.download({ base, checksum, extension, name, version })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export type Arg = {

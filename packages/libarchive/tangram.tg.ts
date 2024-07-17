@@ -7,7 +7,11 @@ import * as xz from "tg:xz" with { path: "../xz" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
+	homepage: "https://libarchive.org",
+	license:
+		"https://raw.githubusercontent.com/libarchive/libarchive/master/COPYING",
 	name: "libarchive",
+	repository: "https://github.com/libarchive/libarchive",
 	version: "3.7.2",
 };
 
@@ -16,16 +20,12 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:04357661e6717b6941682cde02ad741ae4819c67a260593dfb2431861b251acb";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
-	let url = `https://www.libarchive.org/downloads/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(download);
+	let base = `https://www.libarchive.org/downloads`;
+	return std
+		.download({ base, checksum, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
-
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
@@ -58,8 +58,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
 
 	let configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath", "--with-pic"],

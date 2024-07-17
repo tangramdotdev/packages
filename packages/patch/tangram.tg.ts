@@ -2,7 +2,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://savannah.gnu.org/projects/patch/",
+	license: "GPL-3.0-or-later",
 	name: "patch",
+	repository: "https://git.savannah.gnu.org/cgit/patch.git",
 	version: "2.7.6",
 };
 

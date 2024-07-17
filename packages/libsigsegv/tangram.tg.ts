@@ -2,7 +2,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/libsigsegv/",
+	license: "GPL-2.0-or-later",
 	name: "libsigsegv",
+	repository: "https://git.savannah.gnu.org/gitweb/?p=libsigsegv.git",
 	version: "2.14",
 };
 

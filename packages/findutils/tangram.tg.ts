@@ -2,7 +2,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/findutils/",
 	name: "findutils",
+	license: "GPL-3.0-or-later",
+	repository: "https://git.savannah.gnu.org/cgit/findutils.git",
 	version: "4.9.0",
 };
 

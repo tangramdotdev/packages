@@ -2,7 +2,10 @@ import * as go from "tg:go" with { path: "../go" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://cli.github.com",
+	license: "MIT",
 	name: "gh",
+	repository: "https://github.com/cli/cli",
 	version: "2.40.1",
 };
 

@@ -5,7 +5,10 @@ import { $ } from "tg:std" with { path: "../std" };
 import packageLock from "./package-lock.json" with { type: "file" };
 
 export let metadata = {
+	homepage: "https://code.visualstudio.com",
+	license: "MIT",
 	name: "vsce",
+	repository: "https://github.com/microsoft/vscode-vsce",
 	version: "2.15.0",
 };
 

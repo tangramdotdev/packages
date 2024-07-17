@@ -5,7 +5,10 @@ import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
+	homepage: "https://www.gnutls.org",
+	license: "LGPL-2.1-or-later",
 	name: "gnutls",
+	repository: "https://gitlab.com/gnutls/gnutls",
 	version: "3.7.10",
 };
 
@@ -14,14 +17,11 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:b6e4e8bac3a950a3a1b7bdb0904979d4ab420a81e74de8636dd50b467d36f5a9";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
-	let url = `https://www.gnupg.org/ftp/gcrypt/${name}/v3.7/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(download);
+	let base = `https://www.gnupg.org/ftp/gcrypt/${name}/v3.7`;
+	return std
+		.download({ base, checksum, name, extension, version })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export type Arg = {

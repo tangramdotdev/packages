@@ -1,7 +1,10 @@
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/m4/",
+	license: "GPL-3.0-or-later",
 	name: "m4",
+	repository: "https://git.savannah.gnu.org/cgit/m4.git",
 	version: "1.4.19",
 };
 

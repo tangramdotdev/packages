@@ -7,7 +7,10 @@ import * as xz from "tg:xz" with { path: "../xz" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
+	homepage: "https://sourceware.org/elfutils/",
+	license: "GPL-3.0-or-later",
 	name: "elfutils",
+	repository: "https://sourceware.org/git/?p=elfutils.git;a=summary",
 	version: "0.191",
 };
 

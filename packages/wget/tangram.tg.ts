@@ -7,7 +7,10 @@ import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/wget/",
+	license: "GPL-3.0-or-later",
 	name: "wget",
+	repository: "https://gitlab.com/gnuwget/wget2",
 	version: "1.21.4",
 };
 

@@ -3,7 +3,10 @@ import * as perl from "tg:perl" with { path: "../perl" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
+	license: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/License",
 	name: "libcap",
+	repository: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
 	version: "2.24",
 };
 
@@ -65,7 +68,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let phases = { configure: tg.Mutation.unset(), install };
 
 	let attrArtifact = await attr.build({ build, env: env_, host, sdk }, attrArg);
-	let dependencies = [attrArtifact, perl.build({ build, env: env_, host, sdk }, perlArg)];
+	let dependencies = [
+		attrArtifact,
+		perl.build({ build, env: env_, host, sdk }, perlArg),
+	];
 	let env = std.env.arg(
 		...dependencies,
 		{

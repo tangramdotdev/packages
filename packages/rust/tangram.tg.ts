@@ -7,7 +7,10 @@ import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
 
 export let metadata = {
+	homepage: "https://www.rust-lang.org",
+	license: "MIT",
 	name: "rust",
+	repository: "https://github.com/rust-lang/rust",
 	version: "0.0.0",
 };
 

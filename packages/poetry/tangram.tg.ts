@@ -6,7 +6,10 @@ import * as lockfile from "./lockfile.tg.ts";
 import requirements from "./requirements.txt" with { type: "file" };
 
 export let metadata = {
+	homepage: "https://python-poetry.org",
+	license: "MIT",
 	name: "poetry",
+	repository: "https://github.com/python-poetry/poetry",
 	version: "1.7.1",
 };
 

@@ -3,7 +3,10 @@ import * as std from "tg:std" with { path = "../std" };
 import poetryLock from "./poetry.lock" with { type: "file" };
 
 export let metadata = {
+	homepage: "https://pypi.org/project/docformatter/",
 	name: "docformatter",
+	license: "MIT",
+	repository: "https://github.com/PyCQA/docformatter",
 	version: "1.7.2",
 };
 

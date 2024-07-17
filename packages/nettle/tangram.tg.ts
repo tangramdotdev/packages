@@ -3,7 +3,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.lysator.liu.se/~nisse/nettle/",
+	license: "LGPL-3.0-or-later",
 	name: "nettle",
+	repository: "https://git.lysator.liu.se/nettle/nettle",
 	version: "3.8.1",
 };
 

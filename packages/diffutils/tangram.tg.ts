@@ -2,7 +2,10 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/diffutils/",
+	license: "GPL-3.0-or-later",
 	name: "diffutils",
+	repository: "https://git.savannah.gnu.org/cgit/diffutils.git",
 	version: "3.8",
 };
 

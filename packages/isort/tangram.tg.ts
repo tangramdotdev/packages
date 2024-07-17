@@ -2,7 +2,10 @@ import * as poetry from "tg:poetry" with { path: "../poetry" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://pycqa.github.io/isort/",
+	license: "MIT",
 	name: "isort",
+	repository: "https://github.com/PyCQA/isort",
 	version: "5.13.2",
 };
 

@@ -5,7 +5,10 @@ import { $ } from "tg:std" with { path: "../std" };
 import packageLock from "./package-lock.json" with { type: "file" };
 
 export let metadata = {
+	homepage: "https://github.com/http-party/http-server",
+	license: "MIT",
 	name: "http-server",
+	repository: "https://github.com/http-party/http-server",
 	version: "14.1.1",
 };
 

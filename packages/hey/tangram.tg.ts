@@ -2,7 +2,10 @@ import * as go from "tg:go" with { path: "../go" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
+	homepage: "https://github.com/rakyll/hey",
+	license: "Apache-2.0",
 	name: "hey",
+	repository: "https://github.com/rakyll/hey",
 	version: "0.1.4",
 };
 

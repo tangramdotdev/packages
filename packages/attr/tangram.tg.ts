@@ -1,30 +1,26 @@
 import * as std from "tg:std" with { path: "../std" };
 
-import basenamePatch from "./basename.patch" with { type: "file" };
+import patches from "./patches" with { type: "directory" };
 
 export let metadata = {
+	homepage: "https://savannah.nongnu.org/projects/attr",
+	license: "GPL-2.0-or-later",
 	name: "attr",
+	repository: "https://git.savannah.nongnu.org/cgit/attr.git",
 	version: "2.5.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
 	let checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
-	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
-	let source = await std
-		.download({ checksum, url })
+	let base = `https://mirrors.sarata.com/non-gnu/${name}`;
+	let extension = ".tar.xz";
+	return std
+		.download({ checksum, name, base, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-
-	source = await std.patch(source, basenamePatch);
-	return source;
+		.then(std.directory.unwrap)
+		.then((source) => std.patch(source, patches));
 });
 
 export type Arg = {

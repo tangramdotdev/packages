@@ -1,12 +1,10 @@
-export type Arg = {
-	/** The expected checksum of the downloaded file. */
+export type Arg = (download.BuildUrlArg | { url: string }) & {
+	/** The expected checksum of the downloaded file. Use "unsafe" to allow network access without verifying the result. */
 	checksum: tg.Checksum;
 	/** The format of the file to unpack. If `true`, will infer from the URL. Default: `true`. */
 	decompress?: boolean | tg.Blob.CompressionFormat | undefined;
 	/** The format of the archive file to unpack. If `true`, will infer from the URL. Default: `true`. */
 	extract?: boolean | tg.Artifact.ArchiveFormat | undefined;
-	/** The URL to download. */
-	url: string;
 };
 
 /** Wrapper around tg.download that can optionally decompress and unpack tarballs. */
@@ -15,8 +13,9 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 		checksum,
 		decompress: decompress_ = true,
 		extract: extract_ = true,
-		url,
+		...rest
 	} = arg;
+	let url = "url" in rest ? rest.url : download.buildUrl(rest);
 
 	// Perform the download.
 	let blob = await tg.download(url, checksum);
@@ -58,11 +57,11 @@ export default download;
 export namespace download {
 	export type fromGitHubArg = GithubSource & {
 		archiveFormat?: tg.Artifact.ArchiveFormat | undefined;
+		checksum: tg.Checksum;
 		compressionFormat?: tg.Blob.CompressionFormat | undefined;
 		owner: string;
 		repo: string;
 		tag: string;
-		checksum: tg.Checksum;
 	};
 
 	type GithubSource = GithubRelease | GithubTag;
@@ -174,29 +173,42 @@ export namespace download {
 		}
 	};
 
+	export type BuildUrlArg = (PackageArchiveArg | { packageArchive: string }) & {
+		base: string;
+	};
+
+	/** Build a URL from one of three forms, combining a packageArchive with a base URL:
+	 *
+	 * 1. `${base}/${name}(-${version})?${extension}`
+	 * 2. `${base}/${packageName}${extension}`
+	 * 3. `${base}/${packageArchive}`
+	 */
+	export let buildUrl = (arg: BuildUrlArg): string => {
+		let { base, ...rest } = arg;
+		let archive =
+			"packageArchive" in rest ? rest.packageArchive : packageArchive(rest);
+		return `${base}/${archive}`;
+	};
+
+	export type PackageArchiveArg = (PackageNameArg | { packageName: string }) & {
+		extension: string;
+	};
+
+	/** Combine a packageName with an extension. */
+	export let packageArchive = (arg: PackageArchiveArg) => {
+		let { extension, ...rest } = arg;
+		let pkgName = "packageName" in rest ? rest.packageName : packageName(rest);
+		return `${pkgName}${extension}`;
+	};
+
 	export type PackageNameArg = {
 		name: string;
 		version?: string;
 	};
 
-	/** Get the package name for a name and version. */
-	export let packageName = (arg: PackageNameArg) => {
-		let { name, version } = arg;
-		let versionSuffix = version ? `-${version}` : "";
-		return `${name}${versionSuffix}`;
-	};
-
-	export type PackageArchiveArg = {
-		name: string;
-		extension: string;
-		version: string;
-	};
-
-	/** Get the archive name for a name, version, and optional format. */
-	export let packageArchive = (arg: PackageArchiveArg) => {
-		let pkgName = packageName(arg);
-		return `${pkgName}${arg.extension}`;
-	};
+	/** Get the package name string for a name and optional version. */
+	export let packageName = (arg: PackageNameArg) =>
+		`${arg.name}${arg.version ? `-${arg.version}` : ""}`;
 
 	/** Determine the archive formats from the file extension of the url. */
 	export let inferFormats = (
@@ -205,29 +217,30 @@ export namespace download {
 		decompress?: tg.Blob.CompressionFormat;
 		extract?: tg.Artifact.ArchiveFormat;
 	} => {
-		let decompress = undefined;
-		let extract = undefined;
+		let decompress: tg.Blob.CompressionFormat | undefined = undefined;
+		let extract: tg.Artifact.ArchiveFormat | undefined = undefined;
 
 		let split = url.split(".");
 		let last = split.pop();
 		switch (last) {
 			case "tar":
 			case "zip":
-				extract = last as tg.Artifact.ArchiveFormat;
+				extract = last;
 				break;
 			case "tgz":
-				extract = "tar" as tg.Artifact.ArchiveFormat;
-				decompress = "gz" as tg.Blob.CompressionFormat;
+				extract = "tar";
+				decompress = "gz";
 				break;
 			case "bz2":
 			case "gz":
 			case "xz":
 			case "zst":
 			case "zstd":
-				decompress = last as tg.Blob.CompressionFormat;
+				// Coerce `"zstd"` to `"zst"`.
+				decompress = last === "zstd" ? "zst" : last;
 				let prev = split.pop();
 				if (prev === "tar") {
-					extract = prev as tg.Artifact.ArchiveFormat;
+					extract = prev;
 				}
 				break;
 			default:

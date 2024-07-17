@@ -5,7 +5,10 @@ import requirements from "./requirements.txt" with { type: "file" };
 import pyprojectToml from "./pyproject.toml" with { type: "file" };
 
 export let metadata = {
+	homepage: "https://httpie.io",
+	license: "BSD-3-Clause",
 	name: "httpie",
+	repository: "https://github.com/httpie/cli",
 	version: "3.2.2",
 };
 
