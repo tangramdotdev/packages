@@ -204,6 +204,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage1_limited") {
 		configure.body.args = configure.body.args.concat([
+			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libquadmath",
