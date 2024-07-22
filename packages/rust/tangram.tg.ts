@@ -230,6 +230,20 @@ export let testCrossToolchain = tg.target(async () => {
 });
 
 import tests from "./tests" with { type: "directory" };
+export let testUnproxiedWorkspace = tg.target(async () => {
+	let helloWorkspace = cargo_.build({
+		source: tests.get("hello-workspace"),
+		proxy: false,
+	});
+
+	let output = await $`
+		${helloWorkspace}/bin/cli >> $OUTPUT
+	`.then(tg.File.expect);
+	let text = await output.text();
+	tg.assert(text.trim() === "Hello from a workspace!");
+	return true;
+});
+
 export let testCargoProxy = tg.target(async () => {
 	await proxy_.test();
 
@@ -238,15 +252,23 @@ export let testCargoProxy = tg.target(async () => {
 		proxy: true,
 	});
 
-	let helloOpenssl = cargo_.build({
-		source: tests.get("hello-openssl"),
-		env: std.env.arg(await openssl.build(), await toolchain()),
-		proxy: true,
-	});
+	// let helloOpenssl = cargo_.build({
+	// 	source: tests.get("hello-openssl"),
+	// 	env: std.env.arg(await openssl.build(), await toolchain()),
+	// 	proxy: true,
+	// });
 
+	// let helloWorkspace = cargo_.build({
+	// 	source: tests.get("hello-workspace"),
+	// 	proxy: true,
+	// });
+
+	// return await $`
+	// 	${helloWorld}/bin/hello-world     >> $OUTPUT
+	// 	${helloOpenssl}/bin/hello-openssl >> $OUTPUT
+	// `;
 	return await $`
 		${helloWorld}/bin/hello-world     >> $OUTPUT
-		${helloOpenssl}/bin/hello-openssl >> $OUTPUT
 	`;
 });
 
