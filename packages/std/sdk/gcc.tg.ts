@@ -21,16 +21,11 @@ export let source = tg.target((bundledSources?: boolean) => {
 
 	// Download and unpack the GCC source.
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
 	let checksum =
 		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
-	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${packageArchive}`;
+	let base = `https://ftp.gnu.org/gnu/${name}/${name}-${version}`;
 	let sourceDir = std
-		.download({ checksum, url })
+		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 
@@ -94,10 +89,10 @@ export let build = tg.target(async (arg: Arg) => {
 	let targetPrefix = isCross ? `${target}-` : "";
 
 	let configure: tg.Unresolved<std.phases.PhaseArgObject> = {
-		// pre: await tg`mkdir -p $OUTPUT && cp -R ${sysrootDir}/* $OUTPUT && chmod -R u+w $OUTPUT`,
 		pre: "mkdir -p $OUTPUT",
 		body: {
 			args: [
+				"--disable-bootstrap",
 				"--disable-dependency-tracking",
 				"--disable-nls",
 				"--disable-multilib",
@@ -152,7 +147,6 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage1_bootstrap") {
 		configure.body.args = configure.body.args.concat([
-			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libquadmath",
@@ -204,7 +198,6 @@ export let build = tg.target(async (arg: Arg) => {
 
 	if (variant === "stage1_limited") {
 		configure.body.args = configure.body.args.concat([
-			"--disable-bootstrap",
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libquadmath",

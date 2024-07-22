@@ -1,6 +1,6 @@
 import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
 import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as rust from "tg:rust" with { path: "../rust" };
+import { cargo } from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -28,13 +28,13 @@ export let source = tg.target(async () => {
 
 export type Arg = {
 	build?: string;
+	cargo?: cargo.Arg;
 	dependencies?: {
 		pcre2?: pcre2.Arg;
 		pkgconfig?: pkgconfig.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
-	rust?: rust.Arg;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
@@ -42,10 +42,10 @@ export type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build: build_,
+		cargo: cargoArg = {},
 		dependencies: { pcre2: pcre2Arg = {}, pkgconfig: pkgconfigArg = {} } = {},
 		env: env_,
 		host: host_,
-		rust: rustArg = {},
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
@@ -59,7 +59,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		env_,
 	);
 
-	return rust.build(
+	return cargo.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -67,7 +67,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			sdk,
 			source: source_ ?? source(),
 		},
-		rustArg,
+		cargoArg,
 	);
 });
 
@@ -83,5 +83,13 @@ export let test = tg.target(async () => {
 });
 
 export let cross = tg.target(async () => {
-	return await build({ host: "aarch64-unknown-linux-gnu" });
+	// TODO - assert the outputs. Make sure the linux-musl ones produce a static binary.
+	return tg.directory({
+		"aarch64-unknown-linux-gnu": build({ host: "aarch64-unknown-linux-gnu" }),
+		"aarch64-unknown-linux-musl": build({ host: "aarch64-unknown-linux-musl" }),
+		"x86_64-unknown-linux-gnu": build({ host: "x86_64-unknown-linux-gnu" }),
+		"x86_64-unknown-linux-musl": build({ host: "x86_64-unknown-linux-musl" }),
+		"aarch64-apple-darwin": build({ host: "aarch64-apple-darwin" }),
+		"x86_64-apple-darwin": build({ host: "x86_64-apple-darwin" }),
+	});
 });

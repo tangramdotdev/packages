@@ -1,4 +1,4 @@
-import * as rust from "tg:rust" with { path: "../rust" };
+import { cargo } from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -27,8 +27,8 @@ export let source = tg.target(async () => {
 
 type Arg = {
 	build?: string;
+	cargo?: cargo.Arg;
 	env?: std.env.Arg;
-	rust?: rust.Arg;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	host?: string;
@@ -37,21 +37,21 @@ type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build,
+		cargo: cargoArgs = {},
 		env,
 		host,
-		rust: rustArgs = {},
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	return rust.build(
+	return cargo.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
 			sdk,
 			source: source_ ?? source(),
 		},
-		rustArgs,
+		cargoArgs,
 	);
 });
 

@@ -1,5 +1,6 @@
+import pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import openssl from "tg:openssl" with { path: "../openssl" };
-import * as rust from "tg:rust" with { path: "../rust" };
+import { cargo } from "tg:rust" with { path: "../rust" };
 import * as std from "tg:std" with { path: "../std" };
 
 export let metadata = {
@@ -28,10 +29,10 @@ export let source = tg.target(async () => {
 
 export type Arg = {
 	build?: string;
+	cargo?: cargo.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	nativeTls?: boolean;
-	rust?: rust.Arg;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
@@ -39,10 +40,10 @@ export type Arg = {
 export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		build: build_,
+		cargo: cargoArg = {},
 		env: env_,
 		host: host_,
 		nativeTls = true,
-		rust: rustArg = {},
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
@@ -58,11 +59,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		disableDefaultFeatures = true;
 		features.push("native-tls");
 		if (std.triple.os(host) === "linux") {
-			env.push(openssl({ host }));
+			env.push(pkgconfig({ build, host: build }), openssl({ build, host }));
 		}
 	}
 
-	return rust.build(
+	return cargo.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			disableDefaultFeatures,
@@ -71,7 +72,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			sdk,
 			source: source_ ?? source(),
 		},
-		rustArg,
+		cargoArg,
 	);
 });
 

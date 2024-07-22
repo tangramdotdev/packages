@@ -1,6 +1,6 @@
 import { $ } from "tg:std" with { path: "../std" };
 
-import { build, toolchain } from "./tangram.tg.ts";
+import { cargo, toolchain } from "./tangram.tg.ts";
 
 import cargoToml from "./Cargo.toml" with { type: "file" };
 import cargoLock from "./Cargo.lock" with { type: "file" };
@@ -15,7 +15,7 @@ export let source = tg.target(async () => {
 });
 
 export let proxy = tg.target(async () => {
-	return build({
+	return cargo.build({
 		source: source(),
 		proxy: false,
 		useCargoVendor: true,

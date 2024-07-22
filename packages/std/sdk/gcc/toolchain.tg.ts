@@ -114,6 +114,7 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	// Build a fully native GCC toolchain.
 	let nativeGcc = await gcc.build({
 		build,
+		bundledSources: true, // rebuild the host libraries.
 		env: combinedUnproxiedEnv,
 		host,
 		populatePrefix: nativeBinutils,
