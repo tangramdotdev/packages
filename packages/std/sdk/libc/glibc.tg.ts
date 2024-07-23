@@ -2,8 +2,8 @@ import * as std from "../../tangram.tg.ts";
 import * as kernelHeaders from "../kernel_headers.tg.ts";
 
 // Define supported versions.
-type GlibcVersion = "2.37" | "2.38" | "2.39";
-export let defaultGlibcVersion: GlibcVersion = "2.39";
+type GlibcVersion = "2.37" | "2.38" | "2.39" | "2.40";
+export let defaultGlibcVersion: GlibcVersion = "2.40";
 
 export let metadata = {
 	name: "glibc",
@@ -59,7 +59,7 @@ export default tg.target(async (arg: Arg) => {
 		additionalFlags.push("--enable-crypt");
 	}
 
-	if (version === "2.38" || version === "2.39") {
+	if (version === "2.38" || version === "2.39" || version === "2.40") {
 		// This flag is not available in previous versions. The `-DFORTIFY_SOURCE` macro was already available to users of glibc. This flag additionally uses this macro to build libc itself. It's used to detect buffer overflows at compile time.
 		additionalFlags.push("--enable-fortify-source");
 	}
@@ -175,5 +175,9 @@ let checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 	[
 		"2.39",
 		"sha256:f77bd47cf8170c57365ae7bf86696c118adb3b120d3259c64c502d3dc1e2d926",
+	],
+	[
+		"2.40",
+		"sha256:19a890175e9263d748f627993de6f4b1af9cd21e03f080e4bfb3a1fac10205a2",
 	],
 ]);
