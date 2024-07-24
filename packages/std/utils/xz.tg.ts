@@ -10,16 +10,13 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.gz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
 	let checksum =
 		"sha256:aeba3e03bf8140ddedf62a0a367158340520f6b384f75ca6045ccc6c0d43fd5c";
-	let url = `https://downloads.sourceforge.net/project/lzmautils/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(outer);
+	let base = `https://downloads.sourceforge.net/project/lzmautils`;
+	return await std
+		.download({ base, checksum, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export type Arg = {
@@ -50,7 +47,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let env = std.env.arg(env_, prerequisites(host));
+	let env = std.env.arg(env_, prerequisites(build));
 
 	let output = await buildUtil({
 		...(await std.triple.rotate({ build, host })),

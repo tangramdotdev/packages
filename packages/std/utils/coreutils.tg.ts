@@ -61,7 +61,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [];
 
 	if (usePrerequisites) {
-		dependencies.push(prerequisites(host));
+		dependencies.push(prerequisites(build));
 	}
 
 	let attrArtifact;

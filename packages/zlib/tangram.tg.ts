@@ -7,19 +7,13 @@ export let metadata = {
 	version: "1.3.1",
 };
 
-export let source = tg.target(() => {
-	let { name, version } = metadata;
+export let source = tg.target(async () => {
+	let { homepage, name, version } = metadata;
 	let checksum =
 		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
-	let url = `https://zlib.net/${packageArchive}`;
 	return std
-		.download({ checksum, url })
+		.download({ checksum, base: homepage, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

@@ -22,14 +22,9 @@ export let source = tg.target(async (os: string) => {
 	let checksum =
 		"sha256:331963d5d3dc4caf4216a049fa40b66d6bcb8c730615859411b9518764e60585";
 	let extension = ".tar.bz2";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
-	let url = `https://ftp.postgresql.org/pub/source/v${version}/${packageArchive}`;
+	let base = `https://ftp.postgresql.org/pub/source/v${version}`;
 	return await std
-		.download({ checksum, url })
+		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });
@@ -121,6 +116,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			buildInTree: true,
+			debug: true,
 			env: std.env.arg(...env),
 			phases,
 			sdk,
@@ -128,6 +124,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+	console.log("postgres", await output.id());
 
 	// Wrap output binaries.
 	let libDir = tg.Directory.expect(await output.get("lib"));

@@ -8,23 +8,16 @@ export let metadata = {
 	version: "3.3.10",
 };
 
-export let source = tg.target(async (): Promise<tg.Directory> => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension: ".tar.gz",
-	});
-	let url = `https://fftw.org/pub/${name}/${packageArchive}`;
-	let outer = tg.Directory.expect(
-		await std.download({
-			checksum,
-			url,
-		}),
-	);
-	return std.directory.unwrap(outer);
+	let extension = ".tar.gz";
+	let base = `https://fftw.org/pub/${name}`;
+	return await std
+		.download({ checksum, base, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {

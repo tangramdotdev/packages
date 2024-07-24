@@ -170,7 +170,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 				let unwrapped = binDir.get(name).then(tg.File.expect);
 				// Use the wrapper identity to ensure the wrapper is called when binaries call themselves. Otherwise it won't find all required libraries.
 				let wrapped = std.wrap(unwrapped, {
-					identity: "wrapper",
+					// identity: "wrapper",
 					libraryPaths,
 				});
 				llvmArtifact = await tg.directory(llvmArtifact, {
@@ -274,6 +274,8 @@ export let test = async () => {
 		os === "darwin" ? undefined : `/lib/${libc.interpreterName(host)}`;
 
 	let directory = await toolchain({ host });
+	tg.Directory.assert(directory);
+	console.log("toolchain dir", await directory.id());
 
 	let testCSource = tg.file(`
 		#include <stdio.h>

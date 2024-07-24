@@ -13,14 +13,11 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
-	let url = `https://gmplib.org/download/${name}/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(download);
+	let base = `https://gmplib.org/download/${name}`;
+	return await std
+		.download({ base, checksum, extension, name, version })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export type Arg = {

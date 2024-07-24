@@ -14,15 +14,10 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:7b2d06803b5abb03c85f171100ca9d7acd6ba245036fe9a16eb998f088b150cb";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
 	let majorVersion = version.split(".")[0];
-	let url = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x/${packageArchive}`;
+	let base = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x`;
 	return await std
-		.download({ checksum, url })
+		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

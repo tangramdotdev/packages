@@ -229,48 +229,39 @@ export let libgcc = tg.target(async (arg?: Arg) => {
 export let gccSource = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.gz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
 	let checksum =
 		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
-	let url = `https://ftp.gnu.org/gnu/${name}/${name}-${version}/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(outer);
+	let base = `https://ftp.gnu.org/gnu/${name}/${name}-${version}`;
+	return await std
+		.download({ base, checksum, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export let gmpSource = tg.target(async () => {
 	let name = "gmp";
 	let version = "6.2.1";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
 	let checksum =
 		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
-	let url = `https://gmplib.org/download/gmp/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(outer);
+	let base = `https://gmplib.org/download/${name}`;
+	return await std
+		.download({ base, checksum, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export let islSource = tg.target(async () => {
 	let name = "isl";
 	let version = "0.24";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
 	let checksum =
 		"sha256:043105cc544f416b48736fff8caf077fb0663a717d06b1113f16e391ac99ebad";
-	let url = `https://libisl.sourceforge.io/${packageArchive}`;
-	let outer = tg.Directory.expect(await std.download({ checksum, url }));
-	return std.directory.unwrap(outer);
+	let base = `https://libisl.sourceforge.io/`;
+	return await std
+		.download({ base, checksum, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export let mpcSource = tg.target(() => {

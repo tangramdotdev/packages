@@ -11,19 +11,14 @@ export let metadata = {
 	version: "0.29.2",
 };
 
-export let source = tg.target(() => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.gz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
-	let url = `https://pkgconfig.freedesktop.org/releases/${packageArchive}`;
+	let base = `https://pkgconfig.freedesktop.org/releases`;
 	let checksum =
 		"sha256:6fc69c01688c9458a57eb9a1664c9aba372ccda420a02bf4429fe610e7e7d591";
 	return std
-		.download({ checksum, url })
+		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

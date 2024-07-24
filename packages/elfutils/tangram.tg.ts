@@ -19,14 +19,11 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871";
 	let extension = ".tar.bz2";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
-	let url = `https://sourceware.org/elfutils/ftp/${version}/${packageArchive}`;
-	let download = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(download);
+	let base = `https://sourceware.org/elfutils/ftp/${version}`;
+	return await std
+		.download({ base, checksum, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {

@@ -13,19 +13,14 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.gz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
 	let checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
-	let url = `https://sourceware.org/pub/bzip2/${packageArchive}`;
-	let source = await std
-		.download({ url, checksum })
+	let base = `https://sourceware.org/pub/${name}`;
+	return await std
+		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-	return bootstrap.patch(source, dylibDetectOsPatch);
+		.then(std.directory.unwrap)
+		.then((source) => bootstrap.patch(source, dylibDetectOsPatch));
 });
 
 export type Arg = {
@@ -60,7 +55,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		install,
 	};
 
-	let env = std.env.arg(env_, prerequisites(host));
+	let env = std.env.arg(env_, prerequisites(build));
 
 	return await buildUtil({
 		...(await std.triple.rotate({ build, host })),

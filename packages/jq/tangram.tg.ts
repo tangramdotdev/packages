@@ -14,14 +14,9 @@ export let source = tg.target(async () => {
 	let checksum =
 		"sha256:478c9ca129fd2e3443fe27314b455e211e0d8c60bc8ff7df703873deeee580c2";
 	let extension = ".tar.gz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
-	let url = `https://github.com/stedolan/${name}/releases/download/${name}-${version}/${packageArchive}`;
+	let base = `https://github.com/stedolan/${name}/releases/download/${name}-${version}`;
 	return await std
-		.download({ checksum, url })
+		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

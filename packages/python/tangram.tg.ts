@@ -37,14 +37,9 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	let checksum =
 		"sha256:f6d419a6d8743ab26700801b4908d26d97e8b986e14f95de31b32de2b0e79554";
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
-	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
+	let base = `https://www.python.org/ftp/python/${version}`;
 	return await std
-		.download({ checksum, url })
+		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

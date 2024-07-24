@@ -20,15 +20,11 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:889c593a881a3db5fdd96cc9318c87df34eb648edfc458272ad46fd607353fbb";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension: ".tar.xz",
-	});
+	let exteniion = ".tar.xz";
 	let majorMinor = version.split(".").slice(0, 2).join(".");
-	let url = `https://download.gnome.org/sources/${name}/${majorMinor}/${packageArchive}`;
+	let base = `https://download.gnome.org/sources/${name}/${majorMinor}`;
 	return await std
-		.download({ url, checksum })
+		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

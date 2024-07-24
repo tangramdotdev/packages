@@ -8,19 +8,12 @@ export let metadata = {
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
-
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
-
 	let checksum =
 		"sha256:f6d419a6d8743ab26700801b4908d26d97e8b986e14f95de31b32de2b0e79554";
-	let url = `https://www.python.org/ftp/python/${version}/${packageArchive}`;
+	let base = `https://www.python.org/ftp/python/${version}`;
 	return await std
-		.download({ url, checksum })
+		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

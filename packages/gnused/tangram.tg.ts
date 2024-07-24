@@ -6,17 +6,22 @@ export let metadata = {
 	license: "GPL-2.0-or-later",
 	name: "sed",
 	repository: "https://git.savannah.gnu.org/cgit/sed.git",
-	version: "4.8",
+	version: "4.9",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:53cf3e14c71f3a149f29d13a0da64120b3c1d3334fba39c4af3e520be053982a";
-	return std.download.fromGnu({ name, version, checksum });
+		"sha256:6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181";
+	return std.download.fromGnu({
+		name,
+		version,
+		checksum,
+		compressionFormat: "xz",
+	});
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;

@@ -65,7 +65,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let phases = { configure };
 
 	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
-	env.push(prerequisites(host));
+	env.push(prerequisites(build));
 	env.push(bootstrap.shell(host));
 	env.push({
 		CFLAGS: tg.Mutation.prefix("-Wno-implicit-function-declaration", " "),

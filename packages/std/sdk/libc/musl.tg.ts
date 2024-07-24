@@ -10,16 +10,11 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.gz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
 	let checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
-	let url = `https://musl.libc.org/releases/${packageArchive}`;
+	let base = `https://musl.libc.org/releases`;
 	return await std
-		.download({ url, checksum })
+		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, muslPermissionPatch));

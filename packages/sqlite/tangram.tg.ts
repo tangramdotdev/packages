@@ -26,10 +26,10 @@ export let source = tg.target(() => {
 		return `${major}${minor.padEnd(3, "0")}${patch.padEnd(3, "0")}`;
 	};
 
-	let pkgName = `${name}-autoconf-${produceVersion(version)}`;
-	let url = `https://www.sqlite.org/2024/${pkgName}${extension}`;
+	let packageName = `${name}-autoconf-${produceVersion(version)}`;
+	let base = `https://www.sqlite.org/2024`;
 	return std
-		.download({ checksum, url })
+		.download({ checksum, base, packageName, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

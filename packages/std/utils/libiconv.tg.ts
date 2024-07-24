@@ -41,7 +41,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	if (usePrerequisites) {
-		env.push(prerequisites(host));
+		env.push(prerequisites(build));
 	}
 
 	let output = buildUtil({

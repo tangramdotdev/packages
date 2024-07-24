@@ -13,16 +13,11 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.xz";
-	let packageName = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
 	let checksum =
 		"sha256:cee4568f78dc851d726fc93f25f4ed91cc223b1fe8259daa4a77158d174e6c65";
-	let url = `https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/${packageName}`;
+	let base = `https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2`;
 	return await std
-		.download({ checksum, url })
+		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

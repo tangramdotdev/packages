@@ -11,20 +11,14 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
 	let checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
-	let url = `https://mirrors.sarata.com/non-gnu/attr/${packageArchive}`;
-	let source = await std
-		.download({ url, checksum })
+	let base = `https://mirrors.sarata.com/non-gnu/${name}`;
+	return await std
+		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-	source = await bootstrap.patch(source, basenamePatch);
-	return source;
+		.then(std.directory.unwrap)
+		.then((source) => std.patch(source, basenamePatch));
 });
 
 export type Arg = {
@@ -74,7 +68,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	if (usePrerequisites) {
-		env.push(prerequisites(host));
+		env.push(prerequisites(build));
 	}
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });

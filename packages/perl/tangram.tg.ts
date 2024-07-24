@@ -18,26 +18,14 @@ export let source = tg.target(async () => {
 
 	// Download raw source.
 	let extension = ".tar.gz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
 	let checksum =
 		"sha256:a0a31534451eb7b83c7d6594a497543a54d488bc90ca00f5e34762577f40655e";
-	let url = `https://www.cpan.org/src/5.0/${packageArchive}`;
-	let source = tg.Directory.expect(await std.download({ url, checksum }));
-	source = await std.directory.unwrap(source);
-
-	// Apply patches.
-	let patchFiles = [];
-	for await (let [_, artifact] of patches) {
-		if (artifact instanceof tg.File) {
-			patchFiles.push(artifact);
-		}
-	}
-
-	return std.patch(source, ...(await Promise.all(patchFiles)));
+	let base = `https://www.cpan.org/src/5.0`;
+	return await std
+		.download({ base, checksum, extension, name, version })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap)
+		.then((source) => std.patch(source, patches));
 });
 
 export type Arg = {
@@ -162,16 +150,19 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 				.then(tg.File.expect);
 
 			// Wrap it.
-			return await std.wrap(scriptArtifact, {
-				interpreter: wrappedPerl,
-			});
+			return [
+				script,
+				await std.wrap(scriptArtifact, {
+					interpreter: wrappedPerl,
+				}),
+			];
 		}),
 	);
 
-	for (let script of wrappedScripts) {
+	for (let [scriptName, artifact] of wrappedScripts) {
 		// Replace in the original artifact.
 		perlArtifact = await tg.directory(perlArtifact, {
-			[`bin/${script}`]: script,
+			[`bin/${scriptName}`]: artifact,
 		});
 	}
 

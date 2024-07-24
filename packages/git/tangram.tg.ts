@@ -14,16 +14,13 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		extension,
-		name,
-		version,
-	});
-	let url = `https://mirrors.edge.kernel.org/pub/software/scm/git/${packageArchive}`;
+	let base = `https://mirrors.edge.kernel.org/pub/software/scm/${name}`;
 	let checksum =
 		"sha256:51bfe87eb1c02fed1484051875365eeab229831d30d0cec5d89a14f9e40e9adb";
-	let outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(outer);
+	return await std
+		.download({ base, checksum, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 type Arg = {

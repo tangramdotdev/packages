@@ -55,7 +55,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	let env = std.env.arg(env_, prerequisites(host));
+	let env = std.env.arg(env_, prerequisites(build));
 
 	let output = buildUtil({
 		...(await std.triple.rotate({ build, host })),

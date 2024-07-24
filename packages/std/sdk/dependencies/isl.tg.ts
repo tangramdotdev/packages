@@ -9,16 +9,10 @@ export let metadata = {
 export let source = tg.target(async () => {
 	let { homepage, name, version } = metadata;
 	let extension = ".tar.xz";
-	let packageArchive = std.download.packageArchive({
-		name,
-		version,
-		extension,
-	});
 	let checksum =
 		"sha256:a0b5cb06d24f9fa9e77b55fabbe9a3c94a336190345c2555f9915bb38e976504";
-	let url = `${homepage}/${packageArchive}`;
 	return await std
-		.download({ checksum, url })
+		.download({ checksum, base: homepage, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });
