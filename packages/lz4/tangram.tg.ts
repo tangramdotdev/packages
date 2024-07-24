@@ -6,13 +6,13 @@ export let metadata = {
 		"https://github.com/lz4/lz4/blob/5ff839680134437dbf4678f3d0c7b371d84f4964/LICENSE",
 	name: "lz4",
 	repository: "https://github.com/lz4/lz4",
-	version: "1.9.4",
+	version: "1.10.0",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:0b0e3aa07c8c063ddf40b082bdf7e37a1562bda40a0ff5272957f3e987e0e54b";
+		"sha256:537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b";
 	let owner = name;
 	let repo = name;
 	let tag = `v${version}`;
