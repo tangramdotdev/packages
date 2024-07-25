@@ -17,7 +17,7 @@ export let source = tg.target(async () => {
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
-		.then((source) => std.patch(source, noFixDepsPatch));
+		.then((source) => bootstrap.patch(source, noFixDepsPatch));
 });
 
 export type Arg = {

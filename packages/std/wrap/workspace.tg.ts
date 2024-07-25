@@ -3,9 +3,7 @@ import * as gcc from "../sdk/gcc.tg.ts";
 import * as std from "../tangram.tg.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
-import ccProxyDir from "../packages/cc_proxy" with { type: "directory" };
-import ldProxyDir from "../packages/ld_proxy" with { type: "directory" };
-import wrapperDir from "../packages/wrapper" with { type: "directory" };
+import packages from "../packages" with { type: "directory" };
 
 type Arg = {
 	buildToolchain: std.env.Arg;
@@ -33,9 +31,7 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 		: await tg.directory({
 				"Cargo.toml": cargoToml,
 				"Cargo.lock": cargoLock,
-				"packages/cc_proxy": ccProxyDir,
-				"packages/ld_proxy": ldProxyDir,
-				"packages/wrapper": wrapperDir,
+				packages: packages,
 		  });
 
 	return build({
@@ -55,7 +51,7 @@ export let tgld = async (arg: Arg) =>
 export let wrapper = async (arg: Arg) =>
 	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
 
-let version = "1.79.0";
+let version = "1.80.0";
 
 type ToolchainArg = {
 	target?: string;
@@ -299,7 +295,7 @@ export let build = async (arg: BuildArg) => {
 
 		echo "#!/usr/bin/env sh" > rustc.sh
 		echo 'set -eu' >> rustc.sh
-		echo '${rustc} $@' >> rustc.sh
+		echo 'exec ${rustc} "$@"' >> rustc.sh
 		chmod +x rustc.sh
 		export RUSTC=$PWD/rustc.sh
 		`;

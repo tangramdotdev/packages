@@ -18,7 +18,7 @@ export let patch = tg.target(
 					return patchArtifact;
 				}
 			}),
-		);
+		).then((result) => result.flat());
 
 		// Apply the patches.
 		let allPatchFiles = tg.Template.join(" ", ...patchFiles);
