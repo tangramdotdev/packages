@@ -111,23 +111,20 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					target: host,
 					toolchainDir: directory,
 				});
-				wrappedCC = await std.wrap({
+				wrappedCC = await std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
 					buildToolchain,
-					executable: cc,
 					host: build,
 				});
-				wrappedCXX = await std.wrap({
+				wrappedCXX = await std.wrap(cxx, {
 					args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
 					buildToolchain,
-					executable: cxx,
 					host: build,
 				});
 				if (fortran) {
-					wrappedGFortran = await std.wrap({
+					wrappedGFortran = await std.wrap(fortran, {
 						args: [tg`-B${ldProxyDir}`, ...(fortranArgs ?? [])],
 						buildToolchain,
-						executable: fortran,
 						host: build,
 					});
 				}
@@ -180,19 +177,17 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 				});
 				// On Linux, don't wrap in place.
 				let merge = os === "darwin";
-				wrappedCC = std.wrap({
+				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
 					buildToolchain,
 					env,
-					executable: cc,
 					host: build,
 					merge,
 				});
-				wrappedCXX = std.wrap({
+				wrappedCXX = std.wrap(cxx, {
 					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
 					buildToolchain,
 					env,
-					executable: cxx,
 					host: build,
 					merge,
 				});
@@ -304,10 +299,9 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	};
 
 	// Create the linker proxy.
-	return std.wrap({
+	return std.wrap(buildLinkerProxy, {
 		buildToolchain,
 		env,
-		executable: buildLinkerProxy,
 		host: build,
 		identity: "wrapper",
 	});

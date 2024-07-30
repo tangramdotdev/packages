@@ -76,8 +76,6 @@ export default tg.target(async (arg?: Arg) => {
 
 	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	env.push({
-		CC: `${host}-cc`,
-		CXX: `${host}-c++`,
 		CPATH: tg.Mutation.unset(),
 		LIBRARY_PATH: tg.Mutation.unset(),
 		TANGRAM_LINKER_PASSTHROUGH: true,

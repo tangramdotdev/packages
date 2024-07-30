@@ -263,18 +263,19 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 			  : toolchainDir;
 
 	let ccArgs = [
+		//.Set the sysroot.
 		tg`--sysroot=${sysroot}`,
+		// Ensure the correct binutils are used.
+		tg`-B${toolchainDir}/${target}/bin`,
+		// Ensure the compiler's internals are found.
 		tg`-B${toolchainDir}/lib/gcc/${target}/${gccVersion}`,
 		tg`-B${toolchainDir}/libexec/gcc/${target}/${gccVersion}`,
 	];
 
-	// On Darwin, include the target tools bin dir as well.
-	if (hostOs === "darwin") {
-		ccArgs.push(tg`-B${toolchainDir}/${target}/bin`);
-	}
-
+	// Fortran gets the same args as the C compiler.
 	let fortranArgs = ccArgs;
 
+	// The C++ compiler needs additional include paths.
 	let cxxHeaderRoot =
 		hostOs === "darwin" ? tg`${toolchainDir}/${target}` : sysroot;
 	let cxxArgs = [
