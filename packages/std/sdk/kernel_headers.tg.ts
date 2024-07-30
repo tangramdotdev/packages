@@ -27,15 +27,17 @@ export type Arg = {
 	env?: std.env.Arg;
 	host?: string;
 	phases?: tg.MaybeNestedArray<std.phases.Arg>;
+	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
 export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	let {
 		build: build_,
-		env,
+		env: env_,
 		host: host_,
 		phases: phasesArg = [],
+		sdk,
 		source: source_,
 	} = arg ?? {};
 	let host = host_ ?? (await std.triple.host());
@@ -68,6 +70,25 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		body: `cp -r usr/include/. $OUTPUT && mkdir -p $OUTPUT/config && echo ${metadata.version}-default > $OUTPUT/config/kernel.release`,
 	};
 	let order = ["build", "install"];
+
+	let envs: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	if (sdk !== false) {
+		// Add the toolchain.
+		let sdkArg =
+			typeof sdk === "boolean"
+				? { host: buildTriple, target: buildTriple }
+				: sdk;
+		envs.push(std.sdk(sdkArg));
+
+		// Add the standard utils, built with the default SDK.
+		let utils = await std.utils.env({
+			host,
+			sdk: false,
+			env: std.sdk({ host }),
+		});
+		envs.push(utils);
+	}
+	let env = std.env.arg(...envs);
 
 	let result = tg.Directory.expect(
 		await std.phases.build(
@@ -107,11 +128,12 @@ export let test = tg.target(async () => {
 
 export let testKernelHeaders = async (host: string, target?: string) => {
 	let target_ = target ?? host;
-	let sdk = await bootstrap.sdk(host);
+	let buildEnv = std.env.arg(bootstrap.sdk(host), bootstrap.make.build(host));
 	let headers = await kernelHeaders({
 		build: host,
-		env: sdk,
+		env: buildEnv,
 		host: target_,
+		sdk: false,
 	});
 	let configFile = tg.File.expect(await headers.get("config/kernel.release"));
 	let configFileContents = (await configFile.text()).trim();

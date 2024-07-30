@@ -13,7 +13,9 @@ export type LibCArg = {
 };
 
 /** Obtain the proper standard C library for the given host triple. */
-export let libc = async (arg: LibCArg) => {
+export let libc = async (unresolvedArg: tg.Unresolved<LibCArg>) => {
+	let arg = await tg.resolve(unresolvedArg);
+
 	let host = arg.host ?? (await std.triple.host());
 	// Libcs are built for a single target, which is referred to as the host in this context.
 	let kind = kindFromTriple(host);
@@ -24,7 +26,7 @@ export let libc = async (arg: LibCArg) => {
 	} else if (kind === "musl") {
 		return musl.default(arg);
 	} else {
-		return tg.unimplemented();
+		return tg.unreachable();
 	}
 };
 
@@ -39,7 +41,7 @@ let kindFromTriple = (triple: string): LibcKind => {
 	} else if (environment === "musl") {
 		return "musl";
 	} else {
-		return tg.unimplemented(`Unrecognized environment ${environment}`);
+		return tg.unreachable(`Unrecognized environment ${environment}`);
 	}
 };
 
@@ -72,15 +74,16 @@ export let linkerFlags = async (arg: LinkerFlagArg) => {
 };
 
 /** Construct a sysroot containing the libc and the linux headers. */
-export let constructSysroot = async (arg: LibCArg) => {
+export let constructSysroot = async (unresolvedArg: tg.Unresolved<LibCArg>) => {
+	let arg = await tg.resolve(unresolvedArg);
 	let host = arg.host ?? (await std.triple.host());
 	let linuxHeaders =
 		arg.linuxHeaders ?? (await tg.directory({ include: kernelHeaders(arg) }));
 	let cLibrary = await libc({ ...arg, linuxHeaders });
-	let cLibInclude = tg.Directory.expect(await cLibrary.get(`${host}/include`));
-	let hostLinuxInclude = tg.Directory.expect(
-		await (await linuxHeaders).get("include"),
-	);
+	let cLibInclude = await cLibrary
+		.get(`${host}/include`)
+		.then(tg.Directory.expect);
+	let hostLinuxInclude = linuxHeaders.get("include").then(tg.Directory.expect);
 	return tg.directory(cLibrary, {
 		[`${host}/include`]: tg.directory(cLibInclude, hostLinuxInclude),
 	});

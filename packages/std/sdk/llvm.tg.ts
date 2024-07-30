@@ -7,7 +7,7 @@ import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import ncurses from "./llvm/ncurses.tg.ts";
 import cctools from "./llvm/cctools_port.tg.ts";
-import { buildToHostCrossToolchain } from "./gcc/toolchain.tg.ts";
+import { constructSysroot } from "./libc.tg.ts";
 import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
 export let metadata = {
@@ -58,32 +58,41 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 
 	if (std.triple.os(host) === "darwin") {
 		// On macOS, just return the bootstrap toolchain, which provides Apple Clang.
-
 		return bootstrap.sdk.env(host);
 	}
 
 	let sourceDir = source_ ?? source();
 
-	// Use the internal GCC bootstrapping function to avoid needlesssly rebuilding glibc.
-	let { sysroot } = await buildToHostCrossToolchain({
-		host,
-		env: await std.env.arg(bootstrap.sdk(), dependencies.env({ host })),
-	});
-	// The buildSysroot helper nests the sysroot under a triple-named directory. Extract the inner dir.
-	sysroot = tg.Directory.expect(await sysroot.get(host));
-
 	// Define build environment.
-	let ncursesArtifact = ncurses({ host: build });
-	let zlibArtifact = dependencies.zlib.build({ host: build });
+	let m4ForBuild = dependencies.m4.build({ build, host: build });
+	let bisonForBuild = dependencies.bison.build({
+		build,
+		host: build,
+		env: m4ForBuild,
+	});
+	let pythonForBuild = dependencies.python.build({
+		build,
+		host: build,
+		sdk: bootstrap.sdk.arg(build),
+	});
+	let ncursesArtifact = ncurses({ build, host });
+	let zlibArtifact = dependencies.zlib.build({ build, host });
 	let deps = [
-		git({ host: build }),
-		dependencies.python.build({
-			host: build,
-			sdk: bootstrap.sdk.arg(build),
-		}),
+		git({ build, host: build }),
+		bisonForBuild,
+		m4ForBuild,
+		pythonForBuild,
 		ncursesArtifact,
 		zlibArtifact,
 	];
+
+	// Obtain a sysroot for the requested host.
+	let sysroot = await constructSysroot({
+		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild),
+		host,
+	})
+		.then((dir) => dir.get(host))
+		.then(tg.Directory.expect);
 
 	let env = [...deps, env_];
 

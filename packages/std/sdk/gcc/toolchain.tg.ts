@@ -246,6 +246,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 			build: buildTriple,
 			env: buildEnv,
 			host: target,
+			sdk,
 		}),
 	});
 
@@ -270,7 +271,7 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 		build: buildTriple,
 		host,
 		linuxHeaders,
-		env: await std.env.arg(env, initialGccDir),
+		env: std.env.arg(env, initialGccDir),
 		sdk: false,
 	});
 });
