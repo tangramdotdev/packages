@@ -60,7 +60,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 	});
 	let nativeEnv = std.env.arg(proxiedNativeToolchain, nativeBuildTools);
 
-	let { env } = await crossToolchain({
+	let { crossGcc } = await crossToolchain({
 		build: host, // We've produced a native toolchain, so we can use it to build the cross-toolchain.
 		env: nativeEnv,
 		host,
@@ -69,7 +69,7 @@ export let toolchain = tg.target(async (arg: ToolchainArg) => {
 		variant: "stage2_full",
 	});
 
-	return env;
+	return crossGcc;
 });
 
 type CanadianCrossArg = {
@@ -84,53 +84,49 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	let target = host;
 	let build = await bootstrap.toolchainTriple(host);
 
-	let sdk = bootstrap.sdk(host);
-
 	// Create cross-toolchain from build to host.
-	let { env: buildToHostCross, sysroot } = await buildToHostCrossToolchain({
-		host,
-		env: await std.env.arg(sdk, env_),
-	});
-	let combinedUnproxiedEnv = std.env.arg(sdk, buildToHostCross, env_);
+	let { crossGcc: buildToHostCross, sysroot } = await buildToHostCrossToolchain(
+		{
+			host,
+			env: await std.env.arg(bootstrap.sdk(host), env_),
+		},
+	);
 
 	// Proxy the cross toolchain and produce a combined environment.
 	let crossProxyEnv = await proxy.env({
-		toolchain: buildToHostCross,
+		toolchain: tg.directory(buildToHostCross, sysroot),
 		build,
 		forcePrefix: true,
 		host,
 	});
-	let combinedProxiedEnv = std.env.arg(combinedUnproxiedEnv, crossProxyEnv);
+	let stage1HostSdk = std.env.arg(buildToHostCross, crossProxyEnv, env_, {
+		PATH: tg.Mutation.prefix(tg`${buildToHostCross}/${host}/bin`, ":"),
+	});
 
 	// Create a native toolchain (host to host).
 	let nativeBinutils = await binutils({
-		env: combinedProxiedEnv,
+		env: stage1HostSdk,
 		sdk: false,
-		build,
+		build: host,
 		host,
 		target,
 	});
 
 	// Build a fully native GCC toolchain.
-	let nativeGcc = await gcc.build({
-		build,
+	let sysrootDir = sysroot.get(target).then(tg.Directory.expect);
+	let nativeGcc = gcc.build({
+		build: host,
 		bundledSources: true, // rebuild the host libraries.
-		env: combinedUnproxiedEnv,
+		env: stage1HostSdk,
 		host,
 		populatePrefix: nativeBinutils,
-		sysroot,
+		sysroot: sysrootDir,
 		sdk: false,
 		target,
 		variant: "stage2_full",
 	});
 
-	// Flatten the sysroot and combine into a native toolchain.
-	let innerSysroot = sysroot.get(target).then(tg.Directory.expect);
-
-	// Add the native binutils to the combined directory.
-	let combined = tg.directory(nativeGcc, innerSysroot);
-
-	return combined;
+	return tg.directory(nativeGcc, sysrootDir);
 });
 
 export let buildToHostCrossToolchain = async (arg?: CanadianCrossArg) => {
@@ -174,7 +170,7 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 	let target = target_ ?? host;
 
 	// Produce the binutils for building the cross-toolchain.
-	let crossBinutils = binutils({
+	let hostToTargetBinutils = binutils({
 		build: buildTriple,
 		env: env_,
 		host,
@@ -182,11 +178,11 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		target,
 	});
 
-	let binutilsEnv = std.env.arg(env_, crossBinutils);
+	let binutilsEnv = std.env.arg(env_, hostToTargetBinutils);
 
 	let sysroot = await buildSysroot({
 		build: buildTriple,
-		crossBinutils,
+		crossBinutils: hostToTargetBinutils,
 		env: binutilsEnv,
 		host: target,
 		sdk,
@@ -197,17 +193,15 @@ export let crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
 		build: buildTriple,
 		env: env_,
 		host,
-		populatePrefix: crossBinutils,
+		populatePrefix: hostToTargetBinutils,
 		sdk,
 		sysroot,
 		target,
 		variant,
 	});
 
-	let combined = await tg.directory(crossGcc, sysroot);
-
 	return {
-		env: combined,
+		crossGcc,
 		sysroot,
 	};
 });
@@ -263,14 +257,13 @@ export let buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
 	});
 
 	// Produce a combined directory containing the correct C library for the host and the Linux headers.
-	let sysroot = await constructSysroot({
+	return constructSysroot({
 		build: buildTriple,
 		host,
 		linuxHeaders,
 		env: await std.env.arg(env, initialGccDir),
 		sdk: false,
 	});
-	return sysroot;
 });
 
 type DarwinCrossToolchainArg = {

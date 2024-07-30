@@ -23,7 +23,7 @@ export let source = tg.target((bundledSources?: boolean) => {
 	let extension = ".tar.xz";
 	let checksum =
 		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
-	let base = `https://ftp.gnu.org/gnu/${name}/${name}-${version}`;
+	let base = `https://mirrors.ocf.berkeley.edu/gnu/${name}/${name}-${version}`;
 	let sourceDir = std
 		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
@@ -58,7 +58,6 @@ export type Arg = {
 };
 export type Variant =
 	| "stage1_bootstrap" // C only, no libraries. Will produce an output directory with two folders, $OUTPUT/prefix with the installed compiler and $OUTPUT/build with the build artifacts.
-	| "stage1_libstdc++" // Produce libstdc++ and combine it with the output from stage1_bootstrap and the libc sysroot.
 	| "stage1_limited" // Produce a complete native `host === target` GCC toolchain with only C and C++ enabled and many features disabled.
 	| "stage2_full"; // Everything enabled.
 
@@ -87,66 +86,54 @@ export let build = tg.target(async (arg: Arg) => {
 	// Configure sysroot.
 	let isCross = host !== target;
 	let targetPrefix = isCross ? `${target}-` : "";
+	let sysrootSubdir = isCross ? `/${target}` : "";
+	let sysrootDir = tg`${sysroot}${sysrootSubdir}`;
 
-	let configure: tg.Unresolved<std.phases.PhaseArgObject> = {
-		pre: "mkdir -p $OUTPUT",
-		body: {
-			args: [
-				"--disable-bootstrap",
-				"--disable-dependency-tracking",
-				"--disable-nls",
-				"--disable-multilib",
-				"--enable-host-pie",
-				`--build=${build}`,
-				`--host=${host}`,
-				`--target=${target}`,
-				"--with-native-system-header-dir=/include",
-				tg`--with-sysroot=${sysroot}/${target}`,
-			],
-		},
-	};
-	tg.assert(
-		configure !== undefined &&
-			typeof configure === "object" &&
-			"body" in configure &&
-			typeof configure.body === "object" &&
-			"args" in configure.body &&
-			configure.body.args &&
-			Array.isArray(configure.body.args) &&
-			configure.body.args.length > 0 &&
-			"pre" in configure &&
-			typeof configure.pre === "string",
-	);
+	// Set up configuration.
+	let preConfigureHook: tg.Unresolved<tg.Template.Arg> = "mkdir -p $OUTPUT";
+	let configureArgs = [
+		"--disable-bootstrap",
+		"--disable-dependency-tracking",
+		"--disable-nls",
+		"--disable-multilib",
+		"--enable-host-bind-now",
+		"--enable-host-pie",
+		`--build=${build}`,
+		`--host=${host}`,
+		`--target=${target}`,
+		"--with-native-system-header-dir=/include",
+		tg`--with-sysroot=${sysrootDir}`,
+	];
+	let configureCommand = undefined;
+	let installPhase = undefined;
 
-	if (arg.populatePrefix) {
-		configure.pre = await tg.Template.join(
+	if (populatePrefix) {
+		preConfigureHook = tg.Template.join(
 			"\n",
-			configure.pre,
+			preConfigureHook,
 			tg`cp -R ${arg.populatePrefix}/* $OUTPUT\nchmod -R u+w $OUTPUT\nexport PATH=$OUTPUT/bin:$PATH`,
 		);
 	}
 
-	let phases: tg.Unresolved<std.phases.Arg> = { configure };
-
 	// Set up containers to collect additional arguments and environment variables for specific configurations.
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	let envArgs: tg.Unresolved<Array<std.env.Arg>> = [env_];
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
 	let targetEnvironment = std.triple.environment(target);
 	if (targetEnvironment === "musl") {
-		configure.body.args.push("--disable-libsanitizer");
+		configureArgs.push("--disable-libsanitizer");
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
 	let hostEnvironment = std.triple.environment(host);
 	if (hostEnvironment === "gnu") {
-		configure.body.args.push("--enable-__cxa_atexit");
+		configureArgs.push("--enable-__cxa_atexit");
 	}
 
 	let sourceDir = source_ ?? source(bundledSources);
 
 	if (variant === "stage1_bootstrap") {
-		configure.body.args = configure.body.args.concat([
+		configureArgs = configureArgs.concat([
 			"--disable-libatomic",
 			"--disable-libgomp",
 			"--disable-libquadmath",
@@ -162,71 +149,62 @@ export let build = tg.target(async (arg: Arg) => {
 			"--without-headers",
 		]);
 		if (hostEnvironment === "gnu") {
-			configure.body.args.push(`--with-glibc-version=${defaultGlibcVersion}`);
+			configureArgs.push(`--with-glibc-version=${defaultGlibcVersion}`);
 		}
-		phases.install = {
+		installPhase = {
 			post: tg`cat ${sourceDir}/gcc/limitx.h ${sourceDir}/gcc/glimits.h ${sourceDir}/gcc/limity.h > $(dirname $($OUTPUT/bin/${target}-gcc -print-libgcc-file-name))/include/limits.h`,
 		};
 	}
 
-	if (variant === "stage1_libstdc++") {
-		tg.assert(
-			arg.populatePrefix,
-			"populatePrefix is required for stage1_libstdc++. Provide the result of stage1_bootstrap.",
-		);
-
-		configure.body.command = tg`${sourceDir}/libstdc++-v3/configure`;
-
-		configure.body.args = [
-			`--build=${build}`,
-			`--host=${host}`,
-			`--disable-multilib`,
-			"--disable-nls",
-			"--disable-libstdcxx-pch",
-			tg`--with-gxx-include-dir=$OUTPUT/${target}/include/c++/${metadata.version}`,
-		];
-
-		phases.install = {
-			post: "rm -v $OUTPUT/lib64/lib{stdc++{,exp,fs},supc++}.la",
-		};
-
-		env.push({
-			CC: `${host}-gcc`,
-			CXX: `${host}-g++`,
-		});
-	}
-
 	if (variant === "stage1_limited") {
-		configure.body.args = configure.body.args.concat([
+		configureArgs = configureArgs.concat([
 			"--disable-libatomic",
 			"--disable-libgomp",
-			"--disable-libquadmath",
 			"--disable-libssp",
 			"--disable-libvtv",
 			"--enable-default-pie",
 			"--enable-default-ssp",
 			"--enable-initfini-array",
 			tg`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
-			tg`--with-build-sysroot=${sysroot}/${target}`,
+			tg`--with-build-sysroot=${sysrootDir}`,
 		]);
 	}
 
 	if (variant === "stage2_full") {
-		configure.body.args = configure.body.args.concat([
+		configureArgs = configureArgs.concat([
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
+			tg`LDFLAGS_FOR_TARGET="-Wl,-dynamic-linker,${sysrootDir}/lib/${interpreterName(
+				target,
+			)} -Wl,-rpath,${sysrootDir}/lib"`,
 		]);
-		configure.body.args.push("--with-build-config=bootstrap-lto");
 	}
+
+	// Set up phases.
+	let configureBody: tg.Unresolved<std.phases.CommandArgObject> = {
+		args: configureArgs,
+	};
+	if (configureCommand !== undefined) {
+		configureBody.command = configureCommand;
+	}
+	let configure = {
+		pre: preConfigureHook,
+		body: configureBody,
+	};
+	let phases: tg.Unresolved<std.phases.Arg> = { configure };
+	if (installPhase !== undefined) {
+		phases.install = installPhase;
+	}
+
+	let env = std.env.arg(envArgs);
 
 	let result = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
-			env: std.env.arg(env),
-			fullRelro: false,
+			env,
 			prefixPath,
 			phases,
 			opt: "3",
@@ -239,15 +217,13 @@ export let build = tg.target(async (arg: Arg) => {
 	result = await mergeLibDirs(result);
 
 	// Add cc symlinks.
-	if (variant !== "stage1_libstdc++") {
+	result = await tg.directory(result, {
+		[`bin/${targetPrefix}cc`]: tg.symlink(`./${targetPrefix}gcc`),
+	});
+	if (!isCross) {
 		result = await tg.directory(result, {
-			[`bin/${targetPrefix}cc`]: tg.symlink(`./${targetPrefix}gcc`),
+			[`bin/${host}-cc`]: tg.symlink(`./${host}-gcc`),
 		});
-		if (!isCross) {
-			result = await tg.directory(result, {
-				[`bin/${host}-cc`]: tg.symlink(`./${host}-gcc`),
-			});
-		}
 	}
 
 	return result;

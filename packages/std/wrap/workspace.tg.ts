@@ -203,7 +203,9 @@ export let build = async (arg: BuildArg) => {
 	let utilsArtifact = await bootstrap.utils();
 
 	// Get the appropriate toolchain directory.
+	// You need a build toolchian AND a host toolchain. These may be the same.
 	let buildToolchain = arg.buildToolchain;
+	let hostToolchain = undefined;
 	let setSysroot = false;
 	if (os === "linux") {
 		if (!isCross) {
@@ -211,12 +213,14 @@ export let build = async (arg: BuildArg) => {
 			host_ = await bootstrap.toolchainTriple(host_);
 			target_ = host_;
 		} else {
-			buildToolchain = await gcc.toolchain({ host, target });
+			buildToolchain = await bootstrap.sdk.env(host_);
+			hostToolchain = await gcc.toolchain({ host, target });
 			setSysroot = true;
 		}
 	} else {
 		if (isCross) {
-			buildToolchain = await gcc.toolchain({ host, target });
+			buildToolchain = await bootstrap.sdk.env(host_);
+			hostToolchain = await gcc.toolchain({ host, target });
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
 		}
@@ -225,7 +229,6 @@ export let build = async (arg: BuildArg) => {
 	let { directory, ldso, libDir } = await std.sdk.toolchainComponents({
 		env: buildToolchain,
 		host: isCross ? host : host_,
-		target: isCross ? target : target_,
 	});
 	if (setSysroot) {
 		suffix = tg` --sysroot ${directory}`;
@@ -239,6 +242,7 @@ export let build = async (arg: BuildArg) => {
 
 	let env: tg.Unresolved<std.Args<std.env.Arg>> = [
 		buildToolchain,
+		hostToolchain ?? {},
 		rustToolchain,
 		shellArtifact,
 		utilsArtifact,

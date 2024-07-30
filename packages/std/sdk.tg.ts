@@ -1114,7 +1114,9 @@ export let testCrossGccSdk = tg.target(async () => {
 	}
 	let detectedArch = std.triple.arch(detectedHost);
 	let crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
-	let crossTarget = std.triple.create(detectedHost, { arch: crossArch });
+	let crossTarget = sdk.canonicalTriple(
+		std.triple.create(detectedHost, { arch: crossArch }),
+	);
 	let sdkArg = { host: detectedHost, target: crossTarget };
 	let env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);

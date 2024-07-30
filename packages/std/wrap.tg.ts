@@ -797,29 +797,35 @@ let manifestInterpreterFromArg = async (
 				"Cannot build an ld-linux interpreter for a non-ELF executable.",
 			);
 		}
-		let arch = interpreterMetadata.arch;
-		let host = `${arch}-unknown-linux-gnu`;
-		let detectedBuild = await std.triple.host();
-		let buildOs = std.triple.os(detectedBuild);
-		let buildToolchain = buildToolchainArg
-			? buildToolchainArg
-			: gcc.toolchain({ host });
-		let injectionLibrary = await injection.default({
-			buildToolchain,
-			build: buildOs === "darwin" ? detectedBuild : undefined,
-			host,
-		});
 
-		// Combine the injection with any additional preloads specified by the caller.
-		let preloads = [await manifestSymlinkFromArg(injectionLibrary)];
-		let additionalPreloads = arg.preloads
+		let preloads = arg.preloads
 			? await Promise.all(
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
 			  )
 			: [];
-		preloads = preloads.concat(additionalPreloads);
+
+		// If no preload is defined, add the default injection preload.
+		if (preloads.length === 0) {
+			let arch = interpreterMetadata.arch;
+			let host = `${arch}-unknown-linux-gnu`;
+			let detectedBuild = await std.triple.host();
+			let buildOs = std.triple.os(detectedBuild);
+			let buildToolchain = buildToolchainArg
+				? buildToolchainArg
+				: gcc.toolchain({ host });
+			let injectionLibrary = await injection.default({
+				buildToolchain,
+				build: buildOs === "darwin" ? detectedBuild : undefined,
+				host,
+			});
+
+			let injectionManifestSymlink =
+				await manifestSymlinkFromArg(injectionLibrary);
+			preloads.push(injectionManifestSymlink);
+		}
+
 		let args = arg.args
 			? await Promise.all(arg.args.map(manifestTemplateFromArg))
 			: undefined;
@@ -856,24 +862,29 @@ let manifestInterpreterFromArg = async (
 				"Cannot build an ld-musl interpreter for a non-ELF executable.",
 			);
 		}
-		let arch = interpreterMetadata.arch;
-		let host = `${arch}-linux-musl`;
-		let buildToolchain = bootstrap.sdk.env(host);
-		let injectionLibrary = await injection.default({
-			buildToolchain,
-			host,
-		});
 
-		// Combine the injection with any additional preloads specified by the caller.
-		let preloads = [await manifestSymlinkFromArg(injectionLibrary)];
-		let additionalPreloads = arg.preloads
+		let preloads = arg.preloads
 			? await Promise.all(
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
 			  )
 			: [];
-		preloads = preloads.concat(additionalPreloads);
+
+		// If no preload is defined, add the default injection preload.
+		if (preloads.length === 0) {
+			let arch = interpreterMetadata.arch;
+			let host = `${arch}-linux-musl`;
+			let buildToolchain = bootstrap.sdk.env(host);
+			let injectionLibrary = await injection.default({
+				buildToolchain,
+				host,
+			});
+
+			let injectionManifestSymlink =
+				await manifestSymlinkFromArg(injectionLibrary);
+			preloads.push(injectionManifestSymlink);
+		}
 
 		let args = arg.args
 			? await Promise.all(arg.args.map(manifestTemplateFromArg))

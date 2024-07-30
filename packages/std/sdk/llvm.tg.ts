@@ -99,6 +99,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		args: [
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
+			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
 			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH didn't work for Terminfo_ROOT, but this did.
@@ -108,8 +109,15 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		],
 	};
 
+	// Support musl sysroots.
+	let isMusl = std.triple.environment(host) === "musl";
+	if (isMusl) {
+		configure.args.push("-DLIBCXX_HAS_MUSL_LIBC=On");
+		configure.args.push("-DBOOTSTRAP_LIBCXX_HAS_MUSL_LIBC=On");
+	}
+
 	// Add additional flags from the target args.
-	if (lto) {
+	if (lto && !isMusl) {
 		configure.args.push("-DBOOTSTRAP_LLVM_ENABLE_LTO=Thin");
 	}
 
@@ -170,7 +178,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 				let unwrapped = binDir.get(name).then(tg.File.expect);
 				// Use the wrapper identity to ensure the wrapper is called when binaries call themselves. Otherwise it won't find all required libraries.
 				let wrapped = std.wrap(unwrapped, {
-					// identity: "wrapper",
+					identity: "wrapper",
 					libraryPaths,
 				});
 				llvmArtifact = await tg.directory(llvmArtifact, {

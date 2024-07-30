@@ -1,4 +1,4 @@
-export type Arg = (download.BuildUrlArg | { url: string }) & {
+export type Arg = download.BuildUrlArg & {
 	/** The expected checksum of the downloaded file. Use "unsafe" to allow network access without verifying the result. */
 	checksum: tg.Checksum;
 	/** The format of the file to unpack. If `true`, will infer from the URL. Default: `true`. */
@@ -15,7 +15,7 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 		extract: extract_ = true,
 		...rest
 	} = arg;
-	let url = "url" in rest ? rest.url : download.buildUrl(rest);
+	let url = download.buildUrl(rest);
 
 	// Perform the download.
 	let blob = await tg.download(url, checksum);
@@ -145,7 +145,7 @@ export namespace download {
 	};
 
 	export let gnuUrl = (name: string, archive: string) => {
-		return `https://ftp.gnu.org/gnu/${name}/${archive}`;
+		return `https://mirrors.ocf.berkeley.edu/gnu/${name}/${archive}`;
 	};
 
 	export type UnpackArg = {
@@ -173,42 +173,54 @@ export namespace download {
 		}
 	};
 
-	export type BuildUrlArg = (PackageArchiveArg | { packageArchive: string }) & {
-		base: string;
-	};
+	export type BuildUrlArg =
+		| (PackageArchiveArg & {
+				base: string;
+		  })
+		| { url: string };
 
-	/** Build a URL from one of three forms, combining a packageArchive with a base URL:
+	/** Build a URL from one of these object shapes, combining a packageArchive with a base URL:
 	 *
 	 * 1. `${base}/${name}(-${version})?${extension}`
 	 * 2. `${base}/${packageName}${extension}`
 	 * 3. `${base}/${packageArchive}`
+	 * 4. `${url}`
 	 */
 	export let buildUrl = (arg: BuildUrlArg): string => {
+		if ("url" in arg) {
+			return arg.url;
+		}
 		let { base, ...rest } = arg;
-		let archive =
-			"packageArchive" in rest ? rest.packageArchive : packageArchive(rest);
-		return `${base}/${archive}`;
+		return `${base}/${packageArchive(rest)}`;
 	};
 
-	export type PackageArchiveArg = (PackageNameArg | { packageName: string }) & {
-		extension: string;
-	};
+	export type PackageArchiveArg =
+		| (PackageNameArg & {
+				extension: string;
+		  })
+		| { packageArchive: string };
 
 	/** Combine a packageName with an extension. */
 	export let packageArchive = (arg: PackageArchiveArg) => {
+		if ("packageArchive" in arg) {
+			return arg.packageArchive;
+		}
 		let { extension, ...rest } = arg;
-		let pkgName = "packageName" in rest ? rest.packageName : packageName(rest);
-		return `${pkgName}${extension}`;
+		return `${packageName(rest)}${extension}`;
 	};
 
-	export type PackageNameArg = {
-		name: string;
-		version?: string;
-	};
+	export type PackageNameArg =
+		| {
+				name: string;
+				version?: string;
+		  }
+		| { packageName: string };
 
 	/** Get the package name string for a name and optional version. */
 	export let packageName = (arg: PackageNameArg) =>
-		`${arg.name}${arg.version ? `-${arg.version}` : ""}`;
+		"packageName" in arg
+			? arg.packageName
+			: `${arg.name}${arg.version ? `-${arg.version}` : ""}`;
 
 	/** Determine the archive formats from the file extension of the url. */
 	export let inferFormats = (
