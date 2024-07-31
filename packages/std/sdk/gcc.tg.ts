@@ -72,7 +72,7 @@ export let build = tg.target(async (arg: Arg) => {
 		build: build_,
 		bundledSources = false,
 		crossNative = false,
-		env: env_,
+		env,
 		host: host_,
 		sdk,
 		source: source_,
@@ -82,14 +82,22 @@ export let build = tg.target(async (arg: Arg) => {
 		variant,
 	} = arg ?? {};
 
+	// Finalize triples.
 	let host = host_ ?? (await std.triple.host());
 	let build = build_ ?? host;
 	let target = target_ ?? host;
+	let isCross = host !== target;
+	let hostEnvironment = std.triple.environment(host);
 
-	let prefixPath = undefined;
+	// Assert the triples don't conflict with the requested configuratiion.
+	if (variant === "stage1_limited") {
+		tg.assert(isCross, "stage1_limited is for building cross-compilers");
+	}
+	if (crossNative) {
+		tg.assert(!isCross, "crossNative requires host === target");
+	}
 
 	// Configure sysroot.
-	let isCross = host !== target;
 	let targetPrefix = isCross ? `${target}-` : "";
 	let sysrootDir = `${isCross ? `/${target}` : ""}/sysroot`;
 	let prefixSysrootPath = `$\{OUTPUT\}${sysrootDir}`;
@@ -99,11 +107,10 @@ export let build = tg.target(async (arg: Arg) => {
 		? sysroot
 		: sysroot.get(target).then(tg.Directory.expect);
 	let prefixSeed = tg.directory(sysrootToCopy, targetBinutils);
-	let preConfigureHook: tg.Unresolved<tg.Template.Arg> = tg`\nmkdir -p $OUTPUT\ncp -R ${prefixSeed}/* $OUTPUT\nchmod -R u+w $OUTPUT\nexport PATH=$OUTPUT/bin:$PATH\nln -s . ${prefixSysrootPath}`;
+	let preConfigureHook = tg`\nmkdir -p $OUTPUT\ncp -R ${prefixSeed}/* $OUTPUT\nchmod -R u+w $OUTPUT\nln -s . ${prefixSysrootPath}`;
 
 	// Define args used for all variants.
-	// NOTE: Usually any `tg.Template.Arg` could be a valid configure arg. We restrict to strings here because GCC retains the full list of compile-time args. We want to minimize rendered Tangram artifact paths in the output.
-	let configureArgs: Array<string> = [
+	let commonConfigureArgs = [
 		"--disable-bootstrap",
 		"--disable-dependency-tracking",
 		"--disable-nls",
@@ -116,92 +123,86 @@ export let build = tg.target(async (arg: Arg) => {
 		"--with-native-system-header-dir=/include",
 		`--with-sysroot=${prefixSysrootPath}`,
 	];
-	let configureCommand = undefined;
-	let installPhase = undefined;
 
-	let envArgs: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	// Define the args for each variant.
+	let variantConfigureArgs = (variant: Variant) => {
+		switch (variant) {
+			case "stage1_bootstrap": {
+				let args = [
+					"--disable-libatomic",
+					"--disable-libgomp",
+					"--disable-libquadmath",
+					"--disable-libsanitizer",
+					"--disable-libssp",
+					"--disable-libstdcxx",
+					"--disable-libvtv",
+					"--disable-shared",
+					"--disable-threads",
+					"--disable-werror",
+					"--enable-languages=c,c++",
+					"--with-newlib",
+					"--without-headers",
+				];
+				if (hostEnvironment === "gnu") {
+					args.push(`--with-glibc-version=${defaultGlibcVersion}`);
+				}
+				return args;
+			}
+			case "stage1_limited":
+				return [
+					"--disable-libatomic",
+					"--disable-libgomp",
+					"--disable-libssp",
+					"--disable-libvtv",
+					"--enable-default-pie",
+					"--enable-default-ssp",
+					"--enable-initfini-array",
+					`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
+				];
+			case "stage2_full":
+				return [
+					"--enable-default-ssp",
+					"--enable-default-pie",
+					"--enable-initfini-array",
+				];
+		}
+	};
 
-	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
+	// NOTE: Usually any `tg.Template.Arg` could be a valid configure arg. We restrict to strings here to avoid accidentally hardcoding a runtime dependency on a Tangram artifact instead of components included in this installation prefix.
+	let configureArgs: Array<string> = [
+		...commonConfigureArgs,
+		...variantConfigureArgs(variant),
+	];
+
+	// For Musl targets, disable libsanitizer. See https://wiki.musl-libc.org/open-issues.html
+	// NOTE - the stage1_bootstrap variant already includes this flag.
 	let targetEnvironment = std.triple.environment(target);
-	if (targetEnvironment === "musl") {
+	if (targetEnvironment === "musl" && variant !== "stage1_bootstrap") {
 		configureArgs.push("--disable-libsanitizer");
 	}
 
 	// On GLIBC hosts, enable cxa_atexit.
-	let hostEnvironment = std.triple.environment(host);
 	if (hostEnvironment === "gnu") {
 		configureArgs.push("--enable-__cxa_atexit");
 	}
 
-	let sourceDir = source_ ?? source(bundledSources);
-
-	if (variant === "stage1_bootstrap") {
-		configureArgs = configureArgs.concat([
-			"--disable-libatomic",
-			"--disable-libgomp",
-			"--disable-libquadmath",
-			"--disable-libsanitizer",
-			"--disable-libssp",
-			"--disable-libstdcxx",
-			"--disable-libvtv",
-			"--disable-shared",
-			"--disable-threads",
-			"--disable-werror",
-			"--enable-languages=c,c++",
-			"--with-newlib",
-			"--without-headers",
-		]);
-		if (hostEnvironment === "gnu") {
-			configureArgs.push(`--with-glibc-version=${defaultGlibcVersion}`);
-		}
-	}
-
-	if (variant === "stage1_limited") {
-		configureArgs = configureArgs.concat([
-			"--disable-libatomic",
-			"--disable-libgomp",
-			"--disable-libssp",
-			"--disable-libvtv",
-			"--enable-default-pie",
-			"--enable-default-ssp",
-			"--enable-initfini-array",
-			`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
-		]);
-	}
-
-	if (variant === "stage2_full") {
-		configureArgs = configureArgs.concat([
-			"--enable-default-ssp",
-			"--enable-default-pie",
-			"--enable-initfini-array",
-		]);
-	}
-
+	// If requested, include environment necessary to complete the target library builds with the fresh, unproxied compiler.
 	if (crossNative) {
 		let sysrootLibDir = `${prefixSysrootPath}/lib`;
 		let sysrootLdso = `${sysrootLibDir}/${interpreterName(target)}`;
 		let ldflagsForTarget = `-Wl,-dynamic-linker,${sysrootLdso}`;
+		configureArgs.push(`LDFLAGS_FOR_TARGET=${ldflagsForTarget}`);
 		preConfigureHook = tg`${preConfigureHook}\nexport LD_LIBRARY_PATH=${sysrootLibDir}`;
-		configureArgs.push(`LDFLAGS_FOR_TARGET="${ldflagsForTarget}"`);
 	}
 
 	// Set up phases.
-	let configureBody: tg.Unresolved<std.phases.CommandArgObject> = {
-		args: configureArgs,
-	};
-	if (configureCommand !== undefined) {
-		configureBody.command = configureCommand;
-	}
 	let configure = {
 		pre: preConfigureHook,
-		body: configureBody,
+		body: {
+			args: configureArgs,
+		},
 	};
-	let phases: tg.Unresolved<std.phases.Arg> = { configure };
-	if (installPhase !== undefined) {
-		phases.install = installPhase;
-	}
-
-	let env = std.env.arg(envArgs);
+	let phases = { configure };
 
 	let result = await std.autotools.build(
 		{
@@ -209,11 +210,10 @@ export let build = tg.target(async (arg: Arg) => {
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
 			env,
-			prefixPath,
 			phases,
 			opt: "3",
 			sdk,
-			source: sourceDir,
+			source: source_ ?? source(bundledSources),
 		},
 		autotools,
 	);

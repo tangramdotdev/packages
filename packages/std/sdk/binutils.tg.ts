@@ -78,7 +78,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			defaultCrossEnv: false,
 			env,
 			opt: "3",
-			parallel: false,
 			phases,
 			sdk,
 			source: source_ ?? source(build),

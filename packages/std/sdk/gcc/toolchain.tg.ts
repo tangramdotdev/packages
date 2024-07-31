@@ -100,9 +100,7 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 
 	// Create a native toolchain (host to host).
 	let nativeBinutils = await binutils({
-		env: std.env.arg(stage1HostSdk, {
-			PATH: tg.Mutation.prefix(tg`${buildToHostCross}/${host}/bin`, ":"),
-		}),
+		env: stage1HostSdk,
 		sdk: false,
 		build: host,
 		host,
