@@ -28,9 +28,9 @@ export let libc = async (unresolvedArg: tg.Unresolved<LibCArg>) => {
 					host: std.triple.stripVersions(host),
 				}),
 			});
-		return glibc.default({ ...arg, linuxHeaders });
+		return glibc.build({ ...arg, linuxHeaders });
 	} else if (kind === "musl") {
-		return musl.default(arg);
+		return musl.build(arg);
 	} else {
 		return tg.unreachable();
 	}

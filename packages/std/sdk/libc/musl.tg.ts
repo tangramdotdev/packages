@@ -29,7 +29,7 @@ export type Arg = {
 	libcc?: tg.File;
 };
 
-export default tg.target(async (arg?: Arg) => {
+export let build = tg.target(async (arg?: Arg) => {
 	let {
 		build: build_,
 		env: env_,
@@ -99,6 +99,8 @@ export default tg.target(async (arg?: Arg) => {
 
 	return result;
 });
+
+export default build;
 
 export let interpreterPath = (triple: string) => {
 	return `${triple}/lib/${interpreterName(triple)}`;

@@ -46,6 +46,8 @@ export type Arg = {
 	build?: string;
 	/** If this is true, add the gmp, mpfr, mpc, and isl source directories to the GCC source and build them all together. If false, these libraries must be available for the host in the env. */
 	bundledSources?: boolean;
+	/** This is used in the canadian cross case to allow the target libraries to build in the final compiler before we have a chance to proxy the linker. It is not necessary when building a cross-compiler. */
+	crossNative?: boolean;
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg | boolean;
@@ -69,6 +71,7 @@ export let build = tg.target(async (arg: Arg) => {
 		autotools = {},
 		build: build_,
 		bundledSources = false,
+		crossNative = false,
 		env: env_,
 		host: host_,
 		sdk,
@@ -163,7 +166,6 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-initfini-array",
 			`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
-			`--with-build-sysroot=${prefixSysrootPath}`,
 		]);
 	}
 
@@ -172,10 +174,15 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
-			`LDFLAGS_FOR_TARGET="-Wl,-dynamic-linker,${prefixSysrootPath}/lib/${interpreterName(
-				target,
-			)} -Wl,-rpath,${prefixSysrootPath}/lib"`,
 		]);
+	}
+
+	if (crossNative) {
+		let sysrootLibDir = `${prefixSysrootPath}/lib`;
+		let sysrootLdso = `${sysrootLibDir}/${interpreterName(target)}`;
+		let ldflagsForTarget = `-Wl,-dynamic-linker,${sysrootLdso}`;
+		preConfigureHook = tg`${preConfigureHook}\nexport LD_LIBRARY_PATH=${sysrootLibDir}`;
+		configureArgs.push(`LDFLAGS_FOR_TARGET="${ldflagsForTarget}"`);
 	}
 
 	// Set up phases.

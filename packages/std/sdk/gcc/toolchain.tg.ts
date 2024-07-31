@@ -112,7 +112,8 @@ export let canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
 	// Build a fully native GCC toolchain.
 	let nativeGcc = gcc.build({
 		build: host,
-		bundledSources: true, // rebuild the host libraries.
+		bundledSources: true, // Rebuild the host libraries.
+		crossNative: true, // Include workaround for configuring target libraries with an unproxied compiler.
 		env: stage1HostSdk,
 		host,
 		sdk: false,

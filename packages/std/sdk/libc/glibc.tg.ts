@@ -34,7 +34,7 @@ export type Arg = {
 	linuxHeaders: tg.Directory;
 };
 
-export default tg.target(async (arg: Arg) => {
+export let build = tg.target(async (arg: Arg) => {
 	let {
 		build: build_,
 		env: env_,
@@ -118,6 +118,8 @@ export default tg.target(async (arg: Arg) => {
 
 	return result;
 });
+
+export default build;
 
 type SysrootFixArg = {
 	directory: tg.Directory;
