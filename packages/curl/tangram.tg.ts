@@ -10,13 +10,13 @@ export let metadata = {
 	license: "MIT",
 	name: "curl",
 	repository: "https://github.com/curl/curl",
-	version: "8.8.0",
+	version: "8.9.1",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:77c0e1cd35ab5b45b659645a93b46d660224d0024f1185e8a95cdb27ae3d787d";
+		"sha256:291124a007ee5111997825940b3876b3048f7d31e73e9caa681b80fe48b2dcd5";
 	let owner = name;
 	let repo = name;
 	let tag = `curl-${version.replace(/\./g, "_")}`;
@@ -35,8 +35,6 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		openssl?: openssl.Arg;
-		perl?: perl.Arg;
-		pkgconfig?: pkgconfig.Arg;
 		zlib?: zlib.Arg;
 		zstd?: zstd.Arg;
 	};
@@ -52,8 +50,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		build,
 		dependencies: {
 			openssl: opensslArg = {},
-			perl: perlArg = {},
-			pkgconfig: pkgconfigArg = {},
 			zlib: zlibArg = {},
 			zstd: zstdArg = {},
 		} = {},
@@ -66,11 +62,17 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let os = std.triple.os(host);
 
 	let runtimeLibEnvVar =
-		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LT_SYS_LIBRARY_PATH";
 	let prepare = `export ${runtimeLibEnvVar}="$LIBRARY_PATH"`;
 
 	let configure = {
-		args: ["--with-openssl"],
+		args: [
+			"--disable-dependency-tracking",
+			"--disable-silent-rules",
+			"--enable-optimize",
+			"--with-openssl",
+			tg`--with-ca-bundle=${std.caCertificates()}/ca-bundle.crt`,
+		],
 	};
 	let phases = { prepare, configure };
 
@@ -82,8 +84,8 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let zstdDir = await zstd.build({ build, env: env_, host, sdk }, zstdArg);
 
 	let env = [
-		perl.build({ build, host: build }, perlArg),
-		pkgconfig.build({ build, host: build }, pkgconfigArg),
+		perl.build({ build, host: build }),
+		pkgconfig.build({ build, host: build }),
 		openSslDir,
 		zlibDir,
 		zstdDir,
@@ -108,9 +110,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let zlibLibDir = tg.Directory.expect(await zlibDir.get("lib"));
 	let zsdtLibDir = tg.Directory.expect(await zstdDir.get("lib"));
 	let wrappedCurl = std.wrap(curlExe, {
-		env: {
-			SSL_CERT_DIR: std.caCertificates(),
-		},
 		libraryPaths: [libDir, openSslLibDir, zlibLibDir, zsdtLibDir],
 	});
 	output = await tg.directory(output, {

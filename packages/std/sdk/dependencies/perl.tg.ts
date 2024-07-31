@@ -4,14 +4,14 @@ import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 
 export let metadata = {
 	name: "perl",
-	version: "5.38.2",
+	version: "5.40.0",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let extension = ".tar.gz";
 	let checksum =
-		"sha256:a0a31534451eb7b83c7d6594a497543a54d488bc90ca00f5e34762577f40655e";
+		"sha256:c740348f357396327a9795d3e8323bafd0fe8a5c7835fc1cbaba0cc8dfe7161f";
 	let base = `https://www.cpan.org/src/5.0`;
 	return await std
 		.download({ base, checksum, name, version, extension })
@@ -29,7 +29,15 @@ export type Arg = {
 };
 
 export let build = tg.target(async (arg?: Arg) => {
-	let { build, env, host, sdk, source: source_ } = arg ?? {};
+	let {
+		build: buildTriple_,
+		env,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ?? {};
+	let host = host_ ?? (await std.triple.host());
+	let build = buildTriple_ ?? host;
 
 	let sourceDir = source_ ?? source();
 
@@ -43,6 +51,14 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 		command: "$SHELL Configure",
 	};
+
+	// On Linux non-musl hosts, specify that LC_ALL uses name/value pairs.
+	if (
+		std.triple.os(host) === "linux" &&
+		std.triple.environment(host) !== "musl"
+	) {
+		configure.args.push("-Accflags=-DPERL_LC_ALL_USES_NAME_VALUE_PAIRS");
+	}
 
 	let phases = { configure };
 

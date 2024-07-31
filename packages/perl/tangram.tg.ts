@@ -10,7 +10,7 @@ export let metadata = {
 	name: "perl",
 	license: "GPL-1.0-or-later",
 	repository: "https://github.com/Perl/perl5",
-	version: "5.38.2",
+	version: "5.40.0",
 };
 
 export let source = tg.target(async () => {
@@ -19,7 +19,7 @@ export let source = tg.target(async () => {
 	// Download raw source.
 	let extension = ".tar.gz";
 	let checksum =
-		"sha256:a0a31534451eb7b83c7d6594a497543a54d488bc90ca00f5e34762577f40655e";
+		"sha256:c740348f357396327a9795d3e8323bafd0fe8a5c7835fc1cbaba0cc8dfe7161f";
 	let base = `https://www.cpan.org/src/5.0`;
 	return await std
 		.download({ base, checksum, extension, name, version })
@@ -100,6 +100,14 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		],
 		command: "$SHELL Configure",
 	};
+
+	// On Linux non-musl hosts, specify that LC_ALL uses name/value pairs.
+	if (
+		std.triple.os(host) === "linux" &&
+		std.triple.environment(host) !== "musl"
+	) {
+		configure.args.push("-Accflags=-DPERL_LC_ALL_USES_NAME_VALUE_PAIRS");
+	}
 
 	let phases = { configure };
 
