@@ -2,6 +2,7 @@ import * as std from "../../tangram.tg.ts";
 
 // Define supported versions.
 type GlibcVersion = "2.37" | "2.38" | "2.39" | "2.40";
+export let AllGlibcVersions = ["2.37", "2.38", "2.39", "2.40"];
 export let defaultGlibcVersion: GlibcVersion = "2.40";
 
 export let metadata = {
@@ -31,7 +32,6 @@ export type Arg = {
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 	linuxHeaders: tg.Directory;
-	version?: GlibcVersion;
 };
 
 export default tg.target(async (arg: Arg) => {
@@ -42,9 +42,9 @@ export default tg.target(async (arg: Arg) => {
 		linuxHeaders,
 		sdk,
 		source: source_,
-		version = defaultGlibcVersion,
 	} = arg;
-	let host = host_ ?? (await std.triple.host());
+	let incomingHost = host_ ?? (await std.triple.host());
+	let { host, version } = splitVersionFromHost(incomingHost);
 	let build = build_ ?? host;
 
 	let additionalFlags = [];
@@ -155,6 +155,24 @@ export let interpreterName = (triple: string) => {
 	let soVersion = arch === "x86_64" ? "2" : "1";
 	let soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;
+};
+
+let splitVersionFromHost = (
+	host: string,
+): { host: string; version: GlibcVersion } => {
+	let environmentVersion = std.triple.environmentVersion(host);
+	if (environmentVersion) {
+		tg.assert(
+			AllGlibcVersions.includes(environmentVersion),
+			`Unsupported glibc version ${environmentVersion}`,
+		);
+		return {
+			host: std.triple.stripVersions(host),
+			version: environmentVersion as GlibcVersion,
+		};
+	} else {
+		return { host, version: defaultGlibcVersion };
+	}
 };
 
 let checksums: Map<GlibcVersion, tg.Checksum> = new Map([

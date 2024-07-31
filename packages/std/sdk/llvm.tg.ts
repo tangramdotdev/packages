@@ -87,9 +87,15 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	];
 
 	// Obtain a sysroot for the requested host.
+
+	// For gnu hosts, pin to glibc2.39.
+	let sysrootHost =
+		std.triple.environment(host) === "gnu"
+			? std.triple.create(host, { environmentVersion: "2.39" })
+			: host;
 	let sysroot = await constructSysroot({
 		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild),
-		host,
+		host: sysrootHost,
 	})
 		.then((dir) => dir.get(host))
 		.then(tg.Directory.expect);

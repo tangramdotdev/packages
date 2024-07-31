@@ -228,6 +228,14 @@ export let rotate = async (arg: {
 	return { host: build, target: host };
 };
 
+/** Strip the version components if present. */
+export let stripVersions = (s: string) => {
+	let c = components(s);
+	c.osVersion = undefined;
+	c.environmentVersion = undefined;
+	return fromComponents(c);
+};
+
 let envs = ["gnu", "musl"];
 let oss = ["linux", "darwin"];
 

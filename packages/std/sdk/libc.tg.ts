@@ -21,7 +21,13 @@ export let libc = async (unresolvedArg: tg.Unresolved<LibCArg>) => {
 	let kind = kindFromTriple(host);
 	if (kind === "glibc") {
 		let linuxHeaders =
-			arg.linuxHeaders ?? tg.directory({ include: kernelHeaders(arg) });
+			arg.linuxHeaders ??
+			tg.directory({
+				include: kernelHeaders({
+					...arg,
+					host: std.triple.stripVersions(host),
+				}),
+			});
 		return glibc.default({ ...arg, linuxHeaders });
 	} else if (kind === "musl") {
 		return musl.default(arg);
@@ -77,11 +83,15 @@ export let linkerFlags = async (arg: LinkerFlagArg) => {
 export let constructSysroot = async (unresolvedArg: tg.Unresolved<LibCArg>) => {
 	let arg = await tg.resolve(unresolvedArg);
 	let host = arg.host ?? (await std.triple.host());
+	let strippedHost = std.triple.stripVersions(host);
 	let linuxHeaders =
-		arg.linuxHeaders ?? (await tg.directory({ include: kernelHeaders(arg) }));
+		arg.linuxHeaders ??
+		(await tg.directory({
+			include: kernelHeaders({ ...arg, host: strippedHost }),
+		}));
 	let cLibrary = await libc({ ...arg, linuxHeaders });
 	let cLibInclude = await cLibrary
-		.get(`${host}/include`)
+		.get(`${strippedHost}/include`)
 		.then(tg.Directory.expect);
 	let hostLinuxInclude = linuxHeaders.get("include").then(tg.Directory.expect);
 	return tg.directory(cLibrary, {

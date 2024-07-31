@@ -44,18 +44,20 @@ export let source = tg.target((bundledSources?: boolean) => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	/** If this is true, add the gmp,mpfr, mpc, and isl source directories to the GCC source and build them all together. If false, these libraries must be available for the host in the env. */
+	/** If this is true, add the gmp, mpfr, mpc, and isl source directories to the GCC source and build them all together. If false, these libraries must be available for the host in the env. */
 	bundledSources?: boolean;
 	env?: std.env.Arg;
 	host?: string;
-	/** If set, any directory here will be copied to $OUTPUT, and $OUTPUT/bin will be added to PATH before configuring. */
-	populatePrefix?: tg.Directory | undefined;
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
+	/**  This directory must contain a directory structure with a single toplevel directory named for the target triple, containing include/lib directories contains a libc matching the target triple and a set of Linxu headers. They will be copied into the output. */
 	sysroot: tg.Directory;
 	target?: string;
+	/** This directory must contain a set of binutils for the target. They will be copied into the output. */
+	targetBinutils: tg.Directory;
 	variant: Variant;
 };
+
 export type Variant =
 	| "stage1_bootstrap" // C only, no libraries. Will produce an output directory with two folders, $OUTPUT/prefix with the installed compiler and $OUTPUT/build with the build artifacts.
 	| "stage1_limited" // Produce a complete native `host === target` GCC toolchain with only C and C++ enabled and many features disabled.
@@ -69,11 +71,11 @@ export let build = tg.target(async (arg: Arg) => {
 		bundledSources = false,
 		env: env_,
 		host: host_,
-		populatePrefix,
 		sdk,
 		source: source_,
 		sysroot,
 		target: target_,
+		targetBinutils,
 		variant,
 	} = arg ?? {};
 
@@ -86,12 +88,19 @@ export let build = tg.target(async (arg: Arg) => {
 	// Configure sysroot.
 	let isCross = host !== target;
 	let targetPrefix = isCross ? `${target}-` : "";
-	let sysrootSubdir = isCross ? `/${target}` : "";
-	let sysrootDir = tg`${sysroot}${sysrootSubdir}`;
+	let sysrootDir = `${isCross ? `/${target}` : ""}/sysroot`;
+	let prefixSysrootPath = `$\{OUTPUT\}${sysrootDir}`;
 
-	// Set up configuration.
-	let preConfigureHook: tg.Unresolved<tg.Template.Arg> = "mkdir -p $OUTPUT";
-	let configureArgs = [
+	// Before configuring, copy the target binutils and sysroot into the prefix. Create a symlink in a subdirectory of the prefix to ensure the toolchain is relocatable.
+	let sysrootToCopy = isCross
+		? sysroot
+		: sysroot.get(target).then(tg.Directory.expect);
+	let prefixSeed = tg.directory(sysrootToCopy, targetBinutils);
+	let preConfigureHook: tg.Unresolved<tg.Template.Arg> = tg`\nmkdir -p $OUTPUT\ncp -R ${prefixSeed}/* $OUTPUT\nchmod -R u+w $OUTPUT\nexport PATH=$OUTPUT/bin:$PATH\nln -s . ${prefixSysrootPath}`;
+
+	// Define args used for all variants.
+	// NOTE: Usually any `tg.Template.Arg` could be a valid configure arg. We restrict to strings here because GCC retains the full list of compile-time args. We want to minimize rendered Tangram artifact paths in the output.
+	let configureArgs: Array<string> = [
 		"--disable-bootstrap",
 		"--disable-dependency-tracking",
 		"--disable-nls",
@@ -102,20 +111,11 @@ export let build = tg.target(async (arg: Arg) => {
 		`--host=${host}`,
 		`--target=${target}`,
 		"--with-native-system-header-dir=/include",
-		tg`--with-sysroot=${sysrootDir}`,
+		`--with-sysroot=${prefixSysrootPath}`,
 	];
 	let configureCommand = undefined;
 	let installPhase = undefined;
 
-	if (populatePrefix) {
-		preConfigureHook = tg.Template.join(
-			"\n",
-			preConfigureHook,
-			tg`cp -R ${arg.populatePrefix}/* $OUTPUT\nchmod -R u+w $OUTPUT\nexport PATH=$OUTPUT/bin:$PATH`,
-		);
-	}
-
-	// Set up containers to collect additional arguments and environment variables for specific configurations.
 	let envArgs: tg.Unresolved<Array<std.env.Arg>> = [env_];
 
 	// For Musl targets, disable libsanitizer regardless of build configuration. See https://wiki.musl-libc.org/open-issues.html
@@ -151,9 +151,6 @@ export let build = tg.target(async (arg: Arg) => {
 		if (hostEnvironment === "gnu") {
 			configureArgs.push(`--with-glibc-version=${defaultGlibcVersion}`);
 		}
-		installPhase = {
-			post: tg`cat ${sourceDir}/gcc/limitx.h ${sourceDir}/gcc/glimits.h ${sourceDir}/gcc/limity.h > $(dirname $($OUTPUT/bin/${target}-gcc -print-libgcc-file-name))/include/limits.h`,
-		};
 	}
 
 	if (variant === "stage1_limited") {
@@ -165,8 +162,8 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-pie",
 			"--enable-default-ssp",
 			"--enable-initfini-array",
-			tg`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
-			tg`--with-build-sysroot=${sysrootDir}`,
+			`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
+			`--with-build-sysroot=${prefixSysrootPath}`,
 		]);
 	}
 
@@ -175,9 +172,9 @@ export let build = tg.target(async (arg: Arg) => {
 			"--enable-default-ssp",
 			"--enable-default-pie",
 			"--enable-initfini-array",
-			tg`LDFLAGS_FOR_TARGET="-Wl,-dynamic-linker,${sysrootDir}/lib/${interpreterName(
+			`LDFLAGS_FOR_TARGET="-Wl,-dynamic-linker,${prefixSysrootPath}/lib/${interpreterName(
 				target,
-			)} -Wl,-rpath,${sysrootDir}/lib"`,
+			)} -Wl,-rpath,${prefixSysrootPath}/lib"`,
 		]);
 	}
 
@@ -231,16 +228,10 @@ export let build = tg.target(async (arg: Arg) => {
 
 export default build;
 
-export let libPath = "lib";
-
-export let linkerPath = (triple: string) => `${triple}/bin/ld`;
-
-export let crossLinkerPath = (target: string) => `${target}/bin/ld`;
-
 export { interpreterName } from "./libc.tg.ts";
 
-export let interpreterPath = (host: string) =>
-	`${libPath}/${interpreterName(host)}`;
+export let interpreterPath = (target: string, isCross?: boolean) =>
+	`${isCross ? `/${target}/sysroot` : "/"}lib/${interpreterName(target)}`;
 
 type WrapArgsArg = {
 	host: string;
