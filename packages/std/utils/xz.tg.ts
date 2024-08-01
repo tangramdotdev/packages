@@ -49,7 +49,7 @@ export let build = tg.target(async (arg?: Arg) => {
 
 	let env = std.env.arg(env_, prerequisites(build));
 
-	let output = await buildUtil({
+	return buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
@@ -62,20 +62,6 @@ export let build = tg.target(async (arg?: Arg) => {
 			"bin/xzmore",
 		],
 	});
-
-	let bins = ["lzmadec", "lzmainfo", "xz", "xzdec"];
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	for (let bin of bins) {
-		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
-		let wrappedBin = std.wrap({
-			buildToolchain: bootstrap.sdk.env(host),
-			executable: unwrappedBin,
-			libraryPaths: [libDir],
-		});
-		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
-	}
-
-	return output;
 });
 
 export default build;

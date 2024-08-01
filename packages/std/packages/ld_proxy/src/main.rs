@@ -27,7 +27,7 @@ async fn main() {
 
 async fn main_inner() -> tg::Result<()> {
 	// Read the options from the environment and arguments.
-	let options = read_options();
+	let options = read_options()?;
 	setup_tracing(options.tracing_level.as_deref());
 	tracing::debug!(?options);
 
@@ -64,6 +64,9 @@ async fn main_inner() -> tg::Result<()> {
 // The options read from the environment and arguments.
 #[derive(Debug)]
 struct Options {
+	/// Paths which may contain additional dynamic libraries passed on the command line, not via a library path.
+	additional_library_candidate_paths: Vec<PathBuf>,
+
 	/// Library path optimization strategy. Select `resolve`, `filter`, `combine`, or `none`. Defaults to `combine`.
 	library_path_optimization: LibraryPathOptimizationLevel,
 
@@ -102,7 +105,7 @@ struct Options {
 }
 
 // Read the options from the environment and arguments.
-fn read_options() -> Options {
+fn read_options() -> tg::Result<Options> {
 	// Create the output.
 	let mut command_args = Vec::new();
 	let mut output_path = None;
@@ -110,18 +113,18 @@ fn read_options() -> Options {
 
 	// Get the command.
 	let command_path = std::env::var("TANGRAM_LINKER_COMMAND_PATH")
-		.ok()
-		.map(Into::into)
-		.expect("TANGRAM_LINKER_COMMAND_PATH must be set.");
+		.map_err(|error| tg::error!(source = error, "TANGRAM_LINKER_COMMAND_PATH must be set."))?
+		.into();
 
 	// Get the passthrough flag.
 	let mut passthrough = std::env::var("TANGRAM_LINKER_PASSTHROUGH").is_ok();
 
 	// Get the wrapper path.
 	let wrapper_id = tg::file::Id::from_str(
-		&std::env::var("TANGRAM_LINKER_WRAPPER_ID").expect("TANGRAM_LINKER_WRAPPER_ID must be set"),
+		&std::env::var("TANGRAM_LINKER_WRAPPER_ID")
+			.map_err(|error| tg::error!(source = error, "TANGRAM_LINKER_WRAPPER_ID must be set"))?,
 	)
-	.expect("Could not parse wrapper ID");
+	.map_err(|error| tg::error!(source = error, "Could not parse wrapper ID"))?;
 
 	// Get the interpreter path.
 	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH")
@@ -161,6 +164,9 @@ fn read_options() -> Options {
 
 	// Skip arg0.
 	args.next();
+
+	// Prepare to store dynamic libraries passed directly to the linker.
+	let mut additional_library_candidate_paths = Vec::new();
 
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
@@ -209,12 +215,20 @@ fn read_options() -> Options {
 		} else if let Some(library_path) = arg.strip_prefix("-L") {
 			library_paths.push(library_path.to_owned());
 		}
+
+		if is_library_candidate(&arg) {
+			// If the path can't be canonicalized, do nothing - it's not a valid library candidate.
+			if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
+				additional_library_candidate_paths.push(canonical_path);
+			}
+		}
 	}
 
 	// If no explicit output path was provided, instead look for `a.out`.
 	let output_path = output_path.as_deref().unwrap_or("a.out").into();
 
-	Options {
+	let options = Options {
+		additional_library_candidate_paths,
 		library_path_optimization: library_optimization_strategy,
 		command_path,
 		command_args,
@@ -227,7 +241,25 @@ fn read_options() -> Options {
 		passthrough,
 		tracing_level,
 		wrapper_id,
-	}
+	};
+
+	Ok(options)
+}
+
+fn is_library_candidate(arg: &str) -> bool {
+	let dylib_ext = if cfg!(target_os = "macos") {
+		".dylib"
+	} else if cfg!(target_os = "linux") {
+		// Exclude interpreter paths.
+		let is_ldso = arg.contains("ld-linux") || arg.contains("ld-musl");
+		if is_ldso {
+			return false;
+		}
+		".so"
+	} else {
+		unreachable!();
+	};
+	arg.contains(dylib_ext)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -240,8 +272,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let AnalyzeOutputFileOutput {
 		is_executable,
 		interpreter,
+		name,
 		needed_libraries: initial_needed_libraries,
-		..
 	} = analyze_output_file(&options.output_path).await?;
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
@@ -251,12 +283,45 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		return Ok(());
 	}
 
-	// Unrender all library paths to symlinks.
-	let library_paths = options
-		.library_paths
-		.iter()
-		.map(|library_path| template_data_to_symlink_data(unrender(&tg, library_path)));
-	let library_paths = futures::future::try_join_all(library_paths).await?;
+	// Set the initially known needed libraries.
+	let mut needed_libraries: HashMap<String, Option<tg::directory::Id>, Hasher> =
+		initial_needed_libraries
+			.iter()
+			.cloned()
+			.map(|name| (name, None))
+			.collect();
+
+	// On macOS, retain only filenames and remove the "self" and "libSystem.B.dylib" entries.
+	if cfg!(target_os = "macos") {
+		needed_libraries.retain(|key, _| {
+			!key.contains("self")
+				&& !key.contains("libSystem.B.dylib")
+				&& if let Some(name) = &name {
+					!key.contains(name)
+				} else {
+					true
+				}
+		});
+	}
+
+	// Create a library path for any additional candidate libraries that are found in NEEDED and are actual library files.
+	let command_line_library_path = create_library_path_for_command_line_libraries(
+		&tg,
+		&options.additional_library_candidate_paths,
+		&mut needed_libraries,
+	)
+	.await?;
+
+	// Unrender all library paths to symlinks, prepending the command-line library path.
+	let library_paths =
+		std::iter::once(command_line_library_path)
+			.chain(
+				futures::future::try_join_all(options.library_paths.iter().map(|library_path| {
+					template_data_to_symlink_data(unrender(&tg, library_path))
+				}))
+				.await?,
+			)
+			.collect_vec();
 	tracing::debug!(?library_paths);
 
 	// Obtain the file artifact from the output path.
@@ -280,14 +345,6 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let library_paths = if library_paths.is_empty() {
 		None
 	} else {
-		// Set the initially known needed libraries.
-		let mut needed_libraries: HashMap<String, Option<tg::directory::Id>, Hasher> =
-			initial_needed_libraries
-				.iter()
-				.cloned()
-				.map(|name| (name, None))
-				.collect();
-
 		let library_paths: HashSet<tg::symlink::Id, Hasher> =
 			futures::future::try_join_all(library_paths.into_iter().map(|symlink_data| async {
 				let object = tg::symlink::Object::try_from(symlink_data).unwrap();
@@ -306,16 +363,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			"pre-optimize library paths"
 		);
 
-		// If any tracing level is set, enable verifying missing libraries.
-		let report_missing = options.tracing_level.is_some();
-
 		let library_paths = optimize_library_paths(
 			&tg,
 			&output_file,
 			library_paths,
 			&mut needed_libraries,
 			options.library_path_optimization,
-			report_missing,
 			options.max_depth,
 		)
 		.await?;
@@ -437,6 +490,48 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	Ok(())
 }
 
+/// Check in any files needed libraries and produce a directory with correct names.
+async fn create_library_path_for_command_line_libraries<H: BuildHasher + Default>(
+	tg: &impl tg::Handle,
+	library_candidate_paths: &[PathBuf],
+	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
+) -> tg::Result<tg::symlink::Data> {
+	let mut entries = BTreeMap::new();
+	for library_candidate_path in library_candidate_paths {
+		if let Ok(AnalyzeOutputFileOutput { name, .. }) =
+			analyze_output_file(library_candidate_path).await
+		{
+			if let Some(name) = name {
+				// Ensure the file is actually an object. If not, skip it.
+				if all_needed_libraries.contains_key(&name) {
+					// Check in the file.
+					let library_candidate_path =
+						tg::Path::try_from(library_candidate_path.clone())?;
+					let library_candidate_file = tg::Artifact::check_in(
+						tg,
+						tg::artifact::checkin::Arg {
+							destructive: false,
+							path: library_candidate_path,
+						},
+					)
+					.await?
+					.try_unwrap_file()
+					.map_err(|error| tg::error!(source = error, "expected a file"))?;
+
+					// Add an entry to the directory.
+					entries.insert(name, tg::Artifact::File(library_candidate_file));
+				}
+			}
+		}
+	}
+
+	// Construct the directory.
+	let directory = tg::Directory::new(entries);
+	let symlink = tg::Symlink::new(Some(directory.into()), None);
+	let symlink_data = symlink.data(tg).await?;
+	Ok(symlink_data)
+}
+
 /// Create a manifest.
 #[allow(clippy::too_many_lines)]
 async fn create_manifest<H: BuildHasher>(
@@ -556,6 +651,8 @@ struct AnalyzeOutputFileOutput {
 	is_executable: bool,
 	/// Does the output file need an interpreter? On macOS, This should always get `Some(None)`. On Linux, None indicates a statically-linked executable, `Some(None)` indicates a dynamically-linked executable with a default ldso path, and `Some(Some(symlink))` indicates the `PT_INTERP` field has been explicitly set to point at a non-standard path we need to retain.
 	interpreter: InterpreterRequirement,
+	/// The name of this library, if present. This is soname on Linux and name on macOS.
+	name: Option<String>,
 	/// Does the output file specify libraries required at runtime?
 	needed_libraries: Vec<String>,
 }
@@ -613,7 +710,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	library_paths: HashSet<tg::symlink::Id, H>,
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
 	strategy: LibraryPathOptimizationLevel,
-	report_missing: bool,
 	max_depth: usize,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	if matches!(strategy, LibraryPathOptimizationLevel::None) || library_paths.is_empty() {
@@ -624,7 +720,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let resolved_dirs: HashSet<tg::directory::Id, H> = resolve_paths(tg, &library_paths).await?;
 	tracing::trace!(?resolved_dirs, "post-resolve");
 	if matches!(strategy, LibraryPathOptimizationLevel::Resolve) {
-		return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;
+		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
 	}
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
@@ -633,7 +729,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tracing::trace!(?needed_libraries, "post-find");
 	if matches!(strategy, LibraryPathOptimizationLevel::Filter) {
 		let resolved_dirs = needed_libraries.values().flatten().cloned().collect();
-		return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;
+		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
 	}
 
 	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
@@ -655,14 +751,13 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let dir_id = directory.id(tg).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
-	return finalize_library_paths(tg, resolved_dirs, needed_libraries, report_missing).await;
+	return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
 }
 
 async fn finalize_library_paths<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	resolved_dirs: HashSet<tg::directory::Id, H>,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
-	report_missing: bool,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|id| async {
 		tg::Artifact::from(tg::Directory::with_id(id.clone()))
@@ -672,9 +767,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	}))
 	.await?;
 	let result = store_dirs_as_symlinks(tg, resolved_dirs).await?;
-	if report_missing {
-		report_missing_libraries(tg, needed_libraries, &result).await?;
-	}
+	report_missing_libraries(tg, needed_libraries, &result).await?;
 	Ok(result)
 }
 
@@ -705,7 +798,10 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 		.difference(&found_libraries)
 		.collect_vec();
 	if !missing_libs.is_empty() {
-		tracing::warn!("Could not find the following libraries, they will be required at runtime: {missing_libs:?}");
+		tracing::error!("Could not find the following required libraries: {missing_libs:?}");
+		if cfg!(target_os = "linux") {
+			return Err(tg::error!("missing libraries: {missing_libs:?}"));
+		}
 	}
 	Ok(())
 }
@@ -877,6 +973,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 		goblin::Object::Archive(_) => AnalyzeOutputFileOutput {
 			is_executable: false,
 			interpreter: InterpreterRequirement::None,
+			name: None,
 			needed_libraries: vec![],
 		},
 
@@ -889,6 +986,8 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 
 			// Read the ELF header to determine if it is an executable.
 			let is_executable = !elf.is_lib || is_pie;
+
+			let name = elf.soname.map(std::string::ToString::to_string);
 
 			let needed_libraries = elf
 				.libraries
@@ -919,6 +1018,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 			AnalyzeOutputFileOutput {
 				is_executable,
 				interpreter,
+				name,
 				needed_libraries,
 			}
 		},
@@ -927,6 +1027,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 		goblin::Object::Mach(mach) => match mach {
 			goblin::mach::Mach::Binary(mach) => {
 				let is_executable = mach.header.filetype == goblin::mach::header::MH_EXECUTE;
+				let name = mach.name.map(std::string::ToString::to_string);
 				let needed_libraries = mach
 					.libs
 					.iter()
@@ -936,27 +1037,30 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				AnalyzeOutputFileOutput {
 					is_executable,
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
+					name,
 					needed_libraries,
 				}
 			},
 			goblin::mach::Mach::Fat(mach) => {
-				let (is_executable, needed_libraries) = mach
+				let (is_executable, name, needed_libraries) = mach
 					.into_iter()
 					.filter_map(std::result::Result::ok)
-					.fold((false, vec![]), |acc, arch| match arch {
-						goblin::mach::SingleArch::Archive(_) => (true, acc.1),
+					.fold((false, None, vec![]), |acc, arch| match arch {
+						goblin::mach::SingleArch::Archive(_) => (true, None, acc.2),
 						goblin::mach::SingleArch::MachO(mach) => {
 							let acc_executable = acc.0;
-							let mut libs = acc.1;
+							let mut libs = acc.2;
 							let executable = acc_executable
 								|| (mach.header.filetype == goblin::mach::header::MH_EXECUTE);
 							libs.extend(mach.libs.iter().map(std::string::ToString::to_string));
-							(executable, libs)
+							let name = mach.name.map(std::string::ToString::to_string);
+							(executable, name, libs)
 						},
 					});
 				AnalyzeOutputFileOutput {
 					is_executable,
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
+					name,
 					needed_libraries,
 				}
 			},

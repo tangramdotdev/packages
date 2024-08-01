@@ -54,6 +54,7 @@ export let build = tg.target(async (arg?: Arg) => {
 	let configure = {
 		args: [
 			"--disable-dependency-tracking",
+			"--disable-silent-rules",
 			"--disable-nls",
 			"--disable-rpath",
 			"--with-pic",
@@ -74,7 +75,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		env.push({ CC: "gcc -static" });
 	}
 
-	let output = await buildUtil({
+	return buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		phases,
@@ -82,18 +83,6 @@ export let build = tg.target(async (arg?: Arg) => {
 		sdk,
 		source: source_ ?? source(),
 	});
-
-	let bins = ["attr", "getfattr", "setfattr"];
-	for (let bin of bins) {
-		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
-		let wrappedBin = std.wrap({
-			buildToolchain: bootstrap.sdk(),
-			executable: unwrappedBin,
-			libraryPaths: [tg.symlink(tg`${output}/lib`)],
-		});
-		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
-	}
-	return output;
 });
 
 export default build;
