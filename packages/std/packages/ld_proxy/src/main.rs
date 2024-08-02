@@ -287,8 +287,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let mut needed_libraries: HashMap<String, Option<tg::directory::Id>, Hasher> =
 		initial_needed_libraries
 			.iter()
-			.cloned()
-			.map(|name| (name, None))
+			.map(|name| (name.clone(), None))
 			.collect();
 
 	// On macOS, retain only filenames and remove the "self" and "libSystem.B.dylib" entries.
@@ -491,7 +490,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 }
 
 /// Check in any files needed libraries and produce a directory with correct names.
-async fn create_library_path_for_command_line_libraries<H: BuildHasher + Default>(
+#[tracing::instrument(skip(tg))]
+async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 	tg: &impl tg::Handle,
 	library_candidate_paths: &[PathBuf],
 	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
@@ -530,6 +530,13 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher + Default
 	let symlink = tg::Symlink::new(Some(directory.into()), None);
 	let symlink_data = symlink.data(tg).await?;
 	Ok(symlink_data)
+}
+
+fn extract_filename(path: impl AsRef<str> + ToString) -> String {
+	std::path::Path::new(path.as_ref())
+		.file_name()
+		.map(|name| name.to_string_lossy().to_string())
+		.unwrap_or_else(|| path.to_string())
 }
 
 /// Create a manifest.
@@ -799,9 +806,7 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 		.collect_vec();
 	if !missing_libs.is_empty() {
 		tracing::error!("Could not find the following required libraries: {missing_libs:?}");
-		if cfg!(target_os = "linux") {
-			return Err(tg::error!("missing libraries: {missing_libs:?}"));
-		}
+		return Err(tg::error!("missing libraries: {missing_libs:?}"));
 	}
 	Ok(())
 }
@@ -1027,12 +1032,8 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 		goblin::Object::Mach(mach) => match mach {
 			goblin::mach::Mach::Binary(mach) => {
 				let is_executable = mach.header.filetype == goblin::mach::header::MH_EXECUTE;
-				let name = mach.name.map(std::string::ToString::to_string);
-				let needed_libraries = mach
-					.libs
-					.iter()
-					.map(std::string::ToString::to_string)
-					.collect_vec();
+				let name = mach.name.map(extract_filename);
+				let needed_libraries = mach.libs.iter().map(extract_filename).collect_vec();
 
 				AnalyzeOutputFileOutput {
 					is_executable,
@@ -1052,8 +1053,8 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 							let mut libs = acc.2;
 							let executable = acc_executable
 								|| (mach.header.filetype == goblin::mach::header::MH_EXECUTE);
-							libs.extend(mach.libs.iter().map(std::string::ToString::to_string));
-							let name = mach.name.map(std::string::ToString::to_string);
+							libs.extend(mach.libs.iter().map(extract_filename));
+							let name = mach.name.map(extract_filename);
 							(executable, name, libs)
 						},
 					});
