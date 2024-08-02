@@ -108,6 +108,7 @@ struct Options {
 }
 
 // Read the options from the environment and arguments.
+#[allow(clippy::too_many_lines)]
 fn read_options() -> tg::Result<Options> {
 	// Create the output.
 	let mut command_args = Vec::new();
@@ -509,29 +510,27 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 ) -> tg::Result<tg::symlink::Data> {
 	let mut entries = BTreeMap::new();
 	for library_candidate_path in library_candidate_paths {
-		if let Ok(AnalyzeOutputFileOutput { name, .. }) =
-			analyze_output_file(library_candidate_path).await
+		if let Ok(AnalyzeOutputFileOutput {
+			name: Some(name), ..
+		}) = analyze_output_file(library_candidate_path).await
 		{
-			if let Some(name) = name {
-				// Ensure the file is actually an object. If not, skip it.
-				if all_needed_libraries.contains_key(&name) {
-					// Check in the file.
-					let library_candidate_path =
-						tg::Path::try_from(library_candidate_path.clone())?;
-					let library_candidate_file = tg::Artifact::check_in(
-						tg,
-						tg::artifact::checkin::Arg {
-							destructive: false,
-							path: library_candidate_path,
-						},
-					)
-					.await?
-					.try_unwrap_file()
-					.map_err(|error| tg::error!(source = error, "expected a file"))?;
+			// Ensure the file is actually an object. If not, skip it.
+			if all_needed_libraries.contains_key(&name) {
+				// Check in the file.
+				let library_candidate_path = tg::Path::try_from(library_candidate_path.clone())?;
+				let library_candidate_file = tg::Artifact::check_in(
+					tg,
+					tg::artifact::checkin::Arg {
+						destructive: false,
+						path: library_candidate_path,
+					},
+				)
+				.await?
+				.try_unwrap_file()
+				.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
-					// Add an entry to the directory.
-					entries.insert(name, tg::Artifact::File(library_candidate_file));
-				}
+				// Add an entry to the directory.
+				entries.insert(name, tg::Artifact::File(library_candidate_file));
 			}
 		}
 	}
@@ -543,11 +542,11 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 	Ok(symlink_data)
 }
 
-fn extract_filename(path: impl AsRef<str> + ToString) -> String {
-	std::path::Path::new(path.as_ref())
-		.file_name()
-		.map(|name| name.to_string_lossy().to_string())
-		.unwrap_or_else(|| path.to_string())
+fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
+	std::path::Path::new(path.as_ref()).file_name().map_or_else(
+		|| path.to_string(),
+		|name| name.to_string_lossy().to_string(),
+	)
 }
 
 /// Create a manifest.
@@ -813,6 +812,10 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 ) -> tg::Result<()> {
 	let mut found_libraries = HashSet::default();
 	for library in needed_libraries.keys() {
+		// For this check, we just care about the basename.
+		let library_basename = library.split('.').next().ok_or(tg::error!(
+			"could not determine basename for library {library}"
+		))?;
 		for library_path in library_paths {
 			let symlink = tg::Symlink::with_id(library_path.clone());
 			let artifact = symlink.artifact(tg).await?;
@@ -820,9 +823,11 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 				.as_ref()
 				.ok_or(tg::error!("expected a directory"))?;
 			if let tg::Artifact::Directory(directory) = artifact {
-				if directory.entries(tg).await?.contains_key(library) {
-					found_libraries.insert(library.clone());
-					continue;
+				for needed_library_name in directory.entries(tg).await?.keys() {
+					if needed_library_name.starts_with(library_basename) {
+						found_libraries.insert(needed_library_name.to_string());
+						break;
+					}
 				}
 			}
 		}
