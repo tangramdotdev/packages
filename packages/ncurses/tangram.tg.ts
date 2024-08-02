@@ -27,7 +27,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
-		env,
+		env: env_,
 		host,
 		sdk,
 		source: source_,
@@ -56,6 +56,14 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let fixup = `sed -e 's/^#if.*XOPEN.*$/#if 1/' -i $OUTPUT/include/ncursesw/curses.h`;
 
 	let phases = { configure, fixup };
+
+	let env = std.env.arg(
+		{
+			// We rename the shared objects after the build, let the LD proxy ignore missing libraries.
+			TANGRAM_LINKER_ALLOW_MISSING_LIBRARIES: true,
+		},
+		env_,
+	);
 
 	let result = await std.autotools.build(
 		{

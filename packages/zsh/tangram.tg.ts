@@ -54,7 +54,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let dependencies = [pcre2.build({ build, env: env_, host, sdk }, pcre2Arg), ncurses.build(ncursesArg)];
+	let dependencies = [
+		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
+		ncurses.build(ncursesArg),
+	];
 	let env = std.env.arg(
 		...dependencies,
 		{
@@ -87,7 +90,7 @@ export let wrapScript = async (script: tg.File) => {
 	) {
 		throw new Error("Expected a shebang sh, bash, or zsh script");
 	}
-	let interpreter = tg.File.expect(await (await zsh()).get("bin/zsh"));
+	let interpreter = tg.File.expect(await (await build()).get("bin/zsh"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 

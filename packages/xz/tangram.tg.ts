@@ -45,7 +45,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		],
 	};
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -55,19 +55,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	// Wrap binaries that need the library path set.
-	let bins = ["lzmadec", "lzmainfo", "xz", "xzdec"];
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	for (let bin of bins) {
-		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
-		let wrappedBin = std.wrap(unwrappedBin, {
-			libraryPaths: [libDir],
-		});
-		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
-	}
-
-	return output;
 });
 
 export default build;

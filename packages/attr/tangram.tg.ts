@@ -56,23 +56,10 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let bins = await Promise.all(
-		["attr", "getfattr", "setfattr"].map(async (bin) => {
-			return [
-				bin,
-				std.wrap(tg.File.expect(await output.get(`bin/${bin}`)), {
-					libraryPaths: [libDir],
-				}),
-			];
-		}),
-	);
-	for (let [binName, binFile] of bins) {
-		output = await tg.directory(output, { [`bin/${binName}`]: binFile });
-	}
-
 	// Remove .la files.
-	for await (let [name, _] of libDir) {
+	for await (let [name, _] of await output
+		.get("lib")
+		.then(tg.Directory.expect)) {
 		if (name.endsWith(".la")) {
 			output = await tg.directory(output, { [`lib/${name}`]: undefined });
 		}

@@ -33,7 +33,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			sdk,
@@ -41,16 +41,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let unwrappedIconv = tg.File.expect(await output.get("bin/iconv"));
-	let wrappedIconv = await std.wrap(unwrappedIconv, {
-		libraryPaths: [libDir],
-	});
-	output = await tg.directory(output, {
-		["bin/iconv"]: wrappedIconv,
-	});
-	return output;
 });
 
 export default build;

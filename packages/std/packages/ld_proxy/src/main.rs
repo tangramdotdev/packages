@@ -67,6 +67,9 @@ struct Options {
 	/// Paths which may contain additional dynamic libraries passed on the command line, not via a library path.
 	additional_library_candidate_paths: Vec<PathBuf>,
 
+	/// Allow producing wrappers with required libraries missing. Pass specific names or "all" to disable the check entirely.
+	allow_missing_libraries: bool,
+
 	/// Library path optimization strategy. Select `resolve`, `filter`, `combine`, or `none`. Defaults to `combine`.
 	library_path_optimization: LibraryPathOptimizationLevel,
 
@@ -141,6 +144,10 @@ fn read_options() -> tg::Result<Options> {
 				.collect_vec()
 		});
 
+	// Get the optional comma-separated list of allowed missing libraries.
+	let mut allow_missing_libraries =
+		std::env::var("TANGRAM_LINKER_ALLOW_MISSING_LIBRARIES").is_ok();
+
 	// Get the max depth.
 	let mut max_depth = std::env::var("TANGRAM_LINKER_MAX_DEPTH")
 		.ok()
@@ -186,6 +193,8 @@ fn read_options() -> tg::Result<Options> {
 				}
 			} else if arg.starts_with("--tg-passthrough") {
 				passthrough = true;
+			} else if arg.starts_with("--tg-allow-missing-libraries") {
+				allow_missing_libraries = true;
 			} else {
 				command_args.push(arg.clone());
 			}
@@ -229,6 +238,7 @@ fn read_options() -> tg::Result<Options> {
 
 	let options = Options {
 		additional_library_candidate_paths,
+		allow_missing_libraries,
 		library_path_optimization: library_optimization_strategy,
 		command_path,
 		command_args,
@@ -369,6 +379,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			&mut needed_libraries,
 			options.library_path_optimization,
 			options.max_depth,
+			options.allow_missing_libraries,
 		)
 		.await?;
 
@@ -718,6 +729,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
 	strategy: LibraryPathOptimizationLevel,
 	max_depth: usize,
+	allow_missing_libraries: bool,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	if matches!(strategy, LibraryPathOptimizationLevel::None) || library_paths.is_empty() {
 		return Ok(library_paths);
@@ -727,7 +739,13 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let resolved_dirs: HashSet<tg::directory::Id, H> = resolve_paths(tg, &library_paths).await?;
 	tracing::trace!(?resolved_dirs, "post-resolve");
 	if matches!(strategy, LibraryPathOptimizationLevel::Resolve) {
-		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
+		return finalize_library_paths(
+			tg,
+			resolved_dirs,
+			needed_libraries,
+			allow_missing_libraries,
+		)
+		.await;
 	}
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
@@ -736,7 +754,13 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tracing::trace!(?needed_libraries, "post-find");
 	if matches!(strategy, LibraryPathOptimizationLevel::Filter) {
 		let resolved_dirs = needed_libraries.values().flatten().cloned().collect();
-		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
+		return finalize_library_paths(
+			tg,
+			resolved_dirs,
+			needed_libraries,
+			allow_missing_libraries,
+		)
+		.await;
 	}
 
 	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
@@ -758,13 +782,15 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let dir_id = directory.id(tg).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
-	return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
+	return finalize_library_paths(tg, resolved_dirs, needed_libraries, allow_missing_libraries)
+		.await;
 }
 
 async fn finalize_library_paths<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	resolved_dirs: HashSet<tg::directory::Id, H>,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
+	allow_missing_libraries: bool,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|id| async {
 		tg::Artifact::from(tg::Directory::with_id(id.clone()))
@@ -774,7 +800,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	}))
 	.await?;
 	let result = store_dirs_as_symlinks(tg, resolved_dirs).await?;
-	report_missing_libraries(tg, needed_libraries, &result).await?;
+	report_missing_libraries(tg, needed_libraries, &result, allow_missing_libraries).await?;
 	Ok(result)
 }
 
@@ -783,6 +809,7 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 	library_paths: &HashSet<tg::symlink::Id, H>,
+	allow_missing_libraries: bool,
 ) -> tg::Result<()> {
 	let mut found_libraries = HashSet::default();
 	for library in needed_libraries.keys() {
@@ -806,7 +833,9 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 		.collect_vec();
 	if !missing_libs.is_empty() {
 		tracing::error!("Could not find the following required libraries: {missing_libs:?}");
-		return Err(tg::error!("missing libraries: {missing_libs:?}"));
+		if !allow_missing_libraries {
+			return Err(tg::error!("missing libraries: {missing_libs:?}"));
+		}
 	}
 	Ok(())
 }

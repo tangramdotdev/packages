@@ -56,7 +56,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -66,22 +66,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let bins = await Promise.all(
-		["chacl", "getfacl", "setfacl"].map(async (bin) => {
-			return [
-				bin,
-				std.wrap(tg.File.expect(await output.get(`bin/${bin}`)), {
-					libraryPaths: [libDir],
-				}),
-			];
-		}),
-	);
-	for (let [binName, binFile] of bins) {
-		output = await tg.directory(output, { [`bin/${binName}`]: binFile });
-	}
-	return output;
 });
 
 export default build;
