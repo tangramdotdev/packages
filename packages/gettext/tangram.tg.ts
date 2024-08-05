@@ -84,27 +84,28 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let hostDependencies = [];
 	let aclForHost = undefined;
 	let attrForHost = undefined;
+	let libiconvForHost = undefined;
 	if (os === "linux") {
-		aclForHost = await acl
-			.build({ build, host, sdk }, aclArg)
-			.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+		aclForHost = await acl.build({ build, host, sdk }, aclArg);
 		hostDependencies.push(aclForHost);
-		attrForHost = await attr
-			.build({ build, host, sdk }, attrArg)
-			.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+		attrForHost = await attr.build({ build, host, sdk }, attrArg);
 		hostDependencies.push(attrForHost);
+		// Work around a warning using the glibc-provided iconv.
+		hostDependencies.push({
+			CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
+		});
 	}
-	let libiconvForHost = await libiconv
-		.build({ build, host, sdk }, libiconvArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(libiconvForHost);
-	let ncursesForHost = await ncurses
-		.build({ build, host, sdk }, ncursesArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	if (os === "darwin") {
+		libiconvForHost = await libiconv.build({ build, host, sdk }, libiconvArg);
+		hostDependencies.push(libiconvForHost);
+	}
+	let ncursesForHost = await ncurses.build({ build, host, sdk }, ncursesArg);
 	hostDependencies.push(ncursesForHost);
 
 	// Resolve env.
-	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
+	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_, {
+		TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+	});
 
 	// Add final build dependencies to env.
 	let resolvedBuildDependencies = [];
