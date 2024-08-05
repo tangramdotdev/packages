@@ -505,6 +505,17 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 		{
 			// Ensure the file is actually an object. If not, skip it.
 			if all_needed_libraries.contains_key(&name) {
+				// If the path points into a directory that was already checked in (has an ID), create a symlink for the entry.
+				if let Some((artifact_id, subpath)) =
+					get_artifact_and_subpath(library_candidate_path)
+				{
+					let artifact = tg::Artifact::with_id(artifact_id);
+					let symlink = tg::Symlink::new(Some(artifact), subpath);
+					tracing::info!(?symlink, "Created symlink for library candidate.");
+					entries.insert(name, tg::Artifact::Symlink(symlink));
+					continue;
+				}
+				// Otherwise, check the new file in and add it to the directory.
 				// Check in the file.
 				let library_candidate_path = tg::Path::try_from(library_candidate_path.clone())?;
 				let library_candidate_file = tg::Artifact::check_in(
@@ -519,6 +530,7 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 				.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
 				// Add an entry to the directory.
+				tracing::info!(?library_candidate_file, "Checked in library candidate.");
 				entries.insert(name, tg::Artifact::File(library_candidate_file));
 			}
 		}
@@ -1112,6 +1124,24 @@ fn setup_tracing(targets: Option<&str>) {
 			.with(format_layer);
 		subscriber.init();
 	}
+}
+
+/** If the given path refers to a Tangram artifact, return the artifact and optional subpath. */
+fn get_artifact_and_subpath(
+	path: &impl AsRef<std::path::Path>,
+) -> Option<(tg::artifact::Id, Option<tg::Path>)> {
+	let path = path.as_ref();
+	let path_str = path.to_str()?;
+	let mut path = path_str.strip_prefix(".tangram/artifacts/");
+	if path.is_none() {
+		path = path_str.strip_prefix(".tangram/checkouts/");
+	}
+	let path = path?;
+	let mut parts = path.splitn(2, '/');
+	let artifact_id = parts.next()?;
+	let subpath = parts.next();
+	let artifact_id = tg::artifact::Id::from_str(artifact_id).ok()?;
+	Some((artifact_id, subpath.map(tg::Path::from)))
 }
 
 async fn template_data_to_symlink_data<F>(template: F) -> tg::Result<tg::symlink::Data>
