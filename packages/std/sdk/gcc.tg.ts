@@ -12,7 +12,7 @@ export let metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
-	version: "14.1.0",
+	version: "14.2.0",
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
@@ -22,7 +22,7 @@ export let source = tg.target((bundledSources?: boolean) => {
 	// Download and unpack the GCC source.
 	let extension = ".tar.xz";
 	let checksum =
-		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
+		"sha256:a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9";
 	let base = `https://mirrors.ocf.berkeley.edu/gnu/${name}/${name}-${version}`;
 	let sourceDir = std
 		.download({ checksum, base, name, version, extension })

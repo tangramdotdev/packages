@@ -145,7 +145,7 @@ fn read_options() -> tg::Result<Options> {
 				.collect_vec()
 		});
 
-	// Get the optional comma-separated list of allowed missing libraries.
+	// Check if we should allow producing wrappers that don't account for all needed libraries.
 	let mut allow_missing_libraries =
 		std::env::var("TANGRAM_LINKER_ALLOW_MISSING_LIBRARIES").is_ok();
 

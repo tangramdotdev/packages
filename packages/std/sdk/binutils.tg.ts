@@ -3,14 +3,14 @@ import * as std from "../tangram.tg.ts";
 
 export let metadata = {
 	name: "binutils",
-	version: "2.42",
+	version: "2.43",
 };
 
 export let source = tg.target(async (build: string) => {
 	let { name, version } = metadata;
 
 	let checksum =
-		"sha256:f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800";
+		"sha256:b53606f443ac8f01d1d5fc9c39497f2af322d99e14cea5c0b4b124d630379365";
 
 	return std.download.fromGnu({
 		name,
