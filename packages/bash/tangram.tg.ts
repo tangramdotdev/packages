@@ -9,29 +9,14 @@ export let metadata = {
 	license: "GPL-3.0-or-later",
 	name: "bash",
 	repository: "https://git.savannah.gnu.org/git/bash.git",
-	version: "5.2.21",
+	version: "5.2.32",
 };
 
-export let source = tg.target(async (arg?: Arg) => {
+export let source = tg.target(async () => {
 	let { name, version } = metadata;
-	let build = arg?.build ?? (await std.triple.host());
-	let env = std.env.arg(std.sdk({ host: build }, arg?.sdk), arg?.env);
-
 	let checksum =
-		"sha256:c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8";
-	let source = std.download.fromGnu({ name, version, checksum });
-	// See https://lists.gnu.org/archive/html/bug-bash/2022-10/msg00000.html
-	// We don't have autoreconf available so we additionally manually resolve the configure script change. The m4 change isn't used, just here for completeness.
-	// Once this fix is adopted upstream, we can remove this workaround.
-	return await $`
-		cp -R ${source} $OUTPUT
-		chmod -R u+w $OUTPUT
-		sed -i 's/if test $bash_cv_func_strtoimax = yes; then/if test $bash_cv_func_strtoimax = no; then/' $OUTPUT/m4/strtoimax.m4
-		sed -i 's/if test $bash_cv_func_strtoimax = yes; then/if test $bash_cv_func_strtoimax = no ; then/' $OUTPUT/configure
-	`
-		.env(env)
-		.host(std.triple.archAndOs(build))
-		.then(tg.Directory.expect);
+		"sha256:d3ef80d2b67d8cbbe4d3265c63a72c46f9b278ead6e0e06d61801b58f23f50b5";
+	return std.download.fromGnu({ name, version, checksum });
 });
 
 export type Arg = {

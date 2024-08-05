@@ -145,7 +145,7 @@ export namespace download {
 	};
 
 	export let gnuUrl = (name: string, archive: string) => {
-		return `https://mirrors.ocf.berkeley.edu/gnu/${name}/${archive}`;
+		return `https://ftp.gnu.org/gnu/${name}/${archive}`;
 	};
 
 	export type UnpackArg = {
