@@ -45,14 +45,18 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let phases = {};
+	let configureArgs = [
+		"--disable-dependency-tracking",
+		"--enable-fast-install=no",
+	];
 	if (build !== host) {
-		phases = {
-			configure: {
-				args: [`--build=${build}`, `--host=${host}`],
-			},
-		};
+		configureArgs = configureArgs.concat([
+			`--build=${build}`,
+			`--host=${host}`,
+		]);
 	}
+	let configure = { args: configureArgs };
+	let phases = { configure };
 
 	return std.autotools.build(
 		{

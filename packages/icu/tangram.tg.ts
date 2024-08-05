@@ -61,7 +61,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 				0)
 	) {
 		env.push({
-			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter",
+			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter", // FIXME - is this necessary?
 		});
 	}
 
@@ -82,18 +82,18 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	// Every file in bin/ needs to get wrapped to include lib/.
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let binDir = tg.Directory.expect(await output.get("bin"));
-	for await (let [name, artifact] of binDir) {
-		let unwrappedBin = tg.File.expect(artifact);
-		let wrappedBin = std.wrap(unwrappedBin, {
-			libraryPaths: [libDir],
-		});
-		output = await tg.directory(output, {
-			[`bin/${name}`]: wrappedBin,
-		});
-	}
+	// // Every file in bin/ needs to get wrapped to include lib/.
+	// let libDir = tg.Directory.expect(await output.get("lib"));
+	// let binDir = tg.Directory.expect(await output.get("bin"));
+	// for await (let [name, artifact] of binDir) {
+	// 	let unwrappedBin = tg.File.expect(artifact);
+	// 	let wrappedBin = std.wrap(unwrappedBin, {
+	// 		libraryPaths: [libDir],
+	// 	});
+	// 	output = await tg.directory(output, {
+	// 		[`bin/${name}`]: wrappedBin,
+	// 	});
+	// }
 
 	return output;
 });

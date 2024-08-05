@@ -75,7 +75,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		env_,
 	);
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			buildInTree: true,
@@ -86,18 +86,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	let bins = ["capsh", "getcap", "setcap", "getpcaps"];
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let attrLibDir = tg.Directory.expect(await attrArtifact.get("lib"));
-	for (let bin of bins) {
-		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
-		let wrappedBin = std.wrap(unwrappedBin, {
-			libraryPaths: [libDir, attrLibDir],
-		});
-		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
-	}
-	return output;
 });
 
 export default build;

@@ -141,7 +141,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	}
 	let phases = { configure };
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -151,29 +151,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	// Wrap output binaries.
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let libraryPaths = [
-		libDir,
-		tg.Directory.expect(await ncursesForHost.get("lib")),
-	];
-	if (os === "linux") {
-		let aclDir = tg.Directory.expect(await aclForHost?.get("lib"));
-		let attrDir = tg.Directory.expect(await attrForHost?.get("lib"));
-		libraryPaths.push(aclDir);
-		libraryPaths.push(attrDir);
-	}
-	let libiconvDir = tg.Directory.expect(await libiconvForHost.get("lib"));
-	libraryPaths.push(libiconvDir);
-	let binDir = tg.Directory.expect(await output.get("bin"));
-	for await (let [name, artifact] of binDir) {
-		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths });
-		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
-	}
-
-	return output;
 });
 
 export default build;
