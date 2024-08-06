@@ -52,11 +52,15 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let env = await std.env.arg(attrForHost, env_);
 
 	let configure = {
-		args: ["--disable-dependency-tracking", "--disable-rpath"],
+		args: [
+			"--disable-dependency-tracking",
+			"--disable-rpath",
+			"--disable-silent-rules",
+		],
 	};
 	let phases = { configure };
 
-	return std.autotools.build(
+	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -66,6 +70,17 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+
+	// Remove .la files.
+	for await (let [name, _] of await output
+		.get("lib")
+		.then(tg.Directory.expect)) {
+		if (name.endsWith(".la")) {
+			output = await tg.directory(output, { [`lib/${name}`]: undefined });
+		}
+	}
+
+	return output;
 });
 
 export default build;

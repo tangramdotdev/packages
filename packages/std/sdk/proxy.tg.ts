@@ -308,6 +308,15 @@ export let ldProxy = async (arg: LdProxyArg) => {
 };
 
 export let test = tg.target(async () => {
+	let basicResult = await testBasic();
+	console.log("basic result", await basicResult.id());
+	let transitiveResult = await testTransitive();
+	console.log("transitive result", await transitiveResult.id());
+	return transitiveResult;
+});
+
+/** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
+export let testBasic = tg.target(async () => {
 	let bootstrapSDK = await bootstrap.sdk();
 	let helloSource = await tg.file(`
 #include <stdio.h>
@@ -316,23 +325,177 @@ int main() {
 	return 0;
 }
 	`);
-	let output = tg.File.expect(
-		await (
-			await tg.target(
-				tg`
+	let output = await tg
+		.target(
+			tg`
 				set -x
 				/usr/bin/env
 				cc -v -xc ${helloSource} -o $OUTPUT`,
-				{
-					env: await std.env.arg(bootstrapSDK, {
-						TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-						TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-						TANGRAM_WRAPPER_TRACING: "tangram=trace",
-					}),
-				},
-			)
-		).output(),
-	);
+			{
+				env: await std.env.arg(bootstrapSDK, {
+					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TANGRAM_WRAPPER_TRACING: "tangram=trace",
+				}),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.File.expect);
+	let manifest = await std.wrap.Manifest.read(output);
+	console.log("\n\nMANIFEST", manifest);
+	let result = await tg
+		.target(tg`${output} > $OUTPUT`, {
+			env: {
+				TANGRAM_WRAPPER_TRACING: "tangram=trace",
+			},
+		})
+		.then((t) => t.output())
+		.then(tg.File.expect);
+	let text = await result.text();
+	tg.assert(text.includes("Hello from a TGLD-wrapped binary!"));
+	return output;
+});
+
+type MakeSharedArg = {
+	flags?: Array<tg.Template.Arg>;
+	libName: string;
+	sdk: std.env.Arg;
+	source: tg.File;
+};
+
+let makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
+	let { flags: flagArgs = [], libName, sdk, source } = await tg.resolve(arg);
+	let flags = tg.Template.join(" ", ...flagArgs);
+	let dylibExt =
+		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+	return await tg
+		.target(
+			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags}`,
+			{
+				env: std.env.arg(sdk),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.Directory.expect);
+};
+
+/** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
+export let testTransitive = tg.target(async () => {
+	let bootstrapSDK = await bootstrap.sdk();
+	let constantsSourceA = await tg.file(`
+const char* getGreeting() {
+	return "Hello from transitive constants A!";
+}
+	`);
+	let constantsHeader = await tg.file(`
+const char* getGreeting();
+	`);
+
+	let constantsA = await makeShared({
+		libName: "libconstantsa",
+		sdk: bootstrapSDK,
+		source: constantsSourceA,
+	});
+	constantsA = await tg.directory(constantsA, {
+		include: {
+			"constants.h": constantsHeader,
+		},
+	});
+	console.log("STRING CONSTANTS A", await constantsA.id());
+
+	let constantsSourceB = await tg.file(`
+const char* getGreeting() {
+	return "Hello from transitive constants B!";
+}
+		`);
+	let constantsB = await makeShared({
+		libName: "libconstantsb",
+		sdk: bootstrapSDK,
+		source: constantsSourceB,
+	});
+	constantsB = await tg.directory(constantsB, {
+		include: {
+			"constants.h": constantsHeader,
+		},
+	});
+	console.log("STRING CONSTANTS B", await constantsB.id());
+
+	let greetSourceA = await tg.file(`
+	#include <stdio.h>
+	#include <constants.h>
+	void greet_a() {
+		printf("%s\\n", getGreeting());
+	}
+			`);
+	let greetHeaderA = await tg.file(`
+	const char* greet_a();
+			`);
+	let greetA = await makeShared({
+		flags: [
+			tg`-L${constantsA}/lib`,
+			tg`-I${constantsA}/include`,
+			"-lconstantsa",
+		],
+		libName: "libgreeta",
+		sdk: bootstrapSDK,
+		source: greetSourceA,
+	});
+	greetA = await tg.directory(greetA, {
+		include: {
+			"greeta.h": greetHeaderA,
+		},
+	});
+	console.log("GREET A", await greetA.id());
+
+	let greetSourceB = await tg.file(`
+	#include <stdio.h>
+	#include <constants.h>
+	void greet_b() {
+		printf("%s\\n", getGreeting());
+	}
+			`);
+	let greetHeaderB = await tg.file(`
+	const char* greet_b();
+			`);
+	let greetB = await makeShared({
+		flags: [
+			tg`-L${constantsB}/lib`,
+			tg`-I${constantsB}/include`,
+			"-lconstantsb",
+		],
+		libName: "libgreetb",
+		sdk: bootstrapSDK,
+		source: greetSourceB,
+	});
+	greetB = await tg.directory(greetB, {
+		include: {
+			"greetb.h": greetHeaderB,
+		},
+	});
+	console.log("GREET B", await greetB.id());
+
+	let mainSource = await tg.file(`
+	#include <stdio.h>
+	#include <greeta.h>
+	#include <greetb.h>
+	int main() {
+		greet_a();
+		greet_b();
+		return 0;
+	}
+		`);
+	let output = await tg
+		.target(
+			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.so -lgreetb -xc ${mainSource} -o $OUTPUT`,
+			{
+				env: await std.env.arg(bootstrapSDK, {
+					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				}),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.File.expect);
 	let manifest = await std.wrap.Manifest.read(output);
 	console.log("\n\nMANIFEST", manifest);
 	let result = tg.File.expect(
@@ -345,6 +508,10 @@ int main() {
 		).output(),
 	);
 	let text = await result.text();
-	tg.assert(text.includes("Hello from a TGLD-wrapped binary!"));
+	tg.assert(
+		text.includes(
+			"Hello from transitive constants A!\nHello from transitive constants B!",
+		),
+	);
 	return output;
 });
