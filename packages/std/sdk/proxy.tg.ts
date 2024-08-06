@@ -382,6 +382,8 @@ let makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
 export let testTransitive = tg.target(async () => {
 	let bootstrapSDK = await bootstrap.sdk();
+	let dylibExt =
+		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 	let constantsSourceA = await tg.file(`
 const char* getGreeting() {
 	return "Hello from transitive constants A!";
@@ -486,7 +488,7 @@ const char* getGreeting() {
 		`);
 	let output = await tg
 		.target(
-			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.so -lgreetb -xc ${mainSource} -o $OUTPUT`,
+			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -xc ${mainSource} -o $OUTPUT`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
 					TANGRAM_LD_PROXY_TRACING: "tangram=trace",

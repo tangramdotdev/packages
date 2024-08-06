@@ -62,7 +62,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let os = std.triple.os(host);
 
 	let runtimeLibEnvVar =
-		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LT_SYS_LIBRARY_PATH";
+		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 	let prepare = `export ${runtimeLibEnvVar}="$LIBRARY_PATH"`;
 
 	let configure = {

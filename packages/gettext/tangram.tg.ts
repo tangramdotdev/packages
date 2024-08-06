@@ -103,9 +103,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	hostDependencies.push(ncursesForHost);
 
 	// Resolve env.
-	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_, {
-		TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-	});
+	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
 
 	// Add final build dependencies to env.
 	let resolvedBuildDependencies = [];

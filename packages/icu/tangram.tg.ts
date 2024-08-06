@@ -61,7 +61,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 				0)
 	) {
 		env.push({
-			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter", // FIXME - is this necessary?
+			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter",
 		});
 	}
 
