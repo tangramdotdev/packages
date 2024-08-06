@@ -308,12 +308,13 @@ export let ldProxy = async (arg: LdProxyArg) => {
 };
 
 export let test = tg.target(async () => {
-	let basicResult = await testBasic();
-	console.log("basic result", await basicResult.id());
-	let transitiveResult = await testTransitive();
-	console.log("transitive result", await transitiveResult.id());
-	let samePrefix = await testSamePrefix();
-	return samePrefix;
+	let tests = [
+		testBasic(),
+		testTransitive(),
+		testSamePrefix(),
+		testSamePrefixDirect(),
+	];
+	return await Promise.all(tests);
 });
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
@@ -342,18 +343,7 @@ int main() {
 		)
 		.then((t) => t.output())
 		.then(tg.File.expect);
-	let manifest = await std.wrap.Manifest.read(output);
-	console.log("\n\nMANIFEST", manifest);
-	let result = await tg
-		.target(tg`${output} > $OUTPUT`, {
-			env: {
-				TANGRAM_WRAPPER_TRACING: "tangram=trace",
-			},
-		})
-		.then((t) => t.output())
-		.then(tg.File.expect);
-	let text = await result.text();
-	tg.assert(text.includes("Hello from a TGLD-wrapped binary!"));
+	await std.assert.stdoutIncludes(output, "Hello from a TGLD-wrapped binary!");
 	return output;
 });
 
@@ -434,7 +424,7 @@ const char* getGreetingB();
 	}
 			`);
 	let greetHeaderA = await tg.file(`
-	const char* greet_a();
+	void greet_a();
 			`);
 	let greetA = await makeShared({
 		flags: [
@@ -461,7 +451,7 @@ const char* getGreetingB();
 	}
 			`);
 	let greetHeaderB = await tg.file(`
-	const char* greet_b();
+	void greet_b();
 			`);
 	let greetB = await makeShared({
 		flags: [
@@ -481,7 +471,6 @@ const char* getGreetingB();
 	console.log("GREET B", await greetB.id());
 
 	let mainSource = await tg.file(`
-	#include <stdio.h>
 	#include <greeta.h>
 	#include <greetb.h>
 	int main() {
@@ -502,22 +491,9 @@ const char* getGreetingB();
 		)
 		.then((t) => t.output())
 		.then(tg.File.expect);
-	let manifest = await std.wrap.Manifest.read(output);
-	console.log("\n\nMANIFEST", manifest);
-	let result = tg.File.expect(
-		await (
-			await tg.target(tg`${output} > $OUTPUT`, {
-				env: {
-					TANGRAM_WRAPPER_TRACING: "tangram=trace",
-				},
-			})
-		).output(),
-	);
-	let text = await result.text();
-	tg.assert(
-		text.includes(
-			"Hello from transitive constants A!\nHello from transitive constants B!",
-		),
+	await std.assert.stdoutIncludes(
+		output,
+		"Hello from transitive constants A!\nHello from transitive constants B!",
 	);
 	return output;
 });
@@ -535,11 +511,10 @@ export let testSamePrefix = tg.target(async () => {
 	}
 			`);
 	let greetHeader = await tg.file(`
-	const char* greet();
+	void greet();
 			`);
 
 	let mainSource = await tg.file(`
-	#include <stdio.h>
 	#include <greet.h>
 	int main() {
 		greet();
@@ -572,18 +547,59 @@ export let testSamePrefix = tg.target(async () => {
 		)
 		.then((t) => t.output())
 		.then(tg.File.expect);
-	let manifest = await std.wrap.Manifest.read(output);
-	console.log("\n\nMANIFEST", manifest);
-	let result = tg.File.expect(
-		await (
-			await tg.target(tg`${output} > $OUTPUT`, {
-				env: {
-					TANGRAM_WRAPPER_TRACING: "tangram=trace",
-				},
-			})
-		).output(),
-	);
-	let text = await result.text();
-	tg.assert(text.includes("Hello from the shared library!"));
+	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
+	return output;
+});
+
+/** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
+export let testSamePrefixDirect = tg.target(async () => {
+	let bootstrapSDK = await bootstrap.sdk();
+	let dylibExt =
+		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+
+	let greetSource = await tg.file(`
+	#include <stdio.h>
+	void greet() {
+		printf("Hello from the shared library!\\n");
+	}
+			`);
+	let greetHeader = await tg.file(`
+	void greet();
+			`);
+
+	let mainSource = await tg.file(`
+	#include <greet.h>
+	int main() {
+		greet();
+		return 0;
+	}
+		`);
+	let source = await tg.directory({
+		"main.c": mainSource,
+		"greet.c": greetSource,
+		"greet.h": greetHeader,
+	});
+
+	let output = await tg
+		.target(
+			tg`
+			set -x
+			mkdir -p .bins
+			mkdir -p .libs
+			cd .libs
+			cc -v -shared -xc ${source}/greet.c -Wl,-soname,libgreet.so.1 -o libgreet.${dylibExt}
+			cd ../.bins
+			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
+			`,
+			{
+				env: await std.env.arg(bootstrapSDK, {
+					TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				}),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.File.expect);
+	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
 });

@@ -470,6 +470,23 @@ export let tryBaseName = (lib: string): string | undefined => {
 	return match[1];
 };
 
+/** Execute the given file and assert the resulting `stdout` includes the provided string. */
+export let stdoutIncludes = async (
+	file: tg.Unresolved<tg.File>,
+	expected: string,
+) => {
+	let stdout = await tg
+		.target(tg`${file} > $OUTPUT`, {
+			env: {
+				TANGRAM_WRAPPER_TRACING: "tangram=trace",
+			},
+		})
+		.then((t) => t.output())
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(stdout.includes(expected));
+};
+
 /** Produce a set of SDK configurations to test for the given platform. */
 let defaultSdkSet = async (): Promise<Array<std.sdk.Arg>> => {
 	return nativeProxiedSdkArgs();

@@ -2,20 +2,21 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 
 export let metadata = {
+	homepage: "https://www.gnu.org/software/binutils/",
+	license: "GPL-3.0-or-later",
 	name: "binutils",
+	repository: "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git",
 	version: "2.43",
 };
 
 export let source = tg.target(async (build: string) => {
 	let { name, version } = metadata;
-
 	let checksum =
-		"sha256:b53606f443ac8f01d1d5fc9c39497f2af322d99e14cea5c0b4b124d630379365";
-
+		"sha256:ba5e600af2d0e823312b4e04d265722594be7d94906ebabe6eaf8d0817ef48ed";
 	return std.download.fromGnu({
 		name,
 		version,
-		compressionFormat: "xz",
+		compressionFormat: "zst",
 		checksum,
 	});
 });

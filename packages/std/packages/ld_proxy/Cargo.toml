@@ -14,7 +14,6 @@ version = { workspace = true }
 workspace = true
 
 [dependencies]
-bytes = { workspace = true }
 fnv = { workspace = true }
 futures = { workspace = true }
 goblin = { workspace = true }
