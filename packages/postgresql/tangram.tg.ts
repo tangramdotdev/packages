@@ -112,7 +112,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		});
 	}
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			buildInTree: true,
@@ -124,37 +124,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-	console.log("postgres", await output.id());
-
-	// Wrap output binaries.
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let libraryPaths = [libDir];
-	if (os === "darwin") {
-		let ncursesLibDir = tg.Directory.expect(
-			await (await ncursesArtifact).get("lib"),
-		);
-		let readlineLibDir = tg.Directory.expect(
-			await (await readlineArtifact).get("lib"),
-		);
-		let icuLibDir = tg.Directory.expect(await (await icuArtifact).get("lib"));
-		let lz4LibDir = tg.Directory.expect(await (await lz4Artifact).get("lib"));
-		let zlibLibDir = tg.Directory.expect(await (await zlibArtifact).get("lib"));
-		let zstdLibDir = tg.Directory.expect(await (await zstdArtifact).get("lib"));
-		libraryPaths.push(icuLibDir);
-		libraryPaths.push(lz4LibDir);
-		libraryPaths.push(ncursesLibDir);
-		libraryPaths.push(readlineLibDir);
-		libraryPaths.push(zlibLibDir);
-		libraryPaths.push(zstdLibDir);
-	}
-	let binDir = tg.Directory.expect(await output.get("bin"));
-	for await (let [name, artifact] of binDir) {
-		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths });
-		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
-	}
-
-	return output;
 });
 
 export default build;

@@ -46,7 +46,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { configure };
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			phases,
@@ -55,17 +55,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	// Remove .la files.
-	for await (let [name, _] of await output
-		.get("lib")
-		.then(tg.Directory.expect)) {
-		if (name.endsWith(".la")) {
-			output = await tg.directory(output, { [`lib/${name}`]: undefined });
-		}
-	}
-
-	return output;
 });
 
 export default build;

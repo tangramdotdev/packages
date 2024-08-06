@@ -55,6 +55,9 @@ export type Arg = {
 	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
 	prefixPath?: tg.Template.Arg;
 
+	/** Should we remove all Libtool archives from the output directory? The presence of these files can cause downstream builds to depend on absolute paths with may no longer be valid, and can interfere with cross-compilation. Tangram uses other methods for library resolution, rending these files unnecessary, and in some cases detrimental. Default: true. */
+	removeLibtoolArchives?: boolean;
+
 	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
 	sdk?: std.sdk.Arg | boolean;
 
@@ -104,6 +107,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		phases,
 		prefixArg = `--prefix=`,
 		prefixPath = `$OUTPUT`,
+		removeLibtoolArchives = true,
 		sdk: sdkArgs_,
 		source,
 		stripExecutables = true,
@@ -268,9 +272,18 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		}
 	}
 
+	let defaultFixupCommand = tg.template();
+	if (removeLibtoolArchives) {
+		defaultFixupCommand = tg`${defaultFixupCommand}\nfind $OUTPUT -name '*.la' -delete`;
+	}
+
 	if (debug) {
+		defaultFixupCommand = tg`${defaultFixupCommand}\nmkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`;
+	}
+
+	if (debug || removeLibtoolArchives) {
 		let defaultFixup = {
-			command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
+			command: defaultFixupCommand,
 		};
 		defaultPhases.fixup = defaultFixup;
 	}

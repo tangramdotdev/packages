@@ -7,13 +7,13 @@ import disableLocatePatch from "./findutils-disable-locate.diff" with {
 
 export let metadata = {
 	name: "findutils",
-	version: "4.9.0",
+	version: "4.10.0",
 };
 
 export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:a2bfb8c09d436770edc59f50fa483e785b161a3b7b9d547573cb08065fd462fe";
+		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
 	let source = await std.download.fromGnu({
 		name,
 		version,

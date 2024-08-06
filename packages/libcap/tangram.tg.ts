@@ -46,7 +46,18 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let install = tg.Mutation.set(`
+	let os = std.triple.os(host);
+	let runtimeLibEnvVar =
+		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+	let prepare = {
+		command: tg.Mutation.suffix(
+			`export ${runtimeLibEnvVar}="$LIBRARY_PATH"`,
+			"\n",
+		),
+	};
+
+	let install = {
+		command: tg.Mutation.set(`
 		mkdir -p $OUTPUT/bin $OUTPUT/lib/pkgconfig
 		bins="capsh getcap setcap getpcaps"
 		for bin in $bins; do
@@ -59,23 +70,19 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		cd $OUTPUT/lib
 		ln -s libcap.so.${metadata.version} libcap.so.2
 		ln -s libcap.so.2 libcap.so
-	`);
-	let phases = { configure: tg.Mutation.unset(), install };
+	`),
+		args: tg.Mutation.unset(),
+	};
+	let phases = { prepare, configure: tg.Mutation.unset(), install };
 
 	let attrArtifact = await attr.build({ build, env: env_, host, sdk }, attrArg);
 	let dependencies = [
 		attrArtifact,
 		perl.build({ build, env: env_, host, sdk }, perlArg),
 	];
-	let env = std.env.arg(
-		...dependencies,
-		{
-			LDFLAGS: tg.Mutation.prefix(`-L${attrArtifact}/lib`, " "),
-		},
-		env_,
-	);
+	let env = std.env.arg(...dependencies, env_);
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			buildInTree: true,
@@ -86,18 +93,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	let bins = ["capsh", "getcap", "setcap", "getpcaps"];
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let attrLibDir = tg.Directory.expect(await attrArtifact.get("lib"));
-	for (let bin of bins) {
-		let unwrappedBin = tg.File.expect(await output.get(`bin/${bin}`));
-		let wrappedBin = std.wrap(unwrappedBin, {
-			libraryPaths: [libDir, attrLibDir],
-		});
-		output = await tg.directory(output, { [`bin/${bin}`]: wrappedBin });
-	}
-	return output;
 });
 
 export default build;

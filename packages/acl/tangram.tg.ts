@@ -52,7 +52,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let env = await std.env.arg(attrForHost, env_);
 
 	let configure = {
-		args: ["--disable-dependency-tracking", "--disable-rpath"],
+		args: [
+			"--disable-dependency-tracking",
+			"--disable-rpath",
+			"--disable-silent-rules",
+		],
 	};
 	let phases = { configure };
 

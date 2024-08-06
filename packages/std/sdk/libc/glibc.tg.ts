@@ -3,7 +3,7 @@ import * as std from "../../tangram.tg.ts";
 // Define supported versions.
 type GlibcVersion = "2.37" | "2.38" | "2.39" | "2.40";
 export let AllGlibcVersions = ["2.37", "2.38", "2.39", "2.40"];
-export let defaultGlibcVersion: GlibcVersion = "2.40";
+export let defaultGlibcVersion: GlibcVersion = "2.39";
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/libc/",

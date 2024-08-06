@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use futures::future::try_join_all;
+use futures::{future::try_join_all, StreamExt as _, TryStreamExt as _};
 use itertools::Itertools;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -7,9 +7,9 @@ use std::{
 	path::PathBuf,
 	str::FromStr,
 };
-use tangram_client as tg;
+use tangram_client::{self as tg};
 use tangram_wrapper::manifest::{self, Manifest};
-use tokio::io::AsyncReadExt;
+use tokio::io::AsyncReadExt as _;
 use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;
@@ -64,12 +64,6 @@ async fn main_inner() -> tg::Result<()> {
 // The options read from the environment and arguments.
 #[derive(Debug)]
 struct Options {
-	/// Paths which may contain additional dynamic libraries passed on the command line, not via a library path.
-	additional_library_candidate_paths: Vec<PathBuf>,
-
-	/// Allow producing wrappers with required libraries missing. Pass specific names or "all" to disable the check entirely.
-	allow_missing_libraries: bool,
-
 	/// Library path optimization strategy. Select `resolve`, `filter`, `combine`, or `none`. Defaults to `combine`.
 	library_path_optimization: LibraryPathOptimizationLevel,
 
@@ -145,10 +139,6 @@ fn read_options() -> tg::Result<Options> {
 				.collect_vec()
 		});
 
-	// Get the optional comma-separated list of allowed missing libraries.
-	let mut allow_missing_libraries =
-		std::env::var("TANGRAM_LINKER_ALLOW_MISSING_LIBRARIES").is_ok();
-
 	// Get the max depth.
 	let mut max_depth = std::env::var("TANGRAM_LINKER_MAX_DEPTH")
 		.ok()
@@ -173,9 +163,6 @@ fn read_options() -> tg::Result<Options> {
 	// Skip arg0.
 	args.next();
 
-	// Prepare to store dynamic libraries passed directly to the linker.
-	let mut additional_library_candidate_paths = Vec::new();
-
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
 		// Pass through any arg that isn't a tangram arg.
@@ -194,8 +181,6 @@ fn read_options() -> tg::Result<Options> {
 				}
 			} else if arg.starts_with("--tg-passthrough") {
 				passthrough = true;
-			} else if arg.starts_with("--tg-allow-missing-libraries") {
-				allow_missing_libraries = true;
 			} else {
 				command_args.push(arg.clone());
 			}
@@ -225,21 +210,12 @@ fn read_options() -> tg::Result<Options> {
 		} else if let Some(library_path) = arg.strip_prefix("-L") {
 			library_paths.push(library_path.to_owned());
 		}
-
-		if is_library_candidate(&arg) {
-			// If the path can't be canonicalized, do nothing - it's not a valid library candidate.
-			if let Ok(canonical_path) = std::fs::canonicalize(&arg) {
-				additional_library_candidate_paths.push(canonical_path);
-			}
-		}
 	}
 
 	// If no explicit output path was provided, instead look for `a.out`.
 	let output_path = output_path.as_deref().unwrap_or("a.out").into();
 
 	let options = Options {
-		additional_library_candidate_paths,
-		allow_missing_libraries,
 		library_path_optimization: library_optimization_strategy,
 		command_path,
 		command_args,
@@ -255,22 +231,6 @@ fn read_options() -> tg::Result<Options> {
 	};
 
 	Ok(options)
-}
-
-fn is_library_candidate(arg: &str) -> bool {
-	let dylib_ext = if cfg!(target_os = "macos") {
-		".dylib"
-	} else if cfg!(target_os = "linux") {
-		// Exclude interpreter paths.
-		let is_ldso = arg.contains("ld-linux") || arg.contains("ld-musl");
-		if is_ldso {
-			return false;
-		}
-		".so"
-	} else {
-		unreachable!();
-	};
-	arg.contains(dylib_ext)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -314,25 +274,29 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		});
 	}
 
-	// Create a library path for any additional candidate libraries that are found in NEEDED and are actual library files.
-	let command_line_library_path = create_library_path_for_command_line_libraries(
-		&tg,
-		&options.additional_library_candidate_paths,
-		&mut needed_libraries,
-	)
-	.await?;
-
-	// Unrender all library paths to symlinks, prepending the command-line library path.
+	// Unrender all library paths to symlinks. If any library path points into the working directory, check in its contents.
 	let library_paths =
-		std::iter::once(command_line_library_path)
-			.chain(
-				futures::future::try_join_all(options.library_paths.iter().map(|library_path| {
-					template_data_to_symlink_data(unrender(&tg, library_path))
-				}))
-				.await?,
-			)
-			.collect_vec();
-	tracing::debug!(?library_paths);
+		futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
+			let mut symlink_data =
+				template_data_to_symlink_data(unrender(&tg, library_path)).await?;
+			if symlink_data.artifact.is_none() {
+				tracing::debug!("Library path points into working directory. Creating directory.");
+				if let Some(ref library_path) = symlink_data.path {
+					if let Ok(ref canonicalized_path) = std::fs::canonicalize(library_path) {
+						symlink_data = checkin_local_library_path(&tg, canonicalized_path).await?;
+					} else {
+						tracing::warn!(
+							"Could not canonicalize library path {library_path:?}. Skipping."
+						);
+					}
+				} else {
+					tracing::warn!("Library path has no artifact or subpath, skipping.");
+				}
+			}
+			Ok::<_, tg::Error>(symlink_data)
+		}))
+		.await?;
+	tracing::debug!(?library_paths, "Library path symlinks");
 
 	// Obtain the file artifact from the output path.
 	let output_file = {
@@ -380,7 +344,6 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			&mut needed_libraries,
 			options.library_path_optimization,
 			options.max_depth,
-			options.allow_missing_libraries,
 		)
 		.await?;
 
@@ -502,22 +465,50 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 }
 
 /// Check in any files needed libraries and produce a directory with correct names.
-#[tracing::instrument(skip(tg))]
-async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
+async fn checkin_local_library_path(
 	tg: &impl tg::Handle,
-	library_candidate_paths: &[PathBuf],
-	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
+	library_path: &impl AsRef<std::path::Path>,
 ) -> tg::Result<tg::symlink::Data> {
-	let mut entries = BTreeMap::new();
-	for library_candidate_path in library_candidate_paths {
-		if let Ok(AnalyzeOutputFileOutput {
-			name: Some(name), ..
-		}) = analyze_output_file(library_candidate_path).await
-		{
-			// Ensure the file is actually an object. If not, skip it.
-			if all_needed_libraries.contains_key(&name) {
+	let library_path = library_path.as_ref();
+	tracing::debug!(?library_path, "Checking in local library path");
+	// Get a stream of directory entries.
+	let read_dir = tokio::fs::read_dir(library_path)
+		.await
+		.map_err(|error| tg::error!(source = error, "could not read library path"))?;
+	let stream = tokio_stream::wrappers::ReadDirStream::new(read_dir);
+
+	// Produce checked-in directory entries for all libraries found.
+	let entries = stream
+		.map(|entry| async {
+			let entry = entry.map_err(|error| {
+				tg::error!(source = error, "could not read next directory entry")
+			})?;
+
+			let library_candidate_path = entry.path();
+			tracing::debug!(?library_candidate_path, "analyzing library candidate path");
+
+			// Skip any non-files.
+			let metadata = tokio::fs::symlink_metadata(&library_candidate_path)
+				.await
+				.map_err(|error| {
+					tg::error!(
+						source = error,
+						?library_candidate_path,
+						"could not read metadata for path"
+					)
+				})?;
+			if !metadata.is_file() {
+				tracing::debug!("Skipping non-file entry.");
+				return Ok(None);
+			}
+
+			if let Ok(AnalyzeOutputFileOutput {
+				name: Some(name), ..
+			}) = analyze_output_file(&library_candidate_path).await
+			{
+				tracing::debug!(?name, "Found library candidate.");
 				// Check in the file.
-				let library_candidate_path = tg::Path::try_from(library_candidate_path.clone())?;
+				let library_candidate_path = tg::Path::try_from(library_candidate_path)?;
 				let library_candidate_file = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
@@ -530,10 +521,22 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 				.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
 				// Add an entry to the directory.
-				entries.insert(name, tg::Artifact::File(library_candidate_file));
+				tracing::info!(?library_candidate_file, "Checked in library candidate.");
+				Ok::<_, tg::Error>(Some((name, tg::Artifact::File(library_candidate_file))))
+			} else {
+				Ok(None)
 			}
-		}
-	}
+		})
+		.filter_map(|result| async move {
+			// Drop None results, retain errors.
+			match result.await {
+				Ok(Some((name, artifact))) => Some(Ok((name, artifact))),
+				Ok(None) => None,
+				Err(e) => Some(Err(e)),
+			}
+		})
+		.try_collect::<BTreeMap<_, _>>()
+		.await?;
 
 	// Construct the directory.
 	let directory = tg::Directory::new(entries);
@@ -728,7 +731,6 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
 	strategy: LibraryPathOptimizationLevel,
 	max_depth: usize,
-	allow_missing_libraries: bool,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	if matches!(strategy, LibraryPathOptimizationLevel::None) || library_paths.is_empty() {
 		return Ok(library_paths);
@@ -738,13 +740,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let resolved_dirs: HashSet<tg::directory::Id, H> = resolve_paths(tg, &library_paths).await?;
 	tracing::trace!(?resolved_dirs, "post-resolve");
 	if matches!(strategy, LibraryPathOptimizationLevel::Resolve) {
-		return finalize_library_paths(
-			tg,
-			resolved_dirs,
-			needed_libraries,
-			allow_missing_libraries,
-		)
-		.await;
+		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
 	}
 
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
@@ -753,13 +749,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tracing::trace!(?needed_libraries, "post-find");
 	if matches!(strategy, LibraryPathOptimizationLevel::Filter) {
 		let resolved_dirs = needed_libraries.values().flatten().cloned().collect();
-		return finalize_library_paths(
-			tg,
-			resolved_dirs,
-			needed_libraries,
-			allow_missing_libraries,
-		)
-		.await;
+		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
 	}
 
 	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
@@ -781,15 +771,13 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let dir_id = directory.id(tg).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
-	return finalize_library_paths(tg, resolved_dirs, needed_libraries, allow_missing_libraries)
-		.await;
+	return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
 }
 
 async fn finalize_library_paths<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	resolved_dirs: HashSet<tg::directory::Id, H>,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
-	allow_missing_libraries: bool,
 ) -> tg::Result<HashSet<tg::symlink::Id, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|id| async {
 		tg::Artifact::from(tg::Directory::with_id(id.clone()))
@@ -799,7 +787,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	}))
 	.await?;
 	let result = store_dirs_as_symlinks(tg, resolved_dirs).await?;
-	report_missing_libraries(tg, needed_libraries, &result, allow_missing_libraries).await?;
+	report_missing_libraries(tg, needed_libraries, &result).await?;
 	Ok(result)
 }
 
@@ -808,7 +796,6 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
 	library_paths: &HashSet<tg::symlink::Id, H>,
-	allow_missing_libraries: bool,
 ) -> tg::Result<()> {
 	let mut found_libraries = HashSet::default();
 	for library in needed_libraries.keys() {
@@ -837,10 +824,7 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 		.difference(&found_libraries)
 		.collect_vec();
 	if !missing_libs.is_empty() {
-		tracing::error!("Could not find the following required libraries: {missing_libs:?}");
-		if !allow_missing_libraries {
-			return Err(tg::error!("missing libraries: {missing_libs:?}"));
-		}
+		tracing::warn!("Could not find the following required libraries: {missing_libs:?}");
 	}
 	Ok(())
 }
@@ -1101,7 +1085,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 			},
 		},
 
-		_ => panic!("Unsupported object type."),
+		_ => return Err(tg::error!("unsupported object type")),
 	};
 
 	Ok(result)

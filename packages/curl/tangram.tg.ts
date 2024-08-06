@@ -62,7 +62,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let os = std.triple.os(host);
 
 	let runtimeLibEnvVar =
-		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LT_SYS_LIBRARY_PATH";
+		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 	let prepare = `export ${runtimeLibEnvVar}="$LIBRARY_PATH"`;
 
 	let configure = {
@@ -76,23 +76,16 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	let phases = { prepare, configure };
 
-	let openSslDir = await openssl.build(
-		{ build, env: env_, host, sdk },
-		opensslArg,
-	);
-	let zlibDir = await zlib.build({ build, env: env_, host, sdk }, zlibArg);
-	let zstdDir = await zstd.build({ build, env: env_, host, sdk }, zstdArg);
-
 	let env = [
 		perl.build({ build, host: build }),
 		pkgconfig.build({ build, host: build }),
-		openSslDir,
-		zlibDir,
-		zstdDir,
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		zstd.build({ build, env: env_, host, sdk }, zstdArg),
 		env_,
 	];
 
-	let output = await std.autotools.build(
+	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(env),
@@ -102,20 +95,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	// Wrap binary to always include the certificates and libdir.
-	let curlExe = tg.File.expect(await output.get("bin/curl"));
-	let libDir = tg.Directory.expect(await output.get("lib"));
-	let openSslLibDir = tg.Directory.expect(await openSslDir.get("lib"));
-	let zlibLibDir = tg.Directory.expect(await zlibDir.get("lib"));
-	let zsdtLibDir = tg.Directory.expect(await zstdDir.get("lib"));
-	let wrappedCurl = std.wrap(curlExe, {
-		libraryPaths: [libDir, openSslLibDir, zlibLibDir, zsdtLibDir],
-	});
-	output = await tg.directory(output, {
-		["bin/curl"]: wrappedCurl,
-	});
-	return output;
 });
 
 export default build;
