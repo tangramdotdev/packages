@@ -488,7 +488,16 @@ async fn checkin_local_library_path(
 			tracing::debug!(?library_candidate_path, "analyzing library candidate path");
 
 			// Skip any non-files.
-			if !library_candidate_path.is_file() {
+			let metadata = tokio::fs::symlink_metadata(&library_candidate_path)
+				.await
+				.map_err(|error| {
+					tg::error!(
+						source = error,
+						?library_candidate_path,
+						"could not read metadata for path"
+					)
+				})?;
+			if !metadata.is_file() {
 				tracing::debug!("Skipping non-file entry.");
 				return Ok(None);
 			}
