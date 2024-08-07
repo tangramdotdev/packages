@@ -158,6 +158,7 @@ export let build = tg.target(async (arg: Arg) => {
 					"--enable-default-ssp",
 					"--enable-initfini-array",
 					`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
+					`--with-gxx-include-dir=$OUTPUT/${target}/include/c++/${metadata.version}`,
 				];
 			case "stage2_full":
 				return [
