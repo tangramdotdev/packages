@@ -200,12 +200,7 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		configure.args.push("--enable-optimizations");
 	}
 
-	// Allow loading libraries from the compile-time library path.
-	let runtimeLibraryEnvVar =
-		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
-	let prepare = `export ${runtimeLibraryEnvVar}=$LIBRARY_PATH`;
-
-	let phases = { prepare, configure };
+	let phases = { configure };
 
 	let output = await std.autotools.build(
 		{
@@ -214,6 +209,7 @@ export let toolchain = tg.target(async (...args: std.Args<Arg>) => {
 			opt: "3",
 			phases,
 			sdk,
+			setRuntimeLibraryPath: true,
 			source: source_ ?? (await source()),
 		},
 		autotools,

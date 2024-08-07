@@ -41,9 +41,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let build = build_ ?? host;
 	let os = std.triple.os(build);
 
-	// Allow loading libraries from the compile-time library path.
-	let prepare = `export LD_LIBRARY_PATH=$LIBRARY_PATH`;
-
 	let configure = {
 		args: [
 			"--disable-test-modules",
@@ -53,7 +50,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let phases = { prepare, configure };
+	let phases = { configure };
 
 	let providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
@@ -67,6 +64,7 @@ export let build = tg.target(async (arg?: Arg) => {
 			env,
 			phases,
 			sdk,
+			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
 		autotools,

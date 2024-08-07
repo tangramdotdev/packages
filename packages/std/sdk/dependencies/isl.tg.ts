@@ -29,8 +29,6 @@ export let build = tg.target(async (arg?: Arg) => {
 	let { build, env, host, sdk, source: source_ } = arg ?? {};
 
 	let configure = {
-		// We need GMP to be available during the build.
-		pre: "export LD_LIBRARY_PATH=$LIBRARY_PATH",
 		args: ["--disable-dependency-tracking"],
 	};
 
@@ -39,6 +37,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		env,
 		phases: { configure },
 		sdk,
+		// We need GMP to be available during the build.
+		setRuntimeLibraryPath: true,
 		source: source_ ?? source(),
 	});
 

@@ -11,13 +11,13 @@ export let metadata = {
 	license: "BSD-3-Clause",
 	name: "cmake",
 	repository: "https://gitlab.kitware.com/cmake/cmake",
-	version: "3.30.0",
+	version: "3.30.2",
 };
 
 export let source = tg.target(() => {
 	let { version } = metadata;
 	let checksum =
-		"sha256:157e5be6055c154c34f580795fe5832f260246506d32954a971300ed7899f579";
+		"sha256:46074c781eccebc433e98f0bbfa265ca3fd4381f245ca3b140e7711531d60db2";
 	let owner = "Kitware";
 	let repo = "CMake";
 	let tag = `v${version}`;
@@ -63,11 +63,12 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 	let sourceDir = source_ ?? source();
 
+	let curlDir = curl.build({ build, env: env_, host, sdk }, curlArg);
 	let opensslDir = openssl.build({ build, env: env_, host, sdk }, opensslArg);
 	let zlibDir = zlib.build({ build, env: env_, host, sdk }, zlibArg);
 
 	let configure = {
-		command: `./bootstrap`,
+		command: tg`${sourceDir}/bootstrap`,
 		args: [
 			`--parallel=$(nproc)`,
 			`--system-curl`,
@@ -75,13 +76,15 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 			`-DCMAKE_C_BYTE_ORDER=LITTLE_ENDIAN`,
 			`-DCMAKE_CXX_BYTE_ORDER=LITTLE_ENDIAN`,
 			`-DCMAKE_EXE_LINKER_FLAGS="-lssl -lcrypto -lz"`,
+			tg`-DCURL_INCLUDE_DIR=${curlDir}/include`,
+			tg`-DCURL_LIBRARY=${curlDir}/lib/libcurl.so`,
 			tg`-DOPENSSL_ROOT_DIR=${opensslDir}`,
 			tg`-DZLIB_ROOT=${zlibDir}`,
 		],
 	};
 
 	let deps = [
-		curl.build({ build, env: env_, host, sdk }, curlArg),
+		curlDir,
 		pkgconfig.build({ build, host: build }, pkgconfigArg),
 		opensslDir,
 		zlibDir,
@@ -90,10 +93,10 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	let result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
-		buildInTree: true,
 		env: std.env.arg(env),
 		phases: { configure },
 		sdk,
+		setRuntimeLibraryPath: true,
 		source: sourceDir,
 	});
 

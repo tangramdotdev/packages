@@ -46,16 +46,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let os = std.triple.os(host);
-	let runtimeLibEnvVar =
-		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
-	let prepare = {
-		command: tg.Mutation.suffix(
-			`export ${runtimeLibEnvVar}="$LIBRARY_PATH"`,
-			"\n",
-		),
-	};
-
 	let install = {
 		command: tg.Mutation.set(`
 		mkdir -p $OUTPUT/bin $OUTPUT/lib/pkgconfig
@@ -73,7 +63,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	`),
 		args: tg.Mutation.unset(),
 	};
-	let phases = { prepare, configure: tg.Mutation.unset(), install };
+	let phases = { configure: tg.Mutation.unset(), install };
 
 	let attrArtifact = await attr.build({ build, env: env_, host, sdk }, attrArg);
 	let dependencies = [
@@ -89,6 +79,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			env,
 			phases,
 			sdk,
+			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
 		autotools,

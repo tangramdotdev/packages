@@ -59,12 +59,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let os = std.triple.os(host);
-
-	let runtimeLibEnvVar =
-		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
-	let prepare = `export ${runtimeLibEnvVar}="$LIBRARY_PATH"`;
-
 	let configure = {
 		args: [
 			"--disable-dependency-tracking",
@@ -74,7 +68,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			tg`--with-ca-bundle=${std.caCertificates()}/ca-bundle.crt`,
 		],
 	};
-	let phases = { prepare, configure };
+	let phases = { configure };
 
 	let env = [
 		perl.build({ build, host: build }),
@@ -91,6 +85,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			env: std.env.arg(env),
 			phases,
 			sdk,
+			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
 		autotools,

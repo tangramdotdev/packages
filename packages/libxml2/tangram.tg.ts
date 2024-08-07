@@ -20,7 +20,7 @@ export let source = tg.target(async (): Promise<tg.Directory> => {
 	let { name, version } = metadata;
 	let checksum =
 		"sha256:889c593a881a3db5fdd96cc9318c87df34eb648edfc458272ad46fd607353fbb";
-	let exteniion = ".tar.xz";
+	let extension = ".tar.xz";
 	let majorMinor = version.split(".").slice(0, 2).join(".");
 	let base = `https://download.gnome.org/sources/${name}/${majorMinor}`;
 	return await std
@@ -68,7 +68,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let prepare = "export LD_LIBRARY_PATH=$LIBRARY_PATH";
 	let configure = {
 		args: [
 			"--disable-dependency-tracking",
@@ -95,8 +94,9 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(env),
-			phases: { prepare, configure },
+			phases: { configure },
 			sdk,
+			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
 		autotools,

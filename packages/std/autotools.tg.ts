@@ -61,6 +61,9 @@ export type Arg = {
 	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
 	sdk?: std.sdk.Arg | boolean;
 
+	/** Should we mirror the contents `LIBRARY_PATH` in `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`? Default: false */
+	setRuntimeLibraryPath?: boolean;
+
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source?: tg.Directory;
 
@@ -109,6 +112,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		prefixPath = `$OUTPUT`,
 		removeLibtoolArchives = true,
 		sdk: sdkArgs_,
+		setRuntimeLibraryPath = false,
 		source,
 		stripExecutables = true,
 		target: target_,
@@ -252,24 +256,29 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		install: defaultInstall,
 	};
 
-	let defaultPrepare = undefined;
+	let defaultPrepareCommand = tg.template();
 	if (buildInTree) {
-		defaultPrepare = {
-			command: tg`cp -R ${source}/. . && chmod -R u+w .`,
-		};
-		defaultPhases.prepare = defaultPrepare;
+		defaultPrepareCommand = tg`${defaultPrepareCommand}\ncp -R ${source}/. . && chmod -R u+w .`;
+	}
+	if (setRuntimeLibraryPath) {
+		let os = std.triple.os(host);
+		let runtimeLibEnvVar =
+			os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport ${runtimeLibEnvVar}=$LIBRARY_PATH`;
 	}
 
 	if (defaultCrossEnv) {
 		if (host !== target) {
 			let targetPrefix = `${target}-`;
-			defaultPrepare = {
-				command: tg`${
-					defaultPrepare?.command ?? ":"
-				} && export CC=${targetPrefix}cc && export CXX=${targetPrefix}c++ && export AR=${targetPrefix}ar`,
-			};
-			defaultPhases.prepare = defaultPrepare;
+			defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport CC=${targetPrefix}cc && export CXX=${targetPrefix}c++ && export AR=${targetPrefix}ar`;
 		}
+	}
+
+	if (buildInTree || setRuntimeLibraryPath || defaultCrossEnv) {
+		let defaultPrepare = {
+			command: defaultPrepareCommand,
+		};
+		defaultPhases.prepare = defaultPrepare;
 	}
 
 	let defaultFixupCommand = tg.template();
