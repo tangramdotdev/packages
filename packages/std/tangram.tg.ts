@@ -234,7 +234,7 @@ export let testDepsZstd = tg.target(async () => {
 	return await dependencies.zstd.test();
 });
 export let testDeps = tg.target(async () => {
-	return await dependencies.env();
+	return await dependencies.buildTools();
 });
 
 // sdk stage tests

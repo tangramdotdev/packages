@@ -2,21 +2,22 @@ import * as std from "./tangram.tg.ts";
 
 /** Filter the contents of a directory according to a predicate. */
 export let filter = async (
-	directory: tg.Directory,
+	directory: tg.Unresolved<tg.Directory>,
 	predicate: (name: string, artifact: tg.Artifact) => boolean,
 ) => {
-	let ret = directory;
-	for await (let [name, artifact] of directory) {
+	let dir = await tg.resolve(directory);
+	let ret = dir;
+	for await (let [name, artifact] of dir) {
 		if (!predicate(name, artifact)) {
-			ret = await tg.directory(directory, { [`${name}`]: undefined });
+			ret = await tg.directory(dir, { [`${name}`]: undefined });
 		}
 	}
 	return ret;
 };
 
 /** Produce a directory containing only the named subdirectories if present. */
-export let keepSubdirectories = (
-	directory: tg.Directory,
+export let keepSubdirectories = async (
+	directory: tg.Unresolved<tg.Directory>,
 	...subdirectories: Array<string>
 ) => {
 	return filter(

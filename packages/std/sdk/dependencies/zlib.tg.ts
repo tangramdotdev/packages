@@ -26,10 +26,28 @@ export type Arg = {
 };
 
 export let build = tg.target(async (arg?: Arg) => {
-	let { build, env, host, sdk, source: source_ } = arg ?? {};
+	let {
+		build: build_,
+		env: env_,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ?? {};
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+
+	let envs = [env_];
+	if (build !== host) {
+		envs.push({
+			CHOST: host,
+		});
+	}
+	let env = std.env.arg(...envs);
 
 	let output = std.utils.buildUtil({
 		...(await std.triple.rotate({ build, host })),
+		defaultCrossArgs: false,
 		env,
 		sdk,
 		source: source_ ?? source(),
