@@ -17,7 +17,7 @@ export let metadata = {
 	version: "0.0.0",
 };
 
-let VERSION = "1.80.0" as const;
+let VERSION = "1.80.1" as const;
 let PROFILE = "minimal" as const;
 
 type ToolchainArg = {
