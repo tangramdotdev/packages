@@ -9,7 +9,7 @@
 # Environment variables:
 #   OUTPUT: output directory for rustc.
 #
-echo "Running rustc driver script: $*"
+echo "Running rustc driver script. Invocation: $*"
 while test  $# -gt 0  ; do
   case $1 in
     "--rustc")

@@ -250,6 +250,10 @@ export let testCargoProxy = tg.target(async () => {
 	let helloWorld = cargo_.build({
 		source: tests.get("hello-world"),
 		proxy: true,
+		verbose: true,
+		env: {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+		},
 	});
 
 	// let helloOpenssl = cargo_.build({
