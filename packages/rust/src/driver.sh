@@ -21,8 +21,6 @@ die() {
 	exit 1
 }
 
-log "Running rustc driver script with args: $*"
-
 # Parse arguments
 shift # skip the script name
 while [ $# -gt 0 ]; do
@@ -67,5 +65,3 @@ if ! OUT_DIR="$OUTPUT/out" "$RUSTC" "$@" --out-dir "$OUTPUT/build" \
 	cat "$OUTPUT/log/stderr"
 	exit 1
 fi
-
-log "Compilation completed successfully"
