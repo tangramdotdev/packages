@@ -64,6 +64,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 			...(await std.triple.rotate({ build, host })),
 			env,
 			features: ["pcre2"],
+			proxy: true,
 			sdk,
 			source: source_ ?? source(),
 		},

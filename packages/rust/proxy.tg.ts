@@ -17,6 +17,7 @@ export let source = tg.target(async () => {
 export let proxy = tg.target(async () => {
 	return cargo.build({
 		source: source(),
+		features: ["tracing"],
 		proxy: false,
 		useCargoVendor: true,
 	});

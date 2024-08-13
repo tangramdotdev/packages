@@ -1,4 +1,3 @@
-import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
@@ -230,24 +229,79 @@ export let testCrossToolchain = tg.target(async () => {
 });
 
 import tests from "./tests" with { type: "directory" };
+export let testUnproxiedWorkspace = tg.target(async () => {
+	let helloWorkspace = cargo_.build({
+		source: tests.get("hello-workspace"),
+		proxy: false,
+	});
+
+	let output = await $`
+		${helloWorkspace}/bin/cli >> $OUTPUT
+	`.then(tg.File.expect);
+	let text = await output.text();
+	tg.assert(text.trim() === "Hello from a workspace!");
+	return true;
+});
+
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
 export let testCargoProxy = tg.target(async () => {
 	await proxy_.test();
 
-	let helloWorld = cargo_.build({
+	// Build the basic proxy test.
+	let helloWorld = await cargo_.build({
 		source: tests.get("hello-world"),
 		proxy: true,
+		env: {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+		},
 	});
+	console.log("helloWorld result", await helloWorld.id());
 
-	let helloOpenssl = cargo_.build({
+	// Assert it produces the correct output.
+	let helloOutput = await $`hello-world | tee $OUTPUT`
+		.env(helloWorld)
+		.then(tg.File.expect);
+	let helloText = await helloOutput.text();
+	tg.assert(helloText.trim() === "hello, proxy!\n128\nHello, build!");
+
+	// Build the openssl proxy test.
+	let helloOpenssl = await cargo_.build({
 		source: tests.get("hello-openssl"),
-		env: std.env.arg(await openssl.build(), await toolchain()),
+		env: std.env.arg(await openssl.build(), pkgconfig.build(), {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+		}),
 		proxy: true,
 	});
+	console.log("helloOpenssl result", await helloWorld.id());
 
-	return await $`
-		${helloWorld}/bin/hello-world     >> $OUTPUT
-		${helloOpenssl}/bin/hello-openssl >> $OUTPUT
-	`;
+	// Assert it produces the correct output.
+	let opensslOutput = await $`hello-openssl | tee $OUTPUT`
+		.env(helloOpenssl)
+		.then(tg.File.expect);
+	let opensslText = await opensslOutput.text();
+	tg.assert(
+		opensslText.trim() === "Hello, from a crate that links against libssl!",
+	);
+
+	// Build the workspace test.
+	let helloWorkspace = await cargo_.build({
+		source: tests.get("hello-workspace"),
+		proxy: true,
+		env: {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+		},
+	});
+	console.log("helloWorkspace result", await helloWorkspace.id());
+
+	// Assert it produces the correct output.
+	let workspaceOutput = await $`cli | tee $OUTPUT`
+		.env(helloWorkspace)
+		.then(tg.File.expect);
+	let workspaceText = await workspaceOutput.text();
+	tg.assert(workspaceText.trim() === "Hello from a workspace!");
+
+	return true;
 });
 
 // Compare the results of cargo vendor and vendorDependencies.

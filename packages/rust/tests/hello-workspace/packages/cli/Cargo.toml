@@ -1,0 +1,13 @@
+[package]
+name = "cli"
+
+description = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = false
+version = { workspace = true }
+
+[dependencies]
+bytes = { workspace = true }
+greeting = { workspace = true }

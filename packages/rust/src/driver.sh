@@ -1,55 +1,71 @@
-#!/bin/sh -eu
+#!/bin/sh
 # Driver script for tangram_rustc.
 #
 # Arguments:
 #   --rustc  <rustc path>
 #   --source <source directory>
+#   --out-dir <output directory>
 #   --       <rustc args>
 #
 # Environment variables:
 #   OUTPUT: output directory for rustc.
 #
-echo "Running rustc driver script: $*"
-while test  $# -gt 0  ; do
-  case $1 in
-    "--rustc")
-      RUSTC="$2"
-      shift
-      shift
-    ;;
-    "--source")
-      SOURCE="$2"
-      shift
-      shift
-    ;;
-    "--out-dir")
-      OUT_DIR="$2"
-      shift
-      shift
-    ;;
-    "--")
-      shift
-      break;
-    ;;
-  esac
+set -eu
+
+log() {
+	echo "$@" >&2
+}
+
+die() {
+	log "$@"
+	exit 1
+}
+
+log "Running rustc driver script with args: $*"
+
+# Parse arguments
+shift # skip the script name
+while [ $# -gt 0 ]; do
+	case $1 in
+		--rustc)
+			RUSTC=$2
+			shift 2
+			;;
+		--source)
+			SOURCE=$2
+			shift 2
+			;;
+		--out-dir)
+			OUT_DIR=$2
+			shift 2
+			;;
+		--)
+			shift
+			break
+			;;
+	esac
 done
 
-# Change to the source directory and invoke the compiler.
-cd "$SOURCE" || exit 1
-if ! mkdir -p "$OUTPUT/out" "$OUTPUT/build" "$OUTPUT/log" ; then
-  echo "Failed to construct output directory."
-  exit 1
+# Validate required arguments
+if [ -z "${RUSTC-}" ] || [ -z "${SOURCE-}" ] || [ -z "${OUT_DIR-}" ] || [ -z "${OUTPUT-}" ]; then
+	die "Missing required argument or environment variable"
 fi
 
-# Copy over the OUT_DIR contents and update the OUT_DIR env var.
-if ! cp -a "$OUT_DIR/." "$OUTPUT/out" ; then
-  echo "Failed to copy $OUT_DIR to $OUTPUT"
-  exit 1
+# Create output directories
+mkdir -p "$OUTPUT/out" "$OUTPUT/build" "$OUTPUT/log" || die "Failed to create output directories"
+
+# Change to the source directory
+cd "$SOURCE" || die "Failed to change to source directory: $SOURCE"
+
+# Copy over the OUT_DIR contents.
+cp -R "$OUT_DIR/." "$OUTPUT/out" || die "Failed to copy $OUT_DIR to $OUTPUT/out"
+
+# Invoke the compiler
+if ! OUT_DIR="$OUTPUT/out" "$RUSTC" "$@" --out-dir "$OUTPUT/build" \
+		 > "$OUTPUT/log/stdout" 2> "$OUTPUT/log/stderr"; then
+	log "rustc failed. Error output:"
+	cat "$OUTPUT/log/stderr"
+	exit 1
 fi
 
-# Invoke the compiler.
-if ! OUT_DIR="$OUTPUT/out" "$RUSTC" "$@" --out-dir "$OUTPUT/build" 2> "$OUTPUT/log/stderr" 1> "$OUTPUT/log/stdout" ; then
-  echo "rustc failed."
-  cat "$OUTPUT/log/stderr"
-  exit 1
-fi
+log "Compilation completed successfully"

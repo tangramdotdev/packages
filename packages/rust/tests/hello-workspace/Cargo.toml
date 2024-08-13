@@ -1,0 +1,17 @@
+[workspace]
+default-members = ["packages/cli"]
+members = ["packages/cli", "packages/greeting"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Tangram <root@tangram.dev>"]
+description = "Test workspace for the Tangram Rust integration"
+edition = "2021"
+homepage = "https://www.tangram.dev"
+license = "MIT"
+publish = false
+version = "0.0.0"
+
+[workspace.dependencies]
+bytes = "1"
+greeting = { path = "packages/greeting" }

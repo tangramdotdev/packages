@@ -11,5 +11,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "04a18d22bf94c0d554f3570efd4cff5d41b465b9" }
 tokio = { version = "1", features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = [
+	"env-filter",
+	"json",
+], optional = true }
+
+[features]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
