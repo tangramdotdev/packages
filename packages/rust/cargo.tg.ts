@@ -136,16 +136,16 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// When not cross-compiling, ensure the `cc` provided by the SDK is used, which enables Tangram linking.
 	let toolchainEnv = {
-		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`cc`,
+		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `cc`,
 	};
 
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
 		toolchainEnv = {
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`${target}-cc`,
-			[`AR_${tripleToEnvVar(target)}`]: tg`${target}-ar`,
-			[`CC_${tripleToEnvVar(target)}`]: tg`${target}-cc`,
-			[`CXX_${tripleToEnvVar(target)}`]: tg`${target}-c++`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${target}-cc`,
+			[`AR_${tripleToEnvVar(target)}`]: `${target}-ar`,
+			[`CC_${tripleToEnvVar(target)}`]: `${target}-cc`,
+			[`CXX_${tripleToEnvVar(target)}`]: `${target}-c++`,
 		};
 	}
 
@@ -367,3 +367,60 @@ let tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	}
 	return result;
 };
+
+import tests from "./tests" with { type: "directory" };
+export let test = tg.target(async () => {
+	let tests = [];
+
+	tests.push(testUnproxiedWorkspace());
+	tests.push(testVendorDependencies());
+
+	await Promise.all(tests);
+
+	return true;
+});
+
+export let testUnproxiedWorkspace = tg.target(async () => {
+	let helloWorkspace = build({
+		source: tests.get("hello-workspace"),
+		proxy: false,
+	});
+
+	let output = await $`
+		${helloWorkspace}/bin/cli >> $OUTPUT
+	`.then(tg.File.expect);
+	let text = await output.text();
+	tg.assert(text.trim() === "Hello from a workspace!");
+	return true;
+});
+
+// Compare the results of cargo vendor and vendorDependencies.
+export let testVendorDependencies = tg.target(async () => {
+	let sourceDirectory = await tests
+		.get("hello-openssl")
+		.then(tg.Directory.expect);
+	let cargoLock = await sourceDirectory.get("Cargo.lock").then(tg.File.expect);
+	let tgVendored = vendorDependencies(cargoLock);
+
+	let certFile = tg`${std.caCertificates()}/cacert.pem`;
+	let vendorScript = tg`
+		SOURCE="$(realpath ${sourceDirectory})"
+		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
+	`;
+	let rustArtifact = toolchain();
+	let sdk = std.sdk();
+
+	let cargoVendored = await $`${vendorScript}`
+		.checksum("unsafe")
+		.env(sdk, rustArtifact, {
+			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+			CARGO_HTTP_CAINFO: certFile,
+			RUST_TARGET: rustTriple(await std.triple.host()),
+			SSL_CERT_FILE: certFile,
+		})
+		.then(tg.Directory.expect);
+	return tg.directory({
+		tgVendored,
+		cargoVendored,
+	});
+});

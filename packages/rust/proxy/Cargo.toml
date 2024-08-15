@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] }
+fnv = "1"
 futures = "0.3"
 itertools = "0.13"
 serde = { version = "1", features = ["derive"] }
