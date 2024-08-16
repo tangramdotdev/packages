@@ -9,13 +9,13 @@ export let metadata = {
 	name: "sqlite",
 	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",
 	repository: "https://www.sqlite.org/src/",
-	version: "3.46.0",
+	version: "3.46.1",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:6f8e6a7b335273748816f9b3b62bbdc372a889de8782d7f048c653a447417a7d";
+		"sha256:67d3fe6d268e6eaddcae3727fce58fcc8e9c53869bdd07a0c61e38ddf2965071";
 	let extension = ".tar.gz";
 
 	let produceVersion = (version: string) => {
