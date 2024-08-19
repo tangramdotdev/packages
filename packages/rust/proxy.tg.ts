@@ -65,14 +65,14 @@ export let test = tg.target(async () => {
 	});
 	console.log("helloOpenssl result", await helloWorld.id());
 
-	// // Assert it produces the correct output.
-	// let opensslOutput = await $`hello-openssl | tee $OUTPUT`
-	// 	.env(helloOpenssl)
-	// 	.then(tg.File.expect);
-	// let opensslText = await opensslOutput.text();
-	// tg.assert(
-	// 	opensslText.trim() === "Hello, from a crate that links against libssl!",
-	// );
+	// Assert it produces the correct output.
+	let opensslOutput = await $`hello-openssl | tee $OUTPUT`
+		.env(helloOpenssl)
+		.then(tg.File.expect);
+	let opensslText = await opensslOutput.text();
+	tg.assert(
+		opensslText.trim() === "Hello, from a crate that links against libssl!",
+	);
 
 	// Build the workspace test.
 	let helloWorkspace = await cargo.build({
