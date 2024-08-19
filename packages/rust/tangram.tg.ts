@@ -2,6 +2,9 @@ import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 
+import * as build_ from "./build.tg.ts";
+export * as build from "./build.tg.ts";
+
 import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
 
@@ -16,7 +19,7 @@ export let metadata = {
 	version: "0.0.0",
 };
 
-let VERSION = "1.80.1" as const;
+export let VERSION = "1.80.1" as const;
 let PROFILE = "minimal" as const;
 
 type ToolchainArg = {
@@ -197,8 +200,17 @@ export let rustTriple = (triple: string): string => {
 };
 
 export let test = tg.target(async () => {
-	let tests = [testHostToolchain()];
-	await Promise.all(tests);
+	let tests = [];
+
+	tests.push(testHostToolchain());
+	tests.push(testCrossToolchain());
+	tests.push(testCargo());
+	tests.push(testCargoProxy());
+	tests.push(testNativeBuild());
+
+	let results = await Promise.all(tests);
+	tg.assert(results.every((r) => r === true));
+
 	return true;
 });
 
@@ -228,109 +240,14 @@ export let testCrossToolchain = tg.target(async () => {
 	return crossRust;
 });
 
-import tests from "./tests" with { type: "directory" };
-export let testUnproxiedWorkspace = tg.target(async () => {
-	let helloWorkspace = cargo_.build({
-		source: tests.get("hello-workspace"),
-		proxy: false,
-	});
-
-	let output = await $`
-		${helloWorkspace}/bin/cli >> $OUTPUT
-	`.then(tg.File.expect);
-	let text = await output.text();
-	tg.assert(text.trim() === "Hello from a workspace!");
-	return true;
+export let testCargo = tg.target(async () => {
+	return await cargo_.test();
 });
 
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
 export let testCargoProxy = tg.target(async () => {
-	await proxy_.test();
-
-	// Build the basic proxy test.
-	let helloWorld = await cargo_.build({
-		source: tests.get("hello-world"),
-		proxy: true,
-		env: {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
-		},
-	});
-	console.log("helloWorld result", await helloWorld.id());
-
-	// Assert it produces the correct output.
-	let helloOutput = await $`hello-world | tee $OUTPUT`
-		.env(helloWorld)
-		.then(tg.File.expect);
-	let helloText = await helloOutput.text();
-	tg.assert(helloText.trim() === "hello, proxy!\n128\nHello, build!");
-
-	// Build the openssl proxy test.
-	let helloOpenssl = await cargo_.build({
-		source: tests.get("hello-openssl"),
-		env: std.env.arg(await openssl.build(), pkgconfig.build(), {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
-		}),
-		proxy: true,
-	});
-	console.log("helloOpenssl result", await helloWorld.id());
-
-	// Assert it produces the correct output.
-	let opensslOutput = await $`hello-openssl | tee $OUTPUT`
-		.env(helloOpenssl)
-		.then(tg.File.expect);
-	let opensslText = await opensslOutput.text();
-	tg.assert(
-		opensslText.trim() === "Hello, from a crate that links against libssl!",
-	);
-
-	// Build the workspace test.
-	let helloWorkspace = await cargo_.build({
-		source: tests.get("hello-workspace"),
-		proxy: true,
-		env: {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
-		},
-	});
-	console.log("helloWorkspace result", await helloWorkspace.id());
-
-	// Assert it produces the correct output.
-	let workspaceOutput = await $`cli | tee $OUTPUT`
-		.env(helloWorkspace)
-		.then(tg.File.expect);
-	let workspaceText = await workspaceOutput.text();
-	tg.assert(workspaceText.trim() === "Hello from a workspace!");
-
-	return true;
+	return await proxy_.test();
 });
 
-// Compare the results of cargo vendor and vendorDependencies.
-export let testVendorDependencies = tg.target(async () => {
-	let sourceDirectory = tests.get("hello-openssl");
-	tg.assert(sourceDirectory instanceof tg.Directory);
-	let cargoLock = await sourceDirectory.get("Cargo.lock");
-	tg.assert(cargoLock instanceof tg.File);
-	let tgVendored = cargo_.vendorDependencies(cargoLock);
-
-	let certFile = tg`${std.caCertificates()}/cacert.pem`;
-	let vendorScript = tg`
-		SOURCE="$(realpath ${sourceDirectory})"
-		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
-	`;
-	let rustArtifact = toolchain();
-	let sdk = std.sdk();
-
-	let cargoVendored = await $`${vendorScript}`
-		.checksum("unsafe")
-		.env(sdk, rustArtifact, {
-			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-			CARGO_HTTP_CAINFO: certFile,
-			RUST_TARGET: "x86_64-linux-unknown-gnu",
-			SSL_CERT_FILE: certFile,
-		})
-		.then(tg.Directory.expect);
-	return tg.directory({
-		tgVendored,
-		cargoVendored,
-	});
+export let testNativeBuild = tg.target(async () => {
+	return await build_.test();
 });

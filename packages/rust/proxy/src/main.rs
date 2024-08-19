@@ -26,14 +26,11 @@ struct Args {
 	// The rest of the arguments passed to rustc.
 	rustc_args: Vec<String>,
 
-	// The the value of CARGO_MANIFEST_DIRECTORY set by cargo.
-	cargo_manifest_directory: String,
+	// For cargo builds, this is found via CARGO_MANIFEST_DIRECTORY set by cargo. For plain rustc invocations, it is the parent of the source file.
+	source_directory: String,
 
 	// The value of OUT_DIR set by cargo.
 	cargo_out_directory: Option<String>,
-
-	// The location of the nearest .tangram directory.
-	tangram_path: PathBuf,
 }
 
 impl Args {
@@ -81,6 +78,11 @@ impl Args {
 				("--out-dir", Some(value)) => {
 					rustc_output_directory = Some(value);
 				},
+				(arg, None) if arg.starts_with("--out-dir=") => {
+					if let Some(suffix) = arg.strip_prefix("--out-dir=") {
+						rustc_output_directory = Some(suffix.into());
+					}
+				},
 				("-", None) => {
 					stdin = true;
 					rustc_args.push("-".into());
@@ -96,22 +98,31 @@ impl Args {
 		}
 
 		// Read environment variables set by cargo. CARGO_MANIFEST_DIR isn't guaranteed to be set by cargo, but we don't need to care about that case.
-		let cargo_manifest_directory = std::env::var("CARGO_MANIFEST_DIR").unwrap_or(".".into());
+		let cargo_manifest_directory = std::env::var("CARGO_MANIFEST_DIR").ok();
 		let cargo_out_directory = std::env::var("OUT_DIR").ok();
 
-		// Find the tangram path.
-		let cwd = std::env::current_dir()
-			.map_err(|error| tg::error!(source = error, "missing current dir"))?;
-
-		// Get the tangram root path by walking up from the current directory.
-		let mut search_dir = cwd.clone();
-		while !search_dir.join(".tangram").exists() {
-			let Some(parent) = search_dir.parent() else {
-				return Err(tg::error!("missing tangram path"));
-			};
-			search_dir = parent.into();
-		}
-		let tangram_path = search_dir.join(".tangram");
+		// Determine the directory containing the source.
+		let source_directory = if let Some(dir) = cargo_manifest_directory {
+			// If cargo set CARGO_MANIFEST_DIR, it's that directory.
+			dir
+		} else {
+			// Otherwise, it's the only argument left in the rustc_args with a ".rs" extension.
+			let mut source_directory = None;
+			for arg in &rustc_args {
+				if arg.ends_with(".rs") {
+					let path = std::path::Path::new(arg);
+					let parent = path.parent();
+					if let Some(parent) = parent {
+						if let Some(parent_str) = parent.to_str() {
+							source_directory = Some(parent_str.to_owned());
+							break;
+						}
+					}
+				}
+			}
+			// If we still couldn't find it, fall back to ".".
+			source_directory.unwrap_or(".".to_string())
+		};
 
 		Ok(Self {
 			rustc,
@@ -119,10 +130,9 @@ impl Args {
 			dependencies,
 			externs,
 			rustc_output_directory,
-			cargo_manifest_directory,
+			source_directory,
 			cargo_out_directory,
 			rustc_args,
-			tangram_path,
 		})
 	}
 }
@@ -160,7 +170,7 @@ async fn main_inner() -> tg::Result<()> {
 	let tg = &tg;
 
 	// Check in the source and output directories.
-	let source_directory_path = args.cargo_manifest_directory;
+	let source_directory_path = args.source_directory;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?source_directory_path, "checking in source directory");
 	let source_directory = get_checked_in_path(tg, &source_directory_path).await?;
@@ -227,6 +237,7 @@ async fn main_inner() -> tg::Result<()> {
 	}
 
 	// Check in any -L dependency=PATH directories, and splice any matching --extern name=PATH args.
+	let mut used_externs = fnv::FnvHashSet::default();
 	for dependency in &args.dependencies {
 		#[cfg(feature = "tracing")]
 		tracing::info!(?dependency, "checking in dependency");
@@ -260,11 +271,32 @@ async fn main_inner() -> tg::Result<()> {
 						],
 					}
 				};
+				used_externs.insert(name);
 				Some(["--extern".to_owned().into(), template.into()])
 			})
 			.flatten();
 		target_args.extend(externs);
 	}
+
+	// Add any externs that were not already handled.
+	let unhandled_externs = args
+		.externs
+		.iter()
+		.filter(|(name, _)| !used_externs.contains(name));
+	#[cfg(feature = "tracing")]
+	tracing::info!(?unhandled_externs, "adding unhandled externs");
+	target_args.extend(unhandled_externs.flat_map(|(name, path)| {
+		let template = if path.is_empty() {
+			tg::Template {
+				components: vec![name.to_string().into()],
+			}
+		} else {
+			tg::Template {
+				components: vec![format!("{name}=").into(), path.to_owned().into()],
+			}
+		};
+		["--extern".to_owned().into(), template.into()]
+	}));
 
 	// Create the target.
 	let host = host().to_string();
@@ -353,22 +385,60 @@ async fn main_inner() -> tg::Result<()> {
 		.await
 		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
+	// Ensure the result is available with an internal checkout.
+	let path = tg::Artifact::from(output.clone())
+		.check_out(
+			tg,
+			tg::artifact::checkout::Arg {
+				bundle: false,
+				force: true,
+				path: None,
+				references: false,
+			},
+		)
+		.await?;
+	#[cfg(feature = "tracing")]
+	tracing::info!(?path, "checked out result artifact");
+
 	// Get the output directory.
-	let output_directory = args
-		.tangram_path
-		.join("artifacts")
-		.join(output.id(tg).await?.to_string())
-		.join("build");
+	let build_directory = path.join("build");
+	let build_directory = build_directory.as_path();
+	#[cfg(feature = "tracing")]
+	tracing::info!(?build_directory, "got build directory");
 
 	// Copy output files from $OUTPUT to the path specified.
-	for from in output_directory.read_dir().unwrap() {
+	for from in build_directory.read_dir().map_err(|e| {
+		tg::error!(
+			source = e,
+			"could not read output directory {}",
+			build_directory.display()
+		)
+	})? {
 		let filename = from.unwrap().file_name().into_string().unwrap();
-		let from = output_directory.join(&filename);
-		let to = PathBuf::from(args.rustc_output_directory.as_ref().unwrap()).join(filename);
-		if from.exists() && from.is_file() {
-			tokio::fs::copy(from, to)
+		let from = build_directory.join(&filename);
+		let to_parent = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
+		// Create the parent directory if it doesn't exist.
+		if !to_parent.exists() {
+			tokio::fs::create_dir_all(&to_parent)
 				.await
-				.map_err(|error| tg::error!(source = error, "failed to copy output directory"))?;
+				.map_err(|error| {
+					tg::error!(
+						source = error,
+						"failed to create output directory {}",
+						to_parent.display()
+					)
+				})?;
+		}
+		let to = to_parent.join(filename);
+		if from.exists() && from.is_file() {
+			tokio::fs::copy(&from, &to).await.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to copy output directory from {} to {}",
+					from.display(),
+					to.display()
+				)
+			})?;
 		}
 	}
 	Ok(())
@@ -482,7 +552,7 @@ const BLACKLISTED_ENV_VARS: [&str; 5] = [
 	"OUTPUT",
 ];
 
-/// Given a string path, return a [`tg::Path`] pointing to a checked-in artifact. If the path is already checked in, do nothing.
+/// Given a string path, return a [`tg::Path`] pointing to a checked-in artifact. If the path is already checked in or is ".", do nothing.
 async fn get_checked_in_path(
 	tg: &impl tg::Handle,
 	path: &impl AsRef<std::path::Path>,
@@ -490,6 +560,10 @@ async fn get_checked_in_path(
 	// If the path is in the working directory, check it in. If the path points to a checked-in artifact, return it as artifact/subpath (symlink)
 	let path = path.as_ref();
 	let path_str = path.to_str().unwrap();
+
+	if path_str == "." {
+		return Ok(".".into());
+	}
 
 	// Unrender the string.
 	// We want to treat "checkouts" and "artifacts" as the same.

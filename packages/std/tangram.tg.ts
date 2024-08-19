@@ -233,9 +233,6 @@ export let testDepsZlib = tg.target(async () => {
 export let testDepsZstd = tg.target(async () => {
 	return await dependencies.zstd.test();
 });
-export let testDeps = tg.target(async () => {
-	return await dependencies.buildTools();
-});
 
 // sdk stage tests
 
@@ -441,4 +438,15 @@ export let testLibbsd = tg.target(async () => {
 import * as libmd from "./sdk/llvm/libmd.tg.ts";
 export let testLibmd = tg.target(async () => {
 	return await libmd.build();
+});
+
+import testSource from "./wrap/test/inspectProcess.c" with { type: "file" };
+import { $ } from "./dollar.tg.ts";
+export let testStrip = tg.target(async () => {
+	let toolchain = await sdk();
+	let output =
+		await $`cc -o main -xc ${testSource} && strip main && mv main $OUTPUT`
+			.env(toolchain)
+			.then(tg.File.expect);
+	return output;
 });
