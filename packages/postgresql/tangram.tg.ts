@@ -14,13 +14,13 @@ export let metadata = {
 	license: "https://www.postgresql.org/about/licence/",
 	name: "postgresql",
 	repository: "https://git.postgresql.org/gitweb/?p=postgresql.git;a=summary",
-	version: "16.3",
+	version: "16.4",
 };
 
 export let source = tg.target(async (os: string) => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:331963d5d3dc4caf4216a049fa40b66d6bcb8c730615859411b9518764e60585";
+		"sha256:971766d645aa73e93b9ef4e3be44201b4f45b5477095b049125403f9f3386d6f";
 	let extension = ".tar.bz2";
 	let base = `https://ftp.postgresql.org/pub/source/v${version}`;
 	return await std
@@ -116,7 +116,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			buildInTree: true,
-			debug: true,
 			env: std.env.arg(...env),
 			phases,
 			sdk,
