@@ -2,8 +2,6 @@ use itertools::Itertools;
 use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
 use tokio::io::AsyncWriteExt;
-#[cfg(feature = "tracing")]
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 // Input arguments to the rustc proxy.
 #[derive(Debug)]
@@ -137,20 +135,19 @@ impl Args {
 	}
 }
 
-#[tokio::main]
-async fn main() {
-	if let Err(e) = main_inner().await {
+fn main() {
+	// Setup tracing.
+	#[cfg(feature = "tracing")]
+	tangram_std::tracing::setup("TANGRAM_RUSTC_TRACING");
+
+	if let Err(e) = main_inner() {
 		eprintln!("rustc proxy failed: {e}");
 		eprintln!("{}", e.trace(&tg::error::TraceOptions::default()));
 		std::process::exit(1);
 	}
 }
 
-async fn main_inner() -> tg::Result<()> {
-	// Setup tracing.
-	#[cfg(feature = "tracing")]
-	setup_tracing();
-
+fn main_inner() -> tg::Result<()> {
 	let args = Args::parse()?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?args, "parsed arguments");
@@ -165,6 +162,17 @@ async fn main_inner() -> tg::Result<()> {
 		return Err(tg::error!("exec failed: {error}."));
 	}
 
+	tokio::runtime::Builder::new_multi_thread()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(run_proxy(args))?;
+
+	Ok(())
+}
+
+/// Run the proxy.
+async fn run_proxy(args: Args) -> tg::Result<()> {
 	// Create a client.
 	let tg = tg::Client::with_env()?;
 	let tg = &tg;
@@ -195,30 +203,26 @@ async fn main_inner() -> tg::Result<()> {
 	let executable = Some(tg::File::with_object(object).into());
 
 	// Unrender the environment.
-	// Get the artifacts directory.
-	let mut artifacts_directory = None;
-	let cwd = std::env::current_dir().expect("Failed to get the current directory");
-	for path in cwd.ancestors().skip(1) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
-			artifacts_directory = Some(directory);
-			break;
-		}
-	}
-	let artifacts_directory = artifacts_directory.expect("Failed to find the artifacts directory");
-	let artifacts_directory = artifacts_directory
-		.to_str()
-		.expect("artifacts directory path is not valid UTF-8");
 	let mut env = BTreeMap::new();
 	for (name, value) in
 		std::env::vars().filter(|(name, _)| !BLACKLISTED_ENV_VARS.contains(&name.as_str()))
 	{
-		let value = tg::Template::unrender(artifacts_directory, &value)?;
+		// For CARGO_MAKEFLAGS, drop the jobserver arguments. We are spawning new builds and explicitly do not want to coordinate with cargo's jobserver.
+		let value = if name == "CARGO_MAKEFLAGS" {
+			value
+				.split(' ')
+				.filter(|arg| !arg.starts_with("--jobserver"))
+				.join(" ")
+		} else {
+			value
+		};
+
+		let value = tangram_std::unrender(&value)?;
 		env.insert(name, value.into());
 	}
 
 	// Create/Unrender the arguments passed to driver.sh.
-	let rustc = tg::Template::unrender(artifacts_directory, &args.rustc)?;
+	let rustc = tangram_std::unrender(&args.rustc)?;
 	let name = "tangram_rustc".to_string().into();
 	let mut target_args: Vec<tg::Value> = vec![
 		name,
@@ -232,7 +236,7 @@ async fn main_inner() -> tg::Result<()> {
 	];
 
 	for arg in &args.rustc_args {
-		let template = tg::Template::unrender(artifacts_directory, arg)?;
+		let template = tangram_std::unrender(arg)?;
 		target_args.push(template.into());
 	}
 
@@ -299,7 +303,7 @@ async fn main_inner() -> tg::Result<()> {
 	}));
 
 	// Create the target.
-	let host = host().to_string();
+	let host = tangram_std::host().to_string();
 	let lock = None;
 	let checksum = None;
 	let object = tg::target::Object {
@@ -485,25 +489,6 @@ fn find_root_manifest_dir(cargo_manifest_dir: &impl AsRef<std::path::Path>) -> P
 	}
 }
 
-fn host() -> &'static str {
-	#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
-	{
-		"aarch64-darwin"
-	}
-	#[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-	{
-		"aarch64-linux"
-	}
-	#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
-	{
-		"x86_64-darwin"
-	}
-	#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
-	{
-		"x86_64-linux"
-	}
-}
-
 // The driver script.
 const DRIVER_SH: &[u8] = include_bytes!("driver.sh");
 
@@ -568,7 +553,9 @@ async fn get_checked_in_path(
 	// Unrender the string.
 	// We want to treat "checkouts" and "artifacts" as the same.
 	let path_str = path_str.replace("checkouts", "artifacts");
-	let symlink_data = template_data_to_symlink_data(unrender(tg, &path_str)).await?;
+	let symlink_data = tangram_std::template_data_to_symlink_data(
+		tangram_std::unrender(&path_str)?.data(tg).await?,
+	)?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?symlink_data, "unrendered symlink data");
 
@@ -600,83 +587,4 @@ async fn get_checked_in_path(
 	.await?;
 
 	Ok(artifact.into())
-}
-
-/// Convert a [`tangram_client::template::Data`] to its corresponding [`tangram_client::symlink::Data`] object.
-async fn template_data_to_symlink_data<F>(template: F) -> tg::Result<tg::symlink::Data>
-where
-	F: futures::Future<Output = tg::template::Data>,
-{
-	let components = template.await.components;
-	match components.as_slice() {
-		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data {
-			artifact: None,
-			path: Some(tg::Path::from(s)),
-		}),
-		[tg::template::component::Data::Artifact(id)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
-			Ok(tg::symlink::Data {
-				artifact: Some(id.clone()),
-				path: None,
-			})
-		},
-		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
-			Ok(tg::symlink::Data {
-				artifact: Some(artifact_id.clone()),
-				path: Some(tg::Path::from(s)),
-			})
-		},
-		_ => Err(tg::error!(
-			"expected a template with 1-3 components, got {:?}",
-			components
-		)),
-	}
-}
-
-/// Unrender a template string to its [`tangram_client::template::Data`] form.
-async fn unrender(tg: &impl tg::Handle, string: &str) -> tg::template::Data {
-	// Get the artifacts directory.
-	let mut artifacts_directory = None;
-	let cwd = std::env::current_dir().expect("Failed to get the current directory");
-	for path in cwd.ancestors().skip(1) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
-			artifacts_directory = Some(directory);
-			break;
-		}
-	}
-	let artifacts_directory = artifacts_directory.expect("Failed to find the artifacts directory");
-
-	tg::Template::unrender(
-		artifacts_directory
-			.to_str()
-			.expect("artifacts directory should be valid UTF-8"),
-		string,
-	)
-	.expect("Failed to unrender template")
-	.data(tg)
-	.await
-	.expect("Failed to produce template data from template")
-}
-
-#[cfg(feature = "tracing")]
-fn setup_tracing() {
-	// Create the env layer.
-	let targets_layer = std::env::var("TANGRAM_RUSTC_TRACING")
-		.ok()
-		.and_then(|filter| filter.parse::<tracing_subscriber::filter::Targets>().ok());
-
-	// If tracing is enabled, create and initialize the subscriber.
-	if let Some(targets_layer) = targets_layer {
-		let format_layer = tracing_subscriber::fmt::layer()
-			.compact()
-			.with_ansi(false)
-			.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW)
-			.with_writer(std::io::stderr);
-		let subscriber = tracing_subscriber::registry()
-			.with(targets_layer)
-			.with(format_layer);
-		subscriber.init();
-	}
 }

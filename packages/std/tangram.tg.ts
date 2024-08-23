@@ -14,7 +14,7 @@ export * as phases from "./phases.tg.ts";
 export { sdk } from "./sdk.tg.ts";
 export * as triple from "./triple.tg.ts";
 export * as utils from "./utils.tg.ts";
-export { default as wrap } from "./wrap.tg.ts";
+export { rustcProxy, wrap } from "./wrap.tg.ts";
 
 export let metadata = {
 	name: "std",
@@ -440,12 +440,14 @@ export let testLibmd = tg.target(async () => {
 	return await libmd.build();
 });
 
-import testSource from "./wrap/test/inspectProcess.c" with { type: "file" };
+import inspectProcessSource from "./wrap/test/inspectProcess.c" with {
+	type: "file",
+};
 import { $ } from "./dollar.tg.ts";
 export let testStrip = tg.target(async () => {
 	let toolchain = await sdk();
 	let output =
-		await $`cc -o main -xc ${testSource} && strip main && mv main $OUTPUT`
+		await $`cc -g -o main -xc ${inspectProcessSource} && strip main && mv main $OUTPUT`
 			.env(toolchain)
 			.then(tg.File.expect);
 	return output;

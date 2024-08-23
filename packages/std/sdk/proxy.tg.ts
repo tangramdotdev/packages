@@ -229,7 +229,7 @@ export let ccProxy = async (arg: CcProxyArg) => {
 	let host = arg.host ?? (await std.triple.host());
 	let build = arg.build ?? host;
 	let buildToolchain = arg.buildToolchain;
-	let tgcc = workspace.tgcc({
+	let tgcc = workspace.ccProxy({
 		buildToolchain,
 		build,
 		host,
@@ -265,7 +265,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 	// Obtain wrapper components.
 
 	// The linker proxy is built for the build machine.
-	let buildLinkerProxy = await workspace.tgld({
+	let buildLinkerProxy = await workspace.ldProxy({
 		buildToolchain,
 		build,
 		host: build,

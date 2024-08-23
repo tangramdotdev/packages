@@ -1,8 +1,6 @@
 use std::{collections::BTreeMap, ffi::OsStr, os::unix::process::CommandExt, path::PathBuf};
 use tangram_client as tg;
-use tangram_wrapper::manifest::{DyLdInterpreter, Executable, Identity, Interpreter, Manifest};
-#[cfg(feature = "tracing")]
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
+use tangram_std::manifest;
 
 fn main() {
 	if let Err(e) = main_inner() {
@@ -11,10 +9,11 @@ fn main() {
 	}
 }
 
+#[allow(clippy::too_many_lines)]
 fn main_inner() -> std::io::Result<()> {
 	// Setup tracing.
 	#[cfg(feature = "tracing")]
-	setup_tracing();
+	tangram_std::tracing::setup("TANGRAM_WRAPPER_TRACING");
 
 	// Get the wrapper path.
 	let wrapper_path = std::env::current_exe()?.canonicalize()?;
@@ -22,7 +21,7 @@ fn main_inner() -> std::io::Result<()> {
 	tracing::trace!(?wrapper_path);
 
 	// Read the manifest.
-	let manifest = Manifest::read(&wrapper_path)?.expect("Malformed manifest.");
+	let manifest = tangram_std::Manifest::read(&wrapper_path)?.expect("Malformed manifest.");
 
 	// Search args for known flags.
 	let mut suppress_args = false;
@@ -69,17 +68,19 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Render the executable.
 	let executable_path = match &manifest.executable {
-		Executable::Path(file) => PathBuf::from(render_symlink(file, &artifacts_directories)),
-		Executable::Content(template) => {
+		manifest::Executable::Path(file) => {
+			PathBuf::from(render_symlink(file, &artifacts_directories))
+		},
+		manifest::Executable::Content(template) => {
 			content_executable(&render_template(template, &artifacts_directories))?
 		},
 	};
 
 	// Choose the identity path.
 	let identity_path = match &manifest.identity {
-		Identity::Wrapper => wrapper_path,
-		Identity::Interpreter => interpreter_path.expect("If the manifest specifies the interpreter as its identity, then the manifest must contain an interpreter."),
-		Identity::Executable => executable_path.clone(),
+		manifest::Identity::Wrapper => wrapper_path,
+		manifest::Identity::Interpreter => interpreter_path.expect("If the manifest specifies the interpreter as its identity, then the manifest must contain an interpreter."),
+		manifest::Identity::Executable => executable_path.clone(),
 	};
 
 	// Create the command.
@@ -108,15 +109,18 @@ fn main_inner() -> std::io::Result<()> {
 	}
 
 	// Set `TANGRAM_INJECTION_IDENTITY_PATH` if necessary.
-	if let Some(Interpreter::LdLinux(_) | Interpreter::LdMusl(_) | Interpreter::DyLd(_)) =
-		&manifest.interpreter
+	if let Some(
+		manifest::Interpreter::LdLinux(_)
+		| manifest::Interpreter::LdMusl(_)
+		| manifest::Interpreter::DyLd(_),
+	) = &manifest.interpreter
 	{
 		// Set `TANGRAM_INJECTION_IDENTITY_PATH`.
 		std::env::set_var("TANGRAM_INJECTION_IDENTITY_PATH", identity_path);
 	}
 
 	// Set interpreter environment variables if necessary.
-	if let Some(Interpreter::DyLd(interpreter)) = &manifest.interpreter {
+	if let Some(manifest::Interpreter::DyLd(interpreter)) = &manifest.interpreter {
 		set_dyld_environment(interpreter, &artifacts_directories);
 	}
 
@@ -217,13 +221,13 @@ fn locate_artifacts_directories(path: impl AsRef<std::path::Path>) -> Vec<PathBu
 }
 
 fn handle_interpreter(
-	interpreter: &Option<Interpreter>,
+	interpreter: &Option<manifest::Interpreter>,
 	arg0: &OsStr,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) -> Result<Option<(PathBuf, Vec<String>)>, std::io::Error> {
 	let result = match interpreter {
 		// Handle a normal interpreter.
-		Some(Interpreter::Normal(interpreter)) => {
+		Some(manifest::Interpreter::Normal(interpreter)) => {
 			let interpreter_path =
 				PathBuf::from(render_symlink(&interpreter.path, artifacts_directories));
 			let interpreter_args = interpreter
@@ -235,7 +239,7 @@ fn handle_interpreter(
 		},
 
 		// Handle an ld-linux interpreter.
-		Some(Interpreter::LdLinux(interpreter)) => {
+		Some(manifest::Interpreter::LdLinux(interpreter)) => {
 			// Render the interpreter path.
 			let interpreter_path = render_symlink(&interpreter.path, artifacts_directories);
 
@@ -297,7 +301,7 @@ fn handle_interpreter(
 		},
 
 		// Handle an ld-musl interpreter.
-		Some(Interpreter::LdMusl(interpreter)) => {
+		Some(manifest::Interpreter::LdMusl(interpreter)) => {
 			// Render the interpreter path.
 			let interpreter_path = render_symlink(&interpreter.path, artifacts_directories);
 
@@ -356,13 +360,13 @@ fn handle_interpreter(
 		},
 
 		// Handle a dyld interpreter or no interpreter.
-		Some(Interpreter::DyLd(_)) | None => None,
+		Some(manifest::Interpreter::DyLd(_)) | None => None,
 	};
 	Ok(result)
 }
 
 fn set_dyld_environment(
-	interpreter: &DyLdInterpreter,
+	interpreter: &manifest::DyLdInterpreter,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
 ) {
 	// Set `TANGRAM_INJECTION_DYLD_LIBRARY_PATH`.
@@ -639,25 +643,4 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
 		components.push(tg::template::component::Data::String(subpath.to_string()));
 	}
 	tg::template::Data { components }
-}
-
-#[cfg(feature = "tracing")]
-fn setup_tracing() {
-	// Create the env layer.
-	let targets_layer = std::env::var("TANGRAM_WRAPPER_TRACING")
-		.ok()
-		.and_then(|filter| filter.parse::<tracing_subscriber::filter::Targets>().ok());
-
-	// If tracing is enabled, create and initialize the subscriber.
-	if let Some(targets_layer) = targets_layer {
-		let format_layer = tracing_subscriber::fmt::layer()
-			.compact()
-			.with_ansi(false)
-			.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW)
-			.with_writer(std::io::stderr);
-		let subscriber = tracing_subscriber::registry()
-			.with(targets_layer)
-			.with(format_layer);
-		subscriber.init();
-	}
 }

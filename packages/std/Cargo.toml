@@ -1,5 +1,10 @@
 [workspace]
-members = ["packages/cc_proxy", "packages/ld_proxy", "packages/wrapper"]
+members = [
+  "packages/cc_proxy",
+  "packages/ld_proxy",
+  "packages/rustc_proxy",
+  "packages/wrapper",
+]
 resolver = "2"
 
 [workspace.package]
@@ -10,7 +15,7 @@ homepage = "https://www.tangram.dev"
 license = "MIT"
 publish = false
 repository = "https://github.com/tangramdotdev/packages"
-rust-version = "1.77.0"
+rust-version = "1.80.0"
 version = "0.0.0"
 
 [workspace.lints.clippy]
@@ -39,9 +44,12 @@ tokio-stream = { version = "0.1", default-features = false, features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 
-tangram_wrapper = { path = "packages/wrapper" }
 tangram_cc_proxy = { path = "packages/cc_proxy" }
 tangram_ld_proxy = { path = "packages/ld_proxy" }
+tangram_rustc_proxy = { path = "packages/rustc_proxy" }
+tangram_std = { path = "." }
+tangram_strip_proxy = { path = "packages/strip_proxy" }
+tangram_wrapper = { path = "packages/wrapper" }
 
 [profile.release]
 codegen-units = 1
@@ -49,3 +57,33 @@ lto = true
 opt-level = "z"
 panic = "abort"
 strip = true
+
+[package]
+name = "tangram_std"
+
+description = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[lib]
+path = "packages/std/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+fnv = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tangram_client = { workspace = true }
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[features]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]

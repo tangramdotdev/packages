@@ -14,7 +14,7 @@ type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
+export let workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 	let {
 		build: build_,
 		buildToolchain,
@@ -42,14 +42,25 @@ export let workspace = tg.target(async (arg: Arg): Promise<tg.Directory> => {
 	});
 });
 
-export let tgcc = async (arg: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/cc_proxy"));
+export let ccProxy = (arg?: Arg) =>
+	workspace(arg)
+		.then((dir) => dir.get("bin/cc_proxy"))
+		.then(tg.File.expect);
 
-export let tgld = async (arg: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/ld_proxy"));
+export let ldProxy = (arg?: Arg) =>
+	workspace(arg)
+		.then((dir) => dir.get("bin/ld_proxy"))
+		.then(tg.File.expect);
 
-export let wrapper = async (arg: Arg) =>
-	tg.File.expect(await (await workspace(arg)).get("bin/wrapper"));
+export let rustcProxy = (arg?: Arg) =>
+	workspace(arg)
+		.then((dir) => dir.get("bin/rustc_proxy"))
+		.then(tg.File.expect);
+
+export let wrapper = (arg?: Arg) =>
+	workspace(arg)
+		.then((dir) => dir.get("bin/wrapper"))
+		.then(tg.File.expect);
 
 let version = "1.80.1";
 
@@ -328,9 +339,9 @@ export let build = async (arg: BuildArg) => {
 	let install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			mv $TARGET/$RUST_TARGET${buildType}/tangram_cc_proxy $OUTPUT/bin/cc_proxy
-			mv $TARGET/$RUST_TARGET${buildType}/tangram_ld_proxy $OUTPUT/bin/ld_proxy
-			mv $TARGET/$RUST_TARGET${buildType}/tangram_wrapper $OUTPUT/bin/wrapper
+			for item in cc_proxy ld_proxy rustc_proxy wrapper ; do
+				mv $TARGET/$RUST_TARGET${buildType}/tangram_$item $OUTPUT/bin/$item
+			done
 		`,
 	};
 

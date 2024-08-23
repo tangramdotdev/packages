@@ -11,13 +11,13 @@ export let metadata = {
 	license: "MIT",
 	name: "mold",
 	repository: "https://github.com/rui314/mold",
-	version: "2.32.1",
+	version: "2.33.0",
 };
 
 export let source = tg.target(() => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:f3c9a527d884c635834fe7d79b3de959b00783bf9446280ea274d996f0335825";
+		"sha256:37b3aacbd9b6accf581b92ba1a98ca418672ae330b78fe56ae542c2dcb10a155";
 	let owner = "rui314";
 	let repo = name;
 	let tag = `v${version}`;

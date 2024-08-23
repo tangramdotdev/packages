@@ -7,27 +7,24 @@ use std::{
 	str::FromStr,
 };
 use tangram_client as tg;
-use tangram_wrapper::manifest::{self, Manifest};
 use tokio::io::AsyncReadExt as _;
-use tracing_subscriber::prelude::*;
 
 type Hasher = fnv::FnvBuildHasher;
 
 const MAX_DEPTH: usize = 16;
 
-#[tokio::main]
-async fn main() {
-	if let Err(e) = main_inner().await {
+fn main() {
+	if let Err(e) = main_inner() {
 		eprintln!("linker proxy failed: {e}");
 		tracing::trace!("{}", e.trace(&tg::error::TraceOptions::default()));
 		std::process::exit(1);
 	}
 }
 
-async fn main_inner() -> tg::Result<()> {
+fn main_inner() -> tg::Result<()> {
 	// Read the options from the environment and arguments.
 	let options = read_options()?;
-	setup_tracing(options.tracing_level.as_deref());
+	tangram_std::tracing::setup("TANGRAM_LD_PROXY_TRACING");
 	tracing::debug!(?options);
 
 	// Run the command.
@@ -55,7 +52,11 @@ async fn main_inner() -> tg::Result<()> {
 	}
 
 	// Create the wrapper.
-	create_wrapper(&options).await?;
+	tokio::runtime::Builder::new_multi_thread()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(create_wrapper(&options))?;
 
 	Ok(())
 }
@@ -95,9 +96,6 @@ struct Options {
 
 	/// Whether the linker should run in passthrough mode.
 	passthrough: bool,
-
-	/// Tracing level.
-	tracing_level: Option<String>,
 
 	/// The path to the wrapper.
 	wrapper_id: tg::file::Id,
@@ -155,9 +153,6 @@ fn read_options() -> tg::Result<Options> {
 		.map_or(LibraryPathOptimizationLevel::default(), |s| {
 			s.parse().unwrap_or_default()
 		});
-
-	// Get the tracing level if set.
-	let tracing_level = std::env::var("TANGRAM_LD_PROXY_TRACING").ok();
 
 	// Get an iterator over the arguments.
 	let mut args = std::env::args();
@@ -240,7 +235,6 @@ fn read_options() -> tg::Result<Options> {
 		max_depth,
 		output_path,
 		passthrough,
-		tracing_level,
 		wrapper_id,
 	};
 
@@ -300,8 +294,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let library_paths = std::iter::once(command_line_library_path)
 		.chain(
 			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
-				let mut symlink_data =
-					template_data_to_symlink_data(unrender(&tg, library_path)).await?;
+				let mut symlink_data = tangram_std::template_data_to_symlink_data(
+					tangram_std::unrender(library_path)?.data(&tg).await?,
+				)?;
 				if symlink_data.artifact.is_none() {
 					tracing::debug!(
 						"Library path points into working directory. Creating directory."
@@ -415,8 +410,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.unwrap()
 			.to_le_bytes()
 			.into_iter()
-			.chain(tangram_wrapper::manifest::VERSION.to_le_bytes().into_iter())
-			.chain(tangram_wrapper::manifest::MAGIC_NUMBER.iter().copied());
+			.chain(tangram_std::manifest::VERSION.to_le_bytes().into_iter())
+			.chain(tangram_std::manifest::MAGIC_NUMBER.iter().copied());
 		manifest.extend(suffix);
 
 		// Create the manifest blob.
@@ -572,7 +567,7 @@ async fn create_manifest<H: BuildHasher>(
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<HashSet<tg::symlink::Id, H>>,
-) -> tg::Result<Manifest> {
+) -> tg::Result<tangram_std::Manifest> {
 	// Create the interpreter.
 	let interpreter = {
 		let config = match interpreter {
@@ -607,48 +602,50 @@ async fn create_manifest<H: BuildHasher>(
 
 		if let Some((path, interpreter_flavor)) = config {
 			// Unrender the interpreter path.
-			let path = unrender(tg, &path);
-			let path = template_data_to_symlink_data(path).await?;
+			let path = tangram_std::unrender(&path)?;
+			let path = tangram_std::template_data_to_symlink_data(path.data(tg).await?)?;
 			tracing::trace!(?path, "Interpreter path");
 
 			// Unrender the preloads.
 			let mut preloads = None;
 			if let Some(injection_path) = options.injection_path.as_deref() {
-				preloads = Some(vec![
-					template_data_to_symlink_data(unrender(tg, injection_path)).await?,
-				]);
+				preloads = Some(vec![tangram_std::template_data_to_symlink_data(
+					tangram_std::unrender(injection_path)?.data(tg).await?,
+				)?]);
 			}
 
 			// Unrender the additional args.
 			let mut args = None;
 			if let Some(interpreter_args) = options.interpreter_args.as_deref() {
-				let interpreter_args = interpreter_args.iter().map(|arg| unrender(tg, arg));
-				args = Some(futures::future::join_all(interpreter_args).await);
+				let interpreter_args = interpreter_args
+					.iter()
+					.map(|arg| async move { tangram_std::unrender(arg)?.data(tg).await });
+				args = Some(futures::future::try_join_all(interpreter_args).await?);
 			}
 
 			match interpreter_flavor {
-				InterpreterFlavor::Dyld => {
-					Some(manifest::Interpreter::DyLd(manifest::DyLdInterpreter {
+				InterpreterFlavor::Dyld => Some(tangram_std::manifest::Interpreter::DyLd(
+					tangram_std::manifest::DyLdInterpreter {
 						library_paths,
 						preloads,
-					}))
-				},
-				InterpreterFlavor::Gnu => Some(manifest::Interpreter::LdLinux(
-					manifest::LdLinuxInterpreter {
+					},
+				)),
+				InterpreterFlavor::Gnu => Some(tangram_std::manifest::Interpreter::LdLinux(
+					tangram_std::manifest::LdLinuxInterpreter {
 						path,
 						library_paths,
 						preloads,
 						args,
 					},
 				)),
-				InterpreterFlavor::Musl => {
-					Some(manifest::Interpreter::LdMusl(manifest::LdMuslInterpreter {
+				InterpreterFlavor::Musl => Some(tangram_std::manifest::Interpreter::LdMusl(
+					tangram_std::manifest::LdMuslInterpreter {
 						path,
 						library_paths,
 						preloads,
 						args,
-					}))
-				},
+					},
+				)),
 			}
 		} else {
 			// There was no interpreter specified. We are likely a statically linked executable.
@@ -657,7 +654,7 @@ async fn create_manifest<H: BuildHasher>(
 	};
 
 	// Create the executable.
-	let executable = manifest::Executable::Path(tg::symlink::Data {
+	let executable = tangram_std::manifest::Executable::Path(tg::symlink::Data {
 		artifact: Some(ld_output_id),
 		path: None,
 	});
@@ -667,8 +664,8 @@ async fn create_manifest<H: BuildHasher>(
 	let args = None;
 
 	// Create the manifest.
-	let manifest = Manifest {
-		identity: manifest::Identity::Wrapper,
+	let manifest = tangram_std::Manifest {
+		identity: tangram_std::manifest::Identity::Wrapper,
 		interpreter,
 		executable,
 		env,
@@ -1184,83 +1181,6 @@ async fn bytes_from_path(path: impl AsRef<std::path::Path>) -> tg::Result<Vec<u8
 		.map_err(|error| tg::error!(source = error, "failed to read the output file"))?;
 
 	Ok(bytes)
-}
-
-/// Initialize tracing.
-fn setup_tracing(targets: Option<&str>) {
-	let targets_layer =
-		targets.and_then(|filter| filter.parse::<tracing_subscriber::filter::Targets>().ok());
-
-	// If tracing is enabled, create and initialize the subscriber.
-	if let Some(targets_layer) = targets_layer {
-		let format_layer = tracing_subscriber::fmt::layer()
-			.compact()
-			.with_ansi(false)
-			.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW)
-			.with_writer(std::io::stderr);
-		let subscriber = tracing_subscriber::registry()
-			.with(targets_layer)
-			.with(format_layer);
-		subscriber.init();
-	}
-}
-
-/// Convert a [`tangram_client::template::Data`] to its corresponding [`tangram_client::symlink::Data`] object.
-async fn template_data_to_symlink_data<F>(template: F) -> tg::Result<tg::symlink::Data>
-where
-	F: futures::Future<Output = tg::template::Data>,
-{
-	let components = template.await.components;
-	match components.as_slice() {
-		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data {
-			artifact: None,
-			path: Some(tg::Path::from(s)),
-		}),
-		[tg::template::component::Data::Artifact(id)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
-			Ok(tg::symlink::Data {
-				artifact: Some(id.clone()),
-				path: None,
-			})
-		},
-		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
-			Ok(tg::symlink::Data {
-				artifact: Some(artifact_id.clone()),
-				path: Some(tg::Path::from(s)),
-			})
-		},
-		_ => Err(tg::error!(
-			"expected a template with 1-3 components, got {:?}",
-			components
-		)),
-	}
-}
-
-/// Unrender a template string to its [`tangram_client::template::Data`] form.
-async fn unrender(tg: &impl tg::Handle, string: &str) -> tg::template::Data {
-	// Get the artifacts directory.
-	let mut artifacts_directory = None;
-	let cwd = std::env::current_dir().expect("Failed to get the current directory");
-	for path in cwd.ancestors().skip(1) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
-			artifacts_directory = Some(directory);
-			break;
-		}
-	}
-	let artifacts_directory = artifacts_directory.expect("Failed to find the artifacts directory");
-
-	tg::Template::unrender(
-		artifacts_directory
-			.to_str()
-			.expect("artifacts directory should be valid UTF-8"),
-		string,
-	)
-	.expect("Failed to unrender template")
-	.data(tg)
-	.await
-	.expect("Failed to produce template data from template")
 }
 
 #[cfg(test)]

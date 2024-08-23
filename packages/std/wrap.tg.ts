@@ -8,6 +8,8 @@ import inspectProcessSource from "./wrap/test/inspectProcess.c" with {
 	type: "file",
 };
 
+export { ccProxy, ldProxy, rustcProxy, wrapper } from "./wrap/workspace.tg.ts";
+
 /** This module provides the `std.wrap()` function, which can be used to bundle an executable with a predefined environment and arguments, either of which may point to other Tangram artifacts.*/
 
 /** Wrap an executable. */

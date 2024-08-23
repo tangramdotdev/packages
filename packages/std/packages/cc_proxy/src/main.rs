@@ -77,7 +77,7 @@ impl Environment {
 				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => continue,
 				_ => {
-					let value = unrender(&value)?;
+					let value = tangram_std::unrender(&value)?;
 					env.insert(key, value.into());
 				},
 			}
@@ -273,15 +273,14 @@ impl Args {
 	}
 }
 
-#[tokio::main]
-async fn main() {
-	if let Err(e) = main_inner().await {
-		eprintln!("rustc proxy failed: {e}");
+fn main() {
+	if let Err(e) = main_inner() {
+		eprintln!("cc proxy failed: {e}");
 		std::process::exit(1);
 	}
 }
 
-async fn main_inner() -> tg::Result<()> {
+fn main_inner() -> tg::Result<()> {
 	// Get the environment information (env vars, runtime, cc path).
 	let environment = Environment::parse()?;
 
@@ -300,6 +299,16 @@ async fn main_inner() -> tg::Result<()> {
 		));
 	}
 
+	tokio::runtime::Builder::new_multi_thread()
+		.enable_all()
+		.build()
+		.unwrap()
+		.block_on(run_proxy(environment, args))?;
+
+	Ok(())
+}
+
+async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	let Args {
 		output,
 		remap_targets,
@@ -326,7 +335,7 @@ async fn main_inner() -> tg::Result<()> {
 	let remappings = create_remapping_table(tg, remap_targets).await?;
 
 	// Create the arguments to the driver script.
-	let cc = unrender(environment.cc.to_str().unwrap())?.into();
+	let cc = tangram_std::unrender(environment.cc.to_str().unwrap())?.into();
 	let mut args = std::iter::once("tangram_cc".to_string().into())
 		.chain(std::iter::once(cc))
 		.chain(cli_args.into_iter().map(tg::Value::from))
@@ -347,7 +356,7 @@ async fn main_inner() -> tg::Result<()> {
 
 	// Create the target.
 	let target = tg::Target::with_object(tg::target::Object {
-		host: host().to_string(),
+		host: tangram_std::host().to_string(),
 		executable,
 		lock: None,
 		env: environment.env,
@@ -474,7 +483,7 @@ async fn create_remapping_table(
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
 		if path.starts_with("/.tangram/artifacts") {
-			let template = unrender(path.to_str().unwrap())?;
+			let template = tangram_std::unrender(path.to_str().unwrap())?;
 			table.insert(remap_target, template);
 			continue;
 		}
@@ -604,48 +613,6 @@ async fn check_in_source_tree(
 		})
 		.collect();
 	Ok(templates)
-}
-
-fn host() -> &'static str {
-	#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
-	{
-		"aarch64-darwin"
-	}
-	#[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-	{
-		"aarch64-linux"
-	}
-	#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
-	{
-		"x86_64-darwin"
-	}
-	#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
-	{
-		"x86_64-linux"
-	}
-}
-
-fn unrender(string: &str) -> tg::Result<tg::Template> {
-	// Get the artifacts directory.
-	let mut artifacts_directory = None;
-	let cwd = std::env::current_dir()
-		.map_err(|error| tg::error!(source = error, "Failed to get the current directory"))?;
-	for path in cwd.ancestors().skip(1) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
-			artifacts_directory = Some(directory);
-			break;
-		}
-	}
-	let artifacts_directory =
-		artifacts_directory.ok_or(tg::error!("Failed to find the artifacts directory"))?;
-
-	tg::Template::unrender(
-		artifacts_directory
-			.to_str()
-			.ok_or(tg::error!("artifacts directory should be valid UTF-8"))?,
-		string,
-	)
 }
 
 const DRIVER_SH: &str = include_str!("driver.sh");
