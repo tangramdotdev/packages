@@ -60,25 +60,25 @@ pub fn template_data_to_symlink_data(
 	}
 }
 
+pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
+	let mut closest_artifact_path = None;
+	let cwd = std::env::current_dir().expect("Failed to get the current directory");
+	for path in cwd.ancestors().skip(1) {
+		let directory = path.join(".tangram/artifacts");
+		if directory.exists() {
+			closest_artifact_path = Some(
+				directory
+					.to_str()
+					.expect("artifacts directory should be valid UTF-8")
+					.to_string(),
+			);
+			break;
+		}
+	}
+	closest_artifact_path.expect("Failed to find the closest artifact path")
+});
+
 /// Unrender a template string to a [`tangram_client::Template`] using the closest located artifact path.
 pub fn unrender(string: &str) -> tg::Result<tg::Template> {
-	// Get the artifacts directory path and validate the string.
-	let artifacts_directory: LazyLock<String> = LazyLock::new(|| {
-		let mut artifacts_directory = None;
-		let cwd = std::env::current_dir().expect("Failed to get the current directory");
-		for path in cwd.ancestors().skip(1) {
-			let directory = path.join(".tangram/artifacts");
-			if directory.exists() {
-				artifacts_directory = Some(directory);
-				break;
-			}
-		}
-		artifacts_directory
-			.expect("failed to find the artifacts directory")
-			.to_str()
-			.expect("artifacts directory should be valid UTF-8")
-			.to_string()
-	});
-
-	tg::Template::unrender(&artifacts_directory, string)
+	tg::Template::unrender(&CLOSEST_ARTIFACT_PATH, string)
 }

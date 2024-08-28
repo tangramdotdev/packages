@@ -26,7 +26,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 
 	// Determine host toolchain.
 	let toolchain: std.env.Arg;
-	if (toolchain_ === "gcc") {
+	if (toolchain_ === "gnu") {
 		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS.`);
 		}
@@ -44,7 +44,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 	});
 
 	// Set CC/CXX.
-	if (flavor === "gcc") {
+	if (flavor === "gnu") {
 		envs.push({
 			CC: tg.Mutation.setIfUnset(`gcc`),
 			CXX: tg.Mutation.setIfUnset(`g++`),
@@ -73,7 +73,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 					break;
 				}
 				case "lld": {
-					if (flavor === "gcc") {
+					if (flavor === "gnu") {
 						linkerExe = await llvm.lld({ host });
 					}
 					break;
@@ -206,15 +206,15 @@ export namespace sdk {
 		}
 
 		// Set the default proxy arguments.
-		let proxyArg = proxyArg_ ?? { compiler: false, linker: true };
+		let proxyArg = proxyArg_ ?? { compiler: false, linker: true, strip: true };
 
 		// Set the default toolchain if not provided.
 		if (toolchain_ === undefined) {
-			toolchain_ = hostOs === "darwin" ? "llvm" : "gcc";
+			toolchain_ = hostOs === "darwin" ? "llvm" : "gnu";
 		}
 
 		// If we're building our own toolchain, canonicalize the host and targets.
-		if (toolchain_ === "gcc" || toolchain_ === "llvm") {
+		if (toolchain_ === "gnu" || toolchain_ === "llvm") {
 			host = sdk.canonicalTriple(host);
 			targets = targets.map(sdk.canonicalTriple);
 		}
@@ -237,7 +237,7 @@ export namespace sdk {
 		target?: string | undefined;
 	};
 
-	let requiredCompilerComponents = (os: string, flavor: "gcc" | "llvm") => {
+	let requiredCompilerComponents = (os: string, flavor: "gnu" | "llvm") => {
 		let cc = flavor === "llvm" ? "clang" : "gcc";
 		let cxx = flavor === "llvm" ? "clang++" : "g++";
 		let ld = os === "linux" && flavor === "llvm" ? "ld.lld" : "ld";
@@ -267,7 +267,7 @@ export namespace sdk {
 		});
 		let compilerComponents = requiredCompilerComponents(
 			os,
-			llvm ? "llvm" : "gcc",
+			llvm ? "llvm" : "gnu",
 		);
 		await std.env.assertProvides({
 			env,
@@ -291,7 +291,7 @@ export namespace sdk {
 		let llvm = await std.env.provides({ env, names: ["clang"] });
 		let compilerComponents = requiredCompilerComponents(
 			os,
-			llvm ? "llvm" : "gcc",
+			llvm ? "llvm" : "gnu",
 		);
 		if (llvm) {
 			return std.env.provides({
@@ -347,13 +347,13 @@ export namespace sdk {
 		let targetPrefix = forcePrefix || isCross ? `${target}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
-		let flavor: "gcc" | "llvm" = os === "linux" ? "gcc" : "llvm";
+		let flavor: "gnu" | "llvm" = os === "linux" ? "gnu" : "llvm";
 
 		// Determine actual flavor and locate cc and c++.
 		let cc;
 		let cxx;
 		let fortran;
-		if (flavor === "gcc") {
+		if (flavor === "gnu") {
 			// Check if `gcc` is available.
 			let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
 			if (gcc) {
@@ -398,15 +398,15 @@ export namespace sdk {
 					env,
 					name: `${targetPrefix}gfortran`,
 				});
-				flavor = "gcc";
+				flavor = "gnu";
 				cc = gcc;
 				cxx = gxx;
 				fortran = gfortran;
 			}
 		}
 
-		let compiler = flavor === "gcc" ? `${targetPrefix}${flavor}` : "clang";
-		let cxxCompiler = flavor === "gcc" ? `${targetPrefix}g++` : `clang++`;
+		let compiler = flavor === "gnu" ? `${targetPrefix}gcc` : "clang";
+		let cxxCompiler = flavor === "gnu" ? `${targetPrefix}g++` : `clang++`;
 		let directory = await std.env.whichArtifact({ name: compiler, env });
 
 		tg.assert(directory, "Unable to find toolchain directory.");
@@ -422,7 +422,7 @@ export namespace sdk {
 				? isCross
 					? `${targetPrefix}ld.bfd`
 					: "ld"
-				: flavor === "gcc"
+				: flavor === "gnu"
 				  ? `${targetPrefix}ld`
 				  : "ld.lld";
 		let foundLd = await directory.tryGet(`bin/${linkerName}`);
@@ -479,6 +479,9 @@ export namespace sdk {
 		}
 		tg.assert(libDir, "could not find lib directory");
 
+		// Locate the strip utility.
+		let strip = await std.env.which({ env, name: `${targetPrefix}strip` });
+
 		return {
 			cc,
 			cxx,
@@ -489,6 +492,7 @@ export namespace sdk {
 			ld,
 			ldso,
 			libDir,
+			strip,
 			target,
 		};
 	};
@@ -509,11 +513,12 @@ export namespace sdk {
 		cxx: tg.Symlink;
 		fortran?: tg.Symlink | undefined;
 		directory: tg.Directory;
-		flavor: "gcc" | "llvm";
+		flavor: "gnu" | "llvm";
 		host: string;
 		ld: tg.Symlink;
 		ldso?: tg.File | undefined; // NOTE - not present on macOS.
 		libDir: tg.Directory;
+		strip: tg.File | tg.Symlink;
 		target: string;
 	};
 
@@ -930,7 +935,7 @@ export namespace sdk {
 
 	export type LinkerKind = "bfd" | "lld" | "mold" | tg.Symlink | tg.File;
 
-	export type ToolchainKind = "gcc" | "llvm" | std.env.Arg;
+	export type ToolchainKind = "gnu" | "llvm" | std.env.Arg;
 }
 
 /** Check whether Tangram supports building a cross compiler from the host to the target. */
@@ -1293,8 +1298,8 @@ export let allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 		{ toolchain: "llvm", linker: "mold", proxy: false },
 		{ toolchain: "llvm", linker: "bfd" },
 		{ toolchain: "llvm", linker: "bfd", proxy: false },
-		{ toolchain: "gcc", linker: "lld" },
-		{ toolchain: "gcc", linker: "lld", proxy: false },
+		{ toolchain: "gnu", linker: "lld" },
+		{ toolchain: "gnu", linker: "lld", proxy: false },
 		{ host: std.triple.create(detectedHost, { environmentVersion: "2.37" }) },
 		{
 			host: std.triple.create(detectedHost, { environmentVersion: "2.37" }),

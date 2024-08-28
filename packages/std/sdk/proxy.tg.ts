@@ -20,6 +20,10 @@ export type Arg = {
 	linkerExe?: tg.File | tg.Symlink | tg.Template;
 	/** The triple of the computer the toolchain being proxied produces binaries for. */
 	host?: string;
+	/** Should `strip` get proxied? Default: true.  */
+	strip?: boolean;
+	/** Optional strip command to use. If omitted, will use the strip located with the toolchain. */
+	stripExe?: tg.File | tg.Symlink | tg.Template;
 	/** The build environment to be proxied. */
 	toolchain: std.env.Arg;
 };
@@ -32,6 +36,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let proxyCompiler = arg.compiler ?? false;
 	let proxyLinker = arg.linker ?? true;
+	let proxyStrip = arg.strip ?? true;
 	let buildToolchain = arg.toolchain;
 
 	if (!proxyCompiler && !proxyLinker) {
@@ -59,6 +64,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		flavor,
 		ld,
 		ldso,
+		strip,
 	} = await std.sdk.toolchainComponents({
 		env: buildToolchain,
 		forcePrefix,
@@ -105,7 +111,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let wrappedCXX;
 		let wrappedGFortran;
 		switch (flavor) {
-			case "gcc": {
+			case "gnu": {
 				let { ccArgs, cxxArgs, fortranArgs } = await gcc.wrapArgs({
 					host: build,
 					target: host,
@@ -214,6 +220,24 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
+	if (proxyStrip) {
+		let stripProxyArtifact = await stripProxy({
+			buildToolchain,
+			build,
+			host,
+			stripCommand: arg.stripExe ?? strip,
+			runtimeLibraryPath:
+				os === "darwin"
+					? await directory.get("lib").then(tg.Directory.expect)
+					: undefined,
+		});
+		dirs.push(
+			tg.directory({
+				"bin/strip": stripProxyArtifact,
+			}),
+		);
+	}
+
 	return std.env.arg(...dirs);
 });
 
@@ -304,6 +328,52 @@ export let ldProxy = async (arg: LdProxyArg) => {
 		env,
 		host: build,
 		identity: "wrapper",
+	});
+};
+
+type StripProxyArg = {
+	build?: string;
+	buildToolchain: std.env.Arg;
+	host?: string;
+	stripCommand: tg.File | tg.Symlink | tg.Template;
+	runtimeLibraryPath?: tg.Directory | undefined;
+};
+
+export let stripProxy = async (arg: StripProxyArg) => {
+	let { build: build_, buildToolchain, host: host_, stripCommand } = arg;
+
+	let host = host_ ?? (await std.triple.host());
+	let build = build_ ?? host;
+
+	let hostWrapper = await workspace.wrapper({
+		buildToolchain,
+		build,
+		host,
+	});
+
+	let stripProxy = await workspace.stripProxy({
+		build,
+		buildToolchain,
+		host,
+	});
+
+	let envs: tg.Unresolved<Array<std.env.Arg>> = [
+		{
+			TANGRAM_STRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
+				tg.File | tg.Symlink | tg.Template
+			>(stripCommand),
+			TANGRAM_STRIP_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
+		},
+	];
+	if (arg.runtimeLibraryPath !== undefined) {
+		envs.push({
+			TANGRAM_STRIP_RUNTIME_LIBRARY_PATH: arg.runtimeLibraryPath,
+		});
+	}
+
+	return std.wrap(stripProxy, {
+		buildToolchain,
+		env: std.env.arg(...envs),
 	});
 };
 
@@ -601,5 +671,28 @@ export let testSamePrefixDirect = tg.target(async () => {
 		.then((t) => t.output())
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
+	return output;
+});
+
+import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
+	type: "file",
+};
+export let testStrip = tg.target(async () => {
+	let toolchain = await bootstrap.sdk();
+	let output = await tg
+		.target(
+			tg`
+		set -eux
+		cc -g -o main -xc ${inspectProcessSource}
+		strip main
+		mv main $OUTPUT`,
+			{
+				env: std.env.arg(toolchain, {
+					TANGRAM_STRIP_PROXY_TRACING: "tangram=trace",
+				}),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.File.expect);
 	return output;
 });

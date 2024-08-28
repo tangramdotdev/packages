@@ -21,11 +21,15 @@ import zstd from "../sdk/dependencies/zstd.tg.ts";
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
 export type ArgObject = (ExecutableArg | RootFsArg) & {
+	/** The format for the container image, docker or OCI. Default: docker */
+	format?: ImageFormat;
 	/** The compression type to use for the image layers. Default: "zstd". */
 	layerCompression: "gzip" | "zstd";
 	/** The image should target a specific system. If not provided, will detect the host. */
 	system?: string;
 };
+
+export type ImageFormat = "docker" | "oci";
 
 type ExecutableArg = {
 	executable: std.wrap.Arg;
@@ -47,6 +51,7 @@ export let image = tg.target(
 	async (...args: std.Args<Arg>): Promise<tg.File> => {
 		type CombinedArgObject = {
 			cmdString?: Array<string>;
+			format?: ImageFormat;
 			entrypointArtifact?: std.wrap.Arg;
 			entrypointString?: Array<string>;
 			layerCompression?: "gzip" | "zstd";
@@ -91,6 +96,9 @@ export let image = tg.target(
 					if ("executable" in arg && arg.executable !== undefined) {
 						object.entrypointArtifact = arg.executable;
 					}
+					if ("format" in arg) {
+						object.format = arg.format;
+					}
 					if ("layerCompression" in arg) {
 						object.layerCompression = arg.layerCompression;
 					}
@@ -119,6 +127,7 @@ export let image = tg.target(
 			>
 		>(objectArgs, {
 			cmdString: "set",
+			format: "set",
 			entrypointArtifact: "append",
 			entrypointString: "append",
 			layerCompression: "set",
@@ -127,6 +136,7 @@ export let image = tg.target(
 		});
 		let {
 			cmdString = [],
+			format = "docker",
 			entrypointArtifact: entrypointArtifact_,
 			entrypointString,
 			layerCompression = "zstd",
@@ -183,11 +193,86 @@ export let image = tg.target(
 			},
 		};
 
-		return imageFromLayers(config, layerCompression, ...layers);
+		if (format === "docker") {
+			return dockerImageFromLayers(config, ...layers);
+		} else if (format === "oci") {
+			return ociImageFromLayers(config, layerCompression, ...layers);
+		} else {
+			throw new Error(`Unsupported image format: ${format}`);
+		}
 	},
 );
 
-export let imageFromLayers = async (
+export let dockerImageFromLayers = async (
+	config: ImageConfigV1,
+	...layers: Array<Layer>
+): Promise<tg.File> => {
+	// Create an empty image directory.
+	let image = tg.directory();
+
+	// Add the config file to the image, using its checksum value as a filename.
+	let configFile = await tg.file(tg.encoding.json.encode(config));
+	let configFilename = `${(
+		await tg.checksum(await configFile.bytes(), "sha256")
+	).slice("sha256:".length)}.json`;
+	image = tg.directory(image, {
+		[configFilename]: configFile,
+	});
+
+	// Add each layer file to the image directory.
+	let layerFilenames = await Promise.all(
+		layers.map(async (layer) => {
+			let bytes = await layer.tar.bytes();
+			let size = bytes.length;
+			let checksum = await tg.checksum(bytes, "sha256");
+			let checksumValue = checksum.slice("sha256:".length);
+
+			// Add the layer to the image directory, along with the legacy metadata used by older versions of the Docker image spec.
+			image = tg.directory(image, {
+				[checksumValue]: {
+					"layer.tar": layer.tar,
+					json: tg.encoding.json.encode({
+						// Use the checksum as a unique layer ID.
+						id: checksumValue,
+
+						// The v1.0 Docker image spec uses TarSum for the legacy metadata checksum, but the legacy metadata isn't used by newer versions of Docker. So for now, we use the checksum we already have. To properly support older versions of Docker or other tools that expect this legacy format, we could switch to TarSum for this checksum instead.
+						checksum,
+
+						// Add the legacy metadata.
+						architecture: config.architecture,
+						os: config.os,
+						config: config.config,
+						Size: size,
+						author: "Tangram",
+						created: "1970-01-01T00:00:00+00:00",
+					}),
+				},
+			});
+
+			return `${checksumValue}/layer.tar`;
+		}),
+	);
+
+	// The manifest is an array of manifest entries containing the Config, Layers, and Repotags.
+	let manifest = [
+		{
+			Config: configFilename,
+			Layers: layerFilenames,
+			RepoTags: [],
+		},
+	];
+
+	// Add the manifest, along with the legacy `repositories` file.
+	image = tg.directory(image, {
+		"manifest.json": tg.encoding.json.encode(manifest),
+		repositories: tg.encoding.json.encode({}),
+	});
+
+	// Create a `.tar` file of the Docker image. This is the format that `docker load` expects.
+	return await $`tar -cf $OUTPUT -C ${image} .`.then(tg.File.expect);
+};
+
+export let ociImageFromLayers = async (
 	config: ImageConfigV1,
 	layerCompression: "gzip" | "zstd",
 	...layers: Array<Layer>

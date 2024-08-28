@@ -3,6 +3,7 @@ members = [
   "packages/cc_proxy",
   "packages/ld_proxy",
   "packages/rustc_proxy",
+  "packages/strip_proxy",
   "packages/wrapper",
 ]
 resolver = "2"

@@ -401,8 +401,11 @@ export let testOciBasicRootfs = tg.target(async () => {
 export let testOciBasicEnv = tg.target(async () => {
 	return await image.testOciBasicEnv();
 });
-export let testOciBasicEnvImage = tg.target(async () => {
-	return await image.testBasicEnvImage();
+export let testOciBasicEnvImageDocker = tg.target(async () => {
+	return await image.testBasicEnvImageDocker();
+});
+export let testOciBasicEnvImageOci = tg.target(async () => {
+	return await image.testBasicEnvImageOci();
 });
 
 import { test as testDollar_ } from "./dollar.tg.ts";
@@ -440,15 +443,6 @@ export let testLibmd = tg.target(async () => {
 	return await libmd.build();
 });
 
-import inspectProcessSource from "./wrap/test/inspectProcess.c" with {
-	type: "file",
-};
-import { $ } from "./dollar.tg.ts";
 export let testStrip = tg.target(async () => {
-	let toolchain = await sdk();
-	let output =
-		await $`cc -g -o main -xc ${inspectProcessSource} && strip main && mv main $OUTPUT`
-			.env(toolchain)
-			.then(tg.File.expect);
-	return output;
+	return await proxy.testStrip();
 });

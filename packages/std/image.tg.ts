@@ -1,53 +1,14 @@
-import * as oci from "./image/oci.tg.ts";
+import * as container from "./image/container.tg.ts";
 import * as std from "./tangram.tg.ts";
 
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
-export type ArgObject = OciImageArg;
-
-export type OciImageArg = oci.ArgObject & {
-	format: "oci";
-};
-
-export type ImageFormat = "oci";
+export type ArgObject = container.Arg;
 
 /** Create an image file comprised of Tangram artifacts. */
 export let image = tg.target(
 	async (...args: std.Args<Arg>): Promise<tg.File> => {
-		// Determine image format.
-		type Format = {
-			format: ImageFormat;
-		};
-		let formatArgs = await Promise.all(
-			std.flatten(args).map(async (arg) => {
-				if (arg === undefined) {
-					return { format: "oci" as const };
-				} else if (
-					typeof arg === "string" ||
-					arg instanceof tg.Template ||
-					arg instanceof tg.File ||
-					arg instanceof tg.Symlink
-				) {
-					return { format: "oci" as const };
-				} else if (arg instanceof tg.Directory) {
-					return { format: "oci" as const };
-				} else {
-					return { format: arg.format ?? ("oci" as const) };
-				}
-			}),
-		);
-		let mutationArgs = await std.args.createMutations<Format>(formatArgs);
-		let { format } = await std.args.applyMutations(mutationArgs);
-
-		// Build image.
-		switch (format) {
-			case "oci": {
-				return oci.image(...args);
-			}
-			default: {
-				throw new Error(`unknown image format: ${format}`);
-			}
-		}
+		return container.image(...args);
 	},
 );
 
@@ -88,10 +49,19 @@ export let testOciBasicEnv = tg.target(async () => {
 	return basicEnv;
 });
 
-export let testBasicEnvImage = tg.target(async () => {
+export let testBasicEnvImageDocker = tg.target(async () => {
 	let basicEnv = await testOciBasicEnv();
 	let imageFile = await image(basicEnv, {
 		cmd: ["bash"],
+	});
+	return imageFile;
+});
+
+export let testBasicEnvImageOci = tg.target(async () => {
+	let basicEnv = await testOciBasicEnv();
+	let imageFile = await image(basicEnv, {
+		cmd: ["bash"],
+		format: "oci",
 	});
 	return imageFile;
 });
