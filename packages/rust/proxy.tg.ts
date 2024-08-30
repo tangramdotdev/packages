@@ -19,8 +19,8 @@ export let proxy = tg.target(async (arg?: Arg) => {
 
 export default proxy;
 
-// import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-// import * as openssl from "tg:openssl" with { path: "../openssl" };
+import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
+import * as openssl from "tg:openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 export let test = tg.target(async () => {
 	// Make sure the proxy compiles and runs.
@@ -48,24 +48,24 @@ export let test = tg.target(async () => {
 	let helloText = await helloOutput.text();
 	tg.assert(helloText.trim() === "hello, proxy!\n128\nHello, build!");
 
-	// // Build the openssl proxy test.
-	// let helloOpenssl = await cargo.build({
-	// 	source: tests.get("hello-openssl"),
-	// 	env: std.env.arg(await openssl.build(), pkgconfig.build(), {
-	// 		TANGRAM_RUSTC_TRACING: "tangram=trace",
-	// 	}),
-	// 	proxy: true,
-	// });
-	// console.log("helloOpenssl result", await helloWorld.id());
+	// Build the openssl proxy test.
+	let helloOpenssl = await cargo.build({
+		source: tests.get("hello-openssl"),
+		env: std.env.arg(openssl.build(), pkgconfig.build(), {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+		}),
+		proxy: true,
+	});
+	console.log("helloOpenssl result", await helloWorld.id());
 
-	// // Assert it produces the correct output.
-	// let opensslOutput = await $`hello-openssl | tee $OUTPUT`
-	// 	.env(helloOpenssl)
-	// 	.then(tg.File.expect);
-	// let opensslText = await opensslOutput.text();
-	// tg.assert(
-	// 	opensslText.trim() === "Hello, from a crate that links against libssl!",
-	// );
+	// Assert it produces the correct output.
+	let opensslOutput = await $`hello-openssl | tee $OUTPUT`
+		.env(helloOpenssl)
+		.then(tg.File.expect);
+	let opensslText = await opensslOutput.text();
+	tg.assert(
+		opensslText.trim() === "Hello, from a crate that links against libssl!",
+	);
 
 	// Build the workspace test.
 	let helloWorkspace = await cargo.build({
@@ -73,6 +73,7 @@ export let test = tg.target(async () => {
 		proxy: true,
 		env: {
 			TANGRAM_RUSTC_TRACING: "tangram=trace",
+			TANGRAM_STRIP_PROXY_TRACING: "tangram=trace",
 		},
 	});
 	console.log("helloWorkspace result", await helloWorkspace.id());

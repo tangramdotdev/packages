@@ -92,7 +92,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		os === "linux" &&
 		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
 	) {
-		sdkArgs.push({ toolchain: "gcc" });
+		sdkArgs.push({ toolchain: "gnu" });
 	}
 	let sdk = std.sdk(...sdkArgs);
 	let rustArtifact = toolchain({ host, target });
