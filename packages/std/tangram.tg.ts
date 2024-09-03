@@ -298,9 +298,9 @@ export let testDarwinToLinux = tg.target(async () => {
 export let testLinuxToDarwin = tg.target(async () => {
 	return testLinuxToDarwin_();
 });
-import { linuxToDarwin as linuxToDarwinToolchain } from "./sdk/llvm.tg.ts";
+import { testLinuxToDarwin as testLinuxToDarwinToolchain_ } from "./sdk/llvm.tg.ts";
 export let testLinuxToDarwinToolchain = tg.target(async () => {
-	return await linuxToDarwinToolchain({
+	return await testLinuxToDarwinToolchain_({
 		host: await triple.host(),
 		target: "aarch64-apple-darwin",
 	});

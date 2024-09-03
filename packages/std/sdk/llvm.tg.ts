@@ -219,14 +219,40 @@ import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
 export let linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
 	let { host, target: target_ } = arg;
 	let target = target_ ?? host;
-	let clangToolchain = await toolchain({ host });
+
+	// Obtain the clang toolchain.
+	let clangToolchain = await toolchain({ host }).then(tg.Directory.expect);
+
+	// Add the sysroot to the clang toolchain.
+	clangToolchain = await tg.directory(clangToolchain, {
+		["sysroot"]: bootstrap.macOsSdk(),
+	});
+
+	// Add shell wrappers for clang and clang++.
+	let bins = ["clang", "clang++"];
+	for (let bin of bins) {
+		clangToolchain = await tg.directory(clangToolchain, {
+			[`bin/${target}-${bin}`]: tg.file(
+				`#!/usr/bin/env sh\nset -x\ninstalldir=$(${bin} -print-search-dirs | grep 'programs: =' | sed 's/programs: =//' | cut -d':' -f1)\nexec ${bin} -target ${target} --sysroot \${installdir}/../sysroot \"$@\"`,
+				{ executable: true },
+			),
+		});
+	}
+
+	// Obtain linker and SDK.
 	let cctoolsForTarget = await cctools(std.triple.arch(target));
-	let macosSdk = await bootstrap.macOsSdk();
-	let combined = await std.env.arg(clangToolchain, cctoolsForTarget);
+
+	// Return the combined environment.
+	return await std.env.arg(clangToolchain, cctoolsForTarget);
+});
+
+export let testLinuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
+	let { target } = arg;
+	let combined = await linuxToDarwin(arg);
 	let f = await $`
 	set -x
-	clang --version
-	clang -v -xc ${testSource} --sysroot ${macosSdk} -target ${target} -o $OUTPUT
+	${target}-clang --version
+	${target}-clang -v -xc ${testSource} -o $OUTPUT
 	`
 		.env(combined)
 		.then(tg.File.expect);
@@ -260,6 +286,8 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 			SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 		};
 	} else {
+		// If the target is darwin, set sysroot and target flags.
+
 		// Define common flags.
 		let commonFlags = [
 			tg`-resource-dir=${toolchainDir}/lib/clang/${version}`,

@@ -85,7 +85,8 @@ export namespace env {
 			let manifest = await std.wrap.Manifest.read(artifact);
 			if (!manifest) {
 				// If the file was not a wrapper, throw an error.
-				throw new Error(`Could not read manifest from ${artifact}`);
+				let artifactId = await artifact.id();
+				throw new Error(`Could not read manifest from ${artifactId}`);
 			}
 			// If the file was a wrapper, return its env.
 			return await wrap.envArgFromManifestEnv(manifest.env);

@@ -443,9 +443,15 @@ export namespace sdk {
 		let libDir;
 		if (os !== "darwin") {
 			if (forcePrefix || isCross) {
-				libDir = tg.Directory.expect(await directory.tryGet(`${target}/lib`));
-				let ldsoPath = libc.interpreterName(target);
-				ldso = tg.File.expect(await libDir.tryGet(ldsoPath));
+				if (std.triple.os(target) === "darwin") {
+					// If the target is darwin, there is an LDSO in an unprefixed lib dir, but we do not need it
+					libDir = tg.Directory.expect(await directory.tryGet("lib"));
+					ldso = undefined;
+				} else {
+					libDir = tg.Directory.expect(await directory.tryGet(`${target}/lib`));
+					let ldsoPath = libc.interpreterName(target);
+					ldso = tg.File.expect(await libDir.tryGet(ldsoPath));
+				}
 			} else {
 				// Go through LIBRARY_PATH to find the dynamic linker.
 				let ldsoPath = libc.interpreterName(host);
