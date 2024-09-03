@@ -2,7 +2,7 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.tg.ts";
 import { injection } from "../wrap/injection.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
-import * as gcc from "./gcc.tg.ts";
+import * as gnu from "./gnu.tg.ts";
 import * as llvmToolchain from "./llvm.tg.ts";
 
 /** This module is responsible for proxying compiler toolchains. It provides a linker proxy which produces Tangram-wrapped executables and ensure libraries reference all their needed dependencies, and a compiler proxy which schedules Tangram builds for each invocation. */
@@ -112,7 +112,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let wrappedGFortran;
 		switch (flavor) {
 			case "gnu": {
-				let { ccArgs, cxxArgs, fortranArgs } = await gcc.wrapArgs({
+				let { ccArgs, cxxArgs, fortranArgs } = await gnu.gcc.wrapArgs({
 					host: build,
 					target: host,
 					toolchainDir: directory,

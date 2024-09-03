@@ -2,9 +2,9 @@
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 import * as std from "../../tangram.tg.ts";
-import binutils from "../binutils.tg.ts";
+import binutils from "./binutils.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
-import * as gcc from "../gcc.tg.ts";
+import * as gcc from "./gcc.tg.ts";
 import kernelHeaders from "../kernel_headers.tg.ts";
 import { constructSysroot } from "../libc.tg.ts";
 import * as proxy from "../proxy.tg.ts";

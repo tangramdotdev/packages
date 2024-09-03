@@ -1,5 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as gcc from "../sdk/gcc.tg.ts";
+import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.tg.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
@@ -230,13 +230,13 @@ export let build = async (arg: BuildArg) => {
 			target_ = host_;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await gcc.toolchain({ host, target });
+			hostToolchain = await gnu.toolchain({ host, target });
 			setSysroot = true;
 		}
 	} else {
 		if (isCross) {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await gcc.toolchain({ host, target });
+			hostToolchain = await gnu.toolchain({ host, target });
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
 		}
@@ -438,7 +438,7 @@ export let testCross = tg.target(async () => {
 		os: "linux",
 		environment: "gnu",
 	});
-	let buildToolchain = gcc.toolchain({ host, target });
+	let buildToolchain = gnu.toolchain({ host, target });
 
 	let crossWorkspace = await workspace({
 		buildToolchain,

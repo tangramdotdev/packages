@@ -1,5 +1,5 @@
-import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as bootstrap from "../../bootstrap.tg.ts";
+import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	homepage: "https://www.gnu.org/software/binutils/",

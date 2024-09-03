@@ -1,5 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as gcc from "../sdk/gcc.tg.ts";
+import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.tg.ts";
 import injectionSource from "./injection" with { type: "directory" };
 
@@ -212,7 +212,7 @@ export let testCross = tg.target(async () => {
 	let hostArch = std.triple.arch(detectedHost);
 	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	let target = `${targetArch}-unknown-linux-gnu`;
-	let buildToolchain = gcc.toolchain({ host: detectedHost, target });
+	let buildToolchain = gnu.toolchain({ host: detectedHost, target });
 
 	let nativeInjection = await injection({
 		build: detectedHost,

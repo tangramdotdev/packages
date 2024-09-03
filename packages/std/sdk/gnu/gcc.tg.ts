@@ -1,11 +1,9 @@
-import * as bootstrap from "../bootstrap.tg.ts";
-import { mergeLibDirs } from "../sdk.tg.ts";
-import * as std from "../tangram.tg.ts";
-import { interpreterName } from "./libc.tg.ts";
-import { defaultGlibcVersion } from "./libc/glibc.tg.ts";
-import * as dependencies from "./dependencies.tg.ts";
-
-export { toolchain, crossToolchain } from "./gcc/toolchain.tg.ts";
+import * as bootstrap from "../../bootstrap.tg.ts";
+import { mergeLibDirs } from "../../sdk.tg.ts";
+import { interpreterName } from "../libc.tg.ts";
+import { defaultGlibcVersion } from "../libc/glibc.tg.ts";
+import * as dependencies from "../dependencies.tg.ts";
+import * as std from "../../tangram.tg.ts";
 
 export let metadata = {
 	homepage: "https://gcc.gnu.org/",
@@ -236,7 +234,7 @@ export let build = tg.target(async (arg: Arg) => {
 
 export default build;
 
-export { interpreterName } from "./libc.tg.ts";
+export { interpreterName } from "../libc.tg.ts";
 
 export let interpreterPath = (target: string, isCross?: boolean) =>
 	`${isCross ? `/${target}/sysroot` : "/"}lib/${interpreterName(target)}`;

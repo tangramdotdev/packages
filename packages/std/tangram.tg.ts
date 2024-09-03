@@ -241,7 +241,7 @@ export let testKernelHeaders = tg.target(async () => {
 	return await kernelHeaders.test();
 });
 
-import * as binutils from "./sdk/binutils.tg.ts";
+import * as binutils from "./sdk/gnu/binutils.tg.ts";
 export let testBinutilsSource = tg.target(async () => {
 	return await binutils.source(await triple.host());
 });
@@ -249,7 +249,7 @@ export let testBinutils = tg.target(async () => {
 	return await binutils.test();
 });
 
-import * as gcc from "./sdk/gcc.tg.ts";
+import * as gcc from "./sdk/gnu/gcc.tg.ts";
 export let testGccSource = tg.target(async () => {
 	return await gcc.source();
 });
@@ -259,7 +259,7 @@ import {
 	testCross,
 	testCrossMips,
 	testCrossRpi,
-} from "./sdk/gcc/toolchain.tg.ts";
+} from "./sdk/gnu/toolchain.tg.ts";
 export let canadianCross = tg.target(async () => {
 	return testCanadianCross();
 });

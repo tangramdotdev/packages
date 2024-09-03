@@ -3,6 +3,7 @@ import * as curl from "tg:curl" with { path: "../curl" };
 import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
 import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as zstd from "tg:zstd" with { path: "../zstd" };
 
 import * as ninja from "./ninja.tg.ts";
 
@@ -31,7 +32,7 @@ export let source = tg.target(() => {
 	});
 });
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
@@ -39,6 +40,7 @@ type Arg = {
 		openssl?: openssl.Arg;
 		pkgconfig?: pkgconfig.Arg;
 		zlib?: zlib.Arg;
+		zstd?: zstd.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -55,6 +57,7 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 			openssl: opensslArg = {},
 			pkgconfig: pkgconfigArg = {},
 			zlib: zlibArg = {},
+			zstd: zstdArg = {},
 		} = {},
 		env: env_,
 		host,
@@ -66,6 +69,7 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 	let curlDir = curl.build({ build, env: env_, host, sdk }, curlArg);
 	let opensslDir = openssl.build({ build, env: env_, host, sdk }, opensslArg);
 	let zlibDir = zlib.build({ build, env: env_, host, sdk }, zlibArg);
+	let zstdDir = zstd.build({ build, env: env_, host, sdk }, zstdArg);
 
 	let configure = {
 		command: tg`${sourceDir}/bootstrap`,
@@ -75,7 +79,7 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 			`--`,
 			`-DCMAKE_C_BYTE_ORDER=LITTLE_ENDIAN`,
 			`-DCMAKE_CXX_BYTE_ORDER=LITTLE_ENDIAN`,
-			`-DCMAKE_EXE_LINKER_FLAGS="-lssl -lcrypto -lz"`,
+			// `-DCMAKE_EXE_LINKER_FLAGS="-lssl -lcrypto -lz"`,
 			tg`-DCURL_INCLUDE_DIR=${curlDir}/include`,
 			tg`-DCURL_LIBRARY=${curlDir}/lib/libcurl.so`,
 			tg`-DOPENSSL_ROOT_DIR=${opensslDir}`,
@@ -88,8 +92,15 @@ export let cmake = tg.target(async (...args: std.Args<Arg>) => {
 		pkgconfig.build({ build, host: build }, pkgconfigArg),
 		opensslDir,
 		zlibDir,
+		zstdDir,
 	];
-	let env = [...deps, env_];
+	let env = [
+		...deps,
+		{
+			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+		},
+		env_,
+	];
 
 	let result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),

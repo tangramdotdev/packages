@@ -1,8 +1,8 @@
 /** This module provides environments ready to produce Tangram-wrapped executables from C and C++ code. */
 
 import * as bootstrap from "./bootstrap.tg.ts";
-import binutils from "./sdk/binutils.tg.ts";
-import * as gcc from "./sdk/gcc.tg.ts";
+import binutils from "./sdk/gnu/binutils.tg.ts";
+import * as gnu from "./sdk/gnu.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
 import mold from "./sdk/mold.tg.ts";
@@ -30,7 +30,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS.`);
 		}
-		toolchain = await gcc.toolchain({ host });
+		toolchain = await gnu.toolchain({ host });
 	} else if (toolchain_ === "llvm") {
 		toolchain = await llvm.toolchain({ host });
 	} else {
@@ -113,7 +113,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 		if (std.triple.os(host) === "linux" && std.triple.os(target) === "darwin") {
 			crossToolchain = await llvm.linuxToDarwin({ host, target });
 		} else {
-			crossToolchain = await gcc.toolchain({ host, target });
+			crossToolchain = await gnu.toolchain({ host, target });
 		}
 		tg.assert(crossToolchain !== undefined);
 		envs.push(crossToolchain);

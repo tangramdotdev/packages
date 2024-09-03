@@ -1,5 +1,5 @@
 import * as bootstrap from "./bootstrap.tg.ts";
-import * as gcc from "./sdk/gcc.tg.ts";
+import * as gnu from "./sdk/gnu.tg.ts";
 import { interpreterName } from "./sdk/libc.tg.ts";
 import * as std from "./tangram.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
@@ -30,7 +30,7 @@ export async function wrap(
 	let buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
-		  ? await gcc.toolchain({ host: detectedBuild, target: host })
+		  ? await gnu.toolchain({ host: detectedBuild, target: host })
 		  : await bootstrap.sdk.env(host);
 
 	let manifestInterpreter = arg.interpreter
@@ -816,7 +816,7 @@ let manifestInterpreterFromArg = async (
 			let buildOs = std.triple.os(detectedBuild);
 			let buildToolchain = buildToolchainArg
 				? buildToolchainArg
-				: gcc.toolchain({ host });
+				: gnu.toolchain({ host });
 			let injectionLibrary = await injection.default({
 				buildToolchain,
 				build: buildOs === "darwin" ? detectedBuild : undefined,
@@ -1031,7 +1031,7 @@ let manifestInterpreterFromElf = async (
 		? buildToolchainArg
 		: libc === "musl"
 		  ? bootstrap.sdk.env(host)
-		  : gcc.toolchain({ host });
+		  : gnu.toolchain({ host });
 
 	// Obtain injection library.
 	let injectionLib = await injection.default({ buildToolchain, host });
@@ -1041,7 +1041,7 @@ let manifestInterpreterFromElf = async (
 		// Handle an ld-linux interpreter.
 		let toolchainDir = buildToolchainArg
 			? buildToolchainArg
-			: await gcc.toolchain({ host });
+			: await gnu.toolchain({ host });
 		let { ldso, libDir } = await std.sdk.toolchainComponents({
 			env: toolchainDir,
 		});
