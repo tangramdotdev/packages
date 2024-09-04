@@ -7,13 +7,13 @@ export let metadata = {
 	license: "Apache-2.0",
 	name: "openssl",
 	repository: "https://github.com/openssl/openssl",
-	version: "3.3.1",
+	version: "3.3.2",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:777cd596284c883375a2a7a11bf5d2786fc5413255efab20c50d6ffe6d020b7e";
+		"sha256:2e8a40b01979afe8be0bbfb3de5dc1c6709fedb46d6c89c10da114ab5fc3d281";
 	let owner = name;
 	let repo = name;
 	let tag = `${name}-${version}`;
@@ -94,7 +94,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-	console.log("openssl", await openssl.id());
 
 	return tg.directory(openssl, {
 		["bin/openssl"]: std.wrap(
