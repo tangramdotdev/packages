@@ -1,7 +1,7 @@
 import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
-import { rustTriple, toolchain } from "./tangram.tg.ts";
+import { rustTriple, toolchain } from "./tangram.ts";
 
 export type Arg = {
 	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
@@ -44,8 +44,8 @@ export type Arg = {
 	verbose?: boolean;
 };
 
-export let build = tg.target(async (...args: std.Args<Arg>) => {
-	let mutationArgs = await std.args.createMutations<
+export const build = tg.target(async (...args: std.Args<Arg>) => {
+	const mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "sdk">
 	>(std.flatten(args), {
@@ -62,7 +62,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		source: "set",
 	});
-	let {
+	const {
 		checksum,
 		disableDefaultFeatures = false,
 		env,
@@ -78,31 +78,31 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		verbose = false,
 	} = await std.args.applyMutations(mutationArgs);
 
-	let host = rustTriple(host_ ?? (await std.triple.host()));
-	let os = std.triple.os(host);
-	let target = target_ ? rustTriple(target_) : host;
+	const host = rustTriple(host_ ?? (await std.triple.host()));
+	const os = std.triple.os(host);
+	const target = target_ ? rustTriple(target_) : host;
 
 	// Check if we're cross-compiling.
-	let crossCompiling = target !== host;
+	const crossCompiling = target !== host;
 
 	// Obtain handles to the SDK and Rust artifacts.
 	// NOTE - pulls an SDK assuming the selected target is the intended host. Forces GCC on Linux, as rustc expects libgcc_s.
-	let sdkArgs: Array<std.sdk.Arg> = [{ host, target }, sdk_];
+	const sdkArgs: Array<std.sdk.Arg> = [{ host, target }, sdk_];
 	if (
 		os === "linux" &&
 		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
 	) {
 		sdkArgs.push({ toolchain: "gnu" });
 	}
-	let sdk = std.sdk(...sdkArgs);
-	let rustArtifact = toolchain({ host, target });
+	const sdk = std.sdk(...sdkArgs);
+	const rustArtifact = toolchain({ host, target });
 
 	// Download the dependencies using the cargo vendor.
 	tg.assert(source, "Must provide a source directory.");
-	let cargoConfig = vendoredSources({ source, useCargoVendor });
+	const cargoConfig = vendoredSources({ source, useCargoVendor });
 
 	// Set up cargo args.
-	let cargoArgs = [
+	const cargoArgs = [
 		"--release",
 		"--frozen",
 		"--offline",
@@ -116,7 +116,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	}
 
 	// Create the build script.
-	let buildScript = tg`
+	const buildScript = tg`
 		# Create the output directory
 		mkdir -p "$OUTPUT/target"
 
@@ -152,7 +152,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	let proxyEnv = undefined;
 	if (proxy) {
 		proxyEnv = {
-			RUSTC_WRAPPER: tg`${proxy_.proxy()}/bin/tangram_rustc`,
+			RUSTC_WRAPPER: tg`${proxy_.proxy()}/bin/tangram_rustc_proxy`,
 		};
 	}
 
@@ -171,7 +171,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		};
 	}
 
-	let artifact = await $`${buildScript}`
+	const artifact = await $`${buildScript}`
 		.checksum(checksum)
 		.env(
 			sdk,
@@ -190,13 +190,13 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		.then(tg.Directory.expect);
 
 	// Store a handle to the release directory containing Tangram bundles.
-	let releaseDir = await artifact
+	const releaseDir = await artifact
 		.get(`target/${target}/release`)
 		.then(tg.Directory.expect);
 
 	// Grab the bins from the release dir.
-	let bins: Record<string, tg.Artifact> = {};
-	for await (let [name, artifact] of releaseDir) {
+	const bins: Record<string, tg.Artifact> = {};
+	for await (const [name, artifact] of releaseDir) {
 		if (artifact instanceof tg.File) {
 			if (await artifact.executable()) {
 				bins[name] = artifact;
@@ -206,7 +206,7 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Construct a result containing all located executables.
 	let binDir = await tg.directory({});
-	for (let [name, artifact] of Object.entries(bins)) {
+	for (const [name, artifact] of Object.entries(bins)) {
 		binDir = await tg.directory(binDir, {
 			[name]: artifact,
 		});
@@ -222,21 +222,23 @@ export type VendoredSourcesArg = {
 	useCargoVendor?: boolean;
 };
 
-let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
-	let { rustTarget: rustTarget_, source, useCargoVendor = false } = arg;
-	let rustTarget = rustTarget_ ?? (await std.triple.host());
+const vendoredSources = async (
+	arg: VendoredSourcesArg,
+): Promise<tg.Template> => {
+	const { rustTarget: rustTarget_, source, useCargoVendor = false } = arg;
+	const rustTarget = rustTarget_ ?? (await std.triple.host());
 	if (useCargoVendor) {
 		// Run cargo vendor
-		let certFile = tg`${std.caCertificates()}/cacert.pem`;
-		let vendorScript = tg`
+		const certFile = tg`${std.caCertificates()}/cacert.pem`;
+		const vendorScript = tg`
 			SOURCE="$(realpath ${source})"
 			mkdir -p "$OUTPUT/tg_vendor_dir"
 			cd "$OUTPUT"
 			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml tg_vendor_dir > "$OUTPUT/config"
 		`;
-		let rustArtifact = toolchain();
-		let sdk = std.sdk();
-		let result = await $`${vendorScript}`
+		const rustArtifact = toolchain();
+		const sdk = std.sdk();
+		const result = await $`${vendorScript}`
 			.checksum("unsafe")
 			.env(sdk, rustArtifact, {
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
@@ -247,22 +249,22 @@ let vendoredSources = async (arg: VendoredSourcesArg): Promise<tg.Template> => {
 			.then(tg.Directory.expect);
 
 		// Get the output.
-		let vendoredSources = await result
+		const vendoredSources = await result
 			.get("tg_vendor_dir")
 			.then(tg.Directory.expect);
-		let config = await result.get("config").then(tg.File.expect);
+		const config = await result.get("config").then(tg.File.expect);
 
-		let text = await config.text();
-		let match = /tg_vendor_dir/g.exec(text);
+		const text = await config.text();
+		const match = /tg_vendor_dir/g.exec(text);
 		tg.assert(match);
 		return tg`${text.substring(
 			0,
 			match.index,
 		)}${vendoredSources}${text.substring(match.index + match[0].length)}`;
 	} else {
-		let cargoLock = await (await tg.symlink(source, "Cargo.lock")).resolve();
+		const cargoLock = await (await tg.symlink(source, "Cargo.lock")).resolve();
 		tg.assert(cargoLock instanceof tg.File);
-		let vendoredSources = vendorDependencies(cargoLock);
+		const vendoredSources = vendorDependencies(cargoLock);
 		return tg`
 [source.crates-io]
 replace-with = "vendored-sources"
@@ -273,37 +275,37 @@ directory = "${vendoredSources}"`;
 };
 
 // Implementation of `cargo vendor` in tg typescript.
-export let vendorDependencies = tg.target(async (cargoLock: tg.File) => {
+export const vendorDependencies = tg.target(async (cargoLock: tg.File) => {
 	type CargoLock = {
 		package: Array<{
 			name: string;
 			version: string;
 			source?: string;
-			dependencies?: Array<String>;
+			dependencies?: Array<string>;
 			checksum?: string;
 		}>;
 	};
 
-	let cargoLockToml = tg.encoding.toml.decode(
+	const cargoLockToml = tg.encoding.toml.decode(
 		await cargoLock.text(),
 	) as CargoLock;
-	let downloads = cargoLockToml.package
+	const downloads = cargoLockToml.package
 		.filter((pkg) => {
 			return pkg.source?.startsWith("registry+") ?? false;
 		})
 		.map(async (pkg) => {
 			tg.assert(pkg.source);
 			tg.assert(pkg.checksum);
-			let checksum = `sha256:${pkg.checksum}`;
-			let url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
-			let artifact = await std.download({
+			const checksum = `sha256:${pkg.checksum}`;
+			const url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
+			const artifact = await std.download({
 				checksum,
 				decompress: "gz",
 				extract: "tar",
 				url,
 			});
 			tg.assert(artifact instanceof tg.Directory);
-			let child = await artifact.get(`${pkg.name}-${pkg.version}`);
+			const child = await artifact.get(`${pkg.name}-${pkg.version}`);
 			tg.assert(child instanceof tg.Directory);
 			return tg.directory({
 				[`${pkg.name}-${pkg.version}`]: vendorPackage(child, checksum),
@@ -314,7 +316,7 @@ export let vendorDependencies = tg.target(async (cargoLock: tg.File) => {
 });
 
 // Given a crate directory downloaded from crates.io and its checksum, strip excess files and generate the .cargo-checksum.json.
-export let vendorPackage = async (
+export const vendorPackage = async (
 	pkg: tg.Directory,
 	checksum: tg.Checksum,
 ): Promise<tg.Directory> => {
@@ -331,22 +333,22 @@ export let vendorPackage = async (
 	});
 
 	// Create an empty .cargo-checksum.json.
-	let cargoChecksum: CargoChecksum = {
+	const cargoChecksum: CargoChecksum = {
 		files: {},
 		package: checksum.replace("sha256:", ""),
 	};
 
 	// Recurse over the files to create it.
-	let stack: Array<[string, tg.Directory]> = [["", pkg]];
+	const stack: Array<[string, tg.Directory]> = [["", pkg]];
 	while (!(stack.length == 0)) {
-		let [path, dir] = stack.pop() as [string, tg.Directory];
+		const [path, dir] = stack.pop() as [string, tg.Directory];
 		for (let [subpath, artifact] of Object.entries(await dir.entries())) {
 			subpath = `${path}${subpath}`;
 			if (artifact instanceof tg.Directory) {
 				stack.push([`${subpath}/`, artifact]);
 			} else if (artifact instanceof tg.File) {
-				let bytes = await artifact.bytes();
-				let checksum = await tg.checksum(bytes, "sha256");
+				const bytes = await artifact.bytes();
+				const checksum = await tg.checksum(bytes, "sha256");
 				cargoChecksum.files[subpath] = checksum.replace("sha256:", "");
 			} else {
 				throw new Error("Found symlink in downloaded cargo artifact.");
@@ -359,8 +361,8 @@ export let vendorPackage = async (
 	});
 };
 
-let tripleToEnvVar = (triple: string, upcase?: boolean) => {
-	let allCaps = upcase ?? false;
+const tripleToEnvVar = (triple: string, upcase?: boolean) => {
+	const allCaps = upcase ?? false;
 	let result = triple.replace(/-/g, "_");
 	if (allCaps) {
 		result = result.toUpperCase();
@@ -369,8 +371,8 @@ let tripleToEnvVar = (triple: string, upcase?: boolean) => {
 };
 
 import tests from "./tests" with { type: "directory" };
-export let test = tg.target(async () => {
-	let tests = [];
+export const test = tg.target(async () => {
+	const tests = [];
 
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
@@ -380,37 +382,42 @@ export let test = tg.target(async () => {
 	return true;
 });
 
-export let testUnproxiedWorkspace = tg.target(async () => {
-	let helloWorkspace = build({
+export const testUnproxiedWorkspace = tg.target(async () => {
+	const helloWorkspace = build({
 		source: tests.get("hello-workspace"),
+		env: {
+			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+		},
 		proxy: false,
 	});
 
-	let output = await $`
+	const output = await $`
 		${helloWorkspace}/bin/cli >> $OUTPUT
 	`.then(tg.File.expect);
-	let text = await output.text();
+	const text = await output.text();
 	tg.assert(text.trim() === "Hello from a workspace!");
 	return true;
 });
 
 // Compare the results of cargo vendor and vendorDependencies.
-export let testVendorDependencies = tg.target(async () => {
-	let sourceDirectory = await tests
+export const testVendorDependencies = tg.target(async () => {
+	const sourceDirectory = await tests
 		.get("hello-openssl")
 		.then(tg.Directory.expect);
-	let cargoLock = await sourceDirectory.get("Cargo.lock").then(tg.File.expect);
-	let tgVendored = vendorDependencies(cargoLock);
+	const cargoLock = await sourceDirectory
+		.get("Cargo.lock")
+		.then(tg.File.expect);
+	const tgVendored = vendorDependencies(cargoLock);
 
-	let certFile = tg`${std.caCertificates()}/cacert.pem`;
-	let vendorScript = tg`
+	const certFile = tg`${std.caCertificates()}/cacert.pem`;
+	const vendorScript = tg`
 		SOURCE="$(realpath ${sourceDirectory})"
 		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
 	`;
-	let rustArtifact = toolchain();
-	let sdk = std.sdk();
+	const rustArtifact = toolchain();
+	const sdk = std.sdk();
 
-	let cargoVendored = await $`${vendorScript}`
+	const cargoVendored = await $`${vendorScript}`
 		.checksum("unsafe")
 		.env(sdk, rustArtifact, {
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",

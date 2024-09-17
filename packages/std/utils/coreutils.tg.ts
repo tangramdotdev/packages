@@ -1,5 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import { macOsXattrCmds } from "./file_cmds.tg.ts";
@@ -8,14 +8,14 @@ import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch"
 	type: "file",
 };
 
-export let metadata = {
+export const metadata = {
 	name: "coreutils",
 	version: "9.5",
 };
 
-export let source = tg.target(async (os: string) => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(async (os: string) => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a";
 	let source = await std.download.fromGnu({
 		name,
@@ -26,7 +26,7 @@ export let source = tg.target(async (os: string) => {
 
 	// Apply xattr patch on Linux.
 	if (os === "linux") {
-		let patches = [];
+		const patches = [];
 		patches.push(alwaysPreserveXattrsPatch);
 		source = await bootstrap.patch(source, ...patches);
 	}
@@ -44,8 +44,8 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
@@ -54,11 +54,11 @@ export let build = tg.target(async (arg?: Arg) => {
 		staticBuild = false,
 		usePrerequisites = true,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let os = std.triple.os(host);
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+	const os = std.triple.os(host);
 
-	let dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [];
+	const dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [];
 
 	if (usePrerequisites) {
 		dependencies.push(prerequisites(build));
@@ -86,12 +86,12 @@ export let build = tg.target(async (arg?: Arg) => {
 			}),
 		);
 	}
-	let env = [env_, ...dependencies];
+	const env = [env_, ...dependencies];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
 	}
 
-	let configure = {
+	const configure = {
 		args: [
 			"--disable-acl",
 			"--disable-dependency-tracking",
@@ -127,30 +127,30 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 /** Obtain just the `env` binary. */
-export let gnuEnv = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let os = std.triple.os(host);
-	let sdk = bootstrap.sdk(host);
-	let env = std.env.arg(sdk, bootstrap.make.build(host));
-	let directory = await build({
+export const gnuEnv = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const os = std.triple.os(host);
+	const sdk = bootstrap.sdk(host);
+	const env = std.env.arg(sdk, bootstrap.make.build(host));
+	const directory = await build({
 		host,
 		env,
 		sdk: false,
 		staticBuild: os === "linux",
 		usePrerequisites: false,
 	});
-	let exe = tg.File.expect(await directory.get("bin/env"));
+	const exe = tg.File.expect(await directory.get("bin/env"));
 	return exe;
 });
 
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let system = std.triple.archAndOs(host);
-	let os = std.triple.os(system);
-	let sdk = await bootstrap.sdk(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const system = std.triple.archAndOs(host);
+	const os = std.triple.os(system);
+	const sdk = await bootstrap.sdk(host);
 
-	let coreutils = await build({ host, sdk: false, env: sdk });
+	const coreutils = await build({ host, sdk: false, env: sdk });
 
 	let expected;
 	let script;
@@ -214,11 +214,11 @@ export let test = tg.target(async () => {
 	}
 
 	// Run the script.
-	let platformSupportLib =
+	const platformSupportLib =
 		os === "darwin"
 			? libiconv({ host, sdk: false, env: sdk })
 			: attr({ host, sdk: false, env: sdk });
-	let output = tg.File.expect(
+	const output = tg.File.expect(
 		await (
 			await tg.target(script, {
 				env: std.env.arg(platformSupportLib, coreutils),
@@ -226,7 +226,7 @@ export let test = tg.target(async () => {
 		).output(),
 	);
 
-	let contents = (await output.text()).trim();
+	const contents = (await output.text()).trim();
 	tg.assert(contents === expected);
 	return coreutils;
 });

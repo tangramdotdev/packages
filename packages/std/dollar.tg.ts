@@ -1,4 +1,4 @@
-import * as std from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
 
 export function $(
 	strings: TemplateStringsArray,
@@ -14,7 +14,6 @@ class Dollar {
 	#executable?: tg.Artifact | undefined;
 	#args?: Array<tg.Value>;
 	#env?: std.args.UnresolvedArgs<std.env.Arg>;
-	#lock?: tg.Lock | undefined;
 	#checksum?: tg.Checksum | undefined;
 
 	constructor(
@@ -45,17 +44,12 @@ class Dollar {
 		return this;
 	}
 
-	lock(lock: tg.Lock): Dollar {
-		this.#lock = lock;
-		return this;
-	}
-
 	async output(): Promise<tg.Value> {
 		return await (await this.target()).output();
 	}
 
 	async target(): Promise<tg.Target> {
-		let arg: tg.Target.ArgObject = {};
+		const arg: tg.Target.ArgObject = {};
 		if (this.#host !== undefined) {
 			arg.host = this.#host;
 		}
@@ -70,7 +64,7 @@ class Dollar {
 				.then(tg.File.expect);
 		}
 		// If we're using the default executable, add extra flags to make it more strict.
-		let prefixArgs = this.#args ? [] : ["-euo", "pipefail"];
+		const prefixArgs = this.#args ? [] : ["-euo", "pipefail"];
 		arg.args = [
 			...prefixArgs,
 			"-euc",
@@ -80,14 +74,11 @@ class Dollar {
 			arg.args.push(...this.#args);
 		}
 		// Ensure the standard utils are provided in the env.
-		let env_ = std.utils.env({ sdk: false, env: std.sdk(), host: arg.host });
+		const env_ = std.utils.env({ sdk: false, env: std.sdk(), host: arg.host });
 		if (this.#env !== undefined) {
 			arg.env = await std.env.arg(env_, this.#env);
 		} else {
 			arg.env = await env_;
-		}
-		if (this.#lock !== undefined) {
-			arg.lock = this.#lock;
 		}
 		if (this.#checksum !== undefined) {
 			arg.checksum = this.#checksum;
@@ -114,17 +105,17 @@ class Dollar {
 	}
 }
 
-export let test = tg.target(async () => {
-	let f = tg.file("hello there!!!\n");
-	let output = await $`cat ${f} > $OUTPUT
+export const test = tg.target(async () => {
+	const f = tg.file("hello there!!!\n");
+	const output = await $`cat ${f} > $OUTPUT
 		echo $NAME >> $OUTPUT
 		echo $TOOL >> $OUTPUT`
 		.env({ NAME: "ben" })
 		.env({ TOOL: "tangram" })
 		.env({ NAME: tg.Mutation.suffix("L.", " ") })
 		.then(tg.File.expect);
-	let actual = await output.text();
-	let expected = "hello there!!!\nben L.\ntangram\n";
+	const actual = await output.text();
+	const expected = "hello there!!!\nben L.\ntangram\n";
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;
 });

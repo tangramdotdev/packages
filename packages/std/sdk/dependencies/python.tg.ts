@@ -1,17 +1,17 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	name: "Python",
-	version: "3.12.5",
+	version: "3.12.6",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let extension = ".tar.xz";
-	let checksum =
-		"sha256:fa8a2e12c5e620b09f53e65bcd87550d2e5a1e2e04bf8ba991dcc55113876397";
-	let base = `https://www.python.org/ftp/python/${version}`;
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const extension = ".tar.xz";
+	const checksum =
+		"sha256:1999658298cf2fb837dffed8ff3c033ef0c98ef20cf73c5d5f66bed5ab89697c";
+	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -27,8 +27,8 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		autotools = {},
 		build: build_,
 		env,
@@ -37,11 +37,11 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let os = std.triple.os(build);
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+	const os = std.triple.os(build);
 
-	let configure = {
+	const configure = {
 		args: [
 			"--disable-test-modules",
 			"--with-ensurepip=no",
@@ -50,15 +50,15 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let phases = { configure };
+	const phases = { configure };
 
-	let providedCc = await std.env.tryGetKey({ env, key: "CC" });
+	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configure.args.push(`CC="$CC"`);
 	}
 
 	// Build python.
-	let result = std.autotools.build(
+	const result = std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -75,9 +75,9 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdkArg = await bootstrap.sdk.arg(host);
 	await std.assert.pkg({
 		buildFunction: build,
 		binaries: ["python3"],

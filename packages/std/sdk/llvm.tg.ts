@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
-import { $ } from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
+import { $ } from "../tangram.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
 import git from "./llvm/git.tg.ts";
@@ -10,7 +10,7 @@ import cctools from "./llvm/cctools_port.tg.ts";
 import { constructSysroot } from "./libc.tg.ts";
 import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://llvm.org/",
 	name: "llvm",
 	license:
@@ -19,15 +19,15 @@ export let metadata = {
 	version: "18.1.8",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:0b58557a6d32ceee97c8d533a59b9212d87e0fc4d2833924eb6c611247db2f2a";
-	let owner = name;
-	let repo = "llvm-project";
-	let tag = `llvmorg-${version}`;
-	let extension = ".tar.xz";
-	let url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${repo}-${version}.src${extension}`;
+	const owner = name;
+	const repo = "llvm-project";
+	const tag = `llvmorg-${version}`;
+	const extension = ".tar.xz";
+	const url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${repo}-${version}.src${extension}`;
 	return std
 		.download({ checksum, url })
 		.then(tg.Directory.expect)
@@ -44,8 +44,8 @@ export type LLVMArg = {
 };
 
 /** Produce a complete clang+lld distribution using a 2-stage bootstrapping build. */
-export let toolchain = tg.target(async (arg?: LLVMArg) => {
-	let {
+export const toolchain = tg.target(async (arg?: LLVMArg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
@@ -53,31 +53,31 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	let host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
-	let build = build_ ?? host;
+	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	const build = build_ ?? host;
 
 	if (std.triple.os(host) === "darwin") {
 		// On macOS, just return the bootstrap toolchain, which provides Apple Clang.
 		return bootstrap.sdk.env(host);
 	}
 
-	let sourceDir = source_ ?? source();
+	const sourceDir = source_ ?? source();
 
 	// Define build environment.
-	let m4ForBuild = dependencies.m4.build({ build, host: build });
-	let bisonForBuild = dependencies.bison.build({
+	const m4ForBuild = dependencies.m4.build({ build, host: build });
+	const bisonForBuild = dependencies.bison.build({
 		build,
 		host: build,
 		env: m4ForBuild,
 	});
-	let pythonForBuild = dependencies.python.build({
+	const pythonForBuild = dependencies.python.build({
 		build,
 		host: build,
 		sdk: bootstrap.sdk.arg(build),
 	});
-	let ncursesArtifact = ncurses({ build, host });
-	let zlibArtifact = dependencies.zlib.build({ build, host });
-	let deps = [
+	const ncursesArtifact = ncurses({ build, host });
+	const zlibArtifact = dependencies.zlib.build({ build, host });
+	const deps = [
 		git({ build, host: build }),
 		bisonForBuild,
 		m4ForBuild,
@@ -88,24 +88,24 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 
 	// Obtain a sysroot for the requested host.
 
-	let sysroot = await constructSysroot({
+	const sysroot = await constructSysroot({
 		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild),
 		host,
 	})
 		.then((dir) => dir.get(host))
 		.then(tg.Directory.expect);
 
-	let env = [...deps, env_];
+	const env = [...deps, env_];
 
-	let ldsoName = libc.interpreterName(host);
+	const ldsoName = libc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
-	let stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
+	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	let prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
+	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
 
 	// Define default flags.
-	let configure = {
+	const configure = {
 		args: [
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
@@ -120,7 +120,7 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	};
 
 	// Support musl sysroots.
-	let isMusl = std.triple.environment(host) === "musl";
+	const isMusl = std.triple.environment(host) === "musl";
 	if (isMusl) {
 		configure.args.push("-DLIBCXX_HAS_MUSL_LIBC=On");
 		configure.args.push("-DBOOTSTRAP_LIBCXX_HAS_MUSL_LIBC=On");
@@ -134,15 +134,15 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	// Add the cmake cache file last.
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
-	let buildPhase = {
+	const buildPhase = {
 		command: "ninja",
 		args: tg.Mutation.set(["stage2-distribution"]),
 	};
-	let install = {
+	const install = {
 		command: "ninja",
 		args: tg.Mutation.set(["stage2-install-distribution"]),
 	};
-	let phases = { prepare, configure, build: buildPhase, install };
+	const phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
 		...(await std.triple.rotate({ build, host })),
@@ -169,25 +169,25 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 	// The bootstrap compiler was not proxied. Manually wrap the output binaries.
 
 	// Collect all required library paths.
-	let libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
-	let hostLibDir = tg.symlink(tg`${libDir}/${host}`);
-	let ncursesLibDir = ncursesArtifact.then((dir) =>
+	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
+	const hostLibDir = tg.symlink(tg`${libDir}/${host}`);
+	const ncursesLibDir = ncursesArtifact.then((dir) =>
 		dir.get("lib").then(tg.Directory.expect),
 	);
-	let zlibLibDir = zlibArtifact.then((dir) =>
+	const zlibLibDir = zlibArtifact.then((dir) =>
 		dir.get("lib").then(tg.Directory.expect),
 	);
-	let libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
+	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
 
 	// Wrap all ELF binaries in the bin directory.
-	let binDir = await llvmArtifact.get("bin").then(tg.Directory.expect);
-	for await (let [name, artifact] of binDir) {
+	const binDir = await llvmArtifact.get("bin").then(tg.Directory.expect);
+	for await (const [name, artifact] of binDir) {
 		if (artifact instanceof tg.File) {
-			let { format } = await std.file.executableMetadata(artifact);
+			const { format } = await std.file.executableMetadata(artifact);
 			if (format === "elf") {
-				let unwrapped = binDir.get(name).then(tg.File.expect);
+				const unwrapped = binDir.get(name).then(tg.File.expect);
 				// Use the wrapper identity to ensure the wrapper is called when binaries call themselves. Otherwise it won't find all required libraries.
-				let wrapped = std.wrap(unwrapped, {
+				const wrapped = std.wrap(unwrapped, {
 					identity: "wrapper",
 					libraryPaths,
 				});
@@ -202,8 +202,8 @@ export let toolchain = tg.target(async (arg?: LLVMArg) => {
 });
 
 /** Grab the LLD linker from the toolchain. */
-export let lld = tg.target(async (arg?: LLVMArg) => {
-	let toolchainDir = await toolchain(arg);
+export const lld = tg.target(async (arg?: LLVMArg) => {
+	const toolchainDir = await toolchain(arg);
 	tg.assert(toolchainDir instanceof tg.Directory);
 	// Use a template instead of the file directly so the linker proxy invokes the linker by its full name.
 	return tg`${toolchainDir}/bin/ld.lld`;
@@ -216,9 +216,9 @@ type LinuxToDarwinArg = {
 
 /** Produce a linux to darwin toolchain. */
 import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
-export let linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
-	let { host, target: target_ } = arg;
-	let target = target_ ?? host;
+export const linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
+	const { host, target: target_ } = arg;
+	const target = target_ ?? host;
 
 	// Obtain the clang toolchain.
 	let clangToolchain = await toolchain({ host }).then(tg.Directory.expect);
@@ -229,8 +229,8 @@ export let linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
 	});
 
 	// Add shell wrappers for clang and clang++.
-	let bins = ["clang", "clang++"];
-	for (let bin of bins) {
+	const bins = ["clang", "clang++"];
+	for (const bin of bins) {
 		clangToolchain = await tg.directory(clangToolchain, {
 			[`bin/${target}-${bin}`]: tg.file(
 				`#!/usr/bin/env sh\nset -x\ninstalldir=$(${bin} -print-search-dirs | grep 'programs: =' | sed 's/programs: =//' | cut -d':' -f1)\nexec ${bin} -target ${target} --sysroot \${installdir}/../sysroot \"$@\"`,
@@ -240,16 +240,16 @@ export let linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
 	}
 
 	// Obtain linker and SDK.
-	let cctoolsForTarget = await cctools(std.triple.arch(target));
+	const cctoolsForTarget = await cctools(std.triple.arch(target));
 
 	// Return the combined environment.
 	return await std.env.arg(clangToolchain, cctoolsForTarget);
 });
 
-export let testLinuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
-	let { target } = arg;
-	let combined = await linuxToDarwin(arg);
-	let f = await $`
+export const testLinuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
+	const { target } = arg;
+	const combined = await linuxToDarwin(arg);
+	const f = await $`
 	set -x
 	${target}-clang --version
 	${target}-clang -v -xc ${testSource} -o $OUTPUT
@@ -259,7 +259,7 @@ export let testLinuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
 	return f;
 });
 
-export let llvmMajorVersion = () => {
+export const llvmMajorVersion = () => {
 	return metadata.version.split(".")[0];
 };
 
@@ -270,10 +270,10 @@ type WrapArgsArg = {
 };
 
 /** Produce the flags and environment required to properly proxy this toolchain. */
-export let wrapArgs = async (arg: WrapArgsArg) => {
-	let { host, target: target_, toolchainDir } = arg;
-	let target = target_ ?? host;
-	let version = llvmMajorVersion();
+export const wrapArgs = async (arg: WrapArgsArg) => {
+	const { host, target: target_, toolchainDir } = arg;
+	const target = target_ ?? host;
+	const version = llvmMajorVersion();
 
 	let clangArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
@@ -289,7 +289,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		// If the target is darwin, set sysroot and target flags.
 
 		// Define common flags.
-		let commonFlags = [
+		const commonFlags = [
 			tg`-resource-dir=${toolchainDir}/lib/clang/${version}`,
 			tg`-L${toolchainDir}/lib/${target}`,
 		];
@@ -298,7 +298,7 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 		clangArgs = clangArgs.concat(commonFlags);
 
 		// Set C++ flags.
-		let cxxFlags = [
+		const cxxFlags = [
 			"-unwindlib=libunwind",
 			tg`-isystem${toolchainDir}/include/c++/v1`,
 			tg`-isystem${toolchainDir}/include/${target}/c++/v1`,
@@ -309,35 +309,35 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	return { clangArgs, clangxxArgs, env };
 };
 
-export let test = async () => {
+export const test = async () => {
 	// Build a triple for the detected host.
-	let host = std.sdk.canonicalTriple(await std.triple.host());
-	let hostArch = std.triple.arch(host);
-	let system = std.triple.archAndOs(host);
-	let os = std.triple.os(system);
+	const host = std.sdk.canonicalTriple(await std.triple.host());
+	const hostArch = std.triple.arch(host);
+	const system = std.triple.archAndOs(host);
+	const os = std.triple.os(system);
 
-	let expectedInterpreter =
+	const expectedInterpreter =
 		os === "darwin" ? undefined : `/lib/${libc.interpreterName(host)}`;
 
-	let directory = await toolchain({ host });
+	const directory = await toolchain({ host });
 	tg.Directory.assert(directory);
 	console.log("toolchain dir", await directory.id());
 
-	let testCSource = tg.file(`
+	const testCSource = tg.file(`
 		#include <stdio.h>
 		int main() {
 			printf("Hello, world!\\n");
 			return 0;
 		}
 	`);
-	let cOut = await $`
+	const cOut = await $`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
 	`
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
 
-	let cMetadata = await std.file.executableMetadata(cOut);
+	const cMetadata = await std.file.executableMetadata(cOut);
 	if (os === "linux") {
 		tg.assert(
 			cMetadata.format === "elf",
@@ -358,21 +358,21 @@ export let test = async () => {
 		);
 	}
 
-	let testCXXSource = tg.file(`
+	const testCXXSource = tg.file(`
 		#include <iostream>
 		int main() {
 			std::cout << "Hello, world!" << std::endl;
 			return 0;
 		}
 	`);
-	let cxxOut = await $`
+	const cxxOut = await $`
 		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
 
-	let cxxMetadata = await std.file.executableMetadata(cxxOut);
+	const cxxMetadata = await std.file.executableMetadata(cxxOut);
 	if (os === "linux") {
 		tg.assert(
 			cxxMetadata.format === "elf",

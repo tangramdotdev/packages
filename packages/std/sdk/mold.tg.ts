@@ -1,4 +1,4 @@
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import * as cmake from "./cmake.tg.ts";
 import zstd from "./dependencies/zstd.tg.ts";
 
@@ -6,7 +6,7 @@ import blake3DisableNeonFlag from "./mold_blake3_disable_neon_flag.patch" with {
 	type: "file",
 };
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://github.com/rui314/mold",
 	license: "MIT",
 	name: "mold",
@@ -14,13 +14,13 @@ export let metadata = {
 	version: "2.33.0",
 };
 
-export let source = tg.target(() => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(() => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:37b3aacbd9b6accf581b92ba1a98ca418672ae330b78fe56ae542c2dcb10a155";
-	let owner = "rui314";
-	let repo = name;
-	let tag = `v${version}`;
+	const owner = "rui314";
+	const repo = name;
+	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
 		owner,
@@ -38,18 +38,18 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let mold = tg.target(async (arg?: Arg) => {
-	let {
+export const mold = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let configure = {
+	const configure = {
 		args: ["-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_LIBDIR=lib"],
 	};
 
@@ -59,9 +59,9 @@ export let mold = tg.target(async (arg?: Arg) => {
 		sourceDir = await std.patch(sourceDir, blake3DisableNeonFlag);
 	}
 
-	let env = await std.env.arg(zstd({ build, host }), env_);
+	const env = await std.env.arg(zstd({ build, host }), env_);
 
-	let result = cmake.build({
+	const result = cmake.build({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
@@ -74,7 +74,7 @@ export let mold = tg.target(async (arg?: Arg) => {
 
 export default mold;
 
-export let test = tg.target(async () => {
+export const test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFunction: mold,
 		binaries: ["mold"],

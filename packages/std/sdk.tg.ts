@@ -7,7 +7,7 @@ import * as libc from "./sdk/libc.tg.ts";
 import * as llvm from "./sdk/llvm.tg.ts";
 import mold from "./sdk/mold.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
-import * as std from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
 
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
 export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
@@ -19,10 +19,10 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 		linker,
 	} = await sdk.arg(...args);
 
-	let hostOs = std.triple.os(host);
+	const hostOs = std.triple.os(host);
 
 	// Create an array to collect all constituent envs.
-	let envs: tg.Unresolved<std.Args<std.env.Arg>> = [];
+	const envs: tg.Unresolved<std.Args<std.env.Arg>> = [];
 
 	// Determine host toolchain.
 	let toolchain: std.env.Arg;
@@ -38,7 +38,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 	}
 	envs.push(toolchain);
 
-	let { flavor } = await std.sdk.toolchainComponents({
+	const { flavor } = await std.sdk.toolchainComponents({
 		env: toolchain,
 		host,
 	});
@@ -66,7 +66,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 			switch (linker) {
 				case "bfd": {
 					if (flavor === "llvm") {
-						let binutilsDir = await binutils({ host });
+						const binutilsDir = await binutils({ host });
 						linkerDir = binutilsDir;
 						linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
 					}
@@ -79,7 +79,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 					break;
 				}
 				case "mold": {
-					let moldArtifact = await mold({ host });
+					const moldArtifact = await mold({ host });
 					linkerDir = moldArtifact;
 					linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
 					break;
@@ -93,14 +93,14 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 	if (linkerExe) {
 		proxyArg = { ...proxyArg, linkerExe };
 	}
-	let hostProxy = await proxy.env(proxyArg as proxy.Arg);
+	const hostProxy = await proxy.env(proxyArg as proxy.Arg);
 	envs.push(hostProxy);
 	if (linkerDir) {
 		envs.push(linkerDir);
 	}
 
 	// Add cross compilers if requested.
-	for (let target of targets) {
+	for (const target of targets) {
 		if (host === target) {
 			continue;
 		}
@@ -117,14 +117,14 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 		}
 		tg.assert(crossToolchain !== undefined);
 		envs.push(crossToolchain);
-		let proxyEnv = await proxy.env({
+		const proxyEnv = await proxy.env({
 			...proxyArg,
 			toolchain: crossToolchain,
 			build: host,
 			host: target,
 		});
 		envs.push(proxyEnv);
-		let targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
+		const targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
 		envs.push({
 			[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
 			[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
@@ -155,8 +155,8 @@ export namespace sdk {
 		toolchain?: sdk.ToolchainKind;
 	};
 
-	export let arg = async (...args: std.args.UnresolvedArgs<Arg>) => {
-		let objectArgs = await Promise.all(
+	export const arg = async (...args: std.args.UnresolvedArgs<Arg>) => {
+		const objectArgs = await Promise.all(
 			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
 				if (arg === undefined) {
 					return {};
@@ -165,12 +165,12 @@ export namespace sdk {
 				}
 			}),
 		);
-		let mutationArgs = await std.args.createMutations<sdk.ArgObject>(
+		const mutationArgs = await std.args.createMutations<sdk.ArgObject>(
 			objectArgs,
 			{
 				proxy: (arg) => {
 					if (typeof arg === "boolean") {
-						let proxyArg = arg
+						const proxyArg = arg
 							? { compiler: true, linker: true }
 							: { compiler: false, linker: false };
 						return tg.Mutation.set(proxyArg);
@@ -194,7 +194,7 @@ export namespace sdk {
 
 		// Obtain host and targets.
 		let host = host_ ?? (await std.triple.host());
-		let hostOs = std.triple.os(host);
+		const hostOs = std.triple.os(host);
 
 		if (hostOs === "darwin" && linker && linker !== "lld") {
 			throw new Error(`Alternate linkers are only available for Linux hosts.`);
@@ -206,7 +206,11 @@ export namespace sdk {
 		}
 
 		// Set the default proxy arguments.
-		let proxyArg = proxyArg_ ?? { compiler: false, linker: true, strip: true };
+		const proxyArg = proxyArg_ ?? {
+			compiler: false,
+			linker: true,
+			strip: true,
+		};
 
 		// Set the default toolchain if not provided.
 		if (toolchain_ === undefined) {
@@ -237,25 +241,25 @@ export namespace sdk {
 		target?: string | undefined;
 	};
 
-	let requiredCompilerComponents = (os: string, flavor: "gnu" | "llvm") => {
-		let cc = flavor === "llvm" ? "clang" : "gcc";
-		let cxx = flavor === "llvm" ? "clang++" : "g++";
-		let ld = os === "linux" && flavor === "llvm" ? "ld.lld" : "ld";
+	const requiredCompilerComponents = (os: string, flavor: "gnu" | "llvm") => {
+		const cc = flavor === "llvm" ? "clang" : "gcc";
+		const cxx = flavor === "llvm" ? "clang++" : "g++";
+		const ld = os === "linux" && flavor === "llvm" ? "ld.lld" : "ld";
 		return [cc, cxx, ld];
 	};
 
-	let requiredUtils = ["ar", "nm", "ranlib", "strip"] as const;
+	const requiredUtils = ["ar", "nm", "ranlib", "strip"] as const;
 
 	/** Assert that an env provides an toolchain. */
-	export let assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
-		let { env, forcePrefix = false, host: host_, target: target_ } = arg;
+	export const assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
+		const { env, forcePrefix = false, host: host_, target: target_ } = arg;
 
-		let llvm = await std.env.provides({ env, names: ["clang"] });
+		const llvm = await std.env.provides({ env, names: ["clang"] });
 
-		let host = canonicalTriple(host_ ?? (await std.triple.host()));
-		let target = canonicalTriple(target_ ?? host);
-		let os = std.triple.os(target);
-		let isCross = host !== target;
+		const host = canonicalTriple(host_ ?? (await std.triple.host()));
+		const target = canonicalTriple(target_ ?? host);
+		const os = std.triple.os(target);
+		const isCross = host !== target;
 		// Provides binutils, cc/c++.
 		let targetPrefix = ``;
 		if (forcePrefix || isCross) {
@@ -265,7 +269,7 @@ export namespace sdk {
 			env,
 			names: requiredUtils.map((name) => `${targetPrefix}${name}`),
 		});
-		let compilerComponents = requiredCompilerComponents(
+		const compilerComponents = requiredCompilerComponents(
 			os,
 			llvm ? "llvm" : "gnu",
 		);
@@ -277,19 +281,19 @@ export namespace sdk {
 	};
 
 	/** Determine whether an env provides an toolchain. */
-	export let providesToolchain = async (
+	export const providesToolchain = async (
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
-		let { env, forcePrefix, target } = arg;
-		let os = std.triple.os(target ?? (await std.triple.host()));
+		const { env, forcePrefix, target } = arg;
+		const os = std.triple.os(target ?? (await std.triple.host()));
 		let targetPrefix = ``;
 		if (target) {
 			if (forcePrefix || os !== "darwin") {
 				targetPrefix = `${target}-`;
 			}
 		}
-		let llvm = await std.env.provides({ env, names: ["clang"] });
-		let compilerComponents = requiredCompilerComponents(
+		const llvm = await std.env.provides({ env, names: ["clang"] });
+		const compilerComponents = requiredCompilerComponents(
 			os,
 			llvm ? "llvm" : "gnu",
 		);
@@ -307,10 +311,10 @@ export namespace sdk {
 	};
 
 	/** Locate the C and C++ compilers, linker, and ld.so from a toolchain. */
-	export let toolchainComponents = async (
+	export const toolchainComponents = async (
 		arg?: ToolchainEnvArg,
 	): Promise<ToolchainComponents> => {
-		let {
+		const {
 			env,
 			forcePrefix = false,
 			host: host_,
@@ -329,22 +333,22 @@ export namespace sdk {
 			target: targetTriple,
 		});
 
-		let host = await determineToolchainHost({
+		const host = await determineToolchainHost({
 			env,
 			host: host_,
 			target: targetTriple,
 		});
-		let os = std.triple.os(host);
-		let target = targetTriple ?? host;
-		let detectedHost = await std.triple.host();
-		let host__ = host_ ?? detectedHost;
-		let standardizedHost = std.sdk.canonicalTriple(host__);
-		let isCross =
+		const os = std.triple.os(host);
+		const target = targetTriple ?? host;
+		const detectedHost = await std.triple.host();
+		const host__ = host_ ?? detectedHost;
+		const standardizedHost = std.sdk.canonicalTriple(host__);
+		const isCross =
 			std.triple.arch(standardizedHost) !== std.triple.arch(target) ||
 			std.triple.os(standardizedHost) !== std.triple.os(target) ||
 			std.triple.environment(standardizedHost) !==
 				std.triple.environment(target);
-		let targetPrefix = forcePrefix || isCross ? `${target}-` : ``;
+		const targetPrefix = forcePrefix || isCross ? `${target}-` : ``;
 
 		// Set the default flavor for the os at first, to confirm later.
 		let flavor: "gnu" | "llvm" = os === "linux" ? "gnu" : "llvm";
@@ -355,12 +359,12 @@ export namespace sdk {
 		let fortran;
 		if (flavor === "gnu") {
 			// Check if `gcc` is available.
-			let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
+			const gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
 			if (gcc) {
 				// If so, try to find `g++`.
-				let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
+				const gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
 				tg.assert(gxx, `Found ${targetPrefix}gcc but not ${targetPrefix}g++.`);
-				let gfortran = await std.env.tryWhich({
+				const gfortran = await std.env.tryWhich({
 					env,
 					name: `${targetPrefix}gfortran`,
 				});
@@ -369,10 +373,10 @@ export namespace sdk {
 				cxx = gxx;
 			} else {
 				// Try to find clang, which needs no prefix.
-				let clang = await std.env.tryWhich({ env, name: "clang" });
+				const clang = await std.env.tryWhich({ env, name: "clang" });
 				tg.assert(clang, `Found neither ${targetPrefix}gcc nor clang.`);
 				// If clang is available, try to find clang++.
-				let clangxx = await std.env.tryWhich({ env, name: "clang++" });
+				const clangxx = await std.env.tryWhich({ env, name: "clang++" });
 				tg.assert(clangxx, "Found clang but not clang++.");
 				flavor = "llvm";
 				cc = clang;
@@ -380,21 +384,21 @@ export namespace sdk {
 			}
 		} else {
 			// Check if `clang` is available.
-			let clang = await std.env.tryWhich({ env, name: "clang" });
+			const clang = await std.env.tryWhich({ env, name: "clang" });
 			if (clang) {
 				// If so, try to find `clang++`.
-				let clangxx = await std.env.tryWhich({ env, name: "clang++" });
+				const clangxx = await std.env.tryWhich({ env, name: "clang++" });
 				tg.assert(clangxx, "Found clang but not clang++.");
 				cc = clang;
 				cxx = clangxx;
 			} else {
 				// Try to find gcc.
-				let gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
+				const gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
 				tg.assert(gcc, `Found neither clang nor ${targetPrefix}gcc.`);
 				// If gcc is available, try to find g++.
-				let gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
+				const gxx = await std.env.tryWhich({ env, name: `${targetPrefix}g++` });
 				tg.assert(gxx, `Found ${targetPrefix}gcc but not ${targetPrefix}g++.`);
-				let gfortran = await std.env.tryWhich({
+				const gfortran = await std.env.tryWhich({
 					env,
 					name: `${targetPrefix}gfortran`,
 				});
@@ -405,9 +409,9 @@ export namespace sdk {
 			}
 		}
 
-		let compiler = flavor === "gnu" ? `${targetPrefix}gcc` : "clang";
-		let cxxCompiler = flavor === "gnu" ? `${targetPrefix}g++` : `clang++`;
-		let directory = await std.env.whichArtifact({ name: compiler, env });
+		const compiler = flavor === "gnu" ? `${targetPrefix}gcc` : "clang";
+		const cxxCompiler = flavor === "gnu" ? `${targetPrefix}g++` : `clang++`;
+		const directory = await std.env.whichArtifact({ name: compiler, env });
 
 		tg.assert(directory, "Unable to find toolchain directory.");
 		cc = await tg.symlink(tg`${directory}/bin/${compiler}`);
@@ -417,21 +421,21 @@ export namespace sdk {
 		}
 
 		// Grab the linker from the same directory as the compiler, not just by using `Env.which`.
-		let linkerName =
+		const linkerName =
 			os === "darwin"
 				? isCross
 					? `${targetPrefix}ld.bfd`
 					: "ld"
 				: flavor === "gnu"
-				  ? `${targetPrefix}ld`
-				  : "ld.lld";
-		let foundLd = await directory.tryGet(`bin/${linkerName}`);
+					? `${targetPrefix}ld`
+					: "ld.lld";
+		const foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
 		if (foundLd) {
 			ld = await tg.symlink(tg`${directory}/bin/${linkerName}`);
 		} else {
 			// If we couldn't find the linker, try to find it in the PATH.
-			let ldDir = await std.env.whichArtifact({ env, name: linkerName });
+			const ldDir = await std.env.whichArtifact({ env, name: linkerName });
 			if (ldDir) {
 				ld = await tg.symlink(tg`${ldDir}/bin/${linkerName}`);
 			}
@@ -449,17 +453,17 @@ export namespace sdk {
 					ldso = undefined;
 				} else {
 					libDir = tg.Directory.expect(await directory.tryGet(`${target}/lib`));
-					let ldsoPath = libc.interpreterName(target);
+					const ldsoPath = libc.interpreterName(target);
 					ldso = tg.File.expect(await libDir.tryGet(ldsoPath));
 				}
 			} else {
 				// Go through LIBRARY_PATH to find the dynamic linker.
-				let ldsoPath = libc.interpreterName(host);
-				for await (let [_parent, dir] of std.env.dirsInVar({
+				const ldsoPath = libc.interpreterName(host);
+				for await (const [_parent, dir] of std.env.dirsInVar({
 					env,
 					key: "LIBRARY_PATH",
 				})) {
-					let foundLdso = await dir.tryGet(ldsoPath);
+					const foundLdso = await dir.tryGet(ldsoPath);
 					if (foundLdso) {
 						ldso = tg.File.expect(foundLdso);
 						libDir = dir;
@@ -469,12 +473,12 @@ export namespace sdk {
 			}
 		} else {
 			if (isCross) {
-				let sysroot = tg.Directory.expect(
+				const sysroot = tg.Directory.expect(
 					await directory.tryGet(`${target}/sysroot`),
 				);
 				libDir = tg.Directory.expect(await sysroot.tryGet(`lib`));
 				if (std.triple.environment(target) === "gnu") {
-					let ldsoPath = libc.interpreterName(target);
+					const ldsoPath = libc.interpreterName(target);
 					ldso = tg.File.expect(await sysroot.tryGet(`lib/${ldsoPath}`));
 				} else {
 					ldso = tg.File.expect(await sysroot.tryGet(`usr/lib/libc.so`));
@@ -486,7 +490,7 @@ export namespace sdk {
 		tg.assert(libDir, "could not find lib directory");
 
 		// Locate the strip utility.
-		let strip = await std.env.which({ env, name: `${targetPrefix}strip` });
+		const strip = await std.env.which({ env, name: `${targetPrefix}strip` });
 
 		return {
 			cc,
@@ -529,11 +533,11 @@ export namespace sdk {
 	};
 
 	/** Determine whether an SDK supports compiling for a specific target. */
-	export let supportsTarget = async (
+	export const supportsTarget = async (
 		arg: ToolchainEnvArg,
 	): Promise<boolean> => {
-		let detectedHost = await std.triple.host();
-		let target = arg.target ?? detectedHost;
+		const detectedHost = await std.triple.host();
+		const target = arg.target ?? detectedHost;
 		if (
 			std.triple.os(detectedHost) === "darwin" &&
 			std.triple.os(target) === "darwin"
@@ -541,36 +545,36 @@ export namespace sdk {
 			return true;
 		}
 
-		let allTargets = await supportedTargets(arg.env);
+		const allTargets = await supportedTargets(arg.env);
 		return allTargets.some((t) => t === target);
 	};
 
 	/** Obtain the host system for the compilers provided by this env. Throws an error if no compiler is found. */
-	export let determineToolchainHost = async (
+	export const determineToolchainHost = async (
 		arg: ToolchainEnvArg,
 	): Promise<string> => {
-		let { env, host: host_, target: target_ } = arg;
+		const { env, host: host_, target: target_ } = arg;
 		let detectedHost = host_ ?? (await std.triple.host());
-		let target = target_ ?? detectedHost;
-		let isCross = detectedHost !== target;
+		const target = target_ ?? detectedHost;
+		const isCross = detectedHost !== target;
 
 		if (std.triple.os(detectedHost) === "darwin") {
 			return detectedHost;
 		}
 
 		// Locate the C compiler using the CC variable if set, falling back to "cc" in PATH if not.
-		let targetString = isCross ? target : "";
-		let ccEnvVar = isCross ? `CC_${targetString.replace(/-/g, "_")}` : "CC";
+		const targetString = isCross ? target : "";
+		const ccEnvVar = isCross ? `CC_${targetString.replace(/-/g, "_")}` : "CC";
 		let cmd = `$${ccEnvVar}`;
 		let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
-		let targetPrefix = isCross ? `${targetString}-` : "";
+		const targetPrefix = isCross ? `${targetString}-` : "";
 		if (!foundCC) {
-			let clang = await std.env.tryWhich({ env, name: "clang" });
+			const clang = await std.env.tryWhich({ env, name: "clang" });
 			if (clang) {
 				cmd = "clang";
 				foundCC = clang as tg.File | tg.Symlink;
 			} else {
-				let name = `${targetPrefix}cc`;
+				const name = `${targetPrefix}cc`;
 				foundCC = await std.env.tryWhich({ env, name });
 				cmd = name;
 			}
@@ -588,7 +592,7 @@ export namespace sdk {
 
 		if (foundCC instanceof tg.File) {
 			// Inspect the file to see which system it should run on.
-			let metadata = await std.file.executableMetadata(foundCC);
+			const metadata = await std.file.executableMetadata(foundCC);
 			if (metadata.format !== "elf" && metadata.format !== "mach-o") {
 				throw new Error(`Unexpected compiler format ${metadata.format}.`);
 			}
@@ -598,13 +602,13 @@ export namespace sdk {
 			} else if (metadata.format === "mach-o") {
 				detectedArch = metadata.arches[0] ?? "aarch64";
 			}
-			let os = metadata.format === "elf" ? "linux" : "darwin";
-			let arch = detectedArch ?? "x86_64";
+			const os = metadata.format === "elf" ? "linux" : "darwin";
+			const arch = detectedArch ?? "x86_64";
 			detectedHost = `${arch}-${os}`;
 		}
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
-		let output = tg.File.expect(
+		const output = tg.File.expect(
 			await (
 				await tg.target(tg`${cmd} -dumpmachine > $OUTPUT`, {
 					env: std.env.arg(env),
@@ -612,33 +616,33 @@ export namespace sdk {
 				})
 			).output(),
 		);
-		let host = (await output.text()).trim();
+		const host = (await output.text()).trim();
 		std.triple.assert(host);
 		return host;
 	};
 
 	/** Retreive the full range of targets an SDK supports. */
-	export let supportedTargets = async (
+	export const supportedTargets = async (
 		sdk: std.env.Arg,
 	): Promise<Array<string>> => {
 		// Collect all available `*cc` binaries.
-		let foundTargets: Set<string> = new Set();
+		const foundTargets: Set<string> = new Set();
 
-		for await (let [name, _] of std.env.binsInPath({
+		for await (const [name, _] of std.env.binsInPath({
 			env: sdk,
 			predicate: (name) => name.endsWith("-cc"),
 		})) {
-			let triple = name.slice(0, -3);
+			const triple = name.slice(0, -3);
 			foundTargets.add(triple);
 		}
 
 		return Array.from(foundTargets);
 	};
 
-	export let resolveHostAndTarget = async (
+	export const resolveHostAndTarget = async (
 		arg?: HostAndTargetsOptions,
 	): Promise<HostAndTargets> => {
-		let host = arg?.host ?? (await std.triple.host());
+		const host = arg?.host ?? (await std.triple.host());
 		let targets = [];
 		if (arg?.target) {
 			targets.push(arg.target);
@@ -664,26 +668,26 @@ export namespace sdk {
 	};
 
 	/** Compile a program and assert a correct wrapper for the target was produced. If `host == target`, ensure the wrapper execute and produces the expected output. */
-	export let assertCompiler = async (arg: ProxyTestArg) => {
-		let proxiedLinker = arg.proxiedLinker ?? false;
-		let linkerFlavor = arg.linkerFlavor;
+	export const assertCompiler = async (arg: ProxyTestArg) => {
+		const proxiedLinker = arg.proxiedLinker ?? false;
+		const linkerFlavor = arg.linkerFlavor;
 		// Determine requested host and target.
-		let expected = await resolveHostAndTarget({
+		const expected = await resolveHostAndTarget({
 			host: arg.host,
 			target: arg.target,
 		});
-		let expectedHost = expected.host;
+		const expectedHost = expected.host;
 		// There will be exactly one.
 		tg.assert(expected.targets.length === 1);
-		let expectedTarget = expected.targets[0];
+		const expectedTarget = expected.targets[0];
 		tg.assert(expectedTarget);
 
 		// Determine compiler target prefix, if any.
-		let isCross = expectedHost !== expectedTarget;
-		let targetPrefix = isCross ? `${expectedTarget}-` : ``;
+		const isCross = expectedHost !== expectedTarget;
+		const targetPrefix = isCross ? `${expectedTarget}-` : ``;
 
 		// Set up test parameters.
-		let { lang, testProgram, expectedOutput } = arg.parameters;
+		const { lang, testProgram, expectedOutput } = arg.parameters;
 		let cmd;
 		if (lang === "c") {
 			cmd = `${targetPrefix}cc`;
@@ -701,11 +705,12 @@ export namespace sdk {
 		if (lang === "fortran") {
 			langStr = "f95";
 		}
-		let compiledProgram = tg.File.expect(
+		const compiledProgram = tg.File.expect(
 			await (
 				await tg.target(
 					tg`echo "testing ${lang}"
 				set -x
+				echo "WATERMARK 1"
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
 					{
 						env: std.env.arg(arg.sdkEnv),
@@ -716,10 +721,10 @@ export namespace sdk {
 		);
 
 		// Assert the resulting program was compiled for the expected target.
-		let expectedArch = std.triple.arch(expectedTarget);
+		const expectedArch = std.triple.arch(expectedTarget);
 		let metadata = await std.file.executableMetadata(compiledProgram);
 		if (metadata.format === "elf") {
-			let actualArch = metadata.arch;
+			const actualArch = metadata.arch;
 			tg.assert(expectedArch === actualArch);
 
 			// Ensure the correct libc was used.
@@ -733,8 +738,8 @@ export namespace sdk {
 			}
 
 			tg.assert(metadata.format === "elf");
-			let expectedInterpreter = libc.interpreterName(expectedTarget);
-			let actualInterpreter = metadata.interpreter;
+			const expectedInterpreter = libc.interpreterName(expectedTarget);
+			const actualInterpreter = metadata.interpreter;
 			tg.assert(actualInterpreter, "File should have been dynamically linked.");
 			tg.assert(
 				actualInterpreter.includes(expectedInterpreter),
@@ -751,7 +756,7 @@ export namespace sdk {
 
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
-			let testOutput = tg.File.expect(
+			const testOutput = tg.File.expect(
 				await (
 					await tg.target(tg`${compiledProgram} > $OUTPUT`, {
 						host: std.triple.archAndOs(expectedHost),
@@ -759,25 +764,25 @@ export namespace sdk {
 					})
 				).output(),
 			);
-			let outputText = (await testOutput.text()).trim();
+			const outputText = (await testOutput.text()).trim();
 			tg.assert(outputText === expectedOutput);
 		}
 		return true;
 	};
 
 	/** Assert the given env provides everything it should for a particuar arg. */
-	export let assertValid = async (env: std.env.Arg, arg: sdk.Arg) => {
-		let expected = await resolveHostAndTarget(arg);
+	export const assertValid = async (env: std.env.Arg, arg: sdk.Arg) => {
+		const expected = await resolveHostAndTarget(arg);
 
 		// Check that the env provides a host toolchain.
 		await sdk.assertProvidesToolchain({ env });
 
 		// Assert we can determine a host and it matches the expected.
-		let actualHost = await sdk.determineToolchainHost({ env });
-		let actualHostArch = std.triple.arch(actualHost);
-		let expectedHostArch = std.triple.arch(expected.host);
-		let actualHostOs = std.triple.os(actualHost);
-		let expectedHostOs = std.triple.os(expected.host);
+		const actualHost = await sdk.determineToolchainHost({ env });
+		const actualHostArch = std.triple.arch(actualHost);
+		const expectedHostArch = std.triple.arch(expected.host);
+		const actualHostOs = std.triple.os(actualHost);
+		const expectedHostOs = std.triple.os(expected.host);
 		tg.assert(
 			actualHostArch === expectedHostArch,
 			`Given env provides an SDK with host arch ${actualHostArch} instead of expected ${expectedHostArch}.`,
@@ -786,9 +791,9 @@ export namespace sdk {
 			actualHostOs === expectedHostOs,
 			`Given env provides an SDK with host os ${actualHostOs} instead of expected ${expectedHostOs}.`,
 		);
-		let expectedHostEnvironment = std.triple.environment(expected.host);
+		const expectedHostEnvironment = std.triple.environment(expected.host);
 		if (expectedHostEnvironment) {
-			let actualHostEnvironment = std.triple.environment(actualHost);
+			const actualHostEnvironment = std.triple.environment(actualHost);
 			tg.assert(
 				actualHostEnvironment === expectedHostEnvironment,
 				`Given env provides an SDK with host environment ${actualHostEnvironment} instead of expected ${expectedHostEnvironment}.`,
@@ -796,7 +801,7 @@ export namespace sdk {
 		}
 
 		// Assert it can compile and wrap for all requested targets.
-		let allTargets = await sdk.supportedTargets(env);
+		const allTargets = await sdk.supportedTargets(env);
 		// If there is an un-prefixed CC, add the host to the list.
 		if (await std.env.tryWhich({ env, name: "cc" })) {
 			allTargets.push(actualHost);
@@ -911,8 +916,8 @@ export namespace sdk {
 		);
 	};
 
-	export let canonicalTriple = (triple: string): string => {
-		let components = std.triple.components(std.triple.normalize(triple));
+	export const canonicalTriple = (triple: string): string => {
+		const components = std.triple.components(std.triple.normalize(triple));
 		if (components.os === "linux") {
 			return std.triple.create({
 				...components,
@@ -950,16 +955,16 @@ type ValidateCrossTargetArg = {
 	target: string;
 };
 
-let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
-	let { host, target } = arg;
+const validateCrossTarget = (arg: ValidateCrossTargetArg) => {
+	const { host, target } = arg;
 
 	// All triples can compile for themselves.
 	if (host === target) {
 		return true;
 	}
 
-	let hostOs = std.triple.os(host);
-	let targetOs = std.triple.os(target);
+	const hostOs = std.triple.os(host);
+	const targetOs = std.triple.os(target);
 
 	// Darwin supports cross-compiling.
 	if (hostOs === "darwin") {
@@ -976,18 +981,18 @@ let validateCrossTarget = (arg: ValidateCrossTargetArg) => {
 };
 
 /** Merge all lib and lib64 directories into a single lib directory, leaving a symlink. */
-export let mergeLibDirs = async (dir: tg.Directory) => {
-	for await (let [name, artifact] of dir) {
+export const mergeLibDirs = async (dir: tg.Directory) => {
+	for await (const [name, artifact] of dir) {
 		// If we find a lib64, merge it with the adjacent lib.
 		if (artifact instanceof tg.Directory) {
 			if (name === "lib64") {
-				let maybeLibDir = await dir.tryGet("lib");
+				const maybeLibDir = await dir.tryGet("lib");
 				if (!maybeLibDir) {
 					// There was no adjacent lib - this is best effort. Do nothing.
 					continue;
 				}
 				// If we found it, deep merge the lib64 into it.
-				let libDir = maybeLibDir;
+				const libDir = maybeLibDir;
 				tg.assert(libDir instanceof tg.Directory);
 				let mergedLibDir = await tg.directory(libDir, artifact);
 
@@ -1001,7 +1006,7 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 				});
 			} else {
 				// For all other directories, just recurse.
-				let mergedSubdir = await mergeLibDirs(artifact);
+				const mergedSubdir = await mergeLibDirs(artifact);
 				dir = await tg.directory(dir, {
 					[name]: mergedSubdir,
 				});
@@ -1012,12 +1017,12 @@ export let mergeLibDirs = async (dir: tg.Directory) => {
 };
 
 /** Assert the given ELF file contains a comment that includes the provided string. */
-export let assertComment = async (
+export const assertComment = async (
 	exe: tg.File,
 	toolchain: std.env.Arg,
 	textToMatch: string,
 ) => {
-	let elfComment = tg.File.expect(
+	const elfComment = tg.File.expect(
 		await (
 			await tg.target(
 				tg`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`,
@@ -1027,13 +1032,13 @@ export let assertComment = async (
 			)
 		).output(),
 	);
-	let text = await elfComment.text();
+	const text = await elfComment.text();
 	tg.assert(text.includes(textToMatch));
 };
 
 //////// TESTS
 
-let testCParameters: ProxyTestParameters = {
+const testCParameters: ProxyTestParameters = {
 	expectedOutput: "Hello, Tangram!",
 	lang: "c",
 	testProgram: tg.file(`
@@ -1046,7 +1051,7 @@ let testCParameters: ProxyTestParameters = {
 `),
 };
 
-let testCxxParameters: ProxyTestParameters = {
+const testCxxParameters: ProxyTestParameters = {
 	expectedOutput: `new Tangram().send("Hello!")`,
 	lang: "c++",
 	testProgram: tg.file(`
@@ -1059,7 +1064,7 @@ let testCxxParameters: ProxyTestParameters = {
 `),
 };
 
-let testFortranParameters: ProxyTestParameters = {
+const testFortranParameters: ProxyTestParameters = {
 	expectedOutput: "Hello, Fortran!",
 	lang: "fortran",
 	testProgram: tg.file(`
@@ -1075,84 +1080,84 @@ type ProxyTestParameters = {
 	testProgram: tg.Unresolved<tg.File>;
 };
 
-export let testMoldSdk = tg.target(async () => {
-	let detectedHost = await std.triple.host();
+export const testMoldSdk = tg.target(async () => {
+	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
 
-	let sdkArg = { host: detectedHost, linker: "mold" as const };
+	const sdkArg = { host: detectedHost, linker: "mold" as const };
 
-	let moldSdk = await sdk(sdkArg);
+	const moldSdk = await sdk(sdkArg);
 
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(moldSdk, sdkArg);
 	return moldSdk;
 });
 
-export let testGccLldSdk = tg.target(async () => {
-	let detectedHost = await std.triple.host();
+export const testGccLldSdk = tg.target(async () => {
+	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
 
-	let sdkArg = { host: detectedHost, linker: "lld" as const };
+	const sdkArg = { host: detectedHost, linker: "lld" as const };
 
-	let lldSdk = await sdk(sdkArg);
+	const lldSdk = await sdk(sdkArg);
 
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(lldSdk, sdkArg);
 	return lldSdk;
 });
 
-export let testMuslSdk = tg.target(async () => {
-	let host = await std.triple.host();
+export const testMuslSdk = tg.target(async () => {
+	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
 	}
-	let muslHost = std.triple.create(host, { environment: "musl" });
-	let sdkArg = { host: muslHost };
-	let env = await sdk(sdkArg);
+	const muslHost = std.triple.create(host, { environment: "musl" });
+	const sdkArg = { host: muslHost };
+	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
 });
 
-export let testCrossGccSdk = tg.target(async () => {
-	let detectedHost = await std.triple.host();
-	let detectedOs = std.triple.os(detectedHost);
+export const testCrossGccSdk = tg.target(async () => {
+	const detectedHost = await std.triple.host();
+	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
 		throw new Error(`Cross-compilation is not supported on Darwin`);
 	}
-	let detectedArch = std.triple.arch(detectedHost);
-	let crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
-	let crossTarget = sdk.canonicalTriple(
+	const detectedArch = std.triple.arch(detectedHost);
+	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
+	const crossTarget = sdk.canonicalTriple(
 		std.triple.create(detectedHost, { arch: crossArch }),
 	);
-	let sdkArg = { host: detectedHost, target: crossTarget };
-	let env = await sdk(sdkArg);
+	const sdkArg = { host: detectedHost, target: crossTarget };
+	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
 });
 
-export let testLLVMSdk = tg.target(async () => {
-	let env = await sdk({ toolchain: "llvm" });
+export const testLLVMSdk = tg.target(async () => {
+	const env = await sdk({ toolchain: "llvm" });
 	await sdk.assertValid(env, { toolchain: "llvm" });
 	return env;
 });
 
-export let testLLVMMoldSdk = tg.target(async () => {
-	let detectedHost = await std.triple.host();
+export const testLLVMMoldSdk = tg.target(async () => {
+	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
 
-	let sdkArg = {
+	const sdkArg = {
 		host: detectedHost,
 		linker: "mold" as const,
 		toolchain: "llvm" as const,
 	};
 
-	let moldSdk = await sdk(sdkArg);
+	const moldSdk = await sdk(sdkArg);
 
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(moldSdk, sdkArg);
@@ -1160,54 +1165,54 @@ export let testLLVMMoldSdk = tg.target(async () => {
 	return moldSdk;
 });
 
-export let testLLVMBfdSdk = tg.target(async () => {
-	let detectedHost = await std.triple.host();
+export const testLLVMBfdSdk = tg.target(async () => {
+	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`bfd is only available on Linux`);
 	}
 
-	let sdkArg = {
+	const sdkArg = {
 		host: detectedHost,
 		linker: "bfd" as const,
 		toolchain: "llvm" as const,
 	};
 
-	let bfdSdk = await sdk(sdkArg);
+	const bfdSdk = await sdk(sdkArg);
 
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(bfdSdk, sdkArg);
 	return bfdSdk;
 });
 
-export let testExplicitGlibcVersionSdk = tg.target(async () => {
-	let host = await std.triple.host();
+export const testExplicitGlibcVersionSdk = tg.target(async () => {
+	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`glibc is only available on Linux`);
 	}
-	let oldGlibcHost = std.triple.create(host, {
+	const oldGlibcHost = std.triple.create(host, {
 		environment: "gnu",
 		environmentVersion: "2.37",
 	});
-	let sdkArg = { host: oldGlibcHost };
-	let env = await sdk(sdkArg);
+	const sdkArg = { host: oldGlibcHost };
+	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
 });
 
-export let testLLVMMuslSdk = tg.target(async () => {
-	let host = await std.triple.host();
+export const testLLVMMuslSdk = tg.target(async () => {
+	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
 	}
-	let muslHost = std.triple.create(host, { environment: "musl" });
-	let sdkArg = { host: muslHost, toolchain: "llvm" as const };
-	let env = await sdk(sdkArg);
+	const muslHost = std.triple.create(host, { environment: "musl" });
+	const sdkArg = { host: muslHost, toolchain: "llvm" as const };
+	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
 });
 
-export let testDarwinToLinux = tg.target(async () => {
-	let targets = [
+export const testDarwinToLinux = tg.target(async () => {
+	const targets = [
 		"aarch64-unknown-linux-gnu",
 		"aarch64-unknown-linux-musl",
 		"x86_64-unknown-linux-gnu",
@@ -1219,32 +1224,32 @@ export let testDarwinToLinux = tg.target(async () => {
 	return true;
 });
 
-export let testDarwinToLinuxSingle = tg.target(async (target: string) => {
-	let host = await std.triple.host();
+export const testDarwinToLinuxSingle = tg.target(async (target: string) => {
+	const host = await std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		throw new Error(`This test is only valid on Darwin`);
 	}
 
-	let sdkArg = { host, target };
-	let env = await sdk(sdkArg);
+	const sdkArg = { host, target };
+	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
 });
 
-export let testLinuxToDarwin = tg.target(async () => {
-	let host = await std.triple.host();
+export const testLinuxToDarwin = tg.target(async () => {
+	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`This test is only valid on Linux`);
 	}
 
-	let target = "aarch64-apple-darwin";
-	let sdkArg = { host, target };
-	let env = await sdk(sdkArg);
+	const target = "aarch64-apple-darwin";
+	const sdkArg = { host, target };
+	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return true;
 });
 
-export let testNativeProxiedSdks = async () => {
+export const testNativeProxiedSdks = async () => {
 	await Promise.all(
 		(await nativeProxiedSdkArgs()).map(async (arg) => {
 			await sdk.assertValid(await sdk(arg), arg);
@@ -1253,33 +1258,33 @@ export let testNativeProxiedSdks = async () => {
 	return true;
 };
 
-export let nativeProxiedSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
-	let detectedHost = await std.triple.host();
-	let detectedOs = std.triple.os(detectedHost);
+export const nativeProxiedSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
+	const detectedHost = await std.triple.host();
+	const detectedOs = std.triple.os(detectedHost);
 
 	if (detectedOs === "darwin") {
 		return [{}];
 	}
 
-	let hostGnu = sdk.canonicalTriple(detectedHost);
+	const hostGnu = sdk.canonicalTriple(detectedHost);
 
 	return [{}, { toolchain: "llvm" }, { linker: "mold" }];
 };
 
-export let allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
-	let detectedHost = await std.triple.host();
-	let detectedOs = std.triple.os(detectedHost);
+export const allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
+	const detectedHost = await std.triple.host();
+	const detectedOs = std.triple.os(detectedHost);
 
 	if (detectedOs === "darwin") {
 		return [{}, { proxy: false }];
 	}
 
-	let hostGnu = sdk.canonicalTriple(detectedHost);
-	let hostMusl = std.triple.create(hostGnu, { environment: "musl" });
-	let detectedHostArch = std.triple.arch(detectedHost);
-	let crossArch = detectedHostArch === "x86_64" ? "aarch64" : "x86_64";
-	let crossGnu = std.triple.create(hostGnu, { arch: crossArch });
-	let crossMusl = std.triple.create(crossGnu, { environment: "musl" });
+	const hostGnu = sdk.canonicalTriple(detectedHost);
+	const hostMusl = std.triple.create(hostGnu, { environment: "musl" });
+	const detectedHostArch = std.triple.arch(detectedHost);
+	const crossArch = detectedHostArch === "x86_64" ? "aarch64" : "x86_64";
+	const crossGnu = std.triple.create(hostGnu, { arch: crossArch });
+	const crossMusl = std.triple.create(crossGnu, { environment: "musl" });
 
 	return [
 		{},
@@ -1314,7 +1319,7 @@ export let allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 	];
 };
 
-export let assertAllSdks = async () => {
+export const assertAllSdks = async () => {
 	await Promise.all(
 		(await allSdkArgs()).map(async (arg) => {
 			await sdk.assertValid(await sdk(arg), arg);

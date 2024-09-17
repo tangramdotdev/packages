@@ -1,16 +1,16 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 import zlib from "../dependencies/zlib.tg.ts";
 
-let metadata = {
+const metadata = {
 	name: "git",
 	version: "2.45.2",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let extension = ".tar.xz";
-	let base = `https://mirrors.edge.kernel.org/pub/software/scm/git`;
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const extension = ".tar.xz";
+	const base = `https://mirrors.edge.kernel.org/pub/software/scm/git`;
+	const checksum =
 		"sha256:51bfe87eb1c02fed1484051875365eeab229831d30d0cec5d89a14f9e40e9adb";
 	return await std
 		.download({ base, checksum, name, version, extension })
@@ -26,36 +26,36 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let git = tg.target(async (arg?: Arg) => {
-	let {
+export const git = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let sourceDir = source_ ?? source();
+	const sourceDir = source_ ?? source();
 
-	let buildPhase = `make NO_GETTEXT=1 -j "$(nproc)"`;
+	const buildPhase = `make NO_GETTEXT=1 -j "$(nproc)"`;
 
-	let configure = {
+	const configure = {
 		args: ["--with-openssl=NO", "--without-tcltk"],
 	};
 
-	let install = `make NO_GETTEXT=1 install`;
+	const install = `make NO_GETTEXT=1 install`;
 
-	let phases = {
+	const phases = {
 		build: buildPhase,
 		configure,
 		install,
 	};
 
-	let env = std.env.arg(env_, zlib({ build, host }));
+	const env = std.env.arg(env_, zlib({ build, host }));
 
-	let result = std.autotools.build({
+	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,
@@ -68,7 +68,7 @@ export let git = tg.target(async (arg?: Arg) => {
 
 export default git;
 
-export let test = tg.target(async () => {
+export const test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFunction: git,
 		binaries: ["git"],

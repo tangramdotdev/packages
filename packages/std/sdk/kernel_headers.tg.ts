@@ -1,21 +1,21 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://www.kernel.org",
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.10.6",
+	version: "6.10.9",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let checksum =
-		"sha256:e0d50d5b74f8599375660e79f187af7493864dba5ff6671b14983376a070b3d1";
-	let extension = ".tar.xz";
-	let majorVersion = version.split(".")[0];
-	let base = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x`;
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const checksum =
+		"sha256:a4489b70e0a7c2dc8f501b9cd7fc76989be2febb5519e163ecf816064f2f6858";
+	const extension = ".tar.xz";
+	const majorVersion = version.split(".")[0];
+	const base = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x`;
 	return await std
 		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
@@ -31,8 +31,8 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let kernelHeaders = tg.target(async (arg?: Arg) => {
-	let {
+export const kernelHeaders = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
@@ -40,12 +40,12 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let buildTriple = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const buildTriple = build_ ?? host;
 
-	let system = std.triple.archAndOs(buildTriple);
+	const system = std.triple.archAndOs(buildTriple);
 
-	let sourceDir = source_ ?? source();
+	const sourceDir = source_ ?? source();
 
 	tg.assert(
 		std.triple.os(system) === "linux",
@@ -53,7 +53,7 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 	);
 
 	// NOTE - the kernel build wants the string x86_64 on x86_64 but arm64 on aarch64.
-	let tripleArch = std.triple.arch(host);
+	const tripleArch = std.triple.arch(host);
 	let karch = tripleArch;
 	if (karch === "aarch64") {
 		karch = "arm64";
@@ -61,36 +61,36 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 		karch = "arm";
 	}
 
-	let build = {
+	const build = {
 		body: tg`make -C ${sourceDir} O="\$PWD" -j"\$(nproc)" ARCH=${karch} headers`,
 		post: "find usr/include -type f ! -name '*.h' -delete",
 	};
-	let install = {
+	const install = {
 		pre: "mkdir -p $OUTPUT",
 		body: `cp -r usr/include/. $OUTPUT && mkdir -p $OUTPUT/config && echo ${metadata.version}-default > $OUTPUT/config/kernel.release`,
 	};
-	let order = ["build", "install"];
+	const order = ["build", "install"];
 
-	let envs: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	if (sdk !== false) {
 		// Add the toolchain.
-		let sdkArg =
+		const sdkArg =
 			typeof sdk === "boolean"
 				? { host: buildTriple, target: buildTriple }
 				: sdk;
 		envs.push(std.sdk(sdkArg));
 
 		// Add the standard utils, built with the default SDK.
-		let utils = await std.utils.env({
+		const utils = await std.utils.env({
 			host,
 			sdk: false,
 			env: std.sdk({ host }),
 		});
 		envs.push(utils);
 	}
-	let env = std.env.arg(...envs);
+	const env = std.env.arg(...envs);
 
-	let result = tg.Directory.expect(
+	const result = tg.Directory.expect(
 		await std.phases.build(
 			{
 				env,
@@ -107,9 +107,9 @@ export let kernelHeaders = tg.target(async (arg?: Arg) => {
 
 export default kernelHeaders;
 
-export let test = tg.target(async () => {
-	let detectedHost = await std.triple.host();
-	let host = await bootstrap.toolchainTriple(detectedHost);
+export const test = tg.target(async () => {
+	const detectedHost = await std.triple.host();
+	const host = await bootstrap.toolchainTriple(detectedHost);
 	if (std.triple.os(host) !== "linux") {
 		return;
 	}
@@ -118,27 +118,27 @@ export let test = tg.target(async () => {
 	await testKernelHeaders(host);
 
 	// test cross
-	let hostArch = std.triple.arch(host);
-	let targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	let target = std.triple.create(host, { arch: targetArch });
+	const hostArch = std.triple.arch(host);
+	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	const target = std.triple.create(host, { arch: targetArch });
 	await testKernelHeaders(host, target);
 
 	return true;
 });
 
-export let testKernelHeaders = async (host: string, target?: string) => {
-	let target_ = target ?? host;
-	let buildEnv = std.env.arg(bootstrap.sdk(host), bootstrap.make.build(host));
-	let headers = await kernelHeaders({
+export const testKernelHeaders = async (host: string, target?: string) => {
+	const target_ = target ?? host;
+	const buildEnv = std.env.arg(bootstrap.sdk(host), bootstrap.make.build(host));
+	const headers = await kernelHeaders({
 		build: host,
 		env: buildEnv,
 		host: target_,
 		sdk: false,
 	});
-	let configFile = tg.File.expect(await headers.get("config/kernel.release"));
-	let configFileContents = (await configFile.text()).trim();
+	const configFile = tg.File.expect(await headers.get("config/kernel.release"));
+	const configFileContents = (await configFile.text()).trim();
 	tg.assert(configFileContents === `${metadata.version}-default`);
-	let kernelH = tg.File.expect(await headers.get("linux/kernel.h"));
-	let kernelHContents = await kernelH.text();
+	const kernelH = tg.File.expect(await headers.get("linux/kernel.h"));
+	const kernelHContents = await kernelH.text();
 	tg.assert(kernelHContents.includes("#ifndef _LINUX_KERNEL_H"));
 };

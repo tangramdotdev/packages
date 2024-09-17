@@ -96,9 +96,6 @@ struct Options {
 
 	/// Whether the linker should run in passthrough mode.
 	passthrough: bool,
-
-	/// The path to the wrapper.
-	wrapper_id: tg::file::Id,
 }
 
 // Read the options from the environment and arguments.
@@ -116,13 +113,6 @@ fn read_options() -> tg::Result<Options> {
 
 	// Get the passthrough flag.
 	let mut passthrough = std::env::var("TANGRAM_LINKER_PASSTHROUGH").is_ok();
-
-	// Get the wrapper path.
-	let wrapper_id = tg::file::Id::from_str(
-		&std::env::var("TANGRAM_LINKER_WRAPPER_ID")
-			.map_err(|error| tg::error!(source = error, "TANGRAM_LINKER_WRAPPER_ID must be set"))?,
-	)
-	.map_err(|error| tg::error!(source = error, "Could not parse wrapper ID"))?;
 
 	// Get the interpreter path.
 	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH")
@@ -235,7 +225,6 @@ fn read_options() -> tg::Result<Options> {
 		max_depth,
 		output_path,
 		passthrough,
-		wrapper_id,
 	};
 
 	Ok(options)
@@ -294,32 +283,50 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let library_paths = std::iter::once(command_line_library_path)
 		.chain(
 			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
-				let mut symlink_data = tangram_std::template_data_to_symlink_data(
+				let symlink_data = tangram_std::template_data_to_symlink_data(
 					tangram_std::unrender(library_path)?.data(&tg).await?,
 				)?;
-				if symlink_data.artifact.is_none() {
-					tracing::debug!(
-						"Library path points into working directory. Creating directory."
-					);
-					if let Some(ref library_path) = symlink_data.path {
-						if let Ok(ref canonicalized_path) = std::fs::canonicalize(library_path) {
-							symlink_data =
-								checkin_local_library_path(&tg, canonicalized_path).await?;
-						} else {
-							tracing::warn!(
+				let artifact_path = if let tg::symlink::Data::Normal { artifact, path } =
+					symlink_data.clone()
+				{
+					if let Some(artifact) = artifact {
+						Some(
+							tangram_std::manifest::ArtifactPath::with_artifact_id_and_path(
+								artifact, path,
+							),
+						)
+					} else {
+						tracing::debug!(
+							"Library path points into working directory: {:?}. Creating directory.",
+							path
+						);
+						if let Some(ref library_path) = path {
+							if let Ok(ref canonicalized_path) = std::fs::canonicalize(
+								std::path::PathBuf::from(library_path.clone()),
+							) {
+								Some(checkin_local_library_path(&tg, canonicalized_path).await?)
+							} else {
+								tracing::warn!(
 								"Could not canonicalize library path {library_path:?}. Skipping."
 							);
+								None
+							}
+						} else {
+							tracing::warn!("Library path has no artifact or subpath, skipping.");
+							None
 						}
-					} else {
-						tracing::warn!("Library path has no artifact or subpath, skipping.");
 					}
-				}
-				Ok::<_, tg::Error>(symlink_data)
+				} else {
+					None
+				};
+				Ok::<_, tg::Error>(artifact_path)
 			}))
-			.await?,
+			.await?
+			.into_iter()
+			.flatten(),
 		)
 		.collect_vec();
-	tracing::debug!(?library_paths, "Library path symlinks");
+	tracing::debug!(?library_paths, "Library paths");
 
 	// Obtain the file artifact from the output path.
 	let output_file = {
@@ -331,7 +338,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			&tg,
 			tg::artifact::checkin::Arg {
 				destructive: false,
-				path: output_path,
+				deterministic: true,
+				locked: false,
+				path: output_path.into(),
 			},
 		)
 		.await?
@@ -342,16 +351,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	let library_paths = if library_paths.is_empty() {
 		None
 	} else {
-		let library_paths: HashSet<tg::symlink::Id, Hasher> =
-			futures::future::try_join_all(library_paths.into_iter().map(|symlink_data| async {
-				let object = tg::symlink::Object::try_from(symlink_data).unwrap();
-				let symlink = tg::Symlink::with_object(object);
-				let id = symlink.id(&tg).await?;
-				Ok::<_, tg::Error>(id.clone())
-			}))
-			.await?
-			.into_iter()
-			.collect();
+		let library_paths: HashSet<tangram_std::manifest::ArtifactPath, Hasher> =
+			library_paths.into_iter().collect();
+
 		let strategy = options.library_path_optimization;
 		tracing::trace!(
 			?library_paths,
@@ -389,70 +391,38 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let manifest =
 			create_manifest(&tg, output_artifact_id, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
-		let references = manifest
-			.references()
-			.into_iter()
-			.map(tg::Artifact::with_id)
-			.collect_vec();
 
-		// Obtain the wrapper contents blob.
-		let wrapper = tg::File::with_id(options.wrapper_id.clone());
-		let wrapper_contents = wrapper.contents(&tg).await?;
-		let wrapper_size = wrapper_contents.size(&tg).await?;
-
-		// Serialize the manifest.
-		let mut manifest = serde_json::to_vec(&manifest)
-			.map_err(|error| tg::error!(source = error, "failed to serialize the manifest"))?;
-
-		// Add three 64-bit values (manifest length, version, magic number).
-		manifest.reserve_exact(3 * std::mem::size_of::<u64>());
-		let suffix = u64::try_from(manifest.len())
-			.unwrap()
-			.to_le_bytes()
-			.into_iter()
-			.chain(tangram_std::manifest::VERSION.to_le_bytes().into_iter())
-			.chain(tangram_std::manifest::MAGIC_NUMBER.iter().copied());
-		manifest.extend(suffix);
-
-		// Create the manifest blob.
-		let manifest = std::io::Cursor::new(manifest);
-		let manifest_blob = tg::Blob::with_reader(&tg, manifest).await?;
-		let manifest_size = manifest_blob.size(&tg).await?;
-
-		// Create a new blob with the wrapper contents and the manifest, keeping the wrapper in a separate blob.
-		let output_blob = tg::Blob::new(vec![
-			tg::branch::Child {
-				blob: wrapper_contents,
-				size: wrapper_size,
-			},
-			tg::branch::Child {
-				blob: manifest_blob,
-				size: manifest_size,
-			},
-		]);
+		// Write the manifest to a wrapper.
+		let new_wrapper = manifest.write(&tg).await?;
+		tracing::trace!(?new_wrapper);
 
 		// Create a file with the new blob and references.
-		Some(
-			tg::File::builder(output_blob)
-				.executable(true)
-				.references(references.into_iter().map(Into::into).collect_vec())
-				.build(),
-		)
+		Some(new_wrapper)
 	} else {
 		// If the linker generated a library, then add the library paths to its references.
 		if library_paths.is_some() {
-			let references = library_paths
-				.unwrap()
-				.into_iter()
-				.map(|library_path_id| tg::Artifact::with_id(library_path_id.clone().into()))
-				.collect_vec();
+			let dependencies = BTreeMap::from_iter(
+				futures::future::try_join_all(library_paths.unwrap().into_iter().map(
+					|library_path| async {
+						let symlink_id = tg::Symlink::from(library_path).id(&tg).await?;
+						let object_id = tg::object::Id::from(symlink_id);
+						let key = tg::Reference::with_object(&object_id);
+						let value = tg::file::Dependency {
+							object: tg::Object::with_id(object_id),
+							tag: None,
+						};
+						Ok::<_, tg::Error>((key, value))
+					},
+				))
+				.await?,
+			);
 			let output_file_contents = output_file.contents(&tg).await?;
 			// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
 			let output_file_executable = output_file.executable(&tg).await?;
 			Some(
 				tg::File::builder(output_file_contents)
 					.executable(output_file_executable)
-					.references(references)
+					.dependencies(dependencies)
 					.build(),
 			)
 		} else {
@@ -475,9 +445,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				&tg,
 				tg::artifact::checkout::Arg {
 					bundle: false,
+					dependencies: true,
 					force: true,
-					path: Some(output_path.try_into()?),
-					references: false,
+					path: Some(output_path),
 				},
 			)
 			.await?;
@@ -490,7 +460,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 async fn checkin_local_library_path(
 	tg: &impl tg::Handle,
 	library_path: &impl AsRef<std::path::Path>,
-) -> tg::Result<tg::symlink::Data> {
+) -> tg::Result<tangram_std::manifest::ArtifactPath> {
 	let library_path = library_path.as_ref();
 	tracing::debug!(?library_path, "Checking in local library path");
 	// Get a stream of directory entries.
@@ -527,7 +497,9 @@ async fn checkin_local_library_path(
 					tg,
 					tg::artifact::checkin::Arg {
 						destructive: false,
-						path: library_candidate_path,
+						deterministic: true,
+						locked: false,
+						path: library_candidate_path.into(),
 					},
 				)
 				.await?
@@ -546,10 +518,10 @@ async fn checkin_local_library_path(
 		.await?;
 
 	// Construct the directory.
-	let directory = tg::Directory::new(entries);
-	let symlink = tg::Symlink::new(Some(directory.into()), None);
-	let symlink_data = symlink.data(tg).await?;
-	Ok(symlink_data)
+	let directory = tg::Directory::with_entries(entries);
+	let directory_id = directory.id(tg).await?;
+	let artifact_path = tangram_std::manifest::ArtifactPath::with_artifact_id(directory_id);
+	Ok(artifact_path)
 }
 
 fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
@@ -566,7 +538,7 @@ async fn create_manifest<H: BuildHasher>(
 	ld_output_id: tg::artifact::Id,
 	options: &Options,
 	interpreter: InterpreterRequirement,
-	library_paths: Option<HashSet<tg::symlink::Id, H>>,
+	library_paths: Option<HashSet<tangram_std::manifest::ArtifactPath, H>>,
 ) -> tg::Result<tangram_std::Manifest> {
 	// Create the interpreter.
 	let interpreter = {
@@ -586,30 +558,27 @@ async fn create_manifest<H: BuildHasher>(
 			},
 			InterpreterRequirement::None => None,
 		};
+		tracing::trace!(?config, "Interpreter configuration");
 
 		// Render the library paths.
 		let library_paths = if let Some(library_paths) = library_paths {
-			let result = futures::future::try_join_all(library_paths.into_iter().map(|id| async {
-				let symlink = tg::Symlink::with_id(id);
-				let data = symlink.data(tg).await?;
-				Ok::<_, tg::Error>(data)
-			}))
-			.await?;
+			let result = library_paths.into_iter().collect_vec();
 			Some(result)
 		} else {
 			None
 		};
+		tracing::trace!(?library_paths, "Library paths");
 
 		if let Some((path, interpreter_flavor)) = config {
 			// Unrender the interpreter path.
 			let path = tangram_std::unrender(&path)?;
-			let path = tangram_std::template_data_to_symlink_data(path.data(tg).await?)?;
-			tracing::trace!(?path, "Interpreter path");
+			// Attempt to convert the path to an artifact path, but defer the error until we know the interpreter flavor.
+			let path = tangram_std::manifest::ArtifactPath::try_from(path.data(tg).await?);
 
 			// Unrender the preloads.
 			let mut preloads = None;
 			if let Some(injection_path) = options.injection_path.as_deref() {
-				preloads = Some(vec![tangram_std::template_data_to_symlink_data(
+				preloads = Some(vec![tangram_std::manifest::ArtifactPath::try_from(
 					tangram_std::unrender(injection_path)?.data(tg).await?,
 				)?]);
 			}
@@ -632,7 +601,7 @@ async fn create_manifest<H: BuildHasher>(
 				)),
 				InterpreterFlavor::Gnu => Some(tangram_std::manifest::Interpreter::LdLinux(
 					tangram_std::manifest::LdLinuxInterpreter {
-						path,
+						path: path?,
 						library_paths,
 						preloads,
 						args,
@@ -640,7 +609,7 @@ async fn create_manifest<H: BuildHasher>(
 				)),
 				InterpreterFlavor::Musl => Some(tangram_std::manifest::Interpreter::LdMusl(
 					tangram_std::manifest::LdMuslInterpreter {
-						path,
+						path: path?,
 						library_paths,
 						preloads,
 						args,
@@ -654,10 +623,9 @@ async fn create_manifest<H: BuildHasher>(
 	};
 
 	// Create the executable.
-	let executable = tangram_std::manifest::Executable::Path(tg::symlink::Data {
-		artifact: Some(ld_output_id),
-		path: None,
-	});
+	let executable = tangram_std::manifest::Executable::Path(
+		tangram_std::manifest::ArtifactPath::with_artifact_id(ld_output_id),
+	);
 
 	// Create empty values for env and args.
 	let env = None;
@@ -738,7 +706,7 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 	tg: &impl tg::Handle,
 	library_candidate_paths: &[PathBuf],
 	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
-) -> tg::Result<tg::symlink::Data> {
+) -> tg::Result<tangram_std::manifest::ArtifactPath> {
 	let mut entries = BTreeMap::new();
 	for library_candidate_path in library_candidate_paths {
 		if let Ok(AnalyzeOutputFileOutput {
@@ -753,7 +721,9 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 					tg,
 					tg::artifact::checkin::Arg {
 						destructive: false,
-						path: library_candidate_path,
+						deterministic: true,
+						locked: false,
+						path: library_candidate_path.into(),
 					},
 				)
 				.await?
@@ -767,10 +737,10 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 	}
 
 	// Construct the directory.
-	let directory = tg::Directory::new(entries);
-	let symlink = tg::Symlink::new(Some(directory.into()), None);
-	let symlink_data = symlink.data(tg).await?;
-	Ok(symlink_data)
+	let directory = tg::Directory::with_entries(entries);
+	let directory_id = directory.id(tg).await?;
+	let artifact_path = tangram_std::manifest::ArtifactPath::with_artifact_id(directory_id);
+	Ok(artifact_path)
 }
 
 /// Determine whether the given argument should be considered a library candidate.
@@ -795,11 +765,11 @@ fn is_library_candidate(arg: &str) -> bool {
 async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tg: &impl tg::Handle,
 	file: &tg::File,
-	library_paths: HashSet<tg::symlink::Id, H>,
+	library_paths: HashSet<tangram_std::manifest::ArtifactPath, H>,
 	needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
 	strategy: LibraryPathOptimizationLevel,
 	max_depth: usize,
-) -> tg::Result<HashSet<tg::symlink::Id, H>> {
+) -> tg::Result<HashSet<tangram_std::manifest::ArtifactPath, H>> {
 	if matches!(strategy, LibraryPathOptimizationLevel::None) || library_paths.is_empty() {
 		return Ok(library_paths);
 	}
@@ -835,7 +805,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			}
 		}
 	}
-	let directory = tg::Directory::new(entries);
+	let directory = tg::Directory::with_entries(entries);
 	let dir_id = directory.id(tg).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
@@ -847,7 +817,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	resolved_dirs: HashSet<tg::directory::Id, H>,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
-) -> tg::Result<HashSet<tg::symlink::Id, H>> {
+) -> tg::Result<HashSet<tangram_std::manifest::ArtifactPath, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|id| async {
 		tg::Artifact::from(tg::Directory::with_id(id.clone()))
 			.check_out(tg, tg::artifact::checkout::Arg::default())
@@ -855,7 +825,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 		Ok::<_, tg::Error>(())
 	}))
 	.await?;
-	let result = store_dirs_as_symlinks(tg, resolved_dirs).await?;
+	let result = store_dirs_as_artifact_paths(&resolved_dirs);
 	report_missing_libraries(tg, needed_libraries, &result).await?;
 	Ok(result)
 }
@@ -864,7 +834,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 async fn report_missing_libraries<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
 	needed_libraries: &HashMap<String, Option<tg::directory::Id>, H>,
-	library_paths: &HashSet<tg::symlink::Id, H>,
+	library_paths: &HashSet<tangram_std::manifest::ArtifactPath, H>,
 ) -> tg::Result<()> {
 	let mut found_libraries = HashSet::default();
 	for library in needed_libraries.keys() {
@@ -873,11 +843,7 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 			"could not determine basename for library {library}"
 		))?;
 		for library_path in library_paths {
-			let symlink = tg::Symlink::with_id(library_path.clone());
-			let artifact = symlink.artifact(tg).await?;
-			let artifact = artifact
-				.as_ref()
-				.ok_or(tg::error!("expected a directory"))?;
+			let artifact = tg::Artifact::with_id(library_path.artifact.clone());
 			if let tg::Artifact::Directory(directory) = artifact {
 				for needed_library_name in directory.entries(tg).await?.keys() {
 					if needed_library_name.starts_with(library_basename) {
@@ -901,40 +867,34 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 /// Given a set of symlink IDs, return any directory IDs we can find by resolving them.
 async fn resolve_paths<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
-	unresolved_paths: &HashSet<tg::symlink::Id, H>,
+	unresolved_paths: &HashSet<tangram_std::manifest::ArtifactPath, H>,
 ) -> tg::Result<HashSet<tg::directory::Id, H>> {
-	let resolved_paths =
-		futures::future::try_join_all(unresolved_paths.iter().map(|symlink_id| async {
-			let symlink = tg::Symlink::with_id(symlink_id.clone());
+	let resolved_paths = futures::future::try_join_all(unresolved_paths.iter().cloned().map(
+		|artifact_path| async {
+			let symlink = tg::Symlink::from(artifact_path);
 			if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
 				let dir_id = directory.id(tg).await?;
 				Ok::<_, tg::Error>(Some(dir_id.clone()))
 			} else {
 				Ok(None)
 			}
-		}))
-		.await?
-		.into_iter()
-		.flatten()
-		.collect::<HashSet<_, H>>();
+		},
+	))
+	.await?
+	.into_iter()
+	.flatten()
+	.collect::<HashSet<_, H>>();
 	Ok(resolved_paths)
 }
 
 /// Given a set of directory IDs, update the `library_paths` set to contain a matching set of symlinks with no `path` stored.
-async fn store_dirs_as_symlinks<H: BuildHasher + Default>(
-	tg: &impl tg::Handle,
-	dirs: HashSet<tg::directory::Id, H>,
-) -> tg::Result<HashSet<tg::symlink::Id, H>> {
-	let result = futures::future::try_join_all(dirs.iter().map(|dir_id| async {
-		let directory = tg::Directory::with_id(dir_id.clone());
-		let symlink = tg::Symlink::new(Some(directory.into()), None);
-		let symlink_id = symlink.id(tg).await?;
-		Ok::<_, tg::Error>(symlink_id.clone())
-	}))
-	.await?
-	.into_iter()
-	.collect::<HashSet<_, H>>();
-	Ok(result)
+fn store_dirs_as_artifact_paths<H: BuildHasher + Default>(
+	dirs: &HashSet<tg::directory::Id, H>,
+) -> HashSet<tangram_std::manifest::ArtifactPath, H> {
+	dirs.iter()
+		.cloned()
+		.map(tangram_std::manifest::ArtifactPath::with_artifact_id)
+		.collect::<HashSet<_, H>>()
 }
 
 /// Recursively find all needed libraries for an executable.

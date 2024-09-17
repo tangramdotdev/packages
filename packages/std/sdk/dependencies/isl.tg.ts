@@ -1,15 +1,15 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://libisl.sourceforge.io",
 	name: "isl",
 	version: "0.26",
 };
 
-export let source = tg.target(async () => {
-	let { homepage, name, version } = metadata;
-	let extension = ".tar.xz";
-	let checksum =
+export const source = tg.target(async () => {
+	const { homepage, name, version } = metadata;
+	const extension = ".tar.xz";
+	const checksum =
 		"sha256:a0b5cb06d24f9fa9e77b55fabbe9a3c94a336190345c2555f9915bb38e976504";
 	return await std
 		.download({ checksum, base: homepage, name, version, extension })
@@ -25,17 +25,17 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
+export const build = tg.target(async (arg?: Arg) => {
+	const { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let configure = {
+	const configure = {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	let output = await std.utils.buildUtil({
+	const output = await std.utils.buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
@@ -51,8 +51,8 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdk = await bootstrap.sdk.arg(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdk = await bootstrap.sdk.arg(host);
 	return await build({ host, sdk });
 });

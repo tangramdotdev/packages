@@ -1,18 +1,17 @@
-let metadata = {
-	checksum:
-		"sha256:1bf458412568e134a4514f5e170a328d11091e071c7110955c9884ed87972ac9",
+const metadata = {
 	name: "ca-certificates",
 	version: "2024-07-02",
-	url: "https://curl.se/ca",
 };
 
-type Arg = {
+export type Arg = {
 	source?: tg.File;
 };
 
-export let caCertificates = tg.target((arg?: Arg) => {
-	let { checksum, url, version } = metadata;
-	let source =
+export const caCertificates = tg.target((arg?: Arg) => {
+	const { version } = metadata;
+	const checksum = "sha256:1bf458412568e134a4514f5e170a328d11091e071c7110955c9884ed87972ac9";
+	const url = "https://curl.se/ca";
+	const source =
 		arg?.source ?? tg.download(`${url}/cacert-${version}.pem`, checksum);
 	return tg.directory({
 		"ca-bundle.crt": tg.symlink("./cacert.pem"),

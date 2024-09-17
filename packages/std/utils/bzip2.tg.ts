@@ -1,21 +1,21 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
 import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
 	type: "file",
 };
 
-export let metadata = {
+export const metadata = {
 	name: "bzip2",
 	version: "1.0.8",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let extension = ".tar.gz";
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const extension = ".tar.gz";
+	const checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
-	let base = `https://sourceware.org/pub/${name}`;
+	const base = `https://sourceware.org/pub/${name}`;
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -31,8 +31,8 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
@@ -40,22 +40,22 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let sourceDir = source_ ?? source();
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+	const sourceDir = source_ ?? source();
 
 	// Define phases.
-	let buildPhase = `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
-	let install = {
+	const buildPhase = `make CC="$CC" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="$CC" SHELL="$SHELL"`;
+	const install = {
 		args: [`PREFIX="$OUTPUT" SHELL="$SHELL"`],
 	};
-	let phases = {
+	const phases = {
 		configure: tg.Mutation.unset(),
 		build: buildPhase,
 		install,
 	};
 
-	let env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build));
 
 	return await buildUtil({
 		...(await std.triple.rotate({ build, host })),
@@ -70,8 +70,8 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdk = await bootstrap.sdk(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
 });

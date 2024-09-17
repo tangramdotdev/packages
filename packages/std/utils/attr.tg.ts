@@ -1,19 +1,19 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
 import basenamePatch from "./attr_basename.patch" with { type: "file" };
 
-export let metadata = {
+export const metadata = {
 	name: "attr",
 	version: "2.5.2",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let extension = ".tar.xz";
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const extension = ".tar.xz";
+	const checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
-	let base = `https://mirrors.sarata.com/non-gnu/${name}`;
+	const base = `https://mirrors.sarata.com/non-gnu/${name}`;
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -31,8 +31,8 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
@@ -42,8 +42,8 @@ export let build = tg.target(async (arg?: Arg) => {
 		usePrerequisites = true,
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
 	if (std.triple.os(host) !== "linux" || std.triple.os(build) !== "linux") {
 		throw new Error(
@@ -51,7 +51,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		);
 	}
 
-	let configure = {
+	const configure = {
 		args: [
 			"--disable-dependency-tracking",
 			"--disable-silent-rules",
@@ -65,9 +65,11 @@ export let build = tg.target(async (arg?: Arg) => {
 		configure.args.push("--disable-shared");
 	}
 
-	let phases = { configure };
+	const sourceDir = source_ ?? source();
 
-	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
+	const phases = { configure };
+
+	const env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	if (usePrerequisites) {
 		env.push(prerequisites(build));
 	}
@@ -81,14 +83,14 @@ export let build = tg.target(async (arg?: Arg) => {
 		phases,
 		opt: staticBuild ? "s" : undefined,
 		sdk,
-		source: source_ ?? source(),
+		source: sourceDir,
 	});
 });
 
 export default build;
 
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdk = await bootstrap.sdk(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
 });

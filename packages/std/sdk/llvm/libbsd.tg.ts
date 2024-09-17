@@ -1,15 +1,15 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 import libmd from "./libmd.tg.ts";
 
-export let metadata = {
+export const metadata = {
 	name: "libbsd",
 	version: "0.12.2",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let url = `https://libbsd.freedesktop.org/releases/${name}-${version}.tar.xz`;
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const url = `https://libbsd.freedesktop.org/releases/${name}-${version}.tar.xz`;
+	const checksum =
 		"sha256:b88cc9163d0c652aaf39a99991d974ddba1c3a9711db8f1b5838af2a14731014";
 	return await std
 		.download({ checksum, url })
@@ -17,7 +17,7 @@ export let source = tg.target(async () => {
 		.then(std.directory.unwrap);
 });
 
-export let build = tg.target(async () =>
+export const build = tg.target(async () =>
 	std.autotools.build({
 		env: libmd(),
 		source: source(),

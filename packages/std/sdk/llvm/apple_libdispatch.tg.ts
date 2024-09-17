@@ -1,10 +1,10 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 import libbsd from "./libbsd.tg.ts";
 import * as cmake from "../cmake.tg.ts";
 
-export let source = tg.target(async () => {
-	let url = `https://github.com/tpoechtrager/apple-libdispatch/archive/ee39300b12a77efd3f2f020e009e42d557adbb29.zip`;
-	let checksum =
+export const source = tg.target(async () => {
+	const url = `https://github.com/tpoechtrager/apple-libdispatch/archive/ee39300b12a77efd3f2f020e009e42d557adbb29.zip`;
+	const checksum =
 		"sha256:d6ab90b7e8cbf30725be83491bc85ff708daea130bafcac94381b0a2de958b14";
 	return await std
 		.download({ checksum, url })
@@ -12,8 +12,8 @@ export let source = tg.target(async () => {
 		.then(std.directory.unwrap);
 });
 
-export let build = tg.target(async () => {
-	let configure = {
+export const build = tg.target(async () => {
+	const configure = {
 		args: [
 			"-DCMAKE_INSTALL_LIBDIR=lib",
 			"-DCMAKE_C_FLAGS=-Wno-error=unused-command-line-argument",
@@ -21,7 +21,7 @@ export let build = tg.target(async () => {
 		],
 	};
 
-	let phases = { configure };
+	const phases = { configure };
 
 	return await cmake.build({
 		env: libbsd(),

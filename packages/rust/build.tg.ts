@@ -1,7 +1,7 @@
 import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 import tests from "./tests" with { type: "directory" };
-import { toolchain, rustTriple } from "./tangram.tg.ts";
+import { toolchain, rustTriple } from "./tangram.ts";
 import rustcProxy from "./proxy.tg.ts";
 
 export type Arg = {
@@ -70,8 +70,8 @@ export type RustDependency = {
 	checksum?: tg.Checksum;
 };
 
-export let build = tg.target(async (...args: std.Args<Arg>) => {
-	let {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
+	const {
 		crateName: crateName_,
 		crateType: crateType_,
 		edition = "2021",
@@ -88,26 +88,26 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 		verbose = false,
 	} = await std.args.apply<Arg>(args);
 
-	let target = target_ ?? host;
-	let targetPrefix = host === target ? "" : `${target}-`;
-	let rustTarget = rustTriple(target);
+	const target = target_ ?? host;
+	const targetPrefix = host === target ? "" : `${target}-`;
+	const rustTarget = rustTriple(target);
 
 	// Determine crate name.
-	let crateName = crateName_ ?? (await source.id());
+	const crateName = crateName_ ?? (await source.id());
 
 	// Collect environments.
-	let envs = [];
+	const envs = [];
 
 	// Obtain the SDK and toolchain.
-	let sdk = await std.sdk({ host, target });
+	const sdk = await std.sdk({ host, target });
 	envs.push(sdk);
-	let rustToolchain = toolchain({ host, target });
+	const rustToolchain = toolchain({ host, target });
 	envs.push(rustToolchain);
 
 	// Find the main.rs or lib.rs file.
 	let entrypoint = undefined;
 	let inferredCrateType = undefined;
-	for await (let [name, _artifact] of source) {
+	for await (const [name, _artifact] of source) {
 		if (name === "main.rs") {
 			entrypoint = name;
 			inferredCrateType = "bin";
@@ -121,11 +121,11 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	if (!entrypoint) {
 		throw new Error("Could not find an entrypoint for the crate.");
 	}
-	let crateType = crateType_ ?? inferredCrateType;
-	let outputLocation = crateType === "bin" ? "bin" : "lib";
+	const crateType = crateType_ ?? inferredCrateType;
+	const outputLocation = crateType === "bin" ? "bin" : "lib";
 
 	// Set up the proxy if requested.
-	let rustcPrefix = proxy ? tg`${rustcProxy()}/bin/tangram_rustc ` : "";
+	const rustcPrefix = proxy ? tg`${rustcProxy()}/bin/tangram_rustc_proxy ` : "";
 
 	// Set the common rustc flags.
 	let flags: tg.Unresolved<Array<tg.Template.Arg>> = [
@@ -159,19 +159,19 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 	if (rustcFlags) {
 		flags = flags.concat(rustcFlags.map((f) => `-C ${f}`));
 	}
-	let rustcCommand = tg`${rustcPrefix}rustc ${tg.Template.join(" ", ...flags)}`;
+	const rustcCommand = tg`${rustcPrefix}rustc ${tg.Template.join(" ", ...flags)}`;
 
 	// Combine the envs with the user env last.
-	let env = std.env.arg(...envs, env_);
+	const env = std.env.arg(...envs, env_);
 
 	// Run the rustc command in the source directory.
-	let result = await $`${rustcCommand}`.env(env).then(tg.Directory.expect);
+	const result = await $`${rustcCommand}`.env(env).then(tg.Directory.expect);
 
 	return result;
 });
 
 /** Produce a --extern flag for the given dependency */
-export let flagForDependency = async (
+export const flagForDependency = async (
 	dep: RustDependency,
 ): Promise<tg.Template.Arg> => {
 	// Obtain the source for the dependency.
@@ -180,11 +180,11 @@ export let flagForDependency = async (
 		source = dep.artifact;
 	} else if (dep.version) {
 		// Obtain from crates.io.
-		let checksum = dep.checksum;
+		const checksum = dep.checksum;
 		if (!checksum) {
 			throw new Error("Dependency must specify a checksum.");
 		}
-		let url = `https://crates.io/api/v1/crates/${dep.name}/${dep.version}/download`;
+		const url = `https://crates.io/api/v1/crates/${dep.name}/${dep.version}/download`;
 		// The URL will download a `.crate` file, which is a `tar.gz` archive.
 		source = await std
 			.download({
@@ -207,7 +207,7 @@ export let flagForDependency = async (
 	tg.assert(source !== undefined);
 
 	// Build the dependency.
-	let builtDependency = await build({
+	const builtDependency = await build({
 		crateName: dep.name,
 		source,
 	});
@@ -216,8 +216,8 @@ export let flagForDependency = async (
 	return tg`--extern ${dep.name}=${builtDependency}/lib/lib${dep.name}.rlib`;
 };
 
-export let test = tg.target(async () => {
-	let tests = [];
+export const test = tg.target(async () => {
+	const tests = [];
 
 	tests.push(testBasicExeUnproxied());
 	tests.push(testBasicExeProxied());
@@ -228,31 +228,31 @@ export let test = tg.target(async () => {
 	tests.push(testConditionalCompilation());
 	tests.push(testLinkLibcurl());
 
-	let results = await Promise.all(tests);
+	const results = await Promise.all(tests);
 	tg.assert(results.every((r) => r === true));
 
 	return true;
 });
 
-export let testBasicExeUnproxied = tg.target(async () => {
-	let crateName = "native_basic_exe";
-	let basicExe = await build({
+export const testBasicExeUnproxied = tg.target(async () => {
+	const crateName = "native_basic_exe";
+	const basicExe = await build({
 		crateName,
 		proxy: false,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	let basicExeOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeOutput = await $`${crateName} | tee $OUTPUT`
 		.env(basicExe)
 		.then(tg.File.expect);
-	let basicExeText = await basicExeOutput.text();
+	const basicExeText = await basicExeOutput.text();
 	tg.assert(basicExeText.trim() === "Hello, native world!");
 
 	return true;
 });
 
-export let testBasicExeProxied = tg.target(async () => {
-	let crateName = "native_basic_exe";
-	let basicExe = await build({
+export const testBasicExeProxied = tg.target(async () => {
+	const crateName = "native_basic_exe";
+	const basicExe = await build({
 		crateName,
 		env: {
 			WATERMARK: "2",
@@ -262,46 +262,46 @@ export let testBasicExeProxied = tg.target(async () => {
 		source: tests.get(crateName).then(tg.Directory.expect),
 		verbose: true,
 	});
-	let basicExeOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeOutput = await $`${crateName} | tee $OUTPUT`
 		.env(basicExe)
 		.then(tg.File.expect);
-	let basicExeText = await basicExeOutput.text();
+	const basicExeText = await basicExeOutput.text();
 	tg.assert(basicExeText.trim() === "Hello, native world!");
 
 	return true;
 });
 
-export let testBasicLib = tg.target(async () => {
-	let crateName = "native_basic_lib";
-	let basicLib = await build({
+export const testBasicLib = tg.target(async () => {
+	const crateName = "native_basic_lib";
+	const basicLib = await build({
 		crateName,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	let rlib = await basicLib.tryGet(`lib/lib${crateName}.rlib`);
+	const rlib = await basicLib.tryGet(`lib/lib${crateName}.rlib`);
 	tg.assert(rlib !== undefined);
 
 	return true;
 });
 
-export let testBasicExeModules = tg.target(async () => {
-	let crateName = "native_basic_exe_modules";
-	let basicExeModules = await build({
+export const testBasicExeModules = tg.target(async () => {
+	const crateName = "native_basic_exe_modules";
+	const basicExeModules = await build({
 		crateName,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	let basicExeModulesOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeModulesOutput = await $`${crateName} | tee $OUTPUT`
 		.env(basicExeModules)
 		.then(tg.File.expect);
-	let basicExeModulesText = await basicExeModulesOutput.text();
+	const basicExeModulesText = await basicExeModulesOutput.text();
 	tg.assert(basicExeModulesText.trim() === "Hello from a module!");
 
 	return true;
 });
 
-export let testBasicExeWithLib = tg.target(async () => {
-	let crateName = "native_basic_exe_with_lib";
-	let depName = "native_basic_lib";
-	let basicExeWithLib = await build({
+export const testBasicExeWithLib = tg.target(async () => {
+	const crateName = "native_basic_exe_with_lib";
+	const depName = "native_basic_lib";
+	const basicExeWithLib = await build({
 		crateName,
 		source: tests.get(crateName).then(tg.Directory.expect),
 		rustDependencies: [
@@ -311,18 +311,18 @@ export let testBasicExeWithLib = tg.target(async () => {
 			},
 		],
 	});
-	let basicExeWithLibOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeWithLibOutput = await $`${crateName} | tee $OUTPUT`
 		.env(basicExeWithLib)
 		.then(tg.File.expect);
-	let basicExeWithLibText = await basicExeWithLibOutput.text();
+	const basicExeWithLibText = await basicExeWithLibOutput.text();
 	tg.assert(basicExeWithLibText.trim() === "Hello from a library!");
 
 	return true;
 });
 
-export let testExeWithCratesIoDependency = tg.target(async () => {
-	let crateName = "native_deps_exe";
-	let depsExe = await build({
+export const testExeWithCratesIoDependency = tg.target(async () => {
+	const crateName = "native_deps_exe";
+	const depsExe = await build({
 		crateName,
 		env: {
 			TANGRAM_RUSTC_TRACING: "tangram=trace",
@@ -337,38 +337,38 @@ export let testExeWithCratesIoDependency = tg.target(async () => {
 			},
 		],
 	});
-	let depsExeOutput = await $`${crateName} | tee $OUTPUT`
+	const depsExeOutput = await $`${crateName} | tee $OUTPUT`
 		.env(depsExe)
 		.then(tg.File.expect);
-	let depsExeText = await depsExeOutput.text();
+	const depsExeText = await depsExeOutput.text();
 	tg.assert(depsExeText.trim() === 'b"Hello using the bytes crate!"');
 	return true;
 });
 
-export let testConditionalCompilation = tg.target(async () => {
-	let crateName = "native_cfg_exe";
+export const testConditionalCompilation = tg.target(async () => {
+	const crateName = "native_cfg_exe";
 	// Test without the optional feature.
-	let cfgDisabled = await build({
+	const cfgDisabled = await build({
 		crateName: crateName,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	let cfgDisabledOutput = await $`${crateName} | tee $OUTPUT`
+	const cfgDisabledOutput = await $`${crateName} | tee $OUTPUT`
 		.env(cfgDisabled)
 		.then(tg.File.expect);
-	let cfgDisabledText = await cfgDisabledOutput.text();
+	const cfgDisabledText = await cfgDisabledOutput.text();
 	tg.assert(cfgDisabledText.trim() === "optional feature disabled");
 
 	// Test with the optional feature.
-	let cfgEnabled = await build({
+	const cfgEnabled = await build({
 		crateName,
 		cfgOptions: ["optional"],
 		source: tests.get(crateName).then(tg.Directory.expect),
 		verbose: true,
 	});
-	let cfgEnabledOutput = await $`${crateName} | tee $OUTPUT`
+	const cfgEnabledOutput = await $`${crateName} | tee $OUTPUT`
 		.env(cfgEnabled)
 		.then(tg.File.expect);
-	let cfgEnabledText = await cfgEnabledOutput.text();
+	const cfgEnabledText = await cfgEnabledOutput.text();
 	tg.assert(cfgEnabledText.trim() === "optional feature enabled");
 
 	return true;
@@ -378,18 +378,18 @@ import * as curl from "tg:curl" with { path: "../curl" };
 import * as openssl from "tg:openssl" with { path: "../openssl" };
 import * as zlib from "tg:zlib" with { path: "../zlib" };
 import * as zstd from "tg:zstd" with { path: "../zstd" };
-export let testLinkLibcurl = tg.target(async () => {
-	let crateName = "native_exe_libcurl";
+export const testLinkLibcurl = tg.target(async () => {
+	const crateName = "native_exe_libcurl";
 
 	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.
-	let libcurl = curl.build();
-	let sslArtifact = openssl.build();
-	let zlibArtifact = zlib.build();
-	let zstdArtifact = zstd.build();
-	let deps = [libcurl, sslArtifact, zlibArtifact, zstdArtifact];
+	const libcurl = curl.build();
+	const sslArtifact = openssl.build();
+	const zlibArtifact = zlib.build();
+	const zstdArtifact = zstd.build();
+	const deps = [libcurl, sslArtifact, zlibArtifact, zstdArtifact];
 
 	// Build the test.
-	let exe = await build({
+	const exe = await build({
 		crateName,
 		env: std.env.arg(...deps),
 		source: tests.get(crateName).then(tg.Directory.expect),
@@ -397,15 +397,15 @@ export let testLinkLibcurl = tg.target(async () => {
 	console.log("exe", await exe.id());
 
 	// Libcurl transitively requires libssl at runtime.
-	let host = await std.triple.host();
-	let os = std.triple.os(host);
-	let runtimeLibVar =
+	const host = await std.triple.host();
+	const os = std.triple.os(host);
+	const runtimeLibVar =
 		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
-	let exeOutput =
+	const exeOutput =
 		await $`export ${runtimeLibVar}=$LIBRARY_PATH\n${crateName} | tee $OUTPUT`
 			.env(exe, ...deps)
 			.then(tg.File.expect);
-	let exeText = await exeOutput.text();
+	const exeText = await exeOutput.text();
 	tg.assert(exeText.trim().includes(curl.metadata.version));
 
 	return true;

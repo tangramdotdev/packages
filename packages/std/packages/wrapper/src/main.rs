@@ -21,7 +21,8 @@ fn main_inner() -> std::io::Result<()> {
 	tracing::trace!(?wrapper_path);
 
 	// Read the manifest.
-	let manifest = tangram_std::Manifest::read(&wrapper_path)?.expect("Malformed manifest.");
+	let manifest =
+		tangram_std::Manifest::read_from_path(&wrapper_path)?.expect("Malformed manifest.");
 
 	// Search args for known flags.
 	let mut suppress_args = false;
@@ -53,7 +54,7 @@ fn main_inner() -> std::io::Result<()> {
 	// Get the artifacts directories.
 	let artifacts_directories = locate_artifacts_directories(&wrapper_path);
 	#[cfg(feature = "tracing")]
-	tracing::trace!(?artifacts_directories);
+	tracing::debug!(?artifacts_directories);
 
 	// Get arg0 from the invocation.
 	let arg0 = &filtered_args[0];
@@ -65,16 +66,18 @@ fn main_inner() -> std::io::Result<()> {
 		&artifacts_directories,
 	)?;
 	let interpreter_path = interpreter.as_ref().map(|(path, _)| path).cloned();
+	#[cfg(feature = "tracing")]
+	tracing::debug!(?interpreter_path);
 
 	// Render the executable.
 	let executable_path = match &manifest.executable {
-		manifest::Executable::Path(file) => {
-			PathBuf::from(render_symlink(file, &artifacts_directories))
-		},
+		manifest::Executable::Path(file) => PathBuf::from(file.clone()),
 		manifest::Executable::Content(template) => {
 			content_executable(&render_template(template, &artifacts_directories))?
 		},
 	};
+	#[cfg(feature = "tracing")]
+	tracing::debug!(?executable_path);
 
 	// Choose the identity path.
 	let identity_path = match &manifest.identity {
@@ -82,6 +85,8 @@ fn main_inner() -> std::io::Result<()> {
 		manifest::Identity::Interpreter => interpreter_path.expect("If the manifest specifies the interpreter as its identity, then the manifest must contain an interpreter."),
 		manifest::Identity::Executable => executable_path.clone(),
 	};
+	#[cfg(feature = "tracing")]
+	tracing::debug!(?identity_path);
 
 	// Create the command.
 	let mut command = if let Some((interpreter_path, interpreter_args)) = interpreter {
@@ -121,7 +126,7 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Set interpreter environment variables if necessary.
 	if let Some(manifest::Interpreter::DyLd(interpreter)) = &manifest.interpreter {
-		set_dyld_environment(interpreter, &artifacts_directories);
+		set_dyld_environment(interpreter);
 	}
 
 	// Forward arg 0.
@@ -228,8 +233,8 @@ fn handle_interpreter(
 	let result = match interpreter {
 		// Handle a normal interpreter.
 		Some(manifest::Interpreter::Normal(interpreter)) => {
-			let interpreter_path =
-				PathBuf::from(render_symlink(&interpreter.path, artifacts_directories));
+			let interpreter_path = interpreter.path.render();
+			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
 			let interpreter_args = interpreter
 				.args
 				.iter()
@@ -241,7 +246,7 @@ fn handle_interpreter(
 		// Handle an ld-linux interpreter.
 		Some(manifest::Interpreter::LdLinux(interpreter)) => {
 			// Render the interpreter path.
-			let interpreter_path = render_symlink(&interpreter.path, artifacts_directories);
+			let interpreter_path = interpreter.path.render();
 
 			// Canonicalize the interpreter path.
 			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
@@ -257,7 +262,7 @@ fn handle_interpreter(
 				.library_paths
 				.iter()
 				.flatten()
-				.map(|path| render_symlink(path, artifacts_directories))
+				.map(tangram_std::manifest::ArtifactPath::render)
 				.collect::<Vec<_>>()
 				.join(":");
 
@@ -275,7 +280,7 @@ fn handle_interpreter(
 			if let Some(preloads) = &interpreter.preloads {
 				let preload = preloads
 					.iter()
-					.map(|preload| render_symlink(preload, artifacts_directories))
+					.map(tangram_std::manifest::ArtifactPath::render)
 					.collect::<Vec<_>>()
 					.join(":");
 				#[cfg(feature = "tracing")]
@@ -303,10 +308,20 @@ fn handle_interpreter(
 		// Handle an ld-musl interpreter.
 		Some(manifest::Interpreter::LdMusl(interpreter)) => {
 			// Render the interpreter path.
-			let interpreter_path = render_symlink(&interpreter.path, artifacts_directories);
+			let interpreter_path = interpreter.path.render();
 
 			// Canonicalize the interpreter path.
+			#[cfg(feature = "tracing")]
+			tracing::debug!(
+				?interpreter_path,
+				"rendered ld-musl interpreter path string"
+			);
 			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
+			#[cfg(feature = "tracing")]
+			tracing::debug!(
+				?interpreter_path,
+				"canonicalized ld-musl interpreter path string"
+			);
 
 			// Initialize the interpreter arguments.
 			let mut interpreter_args = vec![];
@@ -316,7 +331,7 @@ fn handle_interpreter(
 				.library_paths
 				.iter()
 				.flatten()
-				.map(|path| render_symlink(path, artifacts_directories))
+				.map(tangram_std::manifest::ArtifactPath::render)
 				.collect::<Vec<_>>()
 				.join(":");
 
@@ -334,7 +349,7 @@ fn handle_interpreter(
 			if let Some(preloads) = &interpreter.preloads {
 				let preload = preloads
 					.iter()
-					.map(|preload| render_symlink(preload, artifacts_directories))
+					.map(tangram_std::manifest::ArtifactPath::render)
 					.collect::<Vec<_>>()
 					.join(":");
 				#[cfg(feature = "tracing")]
@@ -365,10 +380,7 @@ fn handle_interpreter(
 	Ok(result)
 }
 
-fn set_dyld_environment(
-	interpreter: &manifest::DyLdInterpreter,
-	artifacts_directories: &[impl AsRef<std::path::Path>],
-) {
+fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) {
 	// Set `TANGRAM_INJECTION_DYLD_LIBRARY_PATH`.
 	if let Some(library_paths) = &interpreter.library_paths {
 		let mut user_library_path = None;
@@ -380,7 +392,7 @@ fn set_dyld_environment(
 		}
 		let manifest_library_path = library_paths
 			.iter()
-			.map(|path| render_symlink(path, artifacts_directories))
+			.map(tangram_std::manifest::ArtifactPath::render)
 			.collect::<Vec<_>>()
 			.join(":");
 		let library_path = if let Some(dyld_library_path) = user_library_path {
@@ -405,7 +417,7 @@ fn set_dyld_environment(
 		}
 		let insert_libraries = preloads
 			.iter()
-			.map(|path| render_symlink(path, artifacts_directories))
+			.map(tangram_std::manifest::ArtifactPath::render)
 			.collect::<Vec<_>>()
 			.join(":");
 		std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries);
@@ -608,19 +620,19 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 	if let tg::value::Data::Object(id) = value {
 		match id {
 			tg::object::Id::Directory(id) => {
-				return tg::symlink::Data {
+				return tg::symlink::Data::Normal {
 					artifact: Some(id.clone().into()),
 					path: None,
 				}
 			},
 			tg::object::Id::File(id) => {
-				return tg::symlink::Data {
+				return tg::symlink::Data::Normal {
 					artifact: Some(id.clone().into()),
 					path: None,
 				}
 			},
 			tg::object::Id::Symlink(id) => {
-				return tg::symlink::Data {
+				return tg::symlink::Data::Normal {
 					artifact: Some(id.clone().into()),
 					path: None,
 				}
@@ -635,12 +647,14 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 
 fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
 	let mut components = Vec::with_capacity(3);
-	if let Some(artifact) = &symlink.artifact {
-		components.push(tg::template::component::Data::Artifact(artifact.clone()));
-	}
-	if let Some(subpath) = &symlink.path {
-		components.push(tg::template::component::Data::String("/".to_owned()));
-		components.push(tg::template::component::Data::String(subpath.to_string()));
+	if let tg::symlink::Data::Normal { artifact, path } = symlink {
+		if let Some(artifact) = artifact {
+			components.push(tg::template::component::Data::Artifact(artifact.clone()));
+		}
+		if let Some(path) = path {
+			components.push(tg::template::component::Data::String("/".to_owned()));
+			components.push(tg::template::component::Data::String(path.to_string()));
+		}
 	}
 	tg::template::Data { components }
 }

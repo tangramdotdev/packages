@@ -1,5 +1,5 @@
 import * as bootstrap from "./bootstrap.tg.ts";
-import * as std from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
 import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
@@ -30,9 +30,9 @@ export namespace env {
 	/** An object containing only a `utils` boolean field and no other members. */
 	export type UtilsToggle = { utils: boolean } & Record<string, never>;
 
-	export let inner = async (...args: std.args.UnresolvedArgs<Arg>) => {
+	export const inner = async (...args: std.args.UnresolvedArgs<Arg>) => {
 		// Check if the user requested to omit the standard utils.
-		let utils = args.reduce((acc, arg) => {
+		const utils = args.reduce((acc, arg) => {
 			if (isUtilsToggle(arg)) {
 				if (arg.utils === false) {
 					return false;
@@ -40,7 +40,7 @@ export namespace env {
 			}
 			return acc;
 		}, true);
-		let objectArgs = std.flatten(args.filter((arg) => !isUtilsToggle(arg)));
+		const objectArgs = std.flatten(args.filter((arg) => !isUtilsToggle(arg)));
 
 		// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
 		let buildToolchain = undefined;
@@ -57,10 +57,10 @@ export namespace env {
 	};
 
 	/** Produce a single env object from a potentially nested array of env args. */
-	export let arg = async (
+	export const arg = async (
 		...args: std.args.UnresolvedArgs<Arg>
 	): Promise<std.env.EnvObject> => {
-		let envObjects = await Promise.all(
+		const envObjects = await Promise.all(
 			std
 				.flatten(await Promise.all(args.map(tg.resolve)))
 				.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
@@ -77,33 +77,33 @@ export namespace env {
 	};
 
 	/** Produce an env object from an artifact value. */
-	export let envObjectFromArtifact = async (
+	export const envObjectFromArtifact = async (
 		artifact: tg.Artifact,
 	): Promise<env.ArgObject> => {
 		if (artifact instanceof tg.File) {
 			// Attempt to read the manifest from the file.
-			let manifest = await std.wrap.Manifest.read(artifact);
+			const manifest = await std.wrap.Manifest.read(artifact);
 			if (!manifest) {
 				// If the file was not a wrapper, throw an error.
-				let artifactId = await artifact.id();
+				const artifactId = await artifact.id();
 				throw new Error(`Could not read manifest from ${artifactId}`);
 			}
 			// If the file was a wrapper, return its env.
 			return await wrap.envArgFromManifestEnv(manifest.env);
 		} else if (artifact instanceof tg.Directory) {
 			// If the directory contains a file at `.tangram/env`, return the env from that file's manifest.
-			let envFile = await artifact.tryGet(".tangram/env");
+			const envFile = await artifact.tryGet(".tangram/env");
 			if (envFile) {
 				tg.File.assert(envFile);
 				return await envObjectFromArtifact(envFile);
 			}
 
 			// Otherwise, return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.
-			let env: env.EnvObject = {};
+			const env: env.EnvObject = {};
 			if (await artifact.tryGet("bin")) {
 				env["PATH"] = await tg.Mutation.prefix(tg`${artifact}/bin`, ":");
 			}
-			let includeDir = await artifact.tryGet("include");
+			const includeDir = await artifact.tryGet("include");
 			if (includeDir) {
 				if (
 					includeDir instanceof tg.Directory &&
@@ -123,7 +123,7 @@ export namespace env {
 			return env;
 		} else if (artifact instanceof tg.Symlink) {
 			// Resolve the symlink and try again.
-			let resolved = await artifact.resolve();
+			const resolved = await artifact.resolve();
 			if (resolved === undefined) {
 				throw new Error(`Could not resolve symlink ${artifact}`);
 			} else {
@@ -135,12 +135,12 @@ export namespace env {
 	};
 
 	/** Merge a list of `env.ArgObject` values into a single `env.EnvObject`, normalizing all mutations to a single mutation per key. */
-	export let mergeArgObjects = async (
+	export const mergeArgObjects = async (
 		...argObjects: Array<tg.MaybeMutation<env.ArgObject>>
 	): Promise<env.EnvObject> => {
 		// Keep a running map of the final env object.
 		let result: env.EnvObject = {};
-		for (let argObject of argObjects) {
+		for (const argObject of argObjects) {
 			let value: env.ArgObject | undefined;
 			// If it's a mutation, verify the kind.
 			if (argObject instanceof tg.Mutation) {
@@ -159,7 +159,7 @@ export namespace env {
 				// Use the value directly.
 				value = argObject;
 			}
-			for await (let [key, val] of Object.entries(value ?? {})) {
+			for await (const [key, val] of Object.entries(value ?? {})) {
 				if (val === undefined) {
 					// do nothing
 					continue;
@@ -169,7 +169,7 @@ export namespace env {
 
 				// Mutate the current value according to the new value.
 				if (val instanceof tg.Mutation) {
-					let mutationKind = val.inner.kind;
+					const mutationKind = val.inner.kind;
 					switch (mutationKind) {
 						case "unset": {
 							// If it's an unset mutation, replace the current value.
@@ -190,7 +190,7 @@ export namespace env {
 						}
 					}
 				} else {
-					let newValues = Array.isArray(val) ? val : [val];
+					const newValues = Array.isArray(val) ? val : [val];
 					for (let newVal of std.flatten(newValues)) {
 						// If it's not a mutation, wrap it in a set mutation.
 						if (!(newVal instanceof tg.Mutation)) {
@@ -238,7 +238,7 @@ export namespace env {
 	};
 
 	/** Convert booleans to the proper string, "1" for true, empty string for false. */
-	let templateFromArg = (val: tg.Template.Arg | boolean) => {
+	const templateFromArg = (val: tg.Template.Arg | boolean) => {
 		if (typeof val === "boolean") {
 			return tg.template(val ? "1" : "");
 		}
@@ -246,7 +246,7 @@ export namespace env {
 	};
 
 	/** Combine two tg.MaybeMutation<tg.Template.Arg> values into one. */
-	export let mergeTemplateMaybeMutations = async (
+	export const mergeTemplateMaybeMutations = async (
 		a: tg.MaybeMutation<tg.Template.Arg>,
 		b: tg.MaybeMutation<tg.Template.Arg>,
 	): Promise<tg.MaybeMutation<tg.Template.Arg>> => {
@@ -281,13 +281,13 @@ export namespace env {
 		}
 
 		// Merge the mutations.
-		let merged = await std.args.mergeMutations(a, b, true);
+		const merged = await std.args.mergeMutations(a, b, true);
 
 		// If there is more than one mutation, throw an error.
 		if (merged.length !== 1) {
 			throw new Error(`Failed to merge mutations`);
 		}
-		let ret = merged.at(0);
+		const ret = merged.at(0);
 		tg.assert(ret instanceof tg.Mutation);
 		return ret as tg.Mutation<tg.Template.Arg>;
 	};
@@ -309,7 +309,7 @@ export namespace env {
 			predicate = (_arg) => true;
 		}
 
-		for await (let [_, dir] of dirsInVar({ env, key: "PATH" })) {
+		for await (const [_, dir] of dirsInVar({ env, key: "PATH" })) {
 			for await (let [name, artifact] of dir) {
 				if (
 					predicate(name) &&
@@ -337,14 +337,14 @@ export namespace env {
 	export async function* dirsInVar(
 		arg: DirsInVarArg,
 	): AsyncGenerator<[tg.Directory, tg.Directory]> {
-		let { env, key, separator = ":" } = arg;
-		let value = await tryGetKey({ env, key });
+		const { env, key, separator = ":" } = arg;
+		const value = await tryGetKey({ env, key });
 		if (!value) {
 			return;
 		}
 
-		for (let chunk of Array.from(separateTemplate(value, separator))) {
-			let [directory, subpath] = chunk;
+		for (const chunk of Array.from(separateTemplate(value, separator))) {
+			const [directory, subpath] = chunk;
 			// If this chunk represents a real tg.Directory, iterate through it looking for matches.
 			if (
 				directory &&
@@ -354,7 +354,7 @@ export namespace env {
 				typeof subpath === "string"
 			) {
 				// Slice off the leading `/`.
-				let subdir = await directory.get(subpath.slice(1));
+				const subdir = await directory.get(subpath.slice(1));
 				if (subdir instanceof tg.Directory) {
 					yield [directory, subdir];
 				}
@@ -368,22 +368,22 @@ export namespace env {
 	};
 
 	/** Retrieve the artifact a key's template value refers to. Throws if cannot be found. */
-	export let getArtifactByKey = async (
+	export const getArtifactByKey = async (
 		arg: ArtifactByKeyArg,
 	): Promise<tg.Artifact> => {
-		let template = await tryGetKey(arg);
+		const template = await tryGetKey(arg);
 		tg.assert(template, `Unable to find key ${arg.key} in this env.`);
 		// There are two options. Either the template points directly to an artifact with a single reference, or it points to a directory with a subpath. Anything else, we reject.
-		let components = template.components;
+		const components = template.components;
 		switch (components.length) {
 			case 1: {
-				let [artifact] = components;
+				const [artifact] = components;
 				if (artifact && typeof artifact !== "string") {
 					return artifact;
 				}
 			}
 			case 2: {
-				let [directory, subpath] = components;
+				const [directory, subpath] = components;
 				if (
 					directory &&
 					typeof directory !== "string" &&
@@ -404,24 +404,24 @@ export namespace env {
 	};
 
 	/** Retrieve the artifact a key's template value refers to. Returns undefined if cannot be found. */
-	export let tryGetArtifactByKey = async (
+	export const tryGetArtifactByKey = async (
 		arg: ArtifactByKeyArg,
 	): Promise<tg.Artifact | undefined> => {
-		let template = await tryGetKey(arg);
+		const template = await tryGetKey(arg);
 		if (!template) {
 			return undefined;
 		}
 		// There are two options. Either the template points directly to an artifact with a single reference, or it points to a directory with a subpath. Anything else, we reject.
-		let components = template.components;
+		const components = template.components;
 		switch (components.length) {
 			case 1: {
-				let [artifact] = components;
+				const [artifact] = components;
 				if (artifact && typeof artifact !== "string") {
 					return artifact;
 				}
 			}
 			case 2: {
-				let [directory, subpath] = components;
+				const [directory, subpath] = components;
 				if (
 					directory &&
 					typeof directory !== "string" &&
@@ -445,9 +445,9 @@ export namespace env {
 	};
 
 	/** Retrieve the value of a key. If not present, throw an error. */
-	export let getKey = async (arg: GetKeyArg): Promise<tg.Template> => {
-		let { env, key } = arg;
-		for await (let [foundKey, value] of envVars(env)) {
+	export const getKey = async (arg: GetKeyArg): Promise<tg.Template> => {
+		const { env, key } = arg;
+		for await (const [foundKey, value] of envVars(env)) {
 			if (foundKey === key) {
 				tg.assert(value, `Found key ${key} but it was undefined.`);
 				return value;
@@ -460,8 +460,8 @@ export namespace env {
 	export async function tryGetKey(
 		arg: GetKeyArg,
 	): Promise<tg.Template | undefined> {
-		let { env, key } = arg;
-		for await (let [foundKey, value] of envVars(env)) {
+		const { env, key } = arg;
+		for await (const [foundKey, value] of envVars(env)) {
 			if (foundKey === key) {
 				return value;
 			}
@@ -473,7 +473,7 @@ export namespace env {
 	export async function* envVars(
 		...envArg: std.Args<env.Arg>
 	): AsyncGenerator<[string, tg.Template | undefined]> {
-		let map = await env.arg(envArg);
+		const map = await env.arg(envArg);
 		let value: env.EnvObject | undefined;
 		if (map instanceof tg.Mutation) {
 			if (map.inner.kind === "unset") {
@@ -484,7 +484,7 @@ export namespace env {
 		} else {
 			value = map;
 		}
-		for await (let [key, val] of Object.entries(value ?? {})) {
+		for await (const [key, val] of Object.entries(value ?? {})) {
 			if (val instanceof tg.Mutation) {
 				let innerValue;
 				if (val.inner.kind === "set" || val.inner.kind === "set_if_unset") {
@@ -506,12 +506,12 @@ export namespace env {
 	}
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, throw an error. */
-	export let getShellExecutable = async (
+	export const getShellExecutable = async (
 		...envArgs: std.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink> => {
 		// First, check if "SHELL" is set and points to an executable.
-		let envArg = await arg(envArgs);
-		let shellArtifact = await env.tryGetArtifactByKey({
+		const envArg = await arg(envArgs);
+		const shellArtifact = await env.tryGetArtifactByKey({
 			env: envArg,
 			key: "SHELL",
 		});
@@ -524,7 +524,7 @@ export namespace env {
 		}
 
 		// If SHELL isn't set, see if `sh` is in path. Return that file if so.
-		let shExecutable = await tryWhich({ env: envArg, name: "sh" });
+		const shExecutable = await tryWhich({ env: envArg, name: "sh" });
 		if (shExecutable) {
 			return shExecutable;
 		}
@@ -534,12 +534,12 @@ export namespace env {
 	};
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, return `undefined`. */
-	export let tryGetShellExecutable = async (
+	export const tryGetShellExecutable = async (
 		...envArgs: std.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink | undefined> => {
-		let envArg = await arg(envArgs);
+		const envArg = await arg(envArgs);
 		// First, check if "SHELL" is set and points to an executable.
-		let shellArtifact = await tryGetArtifactByKey({
+		const shellArtifact = await tryGetArtifactByKey({
 			env: envArg,
 			key: "SHELL",
 		});
@@ -552,7 +552,7 @@ export namespace env {
 		}
 
 		// If SHELL isn't set, see if `sh` is in path. Return that file if so.
-		let shExecutable = await tryWhich({ env: envArg, name: "sh" });
+		const shExecutable = await tryWhich({ env: envArg, name: "sh" });
 		if (shExecutable) {
 			return shExecutable;
 		}
@@ -568,16 +568,16 @@ export namespace env {
 	};
 
 	/** Assert the env provides a specific executable in PATH. */
-	export let assertProvides = async (arg: ProvidesArg) => {
-		let { name, names: names_ } = arg;
-		let names = names_ ?? [];
+	export const assertProvides = async (arg: ProvidesArg) => {
+		const { name, names: names_ } = arg;
+		const names = names_ ?? [];
 		if (name) {
 			names.push(name);
 		}
 
 		await Promise.all(
 			names.map(async (name) => {
-				for await (let [binName, _file] of env.binsInPath(arg)) {
+				for await (const [binName, _file] of env.binsInPath(arg)) {
 					if (binName === name) {
 						return true;
 					}
@@ -589,16 +589,16 @@ export namespace env {
 	};
 
 	/** Check if the env provides a specific executable in PATH. */
-	export let provides = async (arg: ProvidesArg): Promise<boolean> => {
-		let { name, names: names_ } = arg;
-		let names = names_ ?? [];
+	export const provides = async (arg: ProvidesArg): Promise<boolean> => {
+		const { name, names: names_ } = arg;
+		const names = names_ ?? [];
 		if (name) {
 			names.push(name);
 		}
 
-		let results = await Promise.all(
+		const results = await Promise.all(
 			names.map(async (name) => {
-				for await (let [binName, _file] of env.binsInPath(arg)) {
+				for await (const [binName, _file] of env.binsInPath(arg)) {
 					if (binName === name) {
 						return true;
 					}
@@ -615,21 +615,21 @@ export namespace env {
 	};
 
 	/** Return the file for a given executable in an env's PATH. Throws an error if not present. */
-	export let which = async (arg: WhichArg): Promise<tg.File | tg.Symlink> => {
-		let file = await tryWhich(arg);
+	export const which = async (arg: WhichArg): Promise<tg.File | tg.Symlink> => {
+		const file = await tryWhich(arg);
 		tg.assert(file, `This env does not provide ${arg.name} in $PATH`);
 		return file;
 	};
 
 	/** Return the artifact providing a given binary by name. */
-	export let whichArtifact = async (
+	export const whichArtifact = async (
 		arg: WhichArg,
 	): Promise<tg.Directory | undefined> => {
-		for await (let [parentDir, binDir] of env.dirsInVar({
+		for await (const [parentDir, binDir] of env.dirsInVar({
 			env: arg.env,
 			key: "PATH",
 		})) {
-			let artifact = await binDir.tryGet(arg.name);
+			const artifact = await binDir.tryGet(arg.name);
 			if (artifact) {
 				return parentDir;
 			}
@@ -637,10 +637,10 @@ export namespace env {
 	};
 
 	/** Return the file for a given executable in an env's PATH. Returns undefined if not present. */
-	export let tryWhich = async (
+	export const tryWhich = async (
 		arg: WhichArg,
 	): Promise<tg.File | tg.Symlink | undefined> => {
-		for await (let [name, executable] of env.binsInPath(arg)) {
+		for await (const [name, executable] of env.binsInPath(arg)) {
 			if (name === arg.name) {
 				if (executable instanceof tg.Symlink || executable instanceof tg.File) {
 					return executable;
@@ -651,7 +651,7 @@ export namespace env {
 	};
 }
 
-let isUtilsToggle = (arg: unknown): arg is env.UtilsToggle => {
+const isUtilsToggle = (arg: unknown): arg is env.UtilsToggle => {
 	return typeof arg === "object" && arg !== null && "utils" in arg;
 };
 
@@ -660,9 +660,9 @@ function* separateTemplate(
 	separator: string,
 ): Generator<Array<tg.Template.Component>> {
 	let chunk: Array<tg.Template.Component> = [];
-	for (let component of template.components) {
+	for (const component of template.components) {
 		if (typeof component === "string" && component.endsWith(separator)) {
-			let completeChunk = [...chunk, component.slice(0, -1)];
+			const completeChunk = [...chunk, component.slice(0, -1)];
 			chunk = [];
 			yield completeChunk;
 		} else {

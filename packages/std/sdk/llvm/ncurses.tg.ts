@@ -1,15 +1,15 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://invisible-island.net/ncurses/",
 	license: "https://invisible-island.net/ncurses/ncurses-license.html",
 	name: "ncurses",
 	version: "6.5",
 };
 
-export let source = tg.target(() => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(() => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6";
 	return std.download.fromGnu({ name, version, checksum });
 });
@@ -23,8 +23,8 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export let ncurses = tg.target(async (arg?: Arg) => {
-	let {
+export const ncurses = tg.target(async (arg?: Arg) => {
+	const {
 		autotools = [],
 		build: build_,
 		env,
@@ -32,11 +32,11 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let os = std.triple.os(host);
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+	const os = std.triple.os(host);
 
-	let configure = {
+	const configure = {
 		args: [
 			"--with-shared",
 			"--with-cxx-shared",
@@ -53,9 +53,9 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	}
 
 	// Patch curses.h to always use the wide-character ABI.
-	let fixup = `sed -e 's/^#if.*XOPEN.*$/#if 1/' -i $OUTPUT/include/ncursesw/curses.h`;
+	const fixup = `sed -e 's/^#if.*XOPEN.*$/#if 1/' -i $OUTPUT/include/ncursesw/curses.h`;
 
-	let phases = { configure, fixup };
+	const phases = { configure, fixup };
 
 	let result = await std.autotools.build(
 		{
@@ -69,11 +69,11 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 	);
 
 	// Set libraries to post-process.
-	let libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];
-	let dylibExt = os === "darwin" ? "dylib" : "so";
+	const libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];
+	const dylibExt = os === "darwin" ? "dylib" : "so";
 
 	// Create widechar-to-normal symlinks.
-	for (let libName of libNames) {
+	for (const libName of libNames) {
 		result = await tg.directory(result, {
 			lib: {
 				[`lib${libName}.${dylibExt}`]: tg.symlink(`lib${libName}w.${dylibExt}`),
@@ -91,6 +91,6 @@ export let ncurses = tg.target(async (arg?: Arg) => {
 
 export default ncurses;
 
-export let test = tg.target(async () => {
+export const test = tg.target(async () => {
 	return await ncurses();
 });

@@ -1,6 +1,6 @@
 /** Bootstrapping the compiler toolchain requires these dependencies in addition to `std.utils`. */
 
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 
 import bison from "./dependencies/bison.tg.ts";
 import gmp from "./dependencies/gmp.tg.ts";
@@ -32,31 +32,33 @@ export type BuildToolsArg = {
 };
 
 /** An env containing the standard utils plus additional build-time tools needed for toolchain components: m4, bison, perl, python */
-export let buildTools = async (unresolvedArg: tg.Unresolved<BuildToolsArg>) => {
-	let arg = await tg.resolve(unresolvedArg);
-	let { host, buildToolchain } = arg;
-	let utils = std.utils.env({ host, sdk: false, env: buildToolchain });
+export const buildTools = async (
+	unresolvedArg: tg.Unresolved<BuildToolsArg>,
+) => {
+	const arg = await tg.resolve(unresolvedArg);
+	const { host, buildToolchain } = arg;
+	const utils = std.utils.env({ host, sdk: false, env: buildToolchain });
 	// This env is used to build the remaining dependencies only. It includes the bootstrap SDK.
 	let utilsEnv = std.env.arg(utils, buildToolchain);
 
 	// Some dependencies depend on previous builds, so they are manually ordered here.
-	let m4Artifact = m4({ host, sdk: false, env: utilsEnv });
+	const m4Artifact = m4({ host, sdk: false, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, m4Artifact);
 
-	let bisonArtifact = bison({ host, sdk: false, env: utilsEnv });
+	const bisonArtifact = bison({ host, sdk: false, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, bisonArtifact);
 
-	let perlArtifact = perl({ host, sdk: false, env: utilsEnv });
+	const perlArtifact = perl({ host, sdk: false, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, perlArtifact);
 
-	let libxcryptArtifact = libxcrypt({
+	const libxcryptArtifact = libxcrypt({
 		host,
 		sdk: false,
 		env: utilsEnv,
 	});
 	utilsEnv = std.env.arg(utilsEnv, libxcryptArtifact);
 
-	let pythonArtifact = python({ host, sdk: false, env: utilsEnv });
+	const pythonArtifact = python({ host, sdk: false, env: utilsEnv });
 
 	// This env contains the standard utils and additional tools, but NO SDK, so each build step can swap the compiler out accordingly.
 	return await std.env.arg(
@@ -76,35 +78,35 @@ export type HostLibrariesArg = {
 };
 
 /** An env containing libraries built for the given host: gmp, mpfr, isl, mpc, zlib, zstd. Assumes the incoming env contains a toolchain plus the build tools (m4 is required). */
-export let hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
-	let { host, buildToolchain, withGccLibs = true } = await tg.resolve(arg);
+export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
+	const { host, buildToolchain, withGccLibs = true } = await tg.resolve(arg);
 
-	let zlibArtifact = zlib({
+	const zlibArtifact = zlib({
 		host,
 		sdk: false,
 		env: buildToolchain,
 	});
-	let zstdArtifact = zstd({
+	const zstdArtifact = zstd({
 		host,
 		sdk: false,
 		env: buildToolchain,
 	});
-	let ret = [zlibArtifact, zstdArtifact];
+	const ret = [zlibArtifact, zstdArtifact];
 
 	if (withGccLibs) {
 		// These libraries depend on m4, but no other library depends on them. Build them here and use a separate env to thread dependencies..
-		let gmpArtifact = gmp({ host, sdk: false, env: buildToolchain });
+		const gmpArtifact = gmp({ host, sdk: false, env: buildToolchain });
 		ret.push(gmpArtifact);
 		let gmpEnv = std.env.arg(buildToolchain, gmpArtifact);
 
-		let islArtifact = isl({ host, sdk: false, env: gmpEnv });
+		const islArtifact = isl({ host, sdk: false, env: gmpEnv });
 		ret.push(islArtifact);
 
-		let mpfrArtifact = mpfr({ host, sdk: false, env: gmpEnv });
+		const mpfrArtifact = mpfr({ host, sdk: false, env: gmpEnv });
 		ret.push(mpfrArtifact);
 		gmpEnv = std.env.arg(gmpEnv, mpfrArtifact);
 
-		let mpcArtifact = mpc({
+		const mpcArtifact = mpc({
 			host,
 			sdk: false,
 			env: gmpEnv,

@@ -3,9 +3,9 @@ import { mergeLibDirs } from "../../sdk.tg.ts";
 import { interpreterName } from "../libc.tg.ts";
 import { defaultGlibcVersion } from "../libc/glibc.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://gcc.gnu.org/",
 	license: "GPL-3.0-or-later",
 	name: "gcc",
@@ -14,14 +14,14 @@ export let metadata = {
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
-export let source = tg.target((bundledSources?: boolean) => {
-	let { name, version } = metadata;
+export const source = tg.target((bundledSources?: boolean) => {
+	const { name, version } = metadata;
 
 	// Download and unpack the GCC source.
-	let extension = ".tar.xz";
-	let checksum =
+	const extension = ".tar.xz";
+	const checksum =
 		"sha256:a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9";
-	let base = `https://mirrors.ocf.berkeley.edu/gnu/${name}/${name}-${version}`;
+	const base = `https://mirrors.ocf.berkeley.edu/gnu/${name}/${name}-${version}`;
 	let sourceDir = std
 		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
@@ -64,8 +64,8 @@ export type Variant =
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
-export let build = tg.target(async (arg: Arg) => {
-	let {
+export const build = tg.target(async (arg: Arg) => {
+	const {
 		autotools = {},
 		build: build_,
 		bundledSources = false,
@@ -81,11 +81,11 @@ export let build = tg.target(async (arg: Arg) => {
 	} = arg ?? {};
 
 	// Finalize triples.
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let target = target_ ?? host;
-	let isCross = host !== target;
-	let hostEnvironment = std.triple.environment(host);
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+	const target = target_ ?? host;
+	const isCross = host !== target;
+	const hostEnvironment = std.triple.environment(host);
 
 	// Assert the triples don't conflict with the requested configuratiion.
 	if (variant === "stage1_limited") {
@@ -96,19 +96,19 @@ export let build = tg.target(async (arg: Arg) => {
 	}
 
 	// Configure sysroot.
-	let targetPrefix = isCross ? `${target}-` : "";
-	let sysrootDir = `${isCross ? `/${target}` : ""}/sysroot`;
-	let prefixSysrootPath = `$\{OUTPUT\}${sysrootDir}`;
+	const targetPrefix = isCross ? `${target}-` : "";
+	const sysrootDir = `${isCross ? `/${target}` : ""}/sysroot`;
+	const prefixSysrootPath = `$\{OUTPUT\}${sysrootDir}`;
 
 	// Before configuring, copy the target binutils and sysroot into the prefix. Create a symlink in a subdirectory of the prefix to ensure the toolchain is relocatable.
-	let sysrootToCopy = isCross
+	const sysrootToCopy = isCross
 		? sysroot
 		: sysroot.get(target).then(tg.Directory.expect);
-	let prefixSeed = tg.directory(sysrootToCopy, targetBinutils);
+	const prefixSeed = tg.directory(sysrootToCopy, targetBinutils);
 	let preConfigureHook = tg`\nmkdir -p $OUTPUT\ncp -R ${prefixSeed}/* $OUTPUT\nchmod -R u+w $OUTPUT\nln -s . ${prefixSysrootPath}`;
 
 	// Define args used for all variants.
-	let commonConfigureArgs = [
+	const commonConfigureArgs = [
 		"--disable-bootstrap",
 		"--disable-dependency-tracking",
 		"--disable-nls",
@@ -123,10 +123,10 @@ export let build = tg.target(async (arg: Arg) => {
 	];
 
 	// Define the args for each variant.
-	let variantConfigureArgs = (variant: Variant) => {
+	const variantConfigureArgs = (variant: Variant) => {
 		switch (variant) {
 			case "stage1_bootstrap": {
-				let args = [
+				const args = [
 					"--disable-libatomic",
 					"--disable-libgomp",
 					"--disable-libquadmath",
@@ -168,14 +168,14 @@ export let build = tg.target(async (arg: Arg) => {
 	};
 
 	// NOTE: Usually any `tg.Template.Arg` could be a valid configure arg. We restrict to strings here to avoid accidentally hardcoding a runtime dependency on a Tangram artifact instead of components included in this installation prefix.
-	let configureArgs: Array<string> = [
+	const configureArgs: Array<string> = [
 		...commonConfigureArgs,
 		...variantConfigureArgs(variant),
 	];
 
 	// For Musl targets, disable libsanitizer. See https://wiki.musl-libc.org/open-issues.html
 	// NOTE - the stage1_bootstrap variant already includes this flag.
-	let targetEnvironment = std.triple.environment(target);
+	const targetEnvironment = std.triple.environment(target);
 	if (targetEnvironment === "musl" && variant !== "stage1_bootstrap") {
 		configureArgs.push("--disable-libsanitizer");
 	}
@@ -187,21 +187,21 @@ export let build = tg.target(async (arg: Arg) => {
 
 	// If requested, include environment necessary to complete the target library builds with the fresh, unproxied compiler.
 	if (crossNative) {
-		let sysrootLibDir = `${prefixSysrootPath}/lib`;
-		let sysrootLdso = `${sysrootLibDir}/${interpreterName(target)}`;
-		let ldflagsForTarget = `-Wl,-dynamic-linker,${sysrootLdso}`;
+		const sysrootLibDir = `${prefixSysrootPath}/lib`;
+		const sysrootLdso = `${sysrootLibDir}/${interpreterName(target)}`;
+		const ldflagsForTarget = `-Wl,-dynamic-linker,${sysrootLdso}`;
 		configureArgs.push(`LDFLAGS_FOR_TARGET=${ldflagsForTarget}`);
 		preConfigureHook = tg`${preConfigureHook}\nexport LD_LIBRARY_PATH=${sysrootLibDir}`;
 	}
 
 	// Set up phases.
-	let configure = {
+	const configure = {
 		pre: preConfigureHook,
 		body: {
 			args: configureArgs,
 		},
 	};
-	let phases = { configure };
+	const phases = { configure };
 
 	let result = await std.autotools.build(
 		{
@@ -236,7 +236,7 @@ export default build;
 
 export { interpreterName } from "../libc.tg.ts";
 
-export let interpreterPath = (target: string, isCross?: boolean) =>
+export const interpreterPath = (target: string, isCross?: boolean) =>
 	`${isCross ? `/${target}/sysroot` : "/"}lib/${interpreterName(target)}`;
 
 type WrapArgsArg = {
@@ -246,20 +246,20 @@ type WrapArgsArg = {
 };
 
 /** Produce the set of flags required to enable proxying a statically-linked toolchain dir. */
-export let wrapArgs = async (arg: WrapArgsArg) => {
-	let { host, target: target_, toolchainDir } = arg;
-	let target = target_ ?? host;
-	let hostOs = std.triple.os(host);
-	let gccVersion = await getGccVersion(toolchainDir, host, target);
-	let isCross = host !== target;
-	let sysroot =
+export const wrapArgs = async (arg: WrapArgsArg) => {
+	const { host, target: target_, toolchainDir } = arg;
+	const target = target_ ?? host;
+	const hostOs = std.triple.os(host);
+	const gccVersion = await getGccVersion(toolchainDir, host, target);
+	const isCross = host !== target;
+	const sysroot =
 		hostOs === "darwin"
 			? tg`${toolchainDir}/${target}/sysroot`
 			: isCross
-			  ? tg`${toolchainDir}/${target}`
-			  : toolchainDir;
+				? tg`${toolchainDir}/${target}`
+				: toolchainDir;
 
-	let ccArgs = [
+	const ccArgs = [
 		//.Set the sysroot.
 		tg`--sysroot=${sysroot}`,
 		// Ensure the correct binutils are used.
@@ -270,12 +270,12 @@ export let wrapArgs = async (arg: WrapArgsArg) => {
 	];
 
 	// Fortran gets the same args as the C compiler.
-	let fortranArgs = ccArgs;
+	const fortranArgs = ccArgs;
 
 	// The C++ compiler needs additional include paths.
-	let cxxHeaderRoot =
+	const cxxHeaderRoot =
 		hostOs === "darwin" ? tg`${toolchainDir}/${target}` : sysroot;
-	let cxxArgs = [
+	const cxxArgs = [
 		...ccArgs,
 		tg`-isystem${cxxHeaderRoot}/include/c++/${gccVersion}`,
 		tg`-isystem${cxxHeaderRoot}/include/c++/${gccVersion}/${target}`,
@@ -289,13 +289,13 @@ async function getGccVersion(
 	host: string,
 	target?: string,
 ): Promise<string> {
-	let targetTriple = target ?? host;
-	let targetPrefix = host === targetTriple ? `` : `${targetTriple}-`;
+	const targetTriple = target ?? host;
+	const targetPrefix = host === targetTriple ? `` : `${targetTriple}-`;
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
-	let script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
+	const script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
-	let envObject = std.env.arg(bootstrap.utils(), env);
-	let result = tg.File.expect(
+	const envObject = std.env.arg(bootstrap.utils(), env);
+	const result = tg.File.expect(
 		await (await tg.target(script, { env: envObject })).output(),
 	);
 	return (await result.text()).trim();

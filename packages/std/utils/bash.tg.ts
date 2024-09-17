@@ -1,8 +1,8 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://www.gnu.org/software/bash/",
 	license: "GPL-3.0-or-later",
 	name: "bash",
@@ -18,15 +18,15 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:d3ef80d2b67d8cbbe4d3265c63a72c46f9b278ead6e0e06d61801b58f23f50b5";
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_ = [],
 		host: host_,
@@ -34,23 +34,23 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let configureArgs = ["--without-bash-malloc"];
+	const configureArgs = ["--without-bash-malloc"];
 
 	// If the provided env has ncurses in the library path, use it instead of termcap.
-	let envArg = await std.env.arg(env_);
+	const envArg = await std.env.arg(env_);
 	if (await providesNcurses(envArg)) {
 		configureArgs.push("--with-curses");
 	}
 
-	let configure = {
+	const configure = {
 		args: configureArgs,
 	};
-	let phases = { configure };
+	const phases = { configure };
 
-	let env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
+	const env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
 	env.push(prerequisites(build));
 	env.push(bootstrap.shell(host));
 	env.push({
@@ -74,12 +74,12 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-let providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
-	for await (let [_, dir] of std.env.dirsInVar({
+const providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
+	for await (const [_, dir] of std.env.dirsInVar({
 		env,
 		key: "LIBRARY_PATH",
 	})) {
-		for await (let [name, _] of dir) {
+		for await (const [name, _] of dir) {
 			if (name.includes("libncurses")) {
 				return true;
 			}
@@ -88,8 +88,8 @@ let providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 	return false;
 };
 
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdk = await bootstrap.sdk(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
 });

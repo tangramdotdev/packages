@@ -2,7 +2,6 @@
 members = [
   "packages/cc_proxy",
   "packages/ld_proxy",
-  "packages/rustc_proxy",
   "packages/strip_proxy",
   "packages/wrapper",
 ]
@@ -34,7 +33,7 @@ itertools = "0.13"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "04a18d22bf94c0d554f3570efd4cff5d41b465b9" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "bacd0fa452728dd15e18b7c3f2fa99f79acdc237" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "macros",
@@ -47,7 +46,6 @@ tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 
 tangram_cc_proxy = { path = "packages/cc_proxy" }
 tangram_ld_proxy = { path = "packages/ld_proxy" }
-tangram_rustc_proxy = { path = "packages/rustc_proxy" }
 tangram_std = { path = "." }
 tangram_strip_proxy = { path = "packages/strip_proxy" }
 tangram_wrapper = { path = "packages/wrapper" }
@@ -78,7 +76,6 @@ path = "packages/std/lib.rs"
 workspace = true
 
 [dependencies]
-fnv = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

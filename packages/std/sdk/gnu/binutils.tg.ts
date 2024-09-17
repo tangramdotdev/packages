@@ -1,7 +1,7 @@
 import * as bootstrap from "../../bootstrap.tg.ts";
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://www.gnu.org/software/binutils/",
 	license: "GPL-3.0-or-later",
 	name: "binutils",
@@ -9,9 +9,9 @@ export let metadata = {
 	version: "2.43",
 };
 
-export let source = tg.target(async (build: string) => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(async (build: string) => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:ba5e600af2d0e823312b4e04d265722594be7d94906ebabe6eaf8d0817ef48ed";
 	return std.download.fromGnu({
 		name,
@@ -32,8 +32,8 @@ export type Arg = {
 };
 
 /** Obtain the GNU binutils. */
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		autotools = {},
 		build: build_,
 		env,
@@ -42,12 +42,12 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 		target: target_,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let target = target_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+	const target = target_ ?? host;
 
 	// Collect configuration.
-	let configure = {
+	const configure = {
 		args: [
 			"--disable-dependency-tracking",
 			"--disable-nls",
@@ -62,11 +62,11 @@ export let build = tg.target(async (arg?: Arg) => {
 	};
 
 	// NOTE: We could pull in `dependencies.texinfo` to avoid needing to set `MAKEINFO=true`, but we do not need the docs here and texinfo transitively adds more rebuilds than the other required dependencies, which would increase the total build time needlessly.
-	let makeinfoOverride = {
+	const makeinfoOverride = {
 		args: ["MAKEINFO=true"],
 	};
 
-	let phases = {
+	const phases = {
 		configure,
 		build: makeinfoOverride,
 		install: makeinfoOverride,
@@ -89,11 +89,11 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdkArg = await bootstrap.sdk.arg(host);
 
-	let binaries = [
+	const binaries = [
 		"ar",
 		"as",
 		"ld",

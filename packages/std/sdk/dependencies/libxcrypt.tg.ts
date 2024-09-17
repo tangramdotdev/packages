@@ -1,6 +1,6 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://github.com/besser82/libxcrypt",
 	name: "libxcrypt",
 	license: "LGPL-2.1",
@@ -8,12 +8,12 @@ export let metadata = {
 	version: "4.4.36",
 };
 
-export let source = tg.target(() => {
-	let { name, version } = metadata;
-	let owner = "besser82";
-	let repo = name;
-	let tag = `v${version}`;
-	let checksum =
+export const source = tg.target(() => {
+	const { name, version } = metadata;
+	const owner = "besser82";
+	const repo = name;
+	const tag = `v${version}`;
+	const checksum =
 		"sha256:e5e1f4caee0a01de2aee26e3138807d6d3ca2b8e67287966d1fefd65e1fd8943";
 	return std.download.fromGithub({
 		checksum,
@@ -35,13 +35,13 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let { autotools = {}, build, env, host, sdk, source: source_ } = arg ?? {};
+export const build = tg.target(async (arg?: Arg) => {
+	const { autotools = {}, build, env, host, sdk, source: source_ } = arg ?? {};
 
-	let configure = {
+	const configure = {
 		args: ["--disable-dependency-tracking"],
 	};
-	let phases = { configure };
+	const phases = { configure };
 
 	return std.autotools.build(
 		{

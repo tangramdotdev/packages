@@ -1,17 +1,17 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	name: "zstd",
 	version: "1.5.6",
 };
 
-export let source = tg.target(() => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(() => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:4aa8dd1c1115c0fd6b6b66c35c7f6ce7bd58cc1dfd3e4f175b45b39e84b14352";
-	let owner = "facebook";
-	let repo = name;
-	let tag = `v${version}`;
+	const owner = "facebook";
+	const repo = name;
+	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
 		compressionFormat: "zst",
@@ -31,18 +31,18 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
+export const build = tg.target(async (arg?: Arg) => {
+	const { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let sourceDir = source_ ?? source();
+	const sourceDir = source_ ?? source();
 
-	let install = tg`make install PREFIX=$OUTPUT`;
-	let phases = { install };
+	const install = tg`make install PREFIX=$OUTPUT`;
+	const phases = { install };
 
-	let result = std.autotools.build({
+	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		defaultCrossArgs: false,
@@ -59,9 +59,9 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdkArg = await bootstrap.sdk.arg(host);
 	await std.assert.pkg({
 		metadata,
 		buildFunction: build,

@@ -1,13 +1,13 @@
-import * as std from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
 
 /** Filter the contents of a directory according to a predicate. */
-export let filter = async (
+export const filter = async (
 	directory: tg.Unresolved<tg.Directory>,
 	predicate: (name: string, artifact: tg.Artifact) => boolean,
 ) => {
-	let dir = await tg.resolve(directory);
+	const dir = await tg.resolve(directory);
 	let ret = dir;
-	for await (let [name, artifact] of dir) {
+	for await (const [name, artifact] of dir) {
 		if (!predicate(name, artifact)) {
 			ret = await tg.directory(dir, { [`${name}`]: undefined });
 		}
@@ -16,7 +16,7 @@ export let filter = async (
 };
 
 /** Produce a directory containing only the named subdirectories if present. */
-export let keepSubdirectories = async (
+export const keepSubdirectories = async (
 	directory: tg.Unresolved<tg.Directory>,
 	...subdirectories: Array<string>
 ) => {
@@ -28,6 +28,6 @@ export let keepSubdirectories = async (
 };
 
 /** If the given directory contains a single child directory, return the inner child. */
-export let unwrap = async (directory: tg.Directory) => {
+export const unwrap = async (directory: tg.Directory) => {
 	return await std.download.unwrapDirectory(directory);
 };

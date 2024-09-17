@@ -1,13 +1,13 @@
 import * as std from "tg:std" with { path: "../std" };
 import { $ } from "tg:std" with { path: "../std" };
 
-import { versionString, wrapScripts } from "./tangram.tg.ts";
+import { versionString, wrapScripts } from "./tangram.ts";
 export type Arg = tg.File;
 
-export let install = tg.target(
+export const install = tg.target(
 	async (pythonArtifact: tg.Directory, requirements: Arg) => {
 		// Download the requirements specified in any requirements.txt files.
-		let downloads = await $`
+		const downloads = await $`
 					mkdir -p $OUTPUT
 
 					# Download dependencies using the requirements.txt file.
@@ -27,8 +27,8 @@ export let install = tg.target(
 		let installedSitePackages = await tg.directory();
 
 		// For each download, install to a local directory.
-		for await (let [name, file] of downloads) {
-			let installed = await $`
+		for await (const [name, file] of downloads) {
+			const installed = await $`
 						cp "${file}" "${name}"
 						export PYTHONUSERBASE=$OUTPUT
 						mkdir -p $OUTPUT
@@ -44,14 +44,14 @@ export let install = tg.target(
 				.then(tg.Directory.expect);
 
 			// Get any site-packages or bin directories that were installed by pip.
-			let sitePackages = await installed.tryGet(
+			const sitePackages = await installed.tryGet(
 				`lib/python${versionString()}/site-packages`,
 			);
 			if (!(sitePackages instanceof tg.Directory)) {
 				continue;
 			}
 
-			let bin = await installed.tryGet("bin");
+			const bin = await installed.tryGet("bin");
 
 			// Attempt a structural merge of the site packages directories.
 			installedSitePackages = await mergeSitePackages(
@@ -66,12 +66,12 @@ export let install = tg.target(
 		}
 
 		// Create the installed environment containing a "bin" and "site-packages" directory by merging the things installed from source and from pip.
-		let installed = await tg.directory({
+		const installed = await tg.directory({
 			["bin"]: installedBins,
 			["lib/python3/site-packages"]: installedSitePackages,
 		});
 
-		let interpreter = await tg.symlink(
+		const interpreter = await tg.symlink(
 			tg`${pythonArtifact}/bin/python${versionString()}`,
 		);
 
@@ -84,8 +84,8 @@ export let install = tg.target(
 );
 
 /** Detect any potentially conflicting installations in a site-packages directory and merge if necessary. */
-let mergeSitePackages = async (output: tg.Directory, input: tg.Directory) => {
-	for await (let [name, artifact] of input) {
+const mergeSitePackages = async (output: tg.Directory, input: tg.Directory) => {
+	for await (const [name, artifact] of input) {
 		// Resolve symlinks.
 		let installed = await output.tryGet(name);
 		if (installed instanceof tg.Symlink) {

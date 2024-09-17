@@ -1,20 +1,20 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
 // Define supported versions.
 type GlibcVersion = "2.37" | "2.38" | "2.39" | "2.40";
-export let AllGlibcVersions = ["2.37", "2.38", "2.39", "2.40"];
-export let defaultGlibcVersion: GlibcVersion = "2.39";
+export const AllGlibcVersions = ["2.37", "2.38", "2.39", "2.40"];
+export const defaultGlibcVersion: GlibcVersion = "2.39";
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://www.gnu.org/software/libc/",
 	name: "glibc",
 };
 
-export let source = tg.target((version?: GlibcVersion) => {
-	let { name } = metadata;
-	let version_ = version ?? defaultGlibcVersion;
+export const source = tg.target((version?: GlibcVersion) => {
+	const { name } = metadata;
+	const version_ = version ?? defaultGlibcVersion;
 
-	let checksum = checksums.get(version_);
+	const checksum = checksums.get(version_);
 	tg.assert(checksum, `Unsupported glibc version ${version}`);
 
 	return std.download.fromGnu({
@@ -34,8 +34,8 @@ export type Arg = {
 	linuxHeaders: tg.Directory;
 };
 
-export let build = tg.target(async (arg: Arg) => {
-	let {
+export const build = tg.target(async (arg: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
@@ -43,11 +43,11 @@ export let build = tg.target(async (arg: Arg) => {
 		sdk,
 		source: source_,
 	} = arg;
-	let incomingHost = host_ ?? (await std.triple.host());
-	let { host, version } = splitVersionFromHost(incomingHost);
-	let build = build_ ?? host;
+	const incomingHost = host_ ?? (await std.triple.host());
+	const { host, version } = splitVersionFromHost(incomingHost);
+	const build = build_ ?? host;
 
-	let additionalFlags = [];
+	const additionalFlags = [];
 
 	// The 2.38 includes the deprecated libcrypt, which is disabled by default. We opt-in to enable it.
 	if (version === "2.38") {
@@ -60,7 +60,7 @@ export let build = tg.target(async (arg: Arg) => {
 		additionalFlags.push("--enable-fortify-source");
 	}
 
-	let configure = {
+	const configure = {
 		args: [
 			"--disable-nls",
 			"--disable-nscd",
@@ -75,16 +75,16 @@ export let build = tg.target(async (arg: Arg) => {
 		],
 	};
 
-	let install = {
+	const install = {
 		args: [`DESTDIR="$OUTPUT/${host}"`],
 	};
 
-	let phases = {
+	const phases = {
 		configure,
 		install,
 	};
 
-	let env: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	const env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 
 	env.push({
 		CPATH: tg.Mutation.unset(),
@@ -127,15 +127,15 @@ type SysrootFixArg = {
 };
 
 /** Some linker scripts need a small patch to work properly with `ld`'s sysroot replacement, prepending a `=` character to paths that need to resolve relative to the sysroot rather than absolute. This target modifies the script with the given name in the given directory. */
-export let applySysrootFix = async (arg: SysrootFixArg) => {
+export const applySysrootFix = async (arg: SysrootFixArg) => {
 	let { directory, filePath } = arg;
-	let linkerScript = tg.File.expect(await arg.directory.get(arg.filePath));
-	let isElfObject =
+	const linkerScript = tg.File.expect(await arg.directory.get(arg.filePath));
+	const isElfObject =
 		std.file.detectExecutableKind(await linkerScript.bytes()) === "elf";
 	// If the given path points to an ELF object, don't do anything. Apply the fix if it's a text file.
 	if (!isElfObject) {
-		let scriptContents = await linkerScript.text();
-		let scriptContentsFixed = scriptContents
+		const scriptContents = await linkerScript.text();
+		const scriptContentsFixed = scriptContents
 			.split("\n")
 			.map((line) => {
 				if (line.startsWith("GROUP")) {
@@ -152,17 +152,17 @@ export let applySysrootFix = async (arg: SysrootFixArg) => {
 	return directory;
 };
 
-export let interpreterName = (triple: string) => {
-	let arch = std.triple.arch(triple);
-	let soVersion = arch === "x86_64" ? "2" : "1";
-	let soArch = arch === "x86_64" ? "x86-64" : arch;
+export const interpreterName = (triple: string) => {
+	const arch = std.triple.arch(triple);
+	const soVersion = arch === "x86_64" ? "2" : "1";
+	const soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;
 };
 
-let splitVersionFromHost = (
+const splitVersionFromHost = (
 	host: string,
 ): { host: string; version: GlibcVersion } => {
-	let environmentVersion = std.triple.environmentVersion(host);
+	const environmentVersion = std.triple.environmentVersion(host);
 	if (environmentVersion) {
 		tg.assert(
 			AllGlibcVersions.includes(environmentVersion),
@@ -177,7 +177,7 @@ let splitVersionFromHost = (
 	}
 };
 
-let checksums: Map<GlibcVersion, tg.Checksum> = new Map([
+const checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 	[
 		"2.37",
 		"sha256:2257eff111a1815d74f46856daaf40b019c1e553156c69d48ba0cbfc1bb91a43",

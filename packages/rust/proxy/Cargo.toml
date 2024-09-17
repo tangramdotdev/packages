@@ -1,0 +1,29 @@
+[package]
+name = "tangram_rustc_proxy"
+authors = ["Tangram <root@tangram.dev>"]
+description = "Userspace utilities for the Tangram standard library"
+edition = "2021"
+homepage = "https://www.tangram.dev"
+license = "MIT"
+publish = false
+repository = "https://github.com/tangramdotdev/packages"
+rust-version = "1.80.0"
+version = "0.0.0"
+
+
+[features]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
+
+[dependencies]
+fnv = "1"
+futures = "0.3"
+itertools = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "bacd0fa452728dd15e18b7c3f2fa99f79acdc237" }
+tokio = { version = "1", default-features = false, features = [
+  "rt",
+  "fs",
+] }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["json"], optional = true }

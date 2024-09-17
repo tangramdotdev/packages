@@ -1,4 +1,4 @@
-import * as std from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
 
 export type ExecutableMetadata =
 	| ElfExecutableMetadata
@@ -33,21 +33,21 @@ export type ShebangExecutableMetadata = {
 };
 
 /** Get metadata from an executable. */
-export let executableMetadata = async (
+export const executableMetadata = async (
 	file: tg.File,
 ): Promise<ExecutableMetadata> => {
 	tg.assert(file.executable);
-	let bytes = await file.bytes();
-	let kind = detectExecutableKind(bytes);
+	const bytes = await file.bytes();
+	const kind = detectExecutableKind(bytes);
 	if (kind === "elf") {
-		let { arch, interpreter } = elfExecutableMetadata(bytes);
+		const { arch, interpreter } = elfExecutableMetadata(bytes);
 		return { format: "elf", arch, interpreter };
 	} else if (kind === "mach-o") {
-		let { arches } = machoExecutableMetadata(bytes);
+		const { arches } = machoExecutableMetadata(bytes);
 		return { format: "mach-o", arches };
 	} else if (kind === "shebang") {
-		let text = await file.text();
-		let interpreter = text.match(/^#!\s*(\S+)/)?.[1];
+		const text = await file.text();
+		const interpreter = text.match(/^#!\s*(\S+)/)?.[1];
 		tg.assert(interpreter);
 		return { format: "shebang", interpreter };
 	} else {
@@ -56,10 +56,10 @@ export let executableMetadata = async (
 };
 
 /** Attempt to determine the systems an executable is able to run on. */
-export let executableTriples = async (
+export const executableTriples = async (
 	file: tg.File,
 ): Promise<Array<string> | undefined> => {
-	let metadata = await executableMetadata(file);
+	const metadata = await executableMetadata(file);
 	let arches: Array<string>;
 	let os: string;
 	if (metadata.format === "elf") {
@@ -76,7 +76,7 @@ export let executableTriples = async (
 
 type ExecutableKind = "elf" | "mach-o" | "shebang" | "unknown";
 
-export let detectExecutableKind = (bytes: Uint8Array): ExecutableKind => {
+export const detectExecutableKind = (bytes: Uint8Array): ExecutableKind => {
 	if (startsWithBytes(bytes, [0x7f, 0x45, 0x4c, 0x46])) {
 		// ELF.
 		return "elf";
@@ -97,20 +97,20 @@ export let detectExecutableKind = (bytes: Uint8Array): ExecutableKind => {
 	}
 };
 
-let elfExecutableMetadata = (
+const elfExecutableMetadata = (
 	bytes: Uint8Array,
 ): { arch: string; interpreter: string | undefined } => {
-	let fileHeader = parseElfFileHeader(bytes);
-	let arch = fileHeader.arch;
+	const fileHeader = parseElfFileHeader(bytes);
+	const arch = fileHeader.arch;
 
 	let interpreter = undefined;
-	for (let programHeader of Array.from(parseElfProgramHeaders(bytes))) {
+	for (const programHeader of Array.from(parseElfProgramHeaders(bytes))) {
 		// Find the PT_INTERP program header.
 		if (programHeader.type === 0x03) {
 			// Read the section from the file.
-			let start = bigIntToNumber(programHeader.offset);
-			let end = bigIntToNumber(programHeader.offset + programHeader.fileSize);
-			let sectionBytes = bytes.slice(start, end);
+			const start = bigIntToNumber(programHeader.offset);
+			const end = bigIntToNumber(programHeader.offset + programHeader.fileSize);
+			const sectionBytes = bytes.slice(start, end);
 
 			// Decode the section as a UTF-8 string.
 			interpreter = tg.encoding.utf8.decode(sectionBytes);
@@ -134,9 +134,9 @@ type ElfFileHeader = {
 };
 
 /** Parse the file header of the bytes from an ELF file. This function throws an error if it could not be parsed. */
-let parseElfFileHeader = (bytes: Uint8Array): ElfFileHeader => {
-	let data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	let elfClass = data.getUint8(0x04);
+const parseElfFileHeader = (bytes: Uint8Array): ElfFileHeader => {
+	const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const elfClass = data.getUint8(0x04);
 	let bits: 32 | 64;
 	switch (elfClass) {
 		case 1: {
@@ -152,7 +152,7 @@ let parseElfFileHeader = (bytes: Uint8Array): ElfFileHeader => {
 		}
 	}
 
-	let elfData = data.getUint8(0x05);
+	const elfData = data.getUint8(0x05);
 	let isLittleEndian: boolean;
 	switch (elfData) {
 		case 1: {
@@ -168,7 +168,7 @@ let parseElfFileHeader = (bytes: Uint8Array): ElfFileHeader => {
 		}
 	}
 
-	let elfMachine = data.getUint8(0x12);
+	const elfMachine = data.getUint8(0x12);
 	let arch: string | undefined;
 	switch (elfMachine) {
 		case 0x08: {
@@ -243,14 +243,14 @@ type ElfProgramHeader = {
 function* parseElfProgramHeaders(
 	bytes: Uint8Array,
 ): Iterable<ElfProgramHeader> {
-	let elfFileHeader = parseElfFileHeader(bytes);
-	let data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const elfFileHeader = parseElfFileHeader(bytes);
+	const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
 	for (let i = 0; i < elfFileHeader.programHeaderTableEntryCount; i++) {
-		let offset =
+		const offset =
 			elfFileHeader.programHeaderTableOffset +
 			BigInt(i) * BigInt(elfFileHeader.programHeaderTableEntrySize);
-		let type = data.getUint32(
+		const type = data.getUint32(
 			bigIntToNumber(offset),
 			elfFileHeader.isLittleEndian,
 		);
@@ -305,17 +305,17 @@ function* parseElfProgramHeaders(
 	return null;
 }
 
-let MACHO_CPU_TYPE_ARM64 = 0x0100000c as const;
-let MACHO_CPU_TYPE_X86_64 = 0x01000007 as const;
-let MACHO_MAGIC_UNIVERSAL = [0xca, 0xfe, 0xba, 0xbe];
-let MACHO_MAGIC_32_LE = [0xce, 0xfa, 0xed, 0xfe];
-let MACHO_MAGIC_64_LE = [0xcf, 0xfa, 0xed, 0xfe];
+const MACHO_CPU_TYPE_ARM64 = 0x0100000c as const;
+const MACHO_CPU_TYPE_X86_64 = 0x01000007 as const;
+const MACHO_MAGIC_UNIVERSAL = [0xca, 0xfe, 0xba, 0xbe];
+const MACHO_MAGIC_32_LE = [0xce, 0xfa, 0xed, 0xfe];
+const MACHO_MAGIC_64_LE = [0xcf, 0xfa, 0xed, 0xfe];
 
-let machoExecutableMetadata = (
+const machoExecutableMetadata = (
 	bytes: Uint8Array,
 ): { arches: Array<string> } => {
-	let arches: Set<string> = new Set();
-	let data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const arches: Set<string> = new Set();
+	const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
 	// Read the arches.
 	if (
@@ -323,7 +323,7 @@ let machoExecutableMetadata = (
 		startsWithBytes(bytes, MACHO_MAGIC_64_LE)
 	) {
 		// Read the CPU type.
-		let cpuType = data.getUint32(0x4, true);
+		const cpuType = data.getUint32(0x4, true);
 
 		// Push any recognized machine types found.
 		if (cpuType === MACHO_CPU_TYPE_X86_64) {
@@ -333,7 +333,7 @@ let machoExecutableMetadata = (
 		}
 	} else if (startsWithBytes(bytes, MACHO_MAGIC_UNIVERSAL)) {
 		// Read the number of entries.
-		let n = data.getUint32(0x4);
+		const n = data.getUint32(0x4);
 
 		// Initialize the offset to the size of the universal header.
 		let offset = 8;
@@ -341,7 +341,7 @@ let machoExecutableMetadata = (
 		// Read the CPU type from each entry.
 		for (let i = 0; i < n; i++) {
 			// Read the CPU type.
-			let cpuType = data.getInt32(offset);
+			const cpuType = data.getInt32(offset);
 
 			// Push any recognized machine types found.
 			if (cpuType === MACHO_CPU_TYPE_X86_64) {
@@ -359,11 +359,11 @@ let machoExecutableMetadata = (
 };
 
 /** Check if a byte array starts with the provided prefix of bytes. */
-let startsWithBytes = (
+const startsWithBytes = (
 	bytes: Uint8Array,
 	prefix: Iterable<number>,
 ): boolean => {
-	let prefixBytes = Uint8Array.from(prefix);
+	const prefixBytes = Uint8Array.from(prefix);
 	if (bytes.length < prefixBytes.length) {
 		return false;
 	}
@@ -376,7 +376,7 @@ let startsWithBytes = (
 };
 
 /** Convert a BigInt value to a number, or throw an error if cannot be converted losslessly. */
-let bigIntToNumber = (value: bigint): number => {
+const bigIntToNumber = (value: bigint): number => {
 	if (
 		value >= BigInt(Number.MIN_SAFE_INTEGER) &&
 		value <= BigInt(Number.MAX_SAFE_INTEGER)

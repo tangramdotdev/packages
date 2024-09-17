@@ -1,5 +1,5 @@
 import * as bootstrap from "./bootstrap.tg.ts";
-import * as std from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
 import * as bash from "./utils/bash.tg.ts";
 import bzip2 from "./utils/bzip2.tg.ts";
 import coreutils from "./utils/coreutils.tg.ts";
@@ -39,23 +39,23 @@ export type Arg = {
 };
 
 /** A basic set of GNU system utilites. */
-export let env = tg.target(async (arg?: Arg) => {
-	let { env: env_, host: host_, ...rest } = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
+export const env = tg.target(async (arg?: Arg) => {
+	const { env: env_, host: host_, ...rest } = arg ?? {};
+	const host = host_ ?? (await std.triple.host());
 
 	// Build bash and use it as the default shell.
-	let bashArtifact = await bash.build({
+	const bashArtifact = await bash.build({
 		...rest,
 		env: env_,
 		host,
 	});
 
-	let bashExecutable = tg.File.expect(await bashArtifact.get("bin/bash"));
-	let bashEnv = {
+	const bashExecutable = tg.File.expect(await bashArtifact.get("bin/bash"));
+	const bashEnv = {
 		CONFIG_SHELL: bashExecutable,
 		SHELL: bashExecutable,
 	};
-	let env = std.env.arg(env_, bashEnv);
+	const env = await std.env.arg(env_, bashEnv);
 
 	let utils = [bashArtifact, bashEnv];
 	utils = utils.concat(
@@ -80,16 +80,16 @@ export let env = tg.target(async (arg?: Arg) => {
 export default env;
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
-export let prerequisites = tg.target(async (hostArg?: string) => {
-	let host = hostArg ?? (await std.triple.host());
-	let components: std.Args<std.env.Arg> = [await bootstrap.utils(host)];
+export const prerequisites = tg.target(async (hostArg?: string) => {
+	const host = hostArg ?? (await std.triple.host());
+	const components: std.Args<std.env.Arg> = [await bootstrap.utils(host)];
 
 	// Add GNU make.
-	let makeArtifact = await bootstrap.make.build(host);
+	const makeArtifact = await bootstrap.make.build(host);
 	components.push(makeArtifact);
 
 	// Add patched GNU coreutils.
-	let coreutilsArtifact = await coreutils({
+	const coreutilsArtifact = await coreutils({
 		env: std.env.arg(bootstrap.sdk(), makeArtifact),
 		host,
 		sdk: false,
@@ -106,18 +106,18 @@ type BuildUtilArg = std.autotools.Arg & {
 };
 
 /** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag. */
-export let buildUtil = tg.target(async (arg: BuildUtilArg) => {
-	let { opt: opt_, wrapBashScriptPaths, ...rest } = arg;
-	let opt = opt_ ?? "s";
+export const buildUtil = tg.target(async (arg: BuildUtilArg) => {
+	const { opt: opt_, wrapBashScriptPaths, ...rest } = arg;
+	const opt = opt_ ?? "s";
 	let output = await std.autotools.build({
 		...rest,
 		opt,
 	});
 
 	// Wrap the bash scripts in the output.
-	for (let path of arg.wrapBashScriptPaths ?? []) {
-		let file = tg.File.expect(await output.get(path));
-		let wrappedFile = changeShebang(file);
+	for (const path of arg.wrapBashScriptPaths ?? []) {
+		const file = tg.File.expect(await output.get(path));
+		const wrappedFile = changeShebang(file);
 		output = await tg.directory(output, {
 			[path]: wrappedFile,
 		});
@@ -127,27 +127,27 @@ export let buildUtil = tg.target(async (arg: BuildUtilArg) => {
 });
 
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
-export let changeShebang = async (scriptFile: tg.File) => {
+export const changeShebang = async (scriptFile: tg.File) => {
 	// Ensure the file has a shebang.
-	let metadata = await std.file.executableMetadata(scriptFile);
+	const metadata = await std.file.executableMetadata(scriptFile);
 	tg.assert(metadata.format === "shebang");
 
 	// Replace the first line with a new shebang.
-	let fileContents = await scriptFile.text();
-	let firstNewlineIndex = fileContents.indexOf("\n");
+	const fileContents = await scriptFile.text();
+	const firstNewlineIndex = fileContents.indexOf("\n");
 	if (firstNewlineIndex === -1) {
 		return tg.unreachable(
 			"Could not find newline in file contents, but we asserted it begins with a shebang.",
 		);
 	}
-	let fileWithoutShebangLine = fileContents.substring(firstNewlineIndex + 1);
-	let newFileContents = `#!/usr/bin/env bash\n${fileWithoutShebangLine}`;
-	let newFile = tg.file({ contents: newFileContents, executable: true });
+	const fileWithoutShebangLine = fileContents.substring(firstNewlineIndex + 1);
+	const newFileContents = `#!/usr/bin/env bash\n${fileWithoutShebangLine}`;
+	const newFile = tg.file({ contents: newFileContents, executable: true });
 	return newFile;
 };
 
-export let assertProvides = async (env: std.env.Arg) => {
-	let names = [
+export const assertProvides = async (env: std.env.Arg) => {
+	const names = [
 		"bash",
 		"bzip2",
 		"ls", // coreutils
@@ -166,9 +166,9 @@ export let assertProvides = async (env: std.env.Arg) => {
 	return true;
 };
 
-export let test = tg.target(async () => {
-	let host = bootstrap.toolchainTriple(await std.triple.host());
-	let utilsEnv = await env({ host, sdk: false, env: bootstrap.sdk() });
+export const test = tg.target(async () => {
+	const host = bootstrap.toolchainTriple(await std.triple.host());
+	const utilsEnv = await env({ host, sdk: false, env: bootstrap.sdk() });
 	await assertProvides(utilsEnv);
 	return utilsEnv;
 });

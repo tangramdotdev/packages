@@ -323,10 +323,10 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
 	let executable = Some(
-		tg::File::with_object(tg::file::Object {
+		tg::File::with_object(tg::file::Object::Normal {
 			contents,
 			executable: true,
-			references: Vec::new(),
+			dependencies: BTreeMap::new(),
 		})
 		.into(),
 	);
@@ -356,12 +356,11 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Create the target.
 	let target = tg::Target::with_object(tg::target::Object {
-		host: tangram_std::host().to_string(),
-		executable,
-		lock: None,
-		env: environment.env,
 		args,
 		checksum: None,
+		env: environment.env,
+		executable,
+		host: tangram_std::host().to_string(),
 	});
 
 	// Create a build.
@@ -372,7 +371,10 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		remote: None,
 		retry: tg::build::Retry::Canceled,
 	};
-	let build_output = tg.build_target(&id, build_arg).await?;
+	let build_output = tg
+		.try_build_target(&id, build_arg)
+		.await?
+		.ok_or(tg::error!("expected build to be created"))?;
 	let build = tg::Build::with_id(build_output.build);
 
 	// Await the outcome.
@@ -544,7 +546,7 @@ async fn check_in_source_tree(
 	subtree: SourceTree,
 ) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
 	// Directory builder to check in the directory at the end.
-	let mut builder = tg::directory::Builder::new(BTreeMap::new());
+	let mut builder = tg::directory::Builder::with_entries(BTreeMap::new());
 
 	// List of remap targets and their subpaths within the directory that we will eventually check in.
 	let mut remap_targets = Vec::new();
@@ -579,7 +581,9 @@ async fn check_in_source_tree(
 					tg,
 					tg::artifact::checkin::Arg {
 						destructive: false,
-						path,
+						deterministic: true,
+						locked: false,
+						path: path.into(),
 					},
 				)
 				.await?;

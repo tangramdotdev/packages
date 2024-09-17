@@ -1,4 +1,4 @@
-import * as std from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
 
 export type Arg = {
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
@@ -74,8 +74,8 @@ export type Arg = {
 	target?: string;
 };
 
-export let target = tg.target(async (...args: std.Args<Arg>) => {
-	let mutationArgs = await std.args.createMutations<
+export const target = tg.target(async (...args: std.Args<Arg>) => {
+	const mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">
 	>(std.flatten(args), {
@@ -92,7 +92,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		source: "set",
 	});
-	let {
+	const {
 		buildInTree = false,
 		debug = false,
 		defaultCFlags = true,
@@ -122,14 +122,14 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	tg.assert(source !== undefined, `source must be defined`);
 
 	// Detect the host system from the environment.
-	let host = host_ ?? (await std.triple.host());
-	let target = target_ ?? host;
-	let os = std.triple.os(host);
+	const host = host_ ?? (await std.triple.host());
+	const target = target_ ?? host;
+	const os = std.triple.os(host);
 
 	// Determine SDK configuration.
 	let sdkArgs: Array<std.sdk.ArgObject> | undefined = undefined;
 	// If any SDk arg is `false`, we don't want to include the SDK.
-	let includeSdk = !sdkArgs_?.some((arg) => arg === false);
+	const includeSdk = !sdkArgs_?.some((arg) => arg === false);
 	// If we are including the SDK, omit any booleans from the array.
 	if (includeSdk) {
 		sdkArgs =
@@ -148,15 +148,15 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	let env: std.env.Arg = {};
 
 	// // C/C++ flags.
-	let cflags = tg``;
+	let cflags = tg.template();
 	if (opt) {
-		let optFlag = `-O${opt}`;
+		const optFlag = `-O${opt}`;
 		cflags = tg`${cflags} ${optFlag}`;
 	}
 	if (defaultCFlags) {
-		let mArchFlag = march ? `-march=${march} ` : "";
-		let mTuneFlag = mtune ? `-mtune=${mtune} ` : "";
-		let defaultCFlags = `${mArchFlag}${mTuneFlag}-pipe`;
+		const mArchFlag = march ? `-march=${march} ` : "";
+		const mTuneFlag = mtune ? `-mtune=${mtune} ` : "";
+		const defaultCFlags = `${mArchFlag}${mTuneFlag}-pipe`;
 		cflags = tg`${cflags} ${defaultCFlags}`;
 	}
 	if (hardeningCFlags) {
@@ -167,20 +167,20 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		cflags = tg`${cflags} ${extraCFlags}`;
 	}
 
-	let environment = std.triple.environment(host);
+	const environment = std.triple.environment(host);
 	if (!environment || environment === "gnu") {
-		let cc1Specs = tg.file(`
+		const cc1Specs = tg.file(`
 	 *cc1_options:
 	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
 
 	 *cpp_options:
 	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
 	 		`);
-		let ldSpecs = tg.file(`
+		const ldSpecs = tg.file(`
 	 *self_spec:
 	 + %{!static:%{!shared:%{!r:-pie}}}
 	 		`);
-		let extraCxxFlags = await tg.Mutation.prefix(
+		const extraCxxFlags = await tg.Mutation.prefix(
 			`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
 			" ",
 		);
@@ -191,15 +191,15 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 
 	// LDFLAGS
 	if (stripExecutables === true) {
-		let stripFlag = await tg.Mutation.prefix(
+		const stripFlag = await tg.Mutation.prefix(
 			os === "darwin" ? `-Wl,-S` : `-s`,
 			" ",
 		);
 		pushOrSet(env, "LDFLAGS", stripFlag);
 	}
 	if (os === "linux" && hardeningCFlags) {
-		let fullRelroString = fullRelro ? ",-z,now" : "";
-		let extraLdFlags = await tg.Mutation.prefix(
+		const fullRelroString = fullRelro ? ",-z,now" : "";
+		const extraLdFlags = await tg.Mutation.prefix(
 			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
 			" ",
 		);
@@ -208,9 +208,9 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 
 	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
-		let sdk = await std.sdk(sdkArgs);
+		const sdk = await std.sdk(sdkArgs);
 		// Add a set of utils for the host, compiled with the default SDK to improve cache hits.
-		let utils = await std.utils.env({
+		const utils = await std.utils.env({
 			host,
 			sdk: false,
 			env: std.sdk({ host }),
@@ -222,7 +222,7 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	env = await std.env.arg(env, userEnv);
 
 	// Define default phases.
-	let configureArgs =
+	const configureArgs =
 		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : [];
 
 	if (defaultCrossArgs) {
@@ -232,25 +232,25 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	let defaultConfigurePath = buildInTree ? "." : source;
-	let defaultConfigure = {
+	const defaultConfigurePath = buildInTree ? "." : source;
+	const defaultConfigure = {
 		command: tg`${defaultConfigurePath}/configure`,
 		args: configureArgs,
 	};
 
-	let jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
-	let jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
-	let defaultBuild = {
+	const jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
+	const jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
+	const defaultBuild = {
 		command: `make`,
 		args: [jobsArg],
 	};
 
-	let defaultInstall = {
+	const defaultInstall = {
 		command: `make`,
 		args: [`install`],
 	};
 
-	let defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
+	const defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
 		configure: defaultConfigure,
 		build: defaultBuild,
 		install: defaultInstall,
@@ -261,21 +261,21 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 		defaultPrepareCommand = tg`${defaultPrepareCommand}\ncp -R ${source}/. . && chmod -R u+w .`;
 	}
 	if (setRuntimeLibraryPath) {
-		let os = std.triple.os(host);
-		let runtimeLibEnvVar =
+		const os = std.triple.os(host);
+		const runtimeLibEnvVar =
 			os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport ${runtimeLibEnvVar}=$LIBRARY_PATH`;
 	}
 
 	if (defaultCrossEnv) {
 		if (host !== target) {
-			let targetPrefix = `${target}-`;
+			const targetPrefix = `${target}-`;
 			defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport CC=${targetPrefix}cc && export CXX=${targetPrefix}c++ && export AR=${targetPrefix}ar`;
 		}
 	}
 
 	if (buildInTree || setRuntimeLibraryPath || defaultCrossEnv) {
-		let defaultPrepare = {
+		const defaultPrepare = {
 			command: defaultPrepareCommand,
 		};
 		defaultPhases.prepare = defaultPrepare;
@@ -291,22 +291,22 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	}
 
 	if (debug || removeLibtoolArchives) {
-		let defaultFixup = {
+		const defaultFixup = {
 			command: defaultFixupCommand,
 		};
 		defaultPhases.fixup = defaultFixup;
 	}
 
 	if (doCheck) {
-		let defaultCheck = {
+		const defaultCheck = {
 			command: `make`,
 			args: [`check`, jobsArg],
 		};
 		defaultPhases.check = defaultCheck;
 	}
 
-	let system = std.triple.archAndOs(host);
-	let phaseArgs = (phases ?? []).filter(
+	const system = std.triple.archAndOs(host);
+	const phaseArgs = (phases ?? []).filter(
 		(arg): arg is std.phases.Arg => arg !== undefined,
 	);
 	return await std.phases.target(
@@ -320,13 +320,13 @@ export let target = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export let build = async (...args: std.args.UnresolvedArgs<Arg>) => {
+export const build = async (...args: std.args.UnresolvedArgs<Arg>) => {
 	return await target(...args)
 		.then((t) => t.output())
 		.then(tg.Directory.expect);
 };
 
-export let pushOrSet = (
+export const pushOrSet = (
 	obj: { [key: string]: unknown },
 	key: string,
 	value: tg.Value,
@@ -341,7 +341,7 @@ export let pushOrSet = (
 			obj[key] = [obj[key]];
 		}
 		tg.assert(obj && key in obj && Array.isArray(obj[key]));
-		let a = obj[key] as Array<tg.Value>;
+		const a = obj[key] as Array<tg.Value>;
 		a.push(value);
 		obj[key] = a;
 	}

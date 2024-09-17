@@ -1,18 +1,18 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
 import disableLocatePatch from "./findutils-disable-locate.diff" with {
 	type: "file",
 };
 
-export let metadata = {
+export const metadata = {
 	name: "findutils",
 	version: "4.10.0",
 };
 
-export let source = tg.target(async (os: string) => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(async (os: string) => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
 	let source = await std.download.fromGnu({
 		name,
@@ -36,33 +36,35 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
-	let os = std.triple.os(build);
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+	const os = std.triple.os(build);
 
-	let wrapBashScriptPaths: Array<string> | undefined =
+	const wrapBashScriptPaths: Array<string> | undefined =
 		os === "linux" ? ["bin/updatedb"] : undefined;
 
-	let configure = {
+	const sourceDir = source_ ?? source(os);
+
+	const configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	let env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build));
 
-	let output = buildUtil({
+	const output = buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
 		sdk,
-		source: source_ ?? source(os),
+		source: sourceDir,
 		wrapBashScriptPaths,
 	});
 
@@ -71,8 +73,8 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdk = await bootstrap.sdk(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
 });

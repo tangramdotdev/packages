@@ -1,22 +1,24 @@
 import * as std from "tg:std" with { path: "../std" };
 
 /** Given a poetry.lock file, generate a valid requirements.txt with hashes. */
-export let requirements = tg.target(async (lockFile: tg.File) => {
+export const requirements = tg.target(async (lockFile: tg.File) => {
 	// TODO: parse and validate the TOML.
 	console.log(`lockfile: ${await lockFile.id()}`);
-	let lockFileToml = tg.encoding.toml.decode(await lockFile.text()) as LockFile;
+	const lockFileToml = tg.encoding.toml.decode(
+		await lockFile.text(),
+	) as LockFile;
 	let text = ``;
 
 	// poetry.lock files may contain multiple versions of the same package. We choose a heuristic to dedup packages with multiple versions, in this case by picking whichever appears first in the lock file..
-	let packages = new Map<string, ParsedPackage>();
-	for (let pkg of lockFileToml.package) {
+	const packages = new Map<string, ParsedPackage>();
+	for (const pkg of lockFileToml.package) {
 		tg.assert(pkg.files, "Missing hashes from poetry.lock");
 
-		let name = pkg.name;
-		let version = pkg.version;
-		let hashes = pkg.files.map((p) => p.hash);
+		const name = pkg.name;
+		const version = pkg.version;
+		const hashes = pkg.files.map((p) => p.hash);
 
-		let existing = packages.get(name);
+		const existing = packages.get(name);
 		if (existing) {
 			console.log(
 				`Warning: conflicting versions of ${name} (${version}, ${existing.version}). Falling back to ${existing.version}.`,
@@ -28,9 +30,9 @@ export let requirements = tg.target(async (lockFile: tg.File) => {
 	}
 
 	// Now that we have deduplicated packages, create the requirements.txt file.
-	for (let [_, pkg] of Array.from(packages)) {
+	for (const [_, pkg] of Array.from(packages)) {
 		text += `${pkg.name}==${pkg.version}`;
-		for (let hash of pkg.hashes) {
+		for (const hash of pkg.hashes) {
 			text += `\\\n    --hash=${hash}`;
 		}
 		text += "\n";

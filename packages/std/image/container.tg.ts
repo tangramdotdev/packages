@@ -1,5 +1,5 @@
-import * as std from "../tangram.tg.ts";
-import { $ } from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
+import { $ } from "../tangram.ts";
 import zstd from "../sdk/dependencies/zstd.tg.ts";
 
 /*
@@ -47,7 +47,7 @@ type RootFsArg = {
 	cmd?: Array<string>;
 };
 
-export let image = tg.target(
+export const image = tg.target(
 	async (...args: std.Args<Arg>): Promise<tg.File> => {
 		type CombinedArgObject = {
 			cmdString?: Array<string>;
@@ -58,7 +58,7 @@ export let image = tg.target(
 			rootDir?: tg.Directory;
 			system?: string;
 		};
-		let objectArgs = await Promise.all(
+		const objectArgs = await Promise.all(
 			std.flatten(args).map(async (arg) => {
 				if (arg === undefined) {
 					return {};
@@ -75,13 +75,13 @@ export let image = tg.target(
 					}
 					tg.File.assert(file);
 					// Is the file executable? If so, wrap it, use it as the entrypoint.
-					let executableMetadata = await std.file.executableMetadata(file);
+					const executableMetadata = await std.file.executableMetadata(file);
 					if (executableMetadata) {
 						return {
 							entrypointArtifact: file,
 						};
 					} else {
-						let id = arg.id();
+						const id = arg.id();
 						throw new Error(
 							`Non-executable file passed to std.container: ${id}.`,
 						);
@@ -92,7 +92,7 @@ export let image = tg.target(
 						rootDir: arg,
 					};
 				} else {
-					let object: std.args.MaybeMutationMap<CombinedArgObject> = {};
+					const object: std.args.MaybeMutationMap<CombinedArgObject> = {};
 					if ("executable" in arg && arg.executable !== undefined) {
 						object.entrypointArtifact = arg.executable;
 					}
@@ -119,7 +119,7 @@ export let image = tg.target(
 			}),
 		);
 
-		let mutationArgs = await std.args.createMutations<
+		const mutationArgs = await std.args.createMutations<
 			CombinedArgObject,
 			std.args.MakeArrayKeys<
 				CombinedArgObject,
@@ -145,16 +145,16 @@ export let image = tg.target(
 		} = await std.args.applyMutations(mutationArgs);
 
 		// Fill in defaults.
-		let system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
+		const system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
 
 		// Combine all root dirs.
-		let rootDir =
+		const rootDir =
 			rootDirs !== undefined ? await tg.directory(...rootDirs) : undefined;
 
 		// Wrap entrypoint artifact.
 		let entrypointArtifact: tg.File | undefined = undefined;
 		if (entrypointArtifact_ !== undefined) {
-			let entrypointArtifactArgs = entrypointArtifact_.filter(
+			const entrypointArtifactArgs = entrypointArtifact_.filter(
 				(arg) => arg !== undefined,
 			) as Array<std.wrap.Arg>;
 			entrypointArtifact = await std.wrap(...entrypointArtifactArgs);
@@ -167,7 +167,7 @@ export let image = tg.target(
 		);
 
 		// Create the layers for the image.
-		let layers: Array<Layer> = [];
+		const layers: Array<Layer> = [];
 		if (rootDir) {
 			layers.push(await layer(rootDir));
 		}
@@ -181,7 +181,7 @@ export let image = tg.target(
 		}
 
 		// Create the image configuration.
-		let config: ImageConfigV1 = {
+		const config: ImageConfigV1 = {
 			...platform(system),
 			rootfs: {
 				type: "layers",
@@ -203,7 +203,7 @@ export let image = tg.target(
 	},
 );
 
-export let dockerImageFromLayers = async (
+export const dockerImageFromLayers = async (
 	config: ImageConfigV1,
 	...layers: Array<Layer>
 ): Promise<tg.File> => {
@@ -211,21 +211,19 @@ export let dockerImageFromLayers = async (
 	let image = tg.directory();
 
 	// Add the config file to the image, using its checksum value as a filename.
-	let configFile = await tg.file(tg.encoding.json.encode(config));
-	let configFilename = `${(
-		await tg.checksum(await configFile.bytes(), "sha256")
-	).slice("sha256:".length)}.json`;
+	const configFile = await tg.file(tg.encoding.json.encode(config));
+	const configFilename = `${(await tg.checksum(await configFile.bytes(), "sha256")).slice("sha256:".length)}.json`;
 	image = tg.directory(image, {
 		[configFilename]: configFile,
 	});
 
 	// Add each layer file to the image directory.
-	let layerFilenames = await Promise.all(
+	const layerFilenames = await Promise.all(
 		layers.map(async (layer) => {
-			let bytes = await layer.tar.bytes();
-			let size = bytes.length;
-			let checksum = await tg.checksum(bytes, "sha256");
-			let checksumValue = checksum.slice("sha256:".length);
+			const bytes = await layer.tar.bytes();
+			const size = bytes.length;
+			const checksum = await tg.checksum(bytes, "sha256");
+			const checksumValue = checksum.slice("sha256:".length);
 
 			// Add the layer to the image directory, along with the legacy metadata used by older versions of the Docker image spec.
 			image = tg.directory(image, {
@@ -254,7 +252,7 @@ export let dockerImageFromLayers = async (
 	);
 
 	// The manifest is an array of manifest entries containing the Config, Layers, and Repotags.
-	let manifest = [
+	const manifest = [
 		{
 			Config: configFilename,
 			Layers: layerFilenames,
@@ -272,23 +270,23 @@ export let dockerImageFromLayers = async (
 	return await $`tar -cf $OUTPUT -C ${image} .`.then(tg.File.expect);
 };
 
-export let ociImageFromLayers = async (
+export const ociImageFromLayers = async (
 	config: ImageConfigV1,
 	layerCompression: "gzip" | "zstd",
 	...layers: Array<Layer>
 ): Promise<tg.File> => {
 	let blobs = tg.directory();
 
-	let addBlob = async (file: tg.File) => {
-		let bytes = await file.bytes();
-		let checksum = await tg.checksum(bytes, "sha256");
+	const addBlob = async (file: tg.File) => {
+		const bytes = await file.bytes();
+		const checksum = await tg.checksum(bytes, "sha256");
 		blobs = tg.directory(blobs, {
 			[checksum.replace(":", "/")]: file,
 		});
 		return { digest: checksum, size: bytes.length };
 	};
 
-	let platform: Platform = {
+	const platform: Platform = {
 		os: config.os,
 		architecture: config.architecture,
 		variant: config.variant,
@@ -298,25 +296,25 @@ export let ociImageFromLayers = async (
 	};
 
 	// Add the config as a blob.
-	let configDescriptor: ImageDescriptor<typeof MediaTypeV1.imageConfig> = {
+	const configDescriptor: ImageDescriptor<typeof MediaTypeV1.imageConfig> = {
 		mediaType: MediaTypeV1.imageConfig,
 		platform,
 		...(await addBlob(await tg.file(tg.encoding.json.encode(config)))),
 	};
 
 	// Add the layers as blobs.
-	let compressionCmd = layerCompression === "gzip" ? "gzip -nc" : "zstd -c";
-	let mediaType =
+	const compressionCmd = layerCompression === "gzip" ? "gzip -nc" : "zstd -c";
+	const mediaType =
 		layerCompression === "gzip"
 			? MediaTypeV1.imageLayerTarGzip
 			: MediaTypeV1.imageLayerTarZstd;
-	let additionalEnv = layerCompression === "gzip" ? [] : [zstd()];
-	let layerDescriptors = await Promise.all(
+	const additionalEnv = layerCompression === "gzip" ? [] : [zstd()];
+	const layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
-			let file = await $`${compressionCmd} $(realpath ${layer.tar}) > $OUTPUT`
+			const file = await $`${compressionCmd} $(realpath ${layer.tar}) > $OUTPUT`
 				.env(additionalEnv)
 				.then(tg.File.expect);
-			let descriptor: ImageDescriptor<typeof mediaType> = {
+			const descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,
 				platform,
 				...(await addBlob(file)),
@@ -326,7 +324,7 @@ export let ociImageFromLayers = async (
 	);
 
 	// Create the container image manifest.
-	let manifest: ImageManifestV1 = {
+	const manifest: ImageManifestV1 = {
 		mediaType: MediaTypeV1.imageManifest,
 		schemaVersion: 2,
 		config: configDescriptor,
@@ -334,14 +332,15 @@ export let ociImageFromLayers = async (
 	};
 
 	// Add the manifest as a blob.
-	let manifestDescriptor: ImageDescriptor<typeof MediaTypeV1.imageManifest> = {
-		mediaType: MediaTypeV1.imageManifest,
-		platform,
-		...(await addBlob(await tg.file(tg.encoding.json.encode(manifest)))),
-	};
+	const manifestDescriptor: ImageDescriptor<typeof MediaTypeV1.imageManifest> =
+		{
+			mediaType: MediaTypeV1.imageManifest,
+			platform,
+			...(await addBlob(await tg.file(tg.encoding.json.encode(manifest)))),
+		};
 
 	// Create the OCI directory according to the layout specification.
-	let directory = tg.directory({
+	const directory = tg.directory({
 		blobs,
 		"oci-layout": tg.file(
 			tg.encoding.json.encode({
@@ -389,12 +388,12 @@ export type Layer = {
 	diffId: string;
 };
 
-export let layer = tg.target(
+export const layer = tg.target(
 	async (directory: tg.Directory): Promise<Layer> => {
-		let bundle = tg.Artifact.bundle(directory);
-		let tar = await $`tar -cf $OUTPUT -C ${bundle} .`.then(tg.File.expect);
-		let bytes = await tar.bytes();
-		let diffId = await tg.checksum(bytes, "sha256");
+		const bundle = tg.Artifact.bundle(directory);
+		const tar = await $`tar -cf $OUTPUT -C ${bundle} .`.then(tg.File.expect);
+		const bytes = await tar.bytes();
+		const diffId = await tg.checksum(bytes, "sha256");
 		return { tar, diffId };
 	},
 );
@@ -408,7 +407,7 @@ export type Platform = {
 	features?: Array<string> | undefined;
 };
 
-export let platform = (system: string): Platform => {
+export const platform = (system: string): Platform => {
 	switch (std.triple.archAndOs(system)) {
 		case "x86_64-linux":
 			return {

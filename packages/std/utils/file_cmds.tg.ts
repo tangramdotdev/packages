@@ -1,18 +1,18 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	name: "file_cmds",
 	version: "430.100.5",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:035272979817edb250e3527b95a028e59b5bff546a13346c4a4e0e83c4d7ac20";
-	let owner = "apple-oss-distributions";
-	let repo = "file_cmds";
-	let tag = std.download.packageName({ name, version });
+	const owner = "apple-oss-distributions";
+	const repo = "file_cmds";
+	const tag = std.download.packageName({ name, version });
 	return std.download.fromGithub({
 		checksum,
 		source: "tag",
@@ -31,16 +31,16 @@ export type Arg = {
 };
 
 /** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
-export let macOsXattrCmds = tg.target(async (arg?: Arg) => {
-	let build = arg?.build ?? (await std.triple.host());
-	let os = std.triple.os(build);
+export const macOsXattrCmds = tg.target(async (arg?: Arg) => {
+	const build = arg?.build ?? (await std.triple.host());
+	const os = std.triple.os(build);
 
 	// Assert that the system is macOS.
 	if (os !== "darwin") {
 		throw new Error(`fileCmds is only supported on macOS, detected ${os}.`);
 	}
 
-	let sourceDir = await source();
+	const sourceDir = await source();
 
 	let result = await tg.directory({
 		bin: tg.directory(),
@@ -77,28 +77,28 @@ type UtilArg = Arg & {
 	script?: tg.Template.Arg;
 };
 
-export let compileUtil = async (arg: UtilArg) => {
-	let build = arg.build ?? (await std.triple.host());
-	let host = build;
+export const compileUtil = async (arg: UtilArg) => {
+	const build = arg.build ?? (await std.triple.host());
+	const host = build;
 
 	// Grab args.
-	let { destDir, fileName, utilName, utilSource } = arg;
+	const { destDir, fileName, utilName, utilSource } = arg;
 
 	// Grab prerequisites.
-	let dashArtifact = await bootstrap.shell(host);
-	let toolchainArtifact = await bootstrap.toolchain(host);
-	let macOsSdk = await bootstrap.macOsSdk();
+	const dashArtifact = await bootstrap.shell(host);
+	const toolchainArtifact = await bootstrap.toolchain(host);
+	const macOsSdk = await bootstrap.macOsSdk();
 
 	// Compile the util.
-	let script =
+	const script =
 		arg.script ??
 		(await tg`
 			cc -Oz -o $OUTPUT ${utilSource}/${fileName}
 		`);
 
-	let dependencies = [toolchainArtifact, dashArtifact];
+	const dependencies = [toolchainArtifact, dashArtifact];
 
-	let util = tg.File.expect(
+	const util = tg.File.expect(
 		await (
 			await tg.target(await tg.template(script), {
 				host: std.triple.archAndOs(build),

@@ -1,16 +1,16 @@
-import * as std from "../../tangram.tg.ts";
+import * as std from "../../tangram.ts";
 
-export let metadata = {
+export const metadata = {
 	name: "zlib",
 	version: "1.3.1",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let extension = ".tar.xz";
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const extension = ".tar.xz";
+	const checksum =
 		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
-	let base = `https://zlib.net/`;
+	const base = `https://zlib.net/`;
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -25,8 +25,8 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
@@ -34,18 +34,18 @@ export let build = tg.target(async (arg?: Arg) => {
 		source: source_,
 	} = arg ?? {};
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let envs = [env_];
+	const envs = [env_];
 	if (build !== host) {
 		envs.push({
 			CHOST: host,
 		});
 	}
-	let env = std.env.arg(...envs);
+	const env = std.env.arg(...envs);
 
-	let output = std.utils.buildUtil({
+	const output = std.utils.buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		defaultCrossArgs: false,
 		env,
@@ -59,9 +59,9 @@ export let build = tg.target(async (arg?: Arg) => {
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdkArg = await bootstrap.sdk.arg(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdkArg = await bootstrap.sdk.arg(host);
 	await std.assert.pkg({
 		buildFunction: build,
 		libraries: ["z"],

@@ -1,18 +1,18 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
 
-export let metadata = {
+export const metadata = {
 	name: "xz",
 	version: "5.4.6",
 };
 
-export let source = tg.target(async () => {
-	let { name, version } = metadata;
-	let extension = ".tar.gz";
-	let checksum =
+export const source = tg.target(async () => {
+	const { name, version } = metadata;
+	const extension = ".tar.gz";
+	const checksum =
 		"sha256:aeba3e03bf8140ddedf62a0a367158340520f6b384f75ca6045ccc6c0d43fd5c";
-	let base = `https://downloads.sourceforge.net/project/lzmautils`;
+	const base = `https://downloads.sourceforge.net/project/lzmautils`;
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -27,18 +27,18 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export let build = tg.target(async (arg?: Arg) => {
-	let {
+export const build = tg.target(async (arg?: Arg) => {
+	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let configure = {
+	const configure = {
 		args: [
 			"--disable-debug",
 			"--disable-dependency-tracking",
@@ -47,7 +47,7 @@ export let build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	let env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build));
 
 	return buildUtil({
 		...(await std.triple.rotate({ build, host })),
@@ -66,8 +66,8 @@ export let build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export let test = tg.target(async () => {
-	let host = await bootstrap.toolchainTriple(await std.triple.host());
-	let sdk = await bootstrap.sdk(host);
+export const test = tg.target(async () => {
+	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
 });

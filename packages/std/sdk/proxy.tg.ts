@@ -1,5 +1,5 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as std from "../tangram.tg.ts";
+import * as std from "../tangram.ts";
 import { injection } from "../wrap/injection.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
@@ -29,15 +29,15 @@ export type Arg = {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
+export const env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
 
-	let proxyCompiler = arg.compiler ?? false;
-	let proxyLinker = arg.linker ?? true;
-	let proxyStrip = arg.strip ?? true;
-	let buildToolchain = arg.toolchain;
+	const proxyCompiler = arg.compiler ?? false;
+	const proxyLinker = arg.linker ?? true;
+	const proxyStrip = arg.strip ?? true;
+	const buildToolchain = arg.toolchain;
 
 	if (!proxyCompiler && !proxyLinker) {
 		return;
@@ -49,14 +49,14 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
-	let dirs = [];
+	const dirs = [];
 
-	let host = arg.host ?? (await std.triple.host());
-	let build = arg.build ?? host;
-	let os = std.triple.os(host);
-	let forcePrefix = arg.forcePrefix ?? false;
+	const host = arg.host ?? (await std.triple.host());
+	const build = arg.build ?? host;
+	const os = std.triple.os(host);
+	const forcePrefix = arg.forcePrefix ?? false;
 
-	let {
+	const {
 		cc: cc_,
 		cxx: cxx_,
 		fortran,
@@ -74,14 +74,14 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let cc: tg.File | tg.Symlink = cc_;
 	let cxx: tg.File | tg.Symlink = cxx_;
-	let isLlvm = flavor === "llvm";
+	const isLlvm = flavor === "llvm";
 
 	if (proxyLinker) {
-		let isCross = build !== host;
-		let prefix = isCross ? `${host}-` : ``;
+		const isCross = build !== host;
+		const prefix = isCross ? `${host}-` : ``;
 
 		// Construct the ld proxy.
-		let ldProxyArtifact = await ldProxy({
+		const ldProxyArtifact = await ldProxy({
 			buildToolchain,
 			build,
 			linker:
@@ -89,8 +89,8 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					? os === "linux" && isLlvm
 						? await tg`${directory}/bin/ld.lld`
 						: os === "darwin" && isCross
-						  ? await tg`${directory}/bin/${host}-ld.gold`
-						  : ld
+							? await tg`${directory}/bin/${host}-ld.gold`
+							: ld
 					: arg.linkerExe,
 			interpreter: ldso,
 			host,
@@ -100,7 +100,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 			cc = tg.File.expect(await directory.get(`bin/clang`));
 			cxx = cc;
 		}
-		let ldProxyDir = tg.directory({
+		const ldProxyDir = tg.directory({
 			ld: ldProxyArtifact,
 		});
 
@@ -112,7 +112,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 		let wrappedGFortran;
 		switch (flavor) {
 			case "gnu": {
-				let { ccArgs, cxxArgs, fortranArgs } = await gnu.gcc.wrapArgs({
+				const { ccArgs, cxxArgs, fortranArgs } = await gnu.gcc.wrapArgs({
 					host: build,
 					target: host,
 					toolchainDir: directory,
@@ -176,13 +176,13 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 				break;
 			}
 			case "llvm": {
-				let { clangArgs, clangxxArgs, env } = await llvmToolchain.wrapArgs({
+				const { clangArgs, clangxxArgs, env } = await llvmToolchain.wrapArgs({
 					host: build,
 					target: host,
 					toolchainDir: directory,
 				});
 				// On Linux, don't wrap in place.
-				let merge = os === "darwin";
+				const merge = os === "darwin";
 				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
 					buildToolchain,
@@ -221,7 +221,7 @@ export let env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 	}
 
 	if (proxyStrip) {
-		let stripProxyArtifact = await stripProxy({
+		const stripProxyArtifact = await stripProxy({
 			buildToolchain,
 			build,
 			host,
@@ -249,18 +249,18 @@ type CcProxyArg = {
 	host?: string;
 };
 
-export let ccProxy = async (arg: CcProxyArg) => {
-	let host = arg.host ?? (await std.triple.host());
-	let build = arg.build ?? host;
-	let buildToolchain = arg.buildToolchain;
-	let tgcc = workspace.ccProxy({
+export const ccProxy = async (arg: CcProxyArg) => {
+	const host = arg.host ?? (await std.triple.host());
+	const build = arg.build ?? host;
+	const buildToolchain = arg.buildToolchain;
+	const tgcc = workspace.ccProxy({
 		buildToolchain,
 		build,
 		host,
 	});
 
-	let isCross = build !== host;
-	let prefix = isCross ? `${host}-` : ``;
+	const isCross = build !== host;
+	const prefix = isCross ? `${host}-` : ``;
 
 	return tg.directory({
 		[`bin/${prefix}cc`]: tgcc,
@@ -280,35 +280,35 @@ type LdProxyArg = {
 	host?: string;
 };
 
-export let ldProxy = async (arg: LdProxyArg) => {
+export const ldProxy = async (arg: LdProxyArg) => {
 	// Prepare the Tangram tools.
-	let host = arg.host ?? (await std.triple.host());
-	let build = arg.build ?? host;
-	let buildToolchain = arg.buildToolchain;
+	const host = arg.host ?? (await std.triple.host());
+	const build = arg.build ?? host;
+	const buildToolchain = arg.buildToolchain;
 
 	// Obtain wrapper components.
 
 	// The linker proxy is built for the build machine.
-	let buildLinkerProxy = await workspace.ldProxy({
+	const buildLinkerProxy = await workspace.ldProxy({
 		buildToolchain,
 		build,
 		host: build,
 	});
 
 	// The injection library and wrapper are built for the host machine.
-	let hostInjectionLibrary = await injection({
+	const hostInjectionLibrary = await injection({
 		buildToolchain,
 		build,
 		host,
 	});
-	let hostWrapper = await workspace.wrapper({
+	const hostWrapper = await workspace.wrapper({
 		buildToolchain,
 		build,
 		host,
 	});
 
 	// Define environment for the linker proxy.
-	let env = {
+	const env = {
 		TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
@@ -319,7 +319,7 @@ export let ldProxy = async (arg: LdProxyArg) => {
 		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
 		),
-		TANGRAM_LINKER_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
+		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
 	};
 
 	// Create the linker proxy.
@@ -339,30 +339,30 @@ type StripProxyArg = {
 	runtimeLibraryPath?: tg.Directory | undefined;
 };
 
-export let stripProxy = async (arg: StripProxyArg) => {
-	let { build: build_, buildToolchain, host: host_, stripCommand } = arg;
+export const stripProxy = async (arg: StripProxyArg) => {
+	const { build: build_, buildToolchain, host: host_, stripCommand } = arg;
 
-	let host = host_ ?? (await std.triple.host());
-	let build = build_ ?? host;
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
 
-	let hostWrapper = await workspace.wrapper({
+	const hostWrapper = await workspace.wrapper({
 		buildToolchain,
 		build,
 		host,
 	});
 
-	let stripProxy = await workspace.stripProxy({
+	const stripProxy = await workspace.stripProxy({
 		build,
 		buildToolchain,
 		host,
 	});
 
-	let envs: tg.Unresolved<Array<std.env.Arg>> = [
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [
 		{
 			TANGRAM_STRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
-			TANGRAM_STRIP_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
+			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
 		},
 	];
 	if (arg.runtimeLibraryPath !== undefined) {
@@ -377,8 +377,8 @@ export let stripProxy = async (arg: StripProxyArg) => {
 	});
 };
 
-export let test = tg.target(async () => {
-	let tests = [
+export const test = tg.target(async () => {
+	const tests = [
 		testBasic(),
 		testTransitive(),
 		testSamePrefix(),
@@ -388,16 +388,16 @@ export let test = tg.target(async () => {
 });
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
-export let testBasic = tg.target(async () => {
-	let bootstrapSDK = await bootstrap.sdk();
-	let helloSource = await tg.file(`
+export const testBasic = tg.target(async () => {
+	const bootstrapSDK = await bootstrap.sdk();
+	const helloSource = await tg.file(`
 #include <stdio.h>
 int main() {
 	printf("Hello from a TGLD-wrapped binary!\\n");
 	return 0;
 }
 	`);
-	let output = await tg
+	const output = await tg
 		.target(
 			tg`
 				set -x
@@ -424,10 +424,10 @@ type MakeSharedArg = {
 	source: tg.File;
 };
 
-let makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
-	let { flags: flagArgs = [], libName, sdk, source } = await tg.resolve(arg);
-	let flags = tg.Template.join(" ", ...flagArgs);
-	let dylibExt =
+const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
+	const { flags: flagArgs = [], libName, sdk, source } = await tg.resolve(arg);
+	const flags = tg.Template.join(" ", ...flagArgs);
+	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 	return await tg
 		.target(
@@ -441,16 +441,16 @@ let makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 };
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
-export let testTransitive = tg.target(async () => {
-	let bootstrapSDK = await bootstrap.sdk();
-	let dylibExt =
+export const testTransitive = tg.target(async () => {
+	const bootstrapSDK = await bootstrap.sdk();
+	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
-	let constantsSourceA = await tg.file(`
+	const constantsSourceA = await tg.file(`
 const char* getGreetingA() {
 	return "Hello from transitive constants A!";
 }
 	`);
-	let constantsHeaderA = await tg.file(`
+	const constantsHeaderA = await tg.file(`
 const char* getGreetingA();
 	`);
 
@@ -466,7 +466,7 @@ const char* getGreetingA();
 	});
 	console.log("STRING CONSTANTS A", await constantsA.id());
 
-	let constantsSourceB = await tg.file(`
+	const constantsSourceB = await tg.file(`
 const char* getGreetingB() {
 	return "Hello from transitive constants B!";
 }
@@ -476,7 +476,7 @@ const char* getGreetingB() {
 		sdk: bootstrapSDK,
 		source: constantsSourceB,
 	});
-	let constantsHeaderB = await tg.file(`
+	const constantsHeaderB = await tg.file(`
 const char* getGreetingB();
 	`);
 	constantsB = await tg.directory(constantsB, {
@@ -486,14 +486,14 @@ const char* getGreetingB();
 	});
 	console.log("STRING CONSTANTS B", await constantsB.id());
 
-	let greetSourceA = await tg.file(`
+	const greetSourceA = await tg.file(`
 	#include <stdio.h>
 	#include <constantsa.h>
 	void greet_a() {
 		printf("%s\\n", getGreetingA());
 	}
 			`);
-	let greetHeaderA = await tg.file(`
+	const greetHeaderA = await tg.file(`
 	void greet_a();
 			`);
 	let greetA = await makeShared({
@@ -513,14 +513,14 @@ const char* getGreetingB();
 	});
 	console.log("GREET A", await greetA.id());
 
-	let greetSourceB = await tg.file(`
+	const greetSourceB = await tg.file(`
 	#include <stdio.h>
 	#include <constantsb.h>
 	void greet_b() {
 		printf("%s\\n", getGreetingB());
 	}
 			`);
-	let greetHeaderB = await tg.file(`
+	const greetHeaderB = await tg.file(`
 	void greet_b();
 			`);
 	let greetB = await makeShared({
@@ -540,7 +540,7 @@ const char* getGreetingB();
 	});
 	console.log("GREET B", await greetB.id());
 
-	let mainSource = await tg.file(`
+	const mainSource = await tg.file(`
 	#include <greeta.h>
 	#include <greetb.h>
 	int main() {
@@ -549,7 +549,7 @@ const char* getGreetingB();
 		return 0;
 	}
 		`);
-	let output = await tg
+	const output = await tg
 		.target(
 			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -xc ${mainSource} -o $OUTPUT`,
 			{
@@ -569,35 +569,35 @@ const char* getGreetingB();
 });
 
 /** This test checks that the common case of linking against a library in the working directory still works post-install. */
-export let testSamePrefix = tg.target(async () => {
-	let bootstrapSDK = await bootstrap.sdk();
-	let dylibExt =
+export const testSamePrefix = tg.target(async () => {
+	const bootstrapSDK = await bootstrap.sdk();
+	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 
-	let greetSource = await tg.file(`
+	const greetSource = await tg.file(`
 	#include <stdio.h>
 	void greet() {
 		printf("Hello from the shared library!\\n");
 	}
 			`);
-	let greetHeader = await tg.file(`
+	const greetHeader = await tg.file(`
 	void greet();
 			`);
 
-	let mainSource = await tg.file(`
+	const mainSource = await tg.file(`
 	#include <greet.h>
 	int main() {
 		greet();
 		return 0;
 	}
 		`);
-	let source = await tg.directory({
+	const source = await tg.directory({
 		"main.c": mainSource,
 		"greet.c": greetSource,
 		"greet.h": greetHeader,
 	});
 
-	let output = await tg
+	const output = await tg
 		.target(
 			tg`
 			set -x
@@ -622,35 +622,35 @@ export let testSamePrefix = tg.target(async () => {
 });
 
 /** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
-export let testSamePrefixDirect = tg.target(async () => {
-	let bootstrapSDK = await bootstrap.sdk();
-	let dylibExt =
+export const testSamePrefixDirect = tg.target(async () => {
+	const bootstrapSDK = await bootstrap.sdk();
+	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 
-	let greetSource = await tg.file(`
+	const greetSource = await tg.file(`
 	#include <stdio.h>
 	void greet() {
 		printf("Hello from the shared library!\\n");
 	}
 			`);
-	let greetHeader = await tg.file(`
+	const greetHeader = await tg.file(`
 	void greet();
 			`);
 
-	let mainSource = await tg.file(`
+	const mainSource = await tg.file(`
 	#include <greet.h>
 	int main() {
 		greet();
 		return 0;
 	}
 		`);
-	let source = await tg.directory({
+	const source = await tg.directory({
 		"main.c": mainSource,
 		"greet.c": greetSource,
 		"greet.h": greetHeader,
 	});
 
-	let output = await tg
+	const output = await tg
 		.target(
 			tg`
 			set -x
@@ -677,9 +677,9 @@ export let testSamePrefixDirect = tg.target(async () => {
 import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 	type: "file",
 };
-export let testStrip = tg.target(async () => {
-	let toolchain = await bootstrap.sdk();
-	let output = await tg
+export const testStrip = tg.target(async () => {
+	const toolchain = await bootstrap.sdk();
+	const output = await tg
 		.target(
 			tg`
 		set -eux

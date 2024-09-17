@@ -1,6 +1,5 @@
-use std::{path::PathBuf, str::FromStr as _};
+use std::path::PathBuf;
 
-use itertools::Itertools as _;
 use tangram_client as tg;
 use tangram_std::{manifest, Manifest};
 
@@ -44,7 +43,7 @@ fn main_inner() -> tg::Result<()> {
 	// Read the target file. If it is not a Tangram wrapper, pass through the arguments to strip unchanged.
 	// At this point, we know the target is a wrapper. Read the manifest.
 	let target_path = options.strip_target.unwrap(); // This unwrap is safe, it was checked previously.
-	let manifest = manifest::Manifest::read(&target_path).map_err(|error| {
+	let manifest = manifest::Manifest::read_from_path(&target_path).map_err(|error| {
 		tg::error!(
 			source = error,
 			"could not read manifest from path: {}",
@@ -76,7 +75,6 @@ fn main_inner() -> tg::Result<()> {
 			&options.strip_args,
 			&target_path,
 			manifest,
-			options.wrapper_id,
 		))?;
 
 	// Reset the runtime library path.
@@ -97,19 +95,18 @@ async fn run_proxy(
 	strip_args: &[String],
 	target_path: &std::path::Path,
 	manifest: Manifest,
-	wrapper_id: tg::file::Id,
 ) -> tg::Result<()> {
 	// Get the executable symlink data from the manifest.
-	if let manifest::Executable::Path(symlink_data) = manifest.executable {
+	if let manifest::Executable::Path(artifact_path) = manifest.executable {
 		// Create the tangram instance.
 		let tg = tg::Client::with_env()?;
 		tg.connect().await?;
 
 		#[cfg(feature = "tracing")]
-		tracing::info!(?symlink_data, "found executable symlink data");
+		tracing::info!(?artifact_path, "found executable artifact path");
 
 		// Get the path to the actual executable.
-		let executable_path = symlink_data_to_pathbuf(symlink_data);
+		let executable_path = std::path::PathBuf::from(artifact_path);
 
 		#[cfg(feature = "tracing")]
 		tracing::info!(?executable_path, "found executable path");
@@ -147,7 +144,9 @@ async fn run_proxy(
 			&tg,
 			tg::artifact::checkin::Arg {
 				destructive: false,
-				path: local_executable_path.clone().try_into()?,
+				deterministic: true,
+				locked: false,
+				path: local_executable_path,
 			},
 		)
 		.await?
@@ -166,61 +165,17 @@ async fn run_proxy(
 
 		// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 		let new_manifest = Manifest {
-			executable: manifest::Executable::Path(tg::symlink::Data {
-				artifact: Some(stripped_file_id.into()),
-				path: None,
-			}),
+			executable: manifest::Executable::Path(
+				tangram_std::manifest::ArtifactPath::with_artifact_id(stripped_file_id),
+			),
 			..manifest
 		};
 		#[cfg(feature = "tracing")]
 		tracing::info!(?new_manifest, "created new manifest");
-		let references = new_manifest
-			.references()
-			.into_iter()
-			.map(tg::Artifact::with_id)
-			.collect_vec();
 
-		// Obtain the wrapper contents blob.
-		let wrapper = tg::File::with_id(wrapper_id.clone());
-		let wrapper_contents = wrapper.contents(&tg).await?;
-		let wrapper_size = wrapper_contents.size(&tg).await?;
-
-		// Serialize the manifest.
-		let mut manifest = serde_json::to_vec(&new_manifest)
-			.map_err(|error| tg::error!(source = error, "failed to serialize the manifest"))?;
-
-		// Add three 64-bit values (manifest length, version, magic number).
-		manifest.reserve_exact(3 * std::mem::size_of::<u64>());
-		let suffix = u64::try_from(manifest.len())
-			.unwrap()
-			.to_le_bytes()
-			.into_iter()
-			.chain(tangram_std::manifest::VERSION.to_le_bytes().into_iter())
-			.chain(tangram_std::manifest::MAGIC_NUMBER.iter().copied());
-		manifest.extend(suffix);
-
-		// Create the manifest blob.
-		let manifest = std::io::Cursor::new(manifest);
-		let manifest_blob = tg::Blob::with_reader(&tg, manifest).await?;
-		let manifest_size = manifest_blob.size(&tg).await?;
-
-		// Create a new blob with the wrapper contents and the manifest, keeping the wrapper in a separate blob.
-		let output_blob = tg::Blob::new(vec![
-			tg::branch::Child {
-				blob: wrapper_contents,
-				size: wrapper_size,
-			},
-			tg::branch::Child {
-				blob: manifest_blob,
-				size: manifest_size,
-			},
-		]);
-
-		// Create a file with the new blob and references.
-		let new_wrapper = tg::File::builder(output_blob)
-			.executable(true)
-			.references(references.into_iter().map(Into::into).collect_vec())
-			.build();
+		let new_wrapper = new_manifest.write(&tg).await?;
+		#[cfg(feature = "tracing")]
+		tracing::info!(?new_wrapper, "wrote new wrapper");
 
 		// Check out the new output file.
 		let canonical_target_path = std::fs::canonicalize(target_path).map_err(|error| {
@@ -242,9 +197,9 @@ async fn run_proxy(
 				&tg,
 				tg::artifact::checkout::Arg {
 					bundle: false,
+					dependencies: true,
 					force: true,
-					path: Some(canonical_target_path.try_into()?),
-					references: false,
+					path: Some(canonical_target_path),
 				},
 			)
 			.await?;
@@ -277,9 +232,6 @@ struct Options {
 
 	/// Any paths required by the strip program at runtime.
 	strip_runtime_library_path: Option<String>,
-
-	/// The path to the wrapper.
-	wrapper_id: tg::file::Id,
 }
 
 impl Options {
@@ -296,13 +248,6 @@ impl Options {
 		} else {
 			Some(strip_runtime_library_path)
 		};
-
-		// Get the wrapper path.
-		let wrapper_id =
-			tg::file::Id::from_str(&std::env::var("TANGRAM_STRIP_WRAPPER_ID").map_err(
-				|error| tg::error!(source = error, "TANGRAM_STRIP_WRAPPER_ID must be set"),
-			)?)
-			.map_err(|error| tg::error!(source = error, "Could not parse wrapper ID"))?;
 
 		// Parse the arguments.
 		let mut strip_target = None;
@@ -338,7 +283,6 @@ impl Options {
 			strip_target,
 			strip_program,
 			strip_runtime_library_path,
-			wrapper_id,
 		};
 		Ok(options)
 	}
@@ -371,23 +315,6 @@ fn run_strip(
 
 	// Otherwise, return success.
 	Ok(())
-}
-
-fn symlink_data_to_pathbuf(data: tg::symlink::Data) -> std::path::PathBuf {
-	// Start from the artifact path.
-	let mut path = std::path::PathBuf::from_str(&tangram_std::CLOSEST_ARTIFACT_PATH).unwrap();
-
-	// Add the artifact path if it exists.
-	if let Some(artifact_id) = data.artifact {
-		path.push(artifact_id.to_string());
-	}
-
-	// Add the path if it exists.
-	if let Some(subpath) = data.path {
-		path.push(subpath);
-	}
-
-	path
 }
 
 /// Set the correct environment variable for the runtime library path. Returns the current value if set.

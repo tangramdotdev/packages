@@ -1,8 +1,8 @@
 import * as bootstrap from "./bootstrap.tg.ts";
-import * as std from "./tangram.tg.ts";
-import { $ } from "./tangram.tg.ts";
+import * as std from "./tangram.ts";
+import { $ } from "./tangram.ts";
 import { nativeProxiedSdkArgs } from "./sdk.tg.ts";
-import { manifestReferences, wrap } from "./wrap.tg.ts";
+import { manifestDependencies, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
 	/* A function that builds a package to check. If no other options are given, just asserts the package directory is non-empty. */
@@ -24,7 +24,7 @@ type PkgArg = {
 	/* Additional packages required at runtime to use this package. */
 	runtimeDeps?: Array<RuntimeDep>;
 	/** The metadata of the package being tested */
-	metadata?: tg.Metadata;
+	metadata?: Metadata;
 	/** The SDK args to use for testing. Will be combined with `sdks` if present. If both are omitted, a default set will be tested. */
 	sdk?: std.sdk.Arg;
 	/** A list of sdk args to use for testing. Will be combined with `sdk`. If both are omitted, a default set will be tested. */
@@ -60,10 +60,15 @@ type RuntimeDep = {
 	libs: Array<string>;
 };
 
+export type Metadata = {
+	name?: string;
+	version?: string;
+};
+
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
-export let pkg = async (arg: PkgArg) => {
+export const pkg = async (arg: PkgArg) => {
 	//// Produce list of all requested SDK args.
-	let sdks: Array<std.sdk.Arg> = [];
+	const sdks: Array<std.sdk.Arg> = [];
 	if (arg.sdk) {
 		sdks.push(arg.sdk);
 	}
@@ -75,22 +80,22 @@ export let pkg = async (arg: PkgArg) => {
 		sdks.push(...(await defaultSdkSet()));
 	}
 
-	let env = arg.env ?? {};
+	const env = arg.env ?? {};
 
-	let metadata = arg.metadata;
+	const metadata = arg.metadata;
 
 	// Collect a seried of tests to run for each provided SDK.
-	let tests = std.flatten(
+	const tests = std.flatten(
 		sdks.map(async (sdk) => {
-			let directory = await arg.buildFunction({ sdk });
+			const directory = await arg.buildFunction({ sdk });
 
 			// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
-			let tests = [nonEmpty(directory)];
+			const tests = [nonEmpty(directory)];
 
 			// Assert the package contains the specified binaries.
 			if (arg.binaries) {
-				for (let binarySpec of arg.binaries) {
-					let binary =
+				for (const binarySpec of arg.binaries) {
+					const binary =
 						typeof binarySpec === "string"
 							? { name: binarySpec, runtimeDeps: arg.runtimeDeps ?? [] }
 							: binarySpec;
@@ -100,7 +105,7 @@ export let pkg = async (arg: PkgArg) => {
 
 			// Assert the package contains the specified documentation.
 			if (arg.docs) {
-				for (let docPath of arg.docs) {
+				for (const docPath of arg.docs) {
 					tests.push(
 						assertFileExists({ directory, subpath: `share/${docPath}` }),
 					);
@@ -109,7 +114,7 @@ export let pkg = async (arg: PkgArg) => {
 
 			// Assert the package contains the specified headers.
 			if (arg.headers) {
-				for (let header of arg.headers) {
+				for (const header of arg.headers) {
 					tests.push(headerExists({ directory, header }));
 					tests.push(headerCanBeIncluded({ directory, env, header }));
 				}
@@ -157,8 +162,8 @@ export let pkg = async (arg: PkgArg) => {
 };
 
 /** Assert the provided directory has contents. */
-export let nonEmpty = async (dir: tg.Directory) => {
-	let entries = await dir.entries();
+export const nonEmpty = async (dir: tg.Directory) => {
+	const entries = await dir.entries();
 	tg.assert(Object.keys(entries).length > 0, "Directory is empty.");
 	return true;
 };
@@ -168,12 +173,12 @@ type FileExistsArg = {
 	subpath: string;
 };
 
-export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
-	let maybeFile = await arg.directory.tryGet(arg.header);
+export const headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
+	const maybeFile = await arg.directory.tryGet(arg.header);
 	tg.assert(maybeFile, `Path ${arg.header} does not exist.`);
 	tg.File.assert(maybeFile);
 
-	let source = tg.file(`
+	const source = tg.file(`
 		#include "${arg.header}"
 		int main() {
 			return 0;
@@ -187,8 +192,8 @@ export let headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 });
 
 /** Assert the provided path exists and refers to a file. */
-export let assertFileExists = tg.target(async (arg: FileExistsArg) => {
-	let maybeFile = await arg.directory.tryGet(arg.subpath);
+export const assertFileExists = tg.target(async (arg: FileExistsArg) => {
+	const maybeFile = await arg.directory.tryGet(arg.subpath);
 	tg.assert(maybeFile, `Path ${arg.subpath} does not exist.`);
 	tg.File.assert(maybeFile);
 	return true;
@@ -198,11 +203,11 @@ type RunnableBinArg = {
 	directory: tg.Directory;
 	binary: BinarySpec;
 	env?: std.env.Arg | undefined;
-	metadata?: tg.Metadata | undefined;
+	metadata?: Metadata | undefined;
 };
 
 /** Assert the directory contains a binary conforming to the provided spec. */
-export let runnableBin = async (arg: RunnableBinArg) => {
+export const runnableBin = async (arg: RunnableBinArg) => {
 	let name;
 	let testPredicate = (stdout: string) =>
 		stdout.includes(arg.metadata?.version ?? "");
@@ -228,12 +233,12 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 		subpath: `bin/${name}`,
 	});
 
-	let path = (runtimeDeps ?? [])
+	const path = (runtimeDeps ?? [])
 		.flatMap((dep) => dep.directory)
 		.reduce((t, depDir) => {
 			return tg`${t}:${depDir}`;
 		}, tg``);
-	let env = std.env(
+	const env = std.env(
 		{
 			PATH: path,
 		},
@@ -241,17 +246,17 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 	);
 
 	// Run the binary with the provided test invocation.
-	let executable = tg`${arg.directory}/bin/${name} ${tg.Template.join(
+	const executable = tg`${arg.directory}/bin/${name} ${tg.Template.join(
 		" ",
 		...testArgs,
 	)} > $OUTPUT 2>&1 || true`;
 
-	let output = tg.File.expect(
+	const output = tg.File.expect(
 		await (
 			await tg.target(executable, { env: await std.env.arg(env) })
 		).output(),
 	);
-	let stdout = await output.text();
+	const stdout = await output.text();
 	tg.assert(
 		testPredicate(stdout),
 		`Binary ${name} did not produce expected output. Received: ${stdout}`,
@@ -259,41 +264,41 @@ export let runnableBin = async (arg: RunnableBinArg) => {
 	return true;
 };
 
-export let assertFileReferences = async (
+export const assertFileReferences = async (
 	file: tg.File,
 	interpreterKind: "normal" | "ld-musl" | "ld-linux",
 ) => {
-	// Ensure the interpreter is found in the manifest references.
-	let fileManifest = await wrap.Manifest.read(file);
+	// Ensure the interpreter is found in the manifest dependencies.
+	const fileManifest = await wrap.Manifest.read(file);
 	tg.assert(fileManifest);
 	tg.assert(fileManifest.interpreter?.kind === interpreterKind);
-	let interpreter = fileManifest.interpreter;
-	let interpreterPath = interpreter.path;
-	let interpreterId = interpreterPath.artifact;
+	const interpreter = fileManifest.interpreter;
+	const interpreterPath = interpreter.path;
+	const interpreterId = interpreterPath.artifact;
 	tg.assert(interpreterId);
 	let foundManifest = false;
-	for await (let reference of manifestReferences(fileManifest)) {
-		let referenceId = await reference.id();
-		if (referenceId === interpreterId) {
+	for await (const dependency of manifestDependencies(fileManifest)) {
+		const dependencyId = await dependency.id();
+		if (dependencyId === interpreterId) {
 			foundManifest = true;
 		}
 	}
 	tg.assert(
 		foundManifest,
-		"Could not find interpreter in manifest references.",
+		"Could not find interpreter in manifest dependencies.",
 	);
 
-	// Ensure the interpreter is found in the file references.
-	let fileReferences = await file.references();
-	tg.assert(fileReferences.length > 0, "No file references found.");
+	// Ensure the interpreter is found in the file dependencies.
+	const fileDependencies = await file.dependencyObjects();
+	tg.assert(fileDependencies !== undefined && fileDependencies.length > 0, "No file dependencies found.");
 	let foundFile = false;
-	for (let reference of fileReferences) {
-		let referenceId = await reference.id();
+	for (const dependency of fileDependencies) {
+		const referenceId = await dependency.id();
 		if (referenceId === interpreterId) {
 			foundFile = true;
 		}
 	}
-	tg.assert(foundFile, "Could not find interpreter in file references.");
+	tg.assert(foundFile, "Could not find interpreter in file dependencies.");
 };
 
 type HeaderArg = {
@@ -303,7 +308,7 @@ type HeaderArg = {
 };
 
 /** Assert the directory contains a header file with the provided name. */
-export let headerExists = tg.target(async (arg: HeaderArg) => {
+export const headerExists = tg.target(async (arg: HeaderArg) => {
 	// Ensure the file exists.
 	await assertFileExists({
 		directory: arg.directory,
@@ -311,7 +316,7 @@ export let headerExists = tg.target(async (arg: HeaderArg) => {
 	});
 
 	// Generate a program that expects to include this header.
-	let source = tg.file(`
+	const source = tg.file(`
 		#include <${arg.header}>
 		int main() {
 			return 0;
@@ -319,7 +324,7 @@ export let headerExists = tg.target(async (arg: HeaderArg) => {
 	`);
 
 	// Compile the program, ensuring the env properly made the header discoverable.
-	let program = await $`env && cc -xc "${source}" -o $OUTPUT`
+	const program = await $`env && cc -xc "${source}" -o $OUTPUT`
 		.env(std.sdk(), arg.directory)
 		.then(tg.File.expect);
 
@@ -336,12 +341,12 @@ type LibraryArg = {
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
-export let linkableLib = tg.target(async (arg: LibraryArg) => {
+export const linkableLib = tg.target(async (arg: LibraryArg) => {
 	let name;
 	let dylib = true;
 	let staticlib = true;
-	let env = arg.env ?? {};
-	let sdk = arg.sdk;
+	const env = arg.env ?? {};
+	const sdk = arg.sdk;
 	let runtimeDeps: Array<RuntimeDep> = [];
 	if (typeof arg.library === "string") {
 		name = arg.library;
@@ -358,14 +363,14 @@ export let linkableLib = tg.target(async (arg: LibraryArg) => {
 		}
 	}
 
-	let hostOs = std.triple.os(await std.triple.host());
-	let dylibExtension = hostOs === "darwin" ? "dylib" : "so";
+	const hostOs = std.triple.os(await std.triple.host());
+	const dylibExtension = hostOs === "darwin" ? "dylib" : "so";
 
-	let dylibName = (name: string) => `lib${name}.${dylibExtension}`;
+	const dylibName = (name: string) => `lib${name}.${dylibExtension}`;
 
 	if (dylib) {
 		// Combine internal libnames with external runtime dependency libnames.
-		let dylibName_ = dylibName(name);
+		const dylibName_ = dylibName(name);
 
 		// Assert the files exist.
 		await assertFileExists({
@@ -374,8 +379,10 @@ export let linkableLib = tg.target(async (arg: LibraryArg) => {
 		});
 
 		// Assert it can be dlopened.
-		let runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
-		let runtimeDepLibs = runtimeDeps.flatMap((dep) => dep.libs.map(dylibName));
+		const runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
+		const runtimeDepLibs = runtimeDeps.flatMap((dep) =>
+			dep.libs.map(dylibName),
+		);
 		await dlopen({
 			directory: arg.directory,
 			dylib: dylibName_,
@@ -405,11 +412,11 @@ type DlopenArg = {
 };
 
 /** Build and run a small program that dlopens the given dylib. */
-export let dlopen = async (arg: DlopenArg) => {
-	let directory = arg.directory;
-	let dylibs = [arg.dylib, ...arg.runtimeDepLibs];
+export const dlopen = async (arg: DlopenArg) => {
+	const directory = arg.directory;
+	const dylibs = [arg.dylib, ...arg.runtimeDepLibs];
 
-	let testCode = dylibs
+	const testCode = dylibs
 		.map(
 			(name) => `
 		void* ${baseName(name)}Handle = dlopen("${name}", RTLD_NOW);
@@ -421,7 +428,7 @@ export let dlopen = async (arg: DlopenArg) => {
 		.join("\n");
 
 	// Generate the source.
-	let source = tg.file(`
+	const source = tg.file(`
 		#include <dlfcn.h>
 		int main() {
 			${testCode}
@@ -430,8 +437,8 @@ export let dlopen = async (arg: DlopenArg) => {
 	`);
 
 	// Compile the program.
-	let linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
-	let sdkEnv = std.sdk(arg?.sdk);
+	const linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
+	const sdkEnv = std.sdk(arg?.sdk);
 	tg.File.expect(
 		await (
 			await tg.target(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
@@ -452,8 +459,8 @@ export let dlopen = async (arg: DlopenArg) => {
 };
 
 /** Given a library filename, get the basename to pass to a compiler. Throws if no match. */
-export let baseName = (lib: string): string => {
-	let maybeBaseName = tryBaseName(lib);
+export const baseName = (lib: string): string => {
+	const maybeBaseName = tryBaseName(lib);
 	tg.assert(
 		maybeBaseName,
 		`Library name ${lib} does not match expected pattern.`,
@@ -462,8 +469,8 @@ export let baseName = (lib: string): string => {
 };
 
 /** Given a library filename, get the basename to pass to a compiler. Returns undefined if no match. */
-export let tryBaseName = (lib: string): string | undefined => {
-	let match = lib.match(/^lib(.*)\.(a|so|dylib)$/);
+export const tryBaseName = (lib: string): string | undefined => {
+	const match = lib.match(/^lib(.*)\.(a|so|dylib)$/);
 	if (!match) {
 		return undefined;
 	}
@@ -471,11 +478,11 @@ export let tryBaseName = (lib: string): string | undefined => {
 };
 
 /** Execute the given file and assert the resulting `stdout` includes the provided string. */
-export let stdoutIncludes = async (
+export const stdoutIncludes = async (
 	file: tg.Unresolved<tg.File>,
 	expected: string,
 ) => {
-	let stdout = await tg
+	const stdout = await tg
 		.target(tg`${file} > $OUTPUT`, {
 			env: {
 				TANGRAM_WRAPPER_TRACING: "tangram=trace",
@@ -488,6 +495,6 @@ export let stdoutIncludes = async (
 };
 
 /** Produce a set of SDK configurations to test for the given platform. */
-let defaultSdkSet = async (): Promise<Array<std.sdk.Arg>> => {
+const defaultSdkSet = async (): Promise<Array<std.sdk.Arg>> => {
 	return nativeProxiedSdkArgs();
 };
