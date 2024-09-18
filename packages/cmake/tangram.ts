@@ -9,6 +9,7 @@ import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
 
 import * as ninja from "./ninja.tg.ts";
+export * as ninja from "./ninja.tg.ts";
 
 export const metadata = {
 	homepage: "https://cmake.org/",
@@ -318,7 +319,7 @@ export const target = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		env = await std.env.arg(await ninja.build({ host }), env);
+		env = await std.env.arg(await ninja.default_({ host }), env);
 	} else if (generator === "Unix Makefiles") {
 		env = await std.env.arg(await make.default_({ host }), env);
 	}

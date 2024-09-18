@@ -1,5 +1,6 @@
 import * as bison from "bison" with { path: "../bison" };
 import * as flex from "flex" with { path: "../flex" };
+import * as m4 from "m4" with { path: "../m4" };
 import * as icu from "icu" with { path: "../icu" };
 import * as lz4 from "lz4" with { path: "../lz4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
@@ -108,8 +109,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		opensslArtifact,
 		bison.default_({ build, host: build }),
 		flex.default_({ build, host: build }),
+		m4.default_({ build, host: build }),
 		perl.default_({ build, host: build }, perlArg),
-		pkgConfig.default_({ build, host: build }),
+		pkgConfigArtifact,
 		readlineArtifact,
 		zlibArtifact,
 		zstdArtifact,
