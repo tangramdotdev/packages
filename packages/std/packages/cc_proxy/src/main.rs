@@ -391,7 +391,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Dump stdout, stderr
 	let stdout: Vec<u8> = build_directory
-		.get(tg, &"stdout".parse().unwrap())
+		.get(tg, &"stdout")
 		.await?
 		.try_unwrap_file()
 		.unwrap()
@@ -401,7 +401,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		.write_all(&stdout)
 		.map_err(|error| tg::error!(source = error, "failed to dump stdout"))?;
 	let stderr: Vec<u8> = build_directory
-		.get(tg, &"stderr".parse().unwrap())
+		.get(tg, &"stderr")
 		.await?
 		.try_unwrap_file()
 		.unwrap()
@@ -413,7 +413,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Copy the output file to the destination.
 	let output_file = build_directory
-		.get(tg, &"output".parse().unwrap())
+		.get(tg, &"output")
 		.await
 		.map_err(|error| tg::error!(source = error, "cc failed: no output"))?;
 
@@ -458,7 +458,7 @@ fn which_cc() -> tg::Result<PathBuf> {
 
 // Represents a sparse tree of source files. Used to avoid checking in an excessive number of files for every invocation.
 struct SourceTree {
-	component: tg::path::Component,
+	component: std::ffi::OsString,
 	remap_target: Option<RemapTarget>,
 	children: Option<Vec<Self>>,
 }
@@ -491,13 +491,11 @@ async fn create_remapping_table(
 		}
 
 		// Add to the file trees.
-		let path: tg::Path = path.try_into().map_err(|error| {
-			tg::error!(
-				source = error,
-				"failed to convert std::fs::PathBuf to tg::Path"
-			)
-		})?;
-		insert_into_source_tree(&mut subtrees, path.components(), remap_target);
+		insert_into_source_tree(
+			&mut subtrees,
+			path.iter().collect::<Vec<_>>().as_slice(),
+			remap_target,
+		);
 	}
 
 	// Check in every source tree.
@@ -510,17 +508,17 @@ async fn create_remapping_table(
 
 fn insert_into_source_tree(
 	subtrees: &mut Vec<SourceTree>,
-	components: &[tg::path::Component],
+	components: &[&std::ffi::OsStr],
 	remap_target: RemapTarget,
 ) {
 	let parent = match subtrees
 		.iter_mut()
-		.find(|tree| tree.component == components[0])
+		.find(|tree| tree.component.as_os_str() == components[0])
 	{
 		Some(parent) => parent,
 		None => {
 			let parent = SourceTree {
-				component: components[0].clone(),
+				component: components[0].to_os_string(),
 				remap_target: None,
 				children: None,
 			};
@@ -569,8 +567,8 @@ async fn check_in_source_tree(
 			);
 		}
 		if let Some(remap_target) = remap_target {
-			let subpath = tg::Path::with_components(components[1..].to_vec());
-			let path = tg::Path::with_components(components);
+			let subpath = components[1..].iter().collect::<PathBuf>();
+			let path = components.iter().collect::<PathBuf>();
 
 			// Update the remap targets.
 			remap_targets.push((remap_target, subpath.clone()));
@@ -593,7 +591,8 @@ async fn check_in_source_tree(
 					.map_err(|error| {
 						tg::error!(
 							source = error,
-							"failed to add {subpath}, {artifact:?} to directory"
+							"failed to add {}, {artifact:?} to directory",
+							subpath.display()
 						)
 					})?
 			}
@@ -610,7 +609,7 @@ async fn check_in_source_tree(
 			let template = tg::Template {
 				components: vec![
 					tg::template::Component::Artifact(artifact.clone()),
-					tg::template::Component::String(format!("/{subpath}")),
+					tg::template::Component::String(format!("/{}", subpath.display())),
 				],
 			};
 			(remap_target, template)

@@ -71,7 +71,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	const perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
-		path: tg.Path.new("bin/perl"),
+		path: "bin/perl",
 	});
 	const scripts = ["automake", "aclocal"];
 

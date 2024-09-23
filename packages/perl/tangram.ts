@@ -125,7 +125,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 
 	const wrappedPerl = await std.wrap(
-		tg.symlink({ artifact: perlArtifact, path: tg.Path.new("bin/perl") }),
+		tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
 		{
 			env: {
 				PERL5LIB: tg.Mutation.suffix(

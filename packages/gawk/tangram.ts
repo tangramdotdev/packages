@@ -6,14 +6,19 @@ export const metadata = {
 	name: "gawk",
 	license: "GPL-3.0-or-later",
 	repository: "https://git.savannah.gnu.org/git/gawk.git",
-	version: "5.3.0",
+	version: "5.3.1",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:378f8864ec21cfceaa048f7e1869ac9b4597b449087caf1eb55e440d30273336";
-	return std.download.fromGnu({ name, version, checksum });
+		"sha256:694db764812a6236423d4ff40ceb7b6c4c441301b72ad502bb5c27e00cd56f78";
+	return std.download.fromGnu({
+		name,
+		version,
+		checksum,
+		compressionFormat: "xz",
+	});
 });
 
 type Arg = {

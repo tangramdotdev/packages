@@ -1,5 +1,8 @@
 use itertools::Itertools;
-use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf, sync::LazyLock};
+use std::{
+	collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf, str::FromStr,
+	sync::LazyLock,
+};
 use tangram_client as tg;
 use tokio::io::AsyncWriteExt;
 
@@ -183,7 +186,8 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	tracing::info!(?source_directory_path, "checking in source directory");
 	let source_directory = get_checked_in_path(tg, &source_directory_path).await?;
 	let out_dir = if let Some(path) = &args.cargo_out_directory {
-		let out_dir_path: tg::Path = path.parse().unwrap();
+		let out_dir_path = std::path::PathBuf::from_str(&path)
+			.map_err(|source| tg::error!(!source, %path,  "unable to construct path"))?;
 		#[cfg(feature = "tracing")]
 		tracing::info!(?out_dir_path, "checking in output directory");
 		get_checked_in_path(tg, &out_dir_path).await?
@@ -368,7 +372,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Get stdout/stderr from the build and forward it to our stdout/stderr.
 	let stdout = output
-		.get(tg, &"log/stdout".parse().unwrap())
+		.get(tg, &"log/stdout")
 		.await?
 		.try_unwrap_file()
 		.unwrap()
@@ -381,7 +385,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.await
 		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 	let stderr = output
-		.get(tg, &"log/stderr".parse().unwrap())
+		.get(tg, &"log/stderr")
 		.await?
 		.try_unwrap_file()
 		.unwrap()
@@ -581,14 +585,13 @@ async fn get_checked_in_path(
 	tracing::info!(?path, "no artifact found in symlink data, checking in");
 
 	// Otherwise, check in the path.
-	let path = tg::Path::try_from(path)?;
 	let artifact = tg::Artifact::check_in(
 		tg,
 		tg::artifact::checkin::Arg {
 			destructive: false,
 			deterministic: true,
 			locked: false,
-			path: path.into(),
+			path: path.to_path_buf(),
 		},
 	)
 	.await?;
@@ -649,7 +652,7 @@ pub fn template_data_to_symlink_data(
 	match components.as_slice() {
 		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data::Normal {
 			artifact: None,
-			path: Some(tg::Path::from(s)),
+			path: Some(s.into()),
 		}),
 		[tg::template::component::Data::Artifact(id)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
@@ -662,7 +665,7 @@ pub fn template_data_to_symlink_data(
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data::Normal {
 				artifact: Some(artifact_id.clone()),
-				path: Some(tg::Path::from(s)),
+				path: Some(s.into()),
 			})
 		},
 		_ => Err(tg::error!(

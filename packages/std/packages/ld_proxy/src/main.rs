@@ -333,14 +333,13 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// Check in the output file.
 		let output_path = std::fs::canonicalize(&options.output_path)
 			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
-		let output_path = tg::Path::try_from(output_path)?;
 		tg::Artifact::check_in(
 			&tg,
 			tg::artifact::checkin::Arg {
 				destructive: false,
 				deterministic: true,
 				locked: false,
-				path: output_path.into(),
+				path: output_path,
 			},
 		)
 		.await?
@@ -492,14 +491,13 @@ async fn checkin_local_library_path(
 			{
 				tracing::debug!(?name, "Found library candidate.");
 				// Check in the file.
-				let library_candidate_path = tg::Path::try_from(library_candidate_path)?;
 				let library_candidate_file = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
 						destructive: false,
 						deterministic: true,
 						locked: false,
-						path: library_candidate_path.into(),
+						path: library_candidate_path,
 					},
 				)
 				.await?
@@ -716,14 +714,13 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 			// Ensure the file is actually an object. If not, skip it.
 			if all_needed_libraries.contains_key(&name) {
 				// Check in the file.
-				let library_candidate_path = tg::Path::try_from(library_candidate_path.clone())?;
 				let library_candidate_file = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
 						destructive: false,
 						deterministic: true,
 						locked: false,
-						path: library_candidate_path.into(),
+						path: library_candidate_path.to_path_buf(),
 					},
 				)
 				.await?
@@ -800,7 +797,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	for (name, dir_id) in needed_libraries.iter() {
 		if let Some(dir_id) = dir_id {
 			let directory = tg::Directory::with_id(dir_id.clone());
-			if let Ok(Some(artifact)) = directory.try_get(tg, &tg::Path::from_str(name)?).await {
+			if let Ok(Some(artifact)) = directory.try_get(tg, &name).await {
 				entries.insert(name.clone(), artifact);
 			}
 		}
@@ -934,13 +931,8 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			{
 				continue;
 			}
-			if let Ok(Some(tg::artifact::Artifact::File(found_library))) = directory
-				.try_get(
-					tg,
-					&tg::Path::from_str(&library_name)
-						.map_err(|error| tg::error!(source = error, "could not create path"))?,
-				)
-				.await
+			if let Ok(Some(tg::artifact::Artifact::File(found_library))) =
+				directory.try_get(tg, &library_name).await
 			{
 				tracing::trace!(?found_library, ?library_name, "Found library file.");
 				*all_needed_libraries

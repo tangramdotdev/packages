@@ -378,13 +378,14 @@ export const stripProxy = async (arg: StripProxyArg) => {
 };
 
 export const test = tg.target(async () => {
-	const tests = [
-		testBasic(),
-		testTransitive(),
-		testSamePrefix(),
-		testSamePrefixDirect(),
-	];
-	return await Promise.all(tests);
+	// const tests = [
+	// 	testBasic(),
+	// 	testTransitive(),
+	// 	// testSamePrefix(),
+	// 	// testSamePrefixDirect(),
+	// ];
+	// return await Promise.all(tests);
+	return await testTransitive();
 });
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */

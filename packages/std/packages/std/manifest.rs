@@ -142,7 +142,7 @@ pub struct ArtifactPath {
 
 	/// If the artifact is a directory, optionally specify a subpath.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub path: Option<tg::Path>,
+	pub path: Option<String>,
 }
 
 impl ArtifactPath {
@@ -159,7 +159,7 @@ impl ArtifactPath {
 	#[must_use]
 	pub fn with_artifact_id_and_path(
 		artifact: impl Into<tg::artifact::Id>,
-		path: impl Into<Option<tg::Path>>,
+		path: impl Into<Option<String>>,
 	) -> Self {
 		Self {
 			artifact: artifact.into(),
@@ -212,7 +212,7 @@ impl TryFrom<tg::template::Data> for ArtifactPath {
 			| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 				Ok(ArtifactPath {
 					artifact: artifact_id.clone(),
-					path: Some(tg::Path::from(s)),
+					path: Some(s.to_string()),
 				})
 			},
 			_ => Err(tg::error!(

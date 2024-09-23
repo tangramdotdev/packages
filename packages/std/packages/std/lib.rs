@@ -36,7 +36,7 @@ pub fn template_data_to_symlink_data(
 	match components.as_slice() {
 		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data::Normal {
 			artifact: None,
-			path: Some(tg::Path::from(s)),
+			path: Some(s.to_string()),
 		}),
 		[tg::template::component::Data::Artifact(id)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
@@ -49,7 +49,7 @@ pub fn template_data_to_symlink_data(
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data::Normal {
 				artifact: Some(artifact_id.clone()),
-				path: Some(tg::Path::from(s)),
+				path: Some(s.to_string()),
 			})
 		},
 		_ => Err(tg::error!(

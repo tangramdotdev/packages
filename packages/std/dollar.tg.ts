@@ -63,11 +63,8 @@ class Dollar {
 				.then((dir) => dir.get("bin/bash"))
 				.then(tg.File.expect);
 		}
-		// If we're using the default executable, add extra flags to make it more strict.
-		const prefixArgs = this.#args ? [] : ["-euo", "pipefail"];
 		arg.args = [
-			...prefixArgs,
-			"-euc",
+			"-c",
 			await tg(this.#strings, ...std.flatten(this.#placeholders)),
 		];
 		if (this.#args !== undefined) {
