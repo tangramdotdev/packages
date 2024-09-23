@@ -57,7 +57,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		pkgconfig.build({ build, host: build }, pkgconfigArg),
 		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
 		{
-			TANGRAM_LD_PROXY_TRACING: "tangram=trace"
+			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
 		},
 		env_,
 	);
@@ -67,7 +67,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 			...(await std.triple.rotate({ build, host })),
 			env,
 			features: ["pcre2"],
-			proxy: true,
 			sdk,
 			source: source_ ?? source(),
 		},
