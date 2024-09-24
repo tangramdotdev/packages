@@ -225,6 +225,7 @@ fn locate_artifacts_directories(path: impl AsRef<std::path::Path>) -> Vec<PathBu
 	ret
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_interpreter(
 	interpreter: &Option<manifest::Interpreter>,
 	arg0: &OsStr,

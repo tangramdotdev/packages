@@ -49,7 +49,7 @@ pub fn template_data_to_symlink_data(
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data::Normal {
 				artifact: Some(artifact_id.clone()),
-				path: Some(s.to_string()),
+				path: Some(s.chars().skip(1).collect()),
 			})
 		},
 		_ => Err(tg::error!(

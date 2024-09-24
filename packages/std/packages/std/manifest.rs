@@ -212,7 +212,7 @@ impl TryFrom<tg::template::Data> for ArtifactPath {
 			| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 				Ok(ArtifactPath {
 					artifact: artifact_id.clone(),
-					path: Some(s.to_string()),
+					path: Some(s.chars().skip(1).collect()),
 				})
 			},
 			_ => Err(tg::error!(

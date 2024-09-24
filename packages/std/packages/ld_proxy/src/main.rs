@@ -393,7 +393,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 
 		// Write the manifest to a wrapper.
 		let new_wrapper = manifest.write(&tg).await?;
-		tracing::trace!(?new_wrapper);
+		let new_wrapper_id = new_wrapper.id(&tg).await?;
+		tracing::trace!(?new_wrapper_id);
 
 		// Create a file with the new blob and references.
 		Some(new_wrapper)
@@ -699,7 +700,6 @@ impl std::str::FromStr for LibraryPathOptimizationLevel {
 }
 
 /// Check in any files needed libraries and produce a directory with correct names.
-#[tracing::instrument(skip(tg))]
 async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 	tg: &impl tg::Handle,
 	library_candidate_paths: &[PathBuf],
@@ -720,7 +720,7 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 						destructive: false,
 						deterministic: true,
 						locked: false,
-						path: library_candidate_path.to_path_buf(),
+						path: library_candidate_path.clone(),
 					},
 				)
 				.await?
@@ -758,7 +758,6 @@ fn is_library_candidate(arg: &str) -> bool {
 }
 
 /// Produce the library paths for the output wrapper according to the given configuration.
-#[tracing::instrument(skip(tg, file))]
 async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	tg: &impl tg::Handle,
 	file: &tg::File,
@@ -806,7 +805,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let dir_id = directory.id(tg).await?;
 	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
 
-	return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
+	finalize_library_paths(tg, resolved_dirs, needed_libraries).await
 }
 
 /// Produce the set of library paths to be written to the wrapper post-optimization.
@@ -895,7 +894,6 @@ fn store_dirs_as_artifact_paths<H: BuildHasher + Default>(
 }
 
 /// Recursively find all needed libraries for an executable.
-#[tracing::instrument(skip(tg, file))]
 async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync>(
 	tg: &impl tg::Handle,
 	file: &tg::File,
@@ -931,10 +929,12 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 			{
 				continue;
 			}
+			tracing::info!(?library_name, "checking for library");
 			if let Ok(Some(tg::artifact::Artifact::File(found_library))) =
 				directory.try_get(tg, &library_name).await
 			{
-				tracing::trace!(?found_library, ?library_name, "Found library file.");
+				let found_library_id = found_library.id(tg).await?;
+				tracing::trace!(?found_library_id, ?library_name, "Found library file.");
 				*all_needed_libraries
 					.entry(library_name.clone())
 					.or_insert(None) = Some(dir_id.clone());

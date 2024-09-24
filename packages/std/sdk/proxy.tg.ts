@@ -89,8 +89,8 @@ export const env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					? os === "linux" && isLlvm
 						? await tg`${directory}/bin/ld.lld`
 						: os === "darwin" && isCross
-							? await tg`${directory}/bin/${host}-ld.gold`
-							: ld
+						  ? await tg`${directory}/bin/${host}-ld.gold`
+						  : ld
 					: arg.linkerExe,
 			interpreter: ldso,
 			host,
@@ -378,14 +378,13 @@ export const stripProxy = async (arg: StripProxyArg) => {
 };
 
 export const test = tg.target(async () => {
-	// const tests = [
-	// 	testBasic(),
-	// 	testTransitive(),
-	// 	// testSamePrefix(),
-	// 	// testSamePrefixDirect(),
-	// ];
-	// return await Promise.all(tests);
-	return await testTransitive();
+	const tests = [
+		testBasic(),
+		testTransitive(),
+		testSamePrefix(),
+		testSamePrefixDirect(),
+	];
+	return await Promise.all(tests);
 });
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
@@ -544,6 +543,7 @@ const char* getGreetingB();
 	const mainSource = await tg.file(`
 	#include <greeta.h>
 	#include <greetb.h>
+	/* comment */
 	int main() {
 		greet_a();
 		greet_b();

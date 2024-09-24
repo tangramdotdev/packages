@@ -581,7 +581,7 @@ async fn check_in_source_tree(
 						destructive: false,
 						deterministic: true,
 						locked: false,
-						path: path.into(),
+						path,
 					},
 				)
 				.await?;

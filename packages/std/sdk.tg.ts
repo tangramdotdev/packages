@@ -427,8 +427,8 @@ export namespace sdk {
 					? `${targetPrefix}ld.bfd`
 					: "ld"
 				: flavor === "gnu"
-					? `${targetPrefix}ld`
-					: "ld.lld";
+				  ? `${targetPrefix}ld`
+				  : "ld.lld";
 		const foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
 		if (foundLd) {
@@ -713,7 +713,9 @@ export namespace sdk {
 				echo "WATERMARK 1"
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
 					{
-						env: std.env.arg(arg.sdkEnv),
+						env: std.env.arg(arg.sdkEnv, {
+							TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+						}),
 						host: std.triple.archAndOs(expectedHost),
 					},
 				)
