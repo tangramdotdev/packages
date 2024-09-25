@@ -710,7 +710,6 @@ export namespace sdk {
 				await tg.target(
 					tg`echo "testing ${lang}"
 				set -x
-				echo "WATERMARK 1"
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
 					{
 						env: std.env.arg(arg.sdkEnv, {

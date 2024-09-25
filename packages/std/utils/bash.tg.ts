@@ -37,7 +37,7 @@ export const build = tg.target(async (arg?: Arg) => {
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 
-	const configureArgs = ["--without-bash-malloc"];
+	const configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
 	// If the provided env has ncurses in the library path, use it instead of termcap.
 	const envArg = await std.env.arg(env_);
