@@ -591,9 +591,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da62f120a8a37763efb0cf8fdf264b884c7b8b9ac8660b900c8661030c00e6ba"
+checksum = "41296eb09f183ac68eec06e03cdbea2e759633d4067b2f6552fc2e009bcad08b"
 dependencies = [
  "bytes",
  "futures-util",
@@ -697,9 +697,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.158"
+version = "0.2.159"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8adc4bb1803a324070e64a98ae98f38934d91957a99cfb3a43dcbc01bc56439"
+checksum = "561d97a539a36e26a9a5fad1ea11a3039a67714694aaa379433e580854bc3dc5"
 
 [[package]]
 name = "lock_api"
@@ -946,9 +946,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0884ad60e090bf1345b93da0a5de8923c93884cd03f40dfcfddd3b4bee661853"
+checksum = "62871f2d65009c0256aed1b9cfeeb8ac272833c404e13d53d400cd0dad7a2ac0"
 dependencies = [
  "bitflags 2.6.0",
 ]
@@ -1215,7 +1215,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1ea4ffd87a9f7f61bcb4b86f47300eebad453050#1ea4ffd87a9f7f61bcb4b86f47300eebad453050"
+source = "git+https://github.com/tangramdotdev/tangram?rev=d805739e2030a8e2f5f2f062542f69e3a65dab55#d805739e2030a8e2f5f2f062542f69e3a65dab55"
 dependencies = [
  "blake3",
  "bytes",
@@ -1256,7 +1256,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1ea4ffd87a9f7f61bcb4b86f47300eebad453050#1ea4ffd87a9f7f61bcb4b86f47300eebad453050"
+source = "git+https://github.com/tangramdotdev/tangram?rev=d805739e2030a8e2f5f2f062542f69e3a65dab55#d805739e2030a8e2f5f2f062542f69e3a65dab55"
 dependencies = [
  "serde",
 ]
@@ -1264,7 +1264,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1ea4ffd87a9f7f61bcb4b86f47300eebad453050#1ea4ffd87a9f7f61bcb4b86f47300eebad453050"
+source = "git+https://github.com/tangramdotdev/tangram?rev=d805739e2030a8e2f5f2f062542f69e3a65dab55#d805739e2030a8e2f5f2f062542f69e3a65dab55"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1302,7 +1302,7 @@ dependencies = [
 [[package]]
 name = "tangram_semver"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1ea4ffd87a9f7f61bcb4b86f47300eebad453050#1ea4ffd87a9f7f61bcb4b86f47300eebad453050"
+source = "git+https://github.com/tangramdotdev/tangram?rev=d805739e2030a8e2f5f2f062542f69e3a65dab55#d805739e2030a8e2f5f2f062542f69e3a65dab55"
 dependencies = [
  "derive_more",
  "winnow",
@@ -1336,7 +1336,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1ea4ffd87a9f7f61bcb4b86f47300eebad453050#1ea4ffd87a9f7f61bcb4b86f47300eebad453050"
+source = "git+https://github.com/tangramdotdev/tangram?rev=d805739e2030a8e2f5f2f062542f69e3a65dab55#d805739e2030a8e2f5f2f062542f69e3a65dab55"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1812,9 +1812,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.6.18"
+version = "0.6.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68a9bda4691f099d435ad181000724da8e5899daa10713c2d432552b9ccd3a6f"
+checksum = "c52ac009d615e79296318c1bcce2d422aaca15ad08515e344feeda07df67a587"
 dependencies = [
  "memchr",
 ]
