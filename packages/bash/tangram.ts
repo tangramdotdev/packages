@@ -9,13 +9,13 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "bash",
 	repository: "https://git.savannah.gnu.org/git/bash.git",
-	version: "5.2.32",
+	version: "5.2.37",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:d3ef80d2b67d8cbbe4d3265c63a72c46f9b278ead6e0e06d61801b58f23f50b5";
+		"sha256:9599b22ecd1d5787ad7d3b7bf0c59f312b3396d1e281175dd1f8a4014da621ff";
 	return std.download.fromGnu({ name, version, checksum });
 });
 
