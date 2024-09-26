@@ -66,41 +66,13 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 
-	// Set up default build dependencies.
-	const buildDependencies = [];
-	const pkgConfigForBuild = pkgconfig
-		.build({ build, host: build })
-		.then((d) => {
-			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
-		});
-	buildDependencies.push(pkgConfigForBuild);
-
-	// Set up host dependencies.
-	const hostDependencies = [];
-	const ncursesForHost = await ncurses
-		.build({ build, host, sdk }, ncursesArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(ncursesForHost);
-	const readlineForHost = await readline
-		.build({ build, host, sdk }, readlineArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(readlineForHost);
-	const zlibForHost = await zlib
-		.build({ build, host, sdk }, zlibArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(zlibForHost);
-
-	// Resolve env.
-	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
-
-	// Add final build dependencies to env.
-	const resolvedBuildDependencies = [];
-	const finalPkgConfig = await std.env.getArtifactByKey({
-		env,
-		key: "PKGCONFIG",
-	});
-	resolvedBuildDependencies.push(finalPkgConfig);
-	env = await std.env.arg(env, ...resolvedBuildDependencies);
+	const env = std.env.arg(
+		pkgconfig.build({ build, host: build }),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		readline.build({ build, env: env_, host, sdk }, readlineArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		env_,
+	);
 
 	return std.autotools.build(
 		{
