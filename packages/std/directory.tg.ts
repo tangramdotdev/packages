@@ -31,3 +31,28 @@ export const keepSubdirectories = async (
 export const unwrap = async (directory: tg.Directory) => {
 	return await std.download.unwrapDirectory(directory);
 };
+
+export let testKeepSubdirectories = tg.target(async () => {
+	let orig = await tg.directory({
+		a: tg.directory(),
+		b: tg.directory(),
+		c: tg.directory(),
+	});
+	let origId = await orig.id();
+	console.log("orig", origId);
+
+	let filtered = await keepSubdirectories(orig, "a", "c");
+	let filteredId = await filtered.id();
+	console.log("filtered", filteredId);
+
+	let maybeA = await filtered.tryGet("a");
+	tg.assert(maybeA !== undefined && maybeA instanceof tg.Directory);
+
+	let maybeB = await filtered.tryGet("b");
+	tg.assert(maybeB === undefined);
+
+	let maybeC = await filtered.tryGet("c");
+	tg.assert(maybeC !== undefined && maybeC instanceof tg.Directory);
+
+	return true;
+});

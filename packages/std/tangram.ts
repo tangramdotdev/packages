@@ -470,3 +470,8 @@ export const testCheckoutWrapper = tg.target(async () => {
 	console.log("testInTg contents", testInTgText);
 	return output;
 });
+
+import { testKeepSubdirectories as testKeepSubdirectories_ } from "./directory.tg.ts";
+export const testKeepSubdirectories = tg.target(async() => {
+	return await testKeepSubdirectories_();
+})
