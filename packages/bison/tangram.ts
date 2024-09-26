@@ -1,5 +1,5 @@
-import * as m4 from "tg:m4" with { path: "../m4" };
-import * as std from "tg:std" with { path: "../std" };
+import * as m4 from "m4" with { path: "../m4" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/bison/",

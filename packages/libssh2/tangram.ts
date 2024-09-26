@@ -1,7 +1,7 @@
-import * as pkgConfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as std from "tg:std" with { path: "../std" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as pkgConfig from "pkg-config" with { path: "../pkgconfig" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as std from "std" with { path: "../std" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 export let metadata = {
 	homepage: "https://libssh2.org",

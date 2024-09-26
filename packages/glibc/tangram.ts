@@ -1,9 +1,9 @@
-import * as std from "tg:std" with { path: "../std" };
-import bison from "tg:bison" with { path: "../bison" };
-import * as linux from "tg:linux" with { path: "../linux" };
-import perl from "tg:perl" with { path: "../perl" };
-import python from "tg:python" with { path: "../python" };
-import texinfo from "tg:texinfo" with { path: "../texinfo" };
+import * as std from "std" with { path: "../std" };
+import bison from "bison" with { path: "../bison" };
+import * as linux from "linux" with { path: "../linux" };
+import perl from "perl" with { path: "../perl" };
+import python from "python" with { path: "../python" };
+import texinfo from "texinfo" with { path: "../texinfo" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/glibc/",

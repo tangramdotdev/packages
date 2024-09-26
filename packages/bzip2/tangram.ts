@@ -1,5 +1,5 @@
-import * as bash from "tg:bash" with { path: "../bash" };
-import * as std from "tg:std" with { path: "../std" };
+import * as bash from "bash" with { path: "../bash" };
+import * as std from "std" with { path: "../std" };
 
 import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
 	type: "file",

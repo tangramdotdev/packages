@@ -1,5 +1,5 @@
-import * as poetry from "tg:poetry" with { path: "../poetry" };
-import * as std from "tg:std" with { path: "../std" };
+import * as poetry from "poetry" with { path: "../poetry" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://pycqa.github.io/isort/",

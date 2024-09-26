@@ -1,7 +1,7 @@
-import * as std from "tg:std" with { path: "../std" };
-import * as cmake from "tg:cmake" with { path: "../cmake" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as zstd from "tg:zstd" with { path: "../zstd" };
+import * as std from "std" with { path: "../std" };
+import * as cmake from "cmake" with { path: "../cmake" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://github.com/rui314/mold",

@@ -1,11 +1,11 @@
-import * as std from "tg:std" with { path: "../std" };
-import binutils from "tg:binutils" with { path: "../binutils" };
-import glibc from "tg:glibc" with { path: "../glibc" };
-import musl from "tg:musl" with { path: "../musl" };
-import perl from "tg:perl" with { path: "../perl" };
-import python from "tg:python" with { path: "../python" };
-import texinfo from "tg:texinfo" with { path: "../texinfo" };
-import zstd from "tg:zstd" with { path: "../zstd" };
+import * as std from "std" with { path: "../std" };
+import binutils from "binutils" with { path: "../binutils" };
+import glibc from "glibc" with { path: "../glibc" };
+import musl from "musl" with { path: "../musl" };
+import perl from "perl" with { path: "../perl" };
+import python from "python" with { path: "../python" };
+import texinfo from "texinfo" with { path: "../texinfo" };
+import zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://gcc.gnu.org/",

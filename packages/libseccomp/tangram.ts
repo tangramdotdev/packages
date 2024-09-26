@@ -1,5 +1,5 @@
-import * as gperf from "tg:gperf" with { path: "../gperf" };
-import * as std from "tg:std" with { path: "../std" };
+import * as gperf from "gperf" with { path: "../gperf" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/seccomp/libseccomp",

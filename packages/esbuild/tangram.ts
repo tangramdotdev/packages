@@ -1,7 +1,7 @@
-import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
-import * as go from "tg:go" with { path: "../go" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as nodejs from "nodejs" with { path: "../nodejs" };
+import * as go from "go" with { path: "../go" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	home: "https://esbuild.github.io",

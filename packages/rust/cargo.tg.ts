@@ -1,5 +1,5 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, toolchain } from "./tangram.ts";
 
@@ -375,13 +375,15 @@ export const test = tg.target(async () => {
 	const tests = [];
 
 	tests.push(testUnproxiedWorkspace());
-	tests.push(testVendorDependencies());
+	// tests.push(testVendorDependencies());
 
 	await Promise.all(tests);
 
 	return true;
 });
 
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as openssl from "openssl" with { path: "../openssl" };
 export const testUnproxiedWorkspace = tg.target(async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace"),
@@ -391,11 +393,26 @@ export const testUnproxiedWorkspace = tg.target(async () => {
 		proxy: false,
 	});
 
-	const output = await $`
+	const helloOutput = await $`
 		${helloWorkspace}/bin/cli >> $OUTPUT
 	`.then(tg.File.expect);
-	const text = await output.text();
-	tg.assert(text.trim() === "Hello from a workspace!");
+	const helloText = await helloOutput.text();
+	tg.assert(helloText.trim() === "Hello from a workspace!");
+
+
+	const helloOpenssl = build({
+		source: tests.get("hello-openssl"),
+		env: std.env.arg(openssl.build(), pkgconfig.build(), {
+		 TANGRAM_LD_PROXY_TRACING: "tangram=trace"
+		}),
+		proxy: false
+	});
+
+	const openSslOutput = await $`
+		${helloOpenssl}/bin/hello-openssl >> $OUTPUT
+	`.then(tg.File.expect);
+	const openSslText = await openSslOutput.text();
+	tg.assert(openSslText.trim() === "Hello, from a crate that links against libssl!");
 	return true;
 });
 

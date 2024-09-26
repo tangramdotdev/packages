@@ -1,17 +1,17 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
-import * as bison from "tg:bison" with { path: "../bison" };
-import * as bzip2 from "tg:bzip2" with { path: "../bzip2" };
-import * as libffi from "tg:libffi" with { path: "../libffi" };
-import * as libxcrypt from "tg:libxcrypt" with { path: "../libxcrypt" };
-import * as m4 from "tg:m4" with { path: "../m4" };
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as readline from "tg:readline" with { path: "../readline" };
-import * as sqlite from "tg:sqlite" with { path: "../sqlite" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as bison from "bison" with { path: "../bison" };
+import * as bzip2 from "bzip2" with { path: "../bzip2" };
+import * as libffi from "libffi" with { path: "../libffi" };
+import * as libxcrypt from "libxcrypt" with { path: "../libxcrypt" };
+import * as m4 from "m4" with { path: "../m4" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as readline from "readline" with { path: "../readline" };
+import * as sqlite from "sqlite" with { path: "../sqlite" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 import * as requirements from "./requirements.tg.ts";
 export { requirements };

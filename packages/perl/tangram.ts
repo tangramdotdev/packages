@@ -1,8 +1,8 @@
-import * as bison from "tg:bison" with { path: "../bison" };
-import * as libffi from "tg:libffi" with { path: "../libffi" };
-import * as m4 from "tg:m4" with { path: "../m4" };
-import * as std from "tg:std" with { path: "../std" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as bison from "bison" with { path: "../bison" };
+import * as libffi from "libffi" with { path: "../libffi" };
+import * as m4 from "m4" with { path: "../m4" };
+import * as std from "std" with { path: "../std" };
+import * as zlib from "zlib" with { path: "../zlib" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {

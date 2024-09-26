@@ -1,6 +1,6 @@
-import * as gmp from "tg:gmp" with { path: "../gmp" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as gmp from "gmp" with { path: "../gmp" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.lysator.liu.se/~nisse/nettle/",

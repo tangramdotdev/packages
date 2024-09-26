@@ -1,5 +1,5 @@
-import * as python from "tg:python" with { path: "../python" };
-import * as std from "tg:std" with { path: "../std" };
+import * as python from "python" with { path: "../python" };
+import * as std from "std" with { path: "../std" };
 
 import requirements from "./requirements.txt" with { type: "file" };
 import pyprojectToml from "./pyproject.toml" with { type: "file" };

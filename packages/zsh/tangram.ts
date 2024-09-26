@@ -1,6 +1,6 @@
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
-import * as std from "tg:std" with { path: "../std" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as pcre2 from "pcre2" with { path: "../pcre2" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.zsh.org/",

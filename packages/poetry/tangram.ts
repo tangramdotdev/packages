@@ -1,6 +1,6 @@
-import * as python from "tg:python" with { path: "../python" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as python from "python" with { path: "../python" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 import * as lockfile from "./lockfile.tg.ts";
 import requirements from "./requirements.txt" with { type: "file" };

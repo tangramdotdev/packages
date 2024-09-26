@@ -1,5 +1,5 @@
-import * as std from "tg:std" with { path: "../std" };
-import python from "tg:python" with { path: "../python" };
+import * as std from "std" with { path: "../std" };
+import python from "python" with { path: "../python" };
 
 export const metadata = {
 	homepage: "https://rockdaboot.github.io/libpsl/",

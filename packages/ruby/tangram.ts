@@ -1,12 +1,12 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
-import * as libffi from "tg:libffi" with { path: "../libffi" };
-import * as libyaml from "tg:libyaml" with { path: "../libyaml" };
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as readline from "tg:readline" with { path: "../readline" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as libffi from "libffi" with { path: "../libffi" };
+import * as libyaml from "libyaml" with { path: "../libyaml" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as readline from "readline" with { path: "../readline" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
 

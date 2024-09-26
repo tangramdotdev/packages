@@ -1,13 +1,13 @@
-import * as icu from "tg:icu" with { path: "../icu" };
-import * as lz4 from "tg:lz4" with { path: "../lz4" };
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as readline from "tg:readline" with { path: "../readline" };
-import * as std from "tg:std" with { path: "../std" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
-import * as zstd from "tg:zstd" with { path: "../zstd" };
+import * as icu from "icu" with { path: "../icu" };
+import * as lz4 from "lz4" with { path: "../lz4" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as perl from "perl" with { path: "../perl" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as readline from "readline" with { path: "../readline" };
+import * as std from "std" with { path: "../std" };
+import * as zlib from "zlib" with { path: "../zlib" };
+import * as zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://www.postgresql.org",

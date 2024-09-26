@@ -1,8 +1,8 @@
-import * as gmp from "tg:gmp" with { path: "../gmp" };
-import * as nettle from "tg:nettle" with { path: "../nettle" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as gmp from "gmp" with { path: "../gmp" };
+import * as nettle from "nettle" with { path: "../nettle" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.gnutls.org",

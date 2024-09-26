@@ -1,5 +1,5 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 /** Source code for the version of Ruby to bootstrap. Use 2.5.0, the earliest supported. */
 export const source = tg.target(async () => {

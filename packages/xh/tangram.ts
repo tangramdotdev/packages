@@ -1,7 +1,7 @@
-import pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import openssl from "tg:openssl" with { path: "../openssl" };
-import { cargo } from "tg:rust" with { path: "../rust" };
-import * as std from "tg:std" with { path: "../std" };
+import pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import openssl from "openssl" with { path: "../openssl" };
+import { cargo } from "rust" with { path: "../rust" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/ducaale/xh",

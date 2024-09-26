@@ -1,7 +1,7 @@
-import * as pcre2 from "tg:pcre2" with { path: "../pcre2" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import { cargo } from "tg:rust" with { path: "../rust" };
-import * as std from "tg:std" with { path: "../std" };
+import * as pcre2 from "pcre2" with { path: "../pcre2" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import { cargo } from "rust" with { path: "../rust" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/BurntSushi/ripgrep",

@@ -1,4 +1,4 @@
-import * as std from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
 
 import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 

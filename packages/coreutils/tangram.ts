@@ -1,7 +1,7 @@
-import * as acl from "tg:acl" with { path: "../acl" };
-import * as attr from "tg:attr" with { path: "../attr" };
-import * as libcap from "tg:libcap" with { path: "../libcap" };
-import * as std from "tg:std" with { path: "../std" };
+import * as acl from "acl" with { path: "../acl" };
+import * as attr from "attr" with { path: "../attr" };
+import * as libcap from "libcap" with { path: "../libcap" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/coreutils/",

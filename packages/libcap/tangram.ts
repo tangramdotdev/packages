@@ -1,6 +1,6 @@
-import * as attr from "tg:attr" with { path: "../attr" };
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as std from "tg:std" with { path: "../std" };
+import * as attr from "attr" with { path: "../attr" };
+import * as perl from "perl" with { path: "../perl" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",

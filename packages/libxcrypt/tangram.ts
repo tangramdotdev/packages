@@ -1,5 +1,5 @@
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as std from "tg:std" with { path: "../std" };
+import * as perl from "perl" with { path: "../perl" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/besser82/libxcrypt",

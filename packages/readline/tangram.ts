@@ -1,6 +1,6 @@
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as std from "tg:std" with { path: "../std" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://tiswww.cwru.edu/php/chet/readline/rltop.html",

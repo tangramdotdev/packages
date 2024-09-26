@@ -1,4 +1,4 @@
-import * as std from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
 import * as cmake from "./tangram.tg.ts";
 
 export const metadata = {

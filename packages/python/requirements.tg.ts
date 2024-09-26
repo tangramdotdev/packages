@@ -1,5 +1,5 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 import { versionString, wrapScripts } from "./tangram.ts";
 export type Arg = tg.File;

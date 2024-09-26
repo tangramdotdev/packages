@@ -1,7 +1,7 @@
-import * as help2man from "tg:help2man" with { path: "../help2man" };
-import * as m4 from "tg:m4" with { path: "../m4" };
-import * as std from "tg:std" with { path: "../std" };
-import * as texinfo from "tg:texinfo" with { path: "../texinfo" };
+import * as help2man from "help2man" with { path: "../help2man" };
+import * as m4 from "m4" with { path: "../m4" };
+import * as std from "std" with { path: "../std" };
+import * as texinfo from "texinfo" with { path: "../texinfo" };
 
 export const metadata = {
 	homepage: "https://github.com/westes/flex",

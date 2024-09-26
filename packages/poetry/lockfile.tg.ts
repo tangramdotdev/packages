@@ -1,4 +1,4 @@
-import * as std from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
 
 /** Given a poetry.lock file, generate a valid requirements.txt with hashes. */
 export const requirements = tg.target(async (lockFile: tg.File) => {

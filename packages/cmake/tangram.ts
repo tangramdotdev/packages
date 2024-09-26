@@ -1,9 +1,9 @@
-import * as std from "tg:std" with { path: "../std" };
-import * as curl from "tg:curl" with { path: "../curl" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
-import * as zstd from "tg:zstd" with { path: "../zstd" };
+import * as std from "std" with { path: "../std" };
+import * as curl from "curl" with { path: "../curl" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as zlib from "zlib" with { path: "../zlib" };
+import * as zstd from "zstd" with { path: "../zstd" };
 
 import * as ninja from "./ninja.tg.ts";
 

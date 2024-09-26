@@ -1,5 +1,5 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 import tests from "./tests" with { type: "directory" };
 import { toolchain, rustTriple } from "./tangram.ts";
 import rustcProxy from "./proxy.tg.ts";
@@ -374,10 +374,10 @@ export const testConditionalCompilation = tg.target(async () => {
 	return true;
 });
 
-import * as curl from "tg:curl" with { path: "../curl" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
-import * as zstd from "tg:zstd" with { path: "../zstd" };
+import * as curl from "curl" with { path: "../curl" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as zlib from "zlib" with { path: "../zlib" };
+import * as zstd from "zstd" with { path: "../zstd" };
 export const testLinkLibcurl = tg.target(async () => {
 	const crateName = "native_exe_libcurl";
 

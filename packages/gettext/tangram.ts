@@ -1,12 +1,12 @@
-import * as acl from "tg:acl" with { path: "../acl" };
-import * as attr from "tg:attr" with { path: "../attr" };
-import * as bison from "tg:bison" with { path: "../bison" };
-import * as libiconv from "tg:libiconv" with { path: "../libiconv" };
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as std from "tg:std" with { path: "../std" };
-import * as xz from "tg:xz" with { path: "../xz" };
+import * as acl from "acl" with { path: "../acl" };
+import * as attr from "attr" with { path: "../attr" };
+import * as bison from "bison" with { path: "../bison" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as perl from "perl" with { path: "../perl" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as std from "std" with { path: "../std" };
+import * as xz from "xz" with { path: "../xz" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/gettext",

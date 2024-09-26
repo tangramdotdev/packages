@@ -1,5 +1,5 @@
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as std from "tg:std" with { path: "../std" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.vim.org/",

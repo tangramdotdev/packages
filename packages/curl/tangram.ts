@@ -1,11 +1,11 @@
-import * as libpsl from "tg:libpsl" with { path: "../libpsl" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
-import * as zstd from "tg:zstd" with { path: "../zstd" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as libpsl from "libpsl" with { path: "../libpsl" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as perl from "perl" with { path: "../perl" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as zlib from "zlib" with { path: "../zlib" };
+import * as zstd from "zstd" with { path: "../zstd" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://curl.se/",

@@ -1,7 +1,7 @@
-import * as gettext from "tg:gettext" with { path: "../gettext" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as std from "tg:std" with { path: "../std" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as gettext from "gettext" with { path: "../gettext" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as std from "std" with { path: "../std" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 export const metadata = {
 	homepage: "https://git-scm.com/",

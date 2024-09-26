@@ -1,6 +1,6 @@
-import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as nodejs from "nodejs" with { path: "../nodejs" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 import packageLock from "./package-lock.json" with { type: "file" };
 

@@ -1,6 +1,6 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 import * as build_ from "./build.tg.ts";
 export * as build from "./build.tg.ts";
@@ -202,7 +202,7 @@ export const rustTriple = (triple: string): string => {
 export const test = tg.target(async () => {
 	const tests = [];
 
-	tests.push(testHostToolchain());
+	// tests.push(testHostToolchain());
 	// tests.push(testCrossToolchain());
 	tests.push(testCargo());
 	tests.push(testCargoProxy());

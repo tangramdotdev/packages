@@ -1,5 +1,5 @@
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 import { cargo, toolchain, VERSION } from "./tangram.ts";
 
@@ -34,8 +34,8 @@ export const proxy = tg.target(async (arg?: Arg) => {
 
 export default proxy;
 
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 export const test = tg.target(async () => {
 	// Make sure the proxy compiles and runs.

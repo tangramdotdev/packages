@@ -1,10 +1,10 @@
-import * as bzip2 from "tg:bzip2" with { path: "../bzip2" };
-import * as libarchive from "tg:libarchive" with { path: "../libarchive" };
-import * as m4 from "tg:m4" with { path: "../m4" };
-import * as openssl from "tg:openssl" with { path: "../openssl" };
-import * as std from "tg:std" with { path: "../std" };
-import * as xz from "tg:xz" with { path: "../xz" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as bzip2 from "bzip2" with { path: "../bzip2" };
+import * as libarchive from "libarchive" with { path: "../libarchive" };
+import * as m4 from "m4" with { path: "../m4" };
+import * as openssl from "openssl" with { path: "../openssl" };
+import * as std from "std" with { path: "../std" };
+import * as xz from "xz" with { path: "../xz" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/elfutils/",

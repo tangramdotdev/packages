@@ -1,8 +1,8 @@
-import * as nodejs from "tg:nodejs" with { path: "../nodejs" };
-import * as postgresql from "tg:postgresql" with { path: "../postgresql" };
-import * as ripgrep from "tg:ripgrep" with { path: "../ripgrep" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
+import * as nodejs from "nodejs" with { path: "../nodejs" };
+import * as postgresql from "postgresql" with { path: "../postgresql" };
+import * as ripgrep from "ripgrep" with { path: "../ripgrep" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	name: "demo",

@@ -1,10 +1,10 @@
-import * as autoconf from "tg:autoconf" with { path: "../autoconf" };
-import * as bison from "tg:bison" with { path: "../bison" };
-import * as m4 from "tg:m4" with { path: "../m4" };
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as std from "tg:std" with { path: "../std" };
-import * as texinfo from "tg:texinfo" with { path: "../texinfo" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as autoconf from "autoconf" with { path: "../autoconf" };
+import * as bison from "bison" with { path: "../bison" };
+import * as m4 from "m4" with { path: "../m4" };
+import * as perl from "perl" with { path: "../perl" };
+import * as std from "std" with { path: "../std" };
+import * as texinfo from "texinfo" with { path: "../texinfo" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/help2man/",

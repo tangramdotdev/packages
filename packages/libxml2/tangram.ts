@@ -1,12 +1,12 @@
-import * as std from "tg:std" with { path: "../std" };
-import * as icu from "tg:icu" with { path: "../icu" };
-import * as ncurses from "tg:ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "tg:pkg-config" with { path: "../pkgconfig" };
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as python from "tg:python" with { path: "../python" };
-import * as readline from "tg:readline" with { path: "../readline" };
-import * as xz from "tg:xz" with { path: "../xz" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as std from "std" with { path: "../std" };
+import * as icu from "icu" with { path: "../icu" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as perl from "perl" with { path: "../perl" };
+import * as python from "python" with { path: "../python" };
+import * as readline from "readline" with { path: "../readline" };
+import * as xz from "xz" with { path: "../xz" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 export const metadata = {
 	homepage: "https://gitlab.gnome.org/GNOME/libxml2/-/wikis/home",

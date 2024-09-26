@@ -1,9 +1,9 @@
-import * as bison from "tg:bison" with { path: "../bison" };
-import * as m4 from "tg:m4" with { path: "../m4" };
-import * as perl from "tg:perl" with { path: "../perl" };
-import * as std from "tg:std" with { path: "../std" };
-import { $ } from "tg:std" with { path: "../std" };
-import * as zlib from "tg:zlib" with { path: "../zlib" };
+import * as bison from "bison" with { path: "../bison" };
+import * as m4 from "m4" with { path: "../m4" };
+import * as perl from "perl" with { path: "../perl" };
+import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
+import * as zlib from "zlib" with { path: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/autoconf/",

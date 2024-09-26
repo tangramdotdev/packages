@@ -1,5 +1,5 @@
-import * as go from "tg:go" with { path: "../go" };
-import * as std from "tg:std" with { path: "../std" };
+import * as go from "go" with { path: "../go" };
+import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://junegunn.github.io/fzf/",
