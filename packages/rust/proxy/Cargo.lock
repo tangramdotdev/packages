@@ -1165,7 +1165,7 @@ checksum = "a7065abeca94b6a8a577f9bd45aa0867a2238b74e8eb67cf10d492bc39351394"
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=cc93f0f9d90edbf43d51ab025ecd049d59c841f7#cc93f0f9d90edbf43d51ab025ecd049d59c841f7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=aed254ef06e5377945cd2203c9e8126e92d3545d#aed254ef06e5377945cd2203c9e8126e92d3545d"
 dependencies = [
  "blake3",
  "bytes",
@@ -1206,7 +1206,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=cc93f0f9d90edbf43d51ab025ecd049d59c841f7#cc93f0f9d90edbf43d51ab025ecd049d59c841f7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=aed254ef06e5377945cd2203c9e8126e92d3545d#aed254ef06e5377945cd2203c9e8126e92d3545d"
 dependencies = [
  "serde",
 ]
@@ -1214,7 +1214,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=cc93f0f9d90edbf43d51ab025ecd049d59c841f7#cc93f0f9d90edbf43d51ab025ecd049d59c841f7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=aed254ef06e5377945cd2203c9e8126e92d3545d#aed254ef06e5377945cd2203c9e8126e92d3545d"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1249,7 +1249,7 @@ dependencies = [
 [[package]]
 name = "tangram_semver"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=cc93f0f9d90edbf43d51ab025ecd049d59c841f7#cc93f0f9d90edbf43d51ab025ecd049d59c841f7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=aed254ef06e5377945cd2203c9e8126e92d3545d#aed254ef06e5377945cd2203c9e8126e92d3545d"
 dependencies = [
  "derive_more",
  "winnow",
@@ -1258,7 +1258,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=cc93f0f9d90edbf43d51ab025ecd049d59c841f7#cc93f0f9d90edbf43d51ab025ecd049d59c841f7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=aed254ef06e5377945cd2203c9e8126e92d3545d#aed254ef06e5377945cd2203c9e8126e92d3545d"
 dependencies = [
  "derive_more",
  "once_cell",
