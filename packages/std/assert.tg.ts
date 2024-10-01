@@ -1,7 +1,6 @@
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.ts";
 import { $ } from "./tangram.ts";
-import { nativeProxiedSdkArgs } from "./sdk.tg.ts";
 import { manifestDependencies, wrap } from "./wrap.tg.ts";
 
 type PkgArg = {
@@ -75,9 +74,9 @@ export const pkg = async (arg: PkgArg) => {
 	if (arg.sdks) {
 		sdks.push(...arg.sdks);
 	}
-	// If no SDK args were provided, test with the default set of SDKs for the platform.
+	// If no SDK args were provided, test with the default SDK for the platform.
 	if (sdks.length === 0) {
-		sdks.push(...(await defaultSdkSet()));
+		sdks.push({});
 	}
 
 	const env = arg.env ?? {};
@@ -290,7 +289,10 @@ export const assertFileReferences = async (
 
 	// Ensure the interpreter is found in the file dependencies.
 	const fileDependencies = await file.dependencyObjects();
-	tg.assert(fileDependencies !== undefined && fileDependencies.length > 0, "No file dependencies found.");
+	tg.assert(
+		fileDependencies !== undefined && fileDependencies.length > 0,
+		"No file dependencies found.",
+	);
 	let foundFile = false;
 	for (const dependency of fileDependencies) {
 		const referenceId = await dependency.id();
@@ -492,9 +494,4 @@ export const stdoutIncludes = async (
 		.then(tg.File.expect)
 		.then((f) => f.text());
 	tg.assert(stdout.includes(expected));
-};
-
-/** Produce a set of SDK configurations to test for the given platform. */
-const defaultSdkSet = async (): Promise<Array<std.sdk.Arg>> => {
-	return nativeProxiedSdkArgs();
 };

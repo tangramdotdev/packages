@@ -137,9 +137,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.23"
+version = "1.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bbb537bb4a30b90362caddba8f360c0a56bc13d3a5570028e7197204cb54a17"
+checksum = "812acba72f0a070b003d3697490d2b55b837230ae7c6c6497f05cc2ddbb8d938"
 dependencies = [
  "shlex",
 ]
@@ -558,9 +558,9 @@ dependencies = [
 
 [[package]]
 name = "httparse"
-version = "1.9.4"
+version = "1.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fcc0b4a115bf80b728eb8ea024ad5bd707b615bfed49e0665b6e0f86fd082d9"
+checksum = "7d71d3574edd2771538b901e6549113b4006ece66150fb69c0fb6d9a2adae946"
 
 [[package]]
 name = "httpdate"
@@ -1224,7 +1224,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=2202f83a7f6c28713220ec0538576b7b59d7717e#2202f83a7f6c28713220ec0538576b7b59d7717e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=18c8422a53a8ff9f9061b458e1e9dc3da2adec35#18c8422a53a8ff9f9061b458e1e9dc3da2adec35"
 dependencies = [
  "blake3",
  "bytes",
@@ -1265,7 +1265,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=2202f83a7f6c28713220ec0538576b7b59d7717e#2202f83a7f6c28713220ec0538576b7b59d7717e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=18c8422a53a8ff9f9061b458e1e9dc3da2adec35#18c8422a53a8ff9f9061b458e1e9dc3da2adec35"
 dependencies = [
  "serde",
 ]
@@ -1273,7 +1273,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=2202f83a7f6c28713220ec0538576b7b59d7717e#2202f83a7f6c28713220ec0538576b7b59d7717e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=18c8422a53a8ff9f9061b458e1e9dc3da2adec35#18c8422a53a8ff9f9061b458e1e9dc3da2adec35"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1311,7 +1311,7 @@ dependencies = [
 [[package]]
 name = "tangram_semver"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=2202f83a7f6c28713220ec0538576b7b59d7717e#2202f83a7f6c28713220ec0538576b7b59d7717e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=18c8422a53a8ff9f9061b458e1e9dc3da2adec35#18c8422a53a8ff9f9061b458e1e9dc3da2adec35"
 dependencies = [
  "derive_more",
  "winnow",
@@ -1345,7 +1345,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=2202f83a7f6c28713220ec0538576b7b59d7717e#2202f83a7f6c28713220ec0538576b7b59d7717e"
+source = "git+https://github.com/tangramdotdev/tangram?rev=18c8422a53a8ff9f9061b458e1e9dc3da2adec35#18c8422a53a8ff9f9061b458e1e9dc3da2adec35"
 dependencies = [
  "derive_more",
  "once_cell",
