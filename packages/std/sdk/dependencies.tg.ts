@@ -3,6 +3,7 @@
 import * as std from "../tangram.ts";
 
 import bison from "./dependencies/bison.tg.ts";
+import flex from "./dependencies/flex.tg.ts";
 import gmp from "./dependencies/gmp.tg.ts";
 import isl from "./dependencies/isl.tg.ts";
 import m4 from "./dependencies/m4.tg.ts";
@@ -15,6 +16,7 @@ import zlib from "./dependencies/zlib.tg.ts";
 import zstd from "./dependencies/zstd.tg.ts";
 
 export * as bison from "./dependencies/bison.tg.ts";
+export * as flex from "./dependencies/flex.tg.ts";
 export * as gmp from "./dependencies/gmp.tg.ts";
 export * as isl from "./dependencies/isl.tg.ts";
 export * as m4 from "./dependencies/m4.tg.ts";
@@ -48,6 +50,8 @@ export const buildTools = async (
 	const bisonArtifact = bison({ host, sdk: false, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, bisonArtifact);
 
+	const flexArtifact = flex({ host, sdk: false, env: utilsEnv });
+
 	const perlArtifact = perl({ host, sdk: false, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, perlArtifact);
 
@@ -65,6 +69,7 @@ export const buildTools = async (
 		utils,
 		m4Artifact,
 		bisonArtifact,
+		flexArtifact,
 		perlArtifact,
 		pythonArtifact,
 	);
