@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+		"@biomejs/biome": "^1.9.2",
+		"@types/bun": "^1.1.10"
+	},
+  "scripts": {
+    "push_one": "bun scripts/push_all.ts --",
+    "push_all": "bun scripts/push_all.ts"
+  }
+}
