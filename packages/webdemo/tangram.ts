@@ -1,3 +1,4 @@
-import * as jq from "jq";
+import jq from "jq";
+import sqlite from "sqlite";
 import * as std from "std";
-export default tg.target(() => std.env(jq.build()));
+export default tg.target(() => std.env(jq(), sqlite()));

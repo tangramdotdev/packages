@@ -4,7 +4,7 @@ import * as bison from "bison" with { path: "../bison" };
 import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as std from "std" with { path: "../std" };
 import * as xz from "xz" with { path: "../xz" };
 

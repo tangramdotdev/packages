@@ -1,7 +1,7 @@
 import * as std from "std" with { path: "../std" };
 import * as icu from "icu" with { path: "../icu" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as perl from "perl" with { path: "../perl" };
 import * as python from "python" with { path: "../python" };
 import * as readline from "readline" with { path: "../readline" };

@@ -73,18 +73,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.target(async () => {
-	const source = tg.directory({
-		["main.c"]: tg.file(`
-			#include <stdio.h>
-			int main () {}
-		`),
+	await std.assert.pkg({
+		buildFunction: build,
+		libraries: ["pcre2"],
+		metadata,
 	});
-
-	const output = await $`
-				echo "Checking if we can link against libpcre2."
-				cc ${source}/main.c -o $OUTPUT -lpcre2-8
-			`
-		.env(std.sdk(), build())
-		.then(tg.File.expect);
-	return output;
+	return true;
 });

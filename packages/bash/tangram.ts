@@ -1,8 +1,7 @@
 import * as gettext from "gettext" with { path: "../gettext" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/bash/",

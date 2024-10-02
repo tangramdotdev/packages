@@ -1,6 +1,6 @@
 import * as std from "std" with { path: "../std" };
 import * as curl from "curl" with { path: "../curl" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };

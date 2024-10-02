@@ -61,8 +61,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.target(async () => {
-	return await $`
-		echo "Checking that we can run jq." | tee $OUTPUT
-		${build()}/bin/jq --version | tee -a $OUTPUT
-	`;
+	await std.assert.pkg({
+		buildFunction: build,
+		binaries: ["jq"],
+		metadata,
+	});
+	return true;
 });

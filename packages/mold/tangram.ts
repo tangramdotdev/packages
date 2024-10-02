@@ -1,6 +1,6 @@
 import * as std from "std" with { path: "../std" };
 import * as cmake from "cmake" with { path: "../cmake" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {

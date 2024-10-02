@@ -172,5 +172,5 @@ export const test = tg.target(async () => {
 		binaries: ["pkg-config"],
 		metadata,
 	});
-	return build();
+	return true;
 });

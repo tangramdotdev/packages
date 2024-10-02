@@ -3,7 +3,7 @@ import * as lz4 from "lz4" with { path: "../lz4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -124,7 +124,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	let icuLibDir = icuArtifact.then((dir) => dir.get("lib")).then(tg.Directory.expect);
+	let icuLibDir = icuArtifact
+		.then((dir) => dir.get("lib"))
+		.then(tg.Directory.expect);
 	let libraryPaths = [icuLibDir];
 
 	let binDir = await output.get("bin").then(tg.Directory.expect);

@@ -1,5 +1,5 @@
 import * as pcre2 from "pcre2" with { path: "../pcre2" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import { cargo } from "rust" with { path: "../rust" };
 import * as std from "std" with { path: "../std" };
 
@@ -64,7 +64,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 			...(await std.triple.rotate({ build, host })),
 			env,
 			features: ["pcre2"],
-			proxy: true,
 			sdk,
 			source: source_ ?? source(),
 		},

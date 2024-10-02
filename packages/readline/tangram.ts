@@ -1,5 +1,5 @@
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -95,5 +95,5 @@ export const test = tg.target(async () => {
 		buildFunction: build,
 		metadata,
 	});
-	return artifact;
+	return true;
 });

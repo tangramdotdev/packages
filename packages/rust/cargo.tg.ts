@@ -382,7 +382,7 @@ export const test = tg.target(async () => {
 	return true;
 });
 
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as openssl from "openssl" with { path: "../openssl" };
 export const testUnproxiedWorkspace = tg.target(async () => {
 	const helloWorkspace = build({
@@ -399,20 +399,21 @@ export const testUnproxiedWorkspace = tg.target(async () => {
 	const helloText = await helloOutput.text();
 	tg.assert(helloText.trim() === "Hello from a workspace!");
 
-
 	const helloOpenssl = build({
 		source: tests.get("hello-openssl"),
 		env: std.env.arg(openssl.build(), pkgconfig.build(), {
-		 TANGRAM_LD_PROXY_TRACING: "tangram=trace"
+			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
 		}),
-		proxy: false
+		proxy: false,
 	});
 
 	const openSslOutput = await $`
 		${helloOpenssl}/bin/hello-openssl >> $OUTPUT
 	`.then(tg.File.expect);
 	const openSslText = await openSslOutput.text();
-	tg.assert(openSslText.trim() === "Hello, from a crate that links against libssl!");
+	tg.assert(
+		openSslText.trim() === "Hello, from a crate that links against libssl!",
+	);
 	return true;
 });
 

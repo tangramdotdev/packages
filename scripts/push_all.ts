@@ -24,13 +24,32 @@ const doAll = async () => {
   // Create container to store results.
   let results = {};
 
-  // Run.
-  let m4Result = await processPackage("m4");
-  results["m4"] = m4Result;
-  
-  let zlibResult = await processPackage("zlib");
-  results["zlib"] = zlibResult;
+  // Collect all names of packages in the repo.
+  // const names = allPackageNames();
 
+  const collectResult = async (name: string, skipTest?: boolean) => {
+    const result = await processPackage(name, skipTest);
+    results[name] = result;
+  }
+
+  await collectResult("std", true);
+  await collectResult("m4");
+  await collectResult("jq");
+  await collectResult("zlib");
+  await collectResult("libffi");
+  await collectResult("ncurses");
+  await collectResult("readline");
+  await collectResult("zstd");
+  await collectResult("pcre2");
+  await collectResult("bison");
+  await collectResult("pkgconfig");
+  await collectResult("perl");
+  await collectResult("openssl");
+  await collectResult("sqlite");
+  // await collectResult("libpsl");
+  // await collectResult("curl");
+  // await collectResult("ripgrep");
+  
   // Report results.
  console.log(results);
 }
@@ -41,14 +60,18 @@ const getPackagePath = (name: string) => {
 }
 
 /** Ensuring the given package test succeeds, then ensure it is tagged and pushed along with the default target build. */
-const processPackage = async (name: string): Promise<Result> => {
+const processPackage = async (name: string, skipTest?: boolean): Promise<Result> => {
+  let skipTest_ = skipTest ?? false;
+  
   let path = getPackagePath(name);
   console.log(`processing ${name}: ${path}`);
 
   // Make sure the test target succeeds.
-  let testResult = await buildTestTarget(path);
-  if (testResult !== "ok") {
-    return testResult;
+  if (!skipTest) {
+    let testResult = await buildTestTarget(path);
+    if (testResult !== "ok") {
+      return testResult;
+    }
   }
 
   // Check in the package, store the ID.
@@ -160,7 +183,7 @@ const push = async (arg: string): Promise<Result> => {
 const buildDefaultTarget = async (name: string) => {
   console.log("building default target for tag", name);
   try {
-    let output = await $`tg build ${name}`.text();
+    let output = await $`tg build ${name} 2>&1`.text();
 
     // Pull out the build ID from the output.
     const match = output.match(/\bbld_\w+/);

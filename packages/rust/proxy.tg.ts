@@ -34,7 +34,7 @@ export const proxy = tg.target(async (arg?: Arg) => {
 
 export default proxy;
 
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 export const test = tg.target(async () => {

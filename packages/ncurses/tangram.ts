@@ -125,5 +125,5 @@ export const test = tg.target(async () => {
 		buildFunction: build,
 		metadata,
 	});
-	return artifact;
+	return true;
 });

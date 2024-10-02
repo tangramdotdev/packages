@@ -3,7 +3,7 @@ import * as bison from "bison" with { path: "../bison" };
 import * as help2man from "help2man" with { path: "../help2man" };
 import * as m4 from "m4" with { path: "../m4" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 

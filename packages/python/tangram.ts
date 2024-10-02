@@ -4,11 +4,12 @@ import { $ } from "std" with { path: "../std" };
 import * as bison from "bison" with { path: "../bison" };
 import * as bzip2 from "bzip2" with { path: "../bzip2" };
 import * as libffi from "libffi" with { path: "../libffi" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as libxcrypt from "libxcrypt" with { path: "../libxcrypt" };
 import * as m4 from "m4" with { path: "../m4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
-import * as pkgconfig from "pkg-config" with { path: "../pkgconfig" };
+import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -188,14 +189,14 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	];
 
 	if (os === "darwin") {
-		env.push({ MACOSX_DEPLOYMENT_TARGET: "14.5" });
+		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.0" });
 	}
 
 	const configure = {
 		args: ["--with-pkg-config=yes", "--without-c-locale-coercion"],
 	};
 
-	// Enable PGO on macOS and Linux only if the LLVm toolchain is not used.
+	// Enable PGO on macOS and Linux only if the LLVM toolchain is not used.
 	if (
 		std.triple.os(build) === "darwin" ||
 		((await std.env.tryWhich({ env: env_, name: "clang" })) === undefined &&
@@ -210,6 +211,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			debug: true,
 			env: std.env.arg(env),
 			opt: "3",
 			phases,
@@ -219,6 +221,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+	console.log("python output", await output.id());
 
 	const pythonInterpreter = await std.wrap(
 		tg.symlink(tg`${output}/bin/python${versionString()}`),
