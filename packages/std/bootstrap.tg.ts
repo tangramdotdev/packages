@@ -5,52 +5,55 @@ export * as musl from "./bootstrap/musl.tg.ts";
 export { sdk } from "./bootstrap/sdk.tg.ts";
 
 export type Arg = {
-  /** Specify which component to provide. */
-  component?: string | undefined;
-  /** Optionally select a system different from the detected host. */
-  host?: string | undefined;
+	/** Specify which component to provide. */
+	component?: string | undefined;
+	/** Optionally select a system different from the detected host. */
+	host?: string | undefined;
 };
 
 export const bootstrap = async (arg?: Arg) => {
-  let host = std.triple.archAndOs(arg?.host ?? (await std.triple.host()));
-  if (std.triple.os(host) === "darwin") {
-    host = "universal_darwin";
-  }
-  const hostFilename = arg?.component?.includes("sdk")
-    ? undefined
-    : host?.replace("-", "_");
-  if (!arg?.component) {
-    // Download all and aggregate.
-    const allComponents = await componentList({ host });
-    tg.assert(allComponents);
-    const dirObject = allComponents.reduce((acc, name) => {
-      acc[name] = remoteComponent(name);
-      return acc;
-    }, {} as Record<string, Promise<tg.Directory>>);
-    return tg.directory(dirObject);
-  }
-  const requestedComponentName = hostFilename
-    ? `${arg.component}_${hostFilename}`
-    : arg.component;
-  return remoteComponent(requestedComponentName);
+	let host = std.triple.archAndOs(arg?.host ?? (await std.triple.host()));
+	if (std.triple.os(host) === "darwin") {
+		host = "universal_darwin";
+	}
+	const hostFilename = arg?.component?.includes("sdk")
+		? undefined
+		: host?.replace("-", "_");
+	if (!arg?.component) {
+		// Download all and aggregate.
+		const allComponents = await componentList({ host });
+		tg.assert(allComponents);
+		const dirObject = allComponents.reduce(
+			(acc, name) => {
+				acc[name] = remoteComponent(name);
+				return acc;
+			},
+			{} as Record<string, Promise<tg.Directory>>,
+		);
+		return tg.directory(dirObject);
+	}
+	const requestedComponentName = hostFilename
+		? `${arg.component}_${hostFilename}`
+		: arg.component;
+	return remoteComponent(requestedComponentName);
 };
 
 export default bootstrap;
 
 /** Retrieve just the dash component. */
 export const dash = (host?: string) => {
-  return bootstrap({ host, component: "dash" });
+	return bootstrap({ host, component: "dash" });
 };
 export const shell = dash;
 
 /** Retrieve just the toolchain component. */
 export const toolchain = (host?: string) => {
-  return bootstrap({ host, component: "toolchain" });
+	return bootstrap({ host, component: "toolchain" });
 };
 
 /** Retrieve just the utils component. */
 export const utils = (host?: string) => {
-  return bootstrap({ host, component: "utils" });
+	return bootstrap({ host, component: "utils" });
 };
 
 /** Get the GCC version bundled for the Linux toolchain. */
@@ -58,72 +61,65 @@ export const gccVersion = "11.2.1";
 
 /** The build triple string of the bundled Linux toolchain. */
 export const toolchainTriple = async (hostArg?: string) => {
-  const host = hostArg ?? (await std.triple.host());
-  const system = std.triple.archAndOs(host);
-  const arch = std.triple.arch(system);
+	const host = hostArg ?? (await std.triple.host());
+	const system = std.triple.archAndOs(host);
+	const arch = std.triple.arch(system);
 
-  const os = std.triple.os(system);
-  if (os === "linux") {
-    return `${arch}-linux-musl`;
-  } else if (os === "darwin") {
-    return `${arch}-apple-darwin`;
-  } else {
-    return tg.unreachable();
-  }
+	const os = std.triple.os(system);
+	if (os === "linux") {
+		return `${arch}-linux-musl`;
+	} else if (os === "darwin") {
+		return `${arch}-apple-darwin`;
+	} else {
+		return tg.unreachable();
+	}
 };
 
 /** Get the interpreter name for a given host. */
 export const interpreterName = async (hostArg?: string) => {
-  const host = hostArg ?? (await std.triple.host());
-  const system = std.triple.archAndOs(host);
-  switch (system) {
-    case "x86_64-linux": {
-      return "ld-musl-x86_64.so.1";
-    }
-    case "aarch64-linux": {
-      return "ld-musl-aarch64.so.1";
-    }
-    case "x86_64-darwin":
-    case "aarch64-darwin": {
-      return "none";
-    }
-    default: {
-      return tg.unreachable();
-    }
-  }
+	const host = hostArg ?? (await std.triple.host());
+	const system = std.triple.archAndOs(host);
+	switch (system) {
+		case "x86_64-linux": {
+			return "ld-musl-x86_64.so.1";
+		}
+		case "aarch64-linux": {
+			return "ld-musl-aarch64.so.1";
+		}
+		case "x86_64-darwin":
+		case "aarch64-darwin": {
+			return "none";
+		}
+		default: {
+			return tg.unreachable();
+		}
+	}
 };
 
-export type SdkVersion =
-  | "12"
-  | "12.1"
-  | "12.3"
-  | "13"
-  | "13.3"
-  | "14"
-  | "14.4"
-  | "14.5";
-export const LatestSdkVersion: SdkVersion = "14.5" as const;
+export type SdkVersion = "12.1" | "12.3" | "14.5" | "15.0";
+
+export const LatestSdkVersion: SdkVersion = "15.0" as const;
 
 /** Retrieve a single version of the MacOSSDK */
 export const macOsSdk = (versionArg?: SdkVersion) => {
-  const version = versionArg ?? LatestSdkVersion;
-  // NOTE - the host doesn't matter, any host can request this component.
-  return bootstrap({ component: `macos_sdk_${version}` });
+	const version = versionArg ?? LatestSdkVersion;
+	// NOTE - the host doesn't matter, any host can request this component.
+	return bootstrap({ component: `macos_sdk_${version}` });
 };
 
 /** Apply one or more patches to a directory using the bootstrap utils. */
 export const patch = async (
-  source: tg.Directory,
-  ...patches: Array<tg.File | tg.Symlink>
+	source: tg.Directory,
+	...patches: Array<tg.File | tg.Symlink>
 ) => {
-  const host = await std.triple.host();
+	const host = await std.triple.host();
 
-  const patchScript = tg.Template.join(
-    "\n",
-    ...patches.map((patch) => tg`patch -p1 < ${patch}`)
-  );
+	const patchScript = tg.Template.join(
+		"\n",
+		...patches.map((patch) => tg`patch -p1 < ${patch}`),
+	);
 
-  const script = tg`
+	const script = tg`
 		set -eu
 		cp -R ${source} $OUTPUT
 		chmod -R +w $OUTPUT
@@ -131,129 +127,126 @@ export const patch = async (
 		${patchScript}
 	`;
 
-  const shellArtifact = await shell(host);
-  const shellExecutable = await shellArtifact
-    .get("bin/dash")
-    .then(tg.File.expect);
-  const utilsArtifact = utils(host);
+	const shellArtifact = await shell(host);
+	const shellExecutable = await shellArtifact
+		.get("bin/dash")
+		.then(tg.File.expect);
+	const utilsArtifact = utils(host);
 
-  const patchedSource = await tg
-    .target({
-      executable: shellExecutable,
-      args: ["-c", script],
-      env: {
-        PATH: tg`${utilsArtifact}/bin:${shellArtifact}/bin`,
-      },
-      host,
-    })
-    .then((t) => t.output())
-    .then(tg.Directory.expect);
+	const patchedSource = await tg
+		.target({
+			executable: shellExecutable,
+			args: ["-c", script],
+			env: {
+				PATH: tg`${utilsArtifact}/bin:${shellArtifact}/bin`,
+			},
+			host,
+		})
+		.then((t) => t.output())
+		.then(tg.Directory.expect);
 
-  return patchedSource;
+	return patchedSource;
 };
 
 /** Download a component tarball from the remote host. */
 export const remoteComponent = async (componentName: string) => {
-  const version = "v2024.06.20";
-  const url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}.tar.zst`;
-  const checksum = checksums[componentName];
-  tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
+	const version = "v2024.10.03";
+	const url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${componentName}.tar.zst`;
+	const checksum = checksums[componentName];
+	tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
 
-  // Download and extract the selected tarball.
-  return await std.download({ url, checksum }).then(tg.Directory.expect);
+	// Download and extract the selected tarball.
+	return await std.download({ url, checksum }).then(tg.Directory.expect);
 };
 
 /** Enumerate the full set of components for a host. */
 export const componentList = async (arg?: Arg) => {
-  const host = arg?.host ?? (await std.triple.host());
+	const host = arg?.host ?? (await std.triple.host());
 
-  const linuxComponents = (hostTriple: string) => {
-    const host = hostTriple.replace("-", "_");
-    return [
-      `dash_${host}`,
-      `env_${host}`,
-      `toolchain_${host}`,
-      `utils_${host}`,
-    ];
-  };
-  const darwinComponents = [
-    "dash_universal_darwin",
-    "macos_sdk_12.1",
-    "macos_sdk_12.3",
-    "macos_sdk_13.3",
-    "macos_sdk_14.4",
-    "macos_sdk_14.5",
-    "toolchain_universal_darwin",
-    "utils_universal_darwin",
-  ];
-  const expectedComponents: { [key: string]: Array<string> } = {
-    ["aarch64-darwin"]: darwinComponents,
-    ["aarch64-linux"]: linuxComponents("aarch64-linux"),
-    ["js"]: [],
-    ["universal_darwin"]: darwinComponents,
-    ["x86_64-darwin"]: darwinComponents,
-    ["x86_64-linux"]: linuxComponents("x86_64-linux"),
-  };
+	const linuxComponents = (hostTriple: string) => {
+		const host = hostTriple.replace("-", "_");
+		return [
+			`dash_${host}`,
+			`env_${host}`,
+			`toolchain_${host}`,
+			`utils_${host}`,
+		];
+	};
+	const darwinComponents = [
+		"dash_universal_darwin",
+		"macos_sdk_12.1",
+		"macos_sdk_12.3",
+		"macos_sdk_14.5",
+		"macos_sdk_15.0",
+		"toolchain_universal_darwin",
+		"utils_universal_darwin",
+	];
+	const expectedComponents: { [key: string]: Array<string> } = {
+		["aarch64-darwin"]: darwinComponents,
+		["aarch64-linux"]: linuxComponents("aarch64-linux"),
+		["js"]: [],
+		["universal_darwin"]: darwinComponents,
+		["x86_64-darwin"]: darwinComponents,
+		["x86_64-linux"]: linuxComponents("x86_64-linux"),
+	};
 
-  return expectedComponents[host];
+	return expectedComponents[host];
 };
 
 export const test = tg.target(async () => {
-  const host = await std.triple.host();
-  // Assert that all expected components exist and provide a non-empty `bin/` subdirectory.
-  const components = await componentList({ host });
-  tg.assert(components);
-  tg.assert(
-    (
-      await Promise.all(
-        components.map(async (component) =>
-          (await bootstrap()).tryGet(component).then(async (artifact) => {
-            // Assert that the component exists.
-            tg.assert(artifact);
-            tg.Directory.assert(artifact);
-            // Return whether there are entries in the component.
-            const entries = await artifact.entries();
-            const binariesNotEmpty = Object.keys(entries).length > 0;
-            return binariesNotEmpty;
-          })
-        )
-      )
-    ).every((result) => result)
-  );
-  return true;
+	const host = await std.triple.host();
+	// Assert that all expected components exist and provide a non-empty `bin/` subdirectory.
+	const components = await componentList({ host });
+	tg.assert(components);
+	tg.assert(
+		(
+			await Promise.all(
+				components.map(async (component) =>
+					(await bootstrap()).tryGet(component).then(async (artifact) => {
+						// Assert that the component exists.
+						tg.assert(artifact);
+						tg.Directory.assert(artifact);
+						// Return whether there are entries in the component.
+						const entries = await artifact.entries();
+						const binariesNotEmpty = Object.keys(entries).length > 0;
+						return binariesNotEmpty;
+					}),
+				),
+			)
+		).every((result) => result),
+	);
+	return true;
 });
 
 const checksums: Record<string, tg.Checksum> = {
-  "macos_sdk_12.1":
-    "sha256:ec34c2b06b3e19829a101d34283ad6fab48481959a918ceb0583ce833075aede",
-  "macos_sdk_12.3":
-    "sha256:fc19d39cb3bb4eb289a71c140f5b7b4de1c0d0b858fa6936ead47074becde4f6",
-  "macos_sdk_13.3":
-    "sha256:0d2778863846b8c88fd6a26828d046c92e2f001c70459164a9fb214111d6454a",
-  "macos_sdk_14.4":
-    "sha256:11ac6a0b5a295238d215e68313d7d2a46485efafbb7a6106e495398bfd8dfc6a",
-  "macos_sdk_14.5":
-    "sha256:afc30888af86c1b4f80ea095c6ba2d580309ac016559e067e710682aebc233db",
-  dash_aarch64_linux:
-    "sha256:7fd88a5e0e6800424b4ed36927861564eea99699ede9f81bc12729ec405ac193",
-  dash_universal_darwin:
-    "sha256:d522cdef681f13a0f66e78a69db00e08b7c00bd2e65b967d52aa39e73b890add",
-  dash_x86_64_linux:
-    "sha256:42afecad2eadf0d07745d9a047743931b270f555cc5ab8937f957e85e040dc02",
-  env_aarch64_linux:
-    "sha256:a3497e17fac0fb9fa8058157b5cd25d55c5c8379e317ce25c56dfd509d8dc4b4",
-  env_x86_64_linux:
-    "sha256:78a971736d9e66c7bdffa81a24a7f9842b566fdd1609fe7c628ac00dccc16dda",
-  toolchain_aarch64_linux:
-    "sha256:6621ba7a5d6510e9db2e280fd4b69671e76398fa68fb4fb3740d1e4f332d463d",
-  toolchain_universal_darwin:
-    "sha256:7e5fd46f48d346bc3130495d7c083c643e52eeca200dd379c7b53e41051358f4",
-  toolchain_x86_64_linux:
-    "sha256:63f543aac32a67b8cdd1c3274980db0495ba442d0763fdae9fc21e9af5ba4e19",
-  utils_aarch64_linux:
-    "sha256:45e5be2f4282d6f90a60516c0905ac72c630512918887762f8c74dbf2345cd54",
-  utils_universal_darwin:
-    "sha256:df10a8674a990d07f475da2f91777ab18e775181e64280bce2e2675ce6121515",
-  utils_x86_64_linux:
-    "sha256:4f69691d0976110088c0fd1019015a69d08493a7fcf4509f2484715ac1d11f1f",
+	"macos_sdk_12.1":
+		"sha256:58213ebd70d16ff212aa1bd313ee7eb38c61f7d2063cb90f0fbb6c1bdc66df0f",
+	"macos_sdk_12.3":
+		"sha256:abd46b9d50d1cf90f256adfe98206afe6375217c5d35bd9d62c73038ed13ce05",
+	"macos_sdk_14.5":
+		"sha256:53d558e87242418586798f0ee52b235d41eeaf5d0dacdc4397ec897b9c11400a",
+	"macos_sdk_15.0":
+		"sha256:1a110c1ad1bc08a9d528dfc6c561bd9e1857692be561a53b9aec59cd036c9cda",
+	dash_aarch64_linux:
+		"sha256:d1e6ed42b0596507ebfa9ce231e2f42cc67f823cc56c0897c126406004636ce7",
+	dash_universal_darwin:
+		"sha256:026f919826c372cab0f2ac09b647fd570153efdb3e0ea5d8c9f05e1bca02f028",
+	dash_x86_64_linux:
+		"sha256:d23258e559012dc66cc82d9def66b51e9c41f9fb88f8e9e6a5bd19d231028a64",
+	env_aarch64_linux:
+		"sha256:b2985354036c4deea9b107f099d853ac2d7c91a095dc285922f6dab72ae1474c",
+	env_x86_64_linux:
+		"sha256:fceb5be5a7d6f59a026817ebb17be2bcc294d753f1528cbc921eb9015b9ff87b",
+	toolchain_aarch64_linux:
+		"sha256:01cf6871a4e8c28fe29572bc807edfacd8d5e44d0ee5455de8acbb53f516ec98",
+	toolchain_universal_darwin:
+		"sha256:ebcb7793b1cd534a86813e5b8165dada0eca764e11718232284327a51e487246",
+	toolchain_x86_64_linux:
+		"sha256:a3f9ec87394e63f90ec8784e6980727821fe0753b783e86ce298f54145372fad",
+	utils_aarch64_linux:
+		"sha256:486ef386ca587e5a3366df556da6140e9fd633462580a53c63942af411c9f40f",
+	utils_universal_darwin:
+		"sha256:7bd26e53a370d66eb05436c0a128d183a66dd2aba3c2524d94b916bd4515be40",
+	utils_x86_64_linux:
+		"sha256:dcbc2b66a046a66216f4c54d79f2a434c086346799f28b7f405bd6a2dc0e8543",
 };

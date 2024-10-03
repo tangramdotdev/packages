@@ -279,8 +279,8 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
-		// Note - the Apple Clang version provided by the OS is 15, not ${version}.
-		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/15.0.0`);
+		// Note - the Apple Clang version provided by the OS is 16, not ${version}.
+		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/16.0.0`);
 		clangxxArgs = [...clangArgs];
 		env = {
 			SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
