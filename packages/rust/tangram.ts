@@ -202,10 +202,10 @@ export const rustTriple = (triple: string): string => {
 export const test = tg.target(async () => {
 	const tests = [];
 
-	// tests.push(testHostToolchain());
+	tests.push(testHostToolchain());
 	// tests.push(testCrossToolchain());
 	tests.push(testCargo());
-	tests.push(testCargoProxy());
+	// tests.push(testCargoProxy());
 	// tests.push(testNativeBuild());
 
 	const results = await Promise.all(tests);

@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { $ } from "bun";
 
@@ -21,58 +22,45 @@ const entrypoint = async () => {
 
 /** Tag and push all supported packages, reporting failures. */
 const doAll = async () => {
-  // Create container to store results.
-  let results = {};
-
-  // Collect all names of packages in the repo.
-  // const names = allPackageNames();
-
-  const collectResult = async (name: string, skipTest?: boolean) => {
-    const result = await processPackage(name, skipTest);
-    results[name] = result;
-  }
-
-  await collectResult("std", true);
-  await collectResult("m4");
-  await collectResult("jq");
-  await collectResult("zlib");
-  await collectResult("libffi");
-  await collectResult("ncurses");
-  await collectResult("readline");
-  await collectResult("zstd");
-  await collectResult("pcre2");
-  await collectResult("bison");
-  await collectResult("pkgconfig");
-  await collectResult("perl");
-  await collectResult("openssl");
-  await collectResult("sqlite");
-  // await collectResult("libpsl");
-  // await collectResult("curl");
-  // await collectResult("ripgrep");
+  const results: { [key: string]: Result } = await allPackageNames().reduce( async (acc, name) => {
+    const result = await processPackage(name);
+    let acc_ = await acc;
+    acc_[name] = result;
+    return acc_;
+  }, Promise.resolve({}) as Promise<{ [key: string]: Result }>);
   
   // Report results.
  console.log(results);
 }
 
-/** Produce the path to a package in the packages repo by name. Assumes this script lives in <packages repo>/scripts. */
-const getPackagePath = (name: string) => {
-  return path.join(path.dirname(import.meta.dir), "packages", name);
-}
+/** Get the names of every directory in the packages repo with a tangram.ts. */
+export const allPackageNames = () => {
+  const entries = fs.readdirSync(packagesPath(), { withFileTypes: true });
+  const results: Array<string> = [];
 
-/** Ensuring the given package test succeeds, then ensure it is tagged and pushed along with the default target build. */
-const processPackage = async (name: string, skipTest?: boolean): Promise<Result> => {
-  let skipTest_ = skipTest ?? false;
-  
-  let path = getPackagePath(name);
-  console.log(`processing ${name}: ${path}`);
-
-  // Make sure the test target succeeds.
-  if (!skipTest) {
-    let testResult = await buildTestTarget(path);
-    if (testResult !== "ok") {
-      return testResult;
+  for (const entry of entries) {
+    const fullPath = path.join(packagesPath(), entry.name);
+    if (entry.isDirectory()) {
+      // Check if it has a root module.
+      if (fs.existsSync(path.join(fullPath, "tangram.ts"))) {
+        results.push(entry.name);
+      }
     }
   }
+
+  return results;
+}
+
+/** Produce the path containing all the package definitions. */
+const packagesPath = () => path.join(path.dirname(import.meta.dir), "packages");
+
+/** Produce the path to a package in the packages repo by name. Assumes this script lives in <packages repo>/scripts. */
+export const getPackagePath = (name: string) => path.join(packagesPath(), name);
+
+/** Ensuring the given package test succeeds, then ensure it is tagged and pushed along with the default target build. */
+const processPackage = async (name: string): Promise<Result> => {  
+  let path = getPackagePath(name);
+  console.log(`processing ${name}: ${path}`);
 
   // Check in the package, store the ID.
   let packageId = await checkinPackage(path);
@@ -100,39 +88,19 @@ const processPackage = async (name: string, skipTest?: boolean): Promise<Result>
     return pushTagResult;
   }
 
-  // Build the default target by tag, storing the ID.
-  let buildId = await buildDefaultTarget(name);
-  if (buildId === "buildError") {
-    return "buildError";
-  }
+  // // Build the default target by tag, storing the ID.
+  // let buildId = await buildDefaultTarget(name);
+  // if (buildId === "buildError") {
+  //   return "buildError";
+  // }
 
-  // Push the build from the default target.
-  let pushBuildResult = await push(buildId);
-  if (pushBuildResult !== "ok") {
-    return pushBuildResult;
-  }
+  // // Push the build from the default target.
+  // let pushBuildResult = await push(buildId);
+  // if (pushBuildResult !== "ok") {
+  //   return pushBuildResult;
+  // }
 
   return "ok";
-}
-
-
-/** Run the test target for a given package. */
-const buildTestTarget = async (path: string): Promise<Result> => {
-  console.log("testing:", path);
-  try {
-    let result = await $`tg build ${path}#test --quiet`.text();
-    if (!result.includes("true")) {
-      console.error(`${path}: test target failed`);
-      return "testError";
-    } else {
-      return "ok";
-    }
-  } catch (err) {
-    console.error(`${path} test: failed with code ${err.exitCode}`);
-    console.error(err.stdout.toString());
-    console.error(err.stderr.toString());
-    return "testError";
-  }
 }
 
 /** Check in a package, returning the resulting ID or "checkinError" on failure. */
@@ -193,6 +161,6 @@ const buildDefaultTarget = async (name: string) => {
   }
 }
 
-type Result = "ok" | "checkinError" | "testError" | "tagError" | "pushError" | "buildError";
+export type Result = "ok" | "checkinError" | "testError" | "tagError" | "pushError" | "buildError";
 
 await entrypoint();

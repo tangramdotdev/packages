@@ -4,7 +4,6 @@ import { $ } from "std" with { path: "../std" };
 import * as bison from "bison" with { path: "../bison" };
 import * as bzip2 from "bzip2" with { path: "../bzip2" };
 import * as libffi from "libffi" with { path: "../libffi" };
-import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as libxcrypt from "libxcrypt" with { path: "../libxcrypt" };
 import * as m4 from "m4" with { path: "../m4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
@@ -23,7 +22,7 @@ export const metadata = {
 	name: "Python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.12.6",
+	version: "3.12.7",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -36,7 +35,7 @@ export const versionString = () => {
 export const source = tg.target(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:1999658298cf2fb837dffed8ff3c033ef0c98ef20cf73c5d5f66bed5ab89697c";
+		"sha256:24887b92e2afd4a2ac602419ad4b596372f67ac9b077190f459aba390faf5550";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std
@@ -193,7 +192,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	}
 
 	const configure = {
-		args: ["--with-pkg-config=yes", "--without-c-locale-coercion"],
+		args: [],
 	};
 
 	// Enable PGO on macOS and Linux only if the LLVM toolchain is not used.
@@ -211,7 +210,6 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			debug: true,
 			env: std.env.arg(env),
 			opt: "3",
 			phases,
@@ -221,7 +219,6 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-	console.log("python output", await output.id());
 
 	const pythonInterpreter = await std.wrap(
 		tg.symlink(tg`${output}/bin/python${versionString()}`),

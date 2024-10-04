@@ -66,7 +66,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure };
 
-	return std.autotools.build(
+	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -76,6 +76,20 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+
+	// Wrap with BISON_PKGDATADIR to locate m4 support files.
+	const bins = ["bison", "yacc"];
+	const datadir = await output.get("share/bison").then(tg.Directory.expect);
+	for (const bin of bins) {
+		const unwrappedBin = await output.get(`bin/${bin}`).then(tg.File.expect);
+		output = await tg.directory(output, {
+			[`bin/${bin}`]: std.wrap(unwrappedBin, {
+				env: { BISON_PKGDATADIR: datadir },
+			}),
+		});
+	}
+
+	return output;
 });
 
 export default build;
