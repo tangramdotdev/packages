@@ -919,24 +919,26 @@ const manifestInterpreterFromArg = async (
 					),
 			  )
 			: undefined;
-		// Select the universal machO injecton dylib.  Either arch will produce the same result, so just pick one.
-		const host = await std.triple.host();
-		const buildToolchain = buildToolchainArg
-			? buildToolchainArg
-			: bootstrap.sdk.env(host);
-		const injectionLibrary = await injection.default({
-			buildToolchain,
-			host,
-		});
-		let preloads = [await manifestSymlinkFromArg(injectionLibrary)];
-		const additionalPreloads = arg.preloads
+		const preloads = arg.preloads
 			? await Promise.all(
 					arg.preloads?.map(async (arg) =>
 						manifestSymlinkFromArg(await tg.template(arg)),
 					),
 			  )
 			: [];
-		preloads = preloads.concat(additionalPreloads);
+
+		// If no preload is defined, add the default injection preload.
+		if (preloads.length === 0) {
+			const host = await std.triple.host();
+			const buildToolchain = buildToolchainArg
+				? buildToolchainArg
+				: bootstrap.sdk.env(host);
+			const injectionLibrary = await injection.default({
+				buildToolchain,
+				host,
+			});
+			preloads.push(await manifestSymlinkFromArg(injectionLibrary));
+		}
 		return {
 			kind: "dyld",
 			libraryPaths,
