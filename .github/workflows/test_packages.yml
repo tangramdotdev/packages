@@ -1,0 +1,23 @@
+name: Test Packages
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      [ main ]
+jobs:
+  test-packages:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout packages repository
+      uses: actions/checkout@v4
+
+    - name: Checkout tangram repository
+      uses: actions/checkout@v4
+      with:
+        repository: tangramdotdev/tangram
+        path: tangram
+      run: rustup update
+      run cargo build --release --manifest-path tangram/Cargo.toml    
