@@ -20,4 +20,4 @@ jobs:
         repository: tangramdotdev/tangram
         path: tangram
       run: rustup update
-      run cargo build --release --manifest-path tangram/Cargo.toml    
+      run: cargo build --release --manifest-path tangram/Cargo.toml    
