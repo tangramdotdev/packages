@@ -3,14 +3,14 @@ import * as std from "../../tangram.ts";
 
 export const metadata = {
 	name: "Python",
-	version: "3.12.6",
+	version: "3.12.7",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:1999658298cf2fb837dffed8ff3c033ef0c98ef20cf73c5d5f66bed5ab89697c";
+		"sha256:24887b92e2afd4a2ac602419ad4b596372f67ac9b077190f459aba390faf5550";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std
 		.download({ base, checksum, name, version, extension })

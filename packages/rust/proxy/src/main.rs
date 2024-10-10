@@ -254,6 +254,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			tg::artifact::checkin::Arg {
 				destructive: false,
 				deterministic: true,
+				ignore: false,
 				locked: false,
 				path: dependency.parse().unwrap(),
 			},
@@ -590,6 +591,7 @@ async fn get_checked_in_path(
 		tg::artifact::checkin::Arg {
 			destructive: false,
 			deterministic: true,
+			ignore: false,
 			locked: false,
 			path: path.to_path_buf(),
 		},

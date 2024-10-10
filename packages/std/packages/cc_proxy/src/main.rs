@@ -580,6 +580,7 @@ async fn check_in_source_tree(
 					tg::artifact::checkin::Arg {
 						destructive: false,
 						deterministic: true,
+						ignore: false,
 						locked: false,
 						path,
 					},

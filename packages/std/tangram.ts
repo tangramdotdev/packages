@@ -99,6 +99,18 @@ export const testBootstrapShell = tg.target(async () => {
 export const testBootstrapUtils = tg.target(async () => {
 	return await bootstrap.utils();
 });
+export const testGetFromUtils = tg.target(async () => {
+	let utils = await bootstrap.utils();
+	// get something that exists.
+	let busybox = await utils.tryGet("bin/busybox");
+	console.log(busybox);
+
+	// get something that doesn't.
+	let nothing = await utils.tryGet(".tangram/env");
+	console.log(nothing);
+
+	return true;
+});
 export const testBootstrapToolchain = tg.target(async () => {
 	return await bootstrap.toolchain();
 });
@@ -462,16 +474,22 @@ export const testStrip = tg.target(async () => {
 import testSource from "./wrap/test/inspectProcess.c" with { type: "file" };
 export const testCheckoutWrapper = tg.target(async () => {
 	const env = stdEnv.arg(bootstrap.sdk());
-	let output = await tg.target(tg`cc -o $OUTPUT -xc ${testSource}`, { env} ).then((t) => t.output()).then(tg.File.expect);
+	let output = await tg
+		.target(tg`cc -o $OUTPUT -xc ${testSource}`, { env })
+		.then((t) => t.output())
+		.then(tg.File.expect);
 	let outputId = await output.id();
 	console.log("output id", outputId);
-	let testInTg = await tg.target(tg`${output} | tee $OUTPUT`, { env }).then((t) => t.output()).then(tg.File.expect);
+	let testInTg = await tg
+		.target(tg`${output} | tee $OUTPUT`, { env })
+		.then((t) => t.output())
+		.then(tg.File.expect);
 	let testInTgText = await testInTg.contents().then((b) => b.text());
 	console.log("testInTg contents", testInTgText);
 	return output;
 });
 
 import { testKeepSubdirectories as testKeepSubdirectories_ } from "./directory.tg.ts";
-export const testKeepSubdirectories = tg.target(async() => {
+export const testKeepSubdirectories = tg.target(async () => {
 	return await testKeepSubdirectories_();
-})
+});

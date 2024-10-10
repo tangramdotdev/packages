@@ -145,6 +145,7 @@ async fn run_proxy(
 			tg::artifact::checkin::Arg {
 				destructive: false,
 				deterministic: true,
+				ignore: false,
 				locked: false,
 				path: local_executable_path,
 			},

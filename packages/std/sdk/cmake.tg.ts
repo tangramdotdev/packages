@@ -7,13 +7,13 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "cmake",
 	repository: "https://gitlab.kitware.com/cmake/cmake",
-	version: "3.30.2",
+	version: "3.30.5",
 };
 
 export const source = tg.target(() => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:46074c781eccebc433e98f0bbfa265ca3fd4381f245ca3b140e7711531d60db2";
+		"sha256:9f55e1a40508f2f29b7e065fa08c29f82c402fa0402da839fffe64a25755a86d";
 	const owner = "Kitware";
 	const repo = "CMake";
 	const tag = `v${version}`;
