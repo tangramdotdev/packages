@@ -1,5 +1,5 @@
-import * as poetry from "poetry" with { path = "../poetry" };
-import * as std from "std" with { path = "../std" };
+import * as poetry from "poetry" with { path: "../poetry" };
+import * as std from "std" with { path: "../std" };
 import poetryLock from "./poetry.lock" with { type: "file" };
 
 export const metadata = {

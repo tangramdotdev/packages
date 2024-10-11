@@ -47,7 +47,6 @@ export const poetry = tg.target(async (arg?: Arg) => {
 
 export default poetry;
 
-export default tg.target((arg?: Arg) => poetry(arg));
 export type BuildArgs = {
 	/** The source directory to build. */
 	source: tg.Directory;

@@ -1,5 +1,5 @@
 import * as std from "std" with { path: "../std" };
-import * as cmake from "./tangram.tg.ts";
+import * as cmake from "./tangram.ts";
 
 export const metadata = {
 	homepage: "https://ninja-build.org/",
