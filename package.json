@@ -1,10 +1,14 @@
 {
   "dependencies": {
-		"@biomejs/biome": "^1.9.2",
-		"@types/bun": "^1.1.10"
-	},
+    "@biomejs/biome": "^1.9.3",
+    "@types/bun": "^1.1.11"
+  },
   "scripts": {
-    "push_one": "bun scripts/push_all.ts --",
-    "push_all": "bun scripts/push_all.ts"
+    "build_one": "bun scripts/package_automation.ts buildPush $@",
+    "build_all": "bun scripts/package_automation.ts buildPush",
+    "tag_one": "bun scripts/package_automation.ts tag $@",
+    "tag_all": "bun scripts/package_automation.ts tag",
+    "test_one": "bun scripts/package_automation.ts test $@",
+    "test_all": "bun scripts/package_automation.ts test"
   }
 }
