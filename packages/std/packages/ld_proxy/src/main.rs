@@ -284,11 +284,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		.chain(
 			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
 				let symlink_data = tangram_std::template_data_to_symlink_data(
-					tangram_std::unrender(
-						&library_path.replace("/.tangram/checkouts", "/.tangram/artifacts"),
-					)?
-					.data(&tg)
-					.await?,
+					tangram_std::unrender(library_path)?.data(&tg).await?,
 				)?;
 				let artifact_path = if let tg::symlink::Data::Normal { artifact, path } =
 					symlink_data.clone()

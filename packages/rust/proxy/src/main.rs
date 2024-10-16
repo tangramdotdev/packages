@@ -561,8 +561,6 @@ async fn get_checked_in_path(
 	}
 
 	// Unrender the string.
-	// We want to treat "checkouts" and "artifacts" as the same.
-	let path_str = path_str.replace("checkouts", "artifacts");
 	let symlink_data = template_data_to_symlink_data(unrender(&path_str)?.data(tg).await?)?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?symlink_data, "unrendered symlink data");
