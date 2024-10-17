@@ -32,7 +32,7 @@ export const workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 				"Cargo.toml": cargoToml,
 				"Cargo.lock": cargoLock,
 				packages: packages,
-			});
+		  });
 
 	return build({
 		...(await std.triple.rotate({ build: buildTriple, host })),
@@ -62,7 +62,7 @@ export const wrapper = (arg?: Arg) =>
 		.then((dir) => dir.get("bin/wrapper"))
 		.then(tg.File.expect);
 
-const version = "1.81.0";
+const version = "1.82.0";
 
 type ToolchainArg = {
 	target?: string;
