@@ -4,6 +4,9 @@ import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, toolchain } from "./tangram.ts";
 
 export type Arg = {
+	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
+	buildInTree?: boolean;
+
 	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
 	checksum?: tg.Checksum;
 
@@ -32,7 +35,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg | boolean;
 
 	/** Source directory containing the Cargo.toml. */
-	source?: tg.Artifact;
+	source?: tg.Directory;
 
 	/** Target triple for the build. */
 	target?: string;
@@ -63,6 +66,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		source: "set",
 	});
 	const {
+		buildInTree = false,
 		checksum,
 		disableDefaultFeatures = false,
 		env,
@@ -101,6 +105,19 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	tg.assert(source, "Must provide a source directory.");
 	const cargoConfig = vendoredSources({ source, useCargoVendor });
 
+	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
+	const preparePathCommands = [
+		`mkdir -p "$OUTPUT/target"`,
+		`export TARGET_DIR="$(realpath "$OUTPUT/target")"`,
+		tg`mkdir -p "$HOME/.cargo"\necho '${cargoConfig}' >> "$HOME/.cargo/config.toml"\nexport CARGO_HOME=$HOME/.cargo`,
+	];
+	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
+
+	// Set the SOURCE variable.
+	const prepareSource = buildInTree
+		? tg`cp -R ${source}/. .\nchmod -R u+w .\nexport SOURCE="$PWD"`
+		: tg`export SOURCE=$(realpath ${source})`;
+
 	// Set up cargo args.
 	const cargoArgs = [
 		"--release",
@@ -116,23 +133,15 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	}
 
 	// Create the build script.
-	const buildScript = tg`
-		# Create the output directory
-		mkdir -p "$OUTPUT/target"
-
-		# Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
-		mkdir -p "$HOME/.cargo"
-		echo '${cargoConfig}' >> "$HOME/.cargo/config.toml"
-
-		export CARGO_HOME=$HOME/.cargo
-
-		${pre}
-
-		# Build.
-		export TARGET_DIR="$(realpath "$OUTPUT/target")"
-		export SOURCE="$(realpath ${source})"
-		cargo build ${cargoArgs.join(" ")}
-	`;
+	const cargoArgString = cargoArgs.join(" ");
+	const buildCommand = `cargo build ${cargoArgString}`;
+	const buildScript = tg.Template.join(
+		"\n",
+		preparePaths,
+		prepareSource,
+		pre,
+		buildCommand,
+	);
 
 	// When not cross-compiling, ensure the `cc` provided by the SDK is used, which enables Tangram linking.
 	let toolchainEnv = {
@@ -386,7 +395,7 @@ import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
 import * as openssl from "openssl" with { path: "../openssl" };
 export const testUnproxiedWorkspace = tg.target(async () => {
 	const helloWorkspace = build({
-		source: tests.get("hello-workspace"),
+		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
 			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
 		},
@@ -400,7 +409,7 @@ export const testUnproxiedWorkspace = tg.target(async () => {
 	tg.assert(helloText.trim() === "Hello from a workspace!");
 
 	const helloOpenssl = build({
-		source: tests.get("hello-openssl"),
+		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		env: std.env.arg(openssl.build(), pkgconfig.build(), {
 			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
 		}),
