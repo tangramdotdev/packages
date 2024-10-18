@@ -88,6 +88,19 @@ export const macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 		env,
 	});
 
+	// Compile arm64e dylib.
+	const arm64eArgs = additionalArgs.concat([
+		"--target=aarch64-apple-darwin",
+		"-arch",
+		"arm64e",
+	]);
+	const arm64einjection = dylib({
+		...arg,
+		source,
+		additionalArgs: arm64Args,
+		env,
+	});
+
 	// Compile amd64 dylib.
 	const amd64Args = additionalArgs.concat(["--target=x86_64-apple-darwin"]);
 	const amd64injection = dylib({
@@ -102,7 +115,7 @@ export const macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 	const injection = tg.File.expect(
 		await (
 			await tg.target(
-				tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
+				tg`lipo -create ${arm64injection} ${amd64injection} ${arm64einjection} -output $OUTPUT`,
 				{ host: system, env: std.env.arg(arg.buildToolchain, env) },
 			)
 		).output(),
