@@ -97,7 +97,7 @@ export const macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 	const arm64einjection = dylib({
 		...arg,
 		source,
-		additionalArgs: arm64Args,
+		additionalArgs: arm64eArgs,
 		env,
 	});
 
