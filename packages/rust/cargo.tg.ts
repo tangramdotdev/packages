@@ -19,8 +19,8 @@ export type Arg = {
 	/** Machine that will run the compilation. */
 	host?: string;
 
-	/** Whether to compile in parallel. */
-	parallel?: boolean;
+	/** Number of parallel jobs to use. */
+	parallelJobs?: number;
 
 	/** Additional script to run prior to the build */
 	pre?: tg.Template.Arg;
@@ -68,7 +68,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		env,
 		features = [],
 		host: host_,
-		parallel = true,
+		parallelJobs,
 		pre,
 		proxy = false,
 		sdk: sdk_ = {},
@@ -157,9 +157,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	}
 
 	let jobsEnv = undefined;
-	if (!parallel) {
+	if (parallelJobs) {
 		jobsEnv = {
-			CARGO_BUILD_JOBS: "1",
+			CARGO_BUILD_JOBS: `${parallelJobs}`,
 		};
 	}
 
