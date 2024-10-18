@@ -106,11 +106,16 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const cargoConfig = vendoredSources({ source, useCargoVendor });
 
 	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
-	const preparePaths = tg`mkdir -p "$OUTPUT/target"\nexport TARGET_DIR="$(realpath "$OUTPUT/target")"\nmkdir -p ""$HOME/.cargo"\necho '${cargoConfig}' >> "$HOME/.cargo/config.toml"\nexport CARGO_HOME=$HOME/.cargo`;
+	const preparePathCommands = [
+		`mkdir -p "$OUTPUT/target"`,
+		`export TARGET_DIR="$(realpath "$OUTPUT/target")"`,
+		tg`mkdir -p "$HOME/.cargo"\necho '${cargoConfig}' >> "$HOME/.cargo/config.toml"\nexport CARGO_HOME=$HOME/.cargo`,
+	];
+	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
 	// Set the SOURCE variable.
 	const prepareSource = buildInTree
-		? tg`cp -R ${source}/. .\nchmod -R u+w .\nexport SOURCE=$PWD`
+		? tg`cp -R ${source}/. .\nchmod -R u+w .\nexport SOURCE="$PWD"`
 		: tg`export SOURCE=$(realpath ${source})`;
 
 	// Set up cargo args.
