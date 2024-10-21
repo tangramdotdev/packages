@@ -21,6 +21,7 @@ export const source = tg.target(() => {
 		owner,
 		repo,
 		tag,
+		source: "tag"
 	});
 });
 

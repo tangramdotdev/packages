@@ -61,7 +61,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const env = std.env.arg(
 		std.sdk({ host }),
 		go.toolchain(goArg),
-		nodejs.nodejs(nodejsArg),
+		nodejs.toolchain(nodejsArg),
 		{
 			SSL_CERT_FILE: certFile,
 		},

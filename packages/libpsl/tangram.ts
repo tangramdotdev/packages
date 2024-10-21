@@ -46,14 +46,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-nls",
-			"--disable-rpath"
-		],
+		args: ["--disable-dependency-tracking", "--disable-nls", "--disable-rpath"],
 	};
 
-	const env = std.env.arg(python({ host: build }, env_));
+	const env = std.env.arg(python({ host: build }), env_);
 
 	return std.autotools.build(
 		{

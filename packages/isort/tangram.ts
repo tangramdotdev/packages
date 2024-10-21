@@ -36,11 +36,14 @@ export const build = tg.target(async (arg?: Arg) => {
 	const sourceArtifact = arg?.source ?? (await source());
 	const lockfile = tg.File.expect(await sourceArtifact.get("poetry.lock"));
 
+	const host = arg?.host ?? (await std.triple.host());
+	const target = arg?.target ?? host;
+
 	return poetry.build({
 		source: sourceArtifact,
 		lockfile: lockfile,
-		host: arg?.host,
-		target: arg?.target,
+		host,
+		target,
 	});
 });
 

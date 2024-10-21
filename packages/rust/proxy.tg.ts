@@ -47,7 +47,7 @@ export const test = tg.target(async () => {
 
 	// Build the basic proxy test.
 	const helloWorld = await cargo.build({
-		source: tests.get("hello-world"),
+		source: tests.get("hello-world").then(tg.Directory.expect),
 		pre: "echo WATERMARK 1",
 		proxy: true,
 		env: {
@@ -65,7 +65,7 @@ export const test = tg.target(async () => {
 
 	// Build the openssl proxy test.
 	const helloOpenssl = await cargo.build({
-		source: tests.get("hello-openssl"),
+		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		env: std.env.arg(openssl.build(), pkgconfig.build(), {
 			TANGRAM_RUSTC_TRACING: "tangram=trace",
 		}),
@@ -84,7 +84,7 @@ export const test = tg.target(async () => {
 
 	// Build the workspace test.
 	const helloWorkspace = await cargo.build({
-		source: tests.get("hello-workspace"),
+		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		proxy: true,
 		env: {
 			TANGRAM_RUSTC_TRACING: "tangram=trace",

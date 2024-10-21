@@ -32,7 +32,7 @@ export const source = tg.target(async () => {
 type Arg = {
 	build?: string;
 	env?: std.env.Arg;
-	python?: python.Arg;
+	python?: python.BuildArg;
 	host?: string;
 	source?: tg.Directory;
 };
@@ -52,7 +52,7 @@ export const build = tg.target(async (arg?: Arg) => {
 			python: { requirements },
 			host,
 		},
-		arg?.python ?? [],
+		arg?.python ?? {},
 	);
 
 	return build;

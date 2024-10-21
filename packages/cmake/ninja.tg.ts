@@ -26,8 +26,8 @@ export const source = () => {
 };
 
 export type Arg = {
-	autotools?: std.autotools.Arg;
 	build?: string;
+	cmake?: cmake.BuildArg;
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -36,8 +36,8 @@ export type Arg = {
 
 export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
-		autotools = {},
 		build: build_,
+		cmake: cmakeArg = {},
 		host: host_,
 		sdk,
 		source: source_,
@@ -57,7 +57,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 			sdk,
 			source: source_ ?? source(),
 		},
-		autotools,
+		cmakeArg,
 	);
 
 	return result;

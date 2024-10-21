@@ -191,9 +191,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.0" });
 	}
 
-	const configure = {
-		args: [],
-	};
+	const configureArgs: Array<string> = [];
 
 	// Enable PGO on macOS and Linux only if the LLVM toolchain is not used.
 	if (
@@ -202,8 +200,12 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 			std.flatten(sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
 				.length === 0)
 	) {
-		configure.args.push("--enable-optimizations");
+		configureArgs.push("--enable-optimizations");
 	}
+
+	const configure = {
+		args: configureArgs,
+	};
 
 	const phases = { configure };
 

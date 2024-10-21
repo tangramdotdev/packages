@@ -101,6 +101,6 @@ export const test = tg.target(async () => {
 		echo "Checking that we can download a file."
 		wget -O - https://tangram.dev > $OUTPUT
 	`
-		.env(wget())
+		.env(build())
 		.checksum("unsafe");
 });

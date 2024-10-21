@@ -35,7 +35,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg | boolean;
 
 	/** Source directory containing the Cargo.toml. */
-	source?: tg.Directory;
+	source?: tg.Artifact;
 
 	/** Target triple for the build. */
 	target?: string;
