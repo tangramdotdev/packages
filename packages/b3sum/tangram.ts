@@ -42,15 +42,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	// Point to the b3sum subdirectory of the blake3 source.
-	const sourceDir = tg.Directory.expect(source_ ?? (await source()));
-	const b3sumSource = tg.symlink(tg`${sourceDir}/b3sum`);
-
 	return cargo.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			manifestSubdir: "b3sum",
 			sdk,
-			source: b3sumSource,
+			source: source_ ?? source(),
 		},
 		cargoArgs,
 	);

@@ -22,6 +22,9 @@ export type Arg = {
 	/** Machine that will run the compilation. */
 	host?: string;
 
+	/** Parent of the directory containing the Cargo.toml relative to the source dir if not at the expected location. */
+	manifestSubdir?: string;
+
 	/** Number of parallel jobs to use. */
 	parallelJobs?: number;
 
@@ -34,8 +37,8 @@ export type Arg = {
 	/** SDK configuration to use during the build. */
 	sdk?: std.sdk.Arg | boolean;
 
-	/** Source directory containing the Cargo.toml. */
-	source?: tg.Artifact;
+	/** Source directory. */
+	source?: tg.Directory;
 
 	/** Target triple for the build. */
 	target?: string;
@@ -72,6 +75,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		env,
 		features = [],
 		host: host_,
+		manifestSubdir,
 		parallelJobs,
 		pre,
 		proxy = false,
@@ -103,7 +107,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Download the dependencies using the cargo vendor.
 	tg.assert(source, "Must provide a source directory.");
-	const cargoConfig = vendoredSources({ source, useCargoVendor });
+	const cargoConfig = vendoredSources({
+		manifestSubdir,
+		source,
+		useCargoVendor,
+	});
 
 	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
 	const preparePathCommands = [
@@ -119,12 +127,15 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		: tg`export SOURCE=$(realpath ${source})`;
 
 	// Set up cargo args.
+	const manifestPathArg = manifestSubdir
+		? `${manifestSubdir}/Cargo.toml`
+		: `"Cargo.toml"`;
 	const cargoArgs = [
 		"--release",
 		"--frozen",
 		"--offline",
 		`--target-dir "$OUTPUT/target"`,
-		`--manifest-path "$SOURCE/Cargo.toml"`,
+		`--manifest-path "$SOURCE/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
 	];
@@ -227,23 +238,32 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export type VendoredSourcesArg = {
 	rustTarget?: string;
-	source: tg.Artifact;
+	manifestSubdir?: string | undefined;
+	source: tg.Directory;
 	useCargoVendor?: boolean;
 };
 
 const vendoredSources = async (
 	arg: VendoredSourcesArg,
 ): Promise<tg.Template> => {
-	const { rustTarget: rustTarget_, source, useCargoVendor = false } = arg;
+	const {
+		rustTarget: rustTarget_,
+		manifestSubdir,
+		source,
+		useCargoVendor = false,
+	} = arg;
 	const rustTarget = rustTarget_ ?? (await std.triple.host());
 	if (useCargoVendor) {
 		// Run cargo vendor
 		const certFile = tg`${std.caCertificates()}/cacert.pem`;
+		const manifestPathArg = manifestSubdir
+			? `${manifestSubdir}/Cargo.toml`
+			: `"Cargo.toml"`;
 		const vendorScript = tg`
 			SOURCE="$(realpath ${source})"
 			mkdir -p "$OUTPUT/tg_vendor_dir"
 			cd "$OUTPUT"
-			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml tg_vendor_dir > "$OUTPUT/config"
+			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "$OUTPUT/config"
 		`;
 		const rustArtifact = toolchain();
 		const sdk = std.sdk();
@@ -271,7 +291,12 @@ const vendoredSources = async (
 			match.index,
 		)}${vendoredSources}${text.substring(match.index + match[0].length)}`;
 	} else {
-		const cargoLock = await (await tg.symlink(source, "Cargo.lock")).resolve();
+		const sourcePath = manifestSubdir
+			? source.get(manifestSubdir).then(tg.Directory.expect)
+			: source;
+		const cargoLock = await (
+			await tg.symlink(sourcePath, "Cargo.lock")
+		).resolve();
 		tg.assert(cargoLock instanceof tg.File);
 		const vendoredSources = vendorDependencies(cargoLock);
 		return tg`
