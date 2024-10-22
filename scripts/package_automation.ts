@@ -31,13 +31,19 @@ class Results {
 	}
 	summarize(): string {
 		const ret: Array<string> = [separator];
+		const okNames: Array<string> = [];
 		for (const [name, result] of this.results) {
+			if (result.kind === "ok") {
+				okNames.push(name);
+				continue;
+			}
 			ret.push(`Name: ${name}: ${result.kind}`);
 			if (result.message) {
 				ret.push(`Message: ${result.message}`);
 			}
 			ret.push(separator);
 		}
+		ret.push(`Ok: ${okNames.join(" ")}`);
 		const numResults = this.numResults();
 		const numPassed = this.numPassed();
 		const numFailed = numResults - numPassed;
@@ -83,9 +89,6 @@ const ok = (message?: string): Result => {
 const run = async (options: Options): Promise<Results> => {
 	const results = new Results();
 	const buildTracker = new BuildTracker();
-	process.on("SIGINT", async () => {
-		await buildTracker.cancelAll();
-	});
 	const processAndLog = async (name: string) => {
 		const result = await processPackage(name, options.actions, buildTracker);
 		results.log(name, result);
@@ -492,6 +495,10 @@ class BuildTracker {
 	private ids: Set<string>;
 	constructor() {
 		this.ids = new Set();
+		process.on("SIGINT", async () => {
+			await this.cancelAll();
+			process.exit(0);
+		});
 	}
 	add(id: string): void {
 		this.ids.add(id);
