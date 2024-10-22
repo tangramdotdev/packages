@@ -73,18 +73,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	const configure = {
 		command: tg`${sourceDir}/bootstrap`,
-		args: [
-			`--parallel=$(nproc)`,
-			`--system-curl`,
-			`--`,
-			`-DCMAKE_C_BYTE_ORDER=LITTLE_ENDIAN`,
-			`-DCMAKE_CXX_BYTE_ORDER=LITTLE_ENDIAN`,
-			// `-DCMAKE_EXE_LINKER_FLAGS="-lssl -lcrypto -lz"`,
-			tg`-DCURL_INCLUDE_DIR=${curlDir}/include`,
-			tg`-DCURL_LIBRARY=${curlDir}/lib/libcurl.so`,
-			tg`-DOPENSSL_ROOT_DIR=${opensslDir}`,
-			tg`-DZLIB_ROOT=${zlibDir}`,
-		],
+		args: ["--parallel=$(nproc)", "--system-curl"],
 	};
 
 	const deps = [
@@ -94,13 +83,15 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 		zlibDir,
 		zstdDir,
 	];
-	const env = [
-		...deps,
-		{
-			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
-		},
-		env_,
-	];
+	const env = [...deps, env_];
+	if (std.triple.os(host) === "darwin") {
+		// On macOS, the bootstrap script wants to test for `ext/stdio_filebuf.h`, which is not part of the macOS toolchain.
+		// Using the `gcc` and `g++` named symlinks to the AppleClang compiler instead of `clang`/`clang++` prevents this.
+		env.push({
+			CC: "gcc",
+			CXX: "g++",
+		});
+	}
 
 	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
