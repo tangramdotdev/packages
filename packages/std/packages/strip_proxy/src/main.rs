@@ -112,20 +112,9 @@ async fn run_proxy(
 		tracing::info!(?executable_path, "found executable path");
 
 		// Copy the file to a temp directory.
-		let home = std::env::var("HOME")
-			.map_err(|error| tg::error!(source = error, "could not get the home directory"))?;
-		let tmp_path = std::path::Path::new(&home).join("work").join(
-			std::time::SystemTime::UNIX_EPOCH
-				.elapsed()
-				.unwrap()
-				.as_secs()
-				.to_string(),
-		);
-		tokio::fs::create_dir_all(&tmp_path)
-			.await
-			.map_err(|error| {
-				tg::error!(source = error, "failed to create the temporary directory")
-			})?;
+		let tmpdir = tempfile::tempdir()
+			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
+		let tmp_path = tmpdir.path();
 		let local_executable_path = tmp_path.join("executable");
 		#[cfg(feature = "tracing")]
 		tracing::info!(?local_executable_path, "copying the executable");
@@ -157,12 +146,10 @@ async fn run_proxy(
 		#[cfg(feature = "tracing")]
 		tracing::info!(?stripped_file_id, "checked in the stripped executable");
 
-		// Remove the tempdir.
-		tokio::fs::remove_dir_all(&tmp_path)
-			.await
-			.map_err(|error| {
-				tg::error!(source = error, "failed to remove the temporary directory")
-			})?;
+		if let Err(e) = tmpdir.close() {
+			#[cfg(feature = "tracing")]
+			tracing::warn!(?e, "failed to close tempdir");
+		}
 
 		// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 		let new_manifest = Manifest {
@@ -295,6 +282,9 @@ fn run_strip(
 	strip_args: &[String],
 	target: Option<&std::path::Path>,
 ) -> tg::Result<()> {
+	#[cfg(feature = "tracing")]
+	tracing::info!(?strip_program, ?strip_args, ?target, "starting run_strip");
+
 	// Set up command.
 	let mut command = std::process::Command::new(strip_program);
 	command.args(strip_args);
