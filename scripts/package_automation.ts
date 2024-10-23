@@ -57,6 +57,7 @@ export type ResultKind =
 	| "ok"
 	| "checkError"
 	| "checkinError"
+	| "formatError"
 	| "scriptError"
 	| "testError"
 	| "tagError"
@@ -133,11 +134,12 @@ Flags:
 
 -b, --build: run tg build on the default target
 -c, --check: run tg check
+-f, --format: run tg format
 -h, --help: print this message and exit
 -p, --publish: if the package tag is out of date, create a new tag and push it
 -t, --test: run tg build on the test target
 -u, --upload: push the build for the default target. Implies --build.
---parallel: run builds in parallel. If omitted, each package will run sequentially
+--seq/--sequential: run actions sequentially for each package. If omitted, each package will process in parallel.
 `;
 
 /** Construct an Error with the usage message. */
@@ -161,7 +163,7 @@ class Options {
 	constructor(...args: Array<string>) {
 		let packages: Set<string> = new Set();
 		let actions: Set<Action> = new Set();
-		let parallel = false;
+		let parallel = true;
 
 		// Helper to process an individual flag.
 		const processFlag = (opt: string): void => {
@@ -176,6 +178,11 @@ class Options {
 					actions.add("check");
 					break;
 				}
+				case "f":
+				case "format": {
+					actions.add("format");
+					break;
+				}
 				case "h":
 				case "help": {
 					console.log(usage);
@@ -187,8 +194,9 @@ class Options {
 					actions.add("publish");
 					break;
 				}
-				case "parallel": {
-					parallel = true;
+				case "seq":
+				case "sequential": {
+					parallel = false;
 					break;
 				}
 				case "t":
@@ -281,12 +289,13 @@ class Options {
  * - test: build the test target.
  * - upload: build the default target and then push that build.
  */
-type Action = "build" | "check" | "publish" | "test" | "upload";
+type Action = "build" | "check" | "format" | "publish" | "test" | "upload";
 
 /** Get all defined actions. */
 const allActions: Set<Action> = new Set([
 	"check",
 	"build",
+	"format",
 	"test",
 	"upload",
 	"publish",
@@ -295,11 +304,12 @@ const allActions: Set<Action> = new Set([
 /** Sort a set of actions into the correct execution order. */
 const sortedActions = (actions: Iterable<Action>): Array<Action> => {
 	const order: { [key in Action]: number } = {
-		check: 0,
-		build: 1,
-		test: 2,
-		upload: 3,
-		publish: 4,
+		format: 0,
+		check: 1,
+		build: 2,
+		test: 3,
+		upload: 4,
+		publish: 5,
 	};
 	return Array.from(actions).sort((a, b) => order[a] - order[b]);
 };
@@ -320,6 +330,7 @@ const processPackage = async (
 	log(`processing ${name}: ${path}`);
 
 	const actionMap: Record<Action, () => Promise<Result>> = {
+		format: () => formatAction(path),
 		check: () => checkAction(path),
 		build: () => buildDefaultTarget(path, buildTracker),
 		test: () => buildTestTarget(path, buildTracker),
@@ -339,12 +350,27 @@ const processPackage = async (
 	return ok("All actions completed successfully");
 };
 
+/** Perform the `format` action for a package. */
+const formatAction = async (path: string): Promise<Result> => {
+	log("format", path);
+	try {
+		await $`tg format ${path}`.quiet();
+		log(`finished formatting ${path}`);
+	} catch (err) {
+		log(`error formatting ${path}`);
+		return result("formatError", err.stderr.toString());
+	}
+	return ok();
+};
+
 /** Perform the `check` action for a package. */
 const checkAction = async (path: string): Promise<Result> => {
 	log("checking", path);
 	try {
 		await $`tg check ${path}`.quiet();
+		log(`finished checking ${path}`);
 	} catch (err) {
+		log(`error checking ${path}`);
 		return result("checkError", err.stderr.toString());
 	}
 	return ok();
@@ -402,8 +428,10 @@ const uploadAction = async (
 	log(`uploading build ${buildId}`);
 	try {
 		await $`tg push ${buildId}`.quiet();
+		log(`finished pushing ${buildId}`);
 		return ok();
 	} catch (err) {
+		log(`error pushing ${buildId}`);
 		return result("pushError", err.stderr.toString());
 	}
 };
@@ -413,8 +441,10 @@ const checkinPackage = async (path: string): Promise<Result> => {
 	log("checking in", path);
 	try {
 		const id = await $`tg checkin ${path}`.text().then((t) => t.trim());
+		log(`finished checkin ${path}`);
 		return ok(id);
 	} catch (err) {
+		log(`error checking in ${path}`);
 		return result("checkinError", err.stdout.toString());
 	}
 };
@@ -434,7 +464,7 @@ const existingTaggedItem = async (name: string): Promise<string> => {
 const tagPackage = async (name: string, path: string): Promise<Result> => {
 	log("tagging", name, path);
 	try {
-		const _result = await $`tg tag ${name} ${path}`.quiet();
+		await $`tg tag ${name} ${path}`.quiet();
 		return ok();
 	} catch (err) {
 		return result("tagError");
@@ -446,7 +476,9 @@ const push = async (arg: string): Promise<Result> => {
 	log("pushing", arg);
 	try {
 		await $`tg push ${arg}`.quiet();
+		log(`finished pushing ${arg}`);
 	} catch (err) {
+		log(`error pushing ${arg}`);
 		return result("pushError", err.stderr.toString());
 	}
 	return ok();
@@ -464,8 +496,10 @@ const buildDefaultTarget = async (
 		log(`${path}: ${buildId}`);
 		await $`tg build output ${buildId}`.quiet();
 		buildTracker.remove(buildId);
+		log(`finished building ${path}`);
 		return ok(buildId);
 	} catch (err) {
+		log(`error building ${path}`);
 		return result("buildError", err.stderr.toString());
 	}
 };
@@ -484,8 +518,10 @@ const buildTestTarget = async (
 		log(`${path}#test: ${buildId}`);
 		await $`tg build output ${buildId}`.quiet();
 		buildTracker.remove(buildId);
+		log(`finished building ${path}#test`);
 		return ok(buildId);
 	} catch (err) {
+		log(`error building ${path}#test`);
 		return result("testError", err.stderr.toString());
 	}
 };

@@ -71,7 +71,7 @@ export const test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		buildFunction: build,
+		packageDir: build(),
 		libraries: ["attr"],
 		metadata,
 	});

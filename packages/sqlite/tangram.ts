@@ -89,7 +89,7 @@ export default build;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		packageDir: build(),
 		binaries: ["sqlite3"],
 		libraries: ["sqlite3"],
 		metadata,

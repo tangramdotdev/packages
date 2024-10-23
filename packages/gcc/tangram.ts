@@ -26,25 +26,25 @@ export const source = tg.target(() =>
 );
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	target?: string;
 };
 
 export const gcc = tg.target(async (arg?: Arg) => {
 	const {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
 		target: target_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(arg ?? {});
 
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const os = std.triple.os(host);
@@ -100,15 +100,15 @@ export const gcc = tg.target(async (arg?: Arg) => {
 
 	const phases = { configure };
 
-	const env = [additionalEnv, ...deps, env_];
+	const env = std.env.arg(additionalEnv, ...deps, env_);
 
 	let result = await std.autotools.build(
 		{
-			...rest,
 			...(await std.triple.rotate({ build, host })),
 			env,
 			phases,
 			opt: "2",
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -136,14 +136,14 @@ export default gcc;
 export const libgcc = tg.target(async (arg?: Arg) => {
 	// FIXME - write in terms of gcc above, pass phases down.
 	const {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		env: env_,
 		host: host_,
+		sdk,
 		source: source_,
 		target: target_,
-		...rest
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(arg ?? {});
 
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const os = std.triple.os(host);
@@ -207,15 +207,15 @@ export const libgcc = tg.target(async (arg?: Arg) => {
 
 	const phases = { configure, build: buildPhase, install };
 
-	const env = [additionalEnv, ...deps, env_];
+	const env = std.env.arg(additionalEnv, ...deps, env_);
 
 	const result = await std.autotools.build(
 		{
-			...rest,
 			...(await std.triple.rotate({ build, host })),
 			env,
 			phases,
 			opt: "2",
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -335,10 +335,6 @@ export const mergeLibDirs = async (dir: tg.Directory) => {
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: gcc,
-		binaries: ["gcc"],
-		metadata,
-	});
+	await std.assert.pkg({ packageDir: gcc(), binaries: ["gcc"], metadata });
 	return true;
 });

@@ -453,9 +453,10 @@ sys.exit(${attribute}())
 
 export const test = tg.target(async () => {
 	return await $`
-				set -e
+				set -eux
 
 				echo "Checking that we can run python scripts."
+				python --tangram-print-manifest
 				python -I -c 'print("Hello, world!")'
 
 				echo "Checking that we can run pip."

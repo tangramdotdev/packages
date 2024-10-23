@@ -39,9 +39,9 @@ export type Arg = {
 export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		cmake: cmake_ = {},
-		build,
+		build: build_,
 		env: env_,
-		host,
+		host: host_,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
@@ -53,16 +53,15 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	const deps = [
-		pkgconfig.build({ ...rest, build, env: env_, host }),
-		zstd.build({ ...rest, build, env: env_, host }),
+		pkgconfig.build({ build, host: build }),
+		zstd.build({ build, host }),
 	];
-	const env = [...deps, env_];
+	const env = std.env.arg(...deps, env_);
 
 	const result = cmake.build(
 		{
-			...rest,
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env,
 			phases: { configure },
 			sdk,
 			source: source_ ?? source(),
@@ -76,10 +75,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["mold"],
-		metadata,
-	});
+	await std.assert.pkg({ packageDir: build(), binaries: ["mold"], metadata });
 	return true;
 });

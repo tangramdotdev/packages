@@ -60,7 +60,7 @@ export default build;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		directory: await build(),
+		packageDir: await build(),
 		binaries: [
 			{ name: "gh", testPredicate: (stdout) => stdout.includes(metadata.name) },
 		],

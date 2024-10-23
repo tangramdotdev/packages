@@ -34,11 +34,13 @@ type Arg = {
 };
 
 export const build = tg.target(async (arg?: Arg) => {
+	let host = arg?.host ?? (await std.triple.host());
+	let target = arg?.target ?? host;
 	return poetry.build({
 		source: arg?.source ?? source(),
 		lockfile: poetryLock,
-		host: arg?.host,
-		target: arg?.target,
+		host,
+		target,
 	});
 });
 
@@ -46,7 +48,7 @@ export default build;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		packageDir: build(),
 		binaries: ["docformatter"],
 		metadata,
 	});

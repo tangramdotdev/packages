@@ -78,11 +78,7 @@ export default build;
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["python3"],
-		metadata,
-		sdk: sdkArg,
-	});
+	await std.assert.pkg({ packageDir: build(), binaries: ["python3"],
+		metadata,  });
 	return true;
 });

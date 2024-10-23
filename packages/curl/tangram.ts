@@ -77,7 +77,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const env = [
 		perl.build({ build, host: build }),
 		pkgconfig.build({ build, host: build }),
-		libpsl.build({build, env: env_, host, sdk }, libpslArg),
+		libpsl.build({ build, env: env_, host, sdk }, libpslArg),
 		openssl.build({ build, env: env_, host, sdk }, opensslArg),
 		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 		zstd.build({ build, env: env_, host, sdk }, zstdArg),
@@ -105,6 +105,7 @@ export const test = tg.target(async () => {
 	// 	binaries: ["curl"],
 	// 	metadata,
 	// });
-	return await $`curl --version | tee $OUTPUT`.env(build()).then(tg.File.expect);
-
+	return await $`curl --version | tee $OUTPUT`
+		.env(build())
+		.then(tg.File.expect);
 });

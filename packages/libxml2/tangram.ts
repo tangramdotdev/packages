@@ -107,7 +107,7 @@ export default build;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFunction: build,
+		packageDir: build(),
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],
 	});

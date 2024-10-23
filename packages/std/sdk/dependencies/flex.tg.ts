@@ -59,11 +59,7 @@ import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["flex"],
-		metadata,
-		sdk: sdkArg,
-	});
+	await std.assert.pkg({ packageDir: build(), binaries: ["flex"],
+		metadata,  });
 	return true;
 });

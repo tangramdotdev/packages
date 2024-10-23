@@ -95,10 +95,6 @@ export const wrapScript = async (script: tg.File) => {
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["zsh"],
-		metadata,
-	});
+	await std.assert.pkg({ packageDir: build(), binaries: ["zsh"], metadata });
 	return true;
 });

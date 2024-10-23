@@ -69,10 +69,7 @@ export const git = tg.target(async (arg?: Arg) => {
 export default git;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: git,
-		binaries: ["git"],
-		metadata,
-	});
+	await std.assert.pkg({ packageDir: git(), binaries: ["git"],
+		metadata, });
 	return true;
 });

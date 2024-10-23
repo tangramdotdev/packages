@@ -73,9 +73,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: build,
-		libraries: ["crypt"],
-	});
+	await std.assert.pkg({ packageDir: build(), libraries: ["crypt"] });
 	return true;
 });

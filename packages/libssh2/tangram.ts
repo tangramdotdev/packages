@@ -74,9 +74,6 @@ export let build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export let test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: build,
-		libraries: ["ssh2"],
-	});
+	await std.assert.pkg({ packageDir: build(), libraries: ["ssh2"] });
 	return true;
 });

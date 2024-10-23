@@ -60,7 +60,7 @@ export default build;
 export const test = tg.target(async () => {
 	const artifact = build();
 	await std.assert.pkg({
-		buildFunction: build,
+		packageDir: build(),
 		binaries: ["hyperfine"],
 		metadata,
 	});

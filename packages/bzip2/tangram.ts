@@ -90,7 +90,7 @@ export const test = tg.target(async () => {
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
 	await std.assert.pkg({
-		buildFunction: build,
+		packageDir: build(),
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
 		libraries: ["bz2"],
 		metadata,

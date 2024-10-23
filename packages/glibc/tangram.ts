@@ -26,25 +26,25 @@ export const source = tg.target(() => {
 });
 
 type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
+	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
 	linuxHeaders?: tg.Directory;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export const glibc = tg.target(async (arg: Arg) => {
+export const glibc = tg.target(async (...args: std.Args<Arg>) => {
 	const {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		env: env_,
 		host: host_,
 		linuxHeaders: linuxHeaders_,
+		sdk,
 		source: source_,
-		...rest
-	} = arg;
+	} = await std.args.apply<Arg>(args ?? {});
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	if (std.triple.os(host) !== "linux") {
@@ -80,7 +80,7 @@ export const glibc = tg.target(async (arg: Arg) => {
 		python({ host: build }),
 		texinfo({ host: build }),
 	];
-	const env = [
+	const env = std.env.arg(
 		...deps,
 		{
 			CPATH: tg.Mutation.unset(),
@@ -88,16 +88,16 @@ export const glibc = tg.target(async (arg: Arg) => {
 			TANGRAM_LINKER_PASSTHROUGH: "1",
 		},
 		env_,
-	];
+	);
 
 	let result = await std.autotools.build(
 		{
-			...rest,
 			...(await std.triple.rotate({ build, host })),
 			env,
 			opt: "2",
 			phases,
 			prefixPath: "/",
+			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,

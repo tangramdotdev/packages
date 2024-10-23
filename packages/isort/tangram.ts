@@ -50,10 +50,6 @@ export const build = tg.target(async (arg?: Arg) => {
 export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["isort"],
-		metadata,
-	});
+	await std.assert.pkg({ packageDir: build(), binaries: ["isort"], metadata });
 	return true;
 });

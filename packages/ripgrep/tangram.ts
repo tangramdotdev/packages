@@ -64,6 +64,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 			...(await std.triple.rotate({ build, host })),
 			env,
 			features: ["pcre2"],
+			proxy: true,
 			sdk,
 			source: source_ ?? source(),
 		},
@@ -74,11 +75,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFunction: build,
-		binaries: ["rg"],
-		metadata,
-	});
+	await std.assert.pkg({ packageDir: build(), binaries: ["rg"], metadata });
 	return true;
 });
 
