@@ -47,7 +47,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -75,12 +75,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const env = [
-		perl.build({ build, host: build }),
-		pkgconfig.build({ build, host: build }),
-		libpsl.build({ build, env: env_, host, sdk }, libpslArg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-		zstd.build({ build, env: env_, host, sdk }, zstdArg),
+		perl.default_({ build, host: build }),
+		pkgconfig.default_({ build, host: build }),
+		libpsl.default_({ build, env: env_, host, sdk }, libpslArg),
+		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		zstd.default_({ build, env: env_, host, sdk }, zstdArg),
 		env_,
 	];
 
@@ -97,7 +97,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	// await std.assert.pkg({
@@ -106,6 +106,6 @@ export const test = tg.target(async () => {
 	// 	metadata,
 	// });
 	return await $`curl --version | tee $OUTPUT`
-		.env(build())
+		.env(default_())
 		.then(tg.File.expect);
 });

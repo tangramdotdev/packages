@@ -37,7 +37,7 @@ type Arg = {
 	target?: string;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -84,7 +84,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	const deps = [texinfo.build({ build, env: env_, host, sdk }, texinfoArg)];
+	const deps = [texinfo.default_({ build, env: env_, host, sdk }, texinfoArg)];
 	const env = [...deps, additionalEnv, env_];
 
 	// Collect configuration.
@@ -118,7 +118,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	const binaries = [
@@ -132,6 +132,6 @@ export const test = tg.target(async () => {
 		"strip",
 	];
 
-	await std.assert.pkg({ packageDir: build(), binaries, metadata });
+	await std.assert.pkg({ packageDir: default_(), binaries, metadata });
 	return true;
 });

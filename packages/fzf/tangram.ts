@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		go: goArg = {},
 		build,
@@ -53,11 +53,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: [
 			{ name: "fzf", testPredicate: (stdout) => stdout.includes("0.50") },
 		],

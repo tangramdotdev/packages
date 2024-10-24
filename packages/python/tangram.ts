@@ -108,16 +108,16 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up build dependencies.
 	const buildDependencies = [];
-	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
+	const bisonForBuild = bison.default_({ build, host: build }).then((d) => {
 		return { BISON: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(bisonForBuild);
-	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
+	const m4ForBuild = m4.default_({ build, host: build }).then((d) => {
 		return { M4: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(m4ForBuild);
 	const pkgConfigForBuild = pkgconfig
-		.build({ build, host: build })
+		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});
@@ -126,35 +126,35 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	// Set yup host dependencies.
 	const hostDependencies = [];
 	const bzip2ForHost = await bzip2
-		.build({ build, host, sdk }, bzip2Arg)
+		.default_({ build, host, sdk }, bzip2Arg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(bzip2ForHost);
 	const libffiForHost = await libffi
-		.build({ build, host, sdk }, libffiArg)
+		.default_({ build, host, sdk }, libffiArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(libffiForHost);
 	const libxcryptForHost = await libxcrypt
-		.build({ build, host, sdk }, libxcryptArg)
+		.default_({ build, host, sdk }, libxcryptArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(libxcryptForHost);
 	const ncursesForHost = await ncurses
-		.build({ build, host, sdk }, ncursesArg)
+		.default_({ build, host, sdk }, ncursesArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(ncursesForHost);
 	const opensslForHost = await openssl
-		.build({ build, host, sdk }, opensslArg)
+		.default_({ build, host, sdk }, opensslArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(opensslForHost);
 	const readlineForHost = await readline
-		.build({ build, host, sdk }, readlineArg)
+		.default_({ build, host, sdk }, readlineArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(readlineForHost);
 	const sqliteForHost = await sqlite
-		.build({ build, host, sdk }, sqliteArg)
+		.default_({ build, host, sdk }, sqliteArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(sqliteForHost);
 	const zlibForHost = await zlib
-		.build({ build, host, sdk }, zlibArg)
+		.default_({ build, host, sdk }, zlibArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(zlibForHost);
 

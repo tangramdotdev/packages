@@ -52,7 +52,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -74,26 +74,26 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	const os = std.triple.os(host);
 
-	const icuArtifact = icu.build({ build, env: env_, host, sdk }, icuArg);
-	const lz4Artifact = lz4.build({ build, env: env_, host, sdk }, lz4Arg);
-	const ncursesArtifact = ncurses.build(
+	const icuArtifact = icu.default_({ build, env: env_, host, sdk }, icuArg);
+	const lz4Artifact = lz4.default_({ build, env: env_, host, sdk }, lz4Arg);
+	const ncursesArtifact = ncurses.default_(
 		{ build, env: env_, host, sdk },
 		ncursesArg,
 	);
-	const readlineArtifact = readline.build(
+	const readlineArtifact = readline.default_(
 		{ build, env: env_, host, sdk },
 		readlineArg,
 	);
-	const zlibArtifact = zlib.build({ build, env: env_, host, sdk }, zlibArg);
-	const zstdArtifact = zstd.build({ build, env: env_, host, sdk }, zstdArg);
+	const zlibArtifact = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
+	const zstdArtifact = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [
 		icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		perl.build({ build, host: build }, perlArg),
-		pkgconfig.build({ build, host: build }),
+		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
+		perl.default_({ build, host: build }, perlArg),
+		pkgconfig.default_({ build, host: build }),
 		readlineArtifact,
 		zlibArtifact,
 		zstdArtifact,
@@ -154,12 +154,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	const artifact = build();
+	const artifact = default_();
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: artifact,
 		binaries: ["psql"],
 		libraries: ["pq"],
 		metadata,

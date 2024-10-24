@@ -32,7 +32,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -57,7 +57,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	const binTest = (name: string) => {
@@ -71,7 +71,7 @@ export const test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		packageDir: build(),
+		packageDir: default_(),
 		libraries: ["attr"],
 		metadata,
 	});

@@ -416,8 +416,8 @@ export const test = tg.target(async () => {
 	return true;
 });
 
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
-import * as openssl from "openssl" with { path: "../openssl" };
+import pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import openssl from "openssl" with { path: "../openssl" };
 export const testUnproxiedWorkspace = tg.target(async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
@@ -435,7 +435,7 @@ export const testUnproxiedWorkspace = tg.target(async () => {
 
 	const helloOpenssl = build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
-		env: std.env.arg(openssl.build(), pkgconfig.build(), {
+		env: std.env.arg(openssl(), pkgconfig(), {
 			TANGRAM_LD_PROXY_TRACING: "tangram=trace",
 		}),
 		proxy: false,

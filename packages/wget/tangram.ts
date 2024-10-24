@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -55,11 +55,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const env = [
-		gmp.build({ build, env: env_, host, sdk }, gmpArg),
-		gnutls.build({ build, env: env_, host, sdk }, gnutlsArg),
-		nettle.build({ build, env: env_, host, sdk }, nettleArg),
-		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		gmp.default_({ build, env: env_, host, sdk }, gmpArg),
+		gnutls.default_({ build, env: env_, host, sdk }, gnutlsArg),
+		nettle.default_({ build, env: env_, host, sdk }, nettleArg),
+		pcre2.default_({ build, env: env_, host, sdk }, pcre2Arg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 		{
 			LDFLAGS: tg.Mutation.suffix(
 				"-lnettle -lhogweed -lpcre2-8 -lgmp -lgnutls -lz",
@@ -92,7 +92,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	return await $`
@@ -101,6 +101,6 @@ export const test = tg.target(async () => {
 		echo "Checking that we can download a file."
 		wget -O - https://tangram.dev > $OUTPUT
 	`
-		.env(build())
+		.env(default_())
 		.checksum("unsafe");
 });

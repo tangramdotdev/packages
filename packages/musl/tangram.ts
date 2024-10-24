@@ -34,7 +34,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -102,7 +102,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
-export default build;
+export default default_;
 
 export const interpreterName = (triple: string) => {
 	const arch = std.triple.arch(triple);

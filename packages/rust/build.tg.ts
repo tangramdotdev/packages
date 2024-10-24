@@ -382,10 +382,10 @@ export const testLinkLibcurl = tg.target(async () => {
 	const crateName = "native_exe_libcurl";
 
 	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.
-	const libcurl = curl.build();
-	const sslArtifact = openssl.build();
-	const zlibArtifact = zlib.build();
-	const zstdArtifact = zstd.build();
+	const libcurl = curl.default_();
+	const sslArtifact = openssl.default_();
+	const zlibArtifact = zlib.default_();
+	const zstdArtifact = zstd.default_();
 	const deps = [libcurl, sslArtifact, zlibArtifact, zstdArtifact];
 
 	// Build the test.

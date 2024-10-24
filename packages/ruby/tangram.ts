@@ -75,12 +75,12 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	const build = build_ ?? host;
 
 	const env_ = [
-		libffi.build({ host }),
-		libyaml.build({ host }),
-		ncurses.build({ host }),
-		openssl.build({ host }),
-		readline.build({ host }),
-		zlib.build({ host }),
+		libffi.default_({ host }),
+		libyaml.default_({ host }),
+		ncurses.default_({ host }),
+		openssl.default_({ host }),
+		readline.default_({ host }),
+		zlib.default_({ host }),
 		bootstrap.ruby(host),
 		envs,
 	];

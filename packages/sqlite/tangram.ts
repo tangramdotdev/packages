@@ -48,7 +48,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -67,10 +67,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const build = build_ ?? host;
 
 	const env = std.env.arg(
-		pkgconfig.build({ build, host: build }),
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		readline.build({ build, env: env_, host, sdk }, readlineArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		pkgconfig.default_({ build, host: build }),
+		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
+		readline.default_({ build, env: env_, host, sdk }, readlineArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 		env_,
 	);
 
@@ -85,11 +85,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: ["sqlite3"],
 		libraries: ["sqlite3"],
 		metadata,

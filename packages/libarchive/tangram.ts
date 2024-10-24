@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -71,11 +71,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const env = std.env.arg(
-		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
-		libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		xz.build({ build, env: env_, host, sdk }, xzArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		bzip2.default_({ build, env: env_, host, sdk }, bzip2Arg),
+		libiconv.default_({ build, env: env_, host, sdk }, libiconvArg),
+		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
+		xz.default_({ build, env: env_, host, sdk }, xzArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 		env_,
 	);
 
@@ -91,7 +91,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	const source = tg.directory({
@@ -106,11 +106,11 @@ export const test = tg.target(async () => {
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto -larchive -lz -lbz2 -liconv -llzma
 		`.env(
 		std.sdk(),
-		build(),
-		bzip2.build(),
-		libiconv.build(),
-		openssl.build(),
-		xz.build(),
-		zlib.build(),
+		default_(),
+		bzip2.default_(),
+		libiconv.default_(),
+		openssl.default_(),
+		xz.default_(),
+		zlib.default_(),
 	);
 });

@@ -29,7 +29,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -65,12 +65,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	const artifact = build();
+	const artifact = default_();
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: artifact,
 		binaries: ["fftw-wisdom", "fftw-wisdom-to-conf"],
 		libraries: ["fftw3"],
 	});

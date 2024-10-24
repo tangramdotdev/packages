@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -61,16 +61,16 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const perlArtifact = await perl.build(
+	const perlArtifact = await perl.default_(
 		{ build, env: env_, host, sdk },
 		perlArg,
 	);
 	const dependencies = [
-		bison.build({ build, host: build }, bisonArg),
-		m4.build({ build, host: build }, m4Arg),
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		bison.default_({ build, host: build }, bisonArg),
+		m4.default_({ build, host: build }, m4Arg),
+		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
 		perlArtifact,
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 	];
 	const env = [...dependencies, env_];
 
@@ -124,7 +124,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	return (
@@ -141,7 +141,7 @@ export const test = tg.target(async () => {
 				texindex --version
 			`,
 			{
-				env: std.env.arg(build()),
+				env: std.env.arg(default_()),
 			},
 		)
 	).output();

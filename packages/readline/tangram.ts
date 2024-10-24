@@ -29,7 +29,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -43,7 +43,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	// Set up default build dependencies.
 	const buildDependencies = [];
 	const pkgConfigForBuild = pkgconfig
-		.build({ build, host: build })
+		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});
@@ -51,7 +51,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up host dependencies.
 	const hostDependencies = [];
-	const ncursesForHost = await ncurses.build({ build, host, sdk }, ncursesArg);
+	const ncursesForHost = await ncurses.default_(
+		{ build, host, sdk },
+		ncursesArg,
+	);
 	hostDependencies.push(ncursesForHost);
 
 	// Resolve env.
@@ -87,10 +90,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	const artifact = build();
-	await std.assert.pkg({ packageDir: build(), metadata });
+	await std.assert.pkg({ packageDir: default_(), metadata });
 	return true;
 });

@@ -40,7 +40,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const arg = await std.args.apply<Arg>(...args);
 	const {
 		autotools = {},
@@ -57,15 +57,15 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = arg;
 
-	const perlArtifact = await perl.build(
+	const perlArtifact = await perl.default_(
 		{ build, env: env_, host, sdk },
 		perlArg,
 	);
 	const dependencies = [
 		perlArtifact,
-		bison.build({ build, host: build }, bisonArg),
-		m4.build({ build, host: build }, m4Arg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		bison.default_({ build, host: build }, bisonArg),
+		m4.default_({ build, host: build }, m4Arg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 	];
 	const env = std.env.arg(...dependencies, env_);
 
@@ -196,11 +196,11 @@ export const patchAutom4teCfg = tg.target(
 	},
 );
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: ["autoconf"],
 		metadata,
 	});

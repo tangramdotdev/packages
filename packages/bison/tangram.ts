@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const resolved = await std.args.apply<Arg>(...args);
 	const {
 		autotools = {},
@@ -43,7 +43,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up default build dependencies.
 	const buildDependencies = [];
-	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
+	const m4ForBuild = m4.default_({ build, host: build }).then((d) => {
 		return { M4: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(m4ForBuild);
@@ -92,9 +92,13 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["bison"], metadata });
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["bison"],
+		metadata,
+	});
 	return true;
 });

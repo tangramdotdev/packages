@@ -32,7 +32,7 @@ export type Arg = {
 	target?: string;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const default_ = tg.target(async (arg?: Arg) => {
 	const sourceArtifact = arg?.source ?? (await source());
 	const lockfile = tg.File.expect(await sourceArtifact.get("poetry.lock"));
 
@@ -47,9 +47,13 @@ export const build = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["isort"], metadata });
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["isort"],
+		metadata,
+	});
 	return true;
 });

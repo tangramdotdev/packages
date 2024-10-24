@@ -34,7 +34,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		cargo: cargoArgs = {},
@@ -55,12 +55,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	const artifact = build();
+	const artifact = default_();
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: artifact,
 		binaries: ["hyperfine"],
 		metadata,
 	});

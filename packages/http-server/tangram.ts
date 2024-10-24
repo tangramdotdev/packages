@@ -36,7 +36,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const default_ = tg.target(async (arg?: Arg) => {
 	const { nodejs: nodeArgs = [], source: source_, ...rest } = arg ?? {};
 
 	return nodejs.build(
@@ -49,10 +49,10 @@ export const build = tg.target(async (arg?: Arg) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	return await $`
 			http-server --version | tee $OUTPUT
-		`.env(build());
+		`.env(default_());
 });

@@ -34,7 +34,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -55,8 +55,8 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const dependencies = [
-		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
-		ncurses.build(ncursesArg),
+		pcre2.default_({ build, env: env_, host, sdk }, pcre2Arg),
+		ncurses.default_(ncursesArg),
 	];
 	const env = std.env.arg(
 		...dependencies,
@@ -79,7 +79,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
 export const wrapScript = async (script: tg.File) => {
@@ -90,11 +90,11 @@ export const wrapScript = async (script: tg.File) => {
 	) {
 		throw new Error("Expected a shebang sh, bash, or zsh script");
 	}
-	const interpreter = tg.File.expect(await (await build()).get("bin/zsh"));
+	const interpreter = tg.File.expect(await (await default_()).get("bin/zsh"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["zsh"], metadata });
+	await std.assert.pkg({ packageDir: default_(), binaries: ["zsh"], metadata });
 	return true;
 });

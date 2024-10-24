@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build: build_,
 		cargo: cargoArg = {},
@@ -76,9 +76,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["xh"], metadata });
+	await std.assert.pkg({ packageDir: default_(), binaries: ["xh"], metadata });
 	return true;
 });

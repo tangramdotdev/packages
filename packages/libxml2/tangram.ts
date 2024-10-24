@@ -48,7 +48,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -79,14 +79,14 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	const deps = [
-		icu.build({ build, env: env_, host, sdk }, icuArg),
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		perl.build({ build, host: build }, perlArg),
-		pkgconfig.build({ build, host: build }, pkgconfigArg),
+		icu.default_({ build, env: env_, host, sdk }, icuArg),
+		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
+		perl.default_({ build, host: build }, perlArg),
+		pkgconfig.default_({ build, host: build }, pkgconfigArg),
 		python.toolchain(pythonArg),
-		readline.build({ build, env: env_, host, sdk }, readlineArg),
-		xz.build({ build, env: env_, host, sdk }, xzArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		readline.default_({ build, env: env_, host, sdk }, readlineArg),
+		xz.default_({ build, env: env_, host, sdk }, xzArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 	];
 	const env = [...deps, env_];
 
@@ -103,11 +103,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],
 	});

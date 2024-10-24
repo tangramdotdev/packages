@@ -39,7 +39,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -55,9 +55,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const dependencies = [
-		acl.build({ build, env: env_, host, sdk }, aclArg),
-		attr.build({ build, env: env_, host, sdk }, attrArg),
-		libcap.build({ build, env: env_, host, sdk }, libcapArg),
+		acl.default_({ build, env: env_, host, sdk }, aclArg),
+		attr.default_({ build, env: env_, host, sdk }, attrArg),
+		libcap.default_({ build, env: env_, host, sdk }, libcapArg),
 	];
 	const env = [...dependencies, env_];
 
@@ -72,11 +72,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: [
 			"cp",
 			"ls",

@@ -43,7 +43,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -83,12 +83,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const env = [
-		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
-		libarchive.build({ build, env: env_, host, sdk }, libarchiveArg),
-		m4.build({ build, env: env_, host, sdk }, m4Arg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		xz.build({ build, env: env_, host, sdk }, xzArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		bzip2.default_({ build, env: env_, host, sdk }, bzip2Arg),
+		libarchive.default_({ build, env: env_, host, sdk }, libarchiveArg),
+		m4.default_({ build, env: env_, host, sdk }, m4Arg),
+		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
+		xz.default_({ build, env: env_, host, sdk }, xzArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 		{
 			CFLAGS: tg.Mutation.suffix(
 				"-Wno-format-nonliteral -lz -lbz2 -llzma",
@@ -112,4 +112,4 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
-export default build;
+export default default_;

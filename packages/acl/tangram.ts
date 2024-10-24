@@ -33,7 +33,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -46,7 +46,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up host dependencies.
 	const attrForHost = await attr
-		.build({ build, host, sdk }, attrArg)
+		.default_({ build, host, sdk }, attrArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 
 	const env = await std.env.arg(attrForHost, env_);
@@ -72,7 +72,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	const binTest = (name: string) => {
@@ -86,7 +86,7 @@ export const test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		packageDir: build(),
+		packageDir: default_(),
 		libraries: ["acl"],
 		metadata,
 	});

@@ -37,7 +37,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -67,9 +67,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	const env = std.env.arg(
-		gettext.build({ build, env: env_, host, sdk }, gettextArg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		gettext.default_({ build, env: env_, host, sdk }, gettextArg),
+		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 		env_,
 	);
 
@@ -85,9 +85,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["git"], metadata });
+	await std.assert.pkg({ packageDir: default_(), binaries: ["git"], metadata });
 	return true;
 });

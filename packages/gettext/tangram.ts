@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -63,21 +63,21 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up default build dependencies.
 	const buildDependencies = [];
-	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
+	const bisonForBuild = bison.default_({ build, host: build }).then((d) => {
 		return { BISON: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(bisonForBuild);
 	const pkgConfigForBuild = pkgconfig
-		.build({ build, host: build })
+		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});
 	buildDependencies.push(pkgConfigForBuild);
-	const perlForBuild = perl.build({ build, host: build }).then((d) => {
+	const perlForBuild = perl.default_({ build, host: build }).then((d) => {
 		return { PERL: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(perlForBuild);
-	const xzForBuild = xz.build({ build, host: build }).then((d) => {
+	const xzForBuild = xz.default_({ build, host: build }).then((d) => {
 		return { XZ: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(xzForBuild);
@@ -88,9 +88,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	let attrForHost = undefined;
 	let libiconvForHost = undefined;
 	if (os === "linux") {
-		aclForHost = await acl.build({ build, host, sdk }, aclArg);
+		aclForHost = await acl.default_({ build, host, sdk }, aclArg);
 		hostDependencies.push(aclForHost);
-		attrForHost = await attr.build({ build, host, sdk }, attrArg);
+		attrForHost = await attr.default_({ build, host, sdk }, attrArg);
 		hostDependencies.push(attrForHost);
 		// Work around a warning using the glibc-provided iconv.
 		hostDependencies.push({
@@ -98,10 +98,16 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		});
 	}
 	if (os === "darwin") {
-		libiconvForHost = await libiconv.build({ build, host, sdk }, libiconvArg);
+		libiconvForHost = await libiconv.default_(
+			{ build, host, sdk },
+			libiconvArg,
+		);
 		hostDependencies.push(libiconvForHost);
 	}
-	const ncursesForHost = await ncurses.build({ build, host, sdk }, ncursesArg);
+	const ncursesForHost = await ncurses.default_(
+		{ build, host, sdk },
+		ncursesArg,
+	);
 	hostDependencies.push(ncursesForHost);
 
 	// Resolve env.
@@ -154,11 +160,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: ["msgfmt", "msgmerge", "xgettext"],
 		metadata,
 	});

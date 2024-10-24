@@ -37,7 +37,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const default_ = tg.target(async (arg?: Arg) => {
 	const sourceArtifact = arg?.source ?? (await source());
 	const main = await sourceArtifact.get("httpie/__main__.py");
 
@@ -58,11 +58,11 @@ export const build = tg.target(async (arg?: Arg) => {
 	return build;
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: ["http", "https", "httpie"],
 		metadata,
 	});

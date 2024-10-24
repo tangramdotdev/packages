@@ -41,7 +41,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -59,11 +59,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up default build dependencies.
 	const buildDependencies = [];
-	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
+	const m4ForBuild = m4.default_({ build, host: build }).then((d) => {
 		return { M4: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(m4ForBuild);
-	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
+	const bisonForBuild = bison.default_({ build, host: build }).then((d) => {
 		return { BISON: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(bisonForBuild);
@@ -71,11 +71,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	// Set up host dependencies.
 	const hostDependencies = [];
 	const libffiForHost = await libffi
-		.build({ build, host, sdk }, libffiArg)
+		.default_({ build, host, sdk }, libffiArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(libffiForHost);
 	const zlibForHost = await zlib
-		.build({ build, host, sdk }, zlibArg)
+		.default_({ build, host, sdk }, zlibArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(zlibForHost);
 
@@ -179,7 +179,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default build;
+export default default_;
 
 /** Wrap a shebang'd perl script to use this package's bach as the interpreter.. */
 export const wrapScript = async (script: tg.File) => {
@@ -190,11 +190,15 @@ export const wrapScript = async (script: tg.File) => {
 	) {
 		throw new Error("Expected a shebang sh or bash script");
 	}
-	const interpreter = tg.File.expect(await (await build()).get("bin/bash"));
+	const interpreter = tg.File.expect(await (await default_()).get("bin/bash"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["perl"], metadata });
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["perl"],
+		metadata,
+	});
 	return true;
 });

@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -55,7 +55,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure };
 
-	const dependencies = [perl.build({ build, host: build }, perlArg)];
+	const dependencies = [perl.default_({ build, host: build }, perlArg)];
 	const env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
@@ -70,9 +70,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), libraries: ["crypt"] });
+	await std.assert.pkg({ packageDir: default_(), libraries: ["crypt"] });
 	return true;
 });

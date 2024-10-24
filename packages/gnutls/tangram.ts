@@ -38,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -54,9 +54,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const env = [
-		gmp.build({ build, env: env_, host, sdk }, gmpArg),
-		nettle.build({ build, env: env_, host, sdk }, nettleArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		gmp.default_({ build, env: env_, host, sdk }, gmpArg),
+		nettle.default_({ build, env: env_, host, sdk }, nettleArg),
+		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 		env_,
 	];
 
@@ -83,7 +83,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	const source = tg.directory({
@@ -96,5 +96,11 @@ export const test = tg.target(async () => {
 	return await $`
 			echo "Checking if we can link against gnutls."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp -lgnutls -lz
-		`.env(std.sdk(), build(), nettle.build(), gmp.build(), zlib.build());
+		`.env(
+		std.sdk(),
+		default_(),
+		nettle.default_(),
+		gmp.default_(),
+		zlib.default_(),
+	);
 });

@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -71,7 +71,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure, install };
 
-	const env = [perl.build({ build, host: build }, perlArg), env_];
+	const env = [perl.default_({ build, host: build }, perlArg), env_];
 
 	if (build !== host) {
 		// To ensure the cross-compile prefix picks up the correct cross compilers.
@@ -108,7 +108,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	const source = tg.directory({
@@ -123,7 +123,7 @@ export const test = tg.target(async () => {
 			openssl --version
 			echo "Checking if we can link against libssl."
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto
-		`.env(std.sdk(), build());
+		`.env(std.sdk(), default_());
 
 	return true;
 });

@@ -42,7 +42,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -58,9 +58,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const dependencies = [
-		help2man.build({ build, env: env_, host, sdk }, help2manArg),
-		m4.build({ build, env: env_, host, sdk }, m4Arg),
-		texinfo.build({ build, env: env_, host, sdk }, texinfoArg),
+		help2man.default_({ build, env: env_, host, sdk }, help2manArg),
+		m4.default_({ build, env: env_, host, sdk }, m4Arg),
+		texinfo.default_({ build, env: env_, host, sdk }, texinfoArg),
 	];
 	const env = std.env.arg(...dependencies, env_);
 
@@ -75,9 +75,13 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["flex"], metadata });
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["flex"],
+		metadata,
+	});
 	return true;
 });

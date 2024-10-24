@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		dependencies: { go: goArg = {}, nodejs: nodejsArg = {} } = {},
 		env: env_,
@@ -78,11 +78,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		.then(tg.Directory.expect);
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	return await $`
 			echo "Checking that we can run esbuild." | tee $OUTPUT
 			echo "$(esbuild --version)" | tee -a $OUTPUT
-		`.env(build());
+		`.env(default_());
 });

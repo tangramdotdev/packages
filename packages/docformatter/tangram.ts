@@ -33,7 +33,7 @@ type Arg = {
 	target?: string;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const default_ = tg.target(async (arg?: Arg) => {
 	let host = arg?.host ?? (await std.triple.host());
 	let target = arg?.target ?? host;
 	return poetry.build({
@@ -44,11 +44,11 @@ export const build = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: build(),
+		packageDir: default_(),
 		binaries: ["docformatter"],
 		metadata,
 	});

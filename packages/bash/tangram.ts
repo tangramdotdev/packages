@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -44,12 +44,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	// Set up default build dependencies.
 	const buildDependencies = [];
 	const pkgConfigForBuild = pkgconfig
-		.build({ build, host: build })
+		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});
 	buildDependencies.push(pkgConfigForBuild);
-	const gettextForBuild = gettext.build({ build, host: build }).then((d) => {
+	const gettextForBuild = gettext.default_({ build, host: build }).then((d) => {
 		return { GETTEXT: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(gettextForBuild);
@@ -57,7 +57,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	// Set up host dependencies.
 	const hostDependencies = [];
 	const ncursesForHost = await ncurses
-		.build({ build, host, sdk }, ncursesArg)
+		.default_({ build, host, sdk }, ncursesArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(ncursesForHost);
 
@@ -92,7 +92,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default build;
+export default default_;
 
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
 export const wrapScript = async (script: tg.File, host: string) => {
@@ -104,12 +104,16 @@ export const wrapScript = async (script: tg.File, host: string) => {
 		throw new Error("Expected a shebang sh or bash script");
 	}
 	const interpreter = tg.File.expect(
-		await (await build({ host })).get("bin/bash"),
+		await (await default_({ host })).get("bin/bash"),
 	);
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["bash"], metadata });
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["bash"],
+		metadata,
+	});
 	return true;
 });

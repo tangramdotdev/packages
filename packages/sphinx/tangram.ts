@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target((arg?: Arg) => {
+export const default_ = tg.target((arg?: Arg) => {
 	const sourceArtifact = arg?.source ?? source();
 
 	const pythonEnv = python.build(
@@ -70,10 +70,10 @@ export const build = tg.target((arg?: Arg) => {
 	});
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
 	return await $`
 				sphinx --help
-			`.env(build());
+			`.env(default_());
 });
