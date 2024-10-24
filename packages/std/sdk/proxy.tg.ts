@@ -443,8 +443,9 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
 export const testTransitive = tg.target(async () => {
 	const bootstrapSDK = await bootstrap.sdk();
-	const dylibExt =
-		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+	const os = std.triple.os(await std.triple.host());
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+
 	const constantsSourceA = await tg.file(`
 const char* getGreetingA() {
 	return "Hello from transitive constants A!";
@@ -572,8 +573,10 @@ const char* getGreetingB();
 /** This test checks that the common case of linking against a library in the working directory still works post-install. */
 export const testSamePrefix = tg.target(async () => {
 	const bootstrapSDK = await bootstrap.sdk();
-	const dylibExt =
-		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+	const os = std.triple.os(await std.triple.host());
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
+	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
 
 	const greetSource = await tg.file(`
 	#include <stdio.h>
@@ -605,7 +608,7 @@ export const testSamePrefix = tg.target(async () => {
 			mkdir -p .bins
 			mkdir -p .libs
 			cd .libs
-			cc -v -shared -xc ${source}/greet.c -Wl,-soname,libgreet.so.1 -o libgreet.${dylibExt}
+			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
 			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT
 			`,
@@ -625,8 +628,10 @@ export const testSamePrefix = tg.target(async () => {
 /** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
 export const testSamePrefixDirect = tg.target(async () => {
 	const bootstrapSDK = await bootstrap.sdk();
-	const dylibExt =
-		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+	const os = std.triple.os(await std.triple.host());
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
+	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
 
 	const greetSource = await tg.file(`
 	#include <stdio.h>
@@ -658,7 +663,7 @@ export const testSamePrefixDirect = tg.target(async () => {
 			mkdir -p .bins
 			mkdir -p .libs
 			cd .libs
-			cc -v -shared -xc ${source}/greet.c -Wl,-soname,libgreet.so.1 -o libgreet.${dylibExt}
+			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
 			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
 			`,
