@@ -1,7 +1,7 @@
 import * as std from "std" with { path: "../std" };
 import * as icu from "icu" with { path: "../icu" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as perl from "perl" with { path: "../perl" };
 import * as python from "python" with { path: "../python" };
 import * as readline from "readline" with { path: "../readline" };
@@ -36,7 +36,7 @@ export type Arg = {
 		icu?: icu.Arg;
 		ncurses?: ncurses.Arg;
 		perl?: perl.Arg;
-		pkgconfig?: pkgconfig.Arg;
+		pkgconfig?: pkgConfig.Arg;
 		python?: python.Arg;
 		readline?: readline.Arg;
 		xz?: xz.Arg;
@@ -82,7 +82,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		icu.default_({ build, env: env_, host, sdk }, icuArg),
 		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
 		perl.default_({ build, host: build }, perlArg),
-		pkgconfig.default_({ build, host: build }, pkgconfigArg),
+		pkgConfig.default_({ build, host: build }, pkgconfigArg),
 		python.toolchain(pythonArg),
 		readline.default_({ build, env: env_, host, sdk }, readlineArg),
 		xz.default_({ build, env: env_, host, sdk }, xzArg),

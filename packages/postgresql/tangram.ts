@@ -3,7 +3,7 @@ import * as lz4 from "lz4" with { path: "../lz4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -93,7 +93,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		ncursesArtifact,
 		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
 		perl.default_({ build, host: build }, perlArg),
-		pkgconfig.default_({ build, host: build }),
+		pkgConfig.default_({ build, host: build }),
 		readlineArtifact,
 		zlibArtifact,
 		zstdArtifact,

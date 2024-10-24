@@ -104,13 +104,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	// Bundle the resulting binary with the `--define-prefix` flag.
 	let pkgConfig: tg.File | tg.Template = tg.File.expect(
 		await pkgConfigBuild.get("bin/pkg-config"),
 	);
 	if (proxy) {
 		pkgConfig = await tg`#!/usr/bin/env sh
-			set -eu
+			set -eux
 
 			PKG_CONFIG_PATH=""
 

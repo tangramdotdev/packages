@@ -1,6 +1,6 @@
 import * as std from "std" with { path: "../std" };
 import * as curl from "curl" with { path: "../curl" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
@@ -38,7 +38,7 @@ export type Arg = {
 	dependencies?: {
 		curl?: curl.Arg;
 		openssl?: openssl.Arg;
-		pkgconfig?: pkgconfig.Arg;
+		pkgconfig?: pkgConfig.Arg;
 		zlib?: zlib.Arg;
 		zstd?: zstd.Arg;
 	};
@@ -81,7 +81,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	const deps = [
 		curlDir,
-		pkgconfig.default_({ build, host: build }, pkgconfigArg),
+		pkgConfig.default_({ build, host: build }, pkgconfigArg),
 		opensslDir,
 		zlibDir,
 		zstdDir,

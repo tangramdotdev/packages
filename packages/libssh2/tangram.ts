@@ -1,4 +1,4 @@
-import * as pkgConfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };

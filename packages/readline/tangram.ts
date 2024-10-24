@@ -1,5 +1,5 @@
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -42,8 +42,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up default build dependencies.
 	const buildDependencies = [];
-	const pkgConfigForBuild = pkgconfig
-		.default_({ build, host: build })
+	const pkgConfigForBuild = pkgConfig.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});

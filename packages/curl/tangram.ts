@@ -1,7 +1,7 @@
 import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
 import * as std from "std" with { path: "../std" };
@@ -76,7 +76,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const env = [
 		perl.default_({ build, host: build }),
-		pkgconfig.default_({ build, host: build }),
+		pkgConfig.default_({ build, host: build }),
 		libpsl.default_({ build, env: env_, host, sdk }, libpslArg),
 		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),

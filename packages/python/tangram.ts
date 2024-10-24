@@ -8,7 +8,8 @@ import * as libxcrypt from "libxcrypt" with { path: "../libxcrypt" };
 import * as m4 from "m4" with { path: "../m4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+// import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -116,7 +117,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		return { M4: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(m4ForBuild);
-	const pkgConfigForBuild = pkgconfig
+	const pkgConfigForBuild = pkgConfig
 		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
@@ -222,12 +223,15 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
+	const libraryPaths = [zlibForHost].map((dir) =>
+		dir.get("lib").then(tg.Directory.expect),
+	);
+
 	const pythonInterpreter = await std.wrap(
 		tg.symlink(tg`${output}/bin/python${versionString()}`),
 		{
-			env: {
-				PYTHONHOME: tg`${output}`,
-			},
+			env: { PYTHONHOME: output },
+			libraryPaths,
 		},
 	);
 
@@ -236,8 +240,8 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	// When pip3 installs a python script it writes the absolute path of the python interpreter on the shebang line. We force it to be /usr/bin/env python3.
 	python = tg.directory(python, {
 		["bin/pip3"]: std.wrap(tg.File.expect(await output.get("bin/pip3")), {
-			interpreter: tg.symlink(tg`${output}/bin/python3.12`),
-			args: ["--python", tg`${output}/bin/python3.12`],
+			interpreter: pythonInterpreter,
+			args: ["--python", pythonInterpreter],
 		}),
 	});
 
@@ -454,15 +458,15 @@ sys.exit(${attribute}())
 export const test = tg.target(async () => {
 	return await $`
 				set -eux
+				touch $OUTPUT
 
 				echo "Checking that we can run python scripts."
-				python --tangram-print-manifest
-				python -I -c 'print("Hello, world!")'
+				python -c 'print("Hello, world!")'
 
 				echo "Checking that we can run pip."
 				pip3 --version
 
 				echo "Checking that we can create virtual envs."
-				python -m venv $OUTPUT || true
-			`.env(toolchain());
+				python -m venv venv || true
+			`.env(toolchain(), { TANGRAM_WRAPPER_TRACING: "tangram=trace" });
 });

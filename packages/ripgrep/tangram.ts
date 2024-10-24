@@ -1,5 +1,5 @@
 import * as pcre2 from "pcre2" with { path: "../pcre2" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import { cargo } from "rust" with { path: "../rust" };
 import * as std from "std" with { path: "../std" };
 
@@ -31,7 +31,7 @@ export type Arg = {
 	cargo?: cargo.Arg;
 	dependencies?: {
 		pcre2?: pcre2.Arg;
-		pkgconfig?: pkgconfig.Arg;
+		pkgconfig?: pkgConfig.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -54,7 +54,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const build = build_ ?? host;
 
 	const env = std.env.arg(
-		pkgconfig.default_({ build, host: build }, pkgconfigArg),
+		pkgConfig.default_({ build, host: build }, pkgconfigArg),
 		pcre2.default_({ build, env: env_, host, sdk }, pcre2Arg),
 		env_,
 	);

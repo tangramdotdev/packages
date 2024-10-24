@@ -1,4 +1,4 @@
-import pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import openssl from "openssl" with { path: "../openssl" };
 import { cargo } from "rust" with { path: "../rust" };
 import * as std from "std" with { path: "../std" };
@@ -59,7 +59,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		disableDefaultFeatures = true;
 		features.push("native-tls");
 		if (std.triple.os(host) === "linux") {
-			env.push(pkgconfig({ build, host: build }), openssl({ build, host }));
+			env.push(pkgConfig({ build, host: build }), openssl({ build, host }));
 		}
 	}
 

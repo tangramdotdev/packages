@@ -3,7 +3,7 @@ import * as bison from "bison" with { path: "../bison" };
 import * as help2man from "help2man" with { path: "../help2man" };
 import * as m4 from "m4" with { path: "../m4" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
@@ -36,7 +36,7 @@ export type Arg = {
 		help2man?: help2man.Arg;
 		m4?: m4.Arg;
 		perl?: perl.Arg;
-		pkgconfig?: pkgconfig.Arg;
+		pkgconfig?: pkgConfig.Arg;
 		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
@@ -82,7 +82,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		bison.default_({ build, env: env_, host, sdk }, bisonArg),
 		help2man.default_({ build, env: env_, host, sdk }, help2manArg),
 		m4.default_({ build, env: env_, host, sdk }, m4Arg),
-		pkgconfig.default_({ build, host: build }, pkgconfigArg),
+		pkgConfig.default_({ build, host: build }, pkgconfigArg),
 		perlArtifact,
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 	];

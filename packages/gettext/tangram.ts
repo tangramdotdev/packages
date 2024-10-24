@@ -4,7 +4,7 @@ import * as bison from "bison" with { path: "../bison" };
 import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 import * as xz from "xz" with { path: "../xz" };
 
@@ -67,8 +67,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		return { BISON: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(bisonForBuild);
-	const pkgConfigForBuild = pkgconfig
-		.default_({ build, host: build })
+	const pkgConfigForBuild = pkgConfig.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});

@@ -1,5 +1,5 @@
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -67,7 +67,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const build = build_ ?? host;
 
 	const env = std.env.arg(
-		pkgconfig.default_({ build, host: build }),
+		pkgConfig.default_({ build, host: build }),
 		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
 		readline.default_({ build, env: env_, host, sdk }, readlineArg),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),

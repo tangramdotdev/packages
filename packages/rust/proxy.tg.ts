@@ -34,7 +34,7 @@ export const proxy = tg.target(async (arg?: Arg) => {
 
 export default proxy;
 
-import pkgconfig from "pkgconfig" with { path: "../pkgconfig" };
+import pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 export const test = tg.target(async () => {
@@ -66,7 +66,7 @@ export const test = tg.target(async () => {
 	// Build the openssl proxy test.
 	const helloOpenssl = await cargo.build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
-		env: std.env.arg(openssl(), pkgconfig(), {
+		env: std.env.arg(openssl(), pkgConfig(), {
 			TANGRAM_RUSTC_TRACING: "tangram=trace",
 		}),
 		proxy: true,
