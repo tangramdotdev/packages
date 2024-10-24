@@ -6,13 +6,13 @@ export const metadata = {
 	license: "MIT",
 	name: "gh",
 	repository: "https://github.com/cli/cli",
-	version: "2.40.1",
+	version: "2.60.0",
 };
 
 export const source = tg.target(() => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:0bb2af951b4716067747184b5b5bbd90c270edee5b45a84e62a5a803bf7ef467";
+		"sha256:1936a80a668caef437b2f409eaa10e48613a3502db7da9eea011b163769218a7";
 	return std.download.fromGithub({
 		checksum,
 		owner: "cli",
@@ -43,13 +43,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return go.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			checksum: "unsafe",
 			env,
 			sdk,
 			source: source_ ?? source(),
 			install: {
-				command: tg`
-				make install prefix="$OUTPUT"
-			`,
+				command: `make install prefix="$OUTPUT"`,
 			},
 		},
 		goArg,

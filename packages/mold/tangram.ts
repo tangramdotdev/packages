@@ -39,14 +39,14 @@ export type Arg = {
 export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		cmake: cmake_ = {},
-		build: build_,
+		build,
 		env: env_,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
+
+	tg.assert(std.triple.os(host) === "linux", "mold is only supported on Linux");
 
 	const configure = {
 		args: ["-DCMAKE_BUILD_TYPE=Release"],

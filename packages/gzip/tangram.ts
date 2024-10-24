@@ -99,3 +99,12 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	const newFile = tg.file({ contents: newFileContents, executable: true });
 	return newFile;
 };
+
+export const test = tg.target(async () => {
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["gzip"],
+		metadata,
+	});
+	return true;
+});

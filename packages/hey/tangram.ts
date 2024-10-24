@@ -46,6 +46,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return go.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			checksum: "unsafe",
 			env,
 			sdk,
 			source: source_ ?? source(),
@@ -59,10 +60,12 @@ export default default_;
 export const test = tg.target(async () => {
 	await std.assert.pkg({
 		packageDir: default_(),
-		binaries: ["hey"],
-		// binaries: [
-		// 	{ name: "hey", testPredicate: (stdout) => stdout.includes(metadata.name)i },
-		// ],
+		binaries: [
+			{
+				name: "hey",
+				testPredicate: (stdout) => stdout.includes(metadata.name),
+			},
+		],
 		metadata,
 	});
 	return true;

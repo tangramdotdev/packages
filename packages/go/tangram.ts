@@ -6,29 +6,29 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "go",
 	repository: "https://github.com/golang/go",
-	version: "1.22.4",
+	version: "1.23.2",
 };
 
 // See https://go.dev/dl.
 const RELEASES = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:a8e177c354d2e4a1b61020aca3562e27ea3e8f8247eca3170e3fa1e0c2f9e771",
+			"sha256:f626cdd92fc21a88b31c1251f419c17782933a42903db87a174ce74eeecc66a9",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:ba79d4526102575196273416239cca418a651e049c2b099f3159db85e7bade7d",
+			"sha256:542d3c1705f1c6a1c5a80d5dc62e2e45171af291e755d591c5e6531ef63b454e",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:242b78dc4c8f3d5435d28a0d2cec9b4c1aa999b601fb8aa59fb4e5a1364bf827",
+			"sha256:d87031194fe3e01abdcaf3c7302148ade97a7add6eac3fec26765bcb3207b80f",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:c95967f50aa4ace34af0c236cbdb49a9a3e80ee2ad09d85775cb4462a5c19ed3",
+			"sha256:445c0ef19d8692283f4c3a92052cc0568f5a048f4e546105f58e991d4aea54f5",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -223,7 +223,7 @@ export const build = tg.target(
 				export GOBIN=$OUTPUT/bin
 				export GOCACHE=$TMPDIR
 				export GOMODCACHE=$TMPDIR
-				export GOTEMPDIR=$TMPDIR
+				export GOTMPDIR=$TMPDIR
 
 				# Build Go.
 				${generateCommand}
@@ -284,6 +284,8 @@ export const vendor = async ({
 		.then(tg.Directory.expect);
 };
 
+// add cgo test.
+
 export const test = tg.target(async () => {
 	const source = tg.directory({
 		["main.go"]: tg.file(`
@@ -315,6 +317,13 @@ export const test = tg.target(async () => {
 	});
 
 	return await $`
+				set -ex
+				echo $TMPDIR
+				export TMPDIR=$PWD/tmp
+				mkdir -p $TMPDIR
+				export GOCACHE=$TMPDIR
+				export GOMODCACHE=$TMPDIR
+				export GOTMPDIR=$TMPDIR
 				mkdir -p $OUTPUT
 				cp -R ${source}/. .
 				chmod -R u+w .

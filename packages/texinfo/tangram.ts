@@ -30,7 +30,6 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bash?: bash.Arg;
 		bison?: bison.Arg;
 		m4?: m4.Arg;
 		ncurses?: ncurses.Arg;
@@ -48,7 +47,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		autotools = {},
 		build,
 		dependencies: {
-			bash: bashArg = {},
 			bison: bisonArg = {},
 			m4: m4Arg = {},
 			ncurses: ncursesArg = {},

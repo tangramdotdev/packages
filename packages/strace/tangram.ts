@@ -45,6 +45,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	tg.assert(
+		std.triple.os(host) === "linux",
+		"strace is only supported on Linux",
+	);
+
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),

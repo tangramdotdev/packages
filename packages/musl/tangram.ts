@@ -37,18 +37,15 @@ export type Arg = {
 export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
-		build: build_,
+		build,
 		env: env_,
-		host: host_,
+		host,
 		libcc = false,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
-	if (std.triple.os(host) !== "linux") {
-		throw new Error("musl is only supported on Linux");
-	}
+
+	tg.assert(std.triple.os(host) === "linux", "musl is only supported on Linux");
 
 	const isCrossCompiling = build !== host;
 

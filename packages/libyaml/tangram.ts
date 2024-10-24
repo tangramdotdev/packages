@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://pyyaml.org/wiki/LibYAML",
@@ -54,15 +53,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	const source = tg.directory({
-		["main.c"]: tg.file(`
-			#include <stdio.h>
-			int main () {}
-		`),
-	});
-
-	return await $`
-			echo "Checking if we can link against libyaml."
-			cc ${source}/main.c -o $OUTPUT -lyaml
-		`.env(std.sdk(), default_());
+	await std.assert.pkg({ packageDir: default_(), libraries: ["yaml"] });
+	return true;
 });

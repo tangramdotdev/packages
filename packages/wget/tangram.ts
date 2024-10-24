@@ -1,23 +1,28 @@
+import gettext from "gettext" with { path: "../gettext" };
 import * as gmp from "gmp" with { path: "../gmp" };
 import * as gnutls from "gnutls" with { path: "../gnutls" };
+import * as libpsl from "libpsl" with { path: "../libpsl" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as nettle from "nettle" with { path: "../nettle" };
 import * as pcre2 from "pcre2" with { path: "../pcre2" };
+import pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
+import * as zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/wget/",
 	license: "GPL-3.0-or-later",
 	name: "wget",
 	repository: "https://gitlab.com/gnuwget/wget2",
-	version: "1.21.4",
+	version: "1.24.5",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:81542f5cefb8faacc39bbbc6c82ded80e3e4a88505ae72ea51df27525bcde04c";
+		"sha256:fa2dc35bab5184ecbc46a9ef83def2aaaa3f4c9f3c97d4bd19dcb07d4da637de";
 	return std.download.fromGnu({ name, version, checksum });
 });
 
@@ -27,9 +32,12 @@ export type Arg = {
 	dependencies?: {
 		gmp?: gmp.Arg;
 		gnutls?: gnutls.Arg;
+		libiconv?: libiconv.Arg;
+		libpsl?: libpsl.Arg;
 		nettle?: nettle.Arg;
 		pcre2?: pcre2.Arg;
 		zlib?: zlib.Arg;
+		zstd?: zstd.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -44,9 +52,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		dependencies: {
 			gmp: gmpArg = {},
 			gnutls: gnutlsArg = {},
+			libiconv: libiconvArg = {},
+			libpsl: libpslArg = {},
 			nettle: nettleArg = {},
 			pcre2: pcre2Arg = {},
 			zlib: zlibArg = {},
+			zstd: zstdArg = {},
 		} = {},
 		env: env_,
 		host,
@@ -55,11 +66,16 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const env = [
+		gettext({ build, host: build }),
 		gmp.default_({ build, env: env_, host, sdk }, gmpArg),
 		gnutls.default_({ build, env: env_, host, sdk }, gnutlsArg),
 		nettle.default_({ build, env: env_, host, sdk }, nettleArg),
+		libiconv.default_({ build, env: env_, host, sdk }, libiconvArg),
+		libpsl.default_({ build, env: env_, host, sdk }, libpslArg),
 		pcre2.default_({ build, env: env_, host, sdk }, pcre2Arg),
+		pkgConfig({ build, host: build }),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		zstd.default_({ build, env: env_, host, sdk }, zstdArg),
 		{
 			LDFLAGS: tg.Mutation.suffix(
 				"-lnettle -lhogweed -lpcre2-8 -lgmp -lgnutls -lz",
@@ -99,7 +115,7 @@ export const test = tg.target(async () => {
 		echo "Checking that we can run wget."
 		wget --version
 		echo "Checking that we can download a file."
-		wget -O - https://tangram.dev > $OUTPUT
+		wget -O - http://example.com > $OUTPUT
 	`
 		.env(default_())
 		.checksum("unsafe");

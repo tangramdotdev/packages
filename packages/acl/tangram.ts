@@ -44,6 +44,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	tg.assert(std.triple.os(host) === "linux", "acl is only supported on Linux");
+
 	// Set up host dependencies.
 	const attrForHost = await attr
 		.default_({ build, host, sdk }, attrArg)

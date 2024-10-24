@@ -11,9 +11,10 @@ export const metadata = {
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
+	const compressionFormat = "xz";
 	const checksum =
 		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
-	return std.download.fromGnu({ name, version, checksum });
+	return std.download.fromGnu({ name, version, checksum, compressionFormat });
 });
 
 type Arg = {
@@ -49,11 +50,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	return await $`
-			echo "Checking that we can run findutils." | tee $OUTPUT
-			find --version | tee -a $OUTPUT
-			locate --version | tee -a $OUTPUT
-			updatedb --version | tee -a $OUTPUT
-			xargs --version | tee -a $OUTPUT
-		`.env(default_());
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["find", "locate", "updatedb", "xargs"],
+		metadata,
+	});
+	return true;
 });

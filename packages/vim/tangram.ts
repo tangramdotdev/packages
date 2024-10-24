@@ -7,7 +7,7 @@ export const metadata = {
 	license:
 		"https://github.com/vim/vim/blob/c8b47f26d8ae0db2d65a1cd34d7e34a2c7a6b462/LICENSE",
 	repository: "https://github.com/vim/vim",
-	version: "9.1.0206",
+	version: "9.1.0814",
 };
 
 export const source = tg.target(() => {
@@ -16,7 +16,7 @@ export const source = tg.target(() => {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:f30b72a30552e0cba68b19e2509177644fe3f4d7427417b03923b78bbca14fa5";
+		"sha256:5fefd3c8bcc474b56873a4dd7c85748081443baedc253d39634d3553ec65d751";
 	return std.download.fromGithub({
 		checksum,
 		owner,
@@ -71,6 +71,13 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: default_(), binaries: ["vim"], metadata });
+	const majorMinor = metadata.version.split(0).slice(2).join(".");
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: [
+			{ name: "vim", testPredicate: (stdout) => stdout.includes(majorMinor) },
+		],
+		metadata,
+	});
 	return true;
 });

@@ -6,7 +6,7 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "nats-server",
 	repository: "https://github.com/nats-io/nats-server",
-	version: "2.10.16",
+	version: "2.10.22",
 };
 
 export const source = tg.target(() => {
@@ -15,7 +15,7 @@ export const source = tg.target(() => {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:235b8fdd9a005e4bfb7a14752e4c171d168707662fb5ed00ed064641c8fa588b";
+		"sha256:27bbfa502d19a698f33ecf7c91b6d85ab13b11e41cb7ced6371aa3057821bc07";
 	return std.download.fromGithub({
 		checksum,
 		owner,
@@ -57,3 +57,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default default_;
+
+export const test = tg.target(async () => {
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["nats-server"],
+		metadata,
+	});
+	return true;
+});

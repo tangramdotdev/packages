@@ -120,6 +120,15 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: default_(), metadata });
+	await std.assert.pkg({
+		packageDir: default_(),
+		libraries: [
+			"formw",
+			"menuw",
+			"ncursesw",
+			"panelw",
+		],
+		metadata,
+	});
 	return true;
 });

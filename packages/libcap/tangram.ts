@@ -46,6 +46,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	tg.assert(
+		std.triple.os(host) === "linux",
+		"libcap is only supported on Linux",
+	);
+
 	const install = {
 		command: tg.Mutation.set(`
 		mkdir -p $OUTPUT/bin $OUTPUT/lib/pkgconfig

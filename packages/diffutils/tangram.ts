@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/diffutils/",
@@ -43,6 +42,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			env,
 			sdk,
 			source: source_ ?? source(),
 		},
@@ -53,10 +53,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	return await $`
-			echo "Checking that we can run diffutils." | tee $OUTPUT
-			diff --version | tee -a $OUTPUT
-			diff3 --version | tee -a $OUTPUT
-			cmp --version | tee -a $OUTPUT
-		`.env(default_());
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["cmp", "diff", "diff3"],
+		metadata,
+	});
+	return true;
 });

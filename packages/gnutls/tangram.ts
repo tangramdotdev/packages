@@ -1,5 +1,6 @@
 import * as gmp from "gmp" with { path: "../gmp" };
 import * as nettle from "nettle" with { path: "../nettle" };
+import pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -9,13 +10,13 @@ export const metadata = {
 	license: "LGPL-2.1-or-later",
 	name: "gnutls",
 	repository: "https://gitlab.com/gnutls/gnutls",
-	version: "3.7.10",
+	version: "3.7.11",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:b6e4e8bac3a950a3a1b7bdb0904979d4ab420a81e74de8636dd50b467d36f5a9";
+		"sha256:90e337504031ef7d3077ab1a52ca8bac9b2f72bc454c95365a1cd1e0e81e06e9";
 	const extension = ".tar.xz";
 	const base = `https://www.gnupg.org/ftp/gcrypt/${name}/v3.7`;
 	return std
@@ -56,7 +57,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const env = [
 		gmp.default_({ build, env: env_, host, sdk }, gmpArg),
 		nettle.default_({ build, env: env_, host, sdk }, nettleArg),
+		pkgConfig({ build, host: build }),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		{
+			CFLAGS: tg.Mutation.prefix("-Wno-implicit-int -Wno-deprecated-non-prototype", " ")
+		},
 		env_,
 	];
 

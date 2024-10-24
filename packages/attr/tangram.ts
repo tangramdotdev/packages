@@ -41,6 +41,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	tg.assert(std.triple.os(host) === "linux", "attr is only supported on Linux");
+
 	const configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath", "--with-pic"],
 	};

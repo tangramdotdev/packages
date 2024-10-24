@@ -54,15 +54,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-	const prepare = tg`cp -R ${sourceDir}/* . && chmod -R u+w .`;
 
 	const configure = {
 		args: ["--without-tcltk"],
-		command: `./configure`,
 	};
 
 	const phases = {
-		prepare,
 		configure,
 	};
 
@@ -76,6 +73,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			buildInTree: true,
 			env,
 			phases,
 			sdk,

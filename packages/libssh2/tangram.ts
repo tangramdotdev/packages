@@ -8,13 +8,13 @@ export let metadata = {
 	license: "BSD-3-Clause",
 	name: "libssh2",
 	repository: "https://github.com/libssh2/libssh2",
-	version: "1.11.0",
+	version: "1.11.1",
 };
 
 export let source = tg.target(async () => {
 	let { name, version } = metadata;
 	let checksum =
-		"sha256:a488a22625296342ddae862de1d59633e6d446eff8417398e06674a49be3d7c2";
+		"sha256:9954cb54c4f548198a7cbebad248bdc87dd64bd26185708a294b2b50771e3769";
 	let owner = name;
 	let repo = name;
 	let tag = `${name}-${version}`;

@@ -7,13 +7,13 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "openssl",
 	repository: "https://github.com/openssl/openssl",
-	version: "3.3.2",
+	version: "3.4.0",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:2e8a40b01979afe8be0bbfb3de5dc1c6709fedb46d6c89c10da114ab5fc3d281";
+		"sha256:e15dda82fe2fe8139dc2ac21a36d4ca01d5313c75f99f46c4e8a27709b7294bf";
 	const owner = name;
 	const repo = name;
 	const tag = `${name}-${version}`;
@@ -118,12 +118,21 @@ export const test = tg.target(async () => {
 		`),
 	});
 
-	await $`
+	const output = await $`
 		 	echo "Checking if we can run openssl"
-			openssl --version
+		 	mkdir -p $OUTPUT
+			openssl --version | tee -a $OUTPUT/version.txt
 			echo "Checking if we can link against libssl."
-			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto
-		`.env(std.sdk(), default_());
+			cc ${source}/main.c -o $OUTPUT/prog -lssl -lcrypto
+		`
+		.env(std.sdk(), default_())
+		.then(tg.Directory.expect);
+
+	const text = await output
+		.get("version.txt")
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(text.includes(metadata.version));
 
 	return true;
 });

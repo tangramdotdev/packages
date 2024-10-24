@@ -1,4 +1,5 @@
 import * as gmp from "gmp" with { path: "../gmp" };
+import m4 from "m4" with { path: "../m4" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
@@ -7,13 +8,13 @@ export const metadata = {
 	license: "LGPL-3.0-or-later",
 	name: "nettle",
 	repository: "https://git.lysator.liu.se/nettle/nettle",
-	version: "3.8.1",
+	version: "3.10",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:364f3e2b77cd7dcde83fd7c45219c834e54b0c75e428b6f894a23d12dd41cbfe";
+		"sha256:b4c518adb174e484cb4acea54118f02380c7133771e7e9beb98a0787194ee47c";
 	return std.download.fromGnu({ name, version, checksum });
 });
 
@@ -40,7 +41,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const env = [gmp.default_({ build, env: env_, host, sdk }, gmpArg), env_];
+	const env = [
+		gmp.default_({ build, env: env_, host, sdk }, gmpArg),
+		m4({ build, host: build }),
+		env_,
+	];
 
 	const configure = {
 		args: [

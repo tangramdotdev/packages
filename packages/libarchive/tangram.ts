@@ -12,13 +12,13 @@ export const metadata = {
 		"https://raw.githubusercontent.com/libarchive/libarchive/master/COPYING",
 	name: "libarchive",
 	repository: "https://github.com/libarchive/libarchive",
-	version: "3.7.2",
+	version: "3.7.7",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:04357661e6717b6941682cde02ad741ae4819c67a260593dfb2431861b251acb";
+		"sha256:879acd83c3399c7caaee73fe5f7418e06087ab2aaf40af3e99b9e29beb29faee";
 	const extension = ".tar.xz";
 	const base = `https://www.libarchive.org/downloads`;
 	return std

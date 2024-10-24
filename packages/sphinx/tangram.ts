@@ -8,7 +8,7 @@ export const metadata = {
 	license: "BSD-2-Clause",
 	name: "sphinx",
 	repository: "https://github.com/sphinx-doc/sphinx",
-	version: "7.0.1",
+	version: "8.1.3",
 };
 
 // Generated using pip-tools/pip-compile: https://pypi.org/project/pip-tools
@@ -17,7 +17,7 @@ import requirements from "./requirements.txt" with { type: "file" };
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:07615442c34dbbf1844d4b514c659c27a8fa14819d6999b920773aed798d00c9";
+		"sha256:0fcc28999fe8e4fcc49a4ab01e3e987f6fbb3af32995db74e6fc8f8d01dcaaca";
 	const owner = "sphinx-doc";
 	const repo = name;
 	const tag = `v${version}`;
@@ -26,8 +26,7 @@ export const source = tg.target(() => {
 		repo,
 		tag,
 		checksum,
-		source: "release",
-		version,
+		source: "tag",
 	});
 });
 

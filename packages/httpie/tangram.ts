@@ -9,13 +9,13 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "httpie",
 	repository: "https://github.com/httpie/cli",
-	version: "3.2.2",
+	version: "3.2.3",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:01b4407202fac3cc68c73a8ff1f4a81a759d9575fabfad855772c29365fe18e6";
+		"sha256:91cb6cbd1f9e6115ffc13824e87b2a4d903d76c769859e81924913adbf609c1b";
 	const owner = name;
 	const repo = name;
 	const tag = version;

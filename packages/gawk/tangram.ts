@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/gawk/",
@@ -54,8 +53,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	return await $`
-		echo "Checking that we can run awk." | tee $OUTPUT
-		awk --version | tee -a $OUTPUT
-	`.env(default_());
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["gawk"],
+		metadata,
+	});
+	return true;
 });

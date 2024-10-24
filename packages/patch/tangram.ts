@@ -49,8 +49,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	return await $`
-		echo "Checking that we can run patch."
-		${default_()}/bin/patch --version
-	`;
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["patch"],
+		metadata,
+	});
+	return true;
 });

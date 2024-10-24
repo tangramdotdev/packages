@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/hello/",
@@ -55,9 +54,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	return await $`
-		mkdir -p $OUTPUT
-		echo "Checking that we can run gnu hello."
-		${default_()}/bin/hello
-	`;
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["hello"],
+		metadata,
+	});
+	return true;
 });

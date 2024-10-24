@@ -8,13 +8,13 @@ export const metadata = {
 	license: "MIT",
 	name: "xh",
 	repository: "https://github.com/ducaale/xh",
-	version: "0.22.2",
+	version: "0.23.0",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:32a6470ab705aba4c37fce9806202dcc0ed24f55e091e2f4bdf7583108a3da63";
+		"sha256:c44ca41b52b5857895d0118b44075d94c3c4a98b025ed3433652519a1ff967a0";
 	const owner = "ducaale";
 	const repo = name;
 	const tag = `v${version}`;

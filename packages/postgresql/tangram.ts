@@ -3,7 +3,7 @@ import * as lz4 from "lz4" with { path: "../lz4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -75,6 +75,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const os = std.triple.os(host);
 
 	const icuArtifact = icu.default_({ build, env: env_, host, sdk }, icuArg);
+	const opensslArtifact = openssl.default(
+		{ build, env: env_, host, sdk },
+		opensslArg,
+	);
 	const lz4Artifact = lz4.default_({ build, env: env_, host, sdk }, lz4Arg);
 	const ncursesArtifact = ncurses.default_(
 		{ build, env: env_, host, sdk },
@@ -91,7 +95,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
-		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
+		opensslArtifact,
 		perl.default_({ build, host: build }, perlArg),
 		pkgConfig.default_({ build, host: build }),
 		readlineArtifact,
@@ -111,12 +115,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		env.push({
 			CC: "gcc",
 			CXX: "g++",
-			ICU_CFLAGS: tg`-I${icuArtifact}/include`,
-			ICU_LIBS: tg`-L${icuArtifact}/lib -licuuc -licudata -licui18n -licuio`,
-			LZ4_CFLAGS: tg`-I${lz4Artifact}/include`,
-			LZ4_LIBS: tg`-L${lz4Artifact}/lib -llz4`,
-			ZSTD_CFLAGS: tg`-I${zstdArtifact}/include`,
-			ZSTD_LIBS: tg`-L${zstdArtifact}/lib -lzstd`,
 		});
 	}
 
@@ -135,6 +133,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	let libraryPaths = [
 		icuArtifact,
 		ncursesArtifact,
+		opensslArtifact,
 		readlineArtifact,
 		lz4Artifact,
 		zlibArtifact,
@@ -160,7 +159,7 @@ export const test = tg.target(async () => {
 	const artifact = default_();
 	await std.assert.pkg({
 		packageDir: artifact,
-		binaries: ["psql"],
+		binaries: ["postgres", "psql"],
 		libraries: ["pq"],
 		metadata,
 	});

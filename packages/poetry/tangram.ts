@@ -10,13 +10,13 @@ export const metadata = {
 	license: "MIT",
 	name: "poetry",
 	repository: "https://github.com/python-poetry/poetry",
-	version: "1.7.1",
+	version: "1.8.4",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:b348a70e7d67ad9c0bd3d0ea255bc6df84c24cf4b16f8d104adb30b425d6ff32";
+		"sha256:909cc7651508ee6c1eabdfa56c3eded62222516029bf2fc313c47270bba1ad9a";
 	const owner = "python-poetry";
 	const repo = name;
 	const tag = version;

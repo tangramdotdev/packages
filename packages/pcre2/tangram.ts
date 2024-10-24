@@ -6,13 +6,13 @@ export const metadata = {
 	name: "pcre2",
 	repository: "https://github.com/PCRE2Project/pcre2",
 	license: "https://github.com/PCRE2Project/pcre2/blob/master/LICENCE",
-	version: "10.43",
+	version: "10.44",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:889d16be5abb8d05400b33c25e151638b8d4bac0e2d9c76e9d6923118ae8a34e";
+		"sha256:86b9cb0aa3bcb7994faa88018292bc704cdbb708e785f7c74352ff6ea7d3175b";
 	const owner = "PCRE2Project";
 	const repo = name;
 	const tag = `pcre2-${version}`;

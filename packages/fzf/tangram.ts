@@ -6,19 +6,20 @@ export const metadata = {
 	license: "MIT",
 	name: "fzf",
 	repository: "https://github.com/junegunn/fzf",
-	version: "0.50.0",
+	version: "0.55.0",
 };
 
 export const source = tg.target((): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:3dd8f57eb58c039d343c23fbe1b4f03e441eb796d564c959f8241106805370d0";
+		"sha256:805383f71bca7f8fb271ecd716852aea88fd898d5027d58add9e43df6ea766da";
+	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
 		owner: "junegunn",
 		repo: name,
 		source: "tag",
-		tag: version,
+		tag,
 	});
 });
 
@@ -56,10 +57,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
+	const majorMinor = metadata.version.split(0).slice(2).join(".");
 	await std.assert.pkg({
 		packageDir: default_(),
 		binaries: [
-			{ name: "fzf", testPredicate: (stdout) => stdout.includes("0.50") },
+			{ name: "fzf", testPredicate: (stdout) => stdout.includes(majorMinor) },
 		],
 		metadata,
 	});

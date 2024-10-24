@@ -222,7 +222,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	const libraryPaths = [zlibForHost].map((dir) =>
+	const libraryPaths = [opensslForHost, zlibForHost].map((dir) =>
 		dir.get("lib").then(tg.Directory.expect),
 	);
 

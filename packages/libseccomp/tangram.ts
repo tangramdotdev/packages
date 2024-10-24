@@ -50,6 +50,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		...rest
 	} = await std.args.apply<Arg>(...args);
 
+	tg.assert(
+		std.triple.os(host) === "linux",
+		"libseccomp is only supported on Linux",
+	);
+
 	const configure = {
 		args: ["--disable-dependency-tracking"],
 	};

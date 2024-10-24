@@ -1,5 +1,5 @@
 import * as pcre2 from "pcre2" with { path: "../pcre2" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import { cargo } from "rust" with { path: "../rust" };
 import * as std from "std" with { path: "../std" };
 
@@ -8,13 +8,13 @@ export const metadata = {
 	license: "Unlicense",
 	name: "ripgrep",
 	repository: "https://github.com/BurntSushi/ripgrep",
-	version: "14.1.0",
+	version: "14.1.1",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:33c6169596a6bbfdc81415910008f26e0809422fda2d849562637996553b2ab6";
+		"sha256:4dad02a2f9c8c3c8d89434e47337aa654cb0e2aa50e806589132f186bf5c2b66";
 	const owner = "BurntSushi";
 	const repo = name;
 	return std.download.fromGithub({
