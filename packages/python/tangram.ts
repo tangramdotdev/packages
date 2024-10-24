@@ -8,7 +8,6 @@ import * as libxcrypt from "libxcrypt" with { path: "../libxcrypt" };
 import * as m4 from "m4" with { path: "../m4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
-// import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
