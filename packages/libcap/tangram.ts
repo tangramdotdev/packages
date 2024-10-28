@@ -4,6 +4,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/License",
 	name: "libcap",
 	repository: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
@@ -46,10 +47,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	tg.assert(
-		std.triple.os(host) === "linux",
-		"libcap is only supported on Linux",
-	);
+	std.assert.supportedHost(host, metadata);
 
 	const install = {
 		command: tg.Mutation.set(`

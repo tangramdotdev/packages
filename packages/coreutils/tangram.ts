@@ -1,6 +1,7 @@
 import * as acl from "acl" with { path: "../acl" };
 import * as attr from "attr" with { path: "../attr" };
 import * as libcap from "libcap" with { path: "../libcap" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -32,6 +33,7 @@ type Arg = {
 		acl?: acl.Arg;
 		attr?: attr.Arg;
 		libcap?: libcap.Arg;
+		libiconv?: libiconv.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -47,6 +49,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 			acl: aclArg = {},
 			attr: attrArg = {},
 			libcap: libcapArg = {},
+			libiconv: libiconvArg = {},
 		} = {},
 		env: env_,
 		host,
@@ -54,11 +57,22 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const dependencies = [
-		acl.default_({ build, env: env_, host, sdk }, aclArg),
-		attr.default_({ build, env: env_, host, sdk }, attrArg),
-		libcap.default_({ build, env: env_, host, sdk }, libcapArg),
-	];
+	let dependencies: Array<tg.Unresolved<std.env.Arg>> = [];
+
+	if (std.triple.os(host) === "linux") {
+		dependencies = dependencies.concat([
+			acl.default_({ build, env: env_, host, sdk }, aclArg),
+			attr.default_({ build, env: env_, host, sdk }, attrArg),
+			libcap.default_({ build, env: env_, host, sdk }, libcapArg),
+		]);
+	}
+
+	if (std.triple.os(host) === "darwin") {
+		dependencies.push(
+			libiconv.default_({ build, env: env_, host, sdk }, libiconvArg),
+		);
+	}
+
 	const env = [...dependencies, env_];
 
 	return std.autotools.build(

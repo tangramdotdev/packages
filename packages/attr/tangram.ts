@@ -4,6 +4,7 @@ import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
 	homepage: "https://savannah.nongnu.org/projects/attr",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-2.0-or-later",
 	name: "attr",
 	repository: "https://git.savannah.nongnu.org/cgit/attr.git",
@@ -41,7 +42,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	tg.assert(std.triple.os(host) === "linux", "attr is only supported on Linux");
+	std.assert.supportedHost(host, metadata);
 
 	const configure = {
 		args: ["--disable-dependency-tracking", "--disable-rpath", "--with-pic"],

@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/PCRE2Project/pcre2",
@@ -75,7 +74,7 @@ export default default_;
 export const test = tg.target(async () => {
 	await std.assert.pkg({
 		packageDir: default_(),
-		libraries: ["pcre2"],
+		libraries: ["pcre2-8"],
 		metadata,
 	});
 	return true;

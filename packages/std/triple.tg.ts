@@ -279,6 +279,14 @@ const parseEnv = (
 	return undefined;
 };
 
+/** The set of minimal triples corresponding to each supported Tangram host platform. */
+export const allHosts = [
+	"aarch64-darwin",
+	"aarch64-linux",
+	"x86_64-darwin",
+	"x86_64-linux",
+];
+
 export const test = tg.target(() => {
 	const t0 = "aarch64-linux";
 	const c0 = components(t0);

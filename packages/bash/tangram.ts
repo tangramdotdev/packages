@@ -1,6 +1,7 @@
 import * as gettext from "gettext" with { path: "../gettext" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -22,6 +23,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
+		libiconv?: libiconv.Arg;
 		ncurses?: ncurses.Arg;
 	};
 	env?: std.env.Arg;
@@ -34,7 +36,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { ncurses: ncursesArg = {} } = {},
+		dependencies: { libiconv: libiconvArg = {}, ncurses: ncursesArg = {} } = {},
 		env: env_,
 		host,
 		sdk,
@@ -43,7 +45,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up default build dependencies.
 	const buildDependencies = [];
-	const pkgConfigForBuild = pkgConfig.default_({ build, host: build })
+	const pkgConfigForBuild = pkgConfig
+		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});
@@ -55,6 +58,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up host dependencies.
 	const hostDependencies = [];
+	const libiconvForHost = await libiconv
+		.default_({ build, host, sdk }, libiconvArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(libiconvForHost);
 	const ncursesForHost = await ncurses
 		.default_({ build, host, sdk }, ncursesArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));

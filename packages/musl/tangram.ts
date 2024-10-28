@@ -4,6 +4,7 @@ import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://musl.libc.org/",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "MIT",
 	name: "musl",
 	repository: "https://git.musl-libc.org/cgit/musl",
@@ -45,7 +46,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	tg.assert(std.triple.os(host) === "linux", "musl is only supported on Linux");
+	std.assert.supportedHost(host, metadata);
 
 	const isCrossCompiling = build !== host;
 

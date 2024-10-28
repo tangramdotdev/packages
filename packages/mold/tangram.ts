@@ -5,6 +5,7 @@ import * as zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://github.com/rui314/mold",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "MIT",
 	name: "mold",
 	repository: "https://github.com/rui314/mold",
@@ -46,7 +47,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	tg.assert(std.triple.os(host) === "linux", "mold is only supported on Linux");
+	std.assert.supportedHost(host, metadata);
 
 	const configure = {
 		args: ["-DCMAKE_BUILD_TYPE=Release"],

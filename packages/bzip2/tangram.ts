@@ -87,12 +87,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	const host = await std.triple.host();
-	const os = std.triple.os(host);
 	await std.assert.pkg({
 		packageDir: default_(),
 		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libraries: ["bz2"],
+		libraries: [{ name: "bz2", staticlib: true, dylib: false }],
 		metadata,
 	});
 	return true;

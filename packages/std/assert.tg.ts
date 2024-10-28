@@ -53,16 +53,20 @@ type RuntimeDep = {
 	libs: Array<string>;
 };
 
+// TODO - add remaining info to this type.
 export type Metadata = {
 	name?: string;
 	version?: string;
+	hosts?: Array<string>;
 };
 
 /** Assert a package contains the specified contents in the conventional locations. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export const pkg = async (arg: PkgArg) => {
 	const env = arg.env ?? {};
-
 	const metadata = arg.metadata;
+
+	const currentHost = await std.triple.host();
+	supportedHost(currentHost, metadata);
 
 	const directory = await tg.resolve(arg.packageDir);
 
@@ -394,12 +398,12 @@ export const dlopen = async (arg: DlopenArg) => {
 
 	const testCode = dylibs
 		.map(
-			(name) => `
-		void* ${baseName(name)}Handle = dlopen("${name}", RTLD_NOW);
-			if (!${baseName(name)}Handle) {
+			(name, i) => `
+		void* handle_${i} = dlopen("${name}", RTLD_NOW);
+			if (!handle_${i}) {
 				return -1;
 			}
-			dlclose(${baseName(name)}Handle);`,
+			dlclose(handle_${i});`,
 		)
 		.join("\n");
 
@@ -451,6 +455,15 @@ export const tryBaseName = (lib: string): string | undefined => {
 		return undefined;
 	}
 	return match[1];
+};
+
+/** Ensure the given host is supported according to the metadata. */
+export const supportedHost = (currentHost: string, metadata?: Metadata) => {
+	const supportedHosts = metadata?.hosts ?? std.triple.allHosts;
+	tg.assert(
+		supportedHosts.includes(currentHost),
+		`current host ${currentHost} not found in supported hosts: ${supportedHosts}.`,
+	);
 };
 
 /** Execute the given file and assert the resulting `stdout` includes the provided string. */

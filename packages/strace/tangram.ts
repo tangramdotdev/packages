@@ -2,6 +2,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/strace/strace",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	name: "strace",
 	license: "https://github.com/strace/strace/blob/master/COPYING",
 	repository: "https://github.com/strace/strace",
@@ -45,10 +46,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	tg.assert(
-		std.triple.os(host) === "linux",
-		"strace is only supported on Linux",
-	);
+	std.assert.supportedHost(host, metadata);
 
 	return std.autotools.build(
 		{

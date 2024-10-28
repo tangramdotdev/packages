@@ -9,6 +9,7 @@ import zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://gcc.gnu.org/",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
@@ -48,9 +49,7 @@ export const gcc = tg.target(async (arg?: Arg) => {
 
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const os = std.triple.os(host);
-	if (os !== "linux") {
-		throw new Error("GCC is only supported on Linux");
-	}
+	std.assert.supportedHost(host, metadata);
 	const build = std.sdk.canonicalTriple(build_ ?? host);
 	const target = std.sdk.canonicalTriple(target_ ?? host);
 

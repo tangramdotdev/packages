@@ -2,6 +2,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.kernel.org",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
@@ -40,6 +41,7 @@ export const kernelHeaders = tg.target(async (arg?: Arg) => {
 		source: source_,
 	} = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
+	std.assert.supportedHost(host, metadata);
 	const buildTriple = build_ ?? host;
 
 	const system = std.triple.archAndOs(buildTriple);

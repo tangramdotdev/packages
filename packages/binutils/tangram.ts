@@ -121,16 +121,25 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	const binaries = [
-		"ar",
-		"as",
-		"ld",
-		"nm",
-		"objcopy",
-		"objdump",
-		"ranlib",
-		"strip",
-	];
+	const os = std.triple.os(await std.triple.host());
+
+	const binaries =
+		os === "linux"
+			? ["ar", "as", "ld", "nm", "objcopy", "objdump", "ranlib", "strip"]
+			: [
+					"addr2line",
+					"ar",
+					"c++filt",
+					"elfedit",
+					"nm",
+					"objcopy",
+					"objdump",
+					"ranlib",
+					"readelf",
+					"size",
+					"strings",
+					"strip",
+			  ];
 
 	await std.assert.pkg({ packageDir: default_(), binaries, metadata });
 	return true;

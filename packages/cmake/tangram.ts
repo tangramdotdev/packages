@@ -1,5 +1,6 @@
 import * as std from "std" with { path: "../std" };
 import * as curl from "curl" with { path: "../curl" };
+import * as make from "gnumake" with { path: "../gnumake" };
 import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -300,6 +301,8 @@ export const target = tg.target(async (...args: std.Args<BuildArg>) => {
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
 		env = await std.env.arg(await ninja.build({ host }), env);
+	} else if (generator === "Unix Makefiles") {
+		env = await std.env.arg(await make.default_({ host }), env);
 	}
 
 	if (includeSdk) {

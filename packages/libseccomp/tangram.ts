@@ -3,6 +3,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/seccomp/libseccomp",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "LGPLv2.1",
 	name: "libseccomp",
 	repository: "https://github.com/seccomp/libseccomp",
@@ -50,10 +51,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		...rest
 	} = await std.args.apply<Arg>(...args);
 
-	tg.assert(
-		std.triple.os(host) === "linux",
-		"libseccomp is only supported on Linux",
-	);
+	std.assert.supportedHost(host, metadata);
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],

@@ -1,4 +1,6 @@
+import * as curl from "curl" with { path: "../curl" };
 import * as gettext from "gettext" with { path: "../gettext" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -8,7 +10,7 @@ export const metadata = {
 	license: "GPL-2.0-only",
 	name: "git",
 	repository: "https://github.com/git/git",
-	version: "2.45.2",
+	version: "2.47.0",
 };
 
 export const source = tg.target(async () => {
@@ -16,7 +18,7 @@ export const source = tg.target(async () => {
 	const extension = ".tar.xz";
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/${name}`;
 	const checksum =
-		"sha256:51bfe87eb1c02fed1484051875365eeab229831d30d0cec5d89a14f9e40e9adb";
+		"sha256:1ce114da88704271b43e027c51e04d9399f8c88e9ef7542dae7aebae7d87bc4e";
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -27,7 +29,9 @@ type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
+		curl?: curl.Arg;
 		gettext?: gettext.Arg;
+		libiconv?: libiconv.Arg;
 		openssl?: openssl.Arg;
 		zlib?: zlib.Arg;
 	};
@@ -42,7 +46,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		autotools = {},
 		build,
 		dependencies: {
+			curl: curlArg = {},
 			gettext: gettextArg = {},
+			libiconv: libiconvArg = {},
 			openssl: opensslArg = {},
 			zlib: zlibArg = {},
 		} = {},
@@ -54,7 +60,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-
 	const configure = {
 		args: ["--without-tcltk"],
 	};
@@ -63,12 +68,20 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		configure,
 	};
 
-	const env = std.env.arg(
+	let dependencies = [
+		curl.default_({ build, env: env_, host, sdk }, curlArg),
 		gettext.default_({ build, env: env_, host, sdk }, gettextArg),
 		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
-		env_,
-	);
+	];
+
+	if (std.triple.os(host) === "darwin") {
+		dependencies.push(
+			libiconv.default_({ build, env: env_, host, sdk }, libiconvArg),
+		);
+	}
+
+	const env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
 		{

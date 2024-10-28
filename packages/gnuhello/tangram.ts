@@ -1,3 +1,5 @@
+import gettext from "gettext" with { path: "../gettext" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -18,6 +20,9 @@ export const source = tg.target(() => {
 type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
+	dependencies?: {
+		libiconv?: libiconv.Arg;
+	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -28,11 +33,24 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		env,
+		dependencies: { libiconv: libiconvArg = {} } = {},
+		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
+
+	const dependencies: Array<tg.Unresolved<std.env.Arg>> = [
+		gettext({ build, host: build }),
+	];
+
+	if (std.triple.os(host) === "darwin") {
+		dependencies.push(
+			libiconv.default_({ build, env: env_, host, sdk }, libiconvArg),
+		);
+	}
+
+	const env = std.env.arg(...dependencies, env_);
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],

@@ -3,6 +3,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://savannah.nongnu.org/projects/acl",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-2.0-or-later",
 	name: "acl",
 	repository: "https://git.savannah.nongnu.org/cgit/acl.git",
@@ -44,7 +45,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	tg.assert(std.triple.os(host) === "linux", "acl is only supported on Linux");
+	std.assert.supportedHost(host, metadata);
 
 	// Set up host dependencies.
 	const attrForHost = await attr

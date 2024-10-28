@@ -7,6 +7,7 @@ import texinfo from "texinfo" with { path: "../texinfo" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/glibc/",
+	hosts: ["aarch64-linux", "x86_64-linux"],
 	license: "LGPL-2.1-or-later",
 	name: "glibc",
 	repository: "https://sourceware.org/git/?p=glibc.git",
@@ -47,9 +48,7 @@ export const glibc = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(args ?? {});
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
-	if (std.triple.os(host) !== "linux") {
-		throw new Error("glibc is only supported on Linux");
-	}
+	std.assert.supportedHost(host, metadata);
 	const linuxHeaders = linuxHeaders_ ?? (await linux.kernelHeaders({ host }));
 
 	const configure = {

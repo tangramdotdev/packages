@@ -60,10 +60,14 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	const dependencies = [
 		bison.default_({ build, host: build }, bisonArg),
-		libseccomp.default_({ build, env: env_, host, sdk }, libseccompArg),
 		m4.default_({ build, host: build }, m4Arg),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 	];
+	if (std.triple.os(host) === "linux") {
+		dependencies.push(
+			libseccomp.default_({ build, env: env_, host, sdk }, libseccompArg),
+		);
+	}
 	const env = [...dependencies, env_];
 
 	const output = await std.autotools.build(

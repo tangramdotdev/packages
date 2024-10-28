@@ -3,7 +3,7 @@ import zlib from "../dependencies/zlib.tg.ts";
 
 const metadata = {
 	name: "git",
-	version: "2.45.2",
+	version: "2.47.0",
 };
 
 export const source = tg.target(async () => {
@@ -11,7 +11,7 @@ export const source = tg.target(async () => {
 	const extension = ".tar.xz";
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/git`;
 	const checksum =
-		"sha256:51bfe87eb1c02fed1484051875365eeab229831d30d0cec5d89a14f9e40e9adb";
+		"sha256:1ce114da88704271b43e027c51e04d9399f8c88e9ef7542dae7aebae7d87bc4e";
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
@@ -69,7 +69,6 @@ export const git = tg.target(async (arg?: Arg) => {
 export default git;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: git(), binaries: ["git"],
-		metadata, });
+	await std.assert.pkg({ packageDir: git(), binaries: ["git"], metadata });
 	return true;
 });
