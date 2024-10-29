@@ -78,6 +78,9 @@ export type Arg = {
 	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
 	checksum?: tg.Checksum;
 
+	/** The source directory. */
+	source: tg.Directory;
+
 	/**
 	 * Explicitly enable or disable updating vendored dependencies, or override the command used in the vendor phase.
 	 *
@@ -89,13 +92,6 @@ export type Arg = {
 	 *
 	 * By default, we re-vendor dependencies if there is no `vendor` directory in the root of the `source`.
 	 */
-	source: tg.Directory;
-
-	/**
-	 * Configure the installation phase, where binaries are built and copied to the output.
-	 *
-	 * If set, `command` will be run instead of `go install` to build the output binaries.
-	 */
 	vendor?: boolean | { command: tg.Template.Arg };
 
 	/**
@@ -106,7 +102,11 @@ export type Arg = {
 	 */
 	generate?: boolean | { command: tg.Template.Arg };
 
-	/** An optional override to the `go install` command. */
+	/**
+	 * Configure the installation phase, where binaries are built and copied to the output.
+	 *
+	 * If set, `command` will be run instead of `go install` to build the output binaries.
+	 */
 	install?: { command: tg.Template.Arg };
 
 	/**
@@ -139,7 +139,7 @@ export const build = tg.target(
 		});
 		let {
 			checksum,
-			cgo,
+			cgo = true,
 			env: env_,
 			generate,
 			host: host_,
@@ -147,7 +147,7 @@ export const build = tg.target(
 			sdk: sdkArgs,
 			source,
 			target: target_,
-			vendor: vendor_,
+			vendor: vendor_ = true,
 		} = await std.args.applyMutations(mutationArgs);
 		const host = host_ ?? (await std.triple.host());
 		const system = std.triple.archAndOs(host);
@@ -281,6 +281,7 @@ export const vendor = async ({
 				mv -T ./vendor "$OUTPUT"
 			`
 		.env(toolchain(), { SSL_CERT_DIR: std.caCertificates() })
+		.checksum("unsafe")
 		.then(tg.Directory.expect);
 };
 

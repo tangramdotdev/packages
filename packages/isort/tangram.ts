@@ -27,23 +27,20 @@ export const source = tg.target(() => {
 });
 
 export type Arg = {
-	source?: tg.Directory;
+	build?: string;
 	host?: string;
-	target?: string;
+	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (arg?: Arg) => {
-	const sourceArtifact = arg?.source ?? (await source());
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+	const { build, host, source: source_ } = await std.args.apply<Arg>(...args);
+	const sourceArtifact = source_ ?? (await source());
 	const lockfile = tg.File.expect(await sourceArtifact.get("poetry.lock"));
-
-	const host = arg?.host ?? (await std.triple.host());
-	const target = arg?.target ?? host;
 
 	return poetry.build({
 		source: sourceArtifact,
 		lockfile: lockfile,
-		host,
-		target,
+		build,
 	});
 });
 

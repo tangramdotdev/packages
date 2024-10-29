@@ -1,4 +1,3 @@
-import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
 import { versionString, wrapScripts } from "./tangram.ts";
@@ -8,10 +7,12 @@ export const install = tg.target(
 	async (pythonArtifact: tg.Directory, requirements: Arg) => {
 		// Download the requirements specified in any requirements.txt files.
 		const downloads = await $`
+					mkdir tmp
+					export TMPDIR=tmp
 					mkdir -p $OUTPUT
 
 					# Download dependencies using the requirements.txt file.
-					python3 -m pip     \\
+					pip3               \\
 						download         \\
 						-d $OUTPUT       \\
 						--no-deps        \\
@@ -32,7 +33,7 @@ export const install = tg.target(
 						cp "${file}" "${name}"
 						export PYTHONUSERBASE=$OUTPUT
 						mkdir -p $OUTPUT
-						python3 -m pip                \\
+						pip3                          \\
 							install                     \\
 							--no-warn-script-location   \\
 							--disable-pip-version-check \\

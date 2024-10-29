@@ -22,24 +22,23 @@ export const source = tg.target(async () => {
 });
 
 export type Arg = {
-	autotools?: tg.MaybeNestedArray<std.autotools.Arg>;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	phases?: tg.MaybeNestedArray<std.phases.Arg>;
-	sdk?: tg.MaybeNestedArray<std.sdk.Arg>;
+	phases?: std.phases.Arg;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
-export const kernelHeaders = tg.target(async (arg?: Arg) => {
+export const kernelHeaders = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
-		phases: phasesArg = [],
+		phases: phasesArg = {},
 		sdk: sdk_,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 	const host = host_ ?? (await std.triple.host());
 	std.assert.supportedHost(host, metadata);
 	const buildTriple = build_ ?? host;

@@ -30,18 +30,24 @@ export const source = tg.target(() => {
 });
 
 export type Arg = {
-	env?: std.env.Arg;
+	build?: string;
 	host?: string;
-	nodejs?: tg.MaybeNestedArray<nodejs.Arg>;
+	nodejs?: nodejs.Arg;
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (arg?: Arg) => {
-	const { nodejs: nodeArgs = [], source: source_, ...rest } = arg ?? {};
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+	const {
+		build,
+		host,
+		nodejs: nodeArgs = {},
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	return nodejs.build(
 		{
-			...rest,
+			build,
+			host,
 			source: source_ ?? source(),
 			packageLock,
 		},

@@ -31,31 +31,31 @@ export const source = tg.target(async () => {
 
 type Arg = {
 	build?: string;
-	env?: std.env.Arg;
 	python?: python.BuildArg;
 	host?: string;
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (arg?: Arg) => {
-	const sourceArtifact = arg?.source ?? (await source());
-	const main = await sourceArtifact.get("httpie/__main__.py");
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+	const {
+		build,
+		python: pythonArg = {},
+		host,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
-	const host = arg?.host ?? (await std.triple.host());
-	const build_ = arg?.build ?? host;
+	const sourceArtifact = source_ ?? (await source());
 
-	const build = python.build(
+	return python.build(
 		{
-			build: build_,
+			build,
 			source: sourceArtifact,
 			pyprojectToml,
 			python: { requirements },
 			host,
 		},
-		arg?.python ?? {},
+		pythonArg,
 	);
-
-	return build;
 });
 
 export default default_;

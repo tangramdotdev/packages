@@ -36,7 +36,7 @@ export type Arg = {
 
 export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
-		autotools = [],
+		autotools = {},
 		build,
 		host,
 		sdk,

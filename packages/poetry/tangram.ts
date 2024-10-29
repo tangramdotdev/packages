@@ -39,7 +39,7 @@ export type Arg = {
 
 /** Create an environment with poetry installed. */
 export const poetry = tg.target(async (arg?: Arg) => {
-	const sourceArtifact = arg?.source ?? (await source());
+	// const sourceArtifact = arg?.source ?? (await source());
 	return python.toolchain({
 		requirements,
 	});
@@ -54,19 +54,19 @@ export type BuildArgs = {
 	/** The lockfile. Must contain hashes. */
 	lockfile: tg.File;
 
-	/** The host system to build upon. */
-	host?: string;
+	/** The system to build upon. */
+	build?: string;
 
-	/** The target system to compile for. */
-	target?: string;
+	/** The system to compile for. */
+	host?: string;
 
 	// TODO: groups, preferWheel vs sdist
 };
 
 /** Build a poetry project. */
 export const build = tg.target(async (args: BuildArgs) => {
-	const host = args.host ?? (await std.triple.host());
-	const target = args.target ?? host;
+	const host = args.build ?? (await std.triple.host());
+	const target = args.host ?? host;
 	// Construct the basic build environment.
 	const poetryArtifact = await poetry({
 		host,

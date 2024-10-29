@@ -46,7 +46,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return go.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			checksum: "unsafe",
 			env,
 			sdk,
 			source: source_ ?? source(),

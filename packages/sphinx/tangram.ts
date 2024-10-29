@@ -32,27 +32,38 @@ export const source = tg.target(() => {
 
 export type Arg = {
 	build?: string;
-	env?: std.env.Arg;
 	python?: python.Arg;
 	host?: string;
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target((arg?: Arg) => {
-	const sourceArtifact = arg?.source ?? source();
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+	const {
+		build,
+		python: pythonArg = {},
+		host,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
+
+	const sourceArtifact = source_ ?? (await source());
+	const inner = await sourceArtifact.get("sphinx").then(tg.Directory.expect);
+	console.log("inner", await inner.id());
+	const pyprojectToml = await inner.get("pyproject.toml").then(tg.File.expect);
 
 	const pythonEnv = python.build(
 		{
-			...arg,
-			source: sourceArtifact,
+			build,
+			host,
+			source: inner,
+			pyprojectToml,
 			python: { requirements },
 		},
-		arg?.python ?? [],
+		pythonArg,
 	);
 
 	// Manual wrapping is required to avoid a conflict in PYTHONPATH.
 	const sphinx = std.wrap({
-		executable: tg.symlink(tg`${pythonEnv}/bin/python3.11`),
+		executable: tg.symlink(tg`${pythonEnv}/bin/python3.12`),
 		args: ["-m", "sphinx"],
 		env: {
 			PYTHONPATH: tg.Mutation.suffix(

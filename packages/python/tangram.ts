@@ -342,7 +342,7 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// Read the pyproject.toml.
 	let pyprojectToml;
-	if (pyprojectToml_) {
+	if (pyprojectToml_ !== undefined) {
 		pyprojectToml = tg.encoding.toml.decode(
 			await pyprojectToml_.text(),
 		) as PyProjectToml;
@@ -455,17 +455,39 @@ sys.exit(${attribute}())
 };
 
 export const test = tg.target(async () => {
-	return await $`
-				set -eux
-				touch $OUTPUT
+	const helloOutput = await $`python -c 'print("Hello, world!")' > $OUTPUT`
+		.env(toolchain())
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((t) => t.trim());
+	tg.assert(
+		helloOutput === "Hello, world!",
+		"could not run a simple python script",
+	);
 
-				echo "Checking that we can run python scripts."
-				python -c 'print("Hello, world!")'
+	const testImportZlibScript = tg.file(`
+try:
+	import zlib
+	print("zlib is successfully imported!")
+	print(f"zlib version: {zlib.ZLIB_VERSION}")
+except ImportError:
+	print("Failed to import zlib")`);
+	const importZlibOutput = await $`python ${testImportZlibScript} > $OUTPUT`
+		.env(toolchain())
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((t) => t.trim());
+	tg.assert(
+		importZlibOutput.includes(zlib.metadata.version),
+		"failed to import the zlib module",
+	);
 
-				echo "Checking that we can run pip."
-				pip3 --version
+	const pipVersionOutput = await $`pip3 --version > $OUTPUT`
+		.env(toolchain())
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((t) => t.trim());
+	tg.assert(pipVersionOutput.includes("24.2"), "failed to run pip3");
 
-				echo "Checking that we can create virtual envs."
-				python -m venv venv || true
-			`.env(toolchain(), { TANGRAM_WRAPPER_TRACING: "tangram=trace" });
+	return true;
 });
