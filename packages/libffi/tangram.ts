@@ -65,6 +65,18 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: default_(), libraries: ["ffi"] });
+	await std.assert.pkg({
+		packageDir: default_(),
+		docs: [
+			"info/libffi.info",
+			"man/man3/ffi.3",
+			"man/man3/ffi_call.3",
+			"man/man3/ffi_prep_cif.3",
+			"man/man3/ffi_prep_cif_var.3",
+		],
+		headers: ["ffi.h"],
+		libraries: ["ffi"],
+		pkgConfigName: "libffi",
+	});
 	return true;
 });

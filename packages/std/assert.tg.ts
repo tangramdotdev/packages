@@ -1,4 +1,3 @@
-import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.ts";
 import { $ } from "./tangram.ts";
 import { manifestDependencies, wrap } from "./wrap.tg.ts";
@@ -53,7 +52,6 @@ type RuntimeDep = {
 	libs: Array<string>;
 };
 
-// TODO - add remaining info to this type.
 export type Metadata = {
 	name?: string;
 	version?: string;
@@ -94,7 +92,6 @@ export const pkg = async (arg: PkgArg) => {
 	// Assert the package contains the specified headers.
 	if (arg.headers) {
 		for (const header of arg.headers) {
-			tests.push(headerExists({ directory, header }));
 			tests.push(headerCanBeIncluded({ directory, env, header }));
 		}
 	}
@@ -149,24 +146,6 @@ type FileExistsArg = {
 	directory: tg.Directory;
 	subpath: string;
 };
-
-export const headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
-	const maybeFile = await arg.directory.tryGet(arg.header);
-	tg.assert(maybeFile, `Path ${arg.header} does not exist.`);
-	tg.File.assert(maybeFile);
-
-	const source = tg.file(`
-		#include "${arg.header}"
-		int main() {
-			return 0;
-		}
-	`);
-
-	await $`cp -r ${arg.directory}/* . && cc -xc "${source}" -o $OUTPUT`
-		.env(bootstrap.sdk(), arg.directory, arg.env ?? {})
-		.then(tg.File.expect);
-	return true;
-});
 
 /** Assert the provided path exists and refers to a file. */
 export const assertFileExists = tg.target(async (arg: FileExistsArg) => {
@@ -288,7 +267,7 @@ type HeaderArg = {
 };
 
 /** Assert the directory contains a header file with the provided name. */
-export const headerExists = tg.target(async (arg: HeaderArg) => {
+export const headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 	// Ensure the file exists.
 	await assertFileExists({
 		directory: arg.directory,
