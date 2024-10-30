@@ -88,7 +88,18 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		xz.default_({ build, env: env_, host, sdk }, xzArg),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 	];
-	const env = [...deps, env_];
+	const env = [
+		...deps,
+		env_,
+		{
+			CPATH: tg.Mutation.suffix(
+				tg`${python.toolchain(
+					pythonArg,
+				)}/include/python${python.versionString()}`,
+				":",
+			),
+		},
+	];
 
 	return std.autotools.build(
 		{
