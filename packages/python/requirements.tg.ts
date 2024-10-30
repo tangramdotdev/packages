@@ -1,3 +1,4 @@
+import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
 import { versionString, wrapScripts } from "./tangram.ts";
@@ -7,19 +8,19 @@ export const install = tg.target(
 	async (pythonArtifact: tg.Directory, requirements: Arg) => {
 		// Download the requirements specified in any requirements.txt files.
 		const downloads = await $`
-					mkdir tmp
-					export TMPDIR=tmp
-					mkdir -p $OUTPUT
+			set -eu
+			mkdir tmp
+			export TMPDIR=tmp
+			mkdir -p $OUTPUT
 
-					# Download dependencies using the requirements.txt file.
-					pip3               \\
-						download         \\
-						-d $OUTPUT       \\
-						--no-deps        \\
-						--require-hashes \\
-						--disable-pip-version-check \\
-						-r ${requirements}
-				`
+			# Download dependencies using the requirements.txt file.
+			pip3               \\
+				download         \\
+				-d $OUTPUT       \\
+				--no-deps        \\
+				--require-hashes \\
+				--disable-pip-version-check \\
+				-r ${requirements}`
 			.env(pythonArtifact)
 			.checksum("unsafe")
 			.then(tg.Directory.expect);
@@ -30,18 +31,21 @@ export const install = tg.target(
 		// For each download, install to a local directory.
 		for await (const [name, file] of downloads) {
 			const installed = await $`
-						cp "${file}" "${name}"
-						export PYTHONUSERBASE=$OUTPUT
-						mkdir -p $OUTPUT
-						pip3                          \\
-							install                     \\
-							--no-warn-script-location   \\
-							--disable-pip-version-check \\
-							--user                      \\
-							--no-deps                   \\
-						${name} || true # allow failure, needed to skip unnecessary errors in pip install.
-					`
-				.env(pythonArtifact)
+				set -eu
+				cp "${file}" "${name}"
+				mkdir tmp
+				export TMPDIR=tmp
+				export PYTHONUSERBASE=$OUTPUT
+				mkdir -p $OUTPUT
+				pip3                          \\
+					install                     \\
+					--no-warn-script-location   \\
+					--disable-pip-version-check \\
+					--user                      \\
+					--no-deps                   \\
+				${name} || true # allow failure, needed to skip unnecessary errors in pip install.`
+				.env(std.sdk(), pythonArtifact)
+				.checksum("unsafe")
 				.then(tg.Directory.expect);
 
 			// Get any site-packages or bin directories that were installed by pip.
@@ -100,7 +104,7 @@ const mergeSitePackages = async (output: tg.Directory, input: tg.Directory) => {
 			});
 			continue;
 		} else {
-			output = await tg.directory(output, { [name]: tg.symlink(artifact) });
+			output = await tg.directory(output, { [name]: artifact });
 		}
 	}
 

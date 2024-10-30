@@ -3,14 +3,14 @@ import * as std from "../../tangram.ts";
 
 export const metadata = {
 	name: "Python",
-	version: "3.12.7",
+	version: "3.13.0",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:24887b92e2afd4a2ac602419ad4b596372f67ac9b077190f459aba390faf5550";
+		"sha256:086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std
 		.download({ base, checksum, name, version, extension })
@@ -78,7 +78,10 @@ export default build;
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({ packageDir: build(), binaries: ["python3"],
-		metadata,  });
+	await std.assert.pkg({
+		packageDir: build(),
+		binaries: ["python3"],
+		metadata,
+	});
 	return true;
 });

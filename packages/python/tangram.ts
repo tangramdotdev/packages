@@ -22,7 +22,7 @@ export const metadata = {
 	name: "Python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.12.7",
+	version: "3.13.0",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -35,7 +35,7 @@ export const versionString = () => {
 export const source = tg.target(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:24887b92e2afd4a2ac602419ad4b596372f67ac9b077190f459aba390faf5550";
+		"sha256:086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std
@@ -193,12 +193,12 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 
 	const configureArgs: Array<string> = [];
 
-	// Enable PGO on macOS and Linux only if the LLVM toolchain is not used.
+	// Enable PGO on Linux if the LLVM toolchain is not used.
 	if (
-		std.triple.os(build) === "darwin" ||
-		((await std.env.tryWhich({ env: env_, name: "clang" })) === undefined &&
-			std.flatten(sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm")
-				.length === 0)
+		std.triple.os(host) === "linux" &&
+		(await std.env.tryWhich({ env: env_, name: "clang" })) === undefined &&
+		std.flatten(sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm").length ===
+			0
 	) {
 		configureArgs.push("--enable-optimizations");
 	}
@@ -222,7 +222,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	const libraryPaths = [opensslForHost, zlibForHost].map((dir) =>
+	const libraryPaths = [libffiForHost, opensslForHost, zlibForHost].map((dir) =>
 		dir.get("lib").then(tg.Directory.expect),
 	);
 
@@ -247,8 +247,8 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	python = tg.directory(python, {
 		["bin/pip"]: tg.symlink("pip3"),
 		["bin/python"]: tg.symlink("python3"),
-		["bin/python3"]: tg.symlink("python3.12"),
-		["bin/python3.12"]: pythonInterpreter,
+		["bin/python3"]: tg.symlink(`python${versionString()}`),
+		[`bin/python${versionString()}`]: pythonInterpreter,
 	});
 
 	if (requirementsArg) {
@@ -341,15 +341,15 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 	tg.assert(source, "Must specify a source directory.");
 
 	// Read the pyproject.toml.
-	let pyprojectToml;
-	if (pyprojectToml_ !== undefined) {
-		pyprojectToml = tg.encoding.toml.decode(
-			await pyprojectToml_.text(),
-		) as PyProjectToml;
-	}
+	let pyprojectTomlFile =
+		pyprojectToml_ ?? (await source.get("pyproject.toml").then(tg.File.expect));
+	tg.assert(pyprojectTomlFile !== undefined, "could not locate pyproject.toml");
+	const pyprojectToml = tg.encoding.toml.decode(
+		await pyprojectTomlFile.text(),
+	) as PyProjectToml;
 
 	// Add the source directory to the python environment.
-	const name = pyprojectToml?.project?.name;
+	const name = pyprojectToml.project?.name.toLowerCase();
 	if (!name) {
 		throw new Error("Invalid pyproject.toml: missing 'project.name'.");
 	}
@@ -366,10 +366,10 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// Create the bin directory by symlinking in the python artifacts.
 	const pythonBins = tg.Directory.expect(await pythonArtifact.get("bin"));
-	let binDir = tg.directory({});
+	let binDir = tg.directory();
 	for await (const [name, _] of pythonBins) {
 		binDir = tg.directory({
-			[name]: tg.symlink(`${pythonArtifact}/bin/${name}`),
+			[name]: tg.symlink(tg`${pythonArtifact}/bin/${name}`),
 		});
 	}
 

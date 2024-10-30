@@ -3,7 +3,7 @@ import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
 import * as lockfile from "./lockfile.tg.ts";
-import requirements from "./requirements.txt" with { type: "file" };
+import requirementsTxt from "./requirements.txt" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://python-poetry.org",
@@ -32,15 +32,22 @@ export const source = tg.target(() => {
 });
 
 export type Arg = {
-	source?: tg.Directory;
+	requirements?: tg.File;
+	build?: string;
 	host?: string;
-	target?: string;
 };
 
 /** Create an environment with poetry installed. */
-export const poetry = tg.target(async (arg?: Arg) => {
-	// const sourceArtifact = arg?.source ?? (await source());
+export const poetry = tg.target(async (...args: std.Args<Arg>) => {
+	const {
+		build,
+		host,
+		requirements: requirements_,
+	} = await std.args.apply<Arg>(...args);
+	const requirements = requirements_ ?? requirementsTxt;
 	return python.toolchain({
+		build,
+		host,
 		requirements,
 	});
 });
@@ -65,12 +72,12 @@ export type BuildArgs = {
 
 /** Build a poetry project. */
 export const build = tg.target(async (args: BuildArgs) => {
-	const host = args.build ?? (await std.triple.host());
-	const target = args.host ?? host;
+	const host = args.host ?? (await std.triple.host());
+	const build = args.build ?? host;
 	// Construct the basic build environment.
 	const poetryArtifact = await poetry({
+		build,
 		host,
-		target,
 	});
 
 	// Parse the lockfile into a requirements.txt. Note: we do not use poetry export, as the lockfile may be missing hashes.
@@ -107,7 +114,7 @@ export const build = tg.target(async (args: BuildArgs) => {
 
 	// Wrap any binaries that appear.
 	return python.wrapScripts(
-		await tg.symlink(tg`${poetryArtifact}/bin/python3.12`),
+		await tg.symlink(tg`${poetryArtifact}/bin/python${python.versionString()}`),
 		poetryArtifact,
 		installed,
 	);
