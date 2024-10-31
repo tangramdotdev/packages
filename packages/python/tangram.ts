@@ -268,12 +268,21 @@ export const wrapScripts = async (
 	artifact: tg.Directory,
 ) => {
 	const scripts = [];
+	let interpreterId;
+	if (pythonInterpreter instanceof tg.File) {
+		interpreterId = await pythonInterpreter.id();
+	} else {
+		const pythonInterpreterTarget = await pythonInterpreter.resolve();
+		if (pythonInterpreterTarget instanceof tg.File) {
+			interpreterId = await pythonInterpreterTarget.id();
+		}
+	}
 
 	const bin = tg.Directory.expect(await artifact.get("bin"));
 	for await (const [filename, file] of bin) {
 		if (file instanceof tg.File && (await file.executable())) {
 			const metadata = await std.file.executableMetadata(file);
-			if (isPythonScript(metadata)) {
+			if (isPythonScript(metadata, interpreterId)) {
 				scripts.push(filename);
 			}
 		}
@@ -294,14 +303,17 @@ export const wrapScripts = async (
 	return artifact;
 };
 
-const isPythonScript = (metadata: std.file.ExecutableMetadata): boolean => {
+const isPythonScript = (
+	metadata: std.file.ExecutableMetadata,
+	knownId?: string,
+): boolean => {
 	if (metadata.format === "shebang") {
 		const interpreter = metadata.interpreter;
-		return (
-			["python3", "python", `python${versionString}`].find((i) =>
-				interpreter.includes(i),
-			) !== undefined
-		);
+		const recognizedNames = ["python3", "python", `python${versionString}`];
+		if (knownId !== undefined) {
+			recognizedNames.push(knownId);
+		}
+		return recognizedNames.find((i) => interpreter.includes(i)) !== undefined;
 	} else {
 		return false;
 	}
@@ -488,6 +500,20 @@ except ImportError:
 		.then((f) => f.text())
 		.then((t) => t.trim());
 	tg.assert(pipVersionOutput.includes("24.2"), "failed to run pip3");
+
+	const venv = await $`
+		set -x
+		echo "watermark"
+		python -m venv $OUTPUT --copies
+		ls -l $OUTPUT/bin
+		ls -l $OUTPUT/include
+		ls -l $OUTPUT/lib
+		ls -l $OUTPUT/lib/python3.13/site-packages
+		find $OUTPUT -type l
+	`
+		.env(toolchain())
+		.then(tg.Directory.expect);
+	console.log("venv", await venv.id());
 
 	return true;
 });

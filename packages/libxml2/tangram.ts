@@ -13,13 +13,13 @@ export const metadata = {
 	license: "https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright",
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
-	version: "2.12.6",
+	version: "2.13.4",
 };
 
 export const source = tg.target(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:889c593a881a3db5fdd96cc9318c87df34eb648edfc458272ad46fd607353fbb";
+		"sha256:65d042e1c8010243e617efb02afda20b85c2160acdbfbcb5b26b80cec6515650";
 	const extension = ".tar.xz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const base = `https://download.gnome.org/sources/${name}/${majorMinor}`;
@@ -78,34 +78,35 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		],
 	};
 
+	const phases = { configure };
+
+	const pythonArtifact = python.toolchain(pythonArg);
 	const deps = [
 		icu.default_({ build, env: env_, host, sdk }, icuArg),
 		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
 		perl.default_({ build, host: build }, perlArg),
 		pkgConfig.default_({ build, host: build }, pkgconfigArg),
-		python.toolchain(pythonArg),
+		pythonArtifact,
 		readline.default_({ build, env: env_, host, sdk }, readlineArg),
 		xz.default_({ build, env: env_, host, sdk }, xzArg),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 	];
 	const env = [
 		...deps,
-		env_,
 		{
 			CPATH: tg.Mutation.suffix(
-				tg`${python.toolchain(
-					pythonArg,
-				)}/include/python${python.versionString()}`,
+				tg`${pythonArtifact}/include/python${python.versionString()}`,
 				":",
 			),
 		},
+		env_,
 	];
 
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(env),
-			phases: { configure },
+			phases,
 			sdk,
 			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),

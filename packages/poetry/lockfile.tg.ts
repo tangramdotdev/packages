@@ -1,8 +1,6 @@
-import * as std from "std" with { path: "../std" };
-
-/** Given a poetry.lock file, generate a valid requirements.txt with hashes. */
+/** Givn a poetry.lock file, generate a valid requirements.txt with hashes. */
 export const requirements = tg.target(async (lockFile: tg.File) => {
-	// TODO: parse and validate the TOML.
+	// Parse and validate the TOML.
 	console.log(`lockfile: ${await lockFile.id()}`);
 	const lockFileToml = tg.encoding.toml.decode(
 		await lockFile.text(),

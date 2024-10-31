@@ -1,3 +1,4 @@
+import * as rust from "rust" with { path: "../rust" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
@@ -6,6 +7,9 @@ export type Arg = tg.File;
 
 export const install = tg.target(
 	async (pythonArtifact: tg.Directory, requirements: Arg) => {
+		// Construct an env with the standard C/C++ sdks, the Rust toolchain, and Python.
+		const toolchains = std.env.arg(std.sdk(), rust.toolchain(), pythonArtifact);
+
 		// Download the requirements specified in any requirements.txt files.
 		const downloads = await $`
 			set -eu
@@ -21,7 +25,7 @@ export const install = tg.target(
 				--require-hashes \\
 				--disable-pip-version-check \\
 				-r ${requirements}`
-			.env(pythonArtifact)
+			.env(toolchains)
 			.checksum("unsafe")
 			.then(tg.Directory.expect);
 
@@ -44,7 +48,7 @@ export const install = tg.target(
 					--user                      \\
 					--no-deps                   \\
 				${name} || true # allow failure, needed to skip unnecessary errors in pip install.`
-				.env(std.sdk(), pythonArtifact)
+				.env(toolchains)
 				.checksum("unsafe")
 				.then(tg.Directory.expect);
 

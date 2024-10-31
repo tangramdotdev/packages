@@ -86,19 +86,29 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
+	const hasUsage = (name: string) => {
+		return {
+			name,
+			testArgs: ["--help"],
+			testPredicate: (stdout: string) =>
+				stdout.toLowerCase().includes("usage:"),
+		};
+	};
 	await std.assert.pkg({
 		packageDir: default_(),
 		binaries: [
 			"derb",
-			"genbrk",
-			"gencfu",
-			"gencval",
-			"gendict",
-			"icu-config",
+			hasUsage("genbrk"),
+			hasUsage("gencfu"),
+			hasUsage("gencnval"),
+			hasUsage("gendict"),
 			"icuexportdata",
-			"icuinfo",
-			"makeconv",
-			"pkgdata",
+			{ name: "icuinfo", testArgs: [] },
+			{
+				name: "makeconv",
+				testPredicate: (stdout: string) => stdout.includes("6.2"),
+			},
+			hasUsage("pkgdata"),
 			"uconv",
 		],
 		libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],

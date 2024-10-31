@@ -32,34 +32,30 @@ export const source = tg.target(() => {
 });
 
 export type Arg = {
-	requirements?: tg.File;
 	build?: string;
 	host?: string;
+	requirements?: tg.File;
 };
 
 /** Create an environment with poetry installed. */
-export const poetry = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		host,
 		requirements: requirements_,
 	} = await std.args.apply<Arg>(...args);
 	const requirements = requirements_ ?? requirementsTxt;
-	return python.toolchain({
-		build,
-		host,
-		requirements,
-	});
+	return python.toolchain({ build, host, requirements });
 });
 
-export default poetry;
+export default default_;
 
 export type BuildArgs = {
 	/** The source directory to build. */
 	source: tg.Directory;
 
 	/** The lockfile. Must contain hashes. */
-	lockfile: tg.File;
+	lockfile?: tg.File;
 
 	/** The system to build upon. */
 	build?: string;
@@ -75,38 +71,52 @@ export const build = tg.target(async (args: BuildArgs) => {
 	const host = args.host ?? (await std.triple.host());
 	const build = args.build ?? host;
 	// Construct the basic build environment.
-	const poetryArtifact = await poetry({
+	const poetryArtifact = await default_({
 		build,
 		host,
 	});
+	console.log(`poetryArtifact`, await poetryArtifact.id());
+
+	const poetryLock =
+		args.lockfile ??
+		(await args.source.get("poetry.lock").then(tg.File.expect));
+	tg.assert(poetryLock, "could not locate poetry.lock");
 
 	// Parse the lockfile into a requirements.txt. Note: we do not use poetry export, as the lockfile may be missing hashes.
-	const requirements = await lockfile.requirements(args.lockfile);
+	const requirements = await lockfile.requirements(poetryLock);
+	console.log("requirements from poetry.lock", await requirements.id());
 
 	// Install the requirements specified by the poetry.lock file.
 	const installedRequirements = python.requirements.install(
 		poetryArtifact,
 		requirements,
 	);
+	console.log(
+		`installedRequirements: ${await (await installedRequirements).id()}`,
+	);
 
 	// Install the source distribution.
 	const source = tg.directory(args.source, {
 		["poetry.lock"]: args.lockfile,
 	});
+	console.log(`source: ${await (await source).id()}`);
+
+	const env = await std.env.arg(poetryArtifact, {
+		PYTHONPATH: tg.Mutation.suffix(
+			tg`${installedRequirements}/lib/python3/site-packages`,
+			":",
+		),
+	});
+	console.log("env", env);
 
 	const sdist = await $`
-				# Create the virtual env to install to.
-				python3 -m venv $OUTPUT || true
-				export VIRTUAL_ENV=$OUTPUT
+		set -x
+		# Create the virtual env to install to.
+		python3 -m venv $OUTPUT --copies
+		export VIRTUAL_ENV=$OUTPUT
 
-				poetry install --only-root --directory ${source}
-			`
-		.env(poetryArtifact, {
-			PYTHONPATH: tg.Mutation.suffix(
-				tg`${installedRequirements}/lib/python3/site-packages}`,
-				":",
-			),
-		})
+		poetry install --no-interaction --only-root --directory ${source} -vvv`
+		.env(env)
 		.then(tg.Directory.expect);
 
 	// Merge the installed sdist with the requirements.
@@ -121,9 +131,10 @@ export const build = tg.target(async (args: BuildArgs) => {
 });
 
 export const test = tg.target(async () => {
-	return await $`
-				mkdir -p $OUTPUT
-				echo "Checking that we can run poetry: ${poetry()}."
-				poetry --version
-			`.env(poetry());
+	await std.assert.pkg({
+		packageDir: default_(),
+		binaries: ["poetry"],
+		metadata,
+	});
+	return true;
 });
