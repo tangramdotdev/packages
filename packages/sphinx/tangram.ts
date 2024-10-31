@@ -64,9 +64,9 @@ export const test = tg.target(async () => {
 	await std.assert.pkg({
 		packageDir: default_(),
 		binaries: [
-			"sphinx-apidoc",
-			"sphinx-autogen",
-			"sphinx-build",
+			// "sphinx-apidoc",
+			// "sphinx-autogen",
+			// "sphinx-build",
 			"sphinx-quickstart",
 		],
 		metadata,

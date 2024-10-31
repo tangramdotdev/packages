@@ -1,19 +1,20 @@
-import * as poetry from "poetry" with { path: "../poetry" };
+import * as python from "python" with { path: "../python" };
 import * as std from "std" with { path: "../std" };
-import poetryLock from "./poetry.lock" with { type: "file" };
+
+import requirementsTxt from "./requirements.txt" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://pypi.org/project/docformatter/",
 	name: "docformatter",
 	license: "MIT",
 	repository: "https://github.com/PyCQA/docformatter",
-	version: "1.7.2",
+	version: "1.7.5",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:8c4a509f77261c05e093f6268bedd36a2782c0d6ccc01d62d1ddf3a46835aa98";
+		"sha256:d35de4c83b78172bf618500a8b0e9075378ec41aa4a71b28f2f633a60668b3ab";
 	const owner = "PyCQA";
 	const repo = name;
 	const tag = `v${version}`;
@@ -21,27 +22,38 @@ export const source = tg.target(() => {
 		checksum,
 		owner,
 		repo,
-		source: "release",
+		source: "tag",
 		tag,
-		version,
 	});
 });
 
 type Arg = {
 	build?: string;
 	host?: string;
+	python?: python.Arg;
+	requirements?: tg.File;
 	source?: tg.Directory;
 };
 
 export const default_ = tg.target(async (...args: std.Args<Arg>) => {
-	const { build, host, source: source_ } = await std.args.apply<Arg>(...args);
-
-	return poetry.build({
+	const {
 		build,
-		source: source_ ?? (await source()),
-		lockfile: poetryLock,
 		host,
-	});
+		python: pythonArg = {},
+		requirements: requirements_,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
+	const requirements = requirements_ ?? requirementsTxt;
+
+	return python.build(
+		{
+			build,
+			source: source_ ?? (await source()),
+			host,
+			python: { requirements },
+		},
+		pythonArg,
+	);
 });
 
 export default default_;

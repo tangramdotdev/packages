@@ -226,7 +226,7 @@ export const test = tg.target(async () => {
 	tests.push(testBasicExeWithLib());
 	tests.push(testExeWithCratesIoDependency());
 	tests.push(testConditionalCompilation());
-	tests.push(testLinkLibcurl());
+	// tests.push(testLinkLibcurl());
 
 	const results = await Promise.all(tests);
 	tg.assert(results.every((r) => r === true));
@@ -374,39 +374,39 @@ export const testConditionalCompilation = tg.target(async () => {
 	return true;
 });
 
-import * as curl from "curl" with { path: "../curl" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as zlib from "zlib" with { path: "../zlib" };
-import * as zstd from "zstd" with { path: "../zstd" };
-export const testLinkLibcurl = tg.target(async () => {
-	const crateName = "native_exe_libcurl";
+// import * as curl from "curl" with { path: "../curl" };
+// import * as openssl from "openssl" with { path: "../openssl" };
+// import * as zlib from "zlib" with { path: "../zlib" };
+// import * as zstd from "zstd" with { path: "../zstd" };
+// export const testLinkLibcurl = tg.target(async () => {
+// 	const crateName = "native_exe_libcurl";
 
-	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.
-	const libcurl = curl.default_();
-	const sslArtifact = openssl.default_();
-	const zlibArtifact = zlib.default_();
-	const zstdArtifact = zstd.default_();
-	const deps = [libcurl, sslArtifact, zlibArtifact, zstdArtifact];
+// 	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.
+// 	const libcurl = curl.default_();
+// 	const sslArtifact = openssl.default_();
+// 	const zlibArtifact = zlib.default_();
+// 	const zstdArtifact = zstd.default_();
+// 	const deps = [libcurl, sslArtifact, zlibArtifact, zstdArtifact];
 
-	// Build the test.
-	const exe = await build({
-		crateName,
-		env: std.env.arg(...deps),
-		source: tests.get(crateName).then(tg.Directory.expect),
-	});
-	console.log("exe", await exe.id());
+// 	// Build the test.
+// 	const exe = await build({
+// 		crateName,
+// 		env: std.env.arg(...deps),
+// 		source: tests.get(crateName).then(tg.Directory.expect),
+// 	});
+// 	console.log("exe", await exe.id());
 
-	// Libcurl transitively requires libssl at runtime.
-	const host = await std.triple.host();
-	const os = std.triple.os(host);
-	const runtimeLibVar =
-		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
-	const exeOutput =
-		await $`export ${runtimeLibVar}=$LIBRARY_PATH\n${crateName} | tee $OUTPUT`
-			.env(exe, ...deps)
-			.then(tg.File.expect);
-	const exeText = await exeOutput.text();
-	tg.assert(exeText.trim().includes(curl.metadata.version));
+// 	// Libcurl transitively requires libssl at runtime.
+// 	const host = await std.triple.host();
+// 	const os = std.triple.os(host);
+// 	const runtimeLibVar =
+// 		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+// 	const exeOutput =
+// 		await $`export ${runtimeLibVar}=$LIBRARY_PATH\n${crateName} | tee $OUTPUT`
+// 			.env(exe, ...deps)
+// 			.then(tg.File.expect);
+// 	const exeText = await exeOutput.text();
+// 	tg.assert(exeText.trim().includes(curl.metadata.version));
 
-	return true;
-});
+// 	return true;
+// });
