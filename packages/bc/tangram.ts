@@ -70,6 +70,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: default_(), binaries: ["bc"], metadata });
+	await std.assert.pkg({ buildFn: default_, binaries: ["bc"], metadata });
 	return true;
 });

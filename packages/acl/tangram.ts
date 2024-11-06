@@ -89,7 +89,7 @@ export const test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		packageDir: default_(),
+		buildFn: default_,
 		libraries: ["acl"],
 		metadata,
 	});

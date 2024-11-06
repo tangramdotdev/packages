@@ -6,13 +6,13 @@ export const metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.11.3",
+	version: "6.11.7",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:057263d0afc17d5253794afd3d239ba4da4aa734b22fa36c1665f41b95449b73";
+		"sha256:0bf5ec644817d7928920f763581311f5bf258a92759cf2f30985da743af3ebb2";
 	const extension = ".tar.xz";
 	const majorVersion = version.split(".")[0];
 	const base = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x`;
@@ -128,7 +128,10 @@ export const test = tg.target(async () => {
 
 export const testKernelHeaders = async (host: string, target?: string) => {
 	const target_ = target ?? host;
-	const buildEnv = std.env.arg(bootstrap.sdk(host), bootstrap.make.build(host));
+	const buildEnv = std.env.arg(
+		bootstrap.sdk(host),
+		bootstrap.make.default({ host }),
+	);
 	const headers = await kernelHeaders({
 		build: host,
 		env: buildEnv,

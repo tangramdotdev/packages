@@ -16,7 +16,13 @@ const MAX_DEPTH: usize = 16;
 fn main() {
 	if let Err(e) = main_inner() {
 		eprintln!("linker proxy failed: {e}");
-		tracing::trace!("{}", e.trace(&tg::error::TraceOptions::default()));
+		tracing::error!(
+			"{}",
+			e.trace(&tg::error::TraceOptions {
+				internal: true,
+				reverse: false,
+			})
+		);
 		std::process::exit(1);
 	}
 }
@@ -235,6 +241,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Create the tangram instance.
 	let tg = tg::Client::with_env()?;
 	tg.connect().await?;
+	let tg_url = tg.url();
+	tracing::debug!(?tg_url, "connected client");
 
 	// Analyze the output file.
 	let AnalyzeOutputFileOutput {
@@ -286,24 +294,23 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				let symlink_data = tangram_std::template_data_to_symlink_data(
 					tangram_std::unrender(library_path)?.data(&tg).await?,
 				)?;
-				let artifact_path = if let tg::symlink::Data::Normal { artifact, path } =
+				let artifact_path = if let tg::symlink::Data::Normal { artifact, subpath } =
 					symlink_data.clone()
 				{
 					if let Some(artifact) = artifact {
 						Some(
-							tangram_std::manifest::ArtifactPath::with_artifact_id_and_path(
-								artifact, path,
+							tangram_std::manifest::ArtifactPath::with_artifact_id_and_subpath(
+								artifact, subpath,
 							),
 						)
 					} else {
 						tracing::debug!(
 							"Library path points into working directory: {:?}. Creating directory.",
-							path
+							subpath
 						);
-						if let Some(ref library_path) = path {
-							if let Ok(ref canonicalized_path) = std::fs::canonicalize(
-								std::path::PathBuf::from(library_path.clone()),
-							) {
+						if let Some(ref library_path) = subpath {
+							if let Ok(ref canonicalized_path) = std::fs::canonicalize(library_path)
+							{
 								Some(checkin_local_library_path(&tg, canonicalized_path).await?)
 							} else {
 								tracing::warn!(
@@ -333,6 +340,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// Check in the output file.
 		let output_path = std::fs::canonicalize(&options.output_path)
 			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
+		tracing::debug!(?output_path, "about to check in output file");
 		tg::Artifact::check_in(
 			&tg,
 			tg::artifact::checkin::Arg {
@@ -347,6 +355,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		.try_unwrap_file()
 		.map_err(|error| tg::error!(source = error, "expected a file"))?
 	};
+	let output_file_id = output_file.id(&tg).await?;
+	tracing::debug!(?output_file_id, "checked in output file");
 
 	let library_paths = if library_paths.is_empty() {
 		None
@@ -408,8 +418,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						let symlink_id = tg::Symlink::from(library_path).id(&tg).await?;
 						let object_id = tg::object::Id::from(symlink_id);
 						let key = tg::Reference::with_object(&object_id);
-						let value = tg::file::Dependency {
-							object: tg::Object::with_id(object_id),
+						let value = tg::Referent {
+							item: tg::Object::with_id(object_id),
+							path: None,
+							subpath: None,
 							tag: None,
 						};
 						Ok::<_, tg::Error>((key, value))
@@ -445,7 +457,6 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
-					bundle: false,
 					dependencies: true,
 					force: true,
 					path: Some(output_path),
@@ -871,7 +882,7 @@ async fn resolve_paths<H: BuildHasher + Default>(
 	let resolved_paths = futures::future::try_join_all(unresolved_paths.iter().cloned().map(
 		|artifact_path| async {
 			let symlink = tg::Symlink::from(artifact_path);
-			if let Ok(Some(tg::Artifact::Directory(directory))) = symlink.resolve(tg).await {
+			if let Ok(tg::Artifact::Directory(directory)) = symlink.resolve(tg).await {
 				let dir_id = directory.id(tg).await?;
 				Ok::<_, tg::Error>(Some(dir_id.clone()))
 			} else {
@@ -933,7 +944,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				continue;
 			}
 			tracing::info!(?library_name, "checking for library");
-			if let Ok(Some(tg::artifact::Artifact::File(found_library))) =
+			if let Ok(Some(tg::artifact::Handle::File(found_library))) =
 				directory.try_get(tg, &library_name).await
 			{
 				let found_library_id = found_library.id(tg).await?;

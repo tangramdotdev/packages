@@ -16,7 +16,14 @@ export default image;
 
 import * as bootstrap from "./bootstrap.tg.ts";
 export const test = tg.target(async () => {
-	return testWrappedEntrypoint();
+	const tests = [
+		testWrappedEntrypoint(),
+		testBasicRootfs(),
+		testBasicEnvImageDocker(),
+		testBasicEnvImageOci(),
+	];
+	await Promise.all(tests);
+	return true;
 });
 
 export const testWrappedEntrypoint = tg.target(async () => {

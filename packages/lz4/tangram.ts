@@ -69,11 +69,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	const artifact = default_();
 	await std.assert.pkg({
-		packageDir: artifact,
+		buildFn: default_,
 		binaries: ["lz4"],
 		libraries: ["lz4"],
 	});
-	return artifact;
+	return true;
 });

@@ -43,7 +43,7 @@ export namespace env {
 		const objectArgs = std.flatten(args.filter((arg) => !isUtilsToggle(arg)));
 
 		// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
-		let buildToolchain = undefined;
+		let buildToolchain: undefined | tg.Unresolved<std.env.Arg> = undefined;
 		if (utils) {
 			objectArgs.push(await std.utils.env({ sdk: false, env: std.sdk() }));
 		} else {
@@ -318,7 +318,7 @@ export namespace env {
 					if (artifact instanceof tg.Symlink) {
 						artifact = await tg.symlink({
 							artifact: dir,
-							path: artifact.path(),
+							subpath: artifact.subpath(),
 						});
 					}
 					yield [name, artifact];
@@ -671,3 +671,21 @@ function* separateTemplate(
 	}
 	yield chunk;
 }
+
+export const test = tg.target(async () => {
+	const envFile = await env({ FOO: "bar" });
+	const foundFooVal = await env.tryGetKey({ env: envFile, key: "FOO" });
+	tg.assert(
+		foundFooVal instanceof tg.Template,
+		"expected FOO to be set to a template",
+	);
+	const components = foundFooVal.components;
+	tg.assert(components.length === 1, "expected a template with one component");
+	const component = components[0];
+	tg.assert(
+		typeof component === "string",
+		"expected the only component to be a string",
+	);
+	tg.assert(component === "bar", "expected the string to be 'bar'");
+	return true;
+});

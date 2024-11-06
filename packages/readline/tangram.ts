@@ -42,7 +42,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up default build dependencies.
 	const buildDependencies = [];
-	const pkgConfigForBuild = pkgConfig.default_({ build, host: build })
+	const pkgConfigForBuild = pkgConfig
+		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});
@@ -92,6 +93,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: default_(), metadata });
+	await std.assert.pkg({ buildFn: default_, metadata });
 	return true;
 });

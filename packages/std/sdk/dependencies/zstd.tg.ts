@@ -42,7 +42,7 @@ export const build = tg.target(async (arg?: Arg) => {
 	const install = tg`make install PREFIX=$OUTPUT`;
 	const phases = { install };
 
-	const result = std.autotools.build({
+	return await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		defaultCrossArgs: false,
@@ -52,8 +52,6 @@ export const build = tg.target(async (arg?: Arg) => {
 		sdk,
 		source: sourceDir,
 	});
-
-	return result;
 });
 
 export default build;
@@ -62,6 +60,6 @@ import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({ metadata, packageDir: build(), libraries: ["zstd"] });
+	await std.assert.pkg({ metadata, buildFn: build, libraries: ["zstd"] });
 	return true;
 });

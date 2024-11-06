@@ -212,7 +212,9 @@ export const dockerImageFromLayers = async (
 
 	// Add the config file to the image, using its checksum value as a filename.
 	const configFile = await tg.file(tg.encoding.json.encode(config));
-	const configFilename = `${(await tg.checksum(await configFile.bytes(), "sha256")).slice("sha256:".length)}.json`;
+	const configFilename = `${(
+		await tg.checksum(await configFile.bytes(), "sha256")
+	).slice("sha256:".length)}.json`;
 	image = tg.directory(image, {
 		[configFilename]: configFile,
 	});

@@ -159,7 +159,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	if (rustcFlags) {
 		flags = flags.concat(rustcFlags.map((f) => `-C ${f}`));
 	}
-	const rustcCommand = tg`${rustcPrefix}rustc ${tg.Template.join(" ", ...flags)}`;
+	const rustcCommand = tg`${rustcPrefix}rustc ${tg.Template.join(
+		" ",
+		...flags,
+	)}`;
 
 	// Combine the envs with the user env last.
 	const env = std.env.arg(...envs, env_);

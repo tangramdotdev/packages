@@ -66,7 +66,7 @@ export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: default_(),
+		buildFn: default_,
 		docs: [
 			"info/libffi.info",
 			"man/man3/ffi.3",

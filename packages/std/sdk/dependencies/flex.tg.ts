@@ -37,13 +37,9 @@ export const build = tg.target(async (arg?: Arg) => {
 	const { build, env, host, sdk, source: source_ } = arg ?? {};
 
 	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-nls",
-			"--disable-rpath",
-		],
+		args: ["--disable-dependency-tracking", "--disable-nls", "--disable-rpath"],
 	};
-	
+
 	return std.utils.buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		env,
@@ -59,7 +55,6 @@ import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({ packageDir: build(), binaries: ["flex"],
-		metadata,  });
+	await std.assert.pkg({ buildFn: build, binaries: ["flex"], metadata });
 	return true;
 });

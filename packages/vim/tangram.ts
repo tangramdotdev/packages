@@ -73,7 +73,7 @@ export default default_;
 export const test = tg.target(async () => {
 	const majorMinor = metadata.version.split(".").slice(2).join(".");
 	await std.assert.pkg({
-		packageDir: default_(),
+		buildFn: default_,
 		binaries: [
 			{ name: "vim", testPredicate: (stdout) => stdout.includes(majorMinor) },
 		],

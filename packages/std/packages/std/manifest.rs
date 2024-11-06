@@ -1,7 +1,7 @@
 use std::{
 	collections::BTreeMap,
 	io::{Read, Seek},
-	path::Path,
+	path::{Path, PathBuf},
 	str::FromStr as _,
 	sync::LazyLock,
 };
@@ -142,7 +142,7 @@ pub struct ArtifactPath {
 
 	/// If the artifact is a directory, optionally specify a subpath.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub path: Option<String>,
+	pub subpath: Option<PathBuf>,
 }
 
 impl ArtifactPath {
@@ -151,19 +151,19 @@ impl ArtifactPath {
 	pub fn with_artifact_id(artifact: impl Into<tg::artifact::Id>) -> Self {
 		Self {
 			artifact: artifact.into(),
-			path: None,
+			subpath: None,
 		}
 	}
 
 	/// Create a new [`ArtifactPath`] with a subpath.
 	#[must_use]
-	pub fn with_artifact_id_and_path(
+	pub fn with_artifact_id_and_subpath(
 		artifact: impl Into<tg::artifact::Id>,
-		path: impl Into<Option<String>>,
+		subpath: impl Into<Option<PathBuf>>,
 	) -> Self {
 		Self {
 			artifact: artifact.into(),
-			path: path.into(),
+			subpath: subpath.into(),
 		}
 	}
 
@@ -184,7 +184,7 @@ impl From<ArtifactPath> for std::path::PathBuf {
 		ret.push(artifact_path.artifact.to_string());
 
 		// Add the path if it exists.
-		if let Some(subpath) = artifact_path.path {
+		if let Some(subpath) = artifact_path.subpath {
 			ret.push(subpath);
 		}
 
@@ -205,14 +205,14 @@ impl TryFrom<tg::template::Data> for ArtifactPath {
 			| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
 				Ok(ArtifactPath {
 					artifact: id.clone(),
-					path: None,
+					subpath: None,
 				})
 			},
 			[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
 			| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 				Ok(ArtifactPath {
 					artifact: artifact_id.clone(),
-					path: Some(s.chars().skip(1).collect()),
+					subpath: Some(s.chars().skip(1).collect::<String>().into()),
 				})
 			},
 			_ => Err(tg::error!(
@@ -226,7 +226,7 @@ impl TryFrom<tg::template::Data> for ArtifactPath {
 impl From<ArtifactPath> for tg::Symlink {
 	fn from(artifact_path: ArtifactPath) -> Self {
 		let artifact = tg::Artifact::with_id(artifact_path.artifact);
-		tg::Symlink::with_artifact_and_path(Some(artifact), artifact_path.path)
+		tg::Symlink::with_artifact_and_subpath(Some(artifact), artifact_path.subpath)
 	}
 }
 
@@ -372,7 +372,7 @@ impl Manifest {
 
 	/// Collect the dependencies from a manifest.
 	#[must_use]
-	pub fn dependencies(&self) -> BTreeMap<tg::Reference, tg::file::Dependency> {
+	pub fn dependencies(&self) -> BTreeMap<tg::Reference, tg::Referent<tg::Object>> {
 		let mut dependencies = BTreeMap::default();
 
 		// Collect the references from the interpreter.
@@ -452,7 +452,7 @@ impl Manifest {
 
 pub fn collect_dependencies_from_value_data(
 	value: &tg::value::Data,
-	dependencies: &mut BTreeMap<tg::Reference, tg::file::Dependency>,
+	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
 ) {
 	match value {
 		tg::value::Data::Object(id) => match id {
@@ -501,7 +501,7 @@ pub fn collect_dependencies_from_value_data(
 
 pub fn collect_dependencies_from_artifact_path(
 	value: &ArtifactPath,
-	dependencies: &mut BTreeMap<tg::Reference, tg::file::Dependency>,
+	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
 ) {
 	let id = tg::object::Id::from(value.artifact.clone());
 	dependencies.insert(
@@ -512,7 +512,7 @@ pub fn collect_dependencies_from_artifact_path(
 
 pub fn collect_dependencies_from_template_data(
 	value: &tg::template::Data,
-	dependencies: &mut BTreeMap<tg::Reference, tg::file::Dependency>,
+	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
 ) {
 	for component in &value.components {
 		if let tg::template::component::Data::Artifact(id) = component {
@@ -527,7 +527,7 @@ pub fn collect_dependencies_from_template_data(
 
 pub fn collect_dependencies_from_mutation_data(
 	value: &tg::mutation::Data,
-	dependencies: &mut BTreeMap<tg::Reference, tg::file::Dependency>,
+	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
 ) {
 	match value {
 		tg::mutation::Data::Unset => {},
@@ -546,9 +546,11 @@ pub fn collect_dependencies_from_mutation_data(
 	}
 }
 
-fn dependency_from_object_id(id: &tg::object::Id) -> tg::file::Dependency {
-	tg::file::Dependency {
-		object: tg::Object::with_id(id.clone()),
+fn dependency_from_object_id(id: &tg::object::Id) -> tg::Referent<tg::Object> {
+	tg::Referent {
+		item: tg::Object::with_id(id.clone()),
+		path: None,
+		subpath: None,
 		tag: None,
 	}
 }

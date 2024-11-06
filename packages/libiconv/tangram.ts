@@ -47,7 +47,7 @@ export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: default_(),
+		buildFn: default_,
 		binaries: ["iconv"],
 		libraries: ["charset", { name: "iconv", dylib: true, staticlib: false }],
 		metadata,

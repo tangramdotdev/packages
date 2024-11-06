@@ -60,7 +60,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		pkgConfig({ build, host: build }),
 		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
 		{
-			CFLAGS: tg.Mutation.prefix("-Wno-implicit-int -Wno-deprecated-non-prototype", " ")
+			CFLAGS: tg.Mutation.prefix(
+				"-Wno-implicit-int -Wno-deprecated-non-prototype",
+				" ",
+			),
 		},
 		env_,
 	];

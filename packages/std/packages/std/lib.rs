@@ -7,27 +7,6 @@ pub use manifest::Manifest;
 #[cfg(feature = "tracing")]
 pub mod tracing;
 
-/// Get the host string for the current target.
-#[must_use]
-pub fn host() -> &'static str {
-	#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
-	{
-		"aarch64-darwin"
-	}
-	#[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-	{
-		"aarch64-linux"
-	}
-	#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
-	{
-		"x86_64-darwin"
-	}
-	#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
-	{
-		"x86_64-linux"
-	}
-}
-
 /// Convert a [`tangram_client::template::Data`] to its corresponding [`tangram_client::symlink::Data`] object.
 pub fn template_data_to_symlink_data(
 	template: tg::template::Data,
@@ -36,20 +15,20 @@ pub fn template_data_to_symlink_data(
 	match components.as_slice() {
 		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data::Normal {
 			artifact: None,
-			path: Some(s.to_string()),
+			subpath: Some(s.into()),
 		}),
 		[tg::template::component::Data::Artifact(id)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
 			Ok(tg::symlink::Data::Normal {
 				artifact: Some(id.clone()),
-				path: None,
+				subpath: None,
 			})
 		},
 		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data::Normal {
 				artifact: Some(artifact_id.clone()),
-				path: Some(s.chars().skip(1).collect()),
+				subpath: Some(s.chars().skip(1).collect::<String>().into()),
 			})
 		},
 		_ => Err(tg::error!(

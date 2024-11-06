@@ -96,9 +96,9 @@ export const interpreterName = async (hostArg?: string) => {
 	}
 };
 
-export type SdkVersion = "12.1" | "12.3" | "14.5" | "15.0";
+export type SdkVersion = "12.1" | "12.3" | "14.5" | "15.1";
 
-export const LatestSdkVersion: SdkVersion = "15.0" as const;
+export const LatestSdkVersion: SdkVersion = "15.1" as const;
 
 /** Retrieve a single version of the MacOSSDK */
 export const macOsSdk = (versionArg?: SdkVersion) => {
@@ -177,7 +177,7 @@ export const componentList = async (arg?: Arg) => {
 		"macos_sdk_12.1",
 		"macos_sdk_12.3",
 		"macos_sdk_14.5",
-		"macos_sdk_15.0",
+		"macos_sdk_15.1",
 		"toolchain_universal_darwin",
 		"utils_universal_darwin",
 	];
@@ -220,13 +220,13 @@ export const test = tg.target(async () => {
 
 const checksums: Record<string, tg.Checksum> = {
 	"macos_sdk_12.1":
-		"sha256:58213ebd70d16ff212aa1bd313ee7eb38c61f7d2063cb90f0fbb6c1bdc66df0f",
+		"sha256:8416b3f8a10e6022fb196cbb4e85e772c9c56c6c67c9a068c7576224cbf184d0",
 	"macos_sdk_12.3":
-		"sha256:abd46b9d50d1cf90f256adfe98206afe6375217c5d35bd9d62c73038ed13ce05",
+		"sha256:ceccfc1181049d92e8d8a007180bca3c3cdc66d3e818c0e6c866f5312d5ed7b4",
 	"macos_sdk_14.5":
-		"sha256:53d558e87242418586798f0ee52b235d41eeaf5d0dacdc4397ec897b9c11400a",
-	"macos_sdk_15.0":
-		"sha256:1a110c1ad1bc08a9d528dfc6c561bd9e1857692be561a53b9aec59cd036c9cda",
+		"sha256:527106e3ca78ce0aa69469ffac3ebb9c75dffa95d38749e962311819864d05a7",
+	"macos_sdk_15.1":
+		"sha256:9cffeecbaa2a8111f23c12194f66cfc5bc40ac59c2afc459bb83b0080b5358f9",
 	dash_aarch64_linux:
 		"sha256:d1e6ed42b0596507ebfa9ce231e2f42cc67f823cc56c0897c126406004636ce7",
 	dash_universal_darwin:
@@ -240,7 +240,7 @@ const checksums: Record<string, tg.Checksum> = {
 	toolchain_aarch64_linux:
 		"sha256:01cf6871a4e8c28fe29572bc807edfacd8d5e44d0ee5455de8acbb53f516ec98",
 	toolchain_universal_darwin:
-		"sha256:ebcb7793b1cd534a86813e5b8165dada0eca764e11718232284327a51e487246",
+		"sha256:737d4a562b725db647085873f0594559facd612d5f73dc71c2ef07d2620041bc",
 	toolchain_x86_64_linux:
 		"sha256:a3f9ec87394e63f90ec8784e6980727821fe0753b783e86ce298f54145372fad",
 	utils_aarch64_linux:

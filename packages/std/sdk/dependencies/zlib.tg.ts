@@ -62,6 +62,6 @@ import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
-	await std.assert.pkg({ packageDir: build(), libraries: ["z"],  });
+	await std.assert.pkg({ buildFn: build, libraries: ["z"] });
 	return true;
 });

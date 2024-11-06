@@ -66,7 +66,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: build(), binaries: ["ninja"],
-		metadata, });
+	await std.assert.pkg({ buildFn: build, binaries: ["ninja"], metadata });
 	return true;
 });

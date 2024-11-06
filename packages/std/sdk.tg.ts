@@ -9,6 +9,15 @@ import mold from "./sdk/mold.tg.ts";
 import * as proxy from "./sdk/proxy.tg.ts";
 import * as std from "./tangram.ts";
 
+export * as cmake from "./sdk/cmake.tg.ts";
+export * as dependencies from "./sdk/dependencies.tg.ts";
+export * as mold from "./sdk/mold.tg.ts";
+export * as ninja from "./sdk/ninja.tg.ts";
+export * as kernelHeaders from "./sdk/kernel_headers.tg.ts";
+export * as gnu from "./sdk/gnu.tg.ts";
+export * as llvm from "./sdk/llvm.tg.ts";
+export * as proxy from "./sdk/proxy.tg.ts";
+
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
 export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 	let {
@@ -643,7 +652,7 @@ export namespace sdk {
 		arg?: HostAndTargetsOptions,
 	): Promise<HostAndTargets> => {
 		const host = arg?.host ?? (await std.triple.host());
-		let targets = [];
+		let targets: Array<string> = [];
 		if (arg?.target) {
 			targets.push(arg.target);
 		}
@@ -1081,7 +1090,14 @@ type ProxyTestParameters = {
 	testProgram: tg.Unresolved<tg.File>;
 };
 
-export const testMoldSdk = tg.target(async () => {
+export const testDefault = tg.target(async () => {
+	const env = await sdk();
+	const detectedHost = await std.triple.host();
+	await sdk.assertValid(env, { host: detectedHost });
+	return env;
+});
+
+export const testMold = tg.target(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1096,7 +1112,7 @@ export const testMoldSdk = tg.target(async () => {
 	return moldSdk;
 });
 
-export const testGccLldSdk = tg.target(async () => {
+export const testGccLld = tg.target(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1111,7 +1127,7 @@ export const testGccLldSdk = tg.target(async () => {
 	return lldSdk;
 });
 
-export const testMuslSdk = tg.target(async () => {
+export const testMusl = tg.target(async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
@@ -1123,7 +1139,7 @@ export const testMuslSdk = tg.target(async () => {
 	return env;
 });
 
-export const testCrossGccSdk = tg.target(async () => {
+export const testCrossGcc = tg.target(async () => {
 	const detectedHost = await std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
@@ -1140,13 +1156,13 @@ export const testCrossGccSdk = tg.target(async () => {
 	return env;
 });
 
-export const testLLVMSdk = tg.target(async () => {
+export const testLLVM = tg.target(async () => {
 	const env = await sdk({ toolchain: "llvm" });
 	await sdk.assertValid(env, { toolchain: "llvm" });
 	return env;
 });
 
-export const testLLVMMoldSdk = tg.target(async () => {
+export const testLLVMMold = tg.target(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1166,7 +1182,7 @@ export const testLLVMMoldSdk = tg.target(async () => {
 	return moldSdk;
 });
 
-export const testLLVMBfdSdk = tg.target(async () => {
+export const testLLVMBfd = tg.target(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`bfd is only available on Linux`);
@@ -1185,7 +1201,7 @@ export const testLLVMBfdSdk = tg.target(async () => {
 	return bfdSdk;
 });
 
-export const testExplicitGlibcVersionSdk = tg.target(async () => {
+export const testExplicitGlibcVersion = tg.target(async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`glibc is only available on Linux`);
@@ -1200,7 +1216,7 @@ export const testExplicitGlibcVersionSdk = tg.target(async () => {
 	return env;
 });
 
-export const testLLVMMuslSdk = tg.target(async () => {
+export const testLLVMMusl = tg.target(async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
@@ -1250,16 +1266,16 @@ export const testLinuxToDarwin = tg.target(async () => {
 	return true;
 });
 
-export const testNativeProxiedSdks = async () => {
+export const testAllNativeProxied = async () => {
 	await Promise.all(
-		(await nativeProxiedSdkArgs()).map(async (arg) => {
+		(await allNativeProxiedArgs()).map(async (arg) => {
 			await sdk.assertValid(await sdk(arg), arg);
 		}),
 	);
 	return true;
 };
 
-export const nativeProxiedSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
+export const allNativeProxiedArgs = async (): Promise<Array<std.sdk.Arg>> => {
 	const detectedHost = await std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 

@@ -69,12 +69,17 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 export default default_;
 
+const spec: std.assert.PackageSpec = {
+	buildFn: default_,
+	docs: ["man/man3/zlib.3"],
+	pkgConfigName: "zlib",
+	libraries: ["z"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		packageDir: default_(),
-		docs: ["man/man3/zlib.3"],
-		pkgConfigName: "zlib",
-		libraries: ["z"],
-	});
-	return true;
+	return await std.assert.pkg(spec);
+});
+
+export const testAll = tg.target(async () => {
+	return await std.assert.pkg(spec, true);
 });

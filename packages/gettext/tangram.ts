@@ -67,7 +67,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		return { BISON: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(bisonForBuild);
-	const pkgConfigForBuild = pkgConfig.default_({ build, host: build })
+	const pkgConfigForBuild = pkgConfig
+		.default_({ build, host: build })
 		.then((d) => {
 			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 		});
@@ -163,7 +164,7 @@ export default default_;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		packageDir: default_(),
+		buildFn: default_,
 		binaries: ["msgfmt", "msgmerge", "xgettext"],
 		metadata,
 	});

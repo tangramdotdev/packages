@@ -101,10 +101,6 @@ export const changeShebang = async (scriptFile: tg.File) => {
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		packageDir: default_(),
-		binaries: ["gzip"],
-		metadata,
-	});
+	await std.assert.pkg({ buildFn: default_, binaries: ["gzip"], metadata });
 	return true;
 });
