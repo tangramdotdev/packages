@@ -69,9 +69,15 @@ export const build = tg.target(async (arg?: Arg) => {
 		args: [`DESTDIR="$OUTPUT/${host}"`],
 	};
 
+	// The ld-musl symlink installed by default points to a broken absolute path that cannot be checked in. Replace with a relative symlink.
+	const fixup = `cd $OUTPUT/lib && rm ${interpreterName(
+		hostSystem,
+	)} && ln -s libc.so ${interpreterName(hostSystem)}`;
+
 	const phases = {
 		configure,
 		install,
+		fixup,
 	};
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [env_];
@@ -81,7 +87,7 @@ export const build = tg.target(async (arg?: Arg) => {
 		TANGRAM_LINKER_PASSTHROUGH: true,
 	});
 
-	let result = await std.autotools.build({
+	return std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
@@ -91,13 +97,6 @@ export const build = tg.target(async (arg?: Arg) => {
 		sdk,
 		source: source_ ?? source(),
 	});
-
-	// Add an ld.so file, which in musl is just a symlink to libc.so.
-	result = await tg.directory(result, {
-		[`${interpreterPath(host)}`]: tg.symlink("libc.so"),
-	});
-
-	return result;
 });
 
 export default build;

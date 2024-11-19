@@ -42,7 +42,7 @@ export const default_ = tg.target(async (arg?: Arg) => {
 		build,
 		install,
 	};
-	
+
 	return std.autotools.build({
 		env: sdk(host),
 		host,
