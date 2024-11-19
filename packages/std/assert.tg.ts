@@ -83,7 +83,7 @@ export const pkg = async (spec: PackageSpec, allPlatforms?: boolean) => {
 	const results = await Promise.all(
 		packageArgs.map(async (packageArg) => {
 			const host = packageArg.host ?? (await std.triple.host());
-			const directory = await spec.buildFn({ packageArg });
+			const directory = await spec.buildFn(packageArg);
 			return await singlePackageArg(directory, host, spec);
 		}),
 	);

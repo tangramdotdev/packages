@@ -54,6 +54,7 @@ export async function wrap(
 				"Following the executable symlink either failed or returned a directory.",
 			);
 		}
+		tg.File.assert(file);
 		const metadata = await std.file.executableMetadata(file);
 		if (metadata.format === "elf" && metadata.interpreter == undefined) {
 			throw new Error(
@@ -804,6 +805,7 @@ const manifestInterpreterFromArg = async (
 		if (!interpreterFile || interpreterFile instanceof tg.Directory) {
 			throw new Error("Could not resolve the symlink to the interpreter.");
 		}
+		tg.File.assert(interpreterFile);
 		const interpreterMetadata =
 			await std.file.executableMetadata(interpreterFile);
 		if (interpreterMetadata.format !== "elf") {
@@ -869,6 +871,7 @@ const manifestInterpreterFromArg = async (
 		if (!interpreterFile || interpreterFile instanceof tg.Directory) {
 			throw new Error("Could not resolve the symlink to the interpreter.");
 		}
+		tg.File.assert(interpreterFile);
 		const interpreterMetadata =
 			await std.file.executableMetadata(interpreterFile);
 		if (interpreterMetadata.format !== "elf") {

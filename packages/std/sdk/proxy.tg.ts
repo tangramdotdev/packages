@@ -74,6 +74,7 @@ export const env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 
 	let cc: tg.File | tg.Symlink = cc_;
 	let cxx: tg.File | tg.Symlink = cxx_;
+	console.log("cc id", await cc.id());
 	const isLlvm = flavor === "llvm";
 
 	if (proxyLinker) {

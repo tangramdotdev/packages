@@ -44,7 +44,6 @@ export const default_ = tg.target(async (arg?: Arg) => {
 	};
 	
 	return std.autotools.build({
-		debug: true,
 		env: sdk(host),
 		host,
 		opt: "s",
