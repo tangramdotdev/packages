@@ -131,10 +131,6 @@ export const build = tg.target(async (args: BuildArgs) => {
 });
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		packageDir: default_(),
-		binaries: ["poetry"],
-		metadata,
-	});
+	await std.assert.pkg({ buildFn: default_, binaries: ["poetry"], metadata });
 	return true;
 });

@@ -543,7 +543,7 @@ export namespace wrap {
 
 		export type ArtifactPath = {
 			artifact: tg.Artifact.Id;
-			path?: string | undefined;
+			subpath?: string | undefined;
 		};
 
 		// Matches tg::template::Data
@@ -694,9 +694,9 @@ export namespace wrap {
 					dependencies_.add(await reference.id());
 				}),
 			);
-			const dependencies: { [reference: string]: tg.File.Dependency } = {};
+			const dependencies: { [reference: string]: tg.Referent<tg.Object> } = {};
 			for (const dependency of dependencies_) {
-				dependencies[dependency] = { object: tg.Object.withId(dependency) };
+				dependencies[dependency] = { item: tg.Object.withId(dependency) };
 			}
 
 			// Create the file.
@@ -1077,7 +1077,7 @@ const manifestInterpreterFromElf = async (
 		host = std.triple.create(host, { environment: "musl" });
 		const muslArtifact = await bootstrap.musl.build({ host });
 		const libDir = tg.Directory.expect(await muslArtifact.get("lib"));
-		const ldso = tg.File.expect(await libDir.get(interpreterName(host)));
+		const ldso = tg.File.expect(await libDir.get("libc.so"));
 		return {
 			kind: "ld-musl",
 			path: await manifestSymlinkFromArg(ldso),
@@ -1094,7 +1094,8 @@ export const defaultShellInterpreter = async (
 	buildToolchainArg?: std.env.Arg,
 ) => {
 	// Provide bash for the detected host system.
-	let buildArg = undefined;
+	let buildArg: undefined | { sdk: boolean; env: tg.Unresolved<std.env.Arg> } =
+		undefined;
 	if (buildToolchainArg) {
 		buildArg = { sdk: false, env: buildToolchainArg };
 	} else {
@@ -1121,12 +1122,12 @@ const symlinkFromManifestArtifactPath = async (
 ): Promise<tg.Symlink> => {
 	if (artifactPath.artifact) {
 		const artifact = tg.Artifact.withId(artifactPath.artifact);
-		if (artifactPath.path !== undefined) {
-			return tg.symlink({ artifact, path: artifactPath.path });
+		if (artifactPath.subpath !== undefined) {
+			return tg.symlink({ artifact, subpath: artifactPath.subpath });
 		}
 		return tg.symlink({ artifact });
-	} else if (artifactPath.path !== undefined) {
-		return tg.symlink({ path: artifactPath.path });
+	} else if (artifactPath.subpath !== undefined) {
+		return tg.symlink({ subpath: artifactPath.subpath });
 	} else {
 		return tg.symlink();
 	}
@@ -1145,11 +1146,11 @@ const manifestSymlinkFromArg = async (
 		if (!artifact) {
 			throw new Error("artifact is required");
 		}
-		const path = await arg.path();
+		const subpath = await arg.subpath();
 
 		return {
 			artifact: await artifact.id(),
-			path: path ? path.toString() : undefined,
+			subpath: subpath ? subpath.toString() : undefined,
 		};
 	} else if (tg.Artifact.is(arg)) {
 		return { artifact: await arg.id() };
@@ -1663,19 +1664,28 @@ export const argAndEnvDump = tg.target(async () => {
 	);
 });
 
+export const test = tg.target(async () => {
+	await Promise.all([
+		testSingleArgObjectNoMutations(),
+		testDependencies(),
+		testDylibPath(),
+	]);
+	return true;
+});
+
 export const testSingleArgObjectNoMutations = tg.target(async () => {
 	const executable = await argAndEnvDump();
 	const executableID = await executable.id();
+	console.log("argAndEnvDump ID", executableID);
 
 	const buildToolchain = await bootstrap.sdk.env();
 
-	const wrapper = await wrap({
+	const wrapper = await wrap(executable, {
 		args: ["--arg1", "--arg2"],
 		buildToolchain,
 		env: {
 			HELLO: "WORLD",
 		},
-		executable,
 	});
 	const wrapperID = await wrapper.id();
 	console.log("wrapper id", wrapperID);
@@ -1683,7 +1693,10 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	const libraryDir = await tg.directory({
 		"lib.dylib": tg.file(),
 	});
-	const withLibraryPath = await wrap(wrapper, { libraryPaths: [libraryDir] });
+	const withLibraryPath = await wrap(wrapper, {
+		buildToolchain,
+		libraryPaths: [libraryDir],
+	});
 	const withLibraryPathID = await withLibraryPath.id();
 	console.log("withLibraryPath id", withLibraryPathID);
 
@@ -1719,7 +1732,8 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	return wrapper;
 });
 
-export const testReferences = tg.target(async () => {
+export const testDependencies = tg.target(async () => {
+	const buildToolchain = await bootstrap.sdk.env();
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	const transitiveDependencyId = await transitiveDependency.id();
 	console.log("transitiveReference", transitiveDependencyId);
@@ -1728,7 +1742,7 @@ export const testReferences = tg.target(async () => {
 			foo: tg.file("hi", {
 				executable: true,
 				dependencies: {
-					transitiveDependencyId: { object: transitiveDependency },
+					transitiveDependencyId: { item: transitiveDependency },
 				},
 			}),
 		},
@@ -1739,6 +1753,7 @@ export const testReferences = tg.target(async () => {
 	const shellExe = await bootstrapShell.get("bin/sh").then(tg.File.expect);
 
 	const wrapper = await std.wrap({
+		buildToolchain,
 		executable: shellExe,
 		env: {
 			PATH: tg`${binDir}/bin`,

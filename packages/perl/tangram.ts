@@ -126,7 +126,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 
 	const wrappedPerl = await std.wrap(
-		tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),
+		tg.symlink({ artifact: perlArtifact, subpath: "bin/perl" }),
 		{
 			env: {
 				PERL5LIB: tg.Mutation.suffix(
@@ -196,11 +196,7 @@ export const wrapScript = async (script: tg.File) => {
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		packageDir: default_(),
-		binaries: ["perl"],
-		metadata,
-	});
+	await std.assert.pkg({ buildFn: default_, binaries: ["perl"], metadata });
 
 	const output = await $`perl -e 'print "hello\n"' > $OUTPUT`
 		.env(default_())

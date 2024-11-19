@@ -91,5 +91,13 @@ const providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
+	// FIXME - build assert args properly!
+	// await std.assert.pkg({
+	// 	buildFn: build,
+	// 	binaries: ["bash"],
+	// 	bootstrapMode: true,
+	// 	env: sdk,
+	// })
+	// return true;
 	return build({ host, sdk: false, env: sdk });
 });

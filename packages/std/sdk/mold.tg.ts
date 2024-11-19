@@ -75,7 +75,6 @@ export const mold = tg.target(async (arg?: Arg) => {
 export default mold;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: mold(), binaries: ["mold"],
-		metadata, });
+	await std.assert.pkg({ buildFn: mold, binaries: ["mold"], metadata });
 	return true;
 });

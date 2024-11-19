@@ -188,7 +188,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	];
 
 	if (os === "darwin") {
-		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.0" });
+		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.1" });
 	}
 
 	const configureArgs: Array<string> = [];

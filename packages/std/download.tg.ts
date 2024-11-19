@@ -5,20 +5,37 @@ export type Arg = download.BuildUrlArg & {
 	decompress?: boolean | tg.Blob.CompressionFormat | undefined;
 	/** The format of the archive file to unpack. If `true`, will infer from the URL. Default: `true`. */
 	extract?: boolean | tg.Artifact.ArchiveFormat | undefined;
+	/** Optional list of mirror URLs to try if the primary URL fails. */
+	mirrors?: Array<string>;
 };
 
 /** Wrapper around tg.download that can optionally decompress and unpack tarballs. */
 export async function download(arg: Arg): Promise<tg.Artifact> {
-	let {
+	const {
 		checksum,
 		decompress: decompress_ = true,
 		extract: extract_ = true,
+		mirrors = [],
 		...rest
 	} = arg;
-	let url = download.buildUrl(rest);
+	const primaryUrl = download.buildUrl(rest);
+	const urls = [primaryUrl, ...mirrors];
 
 	// Perform the download.
-	let blob = await tg.download(url, checksum);
+	let blob: tg.Blob | undefined;
+	let lastError: unknown;
+	for (const url of urls) {
+		try {
+			blob = await tg.download(url, checksum);
+		} catch (e) {
+			lastError = e;
+			continue;
+		}
+	}
+	tg.assert(
+		blob !== undefined,
+		`unable to download blob. last error: ${lastError}`,
+	);
 
 	// If there's nothing to unpack, return the blob.
 	if (!decompress_ && !extract_) {
@@ -36,14 +53,14 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 	}
 
 	// If either or both is `true`, infer the formats from the URL and fill in the missing values.
-	let formats = download.inferFormats(url);
-	let decompress =
+	const formats = download.inferFormats(primaryUrl);
+	const decompress =
 		typeof decompress_ === "boolean"
 			? decompress_ === true
 				? formats.decompress
 				: undefined
 			: decompress_;
-	let extract =
+	const extract =
 		typeof extract_ === "boolean"
 			? extract_ === true
 				? formats.extract
@@ -75,8 +92,8 @@ export namespace download {
 		source: "tag";
 	};
 
-	export let fromGithub = async (arg: fromGitHubArg) => {
-		let {
+	export const fromGithub = async (arg: fromGitHubArg) => {
+		const {
 			archiveFormat: extract = "tar",
 			checksum,
 			compressionFormat: decompress = "gz",
@@ -95,8 +112,8 @@ export namespace download {
 
 		if (source === "release") {
 			tg.assert("version" in arg && arg.version !== undefined);
-			let version = arg.version;
-			let archive = packageArchive({
+			const version = arg.version;
+			const archive = packageArchive({
 				name: repo,
 				extension,
 				version,
@@ -107,7 +124,7 @@ export namespace download {
 		}
 
 		// Download and unpack the archive.
-		let outer = tg.Directory.expect(
+		const outer = tg.Directory.expect(
 			await download({
 				checksum,
 				decompress,
@@ -126,14 +143,19 @@ export namespace download {
 	};
 
 	/** Download a source package hosted in the GNU FTP repository. */
-	export let fromGnu = async (arg: FromGnuArg) => {
-		let { checksum, compressionFormat: decompress = "gz", name, version } = arg;
-		let extract = "tar" as tg.Artifact.ArchiveFormat;
-		let extension = `.${extract}.${decompress}`;
-		let archive = packageArchive({ extension, name, version });
-		let url = gnuUrl(name, archive);
+	export const fromGnu = async (arg: FromGnuArg) => {
+		const {
+			checksum,
+			compressionFormat: decompress = "gz",
+			name,
+			version,
+		} = arg;
+		const extract = "tar" as tg.Artifact.ArchiveFormat;
+		const extension = `.${extract}.${decompress}`;
+		const archive = packageArchive({ extension, name, version });
+		const url = gnuUrl(name, archive);
 
-		let outer = tg.Directory.expect(
+		const outer = tg.Directory.expect(
 			await download({
 				checksum,
 				decompress,
@@ -144,7 +166,7 @@ export namespace download {
 		return download.unwrapDirectory(outer);
 	};
 
-	export let gnuUrl = (name: string, archive: string) => {
+	export const gnuUrl = (name: string, archive: string) => {
 		return `https://ftp.gnu.org/gnu/${name}/${archive}`;
 	};
 
@@ -154,7 +176,7 @@ export namespace download {
 		extract?: tg.Artifact.ArchiveFormat | undefined;
 	};
 
-	export let unpackBlob = async (arg: UnpackArg): Promise<tg.Artifact> => {
+	export const unpackBlob = async (arg: UnpackArg): Promise<tg.Artifact> => {
 		let { blob, decompress, extract } = arg;
 		if (decompress === undefined && extract === undefined) {
 			return tg.file(blob);
@@ -186,11 +208,11 @@ export namespace download {
 	 * 3. `${base}/${packageArchive}`
 	 * 4. `${url}`
 	 */
-	export let buildUrl = (arg: BuildUrlArg): string => {
+	export const buildUrl = (arg: BuildUrlArg): string => {
 		if ("url" in arg) {
 			return arg.url;
 		}
-		let { base, ...rest } = arg;
+		const { base, ...rest } = arg;
 		return `${base}/${packageArchive(rest)}`;
 	};
 
@@ -201,11 +223,11 @@ export namespace download {
 		| { packageArchive: string };
 
 	/** Combine a packageName with an extension. */
-	export let packageArchive = (arg: PackageArchiveArg) => {
+	export const packageArchive = (arg: PackageArchiveArg) => {
 		if ("packageArchive" in arg) {
 			return arg.packageArchive;
 		}
-		let { extension, ...rest } = arg;
+		const { extension, ...rest } = arg;
 		return `${packageName(rest)}${extension}`;
 	};
 
@@ -217,13 +239,13 @@ export namespace download {
 		| { packageName: string };
 
 	/** Get the package name string for a name and optional version. */
-	export let packageName = (arg: PackageNameArg) =>
+	export const packageName = (arg: PackageNameArg) =>
 		"packageName" in arg
 			? arg.packageName
 			: `${arg.name}${arg.version ? `-${arg.version}` : ""}`;
 
 	/** Determine the archive formats from the file extension of the url. */
-	export let inferFormats = (
+	export const inferFormats = (
 		url: string,
 	): {
 		decompress?: tg.Blob.CompressionFormat;
@@ -232,8 +254,8 @@ export namespace download {
 		let decompress: tg.Blob.CompressionFormat | undefined = undefined;
 		let extract: tg.Artifact.ArchiveFormat | undefined = undefined;
 
-		let split = url.split(".");
-		let last = split.pop();
+		const split = url.split(".");
+		const last = split.pop();
 		switch (last) {
 			case "tar":
 			case "zip":
@@ -250,7 +272,7 @@ export namespace download {
 			case "zstd":
 				// Coerce `"zstd"` to `"zst"`.
 				decompress = last === "zstd" ? "zst" : last;
-				let prev = split.pop();
+				const prev = split.pop();
 				if (prev === "tar") {
 					extract = prev;
 				}
@@ -272,16 +294,16 @@ export namespace download {
 	};
 
 	/** If the given directory contains a single child directory, return the inner child. */
-	export let unwrapDirectory = async (
+	export const unwrapDirectory = async (
 		directory: tg.Directory,
 	): Promise<tg.Directory> => {
-		let iterator = directory[Symbol.asyncIterator]();
-		let inner = await iterator.next();
+		const iterator = directory[Symbol.asyncIterator]();
+		const inner = await iterator.next();
 		tg.assert(
 			(await iterator.next()).done,
 			"Expected the directory to contain one entry.",
 		);
-		let ret = inner.value.at(1);
+		const ret = inner.value.at(1);
 		tg.assert(
 			ret instanceof tg.Directory,
 			"Expected the entry to be a directory.",
@@ -289,3 +311,21 @@ export namespace download {
 		return ret;
 	};
 }
+
+export const test = tg.target(async () => {
+	return await Promise.all([testTgDownload(), testStdDownload()]);
+});
+
+export const testTgDownload = tg.target(async () => {
+	return await tg.download(
+		"https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
+		"unsafe",
+	);
+});
+
+export const testStdDownload = tg.target(async () => {
+	return await download({
+		url: "https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
+		checksum: "unsafe",
+	});
+});

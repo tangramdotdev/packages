@@ -96,7 +96,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const interpreter = await tg.symlink({
 		artifact: perlArtifact,
-		path: "bin/perl",
+		subpath: "bin/perl",
 	});
 
 	let binDirectory = tg.directory();
@@ -104,7 +104,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const autom4te = await std.wrap(
 		tg.symlink({
 			artifact: autoconf,
-			path: "bin/autom4te",
+			subpath: "bin/autom4te",
 		}),
 		{
 			interpreter,
@@ -199,10 +199,6 @@ export const patchAutom4teCfg = tg.target(
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		packageDir: default_(),
-		binaries: ["autoconf"],
-		metadata,
-	});
+	await std.assert.pkg({ buildFn: default_, binaries: ["autoconf"], metadata });
 	return true;
 });

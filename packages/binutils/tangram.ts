@@ -141,6 +141,6 @@ export const test = tg.target(async () => {
 					"strip",
 			  ];
 
-	await std.assert.pkg({ packageDir: default_(), binaries, metadata });
+	await std.assert.pkg({ buildFn: default_, binaries, metadata });
 	return true;
 });

@@ -64,7 +64,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const perlArtifact = await perl.default_({ build, host: build }, perlArg);
 	const interpreter = tg.symlink({
 		artifact: perlArtifact,
-		path: "bin/perl",
+		subpath: "bin/perl",
 	});
 	const dependencies = [
 		autoconf.default_({ build, env: env_, host, sdk }, autoconfArg),
@@ -86,7 +86,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 
 	const wrappedScript = std.wrap(
-		tg.symlink({ artifact, path: "bin/help2man" }),
+		tg.symlink({ artifact, subpath: "bin/help2man" }),
 		{
 			interpreter,
 		},
@@ -100,10 +100,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		packageDir: default_(),
-		binaries: ["help2man"],
-		metadata,
-	});
+	await std.assert.pkg({ buildFn: default_, binaries: ["help2man"], metadata });
 	return true;
 });

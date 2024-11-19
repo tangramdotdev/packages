@@ -104,7 +104,7 @@ export const test = tg.target(async () => {
 	};
 	const binaries = ["capsh", "getcap", "setcap", "getpcaps"].map(binTest);
 	await std.assert.pkg({
-		packageDir: default_(),
+		buildFn: default_,
 		binaries,
 		libraries: ["cap"],
 		metadata,

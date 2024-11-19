@@ -40,17 +40,27 @@ export const build = tg.target(async (arg?: Arg) => {
 		args: [`DESTDIR="$OUTPUT"`],
 	};
 
+	// The ld-musl symlink installed by default points to a broken absolute path that cannot be checked in. Replace with a relative symlink.
+	const fixup = `cd $OUTPUT/lib && rm ${interpreterName(
+		hostSystem,
+	)} && ln -s libc.so ${interpreterName(hostSystem)}`;
+
 	const phases = {
 		configure,
 		install,
+		fixup,
 	};
 
-	const env = std.env.arg(bootstrap.sdk(host), bootstrap.make.build(host), {
-		CPATH: tg.Mutation.unset(),
-		LIBRARY_PATH: tg.Mutation.unset(),
-	});
+	const env = std.env.arg(
+		bootstrap.sdk(host),
+		bootstrap.make.default_({ host }),
+		{
+			CPATH: tg.Mutation.unset(),
+			LIBRARY_PATH: tg.Mutation.unset(),
+		},
+	);
 
-	let result = await std.autotools.build({
+	return await std.autotools.build({
 		env,
 		host,
 		phases,
@@ -58,13 +68,6 @@ export const build = tg.target(async (arg?: Arg) => {
 		sdk: false,
 		source: source(),
 	});
-
-	// The ld-musl symlink installed by default points to a broken absolute path. Use a relative symlink instead.
-	result = await tg.directory(result, {
-		[`lib/${interpreterName(hostSystem)}`]: tg.symlink("libc.so"),
-	});
-
-	return result;
 });
 
 export default build;

@@ -16,8 +16,12 @@ export const source = tg.target(() => {
 	return std.download.fromGnu({ name, version, checksum });
 });
 
-export const build = tg.target(async (arg?: string) => {
-	const host = arg ?? (await std.triple.host());
+export type Arg = {
+	host?: string;
+};
+
+export const default_ = tg.target(async (arg?: Arg) => {
+	const host = arg?.host ?? (await std.triple.host());
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -38,8 +42,9 @@ export const build = tg.target(async (arg?: string) => {
 		build,
 		install,
 	};
-
-	const output = std.autotools.build({
+	
+	return std.autotools.build({
+		debug: true,
 		env: sdk(host),
 		host,
 		opt: "s",
@@ -48,8 +53,14 @@ export const build = tg.target(async (arg?: string) => {
 		sdk: false,
 		source: source(),
 	});
-
-	return output;
 });
 
-export default build;
+export default default_;
+
+export const test = tg.target(async () => {
+	return await std.assert.pkg({
+		buildFn: default_,
+		binaries: ["make"],
+		metadata,
+	});
+});

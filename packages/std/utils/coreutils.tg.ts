@@ -131,7 +131,7 @@ export const gnuEnv = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const os = std.triple.os(host);
 	const sdk = bootstrap.sdk(host);
-	const env = std.env.arg(sdk, bootstrap.make.build(host));
+	const env = std.env.arg(sdk, bootstrap.make.default_({ host }));
 	const directory = await build({
 		host,
 		env,

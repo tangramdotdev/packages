@@ -62,7 +62,7 @@ export const cmake = tg.target(async (arg?: Arg) => {
 	const bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
 	const env = std.env.arg(
 		bootstrapSdk,
-		bootstrap.make.build(host),
+		bootstrap.make.default_({ host }),
 		{
 			CC: "cc -static",
 			CXX: "c++ -static",
@@ -377,7 +377,6 @@ export const pushOrSet = (
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: cmake(), binaries: ["cmake"],
-		metadata,  });
+	await std.assert.pkg({ buildFn: cmake, binaries: ["cmake"], metadata });
 	return true;
 });

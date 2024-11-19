@@ -623,19 +623,19 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 			tg::object::Id::Directory(id) => {
 				return tg::symlink::Data::Normal {
 					artifact: Some(id.clone().into()),
-					path: None,
+					subpath: None,
 				}
 			},
 			tg::object::Id::File(id) => {
 				return tg::symlink::Data::Normal {
 					artifact: Some(id.clone().into()),
-					path: None,
+					subpath: None,
 				}
 			},
 			tg::object::Id::Symlink(id) => {
 				return tg::symlink::Data::Normal {
 					artifact: Some(id.clone().into()),
-					path: None,
+					subpath: None,
 				}
 			},
 			_ => (),
@@ -648,13 +648,15 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 
 fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
 	let mut components = Vec::with_capacity(3);
-	if let tg::symlink::Data::Normal { artifact, path } = symlink {
+	if let tg::symlink::Data::Normal { artifact, subpath } = symlink {
 		if let Some(artifact) = artifact {
 			components.push(tg::template::component::Data::Artifact(artifact.clone()));
 		}
-		if let Some(path) = path {
+		if let Some(subpath) = subpath {
 			components.push(tg::template::component::Data::String("/".to_owned()));
-			components.push(tg::template::component::Data::String(path.to_string()));
+			components.push(tg::template::component::Data::String(
+				subpath.display().to_string(),
+			));
 		}
 	}
 	tg::template::Data { components }

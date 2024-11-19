@@ -186,7 +186,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	tracing::info!(?source_directory_path, "checking in source directory");
 	let source_directory = get_checked_in_path(tg, &source_directory_path).await?;
 	let out_dir = if let Some(path) = &args.cargo_out_directory {
-		let out_dir_path = std::path::PathBuf::from_str(&path)
+		let out_dir_path = std::path::PathBuf::from_str(path)
 			.map_err(|source| tg::error!(!source, %path,  "unable to construct path"))?;
 		#[cfg(feature = "tracing")]
 		tracing::info!(?out_dir_path, "checking in output directory");
@@ -404,7 +404,6 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.check_out(
 			tg,
 			tg::artifact::checkout::Arg {
-				bundle: false,
 				dependencies: false,
 				force: true,
 				path: None,
@@ -561,12 +560,16 @@ async fn get_checked_in_path(
 	}
 
 	// Unrender the string.
-	let symlink_data = template_data_to_symlink_data(unrender(&path_str)?.data(tg).await?)?;
+	let symlink_data = template_data_to_symlink_data(unrender(path_str)?.data(tg).await?)?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?symlink_data, "unrendered symlink data");
 
 	// If the symlink data has an artifact, check it out and return it.
-	if let tg::symlink::Data::Normal { artifact, path: _ } = symlink_data {
+	if let tg::symlink::Data::Normal {
+		artifact,
+		subpath: _,
+	} = symlink_data
+	{
 		if artifact.is_some() {
 			#[cfg(feature = "tracing")]
 			tracing::info!(
@@ -652,20 +655,20 @@ pub fn template_data_to_symlink_data(
 	match components.as_slice() {
 		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data::Normal {
 			artifact: None,
-			path: Some(s.into()),
+			subpath: Some(s.into()),
 		}),
 		[tg::template::component::Data::Artifact(id)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
 			Ok(tg::symlink::Data::Normal {
 				artifact: Some(id.clone()),
-				path: None,
+				subpath: None,
 			})
 		},
 		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
 			Ok(tg::symlink::Data::Normal {
 				artifact: Some(artifact_id.clone()),
-				path: Some(s.into()),
+				subpath: Some(s.into()),
 			})
 		},
 		_ => Err(tg::error!(

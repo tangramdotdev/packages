@@ -360,7 +360,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		checksum: None,
 		env: environment.env,
 		executable,
-		host: tangram_std::host().to_string(),
+		host: tg::host().to_string(),
 	});
 
 	// Create a build.

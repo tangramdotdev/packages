@@ -348,7 +348,7 @@ export const mergeCommandArgs = async (
 											std
 												.flatten(arg.inner.value.args ?? [])
 												.map(maybeMutationToTemplate),
-										);
+									  );
 						}
 						return { command, args };
 					} else {
@@ -369,7 +369,7 @@ export const mergeCommandArgs = async (
 								? arg.inner.value.command
 								: await tg.Mutation.setIfUnset(
 										await tg.template(arg.inner.value.command),
-									);
+								  );
 						let args = undefined;
 						if (arg.inner.value.args !== undefined) {
 							args =
@@ -381,7 +381,7 @@ export const mergeCommandArgs = async (
 													.flatten(arg.inner.value.args ?? [])
 													.map(maybeMutationToTemplate),
 											),
-										);
+									  );
 						}
 						return { command, args };
 					} else {
@@ -407,7 +407,7 @@ export const mergeCommandArgs = async (
 							? arg.args
 							: await Promise.all(
 									std.flatten(arg.args ?? []).map(maybeMutationToTemplate),
-								);
+							  );
 					object["args"] = args;
 				}
 				return object;
@@ -513,13 +513,18 @@ export const constructCommandTemplate = (
 	}
 };
 
-export const basicTest = tg.target(async () => {
-	const prepare = `echo "preparing"`;
-	const configure = `echo "configuring"`;
-	const build_ = `echo "building"`;
-	const check = `echo "checking"`;
-	const install = `echo "installing"`;
-	const fixup = `echo "fixing up"`;
+export const test = tg.target(async () => {
+	await Promise.all([basic(), order(), override(), mutateEnv()]);
+	return true;
+});
+
+export const basic = tg.target(async () => {
+	const prepare = `echo "preparing" >> $OUTPUT`;
+	const configure = `echo "configuring" >> $OUTPUT`;
+	const build_ = `echo "building" >> $OUTPUT`;
+	const check = `echo "checking" >> $OUTPUT`;
+	const install = `echo "installing" >> $OUTPUT`;
+	const fixup = `echo "fixing up" >> $OUTPUT`;
 
 	const phases = {
 		prepare,
@@ -534,10 +539,45 @@ export const basicTest = tg.target(async () => {
 		phases,
 	};
 
-	return build(arg);
+	const output = await build(arg).then(tg.File.expect);
+	const text = await output.text();
+	const expected =
+		"preparing\nconfiguring\nbuilding\nchecking\ninstalling\nfixing up\n";
+	tg.assert(text === expected);
+	return true;
 });
 
-export const overrideTest = tg.target(async () => {
+export const order = tg.target(async () => {
+	const prepare = `echo "preparing" >> $OUTPUT`;
+	const configure = `echo "configuring" >> $OUTPUT`;
+	const build_ = `echo "building" >> $OUTPUT`;
+	const check = `echo "checking" >> $OUTPUT`;
+	const install = `echo "installing" >> $OUTPUT`;
+	const fixup = `echo "fixing up" >> $OUTPUT`;
+	const order = ["fixup", "prepare", "install", "build", "configure"];
+
+	const phases = {
+		prepare,
+		configure,
+		build: build_,
+		check,
+		install,
+		fixup,
+	};
+
+	const arg = {
+		phases,
+		order,
+	};
+
+	const output = await build(arg).then(tg.File.expect);
+	const text = await output.text();
+	const expected = "fixing up\npreparing\ninstalling\nbuilding\nconfiguring\n";
+	tg.assert(text === expected);
+	return true;
+});
+
+export const override = tg.target(async () => {
 	const prepare = `echo "preparing"`;
 	const configure = {
 		command: `echo "configuring"`,
@@ -588,7 +628,7 @@ export const overrideTest = tg.target(async () => {
 	return build(arg1, arg2);
 });
 
-export const envTest = tg.target(async () => {
+export const mutateEnv = tg.target(async () => {
 	const a = await std.env.arg({
 		HELLO: tg.mutation({
 			kind: "prefix",

@@ -334,6 +334,6 @@ export const mergeLibDirs = async (dir: tg.Directory) => {
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ packageDir: gcc(), binaries: ["gcc"], metadata });
+	await std.assert.pkg({ buildFn: gcc, binaries: ["gcc"], metadata });
 	return true;
 });

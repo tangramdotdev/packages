@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 
 use tangram_client as tg;
 use tangram_std::{manifest, Manifest};
@@ -112,7 +112,10 @@ async fn run_proxy(
 		tracing::info!(?executable_path, "found executable path");
 
 		// Copy the file to a temp directory.
-		let tmpdir = tempfile::tempdir()
+		let cwd = std::env::current_dir().map_err(|source| {
+			tg::error!(!source, "could not determine current working directory")
+		})?;
+		let tmpdir = tempfile::TempDir::new_in(&cwd)
 			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
 		let tmp_path = tmpdir.path();
 		let local_executable_path = tmp_path.join("executable");
@@ -123,10 +126,19 @@ async fn run_proxy(
 			.await
 			.map_err(|error| tg::error!(source = error, "failed to copy the executable"))?;
 
+		// Set the file to be writable.
+		let mut perms = tokio::fs::metadata(&local_executable_path)
+			.await
+			.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to get the file metadata"))?.permissions();
+		perms.set_mode(perms.mode() | 0o200);
+		tokio::fs::set_permissions(&local_executable_path, perms)
+			.await
+			.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to set file permissions"))?;
+
 		// Call strip with the correct arguments on the executable.
 		run_strip(strip_program, strip_args, Some(&local_executable_path))?;
 		#[cfg(feature = "tracing")]
-		tracing::info!("strip succeeded");
+		tracing::info!(?local_executable_path, "strip succeeded");
 
 		// Check in the result.
 		let stripped_file = tg::Artifact::check_in(
@@ -184,7 +196,6 @@ async fn run_proxy(
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
-					bundle: false,
 					dependencies: true,
 					force: true,
 					path: Some(canonical_target_path),

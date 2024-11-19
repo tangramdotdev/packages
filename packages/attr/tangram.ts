@@ -15,7 +15,7 @@ export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
-	const base = `https://mirrors.sarata.com/non-gnu/${name}`;
+	const base = `https://download.savannah.gnu.org/releases/${name}`;
 	const extension = ".tar.xz";
 	return std
 		.download({ checksum, name, base, version, extension })
@@ -74,7 +74,7 @@ export const test = tg.target(async () => {
 
 	await std.assert.pkg({
 		binaries,
-		packageDir: default_(),
+		buildFn: default_,
 		libraries: ["attr"],
 		metadata,
 	});

@@ -10,6 +10,14 @@ import cctools from "./llvm/cctools_port.tg.ts";
 import { constructSysroot } from "./libc.tg.ts";
 import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
 
+export * as appleLibdispatch from "./llvm/apple_libdispatch.tg.ts";
+export * as appleLibtapi from "./llvm/apple_libtapi.tg.ts";
+export * as libBsd from "./llvm/libbsd.tg.ts";
+export * as libMd from "./llvm/libmd.tg.ts";
+export * as cctools from "./llvm/cctools_port.tg.ts";
+export * as git from "./llvm/git.tg.ts";
+export * as ncurses from "./llvm/ncurses.tg.ts";
+
 export const metadata = {
 	homepage: "https://llvm.org/",
 	name: "llvm",
@@ -216,8 +224,11 @@ type LinuxToDarwinArg = {
 
 /** Produce a linux to darwin toolchain. */
 import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
-export const linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
-	const { host, target: target_ } = arg;
+export const linuxToDarwin = tg.target(async (arg?: LinuxToDarwinArg) => {
+	const { host, target: target_ } = arg ?? {
+		host: await std.triple.host(),
+		target: "aarch64-apple-darwin",
+	};
 	const target = target_ ?? host;
 
 	// Obtain the clang toolchain.
@@ -246,8 +257,11 @@ export const linuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
 	return await std.env.arg(clangToolchain, cctoolsForTarget);
 });
 
-export const testLinuxToDarwin = tg.target(async (arg: LinuxToDarwinArg) => {
-	const { target } = arg;
+export const testLinuxToDarwin = tg.target(async (arg?: LinuxToDarwinArg) => {
+	const { target } = arg ?? {
+		host: await std.triple.host(),
+		target: "aarch64-apple-darwin",
+	};
 	const combined = await linuxToDarwin(arg);
 	const f = await $`
 	set -x

@@ -191,7 +191,7 @@ export const build = tg.target(async (arg: Arg) => {
 		const sysrootLdso = `${sysrootLibDir}/${interpreterName(target)}`;
 		const ldflagsForTarget = `-Wl,-dynamic-linker,${sysrootLdso}`;
 		configureArgs.push(`LDFLAGS_FOR_TARGET=${ldflagsForTarget}`);
-		preConfigureHook = tg`${preConfigureHook}\nexport LD_LIBRARY_PATH=${sysrootLibDir}`;
+		preConfigureHook = tg`${preConfigureHook}\nexport LD_LIBRARY_PATH=${sysrootLibDir}\nexport WATERMARK=3`;
 	}
 
 	// Set up phases.
@@ -256,8 +256,8 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 		hostOs === "darwin"
 			? tg`${toolchainDir}/${target}/sysroot`
 			: isCross
-				? tg`${toolchainDir}/${target}`
-				: toolchainDir;
+			  ? tg`${toolchainDir}/${target}`
+			  : toolchainDir;
 
 	const ccArgs = [
 		//.Set the sysroot.

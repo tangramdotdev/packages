@@ -383,6 +383,7 @@ export const test = tg.target(async () => {
 		testTransitive(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
+		testStrip(),
 	];
 	return await Promise.all(tests);
 });
