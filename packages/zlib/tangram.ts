@@ -83,3 +83,10 @@ export const test = tg.target(async () => {
 export const testAll = tg.target(async () => {
 	return await std.assert.pkg(spec, true);
 });
+
+export const equivalentTriple = tg.target(() => default_({ host: `x86_64-linux`})); // underlying build should be a cache hit with the default.
+export const crossArch = tg.target(() => default_({ host: `aarch64-unknown-linux-gnu` }));
+export const crossLibc = tg.target(() => default_({ host: `x86_64-unknown-linux-musl` }));
+export const crossArchAndLibc = tg.target(() => default_({ host: `aarch64-unknown-linux-musl` }));
+export const crossOs = tg.target(() => default_({ host: `x86_64-apple-darwin` }));
+export const crossOsAndArch = tg.target(() => default_({ host: `aarch64-apple-darwin` }));
