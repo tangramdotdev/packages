@@ -288,7 +288,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	.await?;
 
 	// Unrender all library paths to symlinks. If any library path points into the working directory, check in its contents.
-	let library_paths = std::iter::once(command_line_library_path)
+	let library_paths = command_line_library_path
+		.into_iter()
 		.chain(
 			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
 				let symlink_data = tangram_std::template_data_to_symlink_data(
@@ -297,12 +298,39 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				let artifact_path = if let tg::symlink::Data::Normal { artifact, subpath } =
 					symlink_data.clone()
 				{
-					if let Some(artifact) = artifact {
-						Some(
-							tangram_std::manifest::ArtifactPath::with_artifact_id_and_subpath(
-								artifact, subpath,
-							),
-						)
+					tracing::debug!(?artifact, ?subpath, "checking for entries");
+					if let Some(artifact_id) = artifact {
+						let artifact = tg::Artifact::with_id(artifact_id.clone());
+						if let Ok(directory) = artifact.try_unwrap_directory() {
+							let entries = if let Some(ref subpath) = subpath {
+								if let Ok(subdirectory) =
+									directory.get(&tg, &subpath).await?.try_unwrap_directory()
+								{
+									subdirectory.entries(&tg).await?
+								} else {
+									BTreeMap::default()
+								}
+							} else {
+								directory.entries(&tg).await?
+							};
+							if entries.is_empty() {
+								None
+							} else {
+								tracing::debug!(
+									?artifact_id,
+									?subpath,
+									"found a directory with entries"
+								);
+								Some(
+								tangram_std::manifest::ArtifactPath::with_artifact_id_and_subpath(
+									artifact_id,
+									subpath,
+								),
+							)
+							}
+						} else {
+							None
+						}
 					} else {
 						tracing::debug!(
 							"Library path points into working directory: {:?}. Creating directory.",
@@ -311,7 +339,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						if let Some(ref library_path) = subpath {
 							if let Ok(ref canonicalized_path) = std::fs::canonicalize(library_path)
 							{
-								Some(checkin_local_library_path(&tg, canonicalized_path).await?)
+								checkin_local_library_path(&tg, canonicalized_path).await?
 							} else {
 								tracing::warn!(
 								"Could not canonicalize library path {library_path:?}. Skipping."
@@ -453,6 +481,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let cwd = std::env::current_dir()
 			.map_err(|error| tg::error!(source = error, "failed to get the current directory"))?;
 		let output_path = cwd.join(&options.output_path);
+		let output_file_id = output_file.id(&tg).await?;
+		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
 		tg::Artifact::from(output_file)
 			.check_out(
 				&tg,
@@ -472,7 +502,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 async fn checkin_local_library_path(
 	tg: &impl tg::Handle,
 	library_path: &impl AsRef<std::path::Path>,
-) -> tg::Result<tangram_std::manifest::ArtifactPath> {
+) -> tg::Result<Option<tangram_std::manifest::ArtifactPath>> {
 	let library_path = library_path.as_ref();
 	tracing::debug!(?library_path, "Checking in local library path");
 	// Get a stream of directory entries.
@@ -529,11 +559,17 @@ async fn checkin_local_library_path(
 		.try_collect::<BTreeMap<_, _>>()
 		.await?;
 
-	// Construct the directory.
-	let directory = tg::Directory::with_entries(entries);
-	let directory_id = directory.id(tg).await?;
-	let artifact_path = tangram_std::manifest::ArtifactPath::with_artifact_id(directory_id);
-	Ok(artifact_path)
+	let result = if entries.is_empty() {
+		None
+	} else {
+		// Construct the directory.
+		let directory = tg::Directory::with_entries(entries);
+		let directory_id = directory.id(tg).await?;
+		let artifact_path = tangram_std::manifest::ArtifactPath::with_artifact_id(directory_id);
+		Some(artifact_path)
+	};
+
+	Ok(result)
 }
 
 fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
@@ -544,7 +580,6 @@ fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
 }
 
 /// Create a manifest.
-#[allow(clippy::too_many_lines)]
 async fn create_manifest<H: BuildHasher>(
 	tg: &impl tg::Handle,
 	ld_output_id: tg::artifact::Id,
@@ -717,7 +752,7 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 	tg: &impl tg::Handle,
 	library_candidate_paths: &[PathBuf],
 	all_needed_libraries: &mut HashMap<String, Option<tg::directory::Id>, H>,
-) -> tg::Result<tangram_std::manifest::ArtifactPath> {
+) -> tg::Result<Option<tangram_std::manifest::ArtifactPath>> {
 	let mut entries = BTreeMap::new();
 	for library_candidate_path in library_candidate_paths {
 		if let Ok(AnalyzeOutputFileOutput {
@@ -748,10 +783,15 @@ async fn create_library_path_for_command_line_libraries<H: BuildHasher>(
 	}
 
 	// Construct the directory.
-	let directory = tg::Directory::with_entries(entries);
-	let directory_id = directory.id(tg).await?;
-	let artifact_path = tangram_std::manifest::ArtifactPath::with_artifact_id(directory_id);
-	Ok(artifact_path)
+	let result = if entries.is_empty() {
+		None
+	} else {
+		let directory = tg::Directory::with_entries(entries);
+		let directory_id = directory.id(tg).await?;
+		let artifact_path = tangram_std::manifest::ArtifactPath::with_artifact_id(directory_id);
+		Some(artifact_path)
+	};
+	Ok(result)
 }
 
 /// Determine whether the given argument should be considered a library candidate.
@@ -815,9 +855,13 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			}
 		}
 	}
-	let directory = tg::Directory::with_entries(entries);
-	let dir_id = directory.id(tg).await?;
-	let resolved_dirs = std::iter::once(dir_id.clone()).collect();
+	let dir_id = if entries.is_empty() {
+		None
+	} else {
+		let directory = tg::Directory::with_entries(entries);
+		Some(directory.id(tg).await?)
+	};
+	let resolved_dirs = dir_id.into_iter().collect();
 
 	finalize_library_paths(tg, resolved_dirs, needed_libraries).await
 }
@@ -869,7 +913,10 @@ async fn report_missing_libraries<H: BuildHasher + Default>(
 		.difference(&found_libraries)
 		.collect_vec();
 	if !missing_libs.is_empty() {
-		tracing::warn!("Could not find the following required libraries: {missing_libs:?}");
+		tracing::warn!(
+			?library_paths,
+			"Could not find the following required libraries: {missing_libs:?}"
+		);
 	}
 	Ok(())
 }
