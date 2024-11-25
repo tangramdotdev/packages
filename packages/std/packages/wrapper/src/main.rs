@@ -109,7 +109,7 @@ fn main_inner() -> std::io::Result<()> {
 	// Set the env.
 	if !suppress_env {
 		if let Some(env) = &manifest.env {
-			mutate_env(env, &artifacts_directories);
+			mutate_env(env, &artifacts_directories)?;
 		}
 	}
 
@@ -425,7 +425,10 @@ fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) {
 	}
 }
 
-fn mutate_env(env: &tg::mutation::Data, artifacts_directories: &[impl AsRef<std::path::Path>]) {
+fn mutate_env(
+	env: &tg::mutation::Data,
+	artifacts_directories: &[impl AsRef<std::path::Path>],
+) -> std::io::Result<()> {
 	match env {
 		tg::mutation::Data::Unset => {
 			clear_env();
@@ -433,7 +436,7 @@ fn mutate_env(env: &tg::mutation::Data, artifacts_directories: &[impl AsRef<std:
 		tg::mutation::Data::Set { value } => {
 			// We expect this to be a map of string to mutation.
 			if let tg::value::Data::Map(mutations) = *value.clone() {
-				apply_env(&mutations, artifacts_directories);
+				apply_env(&mutations, artifacts_directories)?;
 			} else {
 				#[cfg(feature = "tracing")]
 				tracing::error!(?value, "Unexpected value found for env, expected a map.");
@@ -449,42 +452,45 @@ fn mutate_env(env: &tg::mutation::Data, artifacts_directories: &[impl AsRef<std:
 			std::process::exit(1);
 		},
 	}
+	Ok(())
 }
 
 fn apply_env(
 	env: &BTreeMap<String, tg::value::Data>,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
-) {
+) -> std::io::Result<()> {
 	for (key, value) in env {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?key, ?value, "Setting env.");
-		apply_value_to_key(key, value, artifacts_directories);
+		apply_value_to_key(key, value, artifacts_directories)?;
 	}
+	Ok(())
 }
 
 fn apply_value_to_key(
 	key: &str,
 	value: &tg::value::Data,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
-) {
+) -> std::io::Result<()> {
 	if let tg::value::Data::Array(mutations) = value {
 		for mutation in mutations {
 			if let tg::value::Data::Mutation(mutation) = mutation {
-				apply_mutation_to_key(key, mutation, artifacts_directories);
+				apply_mutation_to_key(key, mutation, artifacts_directories)?;
 			}
 		}
 	} else if let tg::value::Data::Mutation(mutation) = value {
-		apply_mutation_to_key(key, mutation, artifacts_directories);
+		apply_mutation_to_key(key, mutation, artifacts_directories)?;
 	} else {
-		std::env::set_var(key, render_value(value, artifacts_directories));
+		std::env::set_var(key, render_value(value, artifacts_directories)?);
 	}
+	Ok(())
 }
 
 fn apply_mutation_to_key(
 	key: &str,
 	mutation: &tg::mutation::Data,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
-) {
+) -> std::io::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::debug!(?key, ?mutation, "Applying mutation.");
 	match mutation {
@@ -492,18 +498,18 @@ fn apply_mutation_to_key(
 			std::env::remove_var(key);
 		},
 		tg::mutation::Data::Set { value } => {
-			apply_value_to_key(key, value, artifacts_directories);
+			apply_value_to_key(key, value, artifacts_directories)?;
 		},
 		tg::mutation::Data::SetIfUnset { value } => {
 			if std::env::var(key).is_err() {
-				apply_value_to_key(key, value, artifacts_directories);
+				apply_value_to_key(key, value, artifacts_directories)?;
 			}
 		},
 		tg::mutation::Data::Prepend { values } => {
 			let values = values
 				.iter()
 				.map(|arg| render_value(arg, artifacts_directories))
-				.collect::<Vec<_>>();
+				.collect::<Result<Vec<_>, _>>()?;
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
@@ -516,7 +522,7 @@ fn apply_mutation_to_key(
 			let values = values
 				.iter()
 				.map(|arg| render_value(arg, artifacts_directories))
-				.collect::<Vec<_>>();
+				.collect::<Result<Vec<_>, _>>()?;
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
@@ -552,6 +558,7 @@ fn apply_mutation_to_key(
 			}
 		},
 	}
+	Ok(())
 }
 
 #[must_use]
@@ -584,16 +591,16 @@ fn render_template(
 fn render_symlink(
 	symlink: &tg::symlink::Data,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
-) -> String {
-	let template = template_from_symlink(symlink);
-	render_template(&template, artifacts_directories)
+) -> std::io::Result<String> {
+	let template = template_from_symlink(symlink)?;
+	Ok(render_template(&template, artifacts_directories))
 }
 
 fn render_value(
 	value: &tg::value::Data,
 	artifacts_directories: &[impl AsRef<std::path::Path>],
-) -> String {
-	match value {
+) -> std::io::Result<String> {
+	let result = match value {
 		tg::value::Data::Null => String::new(),
 		tg::value::Data::Bool(value) => {
 			if *value {
@@ -606,7 +613,7 @@ fn render_value(
 		tg::value::Data::String(value) => value.clone(),
 		tg::value::Data::Object(_) => {
 			let symlink = symlink_from_artifact_value_data(value);
-			render_symlink(&symlink, artifacts_directories)
+			render_symlink(&symlink, artifacts_directories)?
 		},
 		tg::value::Data::Template(template) => render_template(template, artifacts_directories),
 		_ => {
@@ -614,27 +621,28 @@ fn render_value(
 			tracing::error!(?value, "Malformed manifest env value.");
 			std::process::exit(1)
 		},
-	}
+	};
+	Ok(result)
 }
 
 fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Data {
 	if let tg::value::Data::Object(id) = value {
 		match id {
 			tg::object::Id::Directory(id) => {
-				return tg::symlink::Data::Normal {
-					artifact: Some(id.clone().into()),
+				return tg::symlink::Data::Artifact {
+					artifact: id.clone().into(),
 					subpath: None,
 				}
 			},
 			tg::object::Id::File(id) => {
-				return tg::symlink::Data::Normal {
-					artifact: Some(id.clone().into()),
+				return tg::symlink::Data::Artifact {
+					artifact: id.clone().into(),
 					subpath: None,
 				}
 			},
 			tg::object::Id::Symlink(id) => {
-				return tg::symlink::Data::Normal {
-					artifact: Some(id.clone().into()),
+				return tg::symlink::Data::Artifact {
+					artifact: id.clone().into(),
 					subpath: None,
 				}
 			},
@@ -646,18 +654,28 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 	std::process::exit(1);
 }
 
-fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::template::Data {
+fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::template::Data> {
 	let mut components = Vec::with_capacity(3);
-	if let tg::symlink::Data::Normal { artifact, subpath } = symlink {
-		if let Some(artifact) = artifact {
+	match symlink {
+		tg::symlink::Data::Target { target } => components.push(
+			tg::template::component::Data::String(target.display().to_string()),
+		),
+		tg::symlink::Data::Artifact { artifact, subpath } => {
 			components.push(tg::template::component::Data::Artifact(artifact.clone()));
-		}
-		if let Some(subpath) = subpath {
-			components.push(tg::template::component::Data::String("/".to_owned()));
-			components.push(tg::template::component::Data::String(
-				subpath.display().to_string(),
-			));
-		}
-	}
-	tg::template::Data { components }
+			if let Some(subpath) = subpath {
+				components.push(tg::template::component::Data::String("/".to_owned()));
+				components.push(tg::template::component::Data::String(
+					subpath.display().to_string(),
+				));
+			}
+		},
+		tg::symlink::Data::Graph { graph: _, node: _ } => {
+			return Err(std::io::Error::new(
+				std::io::ErrorKind::InvalidInput,
+				"cannot produce a template from a symlink pointing into a graph",
+			))
+		},
+	};
+	let result = tg::template::Data { components };
+	Ok(result)
 }

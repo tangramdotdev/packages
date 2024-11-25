@@ -158,10 +158,12 @@ async fn run_proxy(
 		#[cfg(feature = "tracing")]
 		tracing::info!(?stripped_file_id, "checked in the stripped executable");
 
+		#[cfg(feature = "tracing")]
 		if let Err(e) = tmpdir.close() {
-			#[cfg(feature = "tracing")]
 			tracing::warn!(?e, "failed to close tempdir");
 		}
+		#[cfg(not(feature = "tracing"))]
+		let _ = tmpdir.close();
 
 		// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 		let new_manifest = Manifest {

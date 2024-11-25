@@ -295,11 +295,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				let symlink_data = tangram_std::template_data_to_symlink_data(
 					tangram_std::unrender(library_path)?.data(&tg).await?,
 				)?;
-				let artifact_path = if let tg::symlink::Data::Normal { artifact, subpath } =
-					symlink_data.clone()
-				{
-					tracing::debug!(?artifact, ?subpath, "checking for entries");
-					if let Some(artifact_id) = artifact {
+				let artifact_path = match symlink_data.clone() {
+					tg::symlink::data::Symlink::Artifact {
+						artifact: artifact_id,
+						subpath,
+					} => {
+						tracing::debug!(?artifact_id, ?subpath, "checking for entries");
 						let artifact = tg::Artifact::with_id(artifact_id.clone());
 						if let Ok(directory) = artifact.try_unwrap_directory() {
 							let entries = if let Some(ref subpath) = subpath {
@@ -331,28 +332,25 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						} else {
 							None
 						}
-					} else {
+					},
+					tg::symlink::data::Symlink::Target { target } => {
 						tracing::debug!(
 							"Library path points into working directory: {:?}. Creating directory.",
-							subpath
+							target
 						);
-						if let Some(ref library_path) = subpath {
-							if let Ok(ref canonicalized_path) = std::fs::canonicalize(library_path)
-							{
-								checkin_local_library_path(&tg, canonicalized_path).await?
-							} else {
-								tracing::warn!(
-								"Could not canonicalize library path {library_path:?}. Skipping."
-							);
-								None
-							}
+						if let Ok(ref canonicalized_path) = std::fs::canonicalize(&target) {
+							checkin_local_library_path(&tg, canonicalized_path).await?
 						} else {
-							tracing::warn!("Library path has no artifact or subpath, skipping.");
+							tracing::warn!(
+								"Could not canonicalize library path {target:?}. Skipping."
+							);
 							None
 						}
-					}
-				} else {
-					None
+					},
+					tg::symlink::data::Symlink::Graph { .. } => {
+						tracing::warn!(?symlink_data, "ecountered a graph object");
+						None
+					},
 				};
 				Ok::<_, tg::Error>(artifact_path)
 			}))

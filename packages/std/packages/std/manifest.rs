@@ -226,7 +226,7 @@ impl TryFrom<tg::template::Data> for ArtifactPath {
 impl From<ArtifactPath> for tg::Symlink {
 	fn from(artifact_path: ArtifactPath) -> Self {
 		let artifact = tg::Artifact::with_id(artifact_path.artifact);
-		tg::Symlink::with_artifact_and_subpath(Some(artifact), artifact_path.subpath)
+		tg::Symlink::with_artifact_and_subpath(artifact, artifact_path.subpath)
 	}
 }
 

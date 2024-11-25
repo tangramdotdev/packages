@@ -13,21 +13,20 @@ pub fn template_data_to_symlink_data(
 ) -> tg::Result<tg::symlink::Data> {
 	let components = template.components;
 	match components.as_slice() {
-		[tg::template::component::Data::String(s)] => Ok(tg::symlink::Data::Normal {
-			artifact: None,
-			subpath: Some(s.into()),
-		}),
+		[tg::template::component::Data::String(s)] => {
+			Ok(tg::symlink::Data::Target { target: s.into() })
+		},
 		[tg::template::component::Data::Artifact(id)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
-			Ok(tg::symlink::Data::Normal {
-				artifact: Some(id.clone()),
+			Ok(tg::symlink::Data::Artifact {
+				artifact: id.clone(),
 				subpath: None,
 			})
 		},
 		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
 		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
-			Ok(tg::symlink::Data::Normal {
-				artifact: Some(artifact_id.clone()),
+			Ok(tg::symlink::Data::Artifact {
+				artifact: artifact_id.clone(),
 				subpath: Some(s.chars().skip(1).collect::<String>().into()),
 			})
 		},
