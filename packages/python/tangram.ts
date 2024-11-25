@@ -197,11 +197,6 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	if (os === "darwin") {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.1" });
 	}
-	if (os === "linux") {
-		env.push({
-			CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
-		});
-	}
 
 	const configureArgs: Array<string> = [];
 
