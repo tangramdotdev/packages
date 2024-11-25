@@ -294,10 +294,7 @@ const vendoredSources = async (
 		const sourcePath = manifestSubdir
 			? source.get(manifestSubdir).then(tg.Directory.expect)
 			: source;
-		const cargoLock = await (
-			await tg.symlink(sourcePath, "Cargo.lock")
-		).resolve();
-		tg.assert(cargoLock instanceof tg.File);
+		const cargoLock = sourcePath.get("Cargo.lock").then(tg.File.expect);
 		const vendoredSources = vendorDependencies(cargoLock);
 		return tg`
 [source.crates-io]
