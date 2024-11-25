@@ -12,13 +12,13 @@ export const metadata = {
 	license: "MIT",
 	name: "curl",
 	repository: "https://github.com/curl/curl",
-	version: "8.10.0",
+	version: "8.11.0",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:58c9dcf73493ae9d181fd334b3b3987ff73124621565187ade237bff1064a716";
+		"sha256:264537d90e58d2b09dddc50944baf3c38e7089151c8986715e2aaeaaf2b8118f";
 	const owner = name;
 	const repo = name;
 	const tag = `curl-${version.replace(/\./g, "_")}`;

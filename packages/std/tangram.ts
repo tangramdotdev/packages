@@ -125,6 +125,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		sdkDepsZstd: sdk.dependencies.zlib.test,
 		sdkDepsCmake: sdk.cmake.test,
 		sdkDepsNinja: sdk.ninja.test,
+		sdkDepsMoldSource: sdk.mold.source,
 		sdkDepsMold: sdk.mold.test,
 		sdkDefault: sdk.testDefault,
 		sdkGccCross: sdk.testCrossGcc,

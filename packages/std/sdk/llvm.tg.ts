@@ -24,13 +24,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "18.1.8",
+	version: "19.1.4",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:0b58557a6d32ceee97c8d533a59b9212d87e0fc4d2833924eb6c611247db2f2a";
+		"sha256:3aa2d2d2c7553164ad5c6f3b932b31816e422635e18620c9349a7da95b98d811";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -78,6 +78,11 @@ export const toolchain = tg.target(async (arg?: LLVMArg) => {
 		host: build,
 		env: m4ForBuild,
 	});
+	const perlForBuild = dependencies.perl.build({
+		build,
+		host: build,
+		env: std.env.arg(m4ForBuild, bisonForBuild)
+	});
 	const pythonForBuild = dependencies.python.build({
 		build,
 		host: build,
@@ -89,6 +94,7 @@ export const toolchain = tg.target(async (arg?: LLVMArg) => {
 		git({ build, host: build }),
 		bisonForBuild,
 		m4ForBuild,
+		perlForBuild,
 		pythonForBuild,
 		ncursesArtifact,
 		zlibArtifact,
