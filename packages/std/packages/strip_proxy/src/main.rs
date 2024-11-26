@@ -96,7 +96,7 @@ async fn run_proxy(
 	target_path: &std::path::Path,
 	manifest: Manifest,
 ) -> tg::Result<()> {
-	// Get the executable symlink data from the manifest.
+	// Get the executable path from the manifest.
 	if let manifest::Executable::Path(artifact_path) = manifest.executable {
 		// Create the tangram instance.
 		let tg = tg::Client::with_env()?;
@@ -106,7 +106,10 @@ async fn run_proxy(
 		tracing::info!(?artifact_path, "found executable artifact path");
 
 		// Get the path to the actual executable.
-		let executable_path = std::path::PathBuf::from(artifact_path);
+		let executable_path =
+			std::path::PathBuf::from(tangram_std::render_template_data(&artifact_path).map_err(
+				|source| tg::error!(!source, ?artifact_path, "unable to render executable path"),
+			)?);
 
 		#[cfg(feature = "tracing")]
 		tracing::info!(?executable_path, "found executable path");
@@ -168,7 +171,9 @@ async fn run_proxy(
 		// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 		let new_manifest = Manifest {
 			executable: manifest::Executable::Path(
-				tangram_std::manifest::ArtifactPath::with_artifact_id(stripped_file_id),
+				tangram_std::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
+					.data(&tg)
+					.await?,
 			),
 			..manifest
 		};

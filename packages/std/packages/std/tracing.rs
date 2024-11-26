@@ -1,4 +1,3 @@
-#[cfg(feature = "tracing")]
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 /// Initialize tracing.
