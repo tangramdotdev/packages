@@ -6,6 +6,7 @@ import * as bzip2 from "bzip2" with { path: "../bzip2" };
 import * as libffi from "libffi" with { path: "../libffi" };
 import * as libxcrypt from "libxcrypt" with { path: "../libxcrypt" };
 import * as m4 from "m4" with { path: "../m4" };
+import * as mpdecimal from "mpdecimal" with { path: "../mpdecimal" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
@@ -53,6 +54,7 @@ export type Arg = {
 		bzip2?: bzip2.Arg;
 		libffi?: libffi.Arg;
 		libxcrypt?: libxcrypt.Arg;
+		mpdecimal?: mpdecimal.Arg;
 		ncurses?: ncurses.Arg;
 		openssl?: openssl.Arg;
 		readline?: readline.Arg;
@@ -91,6 +93,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 			bzip2: bzip2Arg = {},
 			libffi: libffiArg = {},
 			libxcrypt: libxcryptArg = {},
+			mpdecimal: mpdecimalArg = {},
 			ncurses: ncursesArg = {},
 			openssl: opensslArg = {},
 			readline: readlineArg = {},
@@ -145,6 +148,10 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		.default_({ build, host, sdk }, opensslArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(opensslForHost);
+	const mpdecimalForHost = await mpdecimal
+		.default_({ build, host, sdk }, mpdecimalArg)
+		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	hostDependencies.push(mpdecimalForHost);
 	const readlineForHost = await readline
 		.default_({ build, host, sdk }, readlineArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
@@ -222,9 +229,12 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	const libraryPaths = [libffiForHost, opensslForHost, zlibForHost].map((dir) =>
-		dir.get("lib").then(tg.Directory.expect),
-	);
+	const libraryPaths = [
+		libffiForHost,
+		mpdecimalForHost,
+		opensslForHost,
+		zlibForHost,
+	].map((dir) => dir.get("lib").then(tg.Directory.expect));
 
 	const pythonInterpreter = await std.wrap(
 		tg.symlink(tg`${output}/bin/python${versionString()}`),

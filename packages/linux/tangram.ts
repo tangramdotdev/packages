@@ -6,13 +6,13 @@ export const metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.9.6",
+	version: "6.12.1",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:5d4366e2b89998f274abe03557ef3bc78b58e47fc62c102d51e6f49e5ed96b4b";
+		"sha256:0193b1d86dd372ec891bae799f6da20deef16fc199f30080a4ea9de8cef0c619";
 	const extension = ".tar.xz";
 	const base = `https://cdn.kernel.org/pub/linux/kernel/v6.x`;
 	return await std

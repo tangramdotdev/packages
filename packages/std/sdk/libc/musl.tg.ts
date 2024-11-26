@@ -70,7 +70,9 @@ export const build = tg.target(async (arg?: Arg) => {
 	};
 
 	// The ld-musl symlink installed by default points to a broken absolute path that cannot be checked in. Replace with a relative symlink.
-	const fixup = `cd $OUTPUT/${host}/lib && rm ${interpreterName(host)} && ln -s libc.so ${interpreterName(host)}`;
+	const fixup = `cd $OUTPUT/${host}/lib && rm ${interpreterName(
+		host,
+	)} && ln -s libc.so ${interpreterName(host)}`;
 
 	const phases = {
 		configure,
