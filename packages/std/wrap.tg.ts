@@ -1123,17 +1123,11 @@ export const defaultShellInterpreter = async (
 const symlinkFromManifestArtifactPath = async (
 	artifactPath: wrap.Manifest.ArtifactPath,
 ): Promise<tg.Symlink> => {
-	if (artifactPath.artifact) {
-		const artifact = tg.Artifact.withId(artifactPath.artifact);
-		if (artifactPath.subpath !== undefined) {
-			return tg.symlink({ artifact, subpath: artifactPath.subpath });
-		}
-		return tg.symlink({ artifact });
-	} else if (artifactPath.subpath !== undefined) {
-		return tg.symlink({ subpath: artifactPath.subpath });
-	} else {
-		return tg.symlink();
+	const artifact = tg.Artifact.withId(artifactPath.artifact);
+	if (artifactPath.subpath !== undefined) {
+		return tg.symlink({ artifact, subpath: artifactPath.subpath });
 	}
+	return tg.symlink({ artifact });
 };
 
 const manifestSymlinkFromArg = async (
