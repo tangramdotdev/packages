@@ -1,7 +1,7 @@
 use std::{
 	collections::BTreeMap,
 	io::{Read, Seek},
-	path::{Path, PathBuf},
+	path::Path,
 	str::FromStr as _,
 	sync::LazyLock,
 };
@@ -67,7 +67,7 @@ pub enum Interpreter {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NormalInterpreter {
 	/// The path to the file to exec.
-	pub path: ArtifactPath,
+	pub path: tg::template::Data,
 
 	/// Arguments for the interpreter.
 	pub args: Vec<tg::template::Data>,
@@ -77,15 +77,15 @@ pub struct NormalInterpreter {
 #[serde(rename_all = "camelCase")]
 pub struct LdLinuxInterpreter {
 	/// The path to ld-linux.so.
-	pub path: ArtifactPath,
+	pub path: tg::template::Data,
 
 	/// The paths for the `--library-path` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<ArtifactPath>>,
+	pub library_paths: Option<Vec<tg::template::Data>>,
 
 	/// The paths for the `--preload` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<ArtifactPath>>,
+	pub preloads: Option<Vec<tg::template::Data>>,
 
 	/// Any additional arguments.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -96,15 +96,15 @@ pub struct LdLinuxInterpreter {
 #[serde(rename_all = "camelCase")]
 pub struct LdMuslInterpreter {
 	/// The path to ld-linux.so.
-	pub path: ArtifactPath,
+	pub path: tg::template::Data,
 
 	/// The paths for the `--library-path` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<ArtifactPath>>,
+	pub library_paths: Option<Vec<tg::template::Data>>,
 
 	/// The paths for the `--preload` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<ArtifactPath>>,
+	pub preloads: Option<Vec<tg::template::Data>>,
 
 	/// Any additional arguments.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -116,11 +116,11 @@ pub struct LdMuslInterpreter {
 pub struct DyLdInterpreter {
 	/// The paths for the `DYLD_LIBRARY_PATH` environment variable.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub library_paths: Option<Vec<ArtifactPath>>,
+	pub library_paths: Option<Vec<tg::template::Data>>,
 
 	/// The paths for the `DYLD_INSERT_LIBRARIES` environment variable.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub preloads: Option<Vec<ArtifactPath>>,
+	pub preloads: Option<Vec<tg::template::Data>>,
 }
 
 /// An executable launched by the entrypoint.
@@ -128,106 +128,10 @@ pub struct DyLdInterpreter {
 #[serde(rename_all = "camelCase", tag = "kind", content = "value")]
 pub enum Executable {
 	/// A path to an executable file.
-	Path(ArtifactPath),
+	Path(tg::template::Data),
 
 	/// A script which will be rendered to a file and interpreted.
 	Content(tg::template::Data),
-}
-
-/// An artifact required by a manifest to exist in the Tangram store.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
-pub struct ArtifactPath {
-	/// The artifact ID.
-	pub artifact: tg::artifact::Id,
-
-	/// If the artifact is a directory, optionally specify a subpath.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub subpath: Option<PathBuf>,
-}
-
-impl ArtifactPath {
-	/// Create a new [`ArtifactPath`] with no subpath.
-	#[must_use]
-	pub fn with_artifact_id(artifact: impl Into<tg::artifact::Id>) -> Self {
-		Self {
-			artifact: artifact.into(),
-			subpath: None,
-		}
-	}
-
-	/// Create a new [`ArtifactPath`] with a subpath.
-	#[must_use]
-	pub fn with_artifact_id_and_subpath(
-		artifact: impl Into<tg::artifact::Id>,
-		subpath: impl Into<Option<PathBuf>>,
-	) -> Self {
-		Self {
-			artifact: artifact.into(),
-			subpath: subpath.into(),
-		}
-	}
-
-	/// Render the artifact path as a string containing the absolute path to the closest Tangram directory.
-	#[must_use]
-	pub fn render(&self) -> String {
-		let pathbuf = std::path::PathBuf::from(self.clone());
-		pathbuf.as_os_str().to_string_lossy().to_string()
-	}
-}
-
-impl From<ArtifactPath> for std::path::PathBuf {
-	fn from(artifact_path: ArtifactPath) -> Self {
-		// Start from the artifact path.
-		let mut ret = std::path::PathBuf::from_str(&crate::CLOSEST_ARTIFACT_PATH).unwrap();
-
-		// Add the artifact path.
-		ret.push(artifact_path.artifact.to_string());
-
-		// Add the path if it exists.
-		if let Some(subpath) = artifact_path.subpath {
-			ret.push(subpath);
-		}
-
-		ret
-	}
-}
-
-impl TryFrom<tg::template::Data> for ArtifactPath {
-	type Error = tg::Error;
-	fn try_from(value: tg::template::Data) -> Result<Self, Self::Error> {
-		let components = value.components;
-		match components.as_slice() {
-			[tg::template::component::Data::String(_)] => Err(tg::error!(
-				?components,
-				"Expected a template with an artifact ID"
-			)),
-			[tg::template::component::Data::Artifact(id)]
-			| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
-				Ok(ArtifactPath {
-					artifact: id.clone(),
-					subpath: None,
-				})
-			},
-			[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
-			| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
-				Ok(ArtifactPath {
-					artifact: artifact_id.clone(),
-					subpath: Some(s.chars().skip(1).collect::<String>().into()),
-				})
-			},
-			_ => Err(tg::error!(
-				"expected a template with 1-3 components, got {:?}",
-				components
-			)),
-		}
-	}
-}
-
-impl From<ArtifactPath> for tg::Symlink {
-	fn from(artifact_path: ArtifactPath) -> Self {
-		let artifact = tg::Artifact::with_id(artifact_path.artifact);
-		tg::Symlink::with_artifact_and_subpath(artifact, artifact_path.subpath)
-	}
 }
 
 impl Manifest {
@@ -378,46 +282,46 @@ impl Manifest {
 		// Collect the references from the interpreter.
 		match &self.interpreter {
 			Some(Interpreter::Normal(interpreter)) => {
-				collect_dependencies_from_artifact_path(&interpreter.path, &mut dependencies);
+				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
 				for arg in &interpreter.args {
 					collect_dependencies_from_template_data(arg, &mut dependencies);
 				}
 			},
 			Some(Interpreter::LdLinux(interpreter)) => {
-				collect_dependencies_from_artifact_path(&interpreter.path, &mut dependencies);
+				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
 				if let Some(library_paths) = &interpreter.library_paths {
 					for library_path in library_paths {
-						collect_dependencies_from_artifact_path(library_path, &mut dependencies);
+						collect_dependencies_from_template_data(library_path, &mut dependencies);
 					}
 				}
 				if let Some(preloads) = &interpreter.preloads {
 					for preload in preloads {
-						collect_dependencies_from_artifact_path(preload, &mut dependencies);
+						collect_dependencies_from_template_data(preload, &mut dependencies);
 					}
 				}
 			},
 			Some(Interpreter::LdMusl(interpreter)) => {
-				collect_dependencies_from_artifact_path(&interpreter.path, &mut dependencies);
+				collect_dependencies_from_template_data(&interpreter.path, &mut dependencies);
 				if let Some(library_paths) = &interpreter.library_paths {
 					for library_path in library_paths {
-						collect_dependencies_from_artifact_path(library_path, &mut dependencies);
+						collect_dependencies_from_template_data(library_path, &mut dependencies);
 					}
 				}
 				if let Some(preloads) = &interpreter.preloads {
 					for preload in preloads {
-						collect_dependencies_from_artifact_path(preload, &mut dependencies);
+						collect_dependencies_from_template_data(preload, &mut dependencies);
 					}
 				}
 			},
 			Some(Interpreter::DyLd(interpreter)) => {
 				if let Some(library_paths) = &interpreter.library_paths {
 					for library_path in library_paths {
-						collect_dependencies_from_artifact_path(library_path, &mut dependencies);
+						collect_dependencies_from_template_data(library_path, &mut dependencies);
 					}
 				}
 				if let Some(preloads) = &interpreter.preloads {
 					for preload in preloads {
-						collect_dependencies_from_artifact_path(preload, &mut dependencies);
+						collect_dependencies_from_template_data(preload, &mut dependencies);
 					}
 				}
 			},
@@ -427,7 +331,7 @@ impl Manifest {
 		// Collect the references from the executable.
 		match &self.executable {
 			Executable::Path(path) => {
-				collect_dependencies_from_artifact_path(path, &mut dependencies);
+				collect_dependencies_from_template_data(path, &mut dependencies);
 			},
 			Executable::Content(template) => {
 				collect_dependencies_from_template_data(template, &mut dependencies);
@@ -497,17 +401,6 @@ pub fn collect_dependencies_from_value_data(
 		},
 		_ => {},
 	}
-}
-
-pub fn collect_dependencies_from_artifact_path(
-	value: &ArtifactPath,
-	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
-) {
-	let id = tg::object::Id::from(value.artifact.clone());
-	dependencies.insert(
-		tg::Reference::with_object(&id),
-		dependency_from_object_id(&id),
-	);
 }
 
 pub fn collect_dependencies_from_template_data(

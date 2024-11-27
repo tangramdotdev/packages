@@ -1,5 +1,9 @@
 import * as std from "./tangram.ts";
-import { manifestDependencies, wrap } from "./wrap.tg.ts";
+import {
+	fileOrSymlinkFromManifestTemplate,
+	manifestDependencies,
+	wrap,
+} from "./wrap.tg.ts";
 
 export type PackageSpec = {
 	/** All executables that should exist under `bin/`, with optional behavior to check. */
@@ -267,7 +271,9 @@ export const assertFileReferences = async (
 	tg.assert(fileManifest.interpreter?.kind === interpreterKind);
 	const interpreter = fileManifest.interpreter;
 	const interpreterPath = interpreter.path;
-	const interpreterId = interpreterPath.artifact;
+	const interpreterArtifact =
+		await fileOrSymlinkFromManifestTemplate(interpreterPath);
+	const interpreterId = await interpreterArtifact.id();
 	tg.assert(interpreterId);
 	let foundManifest = false;
 	for await (const dependency of manifestDependencies(fileManifest)) {

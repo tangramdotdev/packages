@@ -68,7 +68,7 @@ export async function wrap(
 		let paths = manifestInterpreter.libraryPaths ?? [];
 		if (arg.libraryPaths) {
 			paths = paths.concat(
-				await Promise.all(arg.libraryPaths.map(manifestSymlinkFromArg)),
+				await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg)),
 			);
 		}
 		manifestInterpreter.libraryPaths = paths;
@@ -317,7 +317,7 @@ export namespace wrap {
 		switch (manifestInterpreter.kind) {
 			case "normal": {
 				return {
-					executable: await symlinkFromManifestArtifactPath(
+					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
 					args:
@@ -331,7 +331,7 @@ export namespace wrap {
 			case "ld-linux": {
 				return {
 					kind: "ld-linux",
-					executable: await symlinkFromManifestArtifactPath(
+					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
 					libraryPaths:
@@ -339,7 +339,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
-										symlinkFromManifestArtifactPath,
+										fileOrSymlinkFromManifestTemplate,
 									),
 							  ),
 					preloads:
@@ -347,7 +347,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.preloads.map(
-										symlinkFromManifestArtifactPath,
+										fileOrSymlinkFromManifestTemplate,
 									),
 							  ),
 					args:
@@ -361,7 +361,7 @@ export namespace wrap {
 			case "ld-musl": {
 				return {
 					kind: "ld-musl",
-					executable: await symlinkFromManifestArtifactPath(
+					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
 					libraryPaths:
@@ -369,7 +369,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
-										symlinkFromManifestArtifactPath,
+										fileOrSymlinkFromManifestTemplate,
 									),
 							  ),
 					preloads:
@@ -377,7 +377,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.preloads.map(
-										symlinkFromManifestArtifactPath,
+										fileOrSymlinkFromManifestTemplate,
 									),
 							  ),
 					args:
@@ -396,7 +396,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
-										symlinkFromManifestArtifactPath,
+										fileOrSymlinkFromManifestTemplate,
 									),
 							  ),
 					preloads:
@@ -404,7 +404,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.preloads.map(
-										symlinkFromManifestArtifactPath,
+										fileOrSymlinkFromManifestTemplate,
 									),
 							  ),
 				};
@@ -437,11 +437,11 @@ export namespace wrap {
 
 	export const executableFromManifestExecutable = async (
 		manifestExecutable: wrap.Manifest.Executable,
-	): Promise<tg.Template | tg.Symlink> => {
+	): Promise<tg.Template | tg.File | tg.Symlink> => {
 		if (manifestExecutable.kind === "content") {
 			return templateFromManifestTemplate(manifestExecutable.value);
 		} else {
-			return symlinkFromManifestArtifactPath(manifestExecutable.value);
+			return fileOrSymlinkFromManifestTemplate(manifestExecutable.value);
 		}
 	};
 
@@ -466,7 +466,7 @@ export namespace wrap {
 	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */
 	export const tryUnwrap = async (
 		file: tg.File,
-	): Promise<tg.File | tg.Template | undefined> => {
+	): Promise<tg.Symlink | tg.File | tg.Template | undefined> => {
 		try {
 			return await unwrap(file);
 		} catch (_) {
@@ -477,7 +477,7 @@ export namespace wrap {
 	/** Unwrap a wrapped executable. Throws an error if the input was not a Tangram executable. */
 	export const unwrap = async (
 		file: tg.File,
-	): Promise<tg.File | tg.Template> => {
+	): Promise<tg.Symlink | tg.File | tg.Template> => {
 		const manifest = await wrap.Manifest.read(file);
 		if (!manifest) {
 			throw new Error(
@@ -487,17 +487,7 @@ export namespace wrap {
 		if (manifest.executable.kind === "content") {
 			return templateFromManifestTemplate(manifest.executable.value);
 		} else {
-			const symlink = await symlinkFromManifestArtifactPath(
-				manifest.executable.value,
-			);
-			const resolved = await symlink.resolve();
-			if (resolved instanceof tg.File) {
-				return resolved;
-			} else {
-				throw new Error(
-					`Could not resolve executable symlink ${await symlink.id()} to a file.`,
-				);
-			}
+			return fileOrSymlinkFromManifestTemplate(manifest.executable.value);
 		}
 	};
 
@@ -512,40 +502,35 @@ export namespace wrap {
 
 		export type NormalInterpreter = {
 			kind: "normal";
-			path: Manifest.ArtifactPath;
+			path: Manifest.Template;
 			args?: Array<Manifest.Template> | undefined;
 		};
 
 		export type LdLinuxInterpreter = {
 			kind: "ld-linux";
-			path: Manifest.ArtifactPath;
-			libraryPaths?: Array<Manifest.ArtifactPath> | undefined;
-			preloads?: Array<Manifest.ArtifactPath> | undefined;
+			path: Manifest.Template;
+			libraryPaths?: Array<Manifest.Template> | undefined;
+			preloads?: Array<Manifest.Template> | undefined;
 			args?: Array<Manifest.Template> | undefined;
 		};
 
 		export type LdMuslInterpreter = {
 			kind: "ld-musl";
-			path: Manifest.ArtifactPath;
-			libraryPaths?: Array<Manifest.ArtifactPath> | undefined;
-			preloads?: Array<Manifest.ArtifactPath> | undefined;
+			path: Manifest.Template;
+			libraryPaths?: Array<Manifest.Template> | undefined;
+			preloads?: Array<Manifest.Template> | undefined;
 			args?: Array<Manifest.Template> | undefined;
 		};
 
 		export type DyLdInterpreter = {
 			kind: "dyld";
-			libraryPaths?: Array<Manifest.ArtifactPath> | undefined;
-			preloads?: Array<Manifest.ArtifactPath> | undefined;
+			libraryPaths?: Array<Manifest.Template> | undefined;
+			preloads?: Array<Manifest.Template> | undefined;
 		};
 
 		export type Executable =
-			| { kind: "path"; value: Manifest.ArtifactPath }
+			| { kind: "path"; value: Manifest.Template }
 			| { kind: "content"; value: Manifest.Template };
-
-		export type ArtifactPath = {
-			artifact: tg.Artifact.Id;
-			subpath?: string | undefined;
-		};
 
 		// Matches tg::template::Data
 		export type Template = {
@@ -735,7 +720,7 @@ const manifestExecutableFromArg = async (
 	if (isManifestExecutable(arg)) {
 		return arg;
 	} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
-		const value = await manifestSymlinkFromArg(arg);
+		const value = await manifestTemplateFromArg(arg);
 		tg.assert(value);
 		return {
 			kind: "path",
@@ -777,7 +762,7 @@ const manifestInterpreterFromArg = async (
 			buildToolchain: buildToolchainArg,
 			executable: arg,
 		});
-		const path = await manifestSymlinkFromArg(interpreter);
+		const path = await manifestTemplateFromArg(interpreter);
 		return {
 			kind: "normal",
 			path,
@@ -788,11 +773,11 @@ const manifestInterpreterFromArg = async (
 	// Otherwise, create the interpreter specified by the arg object.
 	if ("kind" in arg && arg.kind === "ld-linux") {
 		// Handle an ld-linux interpreter.
-		const path = await manifestSymlinkFromArg(arg.executable);
+		const path = await manifestTemplateFromArg(arg.executable);
 		const libraryPaths = arg.libraryPaths
 			? await Promise.all(
 					arg.libraryPaths.map(async (arg) =>
-						manifestSymlinkFromArg(await tg.template(arg)),
+						manifestTemplateFromArg(await tg.template(arg)),
 					),
 			  )
 			: undefined;
@@ -817,7 +802,7 @@ const manifestInterpreterFromArg = async (
 		const preloads = arg.preloads
 			? await Promise.all(
 					arg.preloads?.map(async (arg) =>
-						manifestSymlinkFromArg(await tg.template(arg)),
+						manifestTemplateFromArg(await tg.template(arg)),
 					),
 			  )
 			: [];
@@ -838,7 +823,7 @@ const manifestInterpreterFromArg = async (
 			});
 
 			const injectionManifestSymlink =
-				await manifestSymlinkFromArg(injectionLibrary);
+				await manifestTemplateFromArg(injectionLibrary);
 			preloads.push(injectionManifestSymlink);
 		}
 
@@ -854,11 +839,11 @@ const manifestInterpreterFromArg = async (
 		};
 	} else if ("kind" in arg && arg.kind === "ld-musl") {
 		// Handle an ld-musl interpreter.
-		const path = await manifestSymlinkFromArg(arg.executable);
+		const path = await manifestTemplateFromArg(arg.executable);
 		const libraryPaths = arg.libraryPaths
 			? await Promise.all(
 					arg.libraryPaths.map(async (arg) =>
-						manifestSymlinkFromArg(await tg.template(arg)),
+						manifestTemplateFromArg(await tg.template(arg)),
 					),
 			  )
 			: undefined;
@@ -883,7 +868,7 @@ const manifestInterpreterFromArg = async (
 		const preloads = arg.preloads
 			? await Promise.all(
 					arg.preloads?.map(async (arg) =>
-						manifestSymlinkFromArg(await tg.template(arg)),
+						manifestTemplateFromArg(await tg.template(arg)),
 					),
 			  )
 			: [];
@@ -899,7 +884,7 @@ const manifestInterpreterFromArg = async (
 			});
 
 			const injectionManifestSymlink =
-				await manifestSymlinkFromArg(injectionLibrary);
+				await manifestTemplateFromArg(injectionLibrary);
 			preloads.push(injectionManifestSymlink);
 		}
 
@@ -918,14 +903,14 @@ const manifestInterpreterFromArg = async (
 		const libraryPaths = arg.libraryPaths
 			? await Promise.all(
 					arg.libraryPaths.map(async (arg) =>
-						manifestSymlinkFromArg(await tg.template(arg)),
+						manifestTemplateFromArg(await tg.template(arg)),
 					),
 			  )
 			: undefined;
 		const preloads = arg.preloads
 			? await Promise.all(
 					arg.preloads?.map(async (arg) =>
-						manifestSymlinkFromArg(await tg.template(arg)),
+						manifestTemplateFromArg(await tg.template(arg)),
 					),
 			  )
 			: [];
@@ -940,7 +925,7 @@ const manifestInterpreterFromArg = async (
 				buildToolchain,
 				host,
 			});
-			preloads.push(await manifestSymlinkFromArg(injectionLibrary));
+			preloads.push(await manifestTemplateFromArg(injectionLibrary));
 		}
 		return {
 			kind: "dyld",
@@ -949,7 +934,7 @@ const manifestInterpreterFromArg = async (
 		};
 	} else {
 		// Handle a normal interpreter.
-		const path = await manifestSymlinkFromArg(arg.executable);
+		const path = await manifestTemplateFromArg(arg.executable);
 		const args = await Promise.all(
 			arg.args?.map(manifestTemplateFromArg) ?? [],
 		);
@@ -1012,7 +997,7 @@ const manifestInterpreterFromExecutableArg = async (
 			return {
 				kind: "dyld",
 				libraryPaths: undefined,
-				preloads: [await manifestSymlinkFromArg(injectionDylib)],
+				preloads: [await manifestTemplateFromArg(injectionDylib)],
 			};
 		}
 		case "shebang": {
@@ -1070,9 +1055,9 @@ const manifestInterpreterFromElf = async (
 		);
 		return {
 			kind: "ld-linux",
-			path: await manifestSymlinkFromArg(ldso),
-			libraryPaths: [await manifestSymlinkFromArg(libDir)],
-			preloads: [await manifestSymlinkFromArg(injectionLib)],
+			path: await manifestTemplateFromArg(ldso),
+			libraryPaths: [await manifestTemplateFromArg(libDir)],
+			preloads: [await manifestTemplateFromArg(injectionLib)],
 			args: undefined,
 		};
 	} else if (metadata.interpreter?.includes("ld-musl")) {
@@ -1083,9 +1068,9 @@ const manifestInterpreterFromElf = async (
 		const ldso = tg.File.expect(await libDir.get("libc.so"));
 		return {
 			kind: "ld-musl",
-			path: await manifestSymlinkFromArg(ldso),
-			libraryPaths: [await manifestSymlinkFromArg(libDir)],
-			preloads: [await manifestSymlinkFromArg(injectionLib)],
+			path: await manifestTemplateFromArg(ldso),
+			libraryPaths: [await manifestTemplateFromArg(libDir)],
+			preloads: [await manifestTemplateFromArg(injectionLib)],
 			args: undefined,
 		};
 	} else {
@@ -1118,42 +1103,6 @@ export const defaultShellInterpreter = async (
 		env,
 	});
 	return bash;
-};
-
-const symlinkFromManifestArtifactPath = async (
-	artifactPath: wrap.Manifest.ArtifactPath,
-): Promise<tg.Symlink> => {
-	const artifact = tg.Artifact.withId(artifactPath.artifact);
-	if (artifactPath.subpath !== undefined) {
-		return tg.symlink({ artifact, subpath: artifactPath.subpath });
-	}
-	return tg.symlink({ artifact });
-};
-
-const manifestSymlinkFromArg = async (
-	arg: string | tg.Template | tg.Artifact | wrap.Manifest.Template,
-): Promise<wrap.Manifest.ArtifactPath> => {
-	if (isManifestTemplate(arg)) {
-		const t = await templateFromManifestTemplate(arg);
-		return manifestSymlinkFromArg(t);
-	} else if (typeof arg === "string" || arg instanceof tg.Template) {
-		return manifestSymlinkFromArg(await tg.symlink(arg));
-	} else if (arg instanceof tg.Symlink) {
-		const artifact = await arg.artifact();
-		if (!artifact) {
-			throw new Error("artifact is required");
-		}
-		const subpath = await arg.subpath();
-
-		return {
-			artifact: await artifact.id(),
-			subpath: subpath ? subpath.toString() : undefined,
-		};
-	} else if (tg.Artifact.is(arg)) {
-		return { artifact: await arg.id() };
-	} else {
-		return tg.unreachable();
-	}
 };
 
 const valueIsTemplateLike = (
@@ -1239,6 +1188,24 @@ const manifestValueFromManifestTemplate = (
 		kind: "template",
 		value: template,
 	};
+};
+
+export const fileOrSymlinkFromManifestTemplate = async (
+	manifestTemplate: wrap.Manifest.Template,
+): Promise<tg.File | tg.Symlink> => {
+	let template = await templateFromManifestTemplate(manifestTemplate);
+	if (template.components.length !== 1) {
+		throw new Error(
+			`expected a template with exactly one component, got ${manifestTemplate}`,
+		);
+	}
+	const component = template.components[0];
+	if (!(component instanceof tg.File || component instanceof tg.Symlink)) {
+		const received =
+			component instanceof tg.Directory ? await component.id() : component;
+		throw new Error(`expected a file or symlink, got ${artifactId}`);
+	}
+	return component;
 };
 
 const templateFromManifestTemplate = (
@@ -1469,35 +1436,35 @@ export async function* manifestDependencies(
 			break;
 		}
 		case "normal":
-			yield* manifestSymlinkDependencies(manifest.interpreter.path);
+			yield* manifestTemplateDependencies(manifest.interpreter.path);
 			for (const arg of manifest.interpreter.args ?? []) {
 				yield* manifestTemplateDependencies(arg);
 			}
 			break;
 		case "ld-linux": {
-			yield* manifestSymlinkDependencies(manifest.interpreter.path);
+			yield* manifestTemplateDependencies(manifest.interpreter.path);
 			if (manifest.interpreter.libraryPaths) {
 				for (const libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestSymlinkDependencies(libraryPath);
+					yield* manifestTemplateDependencies(libraryPath);
 				}
 			}
 			if (manifest.interpreter.preloads) {
 				for (const preload of manifest.interpreter.preloads) {
-					yield* manifestSymlinkDependencies(preload);
+					yield* manifestTemplateDependencies(preload);
 				}
 			}
 			break;
 		}
 		case "ld-musl": {
-			yield* manifestSymlinkDependencies(manifest.interpreter.path);
+			yield* manifestTemplateDependencies(manifest.interpreter.path);
 			if (manifest.interpreter.libraryPaths) {
 				for (const libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestSymlinkDependencies(libraryPath);
+					yield* manifestTemplateDependencies(libraryPath);
 				}
 			}
 			if (manifest.interpreter.preloads) {
 				for (const preload of manifest.interpreter.preloads) {
-					yield* manifestSymlinkDependencies(preload);
+					yield* manifestTemplateDependencies(preload);
 				}
 			}
 			break;
@@ -1505,12 +1472,12 @@ export async function* manifestDependencies(
 		case "dyld": {
 			if (manifest.interpreter.libraryPaths) {
 				for (const libraryPath of manifest.interpreter.libraryPaths) {
-					yield* manifestSymlinkDependencies(libraryPath);
+					yield* manifestTemplateDependencies(libraryPath);
 				}
 			}
 			if (manifest.interpreter.preloads) {
 				for (const preload of manifest.interpreter.preloads) {
-					yield* manifestSymlinkDependencies(preload);
+					yield* manifestTemplateDependencies(preload);
 				}
 			}
 			break;
@@ -1563,20 +1530,7 @@ async function* manifestMutationDependencies(
 async function* manifestExecutableDependencies(
 	executable: wrap.Manifest.Executable,
 ): AsyncGenerator<tg.Object> {
-	if (executable.kind === "path") {
-		yield* manifestSymlinkDependencies(executable.value);
-	} else if (executable.kind === "content") {
-		yield* manifestTemplateDependencies(executable.value);
-	} else {
-		return tg.unreachable();
-	}
-}
-
-/** Yield the artifact referenced by a symlink. */
-async function* manifestSymlinkDependencies(
-	symlink: wrap.Manifest.ArtifactPath,
-): AsyncGenerator<tg.Object> {
-	yield await symlinkFromManifestArtifactPath(symlink);
+	yield* manifestTemplateDependencies(executable.value);
 }
 
 /** Yield the artifacts referenced by a template. */
