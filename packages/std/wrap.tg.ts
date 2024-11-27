@@ -1105,32 +1105,6 @@ export const defaultShellInterpreter = async (
 	return bash;
 };
 
-// const manifestTemplateFromArg = async (
-// 	arg: string | tg.Template | tg.Artifact | wrap.Manifest.Template,
-// ): Promise<wrap.Manifest.Symlink> => {
-// 	if (isManifestTemplate(arg)) {
-// 		const t = await templateFromManifestTemplate(arg);
-// 		return manifestTemplateFromArg(t);
-// 	} else if (typeof arg === "string" || arg instanceof tg.Template) {
-// 		return manifestTemplateFromArg(await tg.symlink(arg));
-// 	} else if (arg instanceof tg.Symlink) {
-// 		const artifact = await arg.artifact();
-// 		if (!artifact) {
-// 			throw new Error("artifact is required");
-// 		}
-// 		const subpath = await arg.subpath();
-
-// 		return {
-// 			artifact: await artifact.id(),
-// 			subpath: subpath ? subpath.toString() : undefined,
-// 		};
-// 	} else if (tg.Artifact.is(arg)) {
-// 		return { artifact: await arg.id() };
-// 	} else {
-// 		return tg.unreachable();
-// 	}
-// };
-
 const valueIsTemplateLike = (
 	value: tg.Value,
 ): value is string | tg.Template | tg.Artifact => {
