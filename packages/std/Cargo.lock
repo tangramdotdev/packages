@@ -128,18 +128,18 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "bytes"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ac0150caa2ae65ca5bd83f25c7de183dea78d4d366469f148435e2acfbad0da"
+checksum = "325918d6fe32f23b19878fe4b34794ae41fc19ddbe53b10571a4874d44ffd39b"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cc"
-version = "1.2.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd9de9f2205d5ef3fd67e685b0df337994ddd4495e2a28d185500d0e1edfea47"
+checksum = "f34d93e62b03caf570cccc334cbc6c2fceca82f39211051345108adcba3eebdc"
 dependencies = [
  "shlex",
 ]
@@ -361,12 +361,12 @@ dependencies = [
 
 [[package]]
 name = "errno"
-version = "0.3.9"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "534c5cf6194dfab3db3242765c03bbe257cf92f22b38f6bc0c58d59108a820ba"
+checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -885,9 +885,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.166"
+version = "0.2.167"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ccc108bbc0b1331bd061864e7cd823c0cab660bbe6970e66e2c0614decde36"
+checksum = "09d6582e104315a817dff97f75133544b2e094ee22447d2acf4a74e189ba06fc"
 
 [[package]]
 name = "linux-raw-sys"
@@ -1390,9 +1390,9 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "socket2"
-version = "0.5.7"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce305eb0b4296696835b71df73eb912e0f1ffd2556a501fcede6e0c50349191c"
+checksum = "c970269d99b64e60ec3bd6ad27270092a5394c4e309314b18ae3fe575695fbe8"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
@@ -1465,7 +1465,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=564fd7cfe44e5f81933b8c7c652933161b824094#564fd7cfe44e5f81933b8c7c652933161b824094"
+source = "git+https://github.com/tangramdotdev/tangram?rev=f79f231e7f09769ca43262bb1b50e9591c9b3529#f79f231e7f09769ca43262bb1b50e9591c9b3529"
 dependencies = [
  "blake3",
  "bytes",
@@ -1508,7 +1508,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=564fd7cfe44e5f81933b8c7c652933161b824094#564fd7cfe44e5f81933b8c7c652933161b824094"
+source = "git+https://github.com/tangramdotdev/tangram?rev=f79f231e7f09769ca43262bb1b50e9591c9b3529#f79f231e7f09769ca43262bb1b50e9591c9b3529"
 dependencies = [
  "serde",
 ]
@@ -1516,7 +1516,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=564fd7cfe44e5f81933b8c7c652933161b824094#564fd7cfe44e5f81933b8c7c652933161b824094"
+source = "git+https://github.com/tangramdotdev/tangram?rev=f79f231e7f09769ca43262bb1b50e9591c9b3529#f79f231e7f09769ca43262bb1b50e9591c9b3529"
 dependencies = [
  "dashmap",
  "futures",
@@ -1529,7 +1529,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=564fd7cfe44e5f81933b8c7c652933161b824094#564fd7cfe44e5f81933b8c7c652933161b824094"
+source = "git+https://github.com/tangramdotdev/tangram?rev=f79f231e7f09769ca43262bb1b50e9591c9b3529#f79f231e7f09769ca43262bb1b50e9591c9b3529"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1593,7 +1593,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=564fd7cfe44e5f81933b8c7c652933161b824094#564fd7cfe44e5f81933b8c7c652933161b824094"
+source = "git+https://github.com/tangramdotdev/tangram?rev=f79f231e7f09769ca43262bb1b50e9591c9b3529#f79f231e7f09769ca43262bb1b50e9591c9b3529"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1604,7 +1604,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=564fd7cfe44e5f81933b8c7c652933161b824094#564fd7cfe44e5f81933b8c7c652933161b824094"
+source = "git+https://github.com/tangramdotdev/tangram?rev=f79f231e7f09769ca43262bb1b50e9591c9b3529#f79f231e7f09769ca43262bb1b50e9591c9b3529"
 dependencies = [
  "derive_more",
  "winnow",
