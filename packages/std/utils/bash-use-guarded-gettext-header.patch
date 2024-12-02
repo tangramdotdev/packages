@@ -1,0 +1,12 @@
+diff -Naur bash-source_unpatched/examples/loadables/getconf.c bash-source_patched/examples/loadables/getconf.c
+--- bash-source_unpatched/examples/loadables/getconf.c	2024-12-02 14:34:40
++++ bash-source_patched/examples/loadables/getconf.c	2024-12-02 14:41:10
+@@ -21,7 +21,7 @@
+ #include <unistd.h>
+ #include <errno.h>
+ #include <error.h>
+-#include <libintl.h>
++#include <gettext.h>
+ #include <locale.h>
+ #include <string.h>
+ #include <stdlib.h>

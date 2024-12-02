@@ -1,6 +1,9 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { buildUtil, prerequisites } from "../utils.tg.ts";
+import guardedGettextPatch from "./bash-use-guarded-gettext-header.patch" with {
+	type: "file",
+};
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/bash/",
@@ -22,7 +25,9 @@ export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9599b22ecd1d5787ad7d3b7bf0c59f312b3396d1e281175dd1f8a4014da621ff";
-	return std.download.fromGnu({ name, version, checksum });
+	let source = await std.download.fromGnu({ name, version, checksum });
+	source = await bootstrap.patch(source, guardedGettextPatch);
+	return source;
 });
 
 export const build = tg.target(async (arg?: Arg) => {
