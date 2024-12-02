@@ -17,7 +17,7 @@ export namespace sdk {
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxies. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
 	export const env = async (hostArg?: string) => {
 		const host = hostArg ?? (await std.triple.host());
-		const toolchain = await prepareBootstrapToolchain(host);
+		const toolchain = await bootstrap.toolchain(host);
 		const bootstrapHost = await bootstrap.toolchainTriple(host);
 		const utils = await prepareBootstrapUtils(bootstrapHost);
 		const shellExe = await utils.get("bin/dash").then(tg.File.expect);
@@ -35,30 +35,6 @@ export namespace sdk {
 		return await std.env.arg(toolchain, utils, env);
 	};
 
-	/** Get the bootstrap components as a single directory, for use before SDK. */
-	export const prepareBootstrapToolchain = async (hostArg?: string) => {
-		// Detect the host triple if not provided.
-		const host = hostArg ?? (await std.triple.host());
-		const os = std.triple.os(host);
-
-		// Obtain the bootstrap toolchain and triple for the detected host to construct the env.
-		let bootstrapToolchain = await bootstrap.toolchain(host);
-
-		if (os === "darwin") {
-			// Replace the Xcode-tied gcc and g++ entries with symlinks to clang and return.
-			bootstrapToolchain = await tg.directory(bootstrapToolchain, {
-				["bin/gcc"]: tg.symlink("clang"),
-				["bin/g++"]: tg.symlink("clang++"),
-			});
-		} else if (os === "linux") {
-			// Nothing to do.
-		} else {
-			throw new Error(`Unsupported host OS: ${os}.`);
-		}
-
-		return bootstrapToolchain;
-	};
-
 	/** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */
 	export const prepareBootstrapUtils = async (hostArg?: string) => {
 		const host = hostArg ?? (await std.triple.host());
@@ -70,25 +46,6 @@ export namespace sdk {
 			"bin/sh": tg.symlink("dash"),
 		});
 		return combined;
-	};
-
-	export const prefixBins = async (
-		dir: tg.Directory,
-		bins: Array<string>,
-		prefix: string,
-	): Promise<tg.Directory> => {
-		let ret = dir;
-		for (const bin of bins) {
-			if (!ret.tryGet(`bin/${bin}`)) {
-				throw new Error(`Could not locate bin/${bin}.`);
-			}
-			ret = await tg.directory(ret, {
-				bin: {
-					[`${prefix}${bin}`]: tg.symlink(`${bin}`),
-				},
-			});
-		}
-		return ret;
 	};
 
 	export const test = async () => {
