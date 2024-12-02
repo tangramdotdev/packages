@@ -870,9 +870,11 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	needed_libraries: &HashMap<String, Option<tg::Referent<tg::directory::Id>>, H>,
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|referent| async {
-		tg::Artifact::from(directory_from_dir_id_referent(tg, referent).await?)
-			.check_out(tg, tg::artifact::checkout::Arg::default())
-			.await?;
+		let directory = directory_from_dir_id_referent(tg, referent).await?;
+		let directory_id = directory.id(tg).await?;
+		let arg = tg::artifact::checkout::Arg::default();
+		tracing::debug!(?directory_id, ?arg, "checking out library path");
+		tg::Artifact::from(directory).check_out(tg, arg).await?;
 		Ok::<_, tg::Error>(())
 	}))
 	.await?;
