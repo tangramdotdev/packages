@@ -186,6 +186,7 @@ export const test = tg.target(async (...testNames: Array<string>) => {
 	tests = validateTestNames(...tests);
 	console.log("Running tests: ", tests.join(", "));
 
+	let results = {};
 	const actionsTable = testActions();
 	for (const testName of tests) {
 		const promise = actionsTable[testName];
@@ -194,9 +195,10 @@ export const test = tg.target(async (...testNames: Array<string>) => {
 		}
 		const result = await promise();
 		console.log(await tg`${testName}: ${result}`);
+		results[testName] = result;
 	}
 
-	return true;
+	return results;
 });
 
 /** Returns a deduplicated array of the tests passed in. Throws if any are unrecognized. */
