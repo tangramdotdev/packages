@@ -211,7 +211,3 @@ const validateTestNames = (...testNames: Array<string>) => {
 	}
 	return [...uniqueTests];
 };
-
-export const rawToolchain = tg.target(() => bootstrap.toolchain());
-
-export const preparedToolchain = tg.target(() => bootstrap.sdk.prepareBootstrapToolchain());

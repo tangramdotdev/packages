@@ -871,9 +871,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|referent| async {
 		let directory = directory_from_dir_id_referent(tg, referent).await?;
-		let directory_id = directory.id(tg).await?;
 		let arg = tg::artifact::checkout::Arg::default();
-		tracing::debug!(?directory_id, ?arg, "checking out library path");
 		tg::Artifact::from(directory).check_out(tg, arg).await?;
 		Ok::<_, tg::Error>(())
 	}))
