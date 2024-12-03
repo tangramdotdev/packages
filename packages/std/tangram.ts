@@ -186,7 +186,7 @@ export const test = tg.target(async (...testNames: Array<string>) => {
 	tests = validateTestNames(...tests);
 	console.log("Running tests: ", tests.join(", "));
 
-	let results = {};
+	let results: Record<string, tg.Value> = {};
 	const actionsTable = testActions();
 	for (const testName of tests) {
 		const promise = actionsTable[testName];
