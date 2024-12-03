@@ -3,13 +3,13 @@ import * as std from "../tangram.ts";
 
 export const metadata = {
 	name: "file_cmds",
-	version: "430.100.5",
+	version: "448.0.3",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:035272979817edb250e3527b95a028e59b5bff546a13346c4a4e0e83c4d7ac20";
+		"sha256:d5cf241a751a9d36f43a4cd759d06835f4346c3150c62147a05c7bdec67b057c";
 	const owner = "apple-oss-distributions";
 	const repo = "file_cmds";
 	const tag = std.download.packageName({ name, version });
@@ -84,11 +84,6 @@ export const compileUtil = async (arg: UtilArg) => {
 	// Grab args.
 	const { destDir, fileName, utilName, utilSource } = arg;
 
-	// Grab prerequisites.
-	const dashArtifact = await bootstrap.shell(host);
-	const toolchainArtifact = await bootstrap.toolchain(host);
-	const macOsSdk = await bootstrap.macOsSdk();
-
 	// Compile the util.
 	const script =
 		arg.script ??
@@ -96,19 +91,11 @@ export const compileUtil = async (arg: UtilArg) => {
 			cc -Oz -o $OUTPUT ${utilSource}/${fileName}
 		`);
 
-	const dependencies = [toolchainArtifact, dashArtifact];
-
 	const util = tg.File.expect(
 		await (
 			await tg.target(await tg.template(script), {
 				host: std.triple.archAndOs(build),
-				env: std.env.arg(
-					arg.env ?? {},
-					{
-						SDKROOT: macOsSdk,
-					},
-					...dependencies,
-				),
+				env: std.env.arg(arg.env ?? {}, bootstrap.sdk.env(host)),
 			})
 		).output(),
 	);
