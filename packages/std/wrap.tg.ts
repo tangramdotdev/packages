@@ -339,7 +339,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
-										fileOrSymlinkFromManifestTemplate,
+										templateFromManifestTemplate,
 									),
 							  ),
 					preloads:
@@ -369,7 +369,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
-										fileOrSymlinkFromManifestTemplate,
+										templateFromManifestTemplate,
 									),
 							  ),
 					preloads:
@@ -396,7 +396,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.libraryPaths.map(
-										fileOrSymlinkFromManifestTemplate,
+										templateFromManifestTemplate,
 									),
 							  ),
 					preloads:
@@ -1203,7 +1203,7 @@ export const fileOrSymlinkFromManifestTemplate = async (
 	if (!(component instanceof tg.File || component instanceof tg.Symlink)) {
 		const received =
 			component instanceof tg.Directory ? await component.id() : component;
-		throw new Error(`expected a file or symlink, got ${artifactId}`);
+		throw new Error(`expected a file or symlink, got ${received}`);
 	}
 	return component;
 };
