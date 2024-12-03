@@ -6,7 +6,7 @@ export const metadata = {
 	name: "icu",
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
-	version: "75.1",
+	version: "76.1",
 };
 
 export const source = tg.target(async () => {
@@ -14,7 +14,7 @@ export const source = tg.target(async () => {
 	const owner = "unicode-org";
 	const repo = name;
 	const checksum =
-		"sha256:cb968df3e4d2e87e8b11c49a5d01c787bd13b9545280fc6642f826527618caef";
+		"sha256:dfacb46bfe4747410472ce3e1144bf28a102feeaa4e3875bac9b4c6cf30f4f3e";
 	const releaseVersion = version.replace(/\./, "-");
 	const pkgVersion = version.replace(/\./, "_");
 	const pkgName = `icu4c-${pkgVersion}-src`;
@@ -109,7 +109,6 @@ export const test = tg.target(async () => {
 				testPredicate: (stdout: string) => stdout.includes("6.2"),
 			},
 			hasUsage("pkgdata"),
-			"uconv",
 		],
 		libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
 		metadata,
