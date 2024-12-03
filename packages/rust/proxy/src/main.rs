@@ -404,7 +404,6 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.check_out(
 			tg,
 			tg::artifact::checkout::Arg {
-				dependencies: false,
 				force: true,
 				path: None,
 			},

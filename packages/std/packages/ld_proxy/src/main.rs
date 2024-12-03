@@ -481,7 +481,6 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
-					dependencies: true,
 					force: true,
 					path: Some(output_path),
 				},
@@ -871,9 +870,9 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	needed_libraries: &HashMap<String, Option<tg::Referent<tg::directory::Id>>, H>,
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
 	futures::future::try_join_all(resolved_dirs.iter().map(|referent| async {
-		tg::Artifact::from(directory_from_dir_id_referent(tg, referent).await?)
-			.check_out(tg, tg::artifact::checkout::Arg::default())
-			.await?;
+		let directory = directory_from_dir_id_referent(tg, referent).await?;
+		let arg = tg::artifact::checkout::Arg::default();
+		tg::Artifact::from(directory).check_out(tg, arg).await?;
 		Ok::<_, tg::Error>(())
 	}))
 	.await?;
