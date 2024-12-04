@@ -1,5 +1,5 @@
 import * as std from "../tangram.ts";
-import { $ } from "../tangram.ts";
+import * as bootstrap from "../bootstrap.tg.ts";
 import zstd from "../sdk/dependencies/zstd.tg.ts";
 
 /*
@@ -222,7 +222,7 @@ export const dockerImageFromLayers = async (
 	// Add each layer file to the image directory.
 	const layerFilenames = await Promise.all(
 		layers.map(async (layer) => {
-			const bytes = await layer.tar.bytes();
+			const bytes = await layer.tarball.bytes();
 			const size = bytes.length;
 			const checksum = await tg.checksum(bytes, "sha256");
 			const checksumValue = checksum.slice("sha256:".length);
@@ -230,7 +230,7 @@ export const dockerImageFromLayers = async (
 			// Add the layer to the image directory, along with the legacy metadata used by older versions of the Docker image spec.
 			image = tg.directory(image, {
 				[checksumValue]: {
-					"layer.tar": layer.tar,
+					"layer.tar": layer.tarball,
 					json: tg.encoding.json.encode({
 						// Use the checksum as a unique layer ID.
 						id: checksumValue,
@@ -269,7 +269,7 @@ export const dockerImageFromLayers = async (
 	});
 
 	// Create a `.tar` file of the Docker image. This is the format that `docker load` expects.
-	return await $`tar -cf $OUTPUT -C ${image} .`.then(tg.File.expect);
+	return await createTarball(image);
 };
 
 export const ociImageFromLayers = async (
@@ -310,11 +310,24 @@ export const ociImageFromLayers = async (
 		layerCompression === "gzip"
 			? MediaTypeV1.imageLayerTarGzip
 			: MediaTypeV1.imageLayerTarZstd;
-	const additionalEnv = layerCompression === "gzip" ? [] : [zstd()];
+	const additionalEnv: tg.Unresolved<Array<std.env.Arg>> = [
+		std.utils.env({ sdk: false, env: bootstrap.sdk() }),
+	];
+	if (layerCompression === "zstd") {
+		additionalEnv.push(
+			zstd({
+				sdk: false,
+				env: await std.env.arg(additionalEnv, bootstrap.sdk()),
+			}),
+		);
+	}
 	const layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
-			const file = await $`${compressionCmd} $(realpath ${layer.tar}) > $OUTPUT`
-				.env(additionalEnv)
+			const file = await tg
+				.target(tg`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`, {
+					env: std.env.arg(additionalEnv),
+				})
+				.then((target) => target.output())
 				.then(tg.File.expect);
 			const descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,
@@ -359,7 +372,7 @@ export const ociImageFromLayers = async (
 	});
 
 	// Tar the result and return it.
-	return await $`tar -cf $OUTPUT -C ${directory} .`.then(tg.File.expect);
+	return await createTarball(directory);
 };
 
 /**
@@ -386,17 +399,31 @@ type ImageDescriptor<MediaType = string> = {
 };
 
 export type Layer = {
-	tar: tg.File;
+	tarball: tg.File;
 	diffId: string;
 };
 
 export const layer = tg.target(
 	async (directory: tg.Directory): Promise<Layer> => {
-		const bundle = tg.Artifact.bundle(directory);
-		const tar = await $`tar -cf $OUTPUT -C ${bundle} .`.then(tg.File.expect);
-		const bytes = await tar.bytes();
+		const bundle = tg.Artifact.bundle(directory).then(tg.Directory.expect);
+		const tarball = await createTarball(bundle);
+		const bytes = await tarball.bytes();
 		const diffId = await tg.checksum(bytes, "sha256");
-		return { tar, diffId };
+		return { tarball, diffId };
+	},
+);
+
+export const createTarball = tg.target(
+	async (directory: tg.Directory): Promise<tg.File> => {
+		const tarArtifact = await std.utils.tar.build({
+			sdk: false,
+			env: bootstrap.sdk(),
+		});
+		const script = tg`tar -cf $OUTPUT -C ${directory} .`;
+		return await tg
+			.target(script, { env: await std.env.arg(tarArtifact) })
+			.then((target) => target.output())
+			.then(tg.File.expect);
 	},
 );
 

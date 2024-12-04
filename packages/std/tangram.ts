@@ -145,7 +145,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		crossWorkspace: workspace.testCross,
 		imageWrappedEntrypoint: image.testWrappedEntrypoint,
 		imageBasicRootfs: image.testBasicRootfs,
-		imageBasicEnv: image.testOciBasicEnv,
+		imageBasicEnv: image.testBasicEnv,
 		imageBasicEnvImageDocker: image.testBasicEnvImageDocker,
 		imageBasicEnvImageOci: image.testBasicEnvImageOci,
 		image: image.test,

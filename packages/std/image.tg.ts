@@ -48,16 +48,16 @@ export const testBasicRootfs = tg.target(async () => {
 	return imageFile;
 });
 
-export const testOciBasicEnv = tg.target(async () => {
+export const testBasicEnv = tg.target(async () => {
 	const detectedHost = await std.triple.host();
 	const host = bootstrap.toolchainTriple(detectedHost);
-	const utils = await std.utils.env({ host, sdk: bootstrap.sdk.arg() });
-	const basicEnv = await std.env(utils, { NAME: "Tangram" }, { utils: true });
+	const utils = await std.utils.env({ host, sdk: false, env: bootstrap.sdk() });
+	const basicEnv = await std.env(utils, { NAME: "Tangram" }, { utils: false });
 	return basicEnv;
 });
 
 export const testBasicEnvImageDocker = tg.target(async () => {
-	const basicEnv = await testOciBasicEnv();
+	const basicEnv = await testBasicEnv();
 	const imageFile = await image(basicEnv, {
 		cmd: ["bash"],
 	});
@@ -65,7 +65,7 @@ export const testBasicEnvImageDocker = tg.target(async () => {
 });
 
 export const testBasicEnvImageOci = tg.target(async () => {
-	const basicEnv = await testOciBasicEnv();
+	const basicEnv = await testBasicEnv();
 	const imageFile = await image(basicEnv, {
 		cmd: ["bash"],
 		format: "oci",

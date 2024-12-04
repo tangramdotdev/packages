@@ -69,7 +69,7 @@ export const macOsPatchCmds = tg.target(async (arg?: Arg) => {
 	const result = await tg
 		.target(script, {
 			host: std.triple.archAndOs(build),
-			env: std.env.arg(arg.env ?? {}, bootstrap.sdk.env()),
+			env: std.env.arg(arg?.env ?? {}, bootstrap.sdk.env()),
 		})
 		.then((target) => target.output())
 		.then(tg.Directory.expect);
