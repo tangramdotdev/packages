@@ -722,7 +722,7 @@ export namespace sdk {
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
 					{
 						env: std.env.arg(arg.sdkEnv, {
-							TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+							TANGRAM_LINKER_TRACING: "tangram=trace",
 						}),
 						host: std.triple.archAndOs(expectedHost),
 					},

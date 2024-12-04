@@ -30,7 +30,7 @@ fn main() {
 fn main_inner() -> tg::Result<()> {
 	// Read the options from the environment and arguments.
 	let options = read_options()?;
-	tangram_std::tracing::setup("TANGRAM_LD_PROXY_TRACING");
+	tangram_std::tracing::setup("TANGRAM_LINKER_TRACING");
 	tracing::debug!(?options);
 
 	// Run the command.
@@ -73,7 +73,7 @@ struct Options {
 	/// Paths which may contain additional dynamic libraries passed on the command line, not via a library path.
 	additional_library_candidate_paths: Vec<PathBuf>,
 
-	/// Library path optimization strategy. Select `resolve`, `filter`, `combine`, or `none`. Defaults to `combine`.
+	/// Library path optimization level. Select `none`, `filter`, `resolve`, or `combine`. Defaults to `resolve`.
 	library_path_optimization: LibraryPathOptimizationLevel,
 
 	/// The path to the command that will be invoked.
@@ -713,12 +713,12 @@ enum InterpreterRequirement {
 enum LibraryPathOptimizationLevel {
 	/// Do not optimize library paths.
 	None = 0,
-	/// Resolve any artifacts with subpaths to their innermost directory. The `Filter` and `Combine` strategies will also perform this optimization first.
-	Resolve = 1,
-	/// Filter library paths for needed libraries.
-	Filter = 2,
-	/// Combine library paths into a single directory.
+	/// Only retain paths containing needed libraries.
+	Filter = 1,
+	/// Resolve any artifacts with subpaths to their innermost directory.
 	#[default]
+	Resolve = 2,
+	/// Combine library paths into a single directory.
 	Combine = 3,
 }
 
@@ -728,8 +728,8 @@ impl std::str::FromStr for LibraryPathOptimizationLevel {
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s.to_ascii_lowercase().as_str() {
 			"none" | "0" => Ok(Self::None),
-			"resolve" | "1" => Ok(Self::Resolve),
-			"filter" | "2" => Ok(Self::Filter),
+			"filter" | "1" => Ok(Self::Filter),
+			"resolve" | "2" => Ok(Self::Resolve),
 			"combine" | "3" => Ok(Self::Combine),
 			_ => {
 				// If the string is a digit greater than 3, fall back to 3.
@@ -819,21 +819,21 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		return Ok(library_paths);
 	}
 
-	// Resolve any artifacts with subpaths to their innermost directory.
-	let resolved_dirs: HashSet<tg::Referent<tg::directory::Id>, H> =
-		resolve_directories(tg, &library_paths).await?;
-	tracing::trace!(?resolved_dirs, "post-resolve");
-	if matches!(strategy, LibraryPathOptimizationLevel::Resolve) {
-		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
-	}
-
 	// Find all the transitive needed libraries of the output file we can locate in the library path.
-	find_transitive_needed_libraries(tg, file, &resolved_dirs, needed_libraries, max_depth, 0)
+	find_transitive_needed_libraries(tg, file, &library_paths, needed_libraries, max_depth, 0)
 		.await?;
 	tracing::trace!(?needed_libraries, "post-find");
+	let filtered_library_paths = needed_libraries.values().flatten().cloned().collect();
 	if matches!(strategy, LibraryPathOptimizationLevel::Filter) {
-		let resolved_dirs = needed_libraries.values().flatten().cloned().collect();
-		return finalize_library_paths(tg, resolved_dirs, needed_libraries).await;
+		return finalize_library_paths(tg, filtered_library_paths, needed_libraries).await;
+	}
+
+	// Resolve any artifacts with subpaths to their innermost directory.
+	let resolved_library_paths: HashSet<tg::Referent<tg::directory::Id>, H> =
+		resolve_directories(tg, &filtered_library_paths).await?;
+	tracing::trace!(?resolved_library_paths, "post-resolve");
+	if matches!(strategy, LibraryPathOptimizationLevel::Resolve) {
+		return finalize_library_paths(tg, resolved_library_paths, needed_libraries).await;
 	}
 
 	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
@@ -842,6 +842,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		));
 	}
 
+	// Create a directory combining all located library files.
 	let mut entries = BTreeMap::new();
 	for (name, dir_id_referent) in needed_libraries.iter() {
 		if let Some(dir_id_referent) = dir_id_referent {
@@ -858,26 +859,26 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			dir_id_referent_from_directory(tg, &tg::Directory::with_entries(entries), None).await?;
 		Some(referent)
 	};
-	let resolved_dirs = dir_id.into_iter().collect();
+	let combined_library_path = dir_id.into_iter().collect();
 
-	finalize_library_paths(tg, resolved_dirs, needed_libraries).await
+	finalize_library_paths(tg, combined_library_path, needed_libraries).await
 }
 
 /// Produce the set of library paths to be written to the wrapper post-optimization.
 async fn finalize_library_paths<H: BuildHasher + Default>(
 	tg: &impl tg::Handle,
-	resolved_dirs: HashSet<tg::Referent<tg::directory::Id>, H>,
+	library_paths: HashSet<tg::Referent<tg::directory::Id>, H>,
 	needed_libraries: &HashMap<String, Option<tg::Referent<tg::directory::Id>>, H>,
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
-	futures::future::try_join_all(resolved_dirs.iter().map(|referent| async {
+	futures::future::try_join_all(library_paths.iter().map(|referent| async {
 		let directory = directory_from_dir_id_referent(tg, referent).await?;
 		let arg = tg::artifact::checkout::Arg::default();
 		tg::Artifact::from(directory).check_out(tg, arg).await?;
 		Ok::<_, tg::Error>(())
 	}))
 	.await?;
-	report_missing_libraries(tg, needed_libraries, &resolved_dirs).await?;
-	Ok(resolved_dirs)
+	report_missing_libraries(tg, needed_libraries, &library_paths).await?;
+	Ok(library_paths)
 }
 
 /// Given a list of needed library names and a set of selected paths, report which libraries are not accounted for.

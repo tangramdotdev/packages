@@ -459,7 +459,7 @@ export const dlopen = async (arg: DlopenArg) => {
 					directory,
 					...arg.runtimeDepDirs,
 					{
-						TANGRAM_LD_PROXY_TRACING: "tangram=trace",
+						TANGRAM_LINKER_TRACING: "tangram=trace",
 					},
 					arg.env,
 				),
