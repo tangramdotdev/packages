@@ -95,6 +95,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		utilsSed: utils.sed.test,
 		utilsTar: utils.tar.test,
 		utilsXz: utils.xz.test,
+		utilsZsh: utils.zsh.test,
 		utils: utils.test,
 		kernelHeaders: sdk.kernelHeaders.test,
 		binutils: sdk.gnu.binutils.test,

@@ -320,13 +320,16 @@ export namespace env {
 						if (symlinkArtifact === undefined) {
 							// If this symlink points above the current directory, we don't have the context to resolve. No match.
 							const symlinkTarget = await artifact.target();
-							if (symlinkTarget.startsWith("..")) {
+							if (
+								symlinkTarget === undefined ||
+								symlinkTarget.startsWith("..")
+							) {
 								continue;
 							}
 							// Otherwise, construct a new symlink using this directory as the artifact.
 							artifact = await tg.symlink({
 								artifact: dir,
-								subpath: symlinkTarget
+								subpath: symlinkTarget,
 							});
 						}
 					}
