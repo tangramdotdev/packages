@@ -109,7 +109,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 	if (proxy) {
 		pkgConfig = await tg`#!/usr/bin/env sh
-			set -eux
+			set -eu
 
 			PKG_CONFIG_PATH=""
 
