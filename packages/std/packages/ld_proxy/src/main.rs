@@ -73,7 +73,7 @@ struct Options {
 	/// Paths which may contain additional dynamic libraries passed on the command line, not via a library path.
 	additional_library_candidate_paths: Vec<PathBuf>,
 
-	/// Library path optimization level. Select `none`, `filter`, `resolve`, or `combine`. Defaults to `resolve`.
+	/// Library path optimization level. Select `none`, `filter`, `resolve`, or `combine`. Defaults to `filter`.
 	library_path_optimization: LibraryPathOptimizationLevel,
 
 	/// The path to the command that will be invoked.
@@ -714,9 +714,9 @@ enum LibraryPathOptimizationLevel {
 	/// Do not optimize library paths.
 	None = 0,
 	/// Only retain paths containing needed libraries.
+	#[default]
 	Filter = 1,
 	/// Resolve any artifacts with subpaths to their innermost directory.
-	#[default]
 	Resolve = 2,
 	/// Combine library paths into a single directory.
 	Combine = 3,

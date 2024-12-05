@@ -17,7 +17,14 @@ export namespace sdk {
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxies. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
 	export const env = async (hostArg?: string) => {
 		const host = hostArg ?? (await std.triple.host());
-		const toolchain = await bootstrap.toolchain(host);
+		const os = std.triple.os(host);
+		let toolchain = await bootstrap.toolchain(host);
+		if (os === "darwin") {
+			toolchain = await tg.directory(toolchain, {
+				["bin/gcc"]: tg.symlink("clang"),
+				["bin/g++"]: tg.symlink("clang++")
+			});
+		}
 		const bootstrapHost = await bootstrap.toolchainTriple(host);
 		const utils = await prepareBootstrapUtils(bootstrapHost);
 		const shellExe = await utils.get("bin/dash").then(tg.File.expect);
@@ -25,7 +32,7 @@ export namespace sdk {
 			CONFIG_SHELL: shellExe,
 			SHELL: shellExe,
 		};
-		if (std.triple.os(host) === "darwin") {
+		if (os === "darwin") {
 			const sdkroot = await tg.Mutation.setIfUnset(bootstrap.macOsSdk());
 			env = {
 				...env,
