@@ -145,7 +145,13 @@ fn main() {
 
 	if let Err(e) = main_inner() {
 		eprintln!("rustc proxy failed: {e}");
-		eprintln!("{}", e.trace(&tg::error::TraceOptions::default()));
+		eprintln!(
+			"{}",
+			e.trace(&tg::error::TraceOptions {
+				internal: true,
+				reverse: false,
+			})
+		);
 		std::process::exit(1);
 	}
 }

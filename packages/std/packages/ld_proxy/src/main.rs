@@ -16,7 +16,7 @@ const MAX_DEPTH: usize = 16;
 fn main() {
 	if let Err(e) = main_inner() {
 		eprintln!("linker proxy failed: {e}");
-		tracing::error!(
+		eprintln!(
 			"{}",
 			e.trace(&tg::error::TraceOptions {
 				internal: true,
