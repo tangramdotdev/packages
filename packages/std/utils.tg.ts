@@ -13,7 +13,6 @@ import patch from "./utils/patch.tg.ts";
 import sed from "./utils/sed.tg.ts";
 import tar from "./utils/tar.tg.ts";
 import xz from "./utils/xz.tg.ts";
-import * as zsh from "./utils/zsh.tg.ts";
 
 export * as attr from "./utils/attr.tg.ts";
 export * as bzip2 from "./utils/bzip2.tg.ts";
@@ -31,7 +30,6 @@ export * as patch from "./utils/patch.tg.ts";
 export * as sed from "./utils/sed.tg.ts";
 export * as tar from "./utils/tar.tg.ts";
 export * as xz from "./utils/xz.tg.ts";
-export * as zsh from "./utils/zsh.tg.ts";
 
 export type Arg = {
 	build?: string | undefined;
@@ -45,9 +43,9 @@ export const env = tg.target(async (arg?: Arg) => {
 	const { build, env: env_, host: host_, sdk } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 
-	const shellArtifact = await defaultShell({ build, env: env_, host, sdk });
+	const shellArtifact = await bash.build({ build, env: env_, host, sdk });
 	const shellExecutable = await shellArtifact
-		.get(`bin/${defaultShellName(host)}`)
+		.get(`bin/bash`)
 		.then(tg.File.expect);
 	const shellEnv = {
 		CONFIG_SHELL: shellExecutable,
@@ -146,7 +144,7 @@ export const changeShebang = async (scriptFile: tg.File) => {
 
 export const assertProvides = async (env: std.env.Arg) => {
 	const names = [
-		"sh", // bash for linux, zsh for macOS
+		"bash", // bash for linux, zsh for macOS
 		"bzip2",
 		"ls", // coreutils
 		"diff", // diffutils
@@ -162,40 +160,6 @@ export const assertProvides = async (env: std.env.Arg) => {
 	];
 	await std.env.assertProvides({ env, names });
 	return true;
-};
-
-/** Produce an artifact containing the default shell for the given host. */
-export const defaultShell = async (arg?: Arg) => {
-	const host = arg?.host ?? (await std.triple.host());
-	const os = std.triple.os(host);
-	let artifact: tg.Directory | undefined;
-	switch (os) {
-		case "darwin": {
-			artifact = await zsh.build(arg);
-			break;
-		}
-		case "linux":
-		case "default": {
-			artifact = await bash.build(arg);
-			break;
-		}
-	}
-	if (artifact === undefined) {
-		throw new Error("unable to produce default shell");
-	}
-	return artifact;
-};
-
-/** Get the name of the default shell for the given host. */
-export const defaultShellName = (host: string) => {
-	const os = std.triple.os(host);
-	switch (os) {
-		case "darwin":
-			return "zsh";
-		case "linux":
-		case "default":
-			return "bash";
-	}
 };
 
 export const test = tg.target(async () => {
