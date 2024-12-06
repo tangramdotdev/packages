@@ -146,6 +146,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		// Allow the build process to locate libraries from the compile-time library path.
 		configure.args.push("DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH");
 	}
+
+	// const fixup = `find $OUTPUT -name tangram.lock -delete`;
 	const phases = { configure };
 
 	return std.autotools.build(

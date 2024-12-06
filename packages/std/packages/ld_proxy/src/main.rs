@@ -368,7 +368,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		tg::Artifact::check_in(
 			&tg,
 			tg::artifact::checkin::Arg {
-				destructive: false,
+				destructive: true,
 				deterministic: true,
 				ignore: false,
 				locked: true,
@@ -531,7 +531,7 @@ async fn checkin_local_library_path(
 				let library_candidate_file = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
-						destructive: false,
+						destructive: true,
 						deterministic: true,
 						ignore: false,
 						locked: false,
@@ -763,7 +763,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				let library_candidate_file = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
-						destructive: false,
+						destructive: true,
 						deterministic: true,
 						ignore: false,
 						locked: true,
