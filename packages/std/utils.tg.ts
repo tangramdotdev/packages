@@ -40,38 +40,34 @@ export type Arg = {
 
 /** A basic set of GNU system utilites. */
 export const env = tg.target(async (arg?: Arg) => {
-	const { env: env_, host: host_, ...rest } = arg ?? {};
+	const { build, env: env_, host: host_, sdk } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 
-	// Build bash and use it as the default shell.
-	const bashArtifact = await bash.build({
-		...rest,
-		env: env_,
-		host,
-	});
-
-	const bashExecutable = tg.File.expect(await bashArtifact.get("bin/bash"));
-	const bashEnv = {
-		CONFIG_SHELL: bashExecutable,
-		SHELL: bashExecutable,
+	const shellArtifact = await bash.build({ build, env: env_, host, sdk });
+	const shellExecutable = await shellArtifact
+		.get(`bin/bash`)
+		.then(tg.File.expect);
+	const shellEnv = {
+		CONFIG_SHELL: shellExecutable,
+		SHELL: shellExecutable,
 	};
-	const env = await std.env.arg(env_, bashEnv);
+	const env = await std.env.arg(env_, shellEnv);
 
-	let utils = [bashArtifact, bashEnv];
+	let utils = [shellArtifact, shellEnv];
 	utils = utils.concat(
 		await Promise.all([
-			bzip2({ ...rest, env, host }),
-			coreutils({ ...rest, env, host }),
-			diffutils({ ...rest, env, host }),
-			findutils({ ...rest, env, host }),
-			gawk({ ...rest, env, host }),
-			grep({ ...rest, env, host }),
-			gzip({ ...rest, env, host }),
-			make({ ...rest, env, host }),
-			patch({ ...rest, env, host }),
-			sed({ ...rest, env, host }),
-			tar({ ...rest, env, host }),
-			xz({ ...rest, env, host }),
+			bzip2({ build, env, host, sdk }),
+			coreutils({ build, env, host, sdk }),
+			diffutils({ build, env, host, sdk }),
+			findutils({ build, env, host, sdk }),
+			gawk({ build, env, host, sdk }),
+			grep({ build, env, host, sdk }),
+			gzip({ build, env, host, sdk }),
+			make({ build, env, host, sdk }),
+			patch({ build, env, host, sdk }),
+			sed({ build, env, host, sdk }),
+			tar({ build, env, host, sdk }),
+			xz({ build, env, host, sdk }),
 		]),
 	);
 	return await std.env.arg(utils);
@@ -148,7 +144,7 @@ export const changeShebang = async (scriptFile: tg.File) => {
 
 export const assertProvides = async (env: std.env.Arg) => {
 	const names = [
-		"bash",
+		"bash", // bash for linux, zsh for macOS
 		"bzip2",
 		"ls", // coreutils
 		"diff", // diffutils

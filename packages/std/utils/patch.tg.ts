@@ -6,7 +6,6 @@ import libiconv from "./libiconv.tg.ts";
 import coreutils from "./coreutils.tg.ts";
 import diffutils from "./diffutils.tg.ts";
 import rlimitFix from "./patch-rlimit-fix.patch" with { type: "file" };
-import macOsPatchCmds from "./patch_cmds.tg.ts";
 
 export const metadata = {
 	name: "patch",
@@ -47,10 +46,6 @@ export const build = tg.target(async (arg?: Arg) => {
 	} = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
-
-	if (std.triple.os(host) === "darwin") {
-		return macOsPatchCmds(arg);
-	}
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],

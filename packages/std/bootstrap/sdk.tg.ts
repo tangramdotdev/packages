@@ -22,7 +22,7 @@ export namespace sdk {
 		if (os === "darwin") {
 			toolchain = await tg.directory(toolchain, {
 				["bin/gcc"]: tg.symlink("clang"),
-				["bin/g++"]: tg.symlink("clang++")
+				["bin/g++"]: tg.symlink("clang++"),
 			});
 		}
 		const bootstrapHost = await bootstrap.toolchainTriple(host);

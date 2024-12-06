@@ -10,7 +10,7 @@ export const metadata = {
 	version: "5.9",
 };
 
-export const source = tg.target(async (arg?: Arg) => {
+export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const url = `https://sourceforge.net/projects/zsh/files/zsh/5.9/${name}-${version}.tar.xz/download`;
 	const checksum =

@@ -316,10 +316,22 @@ export namespace env {
 					(artifact instanceof tg.File || artifact instanceof tg.Symlink)
 				) {
 					if (artifact instanceof tg.Symlink) {
-						artifact = await tg.symlink({
-							artifact: dir,
-							subpath: artifact.subpath(),
-						});
+						const symlinkArtifact = await artifact.artifact();
+						if (symlinkArtifact === undefined) {
+							// If this symlink points above the current directory, we don't have the context to resolve. No match.
+							const symlinkTarget = await artifact.target();
+							if (
+								symlinkTarget === undefined ||
+								symlinkTarget.startsWith("..")
+							) {
+								continue;
+							}
+							// Otherwise, construct a new symlink using this directory as the artifact.
+							artifact = await tg.symlink({
+								artifact: dir,
+								subpath: symlinkTarget,
+							});
+						}
 					}
 					yield [name, artifact];
 				}
