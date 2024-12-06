@@ -1,0 +1,28 @@
+[package]
+name = "tangram_ld_proxy"
+
+description = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+fnv = { workspace = true }
+futures = { workspace = true }
+goblin = { workspace = true }
+itertools = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tangram_client = { workspace = true }
+tangram_std = { workspace = true, features = ["tracing"] }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

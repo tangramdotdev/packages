@@ -1,0 +1,19 @@
+diff -Naur perl-5.38.2/installperl perl-5.38.2_patched/installperl
+--- perl-5.38.2/installperl	2023-11-28 06:57:28
++++ perl-5.38.2_patched/installperl	2023-12-10 14:23:51
+@@ -282,7 +282,6 @@
+     safe_unlink("$installbin/$perl_verbase$ver$exe_ext");
+     copy("perl$exe_ext", "$installbin/$perl_verbase$ver$exe_ext");
+     strip("$installbin/$perl_verbase$ver$exe_ext");
+-    fix_dep_names("$installbin/$perl_verbase$ver$exe_ext");
+     chmod(0755, "$installbin/$perl_verbase$ver$exe_ext");
+     `chtag -r "$installbin/$perl_verbase$ver$exe_ext"` if ($^O eq 'os390');
+ }
+@@ -350,7 +349,6 @@
+     if (copy_if_diff($file,"$installarchlib/CORE/$file")) {
+ 	if ($file =~ /\.(\Q$so\E|\Q$dlext\E)$/) {
+ 	    strip("-S", "$installarchlib/CORE/$file") if $^O eq 'darwin';
+-	    fix_dep_names("$installarchlib/CORE/$file");
+ 	    chmod($SO_MODE, "$installarchlib/CORE/$file");
+ 	} else {
+ 	    chmod($NON_SO_MODE, "$installarchlib/CORE/$file");

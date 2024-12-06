@@ -151,6 +151,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			// setRuntimeLibraryPath: true,
 			env,
 			phases,
 			sdk,

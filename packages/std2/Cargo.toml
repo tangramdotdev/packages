@@ -1,0 +1,88 @@
+[workspace]
+members = [
+  "packages/cc_proxy",
+  "packages/ld_proxy",
+  "packages/strip_proxy",
+  "packages/wrapper",
+]
+resolver = "2"
+
+[workspace.package]
+authors = ["Tangram <root@tangram.dev>"]
+description = "Userspace utilities for the Tangram standard library"
+edition = "2021"
+homepage = "https://www.tangram.dev"
+license = "MIT"
+publish = false
+repository = "https://github.com/tangramdotdev/packages"
+rust-version = "1.80.0"
+version = "0.0.0"
+
+[workspace.lints.clippy]
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+missing_safety_doc = "allow"
+pedantic = { level = "warn", priority = -1 }
+
+[workspace.dependencies]
+clap = { version = "4", features = ["derive"] }
+fnv = "1"
+futures = "0.3"
+goblin = "0.8"
+itertools = "0.13"
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "524642ed06595bd73138baaeadcf0642deb256fb" }
+tempfile = "3"
+tokio = { version = "1", default-features = false, features = [
+  "rt",
+  "macros",
+  "fs",
+  "parking_lot",
+] }
+tokio-stream = { version = "0.1", default-features = false, features = ["fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
+
+tangram_cc_proxy = { path = "packages/cc_proxy" }
+tangram_ld_proxy = { path = "packages/ld_proxy" }
+tangram_std = { path = "." }
+tangram_strip_proxy = { path = "packages/strip_proxy" }
+tangram_wrapper = { path = "packages/wrapper" }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = true
+
+[package]
+name = "tangram_std"
+
+description = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[lib]
+path = "packages/std/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tangram_client = { workspace = true }
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+[features]
+tracing = ["dep:tracing", "dep:tracing-subscriber"]
