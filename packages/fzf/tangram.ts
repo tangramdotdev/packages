@@ -6,13 +6,13 @@ export const metadata = {
 	license: "MIT",
 	name: "fzf",
 	repository: "https://github.com/junegunn/fzf",
-	version: "0.55.0",
+	version: "0.56.3",
 };
 
 export const source = tg.target((): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:805383f71bca7f8fb271ecd716852aea88fd898d5027d58add9e43df6ea766da";
+		"sha256:fc7bf3fcfdc3c9562237d1e82196618201a39b3fd6bf3364149516b288f5a24a";
 	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,

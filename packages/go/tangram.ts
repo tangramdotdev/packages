@@ -6,29 +6,29 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "go",
 	repository: "https://github.com/golang/go",
-	version: "1.23.2",
+	version: "1.23.4",
 };
 
 // See https://go.dev/dl.
 const RELEASES = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:f626cdd92fc21a88b31c1251f419c17782933a42903db87a174ce74eeecc66a9",
+			"sha256:16e5017863a7f6071363782b1b8042eb12c6ca4f4cd71528b2123f0a1275b13e",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:542d3c1705f1c6a1c5a80d5dc62e2e45171af291e755d591c5e6531ef63b454e",
+			"sha256:6924efde5de86fe277676e929dc9917d466efa02fb934197bc2eba35d5680971",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:d87031194fe3e01abdcaf3c7302148ade97a7add6eac3fec26765bcb3207b80f",
+			"sha256:19c054eaf40c5fac65b027f7443c01382e493d3c8c42cf8b2504832ebddce037",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:445c0ef19d8692283f4c3a92052cc0568f5a048f4e546105f58e991d4aea54f5",
+			"sha256:0f4e569b2d38cb75cb2efcaf56beb42778ab5e46d89318fef39060fe36d7b9b7",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -139,7 +139,7 @@ export const build = tg.target(
 		});
 		let {
 			checksum,
-			cgo = true,
+			cgo = false,
 			env: env_,
 			generate,
 			host: host_,
