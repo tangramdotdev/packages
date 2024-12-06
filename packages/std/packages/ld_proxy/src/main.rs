@@ -871,8 +871,8 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	needed_libraries: &HashMap<String, Option<tg::Referent<tg::directory::Id>>, H>,
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
 	futures::future::try_join_all(library_paths.iter().map(|referent| async {
-		let directory = directory_from_dir_id_referent(tg, referent).await?;
-		let arg = tg::artifact::checkout::Arg::default();
+		let directory = tg::Directory::with_id(referent.item.clone());
+		let arg = tg::artifact::checkout::Arg::default(); // FIXME - this is the one I want dependencies: false for.
 		tg::Artifact::from(directory).check_out(tg, arg).await?;
 		Ok::<_, tg::Error>(())
 	}))
