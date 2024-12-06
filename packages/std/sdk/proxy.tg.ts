@@ -442,7 +442,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 };
 
 export const sharedLibraryWithDep = tg.target(async () => {
-	const bootstrapSDK = bootstrap.sdk();
+	const bootstrapSdk = bootstrap.sdk();
 	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 	const constantsSource = await tg.file(`
@@ -456,7 +456,7 @@ const char* getGreetingA();
 
 	const printerSource = await tg.file(`
 #include <stdio.h>
-#include <contants.h>
+#include <constants.h>
 void printGreeting() {
 	printf("%s\\n", getGreetingA());
 }
@@ -464,39 +464,54 @@ void printGreeting() {
 	const printerHeader = await tg.file(`
 void printGreeting();
 		`)
+
+	const mainSource = await tg.file(`
+		#include <printer.h>
+		int main() {
+			printGreeting();
+			return 0;
+		}
+		`);
+	
 	const sources = tg.directory({
 		["constants.c"]: constantsSource,
 		["constants.h"]: constantsHeader,
 		["printer.c"]: printerSource,
-		["printer.h"]: printerHeader
+		["printer.h"]: printerHeader,
+		["main.c"]: mainSource
 	});
 
 	const script = tg`
 		set -eux
+		mkdir -p $OUTPUT/bin
 		mkdir -p $OUTPUT/lib
 		mkdir -p $OUTPUT/include
 		cp ${sources}/*.h $OUTPUT/include
 		
-		cc -shared -xc ${sources}/constants.c -o $OUTPUT/lib/libconstants.${dylibExt}
-		cc -shared -L$OUTPUT/lib -I$OUPTUT/include -xc ${sources}/printer.c -o $OUTPUT/lib/libprinter.${dylibExt}
+		cc -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
+		cc -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
+		cc -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
+		ls -al
+		cp libconstants.${dylibExt} $OUTPUT/lib
+		cp libprinter.${dylibExt} $OUTPUT/lib
+		cp main $OUTPUT/bin
+		ls -al $OUTPUT/lib
+		strip $OUTPUT/lib/libconstants.${dylibExt}
+		strip $OUTPUT/lib/libprinter.${dylibExt}
+		strip $OUTPUT/bin/main
 		ls -al $OUTPUT/lib
 	`;
 
 	const output = await tg
 		.target(script,
 			{
-				env: std.env.arg(sdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
+				env: std.env.arg(bootstrapSdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
 			},
 		)
 		.then((t) => t.output())
 		.then(tg.Directory.expect);
-	constantsA = await tg.directory(constantsA, {
-		include: {
-			"constantsa.h": constantsHeaderA,
-		},
-	});
-	console.log("STRING CONSTANTS A", await constantsA.id());
-	return constantsA;
+	console.log("STRING CONSTANTS A", await output.id());
+	return output;
 })
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
