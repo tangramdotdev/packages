@@ -209,6 +209,7 @@ async fn run_proxy(
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
+					dependencies: true,
 					force: true,
 					path: Some(canonical_target_path),
 				},

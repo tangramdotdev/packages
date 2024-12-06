@@ -371,7 +371,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				destructive: false,
 				deterministic: true,
 				ignore: false,
-				locked: false,
+				locked: true,
 				path: output_path,
 			},
 		)
@@ -481,6 +481,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
+					dependencies: true,
 					force: true,
 					path: Some(output_path),
 				},
@@ -765,7 +766,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 						destructive: false,
 						deterministic: true,
 						ignore: false,
-						locked: false,
+						locked: true,
 						path: library_candidate_path.clone(),
 					},
 				)
@@ -871,8 +872,11 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	needed_libraries: &HashMap<String, Option<tg::Referent<tg::directory::Id>>, H>,
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
 	futures::future::try_join_all(library_paths.iter().map(|referent| async {
-		let directory = tg::Directory::with_id(referent.item.clone());
-		let arg = tg::artifact::checkout::Arg::default(); // FIXME - this is the one I want dependencies: false for.
+		let directory = directory_from_dir_id_referent(tg, referent).await?;
+		let arg = tg::artifact::checkout::Arg {
+			dependencies: false,
+			..Default::default()
+		};
 		tg::Artifact::from(directory).check_out(tg, arg).await?;
 		Ok::<_, tg::Error>(())
 	}))
