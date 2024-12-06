@@ -432,14 +432,72 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 	return await tg
 		.target(
-			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags}`,
+			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`,
 			{
-				env: std.env.arg(sdk),
+				env: std.env.arg(sdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
 			},
 		)
 		.then((t) => t.output())
 		.then(tg.Directory.expect);
 };
+
+export const sharedLibraryWithDep = tg.target(async () => {
+	const bootstrapSDK = bootstrap.sdk();
+	const dylibExt =
+		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+	const constantsSource = await tg.file(`
+const char* getGreetingA() {
+	return "Hello from transitive constants A!";
+}
+	`);
+	const constantsHeader = await tg.file(`
+const char* getGreetingA();
+	`);
+
+	const printerSource = await tg.file(`
+#include <stdio.h>
+#include <contants.h>
+void printGreeting() {
+	printf("%s\\n", getGreetingA());
+}
+		`);
+	const printerHeader = await tg.file(`
+void printGreeting();
+		`)
+	const sources = tg.directory({
+		["constants.c"]: constantsSource,
+		["constants.h"]: constantsHeader,
+		["printer.c"]: printerSource,
+		["printer.h"]: printerHeader
+	});
+
+	const script = tg`
+		set -eux
+		mkdir -p $OUTPUT/lib
+		mkdir -p $OUTPUT/include
+		cp ${sources}/*.h $OUTPUT/include
+		
+		cc -shared -xc ${sources}/constants.c -o $OUTPUT/lib/libconstants.${dylibExt}
+		cc -shared -L$OUTPUT/lib -I$OUPTUT/include -xc ${sources}/printer.c -o $OUTPUT/lib/libprinter.${dylibExt}
+		ls -al $OUTPUT/lib
+	`;
+
+	const output = await tg
+		.target(script,
+			{
+				env: std.env.arg(sdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.Directory.expect);
+	constantsA = await tg.directory(constantsA, {
+		include: {
+			"constantsa.h": constantsHeaderA,
+		},
+	});
+	console.log("STRING CONSTANTS A", await constantsA.id());
+	return constantsA;
+})
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
 export const testTransitive = tg.target(async () => {
