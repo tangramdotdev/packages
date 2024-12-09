@@ -77,6 +77,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		proxySamePrefix: sdk.proxy.testSamePrefix,
 		proxySamePrefixDirect: sdk.proxy.testSamePrefixDirect,
 		proxyStrip: sdk.proxy.testStrip,
+		proxySharedWithDep: sdk.proxy.testSharedLibraryWithDep,
 		proxy: sdk.proxy.test,
 		utilsPrerequisites: utils.testPrerequisites,
 		utilsBash: utils.bash.test,

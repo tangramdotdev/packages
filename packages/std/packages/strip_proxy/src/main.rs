@@ -157,6 +157,7 @@ async fn run_proxy(
 				deterministic: true,
 				ignore: false,
 				locked: false,
+				lockfile: false,
 				path: local_executable_path,
 			},
 		)
@@ -209,8 +210,10 @@ async fn run_proxy(
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
+					dependencies: true,
 					force: true,
 					path: Some(canonical_target_path),
+					lockfile: false,
 				},
 			)
 			.await?;

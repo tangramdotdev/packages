@@ -383,6 +383,7 @@ export const test = tg.target(async () => {
 		testTransitive(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
+		testSharedLibraryWithDep(),
 		testStrip(),
 	];
 	return await Promise.all(tests);
@@ -432,14 +433,87 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 	return await tg
 		.target(
-			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags}`,
+			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`,
 			{
-				env: std.env.arg(sdk),
+				env: std.env.arg(sdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
 			},
 		)
 		.then((t) => t.output())
 		.then(tg.Directory.expect);
 };
+
+export const testSharedLibraryWithDep = tg.target(async () => {
+	const bootstrapSdk = bootstrap.sdk();
+	const dylibExt =
+		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+	const constantsSource = await tg.file(`
+const char* getGreetingA() {
+	return "Hello from transitive constants A!";
+}
+	`);
+	const constantsHeader = await tg.file(`
+const char* getGreetingA();
+	`);
+
+	const printerSource = await tg.file(`
+#include <stdio.h>
+#include <constants.h>
+void printGreeting() {
+	printf("%s\\n", getGreetingA());
+}
+		`);
+	const printerHeader = await tg.file(`
+void printGreeting();
+		`)
+
+	const mainSource = await tg.file(`
+		#include <printer.h>
+		int main() {
+			printGreeting();
+			return 0;
+		}
+		`);
+	
+	const sources = tg.directory({
+		["constants.c"]: constantsSource,
+		["constants.h"]: constantsHeader,
+		["printer.c"]: printerSource,
+		["printer.h"]: printerHeader,
+		["main.c"]: mainSource
+	});
+
+	const script = tg`
+		set -eux
+		mkdir -p $OUTPUT/bin
+		mkdir -p $OUTPUT/lib
+		mkdir -p $OUTPUT/include
+		cp ${sources}/*.h $OUTPUT/include
+		
+		cc -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
+		cc -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
+		cc -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
+		ls -al
+		cp libconstants.${dylibExt} $OUTPUT/lib
+		cp libprinter.${dylibExt} $OUTPUT/lib
+		cp main $OUTPUT/bin
+		ls -al $OUTPUT/lib
+		strip $OUTPUT/lib/libconstants.${dylibExt}
+		strip $OUTPUT/lib/libprinter.${dylibExt}
+		strip $OUTPUT/bin/main
+		ls -al $OUTPUT/lib
+	`;
+
+	const output = await tg
+		.target(script,
+			{
+				env: std.env.arg(bootstrapSdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.Directory.expect);
+	console.log("STRING CONSTANTS A", await output.id());
+	return output;
+})
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
 export const testTransitive = tg.target(async () => {

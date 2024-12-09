@@ -292,7 +292,7 @@ const vendoredSources = async (
 		)}${vendoredSources}${text.substring(match.index + match[0].length)}`;
 	} else {
 		const sourcePath = manifestSubdir
-			? source.get(manifestSubdir).then(tg.Directory.expect)
+			? await source.get(manifestSubdir).then(tg.Directory.expect)
 			: source;
 		const cargoLock = sourcePath.get("Cargo.lock").then(tg.File.expect);
 		const vendoredSources = vendorDependencies(cargoLock);

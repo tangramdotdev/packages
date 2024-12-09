@@ -109,6 +109,7 @@ export const test = tg.target(async () => {
 				testPredicate: (stdout: string) => stdout.includes("6.2"),
 			},
 			hasUsage("pkgdata"),
+			hasUsage("uconv"),
 		],
 		libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
 		metadata,

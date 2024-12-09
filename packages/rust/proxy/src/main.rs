@@ -262,6 +262,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				deterministic: true,
 				ignore: false,
 				locked: false,
+				lockfile: false,
 				path: dependency.parse().unwrap(),
 			},
 		)
@@ -410,8 +411,10 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.check_out(
 			tg,
 			tg::artifact::checkout::Arg {
+				dependencies: true,
 				force: true,
 				path: None,
+				lockfile: false,
 			},
 		)
 		.await?;
@@ -597,6 +600,7 @@ async fn get_checked_in_path(
 			deterministic: true,
 			ignore: false,
 			locked: false,
+			lockfile: false,
 			path: path.to_path_buf(),
 		},
 	)

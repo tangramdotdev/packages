@@ -9,7 +9,8 @@ import * as m4 from "m4" with { path: "../m4" };
 import * as mpdecimal from "mpdecimal" with { path: "../mpdecimal" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
-import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
+import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -119,12 +120,21 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		return { M4: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(m4ForBuild);
-	const pkgConfigForBuild = pkgConfig
-		.default_({ build, host: build })
-		.then((d) => {
-			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
-		});
-	buildDependencies.push(pkgConfigForBuild);
+	if (os === "darwin") {
+		const pkgConfigForBuild = pkgConf
+			.default_({ build, host: build })
+			.then((d) => {
+				return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
+			});
+		buildDependencies.push(pkgConfigForBuild);
+	} else if (os === "linux") {
+		const pkgConfigForBuild = pkgConfig
+			.default_({ build, host: build })
+			.then((d) => {
+				return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
+			});
+		buildDependencies.push(pkgConfigForBuild);
+	}
 
 	// Set yup host dependencies.
 	const hostDependencies = [];
@@ -198,30 +208,11 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.1" });
 	}
 
-	const configureArgs: Array<string> = [];
-
-	// Enable PGO on Linux if the LLVM toolchain is not used.
-	if (
-		std.triple.os(host) === "linux" &&
-		(await std.env.tryWhich({ env: env_, name: "clang" })) === undefined &&
-		std.flatten(sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm").length ===
-			0
-	) {
-		configureArgs.push("--enable-optimizations");
-	}
-
-	const configure = {
-		args: configureArgs,
-	};
-
-	const phases = { configure };
-
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(env),
 			opt: "3",
-			phases,
 			sdk,
 			setRuntimeLibraryPath: true,
 			source: source_ ?? (await source()),
@@ -477,11 +468,12 @@ sys.exit(${attribute}())
 };
 
 export const test = tg.target(async () => {
-	const helloOutput = await $`python -c 'print("Hello, world!")' > $OUTPUT`
-		.env(toolchain())
-		.then(tg.File.expect)
-		.then((f) => f.text())
-		.then((t) => t.trim());
+	const helloOutput =
+		await $`set -x && python -c 'print("Hello, world!")' > $OUTPUT`
+			.env(toolchain())
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((t) => t.trim());
 	tg.assert(
 		helloOutput === "Hello, world!",
 		"could not run a simple python script",
@@ -494,33 +486,25 @@ try:
 	print(f"zlib version: {zlib.ZLIB_VERSION}")
 except ImportError:
 	print("Failed to import zlib")`);
-	const importZlibOutput = await $`python ${testImportZlibScript} > $OUTPUT`
-		.env(toolchain())
-		.then(tg.File.expect)
-		.then((f) => f.text())
-		.then((t) => t.trim());
+	const importZlibOutput =
+		await $`set -x && python ${testImportZlibScript} > $OUTPUT`
+			.env(toolchain())
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((t) => t.trim());
 	tg.assert(
 		importZlibOutput.includes(zlib.metadata.version),
 		"failed to import the zlib module",
 	);
 
-	const pipVersionOutput = await $`pip3 --version > $OUTPUT`
+	const pipVersionOutput = await $`set -x && pip3 --version > $OUTPUT`
 		.env(toolchain())
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());
-	tg.assert(pipVersionOutput.includes("24.2"), "failed to run pip3");
+	tg.assert(pipVersionOutput.includes("24.3"), "failed to run pip3");
 
-	const venv = await $`
-		set -x
-		echo "watermark"
-		python -m venv $OUTPUT --copies
-		ls -l $OUTPUT/bin
-		ls -l $OUTPUT/include
-		ls -l $OUTPUT/lib
-		ls -l $OUTPUT/lib/python3.13/site-packages
-		find $OUTPUT -type l
-	`
+	const venv = await $`set -x && python -m venv $OUTPUT --copies`
 		.env(toolchain())
 		.then(tg.Directory.expect);
 	console.log("venv", await venv.id());

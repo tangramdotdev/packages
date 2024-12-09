@@ -1,9 +1,12 @@
+import * as bison from "bison" with { path: "../bison" };
+import * as flex from "flex" with { path: "../flex" };
 import * as icu from "icu" with { path: "../icu" };
 import * as lz4 from "lz4" with { path: "../lz4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
+import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -16,13 +19,13 @@ export const metadata = {
 	license: "https://www.postgresql.org/about/licence/",
 	name: "postgresql",
 	repository: "https://git.postgresql.org/gitweb/?p=postgresql.git;a=summary",
-	version: "16.4",
+	version: "16.6",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:971766d645aa73e93b9ef4e3be44201b4f45b5477095b049125403f9f3386d6f";
+		"sha256:23369cdaccd45270ac5dcc30fa9da205d5be33fa505e1f17a0418d2caeca477b";
 	const extension = ".tar.bz2";
 	const base = `https://ftp.postgresql.org/pub/source/v${version}`;
 	let output = await std
@@ -91,11 +94,20 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const zlibArtifact = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
 	const zstdArtifact = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
 
+	let pkgConfigArtifact;
+	if (os === "darwin") {
+		pkgConfigArtifact = pkgConf.default_({ build, host: build });
+	} else if (os === "linux") {
+		pkgConfigArtifact = pkgConfig.default_({ build, host: build });
+	}
+
 	const env: tg.Unresolved<Array<std.env.Arg>> = [
 		icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
 		opensslArtifact,
+		bison.default_({ build, host: build }),
+		flex.default_({ build, host: build }),
 		perl.default_({ build, host: build }, perlArg),
 		pkgConfig.default_({ build, host: build }),
 		readlineArtifact,

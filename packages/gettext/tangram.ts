@@ -13,13 +13,13 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
-	version: "0.22.5",
+	version: "0.23",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:fe10c37353213d78a5b83d48af231e005c4da84db5ce88037d88355938259640";
+		"sha256:bf31a9b6bdf3e364669c7bd9858f97e4a0c408a8d22940c5d4ab638b65460f85";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -146,6 +146,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		// Allow the build process to locate libraries from the compile-time library path.
 		configure.args.push("DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH");
 	}
+
 	const phases = { configure };
 
 	return std.autotools.build(

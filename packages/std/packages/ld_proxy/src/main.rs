@@ -372,6 +372,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				deterministic: true,
 				ignore: false,
 				locked: false,
+				lockfile: false,
 				path: output_path,
 			},
 		)
@@ -481,7 +482,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
+					dependencies: true,
 					force: true,
+					lockfile: false,
 					path: Some(output_path),
 				},
 			)
@@ -534,6 +537,7 @@ async fn checkin_local_library_path(
 						deterministic: true,
 						ignore: false,
 						locked: false,
+						lockfile: false,
 						path: library_candidate_path,
 					},
 				)
@@ -766,6 +770,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 						deterministic: true,
 						ignore: false,
 						locked: false,
+						lockfile: false,
 						path: library_candidate_path.clone(),
 					},
 				)
