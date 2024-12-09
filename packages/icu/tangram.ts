@@ -53,18 +53,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const dependencies = [python.toolchain(pythonArg)];
 	const env = [...dependencies, env_];
 
-	// On Linux with LLVM, use the filter option to prevent dropping libm.so.1 from the proxied library paths.
-	if (
-		os === "linux" &&
-		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
-			std.flatten(sdk ?? []).filter((sdk) => sdk?.toolchain === "llvm").length >
-				0)
-	) {
-		env.push({
-			TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "filter",
-		});
-	}
-
 	const configure = {
 		command: tg`${sourceDir}/source/configure`,
 		args: ["--enable-static"],

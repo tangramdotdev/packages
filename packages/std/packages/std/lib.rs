@@ -43,6 +43,19 @@ pub fn template_from_artifact(artifact: tg::Artifact) -> tg::Template {
 	tg::Template::from(tg::template::Component::from(artifact))
 }
 
+/// Get a template with a single artifact component and single subpath.
+#[must_use]
+pub fn template_from_artifact_and_subpath(
+	artifact: tg::Artifact,
+	subpath: impl AsRef<std::path::Path>,
+) -> tg::Template {
+	let subpath = subpath.as_ref().display().to_string();
+	tg::Template::from(vec![
+		tg::template::Component::from(artifact),
+		tg::template::Component::from(format!("/{subpath}")),
+	])
+}
+
 /// Compute the closest located artifact path for the current running process, reusing the result for subsequent lookups.
 pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
 	let mut closest_artifact_path = None;

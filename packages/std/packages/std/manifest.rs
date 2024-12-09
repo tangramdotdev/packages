@@ -240,8 +240,14 @@ impl Manifest {
 
 		// Create the manifest blob.
 		let manifest = std::io::Cursor::new(manifest);
+
 		let manifest_blob = tg::Blob::with_reader(tg, manifest).await?;
 		let manifest_size = manifest_blob.size(tg).await?;
+		#[cfg(feature = "tracing")]
+		{
+			let blob_id = manifest_blob.id(tg).await?;
+			tracing::trace!(?blob_id, ?manifest_size, "created manifest blob");
+		}
 
 		// Create a new blob with the wrapper contents and the manifest, keeping the wrapper in a separate blob.
 		let output_blob = tg::Blob::new(vec![
@@ -254,6 +260,11 @@ impl Manifest {
 				size: manifest_size,
 			},
 		]);
+		#[cfg(feature = "tracing")]
+		{
+			let blob_id = output_blob.id(tg).await?;
+			tracing::trace!(?blob_id, "created wrapper blob");
+		}
 
 		// Obtain the dependencies from the manifest to add to the file.
 		// NOTE: We know the wrapper file has no dependencies, so there is no need to merge.
@@ -270,6 +281,12 @@ impl Manifest {
 			output_file = output_file.dependencies(dependencies);
 		}
 		let output_file = output_file.build();
+
+		#[cfg(feature = "tracing")]
+		{
+			let file_id = output_file.id(tg).await?;
+			tracing::trace!(?file_id, "created wrapper file");
+		}
 
 		Ok(output_file)
 	}

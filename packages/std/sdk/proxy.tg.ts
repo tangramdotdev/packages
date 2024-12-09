@@ -380,7 +380,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 export const test = tg.target(async () => {
 	const tests = [
 		testBasic(),
-		testTransitive(),
+		testTransitiveAll(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
 		testSharedLibraryWithDep(),
@@ -464,7 +464,7 @@ void printGreeting() {
 		`);
 	const printerHeader = await tg.file(`
 void printGreeting();
-		`)
+		`);
 
 	const mainSource = await tg.file(`
 		#include <printer.h>
@@ -473,13 +473,13 @@ void printGreeting();
 			return 0;
 		}
 		`);
-	
+
 	const sources = tg.directory({
 		["constants.c"]: constantsSource,
 		["constants.h"]: constantsHeader,
 		["printer.c"]: printerSource,
 		["printer.h"]: printerHeader,
-		["main.c"]: mainSource
+		["main.c"]: mainSource,
 	});
 
 	const script = tg`
@@ -504,23 +504,39 @@ void printGreeting();
 	`;
 
 	const output = await tg
-		.target(script,
-			{
-				env: std.env.arg(bootstrapSdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
-			},
-		)
+		.target(script, {
+			env: std.env.arg(bootstrapSdk, {
+				TANGRAM_LINKER_TRACING: "tangram=trace",
+			}),
+		})
 		.then((t) => t.output())
 		.then(tg.Directory.expect);
 	console.log("STRING CONSTANTS A", await output.id());
 	return output;
-})
+});
+
+type OptLevel = "none" | "filter" | "resolve" | "combine";
+
+export const testTransitiveAll = tg.target(async () => {
+	return await Promise.all([
+		testTransitive(), // pass pre-assert
+		testTransitiveNone(), // fail pre-assert
+		testTransitiveResolve(), // pass pre-assert
+		testTransitiveCombine(), // pass pre-assert
+	]);
+});
+export const testTransitiveNone = tg.target(() => testTransitive("none")); // fails
+export const testTransitiveResolve = tg.target(() => testTransitive("resolve")); // pass pre-assert
+export const testTransitiveCombine = tg.target(() => testTransitive("combine"));
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
-export const testTransitive = tg.target(async () => {
+export const testTransitive = tg.target(async (optLevel?: OptLevel) => {
+	const opt = optLevel ?? "filter";
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
+	// Define the sources.
 	const constantsSourceA = await tg.file(`
 const char* getGreetingA() {
 	return "Hello from transitive constants A!";
@@ -626,22 +642,113 @@ const char* getGreetingB();
 		return 0;
 	}
 		`);
+
+	// Add a library path that doesn't get used to make sure it gets retained or removed appropriately.
+	const uselessLibDir = tg.directory({ lib: tg.directory() });
+
+	// Compile the executable.
 	const output = await tg
 		.target(
-			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -xc ${mainSource} -o $OUTPUT`,
+			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
 					TANGRAM_LINKER_TRACING: "tangram=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: opt,
 				}),
 			},
 		)
 		.then((t) => t.output())
 		.then(tg.File.expect);
+
+	// Assert the library paths of the wrapper are set appropriately.
+	const manifest = await std.wrap.Manifest.read(output);
+	tg.assert(manifest !== undefined);
+	const interpreter = manifest.interpreter;
+	tg.assert(interpreter !== undefined);
+	const expectedInterpreterKind = os === "darwin" ? "dyld" : "ld-musl";
+	tg.assert(
+		interpreter.kind === expectedInterpreterKind,
+		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,
+	);
+	const libraryPaths = interpreter.libraryPaths;
+	tg.assert(libraryPaths !== undefined);
+	console.log("manifest library paths", libraryPaths);
+	// NOTE - the input has six paths: libc, greeta, constantsa, greetb, constantsb, empty. The output will differ based on the opt level.
+	const numLibraryPaths = libraryPaths.length;
+	console.log("numLibraryPaths", numLibraryPaths);
+	switch (opt) {
+		case "none": {
+			// All the paths are retained.
+			tg.assert(numLibraryPaths === 10);
+			break;
+		}
+		case "filter": {
+			// The empty path with no needed library was dropped.
+			tg.assert(numLibraryPaths === 5);
+			// each path should have a single directory component and a single string component.
+			for (let path of libraryPaths) {
+				tg.assert(path.components.length === 2);
+				const artifactComponent = path.components[0];
+				tg.assert(artifactComponent !== undefined);
+				tg.assert(artifactComponent.kind === "artifact");
+				tg.assert(artifactComponent.value.startsWith("dir_"));
+				const subpathComponent = path.components[1];
+				tg.assert(subpathComponent !== undefined);
+				tg.assert(subpathComponent.kind === "string");
+				tg.assert(subpathComponent.value === "/lib");
+			}
+			break;
+		}
+		case "resolve": {
+			// The empty path with no needed library was dropped.
+			tg.assert(numLibraryPaths === 5);
+			// each path should have a single directory component.
+			for (let path of libraryPaths) {
+				tg.assert(path.components.length === 1);
+				const component = path.components[0];
+				tg.assert(component !== undefined);
+				tg.assert(component.kind === "artifact");
+				tg.assert(component.value.startsWith("dir_"));
+			}
+			break;
+		}
+		case "combine": {
+			// There is one single library path.
+			tg.assert(numLibraryPaths === 1);
+			const path = libraryPaths[0];
+			tg.assert(path !== undefined);
+			// it should be a single directory component, and that diretory should contain all libraries.
+			tg.assert(path.components.length === 1);
+			const component = path.components[0];
+			tg.assert(component !== undefined);
+			tg.assert(component.kind === "artifact");
+			tg.assert(component.value.startsWith("dir_"));
+			const combinedDir = tg.Directory.withId(component.value);
+			const entries = await combinedDir.entries();
+			tg.assert(Object.keys(entries).length === 5);
+			const libc = await combinedDir.tryGet("libc.so");
+			tg.assert(libc instanceof tg.File);
+			const libgreeta = await combinedDir.tryGet("libgreeta.so");
+			tg.assert(libgreeta instanceof tg.File);
+			const libconstantsa = await combinedDir.tryGet("libconstantsa.so");
+			tg.assert(libconstantsa instanceof tg.File);
+			const libgreetb = await combinedDir.tryGet("libgreetb.so");
+			tg.assert(libgreetb instanceof tg.File);
+			const libconstantsb = await combinedDir.tryGet("libconstantsb.so");
+			tg.assert(libconstantsb instanceof tg.File);
+			break;
+		}
+		default: {
+			return tg.unreachable(`unrecognized opt level ${opt}`);
+		}
+	}
+
+	// Make sure the executable runs without errors and produces the expected output.
 	await std.assert.stdoutIncludes(
 		output,
 		"Hello from transitive constants A!\nHello from transitive constants B!",
 	);
+
 	return output;
 });
 
