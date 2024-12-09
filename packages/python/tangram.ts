@@ -23,7 +23,7 @@ export const metadata = {
 	name: "Python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.13.0",
+	version: "3.13.1",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -36,7 +36,7 @@ export const versionString = () => {
 export const source = tg.target(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d";
+		"sha256:9cf9427bee9e2242e3877dd0f6b641c1853ca461f39d6503ce260a59c80bf0d9";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std
