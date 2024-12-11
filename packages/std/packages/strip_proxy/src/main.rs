@@ -121,10 +121,7 @@ async fn run_proxy(
 		tracing::info!(?executable_path, "found executable path");
 
 		// Copy the file to a temp directory.
-		let cwd = std::env::current_dir().map_err(|source| {
-			tg::error!(!source, "could not determine current working directory")
-		})?;
-		let tmpdir = tempfile::TempDir::new_in(&cwd)
+		let tmpdir = tempfile::TempDir::new()
 			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
 		let tmp_path = tmpdir.path();
 		let local_executable_path = tmp_path.join("executable");
@@ -189,7 +186,10 @@ async fn run_proxy(
 
 		let new_wrapper = new_manifest.write(&tg).await?;
 		#[cfg(feature = "tracing")]
-		tracing::info!(?new_wrapper, "wrote new wrapper");
+		{
+			let new_wrapper_id = new_wrapper.id(&tg).await?;
+			tracing::info!(?new_wrapper_id, "wrote new wrapper");
+		}
 
 		// Check out the new output file.
 		let canonical_target_path = std::fs::canonicalize(target_path).map_err(|error| {
