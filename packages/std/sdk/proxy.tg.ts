@@ -464,7 +464,7 @@ void printGreeting() {
 		`);
 	const printerHeader = await tg.file(`
 void printGreeting();
-		`)
+		`);
 
 	const mainSource = await tg.file(`
 		#include <printer.h>
@@ -473,13 +473,13 @@ void printGreeting();
 			return 0;
 		}
 		`);
-	
+
 	const sources = tg.directory({
 		["constants.c"]: constantsSource,
 		["constants.h"]: constantsHeader,
 		["printer.c"]: printerSource,
 		["printer.h"]: printerHeader,
-		["main.c"]: mainSource
+		["main.c"]: mainSource,
 	});
 
 	const script = tg`
@@ -504,16 +504,16 @@ void printGreeting();
 	`;
 
 	const output = await tg
-		.target(script,
-			{
-				env: std.env.arg(bootstrapSdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
-			},
-		)
+		.target(script, {
+			env: std.env.arg(bootstrapSdk, {
+				TANGRAM_LINKER_TRACING: "tangram=trace",
+			}),
+		})
 		.then((t) => t.output())
 		.then(tg.Directory.expect);
 	console.log("STRING CONSTANTS A", await output.id());
 	return output;
-})
+});
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
 export const testTransitive = tg.target(async () => {
