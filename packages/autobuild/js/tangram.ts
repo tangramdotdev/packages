@@ -23,6 +23,7 @@ export const node = tg.target(async (arg: Arg) => {
 export default node;
 
 export const plain = tg.target(async (arg: Arg) => {
+	// FIXME - env!
 	const { source } = arg;
 	const toolchain = await nodejs.toolchain();
 	const interpreter = await toolchain.get("bin/node").then(tg.File.expect);
