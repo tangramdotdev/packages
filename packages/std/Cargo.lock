@@ -222,9 +222,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.3"
+version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27f657647bcff5394bf56c7317665bbf790a137a50eaaa5c6bfbb9e27a518f2d"
+checksum = "9157bbaa6b165880c27a4293a474c91cdcf265cc68cc829bf10be0964a391caf"
 dependencies = [
  "shlex",
 ]
@@ -286,9 +286,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.20"
+version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
+checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "crypto-common"
@@ -717,9 +717,9 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hyper"
-version = "1.5.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97818827ef4f364230e16705d4706e2897df2bb60617d6ca15d598025a3c481f"
+checksum = "256fb8d4bd6413123cc9d91832d78325c48ff41677595be797d90f42969beae0"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -1334,9 +1334,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.7"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b6dfecf2c74bce2466cabf93f6664d6998a69eb21e39f4207930065b27b771f"
+checksum = "03a862b389f93e68874fbf580b9de08dd02facb9a788ebadaf4a3fd33cf58834"
 dependencies = [
  "bitflags 2.6.0",
 ]
@@ -1699,7 +1699,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad#1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad"
+source = "git+https://github.com/tangramdotdev/tangram?rev=dde77540a4d2acf394c5d954935c9691a6cad246#dde77540a4d2acf394c5d954935c9691a6cad246"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1743,7 +1743,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad#1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad"
+source = "git+https://github.com/tangramdotdev/tangram?rev=dde77540a4d2acf394c5d954935c9691a6cad246#dde77540a4d2acf394c5d954935c9691a6cad246"
 dependencies = [
  "serde",
 ]
@@ -1751,7 +1751,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad#1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad"
+source = "git+https://github.com/tangramdotdev/tangram?rev=dde77540a4d2acf394c5d954935c9691a6cad246#dde77540a4d2acf394c5d954935c9691a6cad246"
 dependencies = [
  "dashmap",
  "futures",
@@ -1764,7 +1764,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad#1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad"
+source = "git+https://github.com/tangramdotdev/tangram?rev=dde77540a4d2acf394c5d954935c9691a6cad246#dde77540a4d2acf394c5d954935c9691a6cad246"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1829,7 +1829,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad#1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad"
+source = "git+https://github.com/tangramdotdev/tangram?rev=dde77540a4d2acf394c5d954935c9691a6cad246#dde77540a4d2acf394c5d954935c9691a6cad246"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1840,7 +1840,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad#1dae07b2fca32ed380d96bd0b3d6191ddd4ef9ad"
+source = "git+https://github.com/tangramdotdev/tangram?rev=dde77540a4d2acf394c5d954935c9691a6cad246#dde77540a4d2acf394c5d954935c9691a6cad246"
 dependencies = [
  "derive_more",
  "winnow",
