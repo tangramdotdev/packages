@@ -7,7 +7,7 @@ export const metadata = {
 		"https://github.com/nodejs/node/blob/12fb157f79da8c094a54bc99370994941c28c235/LICENSE",
 	name: "nodejs",
 	repository: "https://github.com/nodejs/node",
-	version: "20.18.0",
+	version: "22.12.0",
 };
 
 export type ToolchainArg = {
@@ -33,22 +33,22 @@ const source = async (): Promise<tg.Directory> => {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
-				"sha256:a9ce85675ba33f00527f6234d90000946c0936fb4fca605f1891bb5f4fe6fb0a",
+				"sha256:8cfd5a8b9afae5a2e0bd86b0148ca31d2589c0ea669c2d0b11c132e35d90ed68",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
 			checksum:
-				"sha256:4543670b589593f8fa5f106111fd5139081da42bb165a9239f05195e405f240a",
+				"sha256:22982235e1b71fa8850f82edd09cdae7e3f32df1764a9ec298c72d25ef2c164f",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
-				"sha256:678e062bdae3824aa997bd469580a4dda48fd51f61d3679b6ba06352e6cef38f",
+				"sha256:0047be0cfda922eb73876f9ef41de361c36b7654c884d13d9b783b0efd1db9aa",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:63e150a3bb4f31743257d8597262c6b5f0a2356e7c42002e29d5f7d1bf161f08",
+				"sha256:d68ef0c4c19b3b3b88c0e7408668d0a539607c136a14668e079feed0c6ec8bec",
 		},
 	};
 
@@ -168,11 +168,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		if (pkg.bin && pkg.dev) {
 			for (const [name, path] of Object.entries(pkg.bin)) {
 				// Get the executable as a symlink, since it may refer to other things in adjacent directories.
-				const executable = tg.symlink(tg`${devDependencies}/${dst}/${path}`);
+				const executable = tg`${devDependencies}/${dst}/${path}`;
 
 				// Wrap the executable using node as the interpreter.
 				const wrapped = std.wrap({
-					interpreter: tg.symlink(tg`${node}/bin/node`),
+					interpreter: tg`${node}/bin/node`,
 					executable: executable,
 					env: {
 						NODE_PATH: tg`${devDependencies}/node_modules`,
@@ -233,6 +233,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		{
 			phases,
 			env,
+			host,
 		},
 		...additionalPhasesArgs,
 	);
@@ -289,14 +290,14 @@ export const wrapBin = tg.target(
 		dependencies: tg.Directory,
 	) => {
 		// Grap the interpreter.
-		const interpreter = await tg.symlink(tg`${node}/bin/node`);
+		const interpreter = tg`${node}/bin/node`;
 
 		// Iterate the list of binaries in the `bin` field of the package.json and wrap.
 		let bin = tg.directory();
 		for (const [name, path] of Object.entries(bins)) {
 			const wrapped = std.wrap({
 				// The executable probably references other files in the same directory, so we wrap it through a symlink.
-				executable: tg.symlink(tg`${arg}/${path}`),
+				executable: tg`${arg}/${path}`,
 				interpreter,
 				env: {
 					NODE_PATH: tg.Mutation.suffix(tg`${dependencies}/node_modules`, ":"),
