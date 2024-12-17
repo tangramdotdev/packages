@@ -1,10 +1,12 @@
 #!/bin/sh
 
+# REQUIRES: bun,tangram,jq,fly
+
 set -eux
 
 # Define tangram binary
-TG_EXE=${TG_EXE:=tangram}
-export TG_EXE
+TANGRAM=${TANGRAM:=tangram}
+export TANGRAM
 
 # set up directories
 WORKDIR="$(mktemp -d)"
@@ -19,13 +21,13 @@ mkdir "$LOCAL"
 # Create wrapper scripts to append the correct args.
 cat <<EOF > "$REMOTE/tg_remote"
 #!/bin/sh
-exec $TG_EXE --config "$REMOTE/config.json" --path "$REMOTE/.tangram" "\$@"
+exec $TANGRAM --config "$REMOTE/config.json" --path "$REMOTE/.tangram" "\$@"
 EOF
 chmod +x "$REMOTE/tg_remote"
 
 cat <<EOF > "$LOCAL/tg_local"
 #!/bin/sh
-exec $TG_EXE --config "$LOCAL/config.json" --path "$HOME/.tangram" "\$@"
+exec $TANGRAM --config "$LOCAL/config.json" --path "$HOME/.tangram" "\$@"
 EOF
 chmod +x "$LOCAL/tg_local"
 
@@ -59,7 +61,7 @@ wait_for_state() {
     attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        current_state=$(fly machines list -a "$APP_NAME" --json | jq -r '.[0].state')
+        current_state=$(fly machines list -a "$FLY_APP" --json | jq -r '.[0].state')
         
         if [ "$current_state" = "$expected_state" ]; then
             return 0
@@ -96,11 +98,13 @@ push_to_cloud() {
 
     # Stop the fly machine
     fly machines stop "$CLOUD_MACHINE_ID" -a "$FLY_APP"
+    wait_for_state "stopped"
     # Attach the volume to a new fly machine that sleeps infinitely
     # Swap the database
     # Stop the maintenence machine
     # Restart the real machine
     fly machines start "$CLOUD_MACHINE_ID" -a "$FLY_APP"
+    wait_for_state "started"
 
  #    # Create a backup of the database in the cloud
  #    fly ssh console -a "$FLY_APP" -s -C "cp ${CLOUD_DB_PATH} ${CLOUD_DB_PATH}.backup-`date +%Y%m%d_%H%M%S`"
@@ -134,7 +138,7 @@ cat <<EOF > "$REMOTE"/config.json
 		"filter": "tangram_server=info",
 		"format": "pretty"
 	},
-	"url": "http://localhost:8476",
+	"url": "http://localhost:5429",
 	"vfs": null
 }
 EOF
@@ -156,7 +160,7 @@ cat <<EOF > "$LOCAL"/config.json
 	},
 	"remotes": {
 	  "default": {
-	    "url": "http://localhost:8476"
+	    "url": "http://localhost:5429"
 	  }
 	},
 	"tracing": {
@@ -175,6 +179,7 @@ ps -o pid,pgid,command -p $LOCAL_PID || true
 # PACKAGES="std jq m4 bison rust pcre2 ripgrep pkgconf pkg-config ncurses readline zlib sqlite"
 PACKAGES="std jq"
 
-bun run auto -pu --seq $PACKAGES
+export TG_EXE="$LOCAL/tg_local"
+bun run auto -p --seq $PACKAGES
 
 push_to_cloud
