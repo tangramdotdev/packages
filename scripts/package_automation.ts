@@ -301,7 +301,8 @@ class Options {
 		const actions = `Actions: ${Array.from(this.actions).join(", ")}`;
 		const packages = `Packages: ${Array.from(this.packages).join(", ")}`;
 		const config = `Parallel: ${this.parallel}`;
-		return `${actions}\n${packages}\n${config}`;
+		const tangram = `Tangram: ${this.tangram_exe}`;
+		return `${actions}\n${packages}\n${config}\n${tangram}`;
 	}
 }
 
