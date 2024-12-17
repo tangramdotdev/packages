@@ -414,25 +414,18 @@ const publishAction = async (tangram: string, name: string, path: string): Promi
 		return result("checkinError", `no ID for ${path}`);
 	}
 
-	// Look up the existing tag for the given name.
-	const existingTag = await existingTaggedItem(tangram, name);
-
-	// If there is no tag or the ID does not match, tag the package.
-	if (packageId !== existingTag) {
-		log(`tagging ${name}...`);
-		const tagResult = await tagPackage(tangram, name, path);
-		if (tagResult.kind !== "ok") {
-			return tagResult;
-		}
-
-		// Push the tag.
-		const pushTagResult = await push(tangram, name);
-		if (pushTagResult.kind !== "ok") {
-			return pushTagResult;
-		}
-	} else {
-		return ok(`matching tag found for ${name}: ${packageId}, not re-tagging.`);
+	log(`tagging ${name}...`);
+	const tagResult = await tagPackage(tangram, name, path);
+	if (tagResult.kind !== "ok") {
+		return tagResult;
 	}
+
+	// Push the tag.
+	const pushTagResult = await push(tangram, name);
+	if (pushTagResult.kind !== "ok") {
+		return pushTagResult;
+	}
+
 	return ok(`tagged ${name}: ${packageId}`);
 };
 
