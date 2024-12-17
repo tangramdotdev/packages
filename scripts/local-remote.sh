@@ -55,6 +55,15 @@ get_cloud_machine_id() {
 	fly machines list -a "$FLY_APP" --json | jq -r '.[0].id'
 }
 
+get_machine_id_by_volume() {
+    volume_id=$1
+    fly machines list -a "$FLY_APP" --json | \
+        jq -r --arg vid "$volume_id" '.[] | 
+        select(.config.mounts != null and
+               (.config.mounts[] | select(.volume == $vid))) |
+        .id' | head -n 1
+}
+
 get_volume_info() {
     machine_id=$1
     fly machines list -a "$FLY_APP" --json | \
@@ -108,9 +117,6 @@ push_to_cloud() {
 
 		CLOUD_MACHINE_ID=$(get_cloud_machine_id)
 
-		ORIGINAL_CONFIG=$(fly machines list -a "$FLY_APP" --json | jq -r --arg mid "$CLOUD_MACHINE_ID" '.[] | select(.id == $mid)')
-		# echo "Stored machine config ${ORIGINAL_CONFIG}" # FIXME remove
-
 		# Locate the volume
     VOLUME_INFO=$(get_volume_info "$CLOUD_MACHINE_ID")
 		if [ -z "$VOLUME_INFO" ]; then
@@ -127,34 +133,22 @@ push_to_cloud() {
 
 		echo "Created clone volume $CLONED_VOLUME_ID"
 		
-# Create a temporary directory for the build context
-TEMP_DIR=$(mktemp -d)
-cat << EOF > "$TEMP_DIR/Dockerfile"
-FROM alpine:latest
-RUN apk add --no-cache bash
-WORKDIR $MOUNT_PATH
-CMD ["sleep", "infinity"]
-EOF
-
-# Create fly.toml file
-cat << EOF > "$TEMP_DIR/fly.toml"
-app = "$FLY_APP"
-EOF
-
 		echo "Creating temporary machine with volume ${CLONED_VOLUME_ID}..."
-		cd "$TEMP_DIR"
-		TEMP_MACHINE_ID=$(fly machine run . \
+		# TEMP_MACHINE_ID=$(fly machine clone "$CLOUD_MACHINE_ID" \
+		# 	--app "$FLY_APP" \
+		# 	--attach-volume "$CLONED_VOLUME_ID:$MOUNT_PATH" \
+		# 	--override-cmd "sleep infinity" \
+		# 	--region "$REGION" | grep -o "machine [[:alnum:]]*" | cut -d' ' -f2)
+		TEMP_MACHINE_ID=$(fly machine run alpine \
 			--app "$FLY_APP" \
-			--name temp-volume-access \
-			--volume "$CLONED_VOLUME_ID:$MOUNT_PATH:ext4" \
-			--region "$REGION" | grep -o "machine [[:alnum:]]*" | cut -d' ' -f2)
-		cd - > /dev/null
-		rm -rf "$TEMP_DIR"
+			--volume "$CLONED_VOLUME_ID:$MOUNT_PATH" \
+			--region "$REGION" \
+			 "sleep inf"  2>&1 | tee /dev/stderr | sed -n 's/.*Machine ID: \([^ ]*\).*/\1/p')
 		wait_for_state "$TEMP_MACHINE_ID" "started"
     
     # Swap the database
     echo "Swapping..."
-    fly ssh console -a "$FLY_APP" -s -C "ls .tangram"
+    fly ssh console -a "$FLY_APP" "$TEMP_MACHINE_ID" -C "ls .tangram"
     # TODO
 
     # Stop and destroy the maintenence machine
@@ -163,50 +157,23 @@ EOF
 		wait_for_state "$TEMP_MACHINE_ID" "stopped"
 		fly machines destroy "$TEMP_MACHINE_ID" -a "$FLY_APP" --force
 
-    # Stop and destroy the original fly machine
+    # Stop the original fly machine
     echo "Stopping original machine to apply changes..."
     fly machines stop "$CLOUD_MACHINE_ID" -a "$FLY_APP"
     wait_for_state "$CLOUD_MACHINE_ID" "stopped"
-
-		# Create a new machine with the modified volume.
-		MACHINE_CONFIG=$(fly machines show "$CLOUD_MACHINE_ID" -a "$FLY_APP" --json)
     
-    # Extract important configuration details
-    MACHINE_IMAGE=$(echo "$MACHINE_CONFIG" | jq -r '.config.image')
-    
-    # Destroy the original machine
-    fly machines destroy "$CLOUD_MACHINE_ID" -a "$FLY_APP" --force
-
     # Create a new machine with identical configuration but new volume
     echo "Creating new machine with modified volume..."
-    echo "$MACHINE_CONFIG" | \
-        jq --arg new_vol "$CLONED_VOLUME_ID" \
-           --arg old_vol "$ORIGINAL_VOLUME_ID" \
-           --arg region "$REGION" \
-           '.config.mounts = [.config.mounts[] | if .volume == $old_vol then . + {"volume": $new_vol} else . end] |
-            .config.region = $region |
-            del(.id) |
-            del(.instance_id) |
-            del(.private_ip) |
-            del(.created_at) |
-            del(.updated_at) |
-            del(.state) |
-            del(.events) |
-            del(.checks) |
-            del(.exit_policy) |
-            del(.restart_policy)' > "$WORKDIR/machine-config.json"
-
-    # Create new machine with preserved configuration
-    NEW_MACHINE_ID=$(fly machines run "$MACHINE_IMAGE" \
-        --app "$FLY_APP" \
-        --config "$WORKDIR/machine-config.json" \
-        --json | jq -r '.id')
+    NEW_MACHINE_ID=$(fly machine clone -a "$FLY_APP" "$CLOUD_MACHINE_ID" --attach-volume "$CLOUD_MACHINE_ID":"$MOUNT_PATH" | grep -o "machine [[:alnum:]]*" | cut -d' ' -f2)
 
     # Wait for the new machine to start
     wait_for_state "$NEW_MACHINE_ID" "started"
 
+    # TODO - health check?
+
 		# Clean up original volume
-		fly volumes destroy "$ORIGINAL_VOLUME_ID" -a "$FLY_APP"
+		# TODO
+		# fly volumes destroy "$ORIGINAL_VOLUME_ID" -a "$FLY_APP"
 
  #    # Create a backup of the database in the cloud
  #    fly ssh console -a "$FLY_APP" -s -C "cp ${CLOUD_DB_PATH} ${CLOUD_DB_PATH}.backup-`date +%Y%m%d_%H%M%S`"
