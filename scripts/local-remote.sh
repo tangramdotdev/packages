@@ -114,14 +114,20 @@ push_to_cloud() {
 			echo "No volume found for machine ${CLOUD_MACHINE_ID}"
 			exit 1
 		fi
-		VOLUME_ID=$(echo "$VOLUME_INFO" | cut -d'|' -f1)
+		ORIGINAL_VOLUME_ID=$(echo "$VOLUME_INFO" | cut -d'|' -f1)
 		MOUNT_PATH=$(echo "$VOLUME_INFO" | cut -d'|' -f2)
-		echo "Found volume ${VOLUME_ID} mounted at path ${MOUNT_PATH} attached to machine ${CLOUD_MACHINE_ID}"
-		
-    # Stop the fly machine
-    fly machines stop "$CLOUD_MACHINE_ID" -a "$FLY_APP"
-    wait_for_state "$CLOUD_MACHINE_ID" "stopped"
+		echo "Found volume ${ORIGINAL_VOLUME_ID} mounted at path ${MOUNT_PATH} attached to machine ${CLOUD_MACHINE_ID}"
 
+		# Clone the volume
+		echo "Cloning volume $ORIGINAL_VOLUME_ID..."
+		CLONED_VOLUME_ID=$(fly volumes create \
+			--region "$REGION" \
+			--size 1 \
+			--snapshot "$ORIGINAL_VOLUME_ID" \
+			-a "$FLY_APP" | grep -o "vol_[[:alnum:]]*")
+
+		echo "Created clone volume $CLONED_VOLUME_ID"
+		
 		# Create temporary machine with the same volume
 
 # Create a temporary directory for the build context
@@ -138,12 +144,12 @@ cat << EOF > "$TEMP_DIR/fly.toml"
 app = "$FLY_APP"
 EOF
 
-		echo "Creating temporary machine with volume $VOLUME_ID..."
+		echo "Creating temporary machine with volume $ORIGINAL_VOLUME_ID..."
 		cd "$TEMP_DIR"
 		TEMP_MACHINE_ID=$(fly machine run . \
 			--app "$FLY_APP" \
 			--name temp-volume-access \
-			--volume "$VOLUME_ID:$MOUNT_PATH:ext4" \
+			--volume "$CLONED_VOLUME_ID:$MOUNT_PATH:ext4" \
 			--region "$REGION" | grep -o "machine [[:alnum:]]*" | cut -d' ' -f2)
 		cd - > /dev/null
 		rm -rf "$TEMP_DIR"
@@ -153,15 +159,30 @@ EOF
     echo "Swapping..."
     fly ssh console -a "$FLY_APP" -s -C "ls .tangram"
     # TODO
+
     # Stop the maintenence machine
     echo "Cleaning up temporary machine..."
-		fly machines stop "$TEMP_MACHINE_ID" -a "$APP_NAME"
+		fly machines stop "$TEMP_MACHINE_ID" -a "$FLY_APP"
 		wait_for_state "$TEMP_MACHINE_ID" "stopped"
-		fly machines destroy "$TEMP_MACHINE_ID" -a "$APP_NAME" --force
-		
-    # Restart the real machine
+		fly machines destroy "$TEMP_MACHINE_ID" -a "$FLY_APP" --force
+
+    # Stop the original fly machine
+    echo "Stopping original machine to apply changes..."
+    fly machines stop "$CLOUD_MACHINE_ID" -a "$FLY_APP"
+    wait_for_state "$CLOUD_MACHINE_ID" "stopped"
+
+    # Snapshot the volume, then restore from the modified cloned snapshot
+    echo "Applying changes..."
+    fly volumes snapshot "$CLONED_VOLUME_ID" -a "$FLY_APP"
+    fly volumes restore "$ORIGINAL_VOLUME_ID" --snapshot "$CLONED_VOLUME_ID" -a "$FLY_APP"
+    
+    # Restart the machine
+    echo "Restarting machine..."
     fly machines start "$CLOUD_MACHINE_ID" -a "$FLY_APP"
     wait_for_state "$CLOUD_MACHINE_ID" "started"
+
+		# Clean up cloned volume
+		fly volumes destroy "$CLONED_VOLUME_ID" -a "$FLY_APP"
 
  #    # Create a backup of the database in the cloud
  #    fly ssh console -a "$FLY_APP" -s -C "cp ${CLOUD_DB_PATH} ${CLOUD_DB_PATH}.backup-`date +%Y%m%d_%H%M%S`"
