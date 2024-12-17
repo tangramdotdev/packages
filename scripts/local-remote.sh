@@ -71,7 +71,7 @@ wait_for_state() {
     attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        local current_state=$(fly machines list -a "$FLY_APP" --json | \
+        current_state=$(fly machines list -a "$FLY_APP" --json | \
             jq -r --arg mid "$machine_id" '.[] | select(.id == $mid) | .state')
         
         if [ "$current_state" = "$expected_state" ]; then
@@ -123,20 +123,31 @@ push_to_cloud() {
     wait_for_state "$CLOUD_MACHINE_ID" "stopped"
 
 		# Create temporary machine with the same volume
-		echo "Creating temporary machine with volume $VOLUME_ID..."
-		TEMP_MACHINE_ID=$(fly machine run . \
-    --app "$FLY_APP" \
-    --name temp-volume-access \
-    --volume "$VOLUME_ID:$MOUNT_PATH:ext4" \
-    --region "$REGION" \
-    --dockerfile - <<EOF | grep -o "machine [[:alnum:]]*" | cut -d' ' -f2
+
+# Create a temporary directory for the build context
+TEMP_DIR=$(mktemp -d)
+cat << EOF > "$TEMP_DIR/Dockerfile"
 FROM alpine:latest
-RUN apk add --no-cache bash sqlite3 jq
+RUN apk add --no-cache bash
 WORKDIR $MOUNT_PATH
 CMD ["sleep", "infinity"]
 EOF
-)
-wait_for_state "$TEMP_MACHINE_ID" "started"
+
+# Create fly.toml file
+cat << EOF > "$TEMP_DIR/fly.toml"
+app = "$FLY_APP"
+EOF
+
+		echo "Creating temporary machine with volume $VOLUME_ID..."
+		cd "$TEMP_DIR"
+		TEMP_MACHINE_ID=$(fly machine run . \
+			--app "$FLY_APP" \
+			--name temp-volume-access \
+			--volume "$VOLUME_ID:$MOUNT_PATH:ext4" \
+			--region "$REGION" | grep -o "machine [[:alnum:]]*" | cut -d' ' -f2)
+		cd - > /dev/null
+		rm -rf "$TEMP_DIR"
+		wait_for_state "$TEMP_MACHINE_ID" "started"
     
     # Swap the database
     echo "Swapping..."
