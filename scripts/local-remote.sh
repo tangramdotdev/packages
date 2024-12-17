@@ -48,6 +48,32 @@ FLY_APP="tangram-api"
 DB_PATH="$REMOTE/.tangram/database"
 CLOUD_DB_PATH="/data/.tangram/database"
 
+get_cloud_machine_id() {
+	fly machines list -a "$FLY_APP" --json | jq -r '.[0].id'
+}
+
+# Function to wait for machine state
+wait_for_state() {
+    expected_state=$1
+    max_attempts=30
+    attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+        current_state=$(fly machines list -a "$APP_NAME" --json | jq -r '.[0].state')
+        
+        if [ "$current_state" = "$expected_state" ]; then
+            return 0
+        fi
+        
+        echo "Waiting for machine to reach $expected_state state (attempt $attempt/$max_attempts)..."
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+
+    echo "Timeout waiting for machine to reach $expected_state state"
+    return 1
+}
+
 pull_from_cloud() {
 	echo "pulling from cloud..."
 	fly sftp get -a "$FLY_APP" "$CLOUD_DB_PATH" "$DB_PATH"
@@ -66,25 +92,32 @@ push_to_cloud() {
 
     sqlite3 "$DB_PATH" "PRAGMA wal_checkpoint(TRUNCATE);"
 
-    # Create a backup of the database in the cloud
-    fly ssh console -a "$FLY_APP" -s -C "cp ${CLOUD_DB_PATH} ${CLOUD_DB_PATH}.backup-`date +%Y%m%d_%H%M%S`"
+		CLOUD_MACHINE_ID=$(get_cloud_machine_id)
 
-    # Stop the server
-    fly ssh console -a "$FLY_APP" -s -C "/tangram-control stop"
+    # Stop the fly machine
+    fly machines stop "$CLOUD_MACHINE_ID" -a "$FLY_APP"
+    # Attach the volume to a new fly machine that sleeps infinitely
+    # Swap the database
+    # Stop the maintenence machine
+    # Restart the real machine
+    fly machines start "$CLOUD_MACHINE_ID" -a "$FLY_APP"
 
- # Push both the main database and WAL files
-    echo "put ${DB_PATH} ${CLOUD_DB_PATH}.tmp" | fly sftp shell -a "$FLY_APP"
+ #    # Create a backup of the database in the cloud
+ #    fly ssh console -a "$FLY_APP" -s -C "cp ${CLOUD_DB_PATH} ${CLOUD_DB_PATH}.backup-`date +%Y%m%d_%H%M%S`"
+
+ #    # Stop the server
+ #    fly ssh console -a "$FLY_APP" -s -C "/tangram-control stop"
+
+ # # Push both the main database and WAL files
+ #    echo "put ${DB_PATH} ${CLOUD_DB_PATH}.tmp" | fly sftp shell -a "$FLY_APP"
     
-    # Atomically move files into place
-    fly ssh console -a "$FLY_APP" -s -C "mv ${CLOUD_DB_PATH}.tmp ${CLOUD_DB_PATH}"
+ #    # Atomically move files into place
+ #    fly ssh console -a "$FLY_APP" -s -C "mv ${CLOUD_DB_PATH}.tmp ${CLOUD_DB_PATH}"
     
-    # Start the server again
-    fly ssh console -a "$FLY_APP" -s -C "/tangram-control start"
+ #    # Start the server again
+ #    fly ssh console -a "$FLY_APP" -s -C "/tangram-control start"
 
     echo "Successfully pushed to ${CLOUD_DB_PATH}"
-
-    tg_remote serve &
-    REMOTE_PID=$!
 }
 
 # set up remote config
