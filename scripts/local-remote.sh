@@ -47,6 +47,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 FLY_APP="tangram-api"
+REGION="bos"
 DB_PATH="$REMOTE/.tangram/database"
 CLOUD_DB_PATH="/data/.tangram/database"
 
@@ -54,20 +55,30 @@ get_cloud_machine_id() {
 	fly machines list -a "$FLY_APP" --json | jq -r '.[0].id'
 }
 
+get_volume_info() {
+    machine_id=$1
+    fly machines list -a "$FLY_APP" --json | \
+        jq -r --arg mid "$machine_id" '.[] | 
+        select(.id == $mid and .config.mounts != null) | 
+        .config.mounts[] | "\(.volume)|\(.path)"'
+}
+
 # Function to wait for machine state
 wait_for_state() {
-    expected_state=$1
+    machine_id=$1
+    expected_state=$2
     max_attempts=30
     attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        current_state=$(fly machines list -a "$FLY_APP" --json | jq -r '.[0].state')
+        local current_state=$(fly machines list -a "$FLY_APP" --json | \
+            jq -r --arg mid "$machine_id" '.[] | select(.id == $mid) | .state')
         
         if [ "$current_state" = "$expected_state" ]; then
             return 0
         fi
         
-        echo "Waiting for machine to reach $expected_state state (attempt $attempt/$max_attempts)..."
+        echo "Waiting for machine $machine_id to reach $expected_state state (attempt $attempt/$max_attempts)..."
         sleep 2
         attempt=$((attempt + 1))
     done
@@ -75,6 +86,7 @@ wait_for_state() {
     echo "Timeout waiting for machine to reach $expected_state state"
     return 1
 }
+
 
 pull_from_cloud() {
 	echo "pulling from cloud..."
@@ -96,15 +108,49 @@ push_to_cloud() {
 
 		CLOUD_MACHINE_ID=$(get_cloud_machine_id)
 
+		# Locate the volume
+    VOLUME_INFO=$(get_volume_info "$CLOUD_MACHINE_ID")
+		if [ -z "$VOLUME_INFO" ]; then
+			echo "No volume found for machine ${CLOUD_MACHINE_ID}"
+			exit 1
+		fi
+		VOLUME_ID=$(echo "$VOLUME_INFO" | cut -d'|' -f1)
+		MOUNT_PATH=$(echo "$VOLUME_INFO" | cut -d'|' -f2)
+		echo "Found volume ${VOLUME_ID} mounted at path ${MOUNT_PATH} attached to machine ${CLOUD_MACHINE_ID}"
+		
     # Stop the fly machine
     fly machines stop "$CLOUD_MACHINE_ID" -a "$FLY_APP"
-    wait_for_state "stopped"
-    # Attach the volume to a new fly machine that sleeps infinitely
+    wait_for_state "$CLOUD_MACHINE_ID" "stopped"
+
+		# Create temporary machine with the same volume
+		echo "Creating temporary machine with volume $VOLUME_ID..."
+		TEMP_MACHINE_ID=$(fly machine run . \
+    --app "$FLY_APP" \
+    --name temp-volume-access \
+    --volume "$VOLUME_ID:$MOUNT_PATH:ext4" \
+    --region "$REGION" \
+    --dockerfile - <<EOF | grep -o "machine [[:alnum:]]*" | cut -d' ' -f2
+FROM alpine:latest
+RUN apk add --no-cache bash sqlite3 jq
+WORKDIR $MOUNT_PATH
+CMD ["sleep", "infinity"]
+EOF
+)
+wait_for_state "$TEMP_MACHINE_ID" "started"
+    
     # Swap the database
+    echo "Swapping..."
+    fly ssh console -a "$FLY_APP" -s -C "ls .tangram"
+    # TODO
     # Stop the maintenence machine
+    echo "Cleaning up temporary machine..."
+		fly machines stop "$TEMP_MACHINE_ID" -a "$APP_NAME"
+		wait_for_state "$TEMP_MACHINE_ID" "stopped"
+		fly machines destroy "$TEMP_MACHINE_ID" -a "$APP_NAME" --force
+		
     # Restart the real machine
     fly machines start "$CLOUD_MACHINE_ID" -a "$FLY_APP"
-    wait_for_state "started"
+    wait_for_state "$CLOUD_MACHINE_ID" "started"
 
  #    # Create a backup of the database in the cloud
  #    fly ssh console -a "$FLY_APP" -s -C "cp ${CLOUD_DB_PATH} ${CLOUD_DB_PATH}.backup-`date +%Y%m%d_%H%M%S`"
