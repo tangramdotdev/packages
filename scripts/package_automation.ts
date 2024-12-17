@@ -286,7 +286,7 @@ class Options {
 
 	async validateTangram() {
 		try {
-			const result = await $`${this.tangram_exe} --version`.text();
+			const result = await $`${this.tangram_exe} --mode client --version`.text();
 			const goodStdout = result.includes("tangram");
 			if (!goodStdout) {
 				throw new Error(`${this.tangram_exe} --help produced an unexpected result, provide a different executable.`);
@@ -353,14 +353,15 @@ const processPackage = async (
 ): Promise<Result> => {
 	const path = getPackagePath(name);
 	log(`processing ${name}: ${path}`);
+	const tg = `${options.tangram_exe}`
 
 	const actionMap: Record<Action, () => Promise<Result>> = {
-		format: () => formatAction(options.tangram_exe, path),
-		check: () => checkAction(options.tangram_exe, path),
-		build: () => buildDefaultTarget(options.tangram_exe, path, buildTracker),
-		test: () => buildTestTarget(options.tangram_exe, path, buildTracker),
-		upload: () => uploadAction(options.tangram_exe, path, buildTracker),
-		publish: () => publishAction(options.tangram_exe, name, path),
+		format: () => formatAction(tg, path),
+		check: () => checkAction(tg, path),
+		build: () => buildDefaultTarget(tg, path, buildTracker),
+		test: () => buildTestTarget(tg, path, buildTracker),
+		upload: () => uploadAction(tg, path, buildTracker),
+		publish: () => publishAction(tg, name, path),
 	};
 
 	for (const action of sortedActions(options.actions)) {
@@ -463,7 +464,7 @@ const checkinPackage = async (tangram: string, path: string): Promise<Result> =>
 		log(`finished checkin ${path}`);
 		return ok(id);
 	} catch (err) {
-		log(`error checking in ${path}`);
+		log(`error checking in ${path}: ${err}`);
 		return result("checkinError", err.stdout.toString());
 	}
 };

@@ -21,13 +21,13 @@ mkdir "$LOCAL"
 # Create wrapper scripts to append the correct args.
 cat <<EOF > "$REMOTE/tg_remote"
 #!/bin/sh
-exec $TANGRAM --config "$REMOTE/config.json" --path "$REMOTE/.tangram" "\$@"
+$TANGRAM --config "$REMOTE/config.json" --path "$REMOTE/.tangram" "\$@"
 EOF
 chmod +x "$REMOTE/tg_remote"
 
 cat <<EOF > "$LOCAL/tg_local"
 #!/bin/sh
-exec $TANGRAM --config "$LOCAL/config.json" --path "$HOME/.tangram" "\$@"
+$TANGRAM --config "$LOCAL/config.json" --path "$HOME/.tangram" "\$@"
 EOF
 chmod +x "$LOCAL/tg_local"
 
@@ -107,7 +107,7 @@ push_to_cloud() {
     echo "pushing to cloud..."
     # Use tangram get to ensure all blobs are stored
     find "$REMOTE"/.tangram/blobs -type f -exec basename {} \; | while read -r blob_id; do
-        tg_remote get "$blob_id" > /dev/null 2>&1
+        "$REMOTE/tg_remote" get "$blob_id" > /dev/null 2>&1
     done
 
     pkill -P $REMOTE_PID 2>/dev/null || true
@@ -218,7 +218,7 @@ EOF
 pull_from_cloud
 
 # start remote server
-tg_remote serve &
+"$REMOTE/tg_remote" serve &
 REMOTE_PID=$!
 ps -o pid,pgid,command -p $REMOTE_PID || true
 
@@ -243,7 +243,7 @@ cat <<EOF > "$LOCAL"/config.json
 }
 EOF
 
-tg_local serve &
+"$LOCAL/tg_local" serve &
 LOCAL_PID=$!
 ps -o pid,pgid,command -p $LOCAL_PID || true
 
