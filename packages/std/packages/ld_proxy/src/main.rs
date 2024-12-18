@@ -482,7 +482,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			.check_out(
 				&tg,
 				tg::artifact::checkout::Arg {
-					dependencies: true,
+					dependencies: false,
 					force: true,
 					lockfile: false,
 					path: Some(output_path),
