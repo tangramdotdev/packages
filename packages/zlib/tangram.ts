@@ -83,3 +83,8 @@ export const test = tg.target(async () => {
 export const testAll = tg.target(async () => {
 	return await std.assert.pkg(spec, true);
 });
+
+import { $} from "std" with { path: "../std" };
+export const mktemp = tg.target(async () => {
+	return await $`mktemp -d > $OUTPUT`;
+})
