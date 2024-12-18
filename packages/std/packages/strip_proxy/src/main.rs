@@ -121,8 +121,12 @@ async fn run_proxy(
 		tracing::info!(?executable_path, "found executable path");
 
 		// Copy the file to a temp directory.
-		let tmpdir = tempfile::TempDir::new()
-			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
+		let home_dir = std::env::var("HOME")
+			.map_err(|source| tg::error!(!source, "could not determine home directory"))?;
+		let work_dir = PathBuf::from(home_dir).join("work");
+		let tmpdir = tempfile::TempDir::new_in(&work_dir).map_err(
+			|source| tg::error!(!source, %parent = work_dir.display(), "failed to create tempdir"),
+		)?;
 		let tmp_path = tmpdir.path();
 		let local_executable_path = tmp_path.join("executable");
 		#[cfg(feature = "tracing")]
