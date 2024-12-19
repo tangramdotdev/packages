@@ -585,6 +585,7 @@ async fn check_in_source_tree(
 				let artifact = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
+						cache: false,
 						destructive: false,
 						deterministic: true,
 						ignore: false,

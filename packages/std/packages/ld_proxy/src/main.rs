@@ -377,6 +377,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		tg::Artifact::check_in(
 			&tg,
 			tg::artifact::checkin::Arg {
+				cache: true,
 				destructive: false,
 				deterministic: true,
 				ignore: false,
@@ -543,6 +544,7 @@ async fn checkin_local_library_path(
 				let library_candidate_file = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
+						cache: true,
 						destructive: false,
 						deterministic: true,
 						ignore: false,
@@ -615,7 +617,7 @@ async fn create_manifest<H: BuildHasher>(
 		let library_paths = if let Some(library_paths) = library_paths {
 			let result = futures::future::try_join_all(library_paths.into_iter().map(
 				|referent| async move {
-					let directory = tg::Directory::with_id(referent.item.clone().into());
+					let directory = tg::Directory::with_id(referent.item);
 					let template = if let Some(subpath) = referent.subpath {
 						tangram_std::template_from_artifact_and_subpath(directory.into(), subpath)
 					} else {
@@ -780,6 +782,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				let library_candidate_file = tg::Artifact::check_in(
 					tg,
 					tg::artifact::checkin::Arg {
+						cache: true,
 						destructive: false,
 						deterministic: true,
 						ignore: false,
@@ -916,7 +919,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	futures::future::try_join_all(library_paths.iter().map(|referent| async {
 		let directory = tg::Artifact::with_id(referent.item.clone().into());
 		let arg = tg::artifact::checkout::Arg::default();
-		tg::Artifact::from(directory).check_out(tg, arg).await?;
+		directory.check_out(tg, arg).await?;
 		Ok::<_, tg::Error>(())
 	}))
 	.await?;
@@ -960,7 +963,7 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 	}
 	let needed_library_names: HashSet<String, H> = needed_libraries
 		.keys()
-		.map(|lib| basename(&lib))
+		.map(|lib| basename(lib))
 		.collect::<tg::Result<_>>()?;
 	tracing::debug!(
 		?found_libraries,
@@ -978,12 +981,11 @@ async fn verify_missing_libraries<H: BuildHasher + Default>(
 				?missing_libs,
 				"could not find required libraries"
 			));
-		} else {
-			tracing::warn!(
-				?library_paths,
-				"Could not find the following required libraries: {missing_libs:?}"
-			);
 		}
+		tracing::warn!(
+			?library_paths,
+			"Could not find the following required libraries: {missing_libs:?}"
+		);
 	}
 	Ok(())
 }
