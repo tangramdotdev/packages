@@ -258,6 +258,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		let directory = tg::Artifact::check_in(
 			tg,
 			tg::artifact::checkin::Arg {
+				cache: true,
 				destructive: false,
 				deterministic: true,
 				ignore: false,
@@ -596,6 +597,7 @@ async fn get_checked_in_path(
 	let artifact = tg::Artifact::check_in(
 		tg,
 		tg::artifact::checkin::Arg {
+			cache: true,
 			destructive: false,
 			deterministic: true,
 			ignore: false,

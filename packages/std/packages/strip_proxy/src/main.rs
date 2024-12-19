@@ -154,6 +154,7 @@ async fn run_proxy(
 		let stripped_file = tg::Artifact::check_in(
 			&tg,
 			tg::artifact::checkin::Arg {
+				cache: true,
 				destructive: false,
 				deterministic: true,
 				ignore: false,

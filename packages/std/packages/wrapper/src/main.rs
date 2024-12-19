@@ -54,7 +54,7 @@ fn main_inner() -> std::io::Result<()> {
 	let arg0 = &filtered_args[0];
 
 	// Render the interpreter.
-	let interpreter = handle_interpreter(&manifest.interpreter, arg0.as_os_str())?;
+	let interpreter = handle_interpreter(manifest.interpreter.as_ref(), arg0.as_os_str())?;
 	let interpreter_path = interpreter.as_ref().map(|(path, _)| path).cloned();
 	#[cfg(feature = "tracing")]
 	tracing::debug!(?interpreter_path);
@@ -206,7 +206,7 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 
 #[allow(clippy::too_many_lines)]
 fn handle_interpreter(
-	interpreter: &Option<manifest::Interpreter>,
+	interpreter: Option<&manifest::Interpreter>,
 	arg0: &OsStr,
 ) -> Result<Option<(PathBuf, Vec<String>)>, std::io::Error> {
 	let result = match interpreter {
