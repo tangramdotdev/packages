@@ -8,6 +8,7 @@ const separator = "-".repeat(50);
 /** Toplevel entrypoint. */
 const entrypoint = async () => {
 	const options = Options.parseFromArgs();
+	await options.validateTangram();
 	log(`Starting! Options:\n${options.summarize()}\n${separator}`);
 	const results = await run(options);
 	log(`Done! Results:\n${results.summarize()}`);
@@ -89,9 +90,9 @@ const ok = (message?: string): Result => {
 /** Run the given options. */
 const run = async (options: Options): Promise<Results> => {
 	const results = new Results();
-	const buildTracker = new BuildTracker();
+	const buildTracker = new BuildTracker(options.tangram_exe);
 	const processAndLog = async (name: string) => {
-		const result = await processPackage(name, options.actions, buildTracker);
+		const result = await processPackage(name, options, buildTracker);
 		results.log(name, result);
 	};
 
@@ -159,11 +160,22 @@ class Options {
 	readonly actions: Set<Action>;
 	/** Whether to run each package concurrently. If false, will run in the order they are defined. */
 	readonly parallel: boolean;
+	/** The path to the tangram executable to use for each invocation. */
+	readonly tangram_exe: string;
 
 	constructor(...args: Array<string>) {
 		let packages: Set<string> = new Set();
 		let actions: Set<Action> = new Set();
 		let parallel = true;
+
+		// Set the tangram executable path.
+		// Read the TG_EXE env var
+		const envVar = Bun.env.TG_EXE;
+		if (envVar === undefined) {
+			this.tangram_exe = "tangram"
+		} else {
+			this.tangram_exe = envVar;
+		}
 
 		// Helper to process an individual flag.
 		const processFlag = (opt: string): void => {
@@ -272,12 +284,25 @@ class Options {
 		return new Options(...process.argv.slice(2));
 	}
 
+	async validateTangram() {
+		try {
+			const result = await $`${this.tangram_exe} --mode client --version`.text();
+			const goodStdout = result.includes("tangram");
+			if (!goodStdout) {
+				throw new Error(`${this.tangram_exe} --help produced an unexpected result, provide a different executable.`);
+			}
+		} catch (err) {
+			throw new Error(`Error running ${this.tangram_exe}, provide a different executable: ${err}`);
+		}
+	}
+
 	/** Produce a human-readable description of the parsed options. */
 	summarize(): string {
 		const actions = `Actions: ${Array.from(this.actions).join(", ")}`;
 		const packages = `Packages: ${Array.from(this.packages).join(", ")}`;
 		const config = `Parallel: ${this.parallel}`;
-		return `${actions}\n${packages}\n${config}`;
+		const tangram = `Tangram: ${this.tangram_exe}`;
+		return `${actions}\n${packages}\n${config}\n${tangram}`;
 	}
 }
 
@@ -323,22 +348,23 @@ export const getPackagePath = (name: string) => path.join(packagesPath(), name);
 /** Ensuring the given package test succeeds, then ensure it is tagged and pushed along with the default target build. */
 const processPackage = async (
 	name: string,
-	actions: Set<Action>,
+	options: Options,
 	buildTracker: BuildTracker,
 ): Promise<Result> => {
 	const path = getPackagePath(name);
 	log(`processing ${name}: ${path}`);
+	const tg = `${options.tangram_exe}`
 
 	const actionMap: Record<Action, () => Promise<Result>> = {
-		format: () => formatAction(path),
-		check: () => checkAction(path),
-		build: () => buildDefaultTarget(path, buildTracker),
-		test: () => buildTestTarget(path, buildTracker),
-		upload: () => uploadAction(path, buildTracker),
-		publish: () => publishAction(name, path),
+		format: () => formatAction(tg, path),
+		check: () => checkAction(tg, path),
+		build: () => buildDefaultTarget(tg, path, buildTracker),
+		test: () => buildTestTarget(tg, path, buildTracker),
+		upload: () => uploadAction(tg, path, buildTracker),
+		publish: () => publishAction(tg, name, path),
 	};
 
-	for (const action of sortedActions(actions)) {
+	for (const action of sortedActions(options.actions)) {
 		if (action in actionMap) {
 			const result = await actionMap[action]();
 			if (result.kind !== "ok") {
@@ -351,10 +377,10 @@ const processPackage = async (
 };
 
 /** Perform the `format` action for a package. */
-const formatAction = async (path: string): Promise<Result> => {
+const formatAction = async (tangram: string, path: string): Promise<Result> => {
 	log("format", path);
 	try {
-		await $`tg format ${path}`.quiet();
+		await $`${tangram} format ${path}`.quiet();
 		log(`finished formatting ${path}`);
 	} catch (err) {
 		log(`error formatting ${path}`);
@@ -364,10 +390,10 @@ const formatAction = async (path: string): Promise<Result> => {
 };
 
 /** Perform the `check` action for a package. */
-const checkAction = async (path: string): Promise<Result> => {
+const checkAction = async (tangram: string, path: string): Promise<Result> => {
 	log("checking", path);
 	try {
-		await $`tg check ${path}`.quiet();
+		await $`${tangram} check ${path}`.quiet();
 		log(`finished checking ${path}`);
 	} catch (err) {
 		log(`error checking ${path}`);
@@ -377,10 +403,10 @@ const checkAction = async (path: string): Promise<Result> => {
 };
 
 /** Perform the `publish` action for a package name. If the existing tag is out of date, tag and push the new package. */
-const publishAction = async (name: string, path: string): Promise<Result> => {
+const publishAction = async (tangram: string, name: string, path: string): Promise<Result> => {
 	log("publishing...");
 	// Check in the package, store the ID.
-	const packageIdResult = await checkinPackage(path);
+	const packageIdResult = await checkinPackage(tangram, path);
 	if (packageIdResult.kind !== "ok") {
 		return packageIdResult;
 	}
@@ -389,34 +415,28 @@ const publishAction = async (name: string, path: string): Promise<Result> => {
 		return result("checkinError", `no ID for ${path}`);
 	}
 
-	// Look up the existing tag for the given name.
-	const existingTag = await existingTaggedItem(name);
-
-	// If there is no tag or the ID does not match, tag the package.
-	if (packageId !== existingTag) {
-		log(`tagging ${name}...`);
-		const tagResult = await tagPackage(name, path);
-		if (tagResult.kind !== "ok") {
-			return tagResult;
-		}
-
-		// Push the tag.
-		const pushTagResult = await push(name);
-		if (pushTagResult.kind !== "ok") {
-			return pushTagResult;
-		}
-	} else {
-		return ok(`matching tag found for ${name}: ${packageId}, not re-tagging.`);
+	log(`tagging ${name}...`);
+	const tagResult = await tagPackage(tangram, name, path);
+	if (tagResult.kind !== "ok") {
+		return tagResult;
 	}
+
+	// Push the tag.
+	const pushTagResult = await push(tangram, name);
+	if (pushTagResult.kind !== "ok") {
+		return pushTagResult;
+	}
+
 	return ok(`tagged ${name}: ${packageId}`);
 };
 
 /** Perform the upload action for a path. Will do the default build first. */
 const uploadAction = async (
+	tangram: string,
 	path: string,
 	buildTracker: BuildTracker,
 ): Promise<Result> => {
-	const buildIdResult = await buildDefaultTarget(path, buildTracker);
+	const buildIdResult = await buildDefaultTarget(tangram, path, buildTracker);
 	if (buildIdResult.kind !== "ok") {
 		return buildIdResult;
 	}
@@ -427,7 +447,7 @@ const uploadAction = async (
 
 	log(`uploading build ${buildId}`);
 	try {
-		await $`tg push ${buildId}`.quiet();
+		await $`${tangram} push ${buildId}`.quiet();
 		log(`finished pushing ${buildId}`);
 		return ok();
 	} catch (err) {
@@ -437,23 +457,23 @@ const uploadAction = async (
 };
 
 /** Check in a path, returning the resulting ID or "checkinError" on failure. */
-const checkinPackage = async (path: string): Promise<Result> => {
+const checkinPackage = async (tangram: string, path: string): Promise<Result> => {
 	log("checking in", path);
 	try {
-		const id = await $`tg checkin ${path}`.text().then((t) => t.trim());
+		const id = await $`${tangram} checkin ${path}`.text().then((t) => t.trim());
 		log(`finished checkin ${path}`);
 		return ok(id);
 	} catch (err) {
-		log(`error checking in ${path}`);
+		log(`error checking in ${path}: ${err}`);
 		return result("checkinError", err.stdout.toString());
 	}
 };
 
 /** Get the existing tagged item for a given name, if present. */
-const existingTaggedItem = async (name: string): Promise<string> => {
+const existingTaggedItem = async (tangram: string, name: string): Promise<string> => {
 	log("checking for existing tag", name);
 	try {
-		const result = await $`tg tag get ${name}`.text().then((t) => t.trim());
+		const result = await $`${tangram} tag get ${name}`.text().then((t) => t.trim());
 		return result;
 	} catch (err) {
 		return "not found";
@@ -461,10 +481,10 @@ const existingTaggedItem = async (name: string): Promise<string> => {
 };
 
 /** Tag a package at the given path with the given name. */
-const tagPackage = async (name: string, path: string): Promise<Result> => {
+const tagPackage = async (tangram: string, name: string, path: string): Promise<Result> => {
 	log("tagging", name, path);
 	try {
-		await $`tg tag ${name} ${path}`.quiet();
+		await $`${tangram} tag ${name} ${path}`.quiet();
 		return ok();
 	} catch (err) {
 		return result("tagError");
@@ -472,10 +492,10 @@ const tagPackage = async (name: string, path: string): Promise<Result> => {
 };
 
 /** Push something. */
-const push = async (arg: string): Promise<Result> => {
+const push = async (tangram: string, arg: string): Promise<Result> => {
 	log("pushing", arg);
 	try {
-		await $`tg push ${arg}`.quiet();
+		await $`${tangram} push ${arg}`.quiet();
 		log(`finished pushing ${arg}`);
 	} catch (err) {
 		log(`error pushing ${arg}`);
@@ -486,15 +506,16 @@ const push = async (arg: string): Promise<Result> => {
 
 /** Build the default target given a path. Return the build ID. */
 const buildDefaultTarget = async (
+	tangram: string,
 	path: string,
 	buildTracker: BuildTracker,
 ): Promise<Result> => {
 	log(`building ${path}`);
 	try {
-		const buildId = await $`tg build ${path} -d`.text().then((t) => t.trim());
+		const buildId = await $`${tangram} build ${path} -d`.text().then((t) => t.trim());
 		buildTracker.add(buildId);
 		log(`${path}: ${buildId}`);
-		await $`tg build output ${buildId}`.quiet();
+		await $`${tangram} build output ${buildId}`.quiet();
 		buildTracker.remove(buildId);
 		log(`finished building ${path}`);
 		return ok(buildId);
@@ -506,17 +527,18 @@ const buildDefaultTarget = async (
 
 /** Build the default target given a path. Return the build ID. */
 const buildTestTarget = async (
+	tangram: string,
 	path: string,
 	buildTracker: BuildTracker,
 ): Promise<Result> => {
 	log(`building ${path}#test...`);
 	try {
-		const buildId = await $`tg build ${path}#test -d`
+		const buildId = await $`${tangram} build ${path}#test -d`
 			.text()
 			.then((t) => t.trim());
 		buildTracker.add(buildId);
 		log(`${path}#test: ${buildId}`);
-		await $`tg build output ${buildId}`.quiet();
+		await $`${tangram} build output ${buildId}`.quiet();
 		buildTracker.remove(buildId);
 		log(`finished building ${path}#test`);
 		return ok(buildId);
@@ -529,8 +551,10 @@ const buildTestTarget = async (
 /** Class for managing builds created by this script. */
 class BuildTracker {
 	private ids: Set<string>;
-	constructor() {
+	private readonly tangram_exe: string;
+	constructor(tangram_exe: string) {
 		this.ids = new Set();
+		this.tangram_exe = tangram_exe;
 		process.on("SIGINT", async () => {
 			await this.cancelAll();
 			process.exit(0);
@@ -547,7 +571,7 @@ class BuildTracker {
 		for (const id of this.ids) {
 			log(`cancelling ${id}`);
 			try {
-				await $`tg build cancel ${id}`.quiet();
+				await $`${this.tangram_exe} build cancel ${id}`.quiet();
 			} catch (err) {
 				log(`Failed to cancel build ${id}: ${err}`);
 			}
