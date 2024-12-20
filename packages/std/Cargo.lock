@@ -1699,7 +1699,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=42207b50eab796fed795deb5ca45bdce49dfabb0#42207b50eab796fed795deb5ca45bdce49dfabb0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=39dc29139f8d1fd65fbe020191d9a88ae33067f6#39dc29139f8d1fd65fbe020191d9a88ae33067f6"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1743,7 +1743,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=42207b50eab796fed795deb5ca45bdce49dfabb0#42207b50eab796fed795deb5ca45bdce49dfabb0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=39dc29139f8d1fd65fbe020191d9a88ae33067f6#39dc29139f8d1fd65fbe020191d9a88ae33067f6"
 dependencies = [
  "serde",
 ]
@@ -1751,7 +1751,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=42207b50eab796fed795deb5ca45bdce49dfabb0#42207b50eab796fed795deb5ca45bdce49dfabb0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=39dc29139f8d1fd65fbe020191d9a88ae33067f6#39dc29139f8d1fd65fbe020191d9a88ae33067f6"
 dependencies = [
  "dashmap",
  "futures",
@@ -1764,7 +1764,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=42207b50eab796fed795deb5ca45bdce49dfabb0#42207b50eab796fed795deb5ca45bdce49dfabb0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=39dc29139f8d1fd65fbe020191d9a88ae33067f6#39dc29139f8d1fd65fbe020191d9a88ae33067f6"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1829,7 +1829,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=42207b50eab796fed795deb5ca45bdce49dfabb0#42207b50eab796fed795deb5ca45bdce49dfabb0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=39dc29139f8d1fd65fbe020191d9a88ae33067f6#39dc29139f8d1fd65fbe020191d9a88ae33067f6"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1840,7 +1840,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=42207b50eab796fed795deb5ca45bdce49dfabb0#42207b50eab796fed795deb5ca45bdce49dfabb0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=39dc29139f8d1fd65fbe020191d9a88ae33067f6#39dc29139f8d1fd65fbe020191d9a88ae33067f6"
 dependencies = [
  "derive_more",
  "winnow",
