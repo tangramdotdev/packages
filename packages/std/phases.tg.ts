@@ -508,7 +508,7 @@ export const constructCommandTemplate = (
 	} else {
 		const { command, args } = arg;
 		const args_ =
-			args && args.length > 0 ? tg` ${tg.Template.join(" ", ...args)}` : tg``;
+			args && args.length > 0 ? tg.Template.raw` ${tg.Template.join(" ", ...args)}` : tg``;
 		return tg`${command}${args_}`;
 	}
 };
