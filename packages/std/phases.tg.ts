@@ -444,7 +444,7 @@ export const constructPhaseTemplate = async (
 	let post_ = tg``;
 	const postTemplate = await constructCommandTemplate(post);
 	if (postTemplate && postTemplate.components.length > 0) {
-		post_ = tg`\n${postTemplate}`;
+		post_ = tg.Template.raw`\n${postTemplate}`;
 	}
 	return tg`${pre_}${constructCommandTemplate(body)}${post_}`;
 };
