@@ -62,7 +62,7 @@ export const wrapper = (arg?: Arg) =>
 		.then((dir) => dir.get("bin/wrapper"))
 		.then(tg.File.expect);
 
-const version = "1.82.0";
+const version = "1.83.0";
 
 type ToolchainArg = {
 	target?: string;
@@ -271,9 +271,12 @@ export const build = async (arg: BuildArg) => {
 		},
 	];
 
-	// On macOS, if cross-compiling, include the default SDK as well.
-	if (os === "darwin" && isCross) {
-		env.push(std.sdk());
+	if (os === "darwin") {
+		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.1" })
+		// On macOS, if cross-compiling, include the default SDK as well.
+		if (isCross) {
+			env.push(std.sdk());
+		}
 	}
 
 	// Set up platform-specific environment.

@@ -19,7 +19,7 @@ export const metadata = {
 	version: "0.0.0",
 };
 
-export const VERSION = "1.82.0" as const;
+export const VERSION = "1.83.0" as const;
 const PROFILE = "minimal" as const;
 
 export type ToolchainArg = {
