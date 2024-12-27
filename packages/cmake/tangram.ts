@@ -1,7 +1,9 @@
 import * as std from "std" with { path: "../std" };
 import * as curl from "curl" with { path: "../curl" };
+import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as make from "gnumake" with { path: "../gnumake" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as ncurses from "ncurses" with { path: "../ncurses" };
+import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
@@ -13,13 +15,13 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "cmake",
 	repository: "https://gitlab.kitware.com/cmake/cmake",
-	version: "3.31.2",
+	version: "3.31.3",
 };
 
 export const source = tg.target(() => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:42abb3f48f37dbd739cdfeb19d3712db0c5935ed5c2aef6c340f9ae9114238a2";
+		"sha256:fac45bc6d410b49b3113ab866074888d6c9e9dc81a141874446eb239ac38cb87";
 	const owner = "Kitware";
 	const repo = "CMake";
 	const tag = `v${version}`;
@@ -38,8 +40,10 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		curl?: curl.Arg;
+		libpsl?: libpsl.Arg;
+		ncurses?: ncurses.Arg;
 		openssl?: openssl.Arg;
-		pkgconfig?: pkgConfig.Arg;
+		pkgconf?: pkgConf.Arg;
 		zlib?: zlib.Arg;
 		zstd?: zstd.Arg;
 	};
@@ -55,8 +59,10 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 		build,
 		dependencies: {
 			curl: curlArg = {},
+			libpsl: libpslArg = {},
+			ncurses: ncursesArg = {},
 			openssl: opensslArg = {},
-			pkgconfig: pkgconfigArg = {},
+			pkgconf: pkgconfArg = {},
 			zlib: zlibArg = {},
 			zstd: zstdArg = {},
 		} = {},
@@ -67,25 +73,38 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 	const sourceDir = source_ ?? source();
 
-	const curlDir = curl.default_({ build, env: env_, host, sdk }, curlArg);
-	const opensslDir = openssl.default_(
+	const curlRoot = curl.default_({ build, env: env_, host, sdk }, curlArg);
+	const ncursesRoot = ncurses.default_(
+		{ build, env: env_, host, sdk },
+		ncursesArg,
+	);
+	const libpslRoot = libpsl.default_(
+		{ build, env: env_, host, sdk },
+		libpslArg,
+	);
+	const opensslRoot = openssl.default_(
 		{ build, env: env_, host, sdk },
 		opensslArg,
 	);
-	const zlibDir = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
-	const zstdDir = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
+	const zlibRoot = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
+	const zstdRoot = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
 
 	const configure = {
 		command: tg`${sourceDir}/bootstrap`,
-		args: ["--parallel=$(nproc)", "--system-curl"],
+		args: [
+			"--parallel=$(nproc)",
+			"--system-curl",
+		],
 	};
 
 	const deps = [
-		curlDir,
-		pkgConfig.default_({ build, host: build }, pkgconfigArg),
-		opensslDir,
-		zlibDir,
-		zstdDir,
+		curlRoot,
+		pkgConf.default_({ build, host: build }, pkgconfArg),
+		ncursesRoot,
+		libpslRoot,
+		opensslRoot,
+		zlibRoot,
+		zstdRoot,
 	];
 	const env = [...deps, env_];
 	if (std.triple.os(host) === "darwin") {
@@ -99,10 +118,9 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(env),
+		env: std.env.arg(...env),
 		phases: { configure },
 		sdk,
-		setRuntimeLibraryPath: true,
 		source: sourceDir,
 	});
 
