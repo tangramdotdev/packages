@@ -23,12 +23,12 @@ const RELEASES = {
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:19c054eaf40c5fac65b027f7443c01382e493d3c8c42cf8b2504832ebddce037",
+			"sha256:87d2bb0ad4fe24d2a0685a55df321e0efe4296419a9b3de03369dbe60b8acd3a",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:0f4e569b2d38cb75cb2efcaf56beb42778ab5e46d89318fef39060fe36d7b9b7",
+			"sha256:6700067389a53a1607d30aa8d6e01d198230397029faa0b109e89bc871ab5a0e",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -139,7 +139,7 @@ export const build = tg.target(
 		});
 		let {
 			checksum,
-			cgo = false,
+			cgo = true,
 			env: env_,
 			generate,
 			host: host_,
@@ -178,9 +178,22 @@ export const build = tg.target(
 			});
 
 			// We need to pass the `-mod=vendor` to obey the vendored dependencies.
-			buildArgs = "-mod=vendor";
+			buildArgs += "-mod=vendor";
 		}
 
+		// Build the vendored source code without internet access.
+		const goArtifact = toolchain({ host });
+
+		const certFile = tg`${std.caCertificates()}/cacert.pem`;
+		const cgoEnabled = cgo ? "1" : "0";
+
+		// If cgo is enabled on Linux, we need to set linkmode to external to force using the Tangram proxy for every link operation, so that host object files can link to the SDK's libc.
+		// On Darwin, this is not necessary because these symbols are provided by the OS in libSystem.dylib, and causes a codesigning failure.
+		// See https://github.com/golang/go/blob/30c18878730434027dbefd343aad74963a1fdc48/src/cmd/cgo/doc.go#L999-L1023
+		if (cgoEnabled && std.triple.os(system) === "linux") {
+			buildArgs += " -ldflags=-linkmode=external";
+		}
+		
 		// Come up with the right command to run in the `go generate` phase.
 		let generateCommand = await tg`go generate -v -x`;
 		if (generate === false) {
@@ -195,13 +208,8 @@ export const build = tg.target(
 		if (install) {
 			installCommand = await tg.template(install.command);
 		}
-
-		// Build the vendored source code without internet access.
-		const goArtifact = toolchain({ host });
-
-		const certFile = tg`${std.caCertificates()}/cacert.pem`;
-		const cgoEnabled = cgo ? "1" : "0";
-		const env = std.env(
+		
+		const envs = [
 			sdk,
 			goArtifact,
 			{
@@ -210,10 +218,12 @@ export const build = tg.target(
 				TANGRAM_HOST: system,
 			},
 			env_,
-		);
+		];
+
+		const env = std.env.arg(...envs);
 
 		const output = await $`
-				cp -rT ${source}/. .
+				cp -R ${source}/. .
 				chmod -R u+w .
 
 				export TMPDIR=$PWD/tmp
@@ -225,7 +235,6 @@ export const build = tg.target(
 				export GOMODCACHE=$TMPDIR
 				export GOTMPDIR=$TMPDIR
 
-				# Build Go.
 				${generateCommand}
 				${installCommand}
 			`
