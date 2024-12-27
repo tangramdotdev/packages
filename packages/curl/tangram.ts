@@ -100,12 +100,30 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	// await std.assert.pkg({
-	// 	buildFunction: build,
-	// 	binaries: ["curl"],
-	// 	metadata,
-	// });
-	return await $`curl --version | tee $OUTPUT`
+	const result = await $`
+		echo "Checking that we can run curl."
+		curl --version
+		echo "Checking that we can download a file."
+		mkdir -p $OUTPUT
+		curl -o $OUTPUT/example http://example.com
+		echo "Checking that we can download via HTTPS."
+		curl -o $OUTPUT/tangram.svg https://www.tangram.dev/tangram.svg
+	`
 		.env(default_())
-		.then(tg.File.expect);
+		.checksum("unsafe");
+
+	const exampleContents = await result
+		.get("example")
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(exampleContents.length > 0);
+	tg.assert(exampleContents.startsWith("<!doctype html>"));
+
+	const svgContents = await result
+		.get("tangram.svg")
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(svgContents.length > 0);
+	tg.assert(svgContents.startsWith("<svg"));
+	return true;
 });

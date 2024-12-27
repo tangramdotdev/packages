@@ -98,9 +98,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	// Wrap the binary to include the CA certificates.
 	const wgetFile = tg.File.expect(await output.get("bin/wget"));
 	const wrappedWget = std.wrap(wgetFile, {
-		env: {
-			SSL_CERT_DIR: std.caCertificates(),
-		},
+		args: [tg`--ca-certificate=${std.caCertificates()}/cacert.pem`],
 	});
 	output = await tg.directory(output, {
 		["bin/wget"]: wrappedWget,
@@ -111,12 +109,30 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	return await $`
+	const result = await $`
 		echo "Checking that we can run wget."
 		wget --version
 		echo "Checking that we can download a file."
-		wget -O - http://example.com > $OUTPUT
+		mkdir -p $OUTPUT
+		wget -O $OUTPUT/example http://example.com
+		echo "Checking that we can download via HTTPS."
+		wget -O $OUTPUT/tangram.svg https://www.tangram.dev/tangram.svg
 	`
 		.env(default_())
 		.checksum("unsafe");
+
+	const exampleContents = await result
+		.get("example")
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(exampleContents.length > 0);
+	tg.assert(exampleContents.startsWith("<!doctype html>"));
+
+	const svgContents = await result
+		.get("tangram.svg")
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(svgContents.length > 0);
+	tg.assert(svgContents.startsWith("<svg"));
+	return true;
 });

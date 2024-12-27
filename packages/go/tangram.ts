@@ -193,7 +193,7 @@ export const build = tg.target(
 		if (cgoEnabled && std.triple.os(system) === "linux") {
 			buildArgs += " -ldflags=-linkmode=external";
 		}
-		
+
 		// Come up with the right command to run in the `go generate` phase.
 		let generateCommand = await tg`go generate -v -x`;
 		if (generate === false) {
@@ -208,7 +208,7 @@ export const build = tg.target(
 		if (install) {
 			installCommand = await tg.template(install.command);
 		}
-		
+
 		const envs = [
 			sdk,
 			goArtifact,
