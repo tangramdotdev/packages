@@ -358,20 +358,15 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Get the output.
 	let output = match outcome {
-		tg::build::Outcome::Canceled => return Err(tg::error!("Build was cancelled.")),
-		tg::build::Outcome::Failed(error) => return Err(tg::error!("Build failed: {error}")),
-		tg::build::Outcome::Succeeded(success) => success
+		tg::build::Outcome::Cancelation(tg::build::outcome::Cancelation { reason }) => {
+			return Err(tg::error!(?reason, "the build was canceled"))
+		},
+		tg::build::Outcome::Failure(tg::build::outcome::Failure { error }) => return Err(error),
+		tg::build::Outcome::Success(tg::build::outcome::Success { value }) => value
 			.try_unwrap_object()
-			.map_err(|error| {
-				tg::error!(source = error, "expected the build outcome to be an object")
-			})?
+			.map_err(|source| tg::error!(!source, "expected the build outcome to be an object"))?
 			.try_unwrap_directory()
-			.map_err(|error| {
-				tg::error!(
-					source = error,
-					"expected the build output to be a directory"
-				)
-			})?,
+			.map_err(|source| tg::error!(!source, "expected the build output to be a directory"))?,
 	};
 	#[cfg(feature = "tracing")]
 	{

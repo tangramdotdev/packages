@@ -1411,18 +1411,18 @@ checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "serde"
-version = "1.0.216"
+version = "1.0.217"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b9781016e935a97e8beecf0c933758c97a5520d32930e460142b4cd80c6338e"
+checksum = "02fc4265df13d6fa1d00ecff087228cc0a2b5f3c0e87e258d8b94a156e984c70"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.216"
+version = "1.0.217"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46f859dbbf73865c6627ed570e78961cd3ac92407a2d117204c49232485da55e"
+checksum = "5a9bf7cf98d04a2b28aead066b7496853d4779c9cc183c440dbac457641e19a0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1595,12 +1595,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sync_wrapper"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
-
-[[package]]
 name = "synstructure"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1614,7 +1608,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=89869754871f7c0491be8e37482453b54a7ae92f#89869754871f7c0491be8e37482453b54a7ae92f"
+source = "git+https://github.com/tangramdotdev/tangram?rev=6d10160466431cf86c839afe43d7ee3b95544a24#6d10160466431cf86c839afe43d7ee3b95544a24"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1639,7 +1633,6 @@ dependencies = [
  "serde_urlencoded",
  "serde_with",
  "sha2",
- "sync_wrapper",
  "tangram_either",
  "tangram_futures",
  "tangram_http",
@@ -1648,6 +1641,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "url",
  "urlencoding",
@@ -1658,7 +1652,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=89869754871f7c0491be8e37482453b54a7ae92f#89869754871f7c0491be8e37482453b54a7ae92f"
+source = "git+https://github.com/tangramdotdev/tangram?rev=6d10160466431cf86c839afe43d7ee3b95544a24#6d10160466431cf86c839afe43d7ee3b95544a24"
 dependencies = [
  "serde",
 ]
@@ -1666,7 +1660,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=89869754871f7c0491be8e37482453b54a7ae92f#89869754871f7c0491be8e37482453b54a7ae92f"
+source = "git+https://github.com/tangramdotdev/tangram?rev=6d10160466431cf86c839afe43d7ee3b95544a24#6d10160466431cf86c839afe43d7ee3b95544a24"
 dependencies = [
  "dashmap",
  "futures",
@@ -1679,7 +1673,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=89869754871f7c0491be8e37482453b54a7ae92f#89869754871f7c0491be8e37482453b54a7ae92f"
+source = "git+https://github.com/tangramdotdev/tangram?rev=6d10160466431cf86c839afe43d7ee3b95544a24#6d10160466431cf86c839afe43d7ee3b95544a24"
 dependencies = [
  "bytes",
  "erased-serde",
@@ -1715,7 +1709,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=89869754871f7c0491be8e37482453b54a7ae92f#89869754871f7c0491be8e37482453b54a7ae92f"
+source = "git+https://github.com/tangramdotdev/tangram?rev=6d10160466431cf86c839afe43d7ee3b95544a24#6d10160466431cf86c839afe43d7ee3b95544a24"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1726,7 +1720,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=89869754871f7c0491be8e37482453b54a7ae92f#89869754871f7c0491be8e37482453b54a7ae92f"
+source = "git+https://github.com/tangramdotdev/tangram?rev=6d10160466431cf86c839afe43d7ee3b95544a24#6d10160466431cf86c839afe43d7ee3b95544a24"
 dependencies = [
  "derive_more",
  "winnow",

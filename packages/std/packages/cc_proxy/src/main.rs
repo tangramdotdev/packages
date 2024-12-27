@@ -387,13 +387,15 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	// Await the outcome.
 	let outcome = build.outcome(tg).await?;
 	let build_directory = match outcome {
-		tg::build::Outcome::Canceled => return Err(tg::error!("build was cancelled")),
-		tg::build::Outcome::Failed(e) => return Err(tg::error!("build failed: {e}")),
-		tg::build::Outcome::Succeeded(outcome) => outcome
+		tg::build::Outcome::Cancelation(tg::build::outcome::Cancelation { reason }) => {
+			return Err(tg::error!(?reason, "the build was canceled"))
+		},
+		tg::build::Outcome::Failure(tg::build::outcome::Failure { error }) => return Err(error),
+		tg::build::Outcome::Success(tg::build::outcome::Success { value }) => value
 			.try_unwrap_object()
-			.map_err(|error| tg::error!(source = error, "expected build to create an object"))?
+			.map_err(|source| tg::error!(!source, "expected build to create an object"))?
 			.try_unwrap_directory()
-			.map_err(|error| tg::error!(source = error, "expected build to create a directory"))?,
+			.map_err(|source| tg::error!(!source, "expected build to create a directory"))?,
 	};
 
 	// Dump stdout, stderr
