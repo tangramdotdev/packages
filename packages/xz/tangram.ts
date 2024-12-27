@@ -3,15 +3,15 @@ import * as std from "std" with { path: "../std" };
 export const metadata = {
 	homepage: "https://tukaani.org/xz/",
 	name: "xz",
-	version: "5.4.6",
+	version: "5.6.3",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:aeba3e03bf8140ddedf62a0a367158340520f6b384f75ca6045ccc6c0d43fd5c";
-	const base = `https://downloads.sourceforge.net/project/lzmautils`;
+		"sha256:b1d45295d3f71f25a4c9101bd7c8d16cb56348bbef3bbc738da0351e17c73317";
+	const base = `https://github.com/tukaani-project/xz/releases/download/v${version}`
 	return await std
 		.download({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
