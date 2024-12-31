@@ -361,7 +361,9 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		tg::build::Outcome::Cancelation(tg::build::outcome::Cancelation { reason }) => {
 			return Err(tg::error!(?reason, "the build was canceled"))
 		},
-		tg::build::Outcome::Failure(tg::build::outcome::Failure { error }) => return Err(error),
+		tg::build::Outcome::Failure(tg::build::outcome::Failure { error, value }) => {
+			return Err(tg::error!(!error, ?value, "failure"))
+		},
 		tg::build::Outcome::Success(tg::build::outcome::Success { value }) => value
 			.try_unwrap_object()
 			.map_err(|source| tg::error!(!source, "expected the build outcome to be an object"))?
