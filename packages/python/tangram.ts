@@ -74,7 +74,7 @@ export type Arg = {
 
 	/** The system to build python upon. */
 	build?: string;
-	
+
 	/** Build with --enable-optimizations? Not supported on macOS at the moment, enabled by default on Linux. */
 	enableOptimizations?: boolean;
 
@@ -219,9 +219,9 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 
 	const configureArgs = [];
 	if (enableOptimizations) {
-		configureArgs.push("--enable-optimizations")
+		configureArgs.push("--enable-optimizations");
 	}
-	
+
 	const configure = { args: configureArgs };
 	const phases = { configure };
 
@@ -229,6 +229,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(env),
+			phases,
 			opt: "3",
 			sdk,
 			setRuntimeLibraryPath: true,
