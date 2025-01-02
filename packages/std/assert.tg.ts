@@ -82,7 +82,7 @@ export const pkg = async (spec: PackageSpec, allPlatforms?: boolean) => {
 
 	// Determine the set of arguments to test.
 	const packageArgs: Array<PackageArg> =
-		allPlatforms ?? false ? allBuildHostPairs(metadata) : [{}];
+		(allPlatforms ?? false) ? allBuildHostPairs(metadata) : [{}];
 
 	const results = await Promise.all(
 		packageArgs.map(async (packageArg) => {

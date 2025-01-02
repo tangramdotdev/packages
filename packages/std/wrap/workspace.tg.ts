@@ -32,7 +32,7 @@ export const workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
 				"Cargo.toml": cargoToml,
 				"Cargo.lock": cargoLock,
 				packages: packages,
-		  });
+			});
 
 	return build({
 		...(await std.triple.rotate({ build: buildTriple, host })),
@@ -272,7 +272,7 @@ export const build = async (arg: BuildArg) => {
 	];
 
 	if (os === "darwin") {
-		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.1" })
+		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.1" });
 		// On macOS, if cross-compiling, include the default SDK as well.
 		if (isCross) {
 			env.push(std.sdk());

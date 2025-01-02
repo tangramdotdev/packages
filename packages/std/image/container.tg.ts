@@ -415,15 +415,7 @@ export const layer = tg.target(
 
 export const createTarball = tg.target(
 	async (directory: tg.Directory): Promise<tg.File> => {
-		const tarArtifact = await std.utils.tar.build({
-			sdk: false,
-			env: bootstrap.sdk(),
-		});
-		const script = tg`tar -cf $OUTPUT -C ${directory} .`;
-		return await tg
-			.target(script, { env: await std.env.arg(tarArtifact) })
-			.then((target) => target.output())
-			.then(tg.File.expect);
+		return await tg.archive(directory, "tar").then(tg.file);
 	},
 );
 

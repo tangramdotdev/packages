@@ -436,8 +436,8 @@ export namespace sdk {
 					? `${targetPrefix}ld.bfd`
 					: "ld"
 				: flavor === "gnu"
-				  ? `${targetPrefix}ld`
-				  : "ld.lld";
+					? `${targetPrefix}ld`
+					: "ld.lld";
 		const foundLd = await directory.tryGet(`bin/${linkerName}`);
 		let ld;
 		if (foundLd) {

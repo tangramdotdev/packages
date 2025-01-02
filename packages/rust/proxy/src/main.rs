@@ -262,7 +262,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				destructive: false,
 				deterministic: true,
 				ignore: false,
-				locked: false,
+				locked: true,
 				lockfile: false,
 				path: dependency.parse().unwrap(),
 			},
@@ -409,7 +409,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.check_out(
 			tg,
 			tg::artifact::checkout::Arg {
-				dependencies: true,
+				dependencies: false,
 				force: true,
 				path: None,
 				lockfile: false,

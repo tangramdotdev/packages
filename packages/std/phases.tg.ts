@@ -348,7 +348,7 @@ export const mergeCommandArgs = async (
 											std
 												.flatten(arg.inner.value.args ?? [])
 												.map(maybeMutationToTemplate),
-									  );
+										);
 						}
 						return { command, args };
 					} else {
@@ -369,7 +369,7 @@ export const mergeCommandArgs = async (
 								? arg.inner.value.command
 								: await tg.Mutation.setIfUnset(
 										await tg.template(arg.inner.value.command),
-								  );
+									);
 						let args = undefined;
 						if (arg.inner.value.args !== undefined) {
 							args =
@@ -381,7 +381,7 @@ export const mergeCommandArgs = async (
 													.flatten(arg.inner.value.args ?? [])
 													.map(maybeMutationToTemplate),
 											),
-									  );
+										);
 						}
 						return { command, args };
 					} else {
@@ -407,7 +407,7 @@ export const mergeCommandArgs = async (
 							? arg.args
 							: await Promise.all(
 									std.flatten(arg.args ?? []).map(maybeMutationToTemplate),
-							  );
+								);
 					object["args"] = args;
 				}
 				return object;
@@ -508,7 +508,9 @@ export const constructCommandTemplate = (
 	} else {
 		const { command, args } = arg;
 		const args_ =
-			args && args.length > 0 ? tg.Template.raw` ${tg.Template.join(" ", ...args)}` : tg``;
+			args && args.length > 0
+				? tg.Template.raw` ${tg.Template.join(" ", ...args)}`
+				: tg``;
 		return tg`${command}${args_}`;
 	}
 };

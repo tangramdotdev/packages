@@ -30,15 +30,15 @@ export async function wrap(
 	const buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
-		  ? await gnu.toolchain({ host: detectedBuild, target: host })
-		  : await bootstrap.sdk.env(host);
+			? await gnu.toolchain({ host: detectedBuild, target: host })
+			: await bootstrap.sdk.env(host);
 
 	const manifestInterpreter = arg.interpreter
 		? await manifestInterpreterFromArg(arg.interpreter, buildToolchain)
 		: await manifestInterpreterFromExecutableArg(
 				arg.executable,
 				buildToolchain,
-		  );
+			);
 
 	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
 	if (
@@ -325,7 +325,7 @@ export namespace wrap {
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.args.map(templateFromManifestTemplate),
-							  ),
+								),
 				};
 			}
 			case "ld-linux": {
@@ -341,7 +341,7 @@ export namespace wrap {
 									manifestInterpreter.libraryPaths.map(
 										templateFromManifestTemplate,
 									),
-							  ),
+								),
 					preloads:
 						manifestInterpreter.preloads === undefined
 							? undefined
@@ -349,13 +349,13 @@ export namespace wrap {
 									manifestInterpreter.preloads.map(
 										fileOrSymlinkFromManifestTemplate,
 									),
-							  ),
+								),
 					args:
 						manifestInterpreter.args === undefined
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.args.map(templateFromManifestTemplate),
-							  ),
+								),
 				};
 			}
 			case "ld-musl": {
@@ -371,7 +371,7 @@ export namespace wrap {
 									manifestInterpreter.libraryPaths.map(
 										templateFromManifestTemplate,
 									),
-							  ),
+								),
 					preloads:
 						manifestInterpreter.preloads === undefined
 							? undefined
@@ -379,13 +379,13 @@ export namespace wrap {
 									manifestInterpreter.preloads.map(
 										fileOrSymlinkFromManifestTemplate,
 									),
-							  ),
+								),
 					args:
 						manifestInterpreter.args === undefined
 							? undefined
 							: await Promise.all(
 									manifestInterpreter.args.map(templateFromManifestTemplate),
-							  ),
+								),
 				};
 			}
 			case "dyld": {
@@ -398,7 +398,7 @@ export namespace wrap {
 									manifestInterpreter.libraryPaths.map(
 										templateFromManifestTemplate,
 									),
-							  ),
+								),
 					preloads:
 						manifestInterpreter.preloads === undefined
 							? undefined
@@ -406,7 +406,7 @@ export namespace wrap {
 									manifestInterpreter.preloads.map(
 										fileOrSymlinkFromManifestTemplate,
 									),
-							  ),
+								),
 				};
 			}
 			default: {
@@ -779,7 +779,7 @@ const manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestTemplateFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -804,7 +804,7 @@ const manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestTemplateFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 
 		// If no preload is defined, add the default injection preload.
@@ -845,7 +845,7 @@ const manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestTemplateFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 
 		// Build an injection dylib to match the interpreter.
@@ -870,7 +870,7 @@ const manifestInterpreterFromArg = async (
 					arg.preloads?.map(async (arg) =>
 						manifestTemplateFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 
 		// If no preload is defined, add the default injection preload.
@@ -905,14 +905,14 @@ const manifestInterpreterFromArg = async (
 					arg.libraryPaths.map(async (arg) =>
 						manifestTemplateFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: undefined;
 		const preloads = arg.preloads
 			? await Promise.all(
 					arg.preloads?.map(async (arg) =>
 						manifestTemplateFromArg(await tg.template(arg)),
 					),
-			  )
+				)
 			: [];
 
 		// If no preload is defined, add the default injection preload.
@@ -1034,8 +1034,8 @@ const manifestInterpreterFromElf = async (
 	const buildToolchain = buildToolchainArg
 		? buildToolchainArg
 		: libc === "musl"
-		  ? bootstrap.sdk.env(host)
-		  : gnu.toolchain({ host });
+			? bootstrap.sdk.env(host)
+			: gnu.toolchain({ host });
 
 	// Obtain injection library.
 	const injectionLib = await injection.default({ buildToolchain, host });
@@ -1604,7 +1604,9 @@ export const pushOrSet = (
 
 /** Basic program for testing the wrapper code. */
 export const argAndEnvDump = tg.target(async () => {
-	const sdkEnv = await std.env.arg(bootstrap.sdk.env());
+	const sdkEnv = await std.env.arg(bootstrap.sdk(), {
+		TANGRAM_LINKER_TRACING: "tangram=trace",
+	});
 
 	return tg.File.expect(
 		await (
@@ -1641,20 +1643,11 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	const wrapperID = await wrapper.id();
 	console.log("wrapper id", wrapperID);
 
-	const libraryDir = await tg.directory({
-		"lib.dylib": tg.file(),
-	});
-	const withLibraryPath = await wrap(wrapper, {
-		buildToolchain,
-		libraryPaths: [libraryDir],
-	});
-	const withLibraryPathID = await withLibraryPath.id();
-	console.log("withLibraryPath id", withLibraryPathID);
-
 	// Check the manifest can be deserialized properly.
 	const manifest = await wrap.Manifest.read(wrapper);
+	console.log("wrapper manifest", manifest);
 	tg.assert(manifest);
-	tg.assert(manifest.identity === "executable");
+	tg.assert(manifest.identity === "executable"); // FIXME - this is coming out as "wrapper", why not executable?
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.

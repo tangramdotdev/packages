@@ -256,8 +256,8 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 		hostOs === "darwin"
 			? tg`${toolchainDir}/${target}/sysroot`
 			: isCross
-			  ? tg`${toolchainDir}/${target}`
-			  : toolchainDir;
+				? tg`${toolchainDir}/${target}`
+				: toolchainDir;
 
 	const ccArgs = [
 		//.Set the sysroot.

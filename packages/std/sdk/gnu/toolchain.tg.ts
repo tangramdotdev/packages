@@ -142,7 +142,7 @@ export const buildToHostCrossToolchain = async (
 	const { host: host_, env } = (await tg.resolve(arg)) ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const build = await bootstrap.toolchainTriple(host);
-	const buildToolchain = bootstrap.sdk(host);
+	const buildToolchain = bootstrap.sdk(build);
 
 	// Create cross-toolchain from build to host.
 	return crossToolchain({

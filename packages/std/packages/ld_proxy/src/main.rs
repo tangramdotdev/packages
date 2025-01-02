@@ -481,11 +481,11 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// Remove the existing file.
 		tokio::fs::remove_file(&options.output_path)
 			.await
-			.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
+			.map_err(|source| tg::error!(!source, %path = &options.output_path.display(), "failed to remove the output file"))?;
 
 		// Check out the new output file.
 		let cwd = std::env::current_dir()
-			.map_err(|error| tg::error!(source = error, "failed to get the current directory"))?;
+			.map_err(|source| tg::error!(!source, "failed to get the current directory"))?;
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id(&tg).await?;
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
@@ -495,7 +495,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				tg::artifact::checkout::Arg {
 					dependencies: false,
 					force: true,
-					lockfile: false,
+					lockfile: true,
 					path: Some(output_path),
 				},
 			)
@@ -548,7 +548,7 @@ async fn checkin_local_library_path(
 						destructive: false,
 						deterministic: true,
 						ignore: false,
-						locked: false,
+						locked: true,
 						lockfile: false,
 						path: library_candidate_path,
 					},
@@ -575,6 +575,7 @@ async fn checkin_local_library_path(
 		let referent = dir_id_referent_from_directory(tg, &directory, None).await?;
 		Some(referent)
 	};
+	tracing::debug!(?result, ?library_path, "checked in local library path");
 	Ok(result)
 }
 
@@ -786,7 +787,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 						destructive: false,
 						deterministic: true,
 						ignore: false,
-						locked: false,
+						locked: true,
 						lockfile: false,
 						path: library_candidate_path.clone(),
 					},
@@ -897,6 +898,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			dir_id_referent_from_directory(tg, &tg::Directory::with_entries(entries), None).await?;
 		Some(referent)
 	};
+	tracing::trace!(?dir_id, "post-combine");
 	let combined_library_path = dir_id.into_iter().collect();
 
 	finalize_library_paths(
@@ -917,9 +919,16 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
 	// Check out all library paths.
 	futures::future::try_join_all(library_paths.iter().map(|referent| async {
+		tracing::debug!(?referent.item, "checking out library path");
 		let directory = tg::Artifact::with_id(referent.item.clone().into());
-		let arg = tg::artifact::checkout::Arg::default();
-		directory.check_out(tg, arg).await?;
+		let arg = tg::artifact::checkout::Arg {
+			dependencies: true,
+			force: false,
+			lockfile: false,
+			path: None,
+		};
+		let output = directory.check_out(tg, arg).await?;
+		tracing::trace!(?output, "completed checkout");
 		Ok::<_, tg::Error>(())
 	}))
 	.await?;

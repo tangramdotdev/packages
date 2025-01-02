@@ -89,8 +89,8 @@ export const env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
 					? os === "linux" && isLlvm
 						? await tg`${directory}/bin/ld.lld`
 						: os === "darwin" && isCross
-						  ? await tg`${directory}/bin/${host}-ld.gold`
-						  : ld
+							? await tg`${directory}/bin/${host}-ld.gold`
+							: ld
 					: arg.linkerExe,
 			interpreter: ldso,
 			host,
@@ -787,6 +787,7 @@ export const testSamePrefix = tg.target(async () => {
 		.target(
 			tg`
 			set -x
+			env
 			mkdir -p .bins
 			mkdir -p .libs
 			cd .libs
@@ -795,14 +796,18 @@ export const testSamePrefix = tg.target(async () => {
 			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT
 			`,
 			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-				}),
+				env: await std.env.arg(
+					bootstrapSDK,
+					{
+						TANGRAM_LINKER_TRACING: "tangram=trace",
+						TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					},
+				),
 			},
 		)
 		.then((t) => t.output())
 		.then(tg.File.expect);
+	console.log("wrapped_exe", await output.id());
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
 });

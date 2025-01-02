@@ -218,7 +218,7 @@ async fn run_proxy(
 					dependencies: false,
 					force: true,
 					path: Some(canonical_target_path),
-					lockfile: false,
+					lockfile: true,
 				},
 			)
 			.await?;

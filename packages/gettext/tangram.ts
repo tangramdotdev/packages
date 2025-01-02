@@ -13,13 +13,13 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
-	version: "0.23",
+	version: "0.23.1",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:bf31a9b6bdf3e364669c7bd9858f97e4a0c408a8d22940c5d4ab638b65460f85";
+		"sha256:c1f97a72a7385b7e71dd07b5fea6cdaf12c9b88b564976b23bd8c11857af2970";
 	return std.download.fromGnu({
 		name,
 		version,

@@ -39,7 +39,7 @@ export const build = tg.target(async (arg?: Arg) => {
 
 	const sourceDir = source_ ?? source();
 
-	const install = tg`make install PREFIX=$OUTPUT`;
+	const install = "make install PREFIX=$OUTPUT";
 	const phases = { install };
 
 	return await std.autotools.build({

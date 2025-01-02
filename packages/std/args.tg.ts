@@ -197,8 +197,8 @@ export type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
 	| Array<infer _U extends tg.Value>
 	? T
 	: T extends { [key: string]: tg.Value }
-	  ? MaybeMutationMap<T>
-	  : never;
+		? MaybeMutationMap<T>
+		: never;
 
 export type MaybeMutationMap<
 	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },

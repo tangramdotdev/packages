@@ -5,13 +5,13 @@ export const metadata = {
 	name: "libiconv",
 	license: "LGPL-2.1-or-later",
 	repository: "https://git.savannah.gnu.org/git/libiconv.git",
-	version: "1.17",
+	version: "1.18",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:8f74213b56238c85a50a5329f77e06198771e70dd9a739779f4c02f65d971313";
+		"sha256:3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8";
 	return std.download.fromGnu({ name, version, checksum });
 });
 

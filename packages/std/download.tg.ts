@@ -28,7 +28,12 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 		try {
 			blob = await tg.download(url, checksum);
 		} catch (e) {
-			if (e.message !== undefined) {
+			if (
+				typeof e === "object" &&
+				e !== null &&
+				"message" in e &&
+				e.message !== undefined
+			) {
 				lastError = e.message;
 			}
 			continue;
