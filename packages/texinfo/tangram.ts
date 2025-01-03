@@ -11,13 +11,13 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "texinfo",
 	repository: "https://git.savannah.gnu.org/git/texinfo.git",
-	version: "7.1.1",
+	version: "7.2",
 };
 
 export const source = tg.target(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:31ae37e46283529432b61bee1ce01ed0090d599e606fc6a29dca1f77c76a6c82";
+		"sha256:0329d7788fbef113fa82cb80889ca197a344ce0df7646fe000974c5d714363a6";
 	return std.download.fromGnu({
 		name,
 		version,

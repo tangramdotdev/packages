@@ -24,13 +24,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "19.1.5",
+	version: "19.1.6",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:bd8445f554aae33d50d3212a15e993a667c0ad1b694ac1977f3463db3338e542";
+		"sha256:e3f79317adaa9196d2cfffe1c869d7c100b7540832bc44fe0d3f44a12861fa34";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;

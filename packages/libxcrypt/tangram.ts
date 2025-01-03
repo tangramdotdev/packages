@@ -1,4 +1,5 @@
 import * as perl from "perl" with { path: "../perl" };
+import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -6,7 +7,7 @@ export const metadata = {
 	name: "libxcrypt",
 	license: "LGPL-2.1",
 	repository: "https://github.com/besser82/libxcrypt",
-	version: "4.4.36",
+	version: "4.4.37",
 };
 
 export const source = tg.target(() => {
@@ -15,7 +16,7 @@ export const source = tg.target(() => {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:e5e1f4caee0a01de2aee26e3138807d6d3ca2b8e67287966d1fefd65e1fd8943";
+		"sha256:902aa2976f959b5ebe55679b1722b8479f8f13cd4ce2ef432b0a84ae298fffd0";
 	return std.download.fromGithub({
 		checksum,
 		compressionFormat: "xz",
@@ -55,7 +56,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure };
 
-	const dependencies = [perl.default_({ build, host: build }, perlArg)];
+	const dependencies = [
+		perl.default_({ build, host: build }, perlArg),
+		pkgConf.default_({ build, host: build }),
+	];
 	const env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
