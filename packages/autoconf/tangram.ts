@@ -1,4 +1,5 @@
 import * as bison from "bison" with { path: "../bison" };
+import grep from "grep" with { path: "../gnugrep" };
 import * as m4 from "m4" with { path: "../m4" };
 import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
@@ -92,7 +93,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		"ifnames",
 	];
 
-	// Bundle the perl scripts.
+	const shareDirectory = await autoconf.get("share").then(tg.Directory.expect);
 
 	const interpreter = await tg.symlink({
 		artifact: perlArtifact,
@@ -101,6 +102,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	let binDirectory = tg.directory();
 
+	// Wrap autom4te
 	const autom4te = await std.wrap(
 		tg.symlink({
 			artifact: autoconf,
@@ -108,28 +110,34 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		}),
 		{
 			interpreter,
-			args: ["-B", await tg`${autoconf}/share/autoconf`],
-			env: {
-				autom4te_perllibdir: tg`${autoconf}/share/autoconf`,
-				AC_MACRODIR: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
-				M4PATH: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
-				PERL5LIB: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
-				AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
-			},
+			args: ["-B", await tg`${shareDirectory}/autoconf`],
+			env: std.env.arg(grep({ build, host }), m4.default_({ build, host }), {
+				autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
+				AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+				M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+				PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+				AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
+			}),
 		},
 	);
 
 	binDirectory = tg.directory(binDirectory, { ["autom4te"]: autom4te });
-	for (const script of perlScripts) {
+
+	// Wrap the shell scripts.
+	for (const script of shellSripts) {
 		const wrappedScript = await std.wrap(
 			tg.File.expect(await autoconf.get(`bin/${script}`)),
 			{
-				interpreter,
 				env: {
+					trailer_m4: tg.Mutation.setIfUnset(
+						tg`${shareDirectory}/autoconf/autoconf/trailer.m4`,
+					),
+					AUTOCONF: tg`${binDirectory}/autoconf`,
+					AUTOHEADER: tg`${binDirectory}/autoheader`,
 					AUTOM4TE: autom4te,
-					M4PATH: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
-					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
-					PERL5LIB: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
+					M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
 				},
 			},
 		);
@@ -139,19 +147,19 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		});
 	}
 
-	// Bundle the shell scripts.
-	for (const script of shellSripts) {
+	// Wrap the perl scripts.
+	for (const script of perlScripts) {
 		const wrappedScript = await std.wrap(
 			tg.File.expect(await autoconf.get(`bin/${script}`)),
 			{
+				interpreter,
 				env: {
-					trailer_m4: tg.Mutation.setIfUnset(
-						tg`${autoconf}/share/autoconf/autoconf/trailer.m4`,
-					),
-					AUTOM4TE: tg`${autoconf}/bin/autom4te`,
-					M4PATH: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
-					PERL5LIB: tg.Mutation.suffix(tg`${autoconf}/share/autoconf`, ":"),
-					AUTOM4TE_CFG: tg`${autoconf}/share/autoconf/autom4te.cfg`,
+					AUTOCONF: tg`${binDirectory}/autoconf`,
+					AUTOHEADER: tg`${binDirectory}/autoheader`,
+					AUTOM4TE: autom4te,
+					M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
+					PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
 				},
 			},
 		);
@@ -199,6 +207,18 @@ export const patchAutom4teCfg = tg.target(
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["autoconf"], metadata });
+	await std.assert.pkg({
+		buildFn: default_,
+		binaries: [
+			"autoconf",
+			"autoheader",
+			"autom4te",
+			"autoreconf",
+			"autoscan",
+			"autoupdate",
+			"ifnames",
+		],
+		metadata,
+	});
 	return true;
 });

@@ -277,7 +277,7 @@ export const vendor = async ({
 }: VendorArgs): Promise<tg.Directory> => {
 	const pruned = source;
 
-	const command = optionalCommand ?? tg`go mod vendor -v`;
+	const command = optionalCommand ?? "go mod vendor -v";
 	return await $`
 				export GOMODCACHE="$(mktemp -d)"
 
@@ -287,7 +287,7 @@ export const vendor = async ({
 
 				${command}
 
-				mv -T ./vendor "$OUTPUT"
+				mv -T ./vendor "$OUTPUT" || true
 			`
 		.env(toolchain(), { SSL_CERT_DIR: std.caCertificates() })
 		.checksum("unsafe")
