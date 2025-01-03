@@ -103,23 +103,23 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 			// "--debug-find",
 			// "--debug-output",
 			// "--trace-expand",
-			`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
-			`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
-			`-DCMAKE_VERBOSE_MAKEFILE=ON`,
+			// `-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
+			// `-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
+			// `-DCMAKE_VERBOSE_MAKEFILE=ON`,
 		],
 	};
 	const phases = { configure };
 
-	let pkgConfigRoot;
-	if (os === "linux") {
-		pkgConfigRoot = pkgConfig.default_({ build, host: build });
-	} else {
-		pkgConfigRoot = pkgConf.default_({ build, host: build });
-	}
+	// let pkgConfigRoot;
+	// if (os === "linux") {
+	// 	pkgConfigRoot = pkgConfig.default_({ build, host: build });
+	// } else {
+	// 	pkgConfigRoot = pkgConf.default_({ build, host: build });
+	// }
 
 	const deps = [
 		curlRoot,
-		pkgConfigRoot,
+		// pkgConfigRoot,
 		ncursesRoot,
 		libpslRoot,
 		opensslRoot,
@@ -138,7 +138,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(...env, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
+		env: std.env.arg(...env),
 		phases,
 		setRuntimeLibraryPath: os === "linux",
 		sdk,
