@@ -100,9 +100,6 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 			"--parallel=$(nproc)",
 			"--system-curl",
 			"--",
-			// "-DCMAKE_VERBOSE_MAKEFILE=ON",
-			// "-DFindZLIB_DEBUG=ON"
-			// tg`-DZLIB_ROOT=${zlibRoot}`
 			// "--debug-find",
 			// "--debug-output",
 			// "--trace-expand",
@@ -141,7 +138,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 
 	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(...env),
+		env: std.env.arg(...env, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
 		phases,
 		setRuntimeLibraryPath: os === "linux",
 		sdk,
