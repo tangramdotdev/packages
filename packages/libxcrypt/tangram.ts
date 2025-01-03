@@ -1,4 +1,5 @@
 import * as perl from "perl" with { path: "../perl" };
+import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -55,7 +56,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure };
 
-	const dependencies = [perl.default_({ build, host: build }, perlArg)];
+	const dependencies = [
+		perl.default_({ build, host: build }, perlArg),
+		pkgConf.default_({ build, host: build }),
+	];
 	const env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
