@@ -34,7 +34,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build: build_,
 		cmake: cmakeArg = {},
@@ -63,9 +63,9 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
-export default build;
+export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, binaries: ["ninja"], metadata });
+	await std.assert.pkg({ buildFn: default_, binaries: ["ninja"], metadata });
 	return true;
 });
