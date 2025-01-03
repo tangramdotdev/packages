@@ -76,27 +76,29 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 	const sourceDir = source_ ?? source();
 	const os = std.triple.os(host);
 
-	const curlRoot = curl.default_({ build, env: env_, host, sdk }, curlArg);
+	// const curlRoot = curl.default_({ build, env: env_, host, sdk }, curlArg);
 	const ncursesRoot = ncurses.default_(
 		{ build, env: env_, host, sdk },
 		ncursesArg,
 	);
-	const libpslRoot = libpsl.default_(
-		{ build, env: env_, host, sdk },
-		libpslArg,
-	);
+	// const libpslRoot = libpsl.default_(
+	// 	{ build, env: env_, host, sdk },
+	// 	libpslArg,
+	// );
 	const opensslRoot = openssl.default_(
 		{ build, env: env_, host, sdk },
 		opensslArg,
 	);
-	const zlibRoot = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
-	const zstdRoot = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
+	// const zlibRoot = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
+	// const zstdRoot = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
 
-	let configureArgs = ["--parallel=$(nproc)", "--system-curl", "--"];
+	let configureArgs = ["--parallel=$(nproc)"];
 	if (os === "linux") {
 		configureArgs = configureArgs.concat([
-			`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
-			`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
+			// `-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
+			// `-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
+			"--",
+			tg`-DOPENSSL_ROOT_DIR=${opensslRoot}`
 		]);
 	}
 	const configure = {
@@ -106,12 +108,12 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const deps = [
-		curlRoot,
+		// curlRoot,
 		ncursesRoot,
-		libpslRoot,
+		// libpslRoot,
 		opensslRoot,
-		zlibRoot,
-		zstdRoot,
+		// zlibRoot,
+		// zstdRoot,
 	];
 	const env = [...deps, env_];
 	if (os === "darwin") {
