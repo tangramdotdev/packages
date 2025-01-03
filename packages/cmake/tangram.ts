@@ -3,8 +3,6 @@ import * as curl from "curl" with { path: "../curl" };
 import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as make from "gnumake" with { path: "../gnumake" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
-import * as pkgConfig from "pkg-config" with { path: "../pkgconf" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
@@ -94,32 +92,21 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 	const zlibRoot = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
 	const zstdRoot = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
 
+	let configureArgs = ["--parallel=$(nproc)", "--system-curl", "--"];
+	if (os === "linux") {
+		configureArgs = configureArgs.concat([
+			`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
+			`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
+		]);
+	}
 	const configure = {
 		command: tg`${sourceDir}/bootstrap`,
-		args: [
-			"--parallel=$(nproc)",
-			"--system-curl",
-			"--",
-			// "--debug-find",
-			// "--debug-output",
-			// "--trace-expand",
-			// `-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
-			// `-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
-			// `-DCMAKE_VERBOSE_MAKEFILE=ON`,
-		],
+		args: configureArgs,
 	};
 	const phases = { configure };
 
-	// let pkgConfigRoot;
-	// if (os === "linux") {
-	// 	pkgConfigRoot = pkgConfig.default_({ build, host: build });
-	// } else {
-	// 	pkgConfigRoot = pkgConf.default_({ build, host: build });
-	// }
-
 	const deps = [
 		curlRoot,
-		// pkgConfigRoot,
 		ncursesRoot,
 		libpslRoot,
 		opensslRoot,
