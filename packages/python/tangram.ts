@@ -114,10 +114,10 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 
 	const os = std.triple.os(host);
 
-	if (os === "darwin" && enableOptimizations_ === true) {
-		throw new Error("enableOptimizations is not supported on macOS.");
-	}
-	const enableOptimizations = enableOptimizations_ ?? os === "linux";
+	// if (os === "darwin" && enableOptimizations_ === true) {
+	// 	throw new Error("enableOptimizations is not supported on macOS.");
+	// }
+	const enableOptimizations = enableOptimizations_ ?? true;
 
 	// Set up build dependencies.
 	const buildDependencies = [];
