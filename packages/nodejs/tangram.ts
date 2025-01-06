@@ -199,21 +199,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		cd $OUTPUT
 
 		# Copy the source to the output.
-		cp -R "${source}/." .
-
-		# Some tools (eg tsc: https://github.com/Microsoft/TypeScript/issues/8760) do not respect NODE_PATH, so we need to make sure there is a local node_modules directory in the working directory.
-		ln -s "${devDependencies}/node_modules" node_modules`;
-
-	const fixup = await tg`
-		# Purge the devDependencies node_modules and replace with the runtime dependencies node_moduels
-		rm -rf node_modules
-		ln -s "${dependencies}/node_modules" node_modules
-	`;
+		cp -R "${source}/." .`;
 
 	const phases: std.phases.PhasesArg = {
 		prepare,
 		build: defaultBuildCommand,
-		fixup,
 	};
 
 	const sdk = std.sdk({ host }, sdkArg ?? []);
@@ -233,7 +223,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		{
 			phases,
 			env,
-			host,
+			target: { host },
 		},
 		...additionalPhasesArgs,
 	);
@@ -243,7 +233,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	if (packageJson.bin) {
 		const bin = wrapBin(node, built, packageJson.bin, dependencies);
 		return tg.directory(bin, {
-			build: tg.symlink(built),
+			build: built,
 		});
 	}
 	// Otherwise, return the result of building the package.
