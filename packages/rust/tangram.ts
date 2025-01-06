@@ -19,7 +19,6 @@ export const metadata = {
 	version: "0.0.0",
 };
 
-export const VERSION = "1.83.0" as const;
 const PROFILE = "minimal" as const;
 
 export type ToolchainArg = {
@@ -45,8 +44,9 @@ export const toolchain = tg.target(async (arg?: ToolchainArg) => {
 	}
 
 	// Download the Rust manifest for the selected version.
+	const date = "2025-01-06";
 	const manifestArtifact = await std.download({
-		url: `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`,
+		url: `https://static.rust-lang.org/dist/${date}/channel-rust-nightly.toml`,
 		checksum: "unsafe",
 		decompress: false,
 		extract: false,
