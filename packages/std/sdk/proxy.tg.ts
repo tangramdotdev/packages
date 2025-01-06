@@ -383,6 +383,7 @@ export const test = tg.target(async () => {
 		testTransitiveAll(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
+		testDifferentPrefixDirect(),
 		testSharedLibraryWithDep(),
 		testStrip(),
 	];
@@ -796,13 +797,10 @@ export const testSamePrefix = tg.target(async () => {
 			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT
 			`,
 			{
-				env: await std.env.arg(
-					bootstrapSDK,
-					{
-						TANGRAM_LINKER_TRACING: "tangram=trace",
-						TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-					},
-				),
+				env: await std.env.arg(bootstrapSDK, {
+					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				}),
 			},
 		)
 		.then((t) => t.output())
@@ -853,6 +851,73 @@ export const testSamePrefixDirect = tg.target(async () => {
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
 			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
+			`,
+			{
+				env: await std.env.arg(bootstrapSDK, {
+					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				}),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.File.expect);
+	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
+	return output;
+});
+
+/** This test checks that the less-common case of linking against a library in a different Tangram artifact by name instead of library path still works post-install. */
+export const testDifferentPrefixDirect = tg.target(async () => {
+	const bootstrapSDK = await bootstrap.sdk();
+	const os = std.triple.os(await std.triple.host());
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
+	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
+
+	const greetSource = await tg.file(`
+	#include <stdio.h>
+	void greet() {
+		printf("Hello from the shared library!\\n");
+	}
+			`);
+	const greetHeader = await tg.file(`
+	void greet();
+			`);
+
+	const mainSource = await tg.file(`
+	#include <greet.h>
+	int main() {
+		greet();
+		return 0;
+	}
+		`);
+	const source = await tg.directory({
+		"main.c": mainSource,
+		"greet.c": greetSource,
+		"greet.h": greetHeader,
+	});
+
+	const libgreetArtifact = await tg
+		.target(
+			tg`
+			set -x
+			mkdir -p $OUTPUT
+			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o $OUTPUT/libgreet.${dylibExt}
+			`,
+			{
+				env: await std.env.arg(bootstrapSDK, {
+					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				}),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.Directory.expect);
+
+	const output = await tg
+		.target(
+			tg`
+			set -x
+			cc -v ${libgreetArtifact}/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
 			`,
 			{
 				env: await std.env.arg(bootstrapSDK, {

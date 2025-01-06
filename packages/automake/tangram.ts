@@ -75,10 +75,14 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	});
 	const scripts = ["automake", "aclocal"];
 
-	const version = "1.17";
+	const { version } = metadata;
 	let binDirectory = tg.directory({});
+	const autoconfArtifact = autoconf.default_(
+		{ build, env: env_, host, sdk },
+		autoconfArg,
+	);
 	const dependencies = [
-		autoconf.default_({ build, env: env_, host, sdk }, autoconfArg),
+		autoconfArtifact,
 		bison.default_({ build, env: env_, host, sdk }, bisonArg),
 		help2man.default_({ build, env: env_, host, sdk }, help2manArg),
 		m4.default_({ build, env: env_, host, sdk }, m4Arg),
@@ -106,6 +110,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		const wrappedScript = std.wrap(executable, {
 			interpreter: perlInterpreter,
 			env: {
+				AUTOCONF: tg.Mutation.setIfUnset(tg`${autoconfArtifact}/bin/autoconf`),
 				PERL5LIB: tg.Mutation.suffix(
 					tg`${automake}/share/automake-${version}`,
 					":",
@@ -148,6 +153,16 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["automake"], metadata });
+	const { version } = metadata;
+	await std.assert.pkg({
+		buildFn: default_,
+		binaries: [
+			"aclocal",
+			`aclocal-${version}`,
+			"automake",
+			`automake-${version}`,
+		],
+		metadata,
+	});
 	return true;
 });

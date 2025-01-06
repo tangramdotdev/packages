@@ -81,6 +81,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		proxyCombine: sdk.proxy.testTransitiveCombine,
 		proxySamePrefix: sdk.proxy.testSamePrefix,
 		proxySamePrefixDirect: sdk.proxy.testSamePrefixDirect,
+		proxyDifferentPrefixDirect: sdk.proxy.testDifferentPrefixDirect,
 		proxyStrip: sdk.proxy.testStrip,
 		proxySharedWithDep: sdk.proxy.testSharedLibraryWithDep,
 		proxy: sdk.proxy.test,

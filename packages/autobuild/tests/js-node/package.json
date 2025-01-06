@@ -1,0 +1,9 @@
+{
+  "name": "demo-nodejs-project",
+  "version": "1.0.0",
+  "description": "A basic Node.js project that displays text to stdout",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}

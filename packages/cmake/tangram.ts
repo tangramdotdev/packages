@@ -3,12 +3,14 @@ import * as curl from "curl" with { path: "../curl" };
 import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as make from "gnumake" with { path: "../gnumake" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
 
+import patches from "./patches" with { type: "directory" };
+
 import * as ninja from "./ninja.tg.ts";
+export * as ninja from "./ninja.tg.ts";
 
 export const metadata = {
 	homepage: "https://cmake.org/",
@@ -25,14 +27,16 @@ export const source = tg.target(() => {
 	const owner = "Kitware";
 	const repo = "CMake";
 	const tag = `v${version}`;
-	return std.download.fromGithub({
-		checksum,
-		owner,
-		repo,
-		source: "release",
-		tag,
-		version,
-	});
+	return std.download
+		.fromGithub({
+			checksum,
+			owner,
+			repo,
+			source: "release",
+			tag,
+			version,
+		})
+		.then((source) => std.patch(source, patches));
 });
 
 export type Arg = {
@@ -43,7 +47,6 @@ export type Arg = {
 		libpsl?: libpsl.Arg;
 		ncurses?: ncurses.Arg;
 		openssl?: openssl.Arg;
-		pkgconf?: pkgConf.Arg;
 		zlib?: zlib.Arg;
 		zstd?: zstd.Arg;
 	};
@@ -62,7 +65,6 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 			libpsl: libpslArg = {},
 			ncurses: ncursesArg = {},
 			openssl: opensslArg = {},
-			pkgconf: pkgconfArg = {},
 			zlib: zlibArg = {},
 			zstd: zstdArg = {},
 		} = {},
@@ -72,6 +74,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 	const sourceDir = source_ ?? source();
+	const os = std.triple.os(host);
 
 	const curlRoot = curl.default_({ build, env: env_, host, sdk }, curlArg);
 	const ncursesRoot = ncurses.default_(
@@ -89,17 +92,21 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 	const zlibRoot = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
 	const zstdRoot = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
 
+	let configureArgs = ["--parallel=$(nproc)", "--system-curl", "--"];
+	if (os === "linux") {
+		configureArgs = configureArgs.concat([
+			`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
+			`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
+		]);
+	}
 	const configure = {
 		command: tg`${sourceDir}/bootstrap`,
-		args: [
-			"--parallel=$(nproc)",
-			"--system-curl",
-		],
+		args: configureArgs,
 	};
+	const phases = { configure };
 
 	const deps = [
 		curlRoot,
-		pkgConf.default_({ build, host: build }, pkgconfArg),
 		ncursesRoot,
 		libpslRoot,
 		opensslRoot,
@@ -107,7 +114,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 		zstdRoot,
 	];
 	const env = [...deps, env_];
-	if (std.triple.os(host) === "darwin") {
+	if (os === "darwin") {
 		// On macOS, the bootstrap script wants to test for `ext/stdio_filebuf.h`, which is not part of the macOS toolchain.
 		// Using the `gcc` and `g++` named symlinks to the AppleClang compiler instead of `clang`/`clang++` prevents this.
 		env.push({
@@ -116,13 +123,26 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 		});
 	}
 
-	const result = std.autotools.build({
+	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(...env),
-		phases: { configure },
+		phases,
+		setRuntimeLibraryPath: os === "linux",
 		sdk,
 		source: sourceDir,
 	});
+
+	if (os === "linux") {
+		const libraryPaths = deps.map((dir) =>
+			dir.then((dir: tg.Directory) => dir.get("lib").then(tg.Directory.expect)),
+		);
+		const binDir = await result.get("bin").then(tg.Directory.expect);
+		for await (let [name, artifact] of binDir) {
+			const file = tg.File.expect(artifact);
+			const wrappedFile = await std.wrap(file, { libraryPaths });
+			result = await tg.directory(result, { [`bin/${name}`]: wrappedFile });
+		}
+	}
 
 	return result;
 });
@@ -318,7 +338,7 @@ export const target = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		env = await std.env.arg(await ninja.build({ host }), env);
+		env = await std.env.arg(await ninja.default_({ host }), env);
 	} else if (generator === "Unix Makefiles") {
 		env = await std.env.arg(await make.default_({ host }), env);
 	}

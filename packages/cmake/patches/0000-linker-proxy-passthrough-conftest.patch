@@ -1,0 +1,16 @@
+diff --git a/Modules/TestBigEndian.cmake b/Modules/TestBigEndian.cmake
+index 03c8588f..6f8f7213 100644
+--- a/Modules/TestBigEndian.cmake
++++ b/Modules/TestBigEndian.cmake
+@@ -85,9 +85,11 @@ macro(__TEST_BIG_ENDIAN_LEGACY_IMPL VARIABLE)
+     file(READ "${CMAKE_ROOT}/Modules/TestEndianess.c.in" TEST_ENDIANESS_FILE_CONTENT)
+     string(CONFIGURE "${TEST_ENDIANESS_FILE_CONTENT}" TEST_ENDIANESS_FILE_CONTENT @ONLY)
+ 
++     set(ENV{TANGRAM_LINKER_PASSTHROUGH} "TRUE")
+      try_compile(HAVE_${VARIABLE}
+       SOURCE_FROM_VAR "${_test_file}" TEST_ENDIANESS_FILE_CONTENT
+       COPY_FILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/TestEndianess.bin" )
++     unset(ENV{TANGRAM_LINKER_PASSTHROUGH})
+ 
+       if(HAVE_${VARIABLE})
+ 

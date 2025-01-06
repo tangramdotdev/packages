@@ -6,7 +6,7 @@ export const metadata = {
 	license: "MIT",
 	name: "bun",
 	repository: "https://github.com/oven-sh/bun",
-	version: "1.1.33",
+	version: "1.1.42",
 };
 
 export type Arg = {
@@ -44,13 +44,13 @@ export default toolchain;
 // Taken from https://github.com/oven-sh/bun/releases/download/bun-v${version}/SHASUMS256.txt.asc
 const binaryChecksums: { [key: string]: tg.Checksum } = {
 	["aarch64-linux"]:
-		"sha256:ccd3a11a12d7eb2ba23a31dba628e473193c62590c0f334253058a4c8c1cdd79",
+		"sha256:006648456d2a8d50aa6213d9af65a25042ce01f84060396e5eaa3c98f784dd17",
 	["x86_64-linux"]:
-		"sha256:a00205a7d5a749c471f95257c249e750c0504fb4bd9ee8320fee39a89bbaa858",
+		"sha256:368206c3038d8faabc63e3059eeea64c2af9c50ed0dfbfb86f64984ba69db1af",
 	["aarch64-darwin"]:
-		"sha256:656dbe3f56d658d1b430209eaad73338e639d93c90fd66640b91316a07f1b013",
+		"sha256:64a70fe290bd6391a09d555d4e4e1a8df56543e526bb1381ab344a385348572c",
 	["x86_64-darwin"]:
-		"sha256:97604230d5c4f34fc8ca9477c198d44cc568c1ce70795a8e8ce2c8f56c5c2f8d",
+		"sha256:3f5630e0641d0824eb334cfe89d17cf69b1b6019b68d118afba7b62045794f58",
 };
 
 export const test = tg.target(async () => {
