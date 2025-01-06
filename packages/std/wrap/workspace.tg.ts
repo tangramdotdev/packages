@@ -272,7 +272,7 @@ export const build = async (arg: BuildArg) => {
 	];
 
 	if (os === "darwin") {
-		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.1" });
+		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
 		// On macOS, if cross-compiling, include the default SDK as well.
 		if (isCross) {
 			env.push(std.sdk());

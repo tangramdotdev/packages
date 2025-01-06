@@ -96,9 +96,9 @@ export const interpreterName = async (hostArg?: string) => {
 	}
 };
 
-export type SdkVersion = "12.1" | "12.3" | "14.5" | "15.1";
+export type SdkVersion = "12.1" | "12.3" | "14.5" | "15.1" | "15.2";
 
-export const LatestSdkVersion: SdkVersion = "15.1" as const;
+export const LatestSdkVersion: SdkVersion = "15.2" as const;
 
 /** Retrieve a single version of the MacOSSDK */
 export const macOsSdk = (versionArg?: SdkVersion) => {
@@ -178,6 +178,7 @@ export const componentList = async (arg?: Arg) => {
 		"macos_sdk_12.3",
 		"macos_sdk_14.5",
 		"macos_sdk_15.1",
+		"macos_sdk_15.2",
 		"toolchain_universal_darwin",
 		"utils_universal_darwin",
 	];
@@ -227,6 +228,8 @@ const checksums: Record<string, tg.Checksum> = {
 		"sha256:527106e3ca78ce0aa69469ffac3ebb9c75dffa95d38749e962311819864d05a7",
 	"macos_sdk_15.1":
 		"sha256:9cffeecbaa2a8111f23c12194f66cfc5bc40ac59c2afc459bb83b0080b5358f9",
+	"macos_sdk_15.2":
+		"sha256:3ac655aba6e6b36a0db65173b1f5e382e3614d7180e567a38f452b9715549f92",
 	dash_aarch64_linux:
 		"sha256:d1e6ed42b0596507ebfa9ce231e2f42cc67f823cc56c0897c126406004636ce7",
 	dash_universal_darwin:
@@ -240,7 +243,7 @@ const checksums: Record<string, tg.Checksum> = {
 	toolchain_aarch64_linux:
 		"sha256:01cf6871a4e8c28fe29572bc807edfacd8d5e44d0ee5455de8acbb53f516ec98",
 	toolchain_universal_darwin:
-		"sha256:737d4a562b725db647085873f0594559facd612d5f73dc71c2ef07d2620041bc",
+		"sha256:49de2d7ba2e008d089c8b2ab8e544a429b861f3d45037bba0f0d27b6ec56386d",
 	toolchain_x86_64_linux:
 		"sha256:a3f9ec87394e63f90ec8784e6980727821fe0753b783e86ce298f54145372fad",
 	utils_aarch64_linux:
