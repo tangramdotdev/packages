@@ -123,7 +123,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 		});
 	}
 
-	const result = std.autotools.build({
+	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(...env),
 		phases,
@@ -131,6 +131,18 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 		sdk,
 		source: sourceDir,
 	});
+
+	if (os === "linux") {
+		const libraryPaths = deps.map((dir) =>
+			dir.then((dir: tg.Directory) => dir.get("lib").then(tg.Directory.expect)),
+		);
+		const binDir = await result.get("bin").then(tg.Directory.expect);
+		for await (let [name, artifact] of binDir) {
+			const file = tg.File.expect(artifact);
+			const wrappedFile = await std.wrap(file, { libraryPaths });
+			result = await tg.directory(result, { [`bin/${name}`]: wrappedFile });
+		}
+	}
 
 	return result;
 });
