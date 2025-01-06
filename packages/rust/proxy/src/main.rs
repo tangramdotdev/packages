@@ -348,28 +348,15 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?build_output, "built target");
 
-	// Get the build outcome.
-	let outcome = tg::Build::with_id(build_output.build)
-		.outcome(tg)
-		.await
-		.map_err(|error| tg::error!(source = error, "failed to get the build"))?;
-	#[cfg(feature = "tracing")]
-	tracing::info!(?outcome, "built outcome");
+	// Get the build output.
+	let output = tg::Build::with_id(build_output.build)
+		.output(tg)
+		.await?
+		.try_unwrap_object()
+		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
+		.try_unwrap_directory()
+		.map_err(|source| tg::error!(!source, "expected the build to produce a directory"))?;
 
-	// Get the output.
-	let output = match outcome {
-		tg::build::Outcome::Cancelation(tg::build::outcome::Cancelation { reason }) => {
-			return Err(tg::error!(?reason, "the build was canceled"))
-		},
-		tg::build::Outcome::Failure(tg::build::outcome::Failure { error, value }) => {
-			return Err(tg::error!(!error, ?value, "failure"))
-		},
-		tg::build::Outcome::Success(tg::build::outcome::Success { value }) => value
-			.try_unwrap_object()
-			.map_err(|source| tg::error!(!source, "expected the build outcome to be an object"))?
-			.try_unwrap_directory()
-			.map_err(|source| tg::error!(!source, "expected the build output to be a directory"))?,
-	};
 	#[cfg(feature = "tracing")]
 	{
 		let output_id = output.id(tg).await?;
