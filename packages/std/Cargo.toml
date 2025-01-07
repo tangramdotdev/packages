@@ -28,12 +28,12 @@ pedantic = { level = "warn", priority = -1 }
 clap = { version = "4", features = ["derive"] }
 fnv = "1"
 futures = "0.3"
-goblin = "0.8"
-itertools = "0.13"
+goblin = "0.9"
+itertools = "0.14"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "4fe2ea1fd53fe4b3b2a9a919a695884edaea3971" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "f1fba1562b40acb8d08d8571c859466d970f6649" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",
