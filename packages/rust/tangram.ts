@@ -99,7 +99,7 @@ export const toolchain = tg.target(async (arg?: ToolchainArg) => {
 	const sdk = await std.sdk({ host, targets });
 
 	// Install each package.
-	const rustInstall = await $`
+	let rustInstall = await $`
 			for package in ${packagesArtifact}/*/* ; do
 				echo "Installing $package"
 				bash "$package/install.sh" --prefix="$OUTPUT"
@@ -108,6 +108,14 @@ export const toolchain = tg.target(async (arg?: ToolchainArg) => {
 		`
 		.env(sdk)
 		.then(tg.Directory.expect);
+
+	// Proxy rust-objcopy.
+	rustInstall = await proxyRustObjcopy({
+		build: host,
+		buildToolchain: sdk,
+		host,
+		rustInstall,
+	});
 
 	// Wrap the Rust binaries.
 	const executables = [
@@ -125,21 +133,53 @@ export const toolchain = tg.target(async (arg?: ToolchainArg) => {
 
 	for (const executable of executables) {
 		const wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
-			libraryPaths: [
-				tg.symlink(tg`${rustInstall}/lib`),
-				tg.symlink(tg`${zlibArtifact}/lib`),
-			],
+			libraryPaths: [tg`${rustInstall}/lib`, tg`${zlibArtifact}/lib`],
 		});
 
 		artifact = tg.directory(artifact, {
 			[executable]: wrapped,
 		});
 	}
+	console.log("post-wrap rustInstall", await (await artifact).id());
 
 	return artifact;
 });
 
 export default toolchain;
+
+type ProxyRustObjcopyArg = {
+	build: string;
+	buildToolchain: std.env.Arg;
+	host: string;
+	rustInstall: tg.Directory;
+};
+
+export const proxyRustObjcopy = tg.target(
+	async (arg: ProxyRustObjcopyArg): Promise<tg.Directory> => {
+		const { build, buildToolchain, host, rustInstall } = arg;
+
+		// Get the rust-objcopy executable.
+		// NOTE - `host` is assumed to already be a valid rust triple, produced by the caller.
+		const rustObjcopySubpath = `lib/rustlib/${host}/bin/rust-objcopy`;
+		const rustObjcopyExe = await rustInstall
+			.get(rustObjcopySubpath)
+			.then(tg.File.expect);
+
+		// Produce the proxy wrapper.
+		const wrappedRustObjcopyExe = await std.stripProxy({
+			buildToolchain,
+			build,
+			host,
+			stripCommand: rustObjcopyExe,
+		});
+		console.log("proxied", await wrappedRustObjcopyExe.id());
+
+		// Replace the original path with the wrapper.
+		return tg.directory(rustInstall, {
+			[rustObjcopySubpath]: wrappedRustObjcopyExe,
+		});
+	},
+);
 
 type RustupManifestV2 = {
 	"manifest-version": "2";

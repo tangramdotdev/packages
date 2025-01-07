@@ -15,6 +15,7 @@ export { sdk } from "./sdk.tg.ts";
 export * as triple from "./triple.tg.ts";
 export * as utils from "./utils.tg.ts";
 export { wrap } from "./wrap.tg.ts";
+export { stripProxy } from "./sdk/proxy.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
 import caCertificates from "./certificates.tg.ts";
