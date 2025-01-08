@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import * as icu from "icu" with { path: "../icu" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as perl from "perl" with { path: "../perl" };
@@ -33,7 +32,6 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		icu?: icu.Arg;
 		ncurses?: ncurses.Arg;
 		perl?: perl.Arg;
 		pkgconfig?: pkgConfig.Arg;
@@ -53,7 +51,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		autotools = {},
 		build,
 		dependencies: {
-			icu: icuArg = {},
 			ncurses: ncursesArg = {},
 			perl: perlArg = {},
 			pkgconfig: pkgconfigArg = {},
@@ -74,7 +71,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 			"--enable-static",
 			"--enable-shared",
 			"--with-history",
-			"--with-icu",
 		],
 	};
 
@@ -82,7 +78,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const pythonArtifact = python.toolchain(pythonArg);
 	const deps = [
-		icu.default_({ build, env: env_, host, sdk }, icuArg),
 		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
 		perl.default_({ build, host: build }, perlArg),
 		pkgConfig.default_({ build, host: build }, pkgconfigArg),
