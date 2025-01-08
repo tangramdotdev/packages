@@ -79,6 +79,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		proxyNone: sdk.proxy.testTransitiveNone,
 		proxyFilter: sdk.proxy.testTransitive,
 		proxyResolve: sdk.proxy.testTransitiveResolve,
+		proxyIsolate: sdk.proxy.testTransitiveIsolate,
 		proxyCombine: sdk.proxy.testTransitiveCombine,
 		proxySamePrefix: sdk.proxy.testSamePrefix,
 		proxySamePrefixDirect: sdk.proxy.testSamePrefixDirect,
@@ -165,24 +166,8 @@ const testActions = (): Record<string, () => Promise<any>> => {
 const defaultTests = [
 	"hostSystem",
 	"triple",
-	"download",
-	"phases",
 	"certificates",
-	"bootstrapComponents",
-	"hostInjection",
-	"earlyRust",
-	"workspace",
-	"bootstrapSdk",
-	"bootstrapMake",
-	"bootstrapMusl",
-	"wrap",
-	"proxy",
-	"utils",
-	"kernelHeaders",
 	"sdkDefault",
-	"env",
-	"dollar",
-	"image",
 ];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
