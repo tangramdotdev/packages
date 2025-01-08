@@ -23,19 +23,15 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 
 	// Perform the download.
 	let blob: tg.Blob | undefined;
-	let lastError;
 	for (const url of urls) {
 		try {
 			blob = await tg.download(url, checksum);
 		} catch (e) {
 			console.log(`error downloading from ${url}: ${JSON.stringify(e)}`);
-			lastError = e;
 			continue;
 		}
 	}
-	if (blob === undefined) {
-		throw new Error(lastError);
-	}
+	tg.assert(blob !== undefined, "unable to download blob");
 
 	// If there's nothing to unpack, return the blob.
 	if (!decompress_ && !extract_) {
