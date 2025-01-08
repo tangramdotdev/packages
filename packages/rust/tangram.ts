@@ -140,7 +140,6 @@ export const toolchain = tg.target(async (arg?: ToolchainArg) => {
 			[executable]: wrapped,
 		});
 	}
-	console.log("post-wrap rustInstall", await (await artifact).id());
 
 	return artifact;
 });
