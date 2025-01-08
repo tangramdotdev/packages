@@ -138,7 +138,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 			env: std.env.arg(...env),
 			phases,
 			sdk,
-			setRuntimeLibraryPath: os === "darwin",
+			setRuntimeLibraryPath: true,
 			source: sourceDir,
 		},
 		autotools,
