@@ -172,7 +172,6 @@ export const proxyRustObjcopy = tg.target(
 			host,
 			stripCommand: rustObjcopyExe,
 		});
-		console.log("proxied", await wrappedRustObjcopyExe.id());
 
 		// Replace the original path with the wrapper.
 		return tg.directory(rustInstall, {
