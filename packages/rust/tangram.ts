@@ -140,7 +140,6 @@ export const toolchain = tg.target(async (arg?: ToolchainArg) => {
 			[executable]: wrapped,
 		});
 	}
-	console.log("post-wrap rustInstall", await (await artifact).id());
 
 	return artifact;
 });
@@ -172,7 +171,6 @@ export const proxyRustObjcopy = tg.target(
 			host,
 			stripCommand: rustObjcopyExe,
 		});
-		console.log("proxied", await wrappedRustObjcopyExe.id());
 
 		// Replace the original path with the wrapper.
 		return tg.directory(rustInstall, {

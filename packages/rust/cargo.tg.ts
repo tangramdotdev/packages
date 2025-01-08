@@ -154,15 +154,15 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		buildCommand,
 	);
 
-	// When not cross-compiling, ensure the `cc` provided by the SDK is used, which enables Tangram linking.
+	// When not cross-compiling, ensure the `gcc` provided by the SDK is used, which enables Tangram linking.
 	let toolchainEnv = {
-		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `cc`,
+		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `gcc`,
 	};
 
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
 		toolchainEnv = {
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${target}-cc`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${target}-gcc`,
 			[`AR_${tripleToEnvVar(target)}`]: `${target}-ar`,
 			[`CC_${tripleToEnvVar(target)}`]: `${target}-cc`,
 			[`CXX_${tripleToEnvVar(target)}`]: `${target}-c++`,
@@ -186,7 +186,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	let verbosityEnv = undefined;
 	if (verbose) {
 		verbosityEnv = {
-			RUSTFLAGS: "-v",
+			RUSTFLAGS: tg.Mutation.suffix("-v", " "),
 			CARGO_TERM_VERBOSE: "true",
 		};
 	}
@@ -421,7 +421,9 @@ export const testUnproxiedWorkspace = tg.target(async () => {
 		env: {
 			TANGRAM_LINKER_TRACING: "tangram=trace",
 		},
+		pre: "set -x",
 		proxy: false,
+		verbose: true
 	});
 
 	const helloOutput = await $`
