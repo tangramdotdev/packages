@@ -1,0 +1,66 @@
+name: Rust Project CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  BUN_VERSION: 1.1.43
+  CARGO_TERM_COLOR: always
+  RUST_BINARY_NAME: tangram
+  RUST_REPO: tangramdotdev/tangram
+  RUST_REPO_BRANCH: main
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out workflow repository
+      uses: actions/checkout@v4
+      
+    - name: Check out Rust repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ env.RUST_REPO }}
+        path: tangram
+        ref: ${{ env.RUST_REPO_BRANCH }}
+    
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    
+    - name: Install Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: ${{ env.BUN_VERSION }}
+    
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          tangram/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('tangram/**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Build Tangram
+      working-directory: tangram
+      run: cargo build --verbose --release
+
+    - name: Copy Tangram to path
+      run: |
+        mkdir -p ./bin
+        cp ./tangram/target/release/${{ env.RUST_BINARY_NAME }} ./bin/
+        echo "./bin" >> $GITHUB_PATH
+
+    - name: Tag and push all packages
+      shell: bash
+      run: |
+        bun run auto -p
+      
