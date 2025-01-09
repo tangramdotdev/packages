@@ -58,6 +58,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
+	const os = std.triple.os(host);
+	
 	const sourceDir = source_ ?? source();
 
 	const configure = {
@@ -90,6 +92,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 			env,
 			phases,
 			sdk,
+			setRuntimeLibraryPath: os === "linux",
 			source: sourceDir,
 		},
 		autotools,
