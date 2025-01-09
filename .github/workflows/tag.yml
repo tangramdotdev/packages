@@ -14,22 +14,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out workflow repository
+    - name: Check out packages repository
       uses: actions/checkout@v4
       
-    
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
-    
     - name: Install Bun
       uses: oven-sh/setup-bun@v1
       with:
         bun-version: ${{ env.BUN_VERSION }}
     
     - name: Install Tangram
-      run: curl -fsSL https://tangram.dev/install.sh | bash
+      run: |
+        curl -fsSL https://tangram.dev/install.sh | bash
+        echo "${HOME}/.tangram/bin" >> $GITHUB_PATH
 
     - name: Tag and push all packages
       shell: bash
