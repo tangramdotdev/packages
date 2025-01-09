@@ -11,7 +11,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BINARY_NAME: tangram
   RUST_REPO: tangramdotdev/tangram
-  RUST_REPO_BRANCH: main
+  RUST_REV: 57c9cd4f999f381c9e03e8ff2ba807b22c0d72b2
 
 jobs:
   build-and-run:
@@ -26,7 +26,7 @@ jobs:
       with:
         repository: ${{ env.RUST_REPO }}
         path: tangram
-        ref: ${{ env.RUST_REPO_BRANCH }}
+        ref: ${{ env.RUST_REV }}
     
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
