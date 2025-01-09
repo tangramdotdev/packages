@@ -405,6 +405,7 @@ const checkAction = async (tangram: string, path: string): Promise<Result> => {
 /** Perform the `publish` action for a package name. If the existing tag is out of date, tag and push the new package. */
 const publishAction = async (tangram: string, name: string, path: string): Promise<Result> => {
 	log("publishing...");
+
 	// Check in the package, store the ID.
 	const packageIdResult = await checkinPackage(tangram, path);
 	if (packageIdResult.kind !== "ok") {
@@ -415,19 +416,27 @@ const publishAction = async (tangram: string, name: string, path: string): Promi
 		return result("checkinError", `no ID for ${path}`);
 	}
 
-	log(`tagging ${name}...`);
-	const tagResult = await tagPackage(tangram, name, path);
-	if (tagResult.kind !== "ok") {
-		return tagResult;
-	}
+	// Check if the tag already matches this ID.
+	let existing = await existingTaggedItem(tangram, name);
 
-	// Push the tag.
-	const pushTagResult = await push(tangram, name);
-	if (pushTagResult.kind !== "ok") {
-		return pushTagResult;
-	}
+	if (packageId === existing) {
+		log(`Existing tag for ${name} matches current ID:`, existing);
+		return ok(`${name} unchanged, no action taken.`);
+	} else {
+		log(`tagging ${name}...`);
+		const tagResult = await tagPackage(tangram, name, path);
+		if (tagResult.kind !== "ok") {
+			return tagResult;
+		}
 
-	return ok(`tagged ${name}: ${packageId}`);
+		// Push the tag.
+		const pushTagResult = await push(tangram, name);
+		if (pushTagResult.kind !== "ok") {
+			return pushTagResult;
+		}
+
+		return ok(`tagged ${name}: ${packageId}`);
+	}
 };
 
 /** Perform the upload action for a path. Will do the default build first. */
