@@ -1,4 +1,4 @@
-name: Rust Project CI
+name: Tag Packages
 
 on:
   push:
@@ -14,7 +14,7 @@ env:
   RUST_REV: 57c9cd4f999f381c9e03e8ff2ba807b22c0d72b2
 
 jobs:
-  build-and-run:
+  tag-and-push:
     runs-on: ubuntu-latest
 
     steps:
