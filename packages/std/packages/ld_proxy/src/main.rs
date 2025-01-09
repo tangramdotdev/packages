@@ -91,7 +91,7 @@ struct Options {
 	/// The path to the injection library.
 	injection_path: Option<String>,
 
-	/// Library path optimization level. Select `none`, `filter`, `resolve`, or `combine`. Defaults to `filter`.
+	/// Library path optimization level. Select `none`, `filter`, `resolve`, `isolate`, or `combine`. Defaults to `isolate`.
 	library_path_optimization: LibraryPathOptimizationLevel,
 
 	/// The library paths.
@@ -735,12 +735,14 @@ enum LibraryPathOptimizationLevel {
 	/// Do not optimize library paths.
 	None = 0,
 	/// Only retain paths containing needed libraries.
-	#[default]
 	Filter = 1,
 	/// Resolve any artifacts with subpaths to their innermost directory.
 	Resolve = 2,
+	/// Create individual library paths for each library.
+	#[default]
+	Isolate = 3,
 	/// Combine library paths into a single directory.
-	Combine = 3,
+	Combine = 4,
 }
 
 impl std::str::FromStr for LibraryPathOptimizationLevel {
@@ -751,11 +753,12 @@ impl std::str::FromStr for LibraryPathOptimizationLevel {
 			"none" | "0" => Ok(Self::None),
 			"filter" | "1" => Ok(Self::Filter),
 			"resolve" | "2" => Ok(Self::Resolve),
-			"combine" | "3" => Ok(Self::Combine),
+			"isolate" | "3" => Ok(Self::Isolate),
+			"combine" | "4" => Ok(Self::Combine),
 			_ => {
-				// If the string is a digit greater than 3, fall back to 3.
+				// If the string is a digit greater than 4, fall back to 4.
 				if let Ok(level) = s.parse::<usize>() {
-					if level > 3 {
+					if level > 4 {
 						return Ok(Self::Combine);
 					}
 				}
@@ -898,53 +901,79 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 		.await;
 	}
 
-	// Resolve any artifacts with subpaths to their innermost directory.
-	let resolved_library_paths: HashSet<tg::Referent<tg::directory::Id>, H> =
-		resolve_directories(tg, &filtered_library_paths).await?;
-	tracing::trace!(?resolved_library_paths, "post-resolve");
-	if matches!(strategy, LibraryPathOptimizationLevel::Resolve) {
-		return finalize_library_paths(
-			tg,
-			disallow_missing,
-			resolved_library_paths,
-			needed_libraries,
-		)
-		.await;
-	}
-
-	if !matches!(strategy, LibraryPathOptimizationLevel::Combine) {
-		return Err(tg::error!(
-			"invalid library path optimization strategy {strategy:?}"
-		));
-	}
-
-	// Create a directory combining all located library files.
-	let mut entries = BTreeMap::new();
-	for (name, dir_id_referent) in needed_libraries.iter() {
-		if let Some(dir_id_referent) = dir_id_referent {
-			let directory = directory_from_dir_id_referent(tg, dir_id_referent).await?;
-			if let Ok(Some(artifact)) = directory.try_get(tg, &name).await {
-				entries.insert(name.clone(), artifact);
+	match strategy {
+		LibraryPathOptimizationLevel::Resolve => {
+			let resolved_library_paths: HashSet<tg::Referent<tg::directory::Id>, H> =
+				resolve_directories(tg, &filtered_library_paths).await?;
+			tracing::trace!(?resolved_library_paths, "post-resolve");
+			return finalize_library_paths(
+				tg,
+				disallow_missing,
+				resolved_library_paths,
+				needed_libraries,
+			)
+			.await;
+		},
+		LibraryPathOptimizationLevel::Isolate => {
+			// Create an individual library path for every found library.
+			let mut isolated_library_paths: HashSet<tg::Referent<tg::directory::Id>, H> =
+				HashSet::default();
+			for (name, dir_id_referent) in needed_libraries.iter() {
+				if let Some(dir_id_referent) = dir_id_referent {
+					let directory = directory_from_dir_id_referent(tg, dir_id_referent).await?;
+					if let Ok(Some(artifact)) = directory.try_get(tg, &name).await {
+						let mut entries = BTreeMap::new();
+						entries.insert(name.clone(), artifact);
+						let dir = tg::Directory::with_entries(entries);
+						let referent = dir_id_referent_from_directory(tg, &dir, None).await?;
+						isolated_library_paths.insert(referent);
+					}
+				}
 			}
-		}
-	}
-	let dir_id = if entries.is_empty() {
-		None
-	} else {
-		let referent =
-			dir_id_referent_from_directory(tg, &tg::Directory::with_entries(entries), None).await?;
-		Some(referent)
-	};
-	tracing::trace!(?dir_id, "post-combine");
-	let combined_library_path = dir_id.into_iter().collect();
+			tracing::trace!(?isolated_library_paths, "post-isolate");
 
-	finalize_library_paths(
-		tg,
-		disallow_missing,
-		combined_library_path,
-		needed_libraries,
-	)
-	.await
+			return finalize_library_paths(
+				tg,
+				disallow_missing,
+				isolated_library_paths,
+				needed_libraries,
+			)
+			.await;
+		},
+		LibraryPathOptimizationLevel::Combine => {
+			// Create a directory combining all located library files.
+			let mut entries = BTreeMap::new();
+			for (name, dir_id_referent) in needed_libraries.iter() {
+				if let Some(dir_id_referent) = dir_id_referent {
+					let directory = directory_from_dir_id_referent(tg, dir_id_referent).await?;
+					if let Ok(Some(artifact)) = directory.try_get(tg, &name).await {
+						entries.insert(name.clone(), artifact);
+					}
+				}
+			}
+			let dir_id = if entries.is_empty() {
+				None
+			} else {
+				let referent =
+					dir_id_referent_from_directory(tg, &tg::Directory::with_entries(entries), None)
+						.await?;
+				Some(referent)
+			};
+			tracing::trace!(?dir_id, "post-combine");
+			let combined_library_path = dir_id.into_iter().collect();
+
+			return finalize_library_paths(
+				tg,
+				disallow_missing,
+				combined_library_path,
+				needed_libraries,
+			)
+			.await;
+		},
+		_ => {
+			unreachable!("the none and filter cases have already been handled")
+		},
+	}
 }
 
 /// Produce the set of library paths to be written to the wrapper post-optimization.

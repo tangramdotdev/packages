@@ -516,18 +516,20 @@ void printGreeting();
 	return output;
 });
 
-type OptLevel = "none" | "filter" | "resolve" | "combine";
+type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 
 export const testTransitiveAll = tg.target(async () => {
 	return await Promise.all([
-		testTransitive(), // pass pre-assert
-		testTransitiveNone(), // fail pre-assert
-		testTransitiveResolve(), // pass pre-assert
-		testTransitiveCombine(), // pass pre-assert
+		testTransitive(),
+		testTransitiveNone(),
+		testTransitiveResolve(),
+		testTransitiveIsolate(),
+		testTransitiveCombine(),
 	]);
 });
-export const testTransitiveNone = tg.target(() => testTransitive("none")); // fails
-export const testTransitiveResolve = tg.target(() => testTransitive("resolve")); // pass pre-assert
+export const testTransitiveNone = tg.target(() => testTransitive("none"));
+export const testTransitiveResolve = tg.target(() => testTransitive("resolve"));
+export const testTransitiveIsolate = tg.target(() => testTransitive("isolate"));
 export const testTransitiveCombine = tg.target(() => testTransitive("combine"));
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
@@ -702,6 +704,19 @@ const char* getGreetingB();
 		}
 		case "resolve": {
 			// The empty path with no needed library was dropped.
+			tg.assert(numLibraryPaths === 5);
+			// each path should have a single directory component.
+			for (let path of libraryPaths) {
+				tg.assert(path.components.length === 1);
+				const component = path.components[0];
+				tg.assert(component !== undefined);
+				tg.assert(component.kind === "artifact");
+				tg.assert(component.value.startsWith("dir_"));
+			}
+			break;
+		}
+		case "isolate": {
+			// There are as many library paths as libraries.
 			tg.assert(numLibraryPaths === 5);
 			// each path should have a single directory component.
 			for (let path of libraryPaths) {
