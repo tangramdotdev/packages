@@ -1629,7 +1629,19 @@ export const test = tg.target(async () => {
 export const testSingleArgObjectNoMutations = tg.target(async () => {
 	const executable = await argAndEnvDump();
 	const executableID = await executable.id();
-	console.log("argAndEnvDump ID", executableID);
+	// The program is a wrapper produced by the LD proxy.
+	console.log("argAndEnvDump wrapper ID", executableID);
+
+	// Get the value of the original executable.
+	const origManifest = await wrap.Manifest.read(executable);
+	tg.assert(origManifest);
+	const origManifestExecutable = origManifest.executable;
+	tg.assert(origManifestExecutable.kind === "path");
+	const origExecutable = await wrap
+		.executableFromManifestExecutable(origManifestExecutable)
+		.then(tg.File.expect);
+	const origExecutableId = await origExecutable.id();
+	console.log("origExecutable", origExecutableId);
 
 	const buildToolchain = await bootstrap.sdk.env();
 
@@ -1647,22 +1659,45 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	const manifest = await wrap.Manifest.read(wrapper);
 	console.log("wrapper manifest", manifest);
 	tg.assert(manifest);
-	tg.assert(manifest.identity === "executable"); // FIXME - this is coming out as "wrapper", why not executable?
+	tg.assert(manifest.identity === "executable");
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	const output = tg.File.expect(
-		(await tg.target(tg`${wrapper} > $OUTPUT`)).output(),
-	);
+	const output = await tg
+		.target(tg`${wrapper} > $OUTPUT`)
+		.then((target) => target.output())
+		.then(tg.File.expect);
 	const text = await output.text();
-	tg.assert(
-		text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),
-		"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
-	);
-	tg.assert(
-		text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
-		"Expected argv[0] to be set to the wrapper that was invoked",
-	);
+	console.log("text", text);
+
+	const os = await std.triple.host().then(std.triple.os);
+
+	if (os === "linux") {
+		tg.assert(
+			text.includes(`/proc/self/exe: /.tangram/artifacts/${origExecutableId}`),
+			"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
+		);
+		tg.assert(
+			text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),
+			"Expected argv[0] to be set to the wrapper that was invoked",
+		);
+	} else if (os === "darwin") {
+		tg.assert(
+			text.match(
+				new RegExp(
+					`_NSGetExecutablePath: .*\\.tangram/artifacts/${origExecutableId}`,
+				),
+			),
+			"Expected _NSGetExecutablePath to point to the wrapped executable",
+		);
+		tg.assert(
+			text.match(
+				new RegExp(`argv\\[0\\]: .*\\.tangram/artifacts/${wrapperID}`),
+			),
+			"Expected argv[0] to point to the wrapper that was invoked",
+		);
+	}
+
 	tg.assert(
 		text.includes("argv[1]: --arg1"),
 		"Expected first arg to be --arg1",
