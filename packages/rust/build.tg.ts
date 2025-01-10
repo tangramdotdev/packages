@@ -93,7 +93,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const rustTarget = rustTriple(target);
 
 	// Determine crate name.
-	const crateName = crateName_ ?? (await source.id());
+	const crateName = crateName_ ?? "main";
 
 	// Collect environments.
 	const envs = [];
@@ -378,6 +378,7 @@ export const testConditionalCompilation = tg.target(async () => {
 });
 
 import * as curl from "curl" with { path: "../curl" };
+import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
@@ -386,10 +387,17 @@ export const testLinkLibcurl = tg.target(async () => {
 
 	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.
 	const libcurl = curl.default_();
+	const libpslArtifact = libpsl.default_();
 	const sslArtifact = openssl.default_();
 	const zlibArtifact = zlib.default_();
 	const zstdArtifact = zstd.default_();
-	const deps = [libcurl, sslArtifact, zlibArtifact, zstdArtifact];
+	const deps = [
+		libcurl,
+		libpslArtifact,
+		sslArtifact,
+		zlibArtifact,
+		zstdArtifact,
+	];
 
 	// Build the test.
 	const exe = await build({

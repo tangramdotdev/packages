@@ -119,7 +119,8 @@ export const test = tg.target(async () => {
 		wget -O $OUTPUT/tangram.svg https://www.tangram.dev/tangram.svg
 	`
 		.env(default_())
-		.checksum("unsafe");
+		.checksum("unsafe")
+		.then(tg.Directory.expect);
 
 	const exampleContents = await result
 		.get("example")

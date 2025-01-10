@@ -59,7 +59,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const os = std.triple.os(host);
-	
+
 	const sourceDir = source_ ?? source();
 
 	const configure = {

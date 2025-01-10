@@ -139,7 +139,7 @@ export const test = tg.target(async () => {
 					"size",
 					"strings",
 					"strip",
-			  ];
+				];
 
 	await std.assert.pkg({ buildFn: default_, binaries, metadata });
 	return true;

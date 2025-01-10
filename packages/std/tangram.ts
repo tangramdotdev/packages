@@ -72,6 +72,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		bootstrapMusl: bootstrap.musl.build,
 		wrapArgAndEnvDump: wrap.argAndEnvDump,
 		wrapBasic: wrap.testSingleArgObjectNoMutations,
+		wrapContent: wrap.testContentExecutable,
 		wrap: wrap.test,
 		env: env.test,
 		proxyBasic: sdk.proxy.testBasic,

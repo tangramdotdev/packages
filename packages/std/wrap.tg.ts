@@ -130,10 +130,10 @@ export namespace wrap {
 		identity?: Identity;
 
 		/** The interpreter to run the executable with. If not provided, a default is detected. */
-		interpreter?: tg.File | tg.Symlink | Interpreter;
+		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter;
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
-		libraryPaths?: Array<tg.Directory | tg.Symlink>;
+		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template>;
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
@@ -749,7 +749,12 @@ const isManifestExecutable = (
 };
 
 const manifestInterpreterFromArg = async (
-	arg: tg.File | tg.Symlink | wrap.Interpreter | wrap.Manifest.Interpreter,
+	arg:
+		| tg.File
+		| tg.Symlink
+		| tg.Template
+		| wrap.Interpreter
+		| wrap.Manifest.Interpreter,
 	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Manifest.Interpreter> => {
 	if (isManifestInterpreter(arg)) {
@@ -757,7 +762,11 @@ const manifestInterpreterFromArg = async (
 	}
 
 	// If the arg is an executable, then wrap it and create a normal interpreter.
-	if (arg instanceof tg.File || arg instanceof tg.Symlink) {
+	if (
+		arg instanceof tg.File ||
+		arg instanceof tg.Symlink ||
+		arg instanceof tg.Template
+	) {
 		const interpreter = await std.wrap({
 			buildToolchain: buildToolchainArg,
 			executable: arg,
@@ -1622,6 +1631,7 @@ export const test = tg.target(async () => {
 		testSingleArgObjectNoMutations(),
 		testDependencies(),
 		testDylibPath(),
+		testContentExecutable(),
 	]);
 	return true;
 });
@@ -1709,6 +1719,28 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
 
 	return wrapper;
+});
+
+export const testContentExecutable = tg.target(async () => {
+	const buildToolchain = bootstrap.sdk();
+	const exe = "echo '$NAME' > $OUTPUT";
+	const wrapper = await std.wrap({
+		buildToolchain,
+		executable: exe,
+		env: {
+			NAME: "Tangram"
+		},
+	});
+	console.log("wrapper", await wrapper.id());
+	// Check the output matches the expected output.
+	const output = await tg
+		.target(tg`${wrapper} > $OUTPUT`, { env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" }})
+		.then((target) => target.output())
+		.then(tg.File.expect);
+	const text = await output.text();
+	console.log("text", text);
+	tg.assert(text.includes("Tangram"));
+	return true;
 });
 
 export const testDependencies = tg.target(async () => {
