@@ -163,12 +163,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 };
 
 /** A subset of all defined tests to run in the correct order. */
-const defaultTests = [
-	"hostSystem",
-	"triple",
-	"certificates",
-	"sdkDefault",
-];
+const defaultTests = ["hostSystem", "triple", "certificates", "sdkDefault"];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
 export const test = tg.target(async (...testNames: Array<string>) => {

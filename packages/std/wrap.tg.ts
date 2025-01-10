@@ -1647,14 +1647,17 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	const manifest = await wrap.Manifest.read(wrapper);
 	console.log("wrapper manifest", manifest);
 	tg.assert(manifest);
-	tg.assert(manifest.identity === "executable"); // FIXME - this is coming out as "wrapper", why not executable?
+	tg.assert(manifest.identity === "executable");
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	const output = tg.File.expect(
-		(await tg.target(tg`${wrapper} > $OUTPUT`)).output(),
-	);
+	const output = await tg
+		.target(tg`${wrapper} > $OUTPUT`)
+		.then((target) => target.output())
+		.then(tg.File.expect);
 	const text = await output.text();
+	console.log("text", text);
+
 	tg.assert(
 		text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),
 		"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",

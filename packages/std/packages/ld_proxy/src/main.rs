@@ -587,6 +587,7 @@ fn extract_filename(path: &(impl AsRef<str> + ToString + ?Sized)) -> String {
 }
 
 /// Create a manifest.
+#[allow(clippy::too_many_lines)]
 async fn create_manifest<H: BuildHasher>(
 	tg: &impl tg::Handle,
 	ld_output_id: tg::artifact::Id,
@@ -696,9 +697,22 @@ async fn create_manifest<H: BuildHasher>(
 	let env = None;
 	let args = None;
 
+	// Set the identity. If the interpreter flavor is Dyld, LdLinux, or LdMusl, use `Executable`, and otherwise use `Wrapper`.
+	let identity = match interpreter {
+		Some(ref interpreter) => match interpreter {
+			tangram_std::manifest::Interpreter::LdLinux(_)
+			| tangram_std::manifest::Interpreter::LdMusl(_)
+			| tangram_std::manifest::Interpreter::DyLd(_) => tangram_std::manifest::Identity::Executable,
+			tangram_std::manifest::Interpreter::Normal(_) => {
+				tangram_std::manifest::Identity::Wrapper
+			},
+		},
+		None => tangram_std::manifest::Identity::Wrapper,
+	};
+
 	// Create the manifest.
 	let manifest = tangram_std::Manifest {
-		identity: tangram_std::manifest::Identity::Wrapper,
+		identity,
 		interpreter,
 		executable,
 		env,
