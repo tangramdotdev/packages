@@ -37,7 +37,7 @@ export const build = tg.target(async (arg?: Arg) => {
 		],
 	};
 
-	const output = std.utils.buildUtil({
+	let output = await std.utils.buildUtil({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
@@ -45,6 +45,19 @@ export const build = tg.target(async (arg?: Arg) => {
 		source: source_ ?? source(),
 		wrapBashScriptPaths: ["bin/yacc"],
 	});
+
+	// Wrap with BISON_PKGDATADIR to locate m4 support files.
+	const bins = ["bison", "yacc"];
+	const datadir = await output.get("share/bison").then(tg.Directory.expect);
+	for (const bin of bins) {
+		const unwrappedBin = await output.get(`bin/${bin}`).then(tg.File.expect);
+		output = await tg.directory(output, {
+			[`bin/${bin}`]: std.wrap(unwrappedBin, {
+				buildToolchain: env,
+				env: { BISON_PKGDATADIR: datadir },
+			}),
+		});
+	}
 
 	return output;
 });
