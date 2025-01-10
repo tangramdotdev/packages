@@ -155,8 +155,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	);
 
 	// When not cross-compiling, ensure the `gcc` provided by the SDK is used, which enables Tangram linking.
+	let compilerName = "gcc";
+	if (os === "darwin") {
+		compilerName = "clang";
+	}
 	let toolchainEnv = {
-		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `gcc`,
+		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: compilerName,
 	};
 
 	// If cross-compiling, set additional environment variables.
