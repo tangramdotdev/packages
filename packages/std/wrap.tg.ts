@@ -1629,7 +1629,19 @@ export const test = tg.target(async () => {
 export const testSingleArgObjectNoMutations = tg.target(async () => {
 	const executable = await argAndEnvDump();
 	const executableID = await executable.id();
-	console.log("argAndEnvDump ID", executableID);
+	// The program is a wrapper produced by the LD proxy.
+	console.log("argAndEnvDump wrapper ID", executableID);
+
+	// Get the value of the original executable.
+	const origManifest = await wrap.Manifest.read(executable);
+	tg.assert(origManifest);
+	const origManifestExecutable = origManifest.executable;
+	tg.assert(origManifestExecutable.kind === "path");
+	const origExecutable = await wrap.executableFromManifestExecutable(
+		origManifestExecutable,
+	);
+	const origExecutableId = await origExecutable.id();
+	console.log("origExecutable", origExecutableId);
 
 	const buildToolchain = await bootstrap.sdk.env();
 
@@ -1659,7 +1671,7 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	console.log("text", text);
 
 	tg.assert(
-		text.includes(`/proc/self/exe: /.tangram/artifacts/${executableID}`),
+		text.includes(`/proc/self/exe: /.tangram/artifacts/${origExecutableId}`),
 		"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
 	);
 	tg.assert(
