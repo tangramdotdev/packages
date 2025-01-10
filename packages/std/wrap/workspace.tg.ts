@@ -73,11 +73,11 @@ export const rust = tg.target(
 		const hostSystem = std.triple.archAndOs(host);
 
 		// Download and parse the Rust manifest for the selected version.
-		const date = "2025-01-06";
+		const version = "1.84.0";
 		const manifestFile = await tg.file(
 			await tg.download(
-				`https://static.rust-lang.org/dist/${date}/channel-rust-nightly.toml`,
-				"unsafe",
+				`https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
+				"sha256:94c2c0ba9c6783815df45d680f0f20c7ea80d11b85ee8bbbc61354f3082cd0f5",
 			),
 		);
 		tg.assert(manifestFile instanceof tg.File);
