@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "demo_package"
+version = "0.1.0"
+description = "A demonstration package that displays text to stdout"
+readme = "README.md"
+authors = [
+    {name = "Tangram", email = "hello@tangram.dev"}
+]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+test = "demo_package.main:main"

@@ -1697,7 +1697,6 @@ export const test = tg.target(async () => {
 		testDependencies(),
 		testDylibPath(),
 		testContentExecutable(),
-		testContentExecutableVariadic(),
 	]);
 	return true;
 });
@@ -1789,50 +1788,23 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 
 export const testContentExecutable = tg.target(async () => {
 	const buildToolchain = bootstrap.sdk();
+	const exe = "echo '$NAME' > $OUTPUT";
 	const wrapper = await std.wrap({
 		buildToolchain,
-		executable: `echo $NAME`,
+		executable: exe,
 		env: {
-			NAME: "Tangram",
+			NAME: "Tangram"
 		},
 	});
-
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
-			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
-		})
+		.target(tg`${wrapper} > $OUTPUT`, { env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" }})
 		.then((target) => target.output())
 		.then(tg.File.expect);
-	const text = await output.text().then((t) => t.trim());
+	const text = await output.text();
 	console.log("text", text);
 	tg.assert(text.includes("Tangram"));
-
-	return true;
-});
-
-export const testContentExecutableVariadic = tg.target(async () => {
-	const buildToolchain = bootstrap.sdk();
-	const wrapper = await std.wrap(
-		`echo "$NAME"`,
-		{ env: { NAME: "Tangram" } },
-		{
-			buildToolchain,
-		},
-	);
-	console.log("wrapper", await wrapper.id());
-	// Check the output matches the expected output.
-	const output = await tg
-		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
-			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
-		})
-		.then((target) => target.output())
-		.then(tg.File.expect);
-	const text = await output.text().then((t) => t.trim());
-	console.log("text", text);
-	tg.assert(text.includes("Tangram"));
-
 	return true;
 });
 

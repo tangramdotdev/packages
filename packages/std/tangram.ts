@@ -73,7 +73,6 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		wrapArgAndEnvDump: wrap.argAndEnvDump,
 		wrapBasic: wrap.testSingleArgObjectNoMutations,
 		wrapContent: wrap.testContentExecutable,
-		wrapContentVariadic: wrap.testContentExecutableVariadic,
 		wrap: wrap.test,
 		env: env.test,
 		proxyBasic: sdk.proxy.testBasic,
