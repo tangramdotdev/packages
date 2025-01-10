@@ -9,6 +9,7 @@ env:
 
 jobs:
   tag-and-push:
+    if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
 
     steps:
