@@ -183,11 +183,11 @@ export const test = tg.target(async () => {
 		"cc-autotools",
 		"cmake",
 		"go",
-		// "js-node",
+		// "js-node", // still bad, eperm, likely bad path.
 		"js-plain",
-		// "python",
+		// "python", // expects to find pyproject.toml?
 		"python-plain",
-		// "python-pyproject",
+		// "python-pyproject", // drops into interactive REPL?
 		"rust-cargo",
 		"rust-plain",
 	];
@@ -243,9 +243,9 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 };
 
 const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
-	// const preparedAutotoolsTest = await prepareAutotoolsTestDistributionBundle();
+	const preparedAutotoolsTest = await prepareAutotoolsTestDistributionBundle();
 	return {
-		"cc-autotools": await tg.directory(),
+		"cc-autotools": preparedAutotoolsTest,
 		cmake: cmakeTest,
 		go: goTest,
 		"js-node": jsNodeTest,
@@ -289,6 +289,7 @@ export const testKind = tg.target(async (kind: Kind) => {
 /** We need to generate the distribution bundle for the `cc-autotools` test package, generating the configure scripts and intermediate makefile templates. */
 export const prepareAutotoolsTestDistributionBundle = tg.target(async () => {
 	const originalSource = ccAutotoolsTest;
+	// FIXME - this isn't a test-only concern. This should be part of the autotools build itself - if there is a configure.ac without a configure, do this step!
 	return $`set -eux
 			cp -R ${originalSource} $OUTPUT
 			chmod -R u+w $OUTPUT

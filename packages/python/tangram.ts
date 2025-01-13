@@ -390,12 +390,10 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 		toolchain({ ...pythonArg, build: buildTriple, host }),
 		{
 			["lib/python3/site-packages"]: {
-				[name]: tg.symlink(tg`${source}/src/${name}`),
+				[name]: tg.symlink(tg`${source}/${name}`),
 			},
 		},
 	);
-	console.log("source pointed to", await source.id());
-	console.log("orig python artifact", await pythonArtifact.id());
 
 	// Create the bin directory by symlinking in the python artifacts.
 	const pythonBins = tg.Directory.expect(await pythonArtifact.get("bin"));
@@ -474,8 +472,9 @@ sys.exit(${attribute}())
 		bin = tg.directory(bin, {
 			[name]: std.wrap({
 				executable: script,
-				interpreter:
+				interpreter: tg.symlink(
 					tg`${pythonArtifact}/bin/python${versionString()}`,
+				),
 				env: {
 					PYTHONPATH: tg`${pythonArtifact}/lib/python3/site-packages`,
 				},
