@@ -216,10 +216,9 @@ export namespace wrap {
 					return { executable: arg };
 				} else if (typeof arg === "string" || arg instanceof tg.Template) {
 					// This is a "content" executable.
-					const defaultShell = await defaultShellInterpreter();
 					return {
-						identity: "interpreter" as const,
-						interpreter: defaultShell,
+						identity: "wrapper" as const,
+						interpreter: await wrap.defaultShell(),
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
@@ -289,7 +288,7 @@ export namespace wrap {
 		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
 		if (executable instanceof tg.Template || typeof executable === "string") {
 			if (interpreter === undefined) {
-				interpreter = await defaultShellInterpreter();
+				interpreter = await wrap.defaultShell();
 			}
 			if (identity === undefined) {
 				identity = "interpreter" as const;
@@ -312,6 +311,81 @@ export namespace wrap {
 			merge,
 			libraryPaths,
 		};
+	};
+
+	export type DefaultShellArg = {
+		/** The toolchain to use to build constituent components. Default: `std.sdk()`. */
+		buildToolchain?: std.env.Arg;
+		/** Should scripts treat unset variables as errors? Equivalent to setting `-u`. Default: true. */
+		disallowUnset?: boolean;
+		/** Should scripts exit on errors? Equivalent to setting `-e`. Default: true. */
+		exitOnErr?: boolean;
+		/** Which identity should we use for the shell? Default: "wrapper". */
+		identity?: "interpreter" | "wrapper";
+		/** Whether to incldue the complete `std.utils()` environment. Default: true. */
+		includeUtils?: boolean;
+		/** Should failures inside pipelines cause the whole pipeline to fail? Equivalent to setting `-o pipefail`. Default: true. */
+		pipefail?: boolean;
+	};
+
+	/** Helper to configure a `bash` executable to use as the interpreter for content executables. */
+	export const defaultShell = async (arg?: DefaultShellArg) => {
+		const {
+			buildToolchain: buildToolchain_,
+			disallowUnset = true,
+			exitOnErr = true,
+			identity = "wrapper",
+			includeUtils = true,
+			pipefail = true,
+		} = arg ?? {};
+
+		// Provide bash for the detected host system.
+		let buildArg:
+			| undefined
+			| { sdk: boolean; env: tg.Unresolved<std.env.Arg> } = undefined;
+		if (buildToolchain_) {
+			buildArg = { sdk: false, env: buildToolchain_ };
+		} else {
+			buildArg = { sdk: false, env: std.sdk() };
+		}
+		const shellExecutable = await std.utils.bash
+			.build(buildArg)
+			.then((artifact) => artifact.get("bin/bash"))
+			.then(tg.File.expect);
+
+		const wrapArgs: Array<wrap.Arg> = [
+			{
+				executable: shellExecutable,
+				identity,
+			},
+		];
+		if (buildToolchain_ !== undefined) {
+			wrapArgs.push({ buildToolchain: buildToolchain_ });
+		}
+
+		// Set up args.
+		const args: Array<string> = [];
+		if (disallowUnset) {
+			args.push("-u");
+		}
+		if (exitOnErr) {
+			args.push("-e");
+		}
+		if (pipefail) {
+			args.push("-o");
+			args.push("pipefail");
+		}
+		if (args.length > 0) {
+			wrapArgs.push({ args });
+		}
+
+		// Add utils.
+		if (includeUtils) {
+			wrapArgs.push({ env: await std.utils.env(buildArg) });
+		}
+
+		// Produce wrapped shell.
+		return wrap(...wrapArgs);
 	};
 
 	export const envArgFromManifestEnv = async (
@@ -1030,7 +1104,7 @@ const manifestInterpreterFromExecutableArg = async (
 		case "shebang": {
 			if (metadata.interpreter === undefined) {
 				return manifestInterpreterFromArg(
-					await defaultShellInterpreter(buildToolchainArg),
+					await wrap.defaultShell({ buildToolchain: buildToolchainArg }),
 					buildToolchainArg,
 				);
 			} else {
@@ -1103,33 +1177,6 @@ const manifestInterpreterFromElf = async (
 	} else {
 		throw new Error(`Unsupported interpreter: "${metadata.interpreter}".`);
 	}
-};
-
-export const defaultShellInterpreter = async (
-	buildToolchainArg?: std.env.Arg,
-) => {
-	// Provide bash for the detected host system.
-	let buildArg: undefined | { sdk: boolean; env: tg.Unresolved<std.env.Arg> } =
-		undefined;
-	if (buildToolchainArg) {
-		buildArg = { sdk: false, env: buildToolchainArg };
-	} else {
-		buildArg = { sdk: false, env: std.sdk() };
-	}
-	const shellArtifact = await std.utils.bash.build(buildArg);
-	const shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
-
-	//  Add the standard utils.
-	// FIXME - make this toggleable alongside the -e -u and pipefail change.
-	const env = await std.utils.env(buildArg);
-
-	const bash = wrap({
-		buildToolchain: buildToolchainArg,
-		executable: shellExecutable,
-		identity: "wrapper",
-		env,
-	});
-	return bash;
 };
 
 const valueIsTemplateLike = (
