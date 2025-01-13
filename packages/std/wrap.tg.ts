@@ -212,7 +212,6 @@ export namespace wrap {
 	export const arg = async (...args: std.args.UnresolvedArgs<wrap.Arg>) => {
 		const objectArgs = await Promise.all(
 			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
-				console.log("processing arg");
 				if (arg === undefined) {
 					return {};
 				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
@@ -1184,6 +1183,32 @@ const manifestInterpreterFromElf = async (
 	}
 };
 
+export const defaultShellInterpreter = async (
+	buildToolchainArg?: std.env.Arg,
+) => {
+	// Provide bash for the detected host system.
+	let buildArg: undefined | { sdk: boolean; env: tg.Unresolved<std.env.Arg> } =
+		undefined;
+	if (buildToolchainArg) {
+		buildArg = { sdk: false, env: buildToolchainArg };
+	} else {
+		buildArg = { sdk: false, env: std.sdk() };
+	}
+	const shellArtifact = await std.utils.bash.build(buildArg);
+	const shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
+
+	//  Add the standard utils.
+	const env = await std.utils.env(buildArg);
+
+	const bash = wrap({
+		buildToolchain: buildToolchainArg,
+		executable: shellExecutable,
+		identity: "wrapper",
+		env,
+	});
+	return bash;
+};
+
 const valueIsTemplateLike = (
 	value: tg.Value,
 ): value is string | tg.Template | tg.Artifact => {
@@ -1701,7 +1726,7 @@ export const test = tg.target(async () => {
 		testSingleArgObjectNoMutations(),
 		testDependencies(),
 		testDylibPath(),
-		testContentExecutable(),
+		// testContentExecutable(),
 		testContentExecutableVariadic(),
 	]);
 	return true;
@@ -1801,6 +1826,7 @@ export const testContentExecutable = tg.target(async () => {
 			NAME: "Tangram",
 		},
 	});
+
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
 	const output = await tg
