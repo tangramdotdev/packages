@@ -16,7 +16,6 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 export async function wrap(
 	...args: std.args.UnresolvedArgs<wrap.Arg>
 ): Promise<tg.File> {
-	console.log("-------STARTING WRAP-----------");
 	const arg = await wrap.arg(...args);
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
@@ -103,7 +102,6 @@ export async function wrap(
 	});
 
 	// Write the manifest to the wrapper and return.
-	console.log("--------FINISHED WRAP--------------");
 	return await wrap.Manifest.write(wrapper, manifest);
 }
 
@@ -218,11 +216,10 @@ export namespace wrap {
 					return { executable: arg };
 				} else if (typeof arg === "string" || arg instanceof tg.Template) {
 					// This is a "content" executable.
-					console.log("found a content executable, setting default shell!");
 					const defaultShell = await defaultShellInterpreter();
 					return {
-						identity: "wrapper" as const,
-						interpreter: await wrap.defaultShell(),
+						identity: "interpreter" as const,
+						interpreter: defaultShell,
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
@@ -292,7 +289,7 @@ export namespace wrap {
 		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
 		if (executable instanceof tg.Template || typeof executable === "string") {
 			if (interpreter === undefined) {
-				interpreter = await wrap.defaultShell();
+				interpreter = await defaultShellInterpreter();
 			}
 			if (identity === undefined) {
 				identity = "interpreter" as const;
@@ -1198,6 +1195,7 @@ export const defaultShellInterpreter = async (
 	const shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
 
 	//  Add the standard utils.
+	// FIXME - make this toggleable alongside the -e -u and pipefail change.
 	const env = await std.utils.env(buildArg);
 
 	const bash = wrap({
