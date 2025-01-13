@@ -16,6 +16,7 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 export async function wrap(
 	...args: std.args.UnresolvedArgs<wrap.Arg>
 ): Promise<tg.File> {
+	console.log("-------STARTING WRAP-----------");
 	const arg = await wrap.arg(...args);
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
@@ -102,6 +103,7 @@ export async function wrap(
 	});
 
 	// Write the manifest to the wrapper and return.
+	console.log("--------FINISHED WRAP--------------");
 	return await wrap.Manifest.write(wrapper, manifest);
 }
 
@@ -210,12 +212,14 @@ export namespace wrap {
 	export const arg = async (...args: std.args.UnresolvedArgs<wrap.Arg>) => {
 		const objectArgs = await Promise.all(
 			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
+				console.log("processing arg");
 				if (arg === undefined) {
 					return {};
 				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
 					return { executable: arg };
 				} else if (typeof arg === "string" || arg instanceof tg.Template) {
 					// This is a "content" executable.
+					console.log("found a content executable, setting default shell!");
 					const defaultShell = await defaultShellInterpreter();
 					return {
 						identity: "executable" as const,
@@ -708,6 +712,7 @@ const isArgObject = (arg: unknown): arg is wrap.ArgObject => {
 	);
 };
 
+/** The magic number is `tangram\0`. */
 const MANIFEST_MAGIC_NUMBER: Uint8Array = new Uint8Array([
 	116, 97, 110, 103, 114, 97, 109, 0,
 ]);
@@ -1632,6 +1637,7 @@ export const test = tg.target(async () => {
 		testDependencies(),
 		testDylibPath(),
 		testContentExecutable(),
+		testContentExecutableVariadic(),
 	]);
 	return true;
 });
@@ -1723,23 +1729,49 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 
 export const testContentExecutable = tg.target(async () => {
 	const buildToolchain = bootstrap.sdk();
-	const exe = "echo '$NAME' > $OUTPUT";
 	const wrapper = await std.wrap({
 		buildToolchain,
-		executable: exe,
+		executable: `echo $NAME`,
 		env: {
-			NAME: "Tangram"
+			NAME: "Tangram",
 		},
 	});
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`${wrapper} > $OUTPUT`, { env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" }})
+		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+		})
 		.then((target) => target.output())
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
 	tg.assert(text.includes("Tangram"));
+
+	return true;
+});
+
+export const testContentExecutableVariadic = tg.target(async () => {
+	const buildToolchain = bootstrap.sdk();
+	const wrapper = await std.wrap(
+		`echo "$NAME"`,
+		{ env: { NAME: "Tangram" } },
+		{
+			buildToolchain,
+		},
+	);
+	console.log("wrapper", await wrapper.id());
+	// Check the output matches the expected output.
+	const output = await tg
+		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+		})
+		.then((target) => target.output())
+		.then(tg.File.expect);
+	const text = await output.text().then((t) => t.trim());
+	console.log("text", text);
+	tg.assert(text.includes("Tangram"));
+
 	return true;
 });
 
