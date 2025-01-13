@@ -216,10 +216,9 @@ export namespace wrap {
 					return { executable: arg };
 				} else if (typeof arg === "string" || arg instanceof tg.Template) {
 					// This is a "content" executable.
-					const defaultShell = await defaultShellInterpreter();
 					return {
-						identity: "interpreter" as const,
-						interpreter: defaultShell,
+						identity: "wrapper" as const,
+						interpreter: await wrap.defaultShell(),
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
@@ -289,7 +288,7 @@ export namespace wrap {
 		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
 		if (executable instanceof tg.Template || typeof executable === "string") {
 			if (interpreter === undefined) {
-				interpreter = await defaultShellInterpreter();
+				interpreter = await wrap.defaultShell();
 			}
 			if (identity === undefined) {
 				identity = "interpreter" as const;
@@ -1178,33 +1177,6 @@ const manifestInterpreterFromElf = async (
 	} else {
 		throw new Error(`Unsupported interpreter: "${metadata.interpreter}".`);
 	}
-};
-
-export const defaultShellInterpreter = async (
-	buildToolchainArg?: std.env.Arg,
-) => {
-	// Provide bash for the detected host system.
-	let buildArg: undefined | { sdk: boolean; env: tg.Unresolved<std.env.Arg> } =
-		undefined;
-	if (buildToolchainArg) {
-		buildArg = { sdk: false, env: buildToolchainArg };
-	} else {
-		buildArg = { sdk: false, env: std.sdk() };
-	}
-	const shellArtifact = await std.utils.bash.build(buildArg);
-	const shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
-
-	//  Add the standard utils.
-	// FIXME - make this toggleable alongside the -e -u and pipefail change.
-	const env = await std.utils.env(buildArg);
-
-	const bash = wrap({
-		buildToolchain: buildToolchainArg,
-		executable: shellExecutable,
-		identity: "wrapper",
-		env,
-	});
-	return bash;
 };
 
 const valueIsTemplateLike = (
