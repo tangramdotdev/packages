@@ -8,7 +8,6 @@ import * as autotools from "./autotools";
 import * as cmake from "./cmake";
 import * as go from "./go";
 import * as js from "./js";
-import * as python from "./python";
 import * as rust from "./rust";
 
 import ccAutotoolsTest from "./tests/cc-autotools" with { type: "directory" };
@@ -16,13 +15,7 @@ import cmakeTest from "./tests/cmake" with { type: "directory" };
 import goTest from "./tests/go" with { type: "directory" };
 import jsNodeTest from "./tests/js-node" with { type: "directory" };
 import jsPlainTest from "./tests/js-plain" with { type: "directory" };
-import pythonTest from "./tests/python" with { type: "directory" };
-import pythonPlainTest from "./tests/python-plain" with { type: "directory" };
-import pythonPyprojectTest from "./tests/python-pyproject" with {
-	type: "directory",
-};
 import rustCargoTest from "./tests/rust-cargo" with { type: "directory" };
-import rustPlainTest from "./tests/rust-plain" with { type: "directory" };
 
 export const metadata = {
 	name: "autobuild",
@@ -64,20 +57,8 @@ export const build = tg.target(async (arg: Arg) => {
 		case "js-plain": {
 			return js.plain(arg_);
 		}
-		case "python": {
-			return python.build(arg_);
-		}
-		case "python-plain": {
-			return python.plain(arg_);
-		}
-		case "python-pyproject": {
-			return python.pyproject(arg_);
-		}
 		case "rust-cargo": {
 			return rust.cargo(arg_);
-		}
-		case "rust-plain": {
-			return rust.plain(arg_);
 		}
 		default: {
 			throw new Error(
@@ -117,13 +98,7 @@ export const env = tg.target(async (arg: EnvArg) => {
 		case "js-plain": {
 			return js.env(arg_);
 		}
-		case "python":
-		case "python-plain":
-		case "python-pyproject": {
-			return python.env(arg_);
-		}
-		case "rust-cargo":
-		case "rust-plain": {
+		case "rust-cargo": {
 			return rust.env(arg_);
 		}
 		default: {
@@ -140,11 +115,7 @@ export type Kind =
 	| "go"
 	| "js-node"
 	| "js-plain"
-	| "python"
-	| "python-plain"
-	| "python-pyproject"
-	| "rust-cargo"
-	| "rust-plain";
+	| "rust-cargo";
 
 export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 	const entries = await source.entries();
@@ -166,11 +137,8 @@ export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 	if (hasExecutableFile("configure") || hasFile("configure.ac"))
 		return "cc-autotools";
 	if (hasFile("package.json")) return "js-node";
-	if (hasFile("pyproject.toml")) return "python-pyproject";
-	if (hasFile("setup.py") || hasFile("setup.cfg")) return "python";
 	if (hasFile("go.mod") || hasDir("vendor")) return "go";
 
-	if (hasFileWithExtension(".py")) return "python-plain";
 	if (hasFileWithExtension(".rs")) return "rust-plain";
 	if (hasFileWithExtension(".js")) return "js-plain";
 
@@ -183,13 +151,9 @@ export const test = tg.target(async () => {
 		"cc-autotools",
 		"cmake",
 		"go",
-		// "js-node", // still bad, eperm, likely bad path.
+		// "js-node",// failed to creat target without host - phases.build issue?
 		"js-plain",
-		// "python", // expects to find pyproject.toml?
-		"python-plain",
-		// "python-pyproject", // drops into interactive REPL?
 		"rust-cargo",
-		"rust-plain",
 	];
 	await Promise.all(allKinds.map((variant) => testKind(variant)));
 
@@ -226,19 +190,7 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
 				tg`${buildOutput}/index.js`,
 		},
-		python: defaultTestArg,
-		"python-plain": {
-			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
-				tg`${buildOutput}/main.py`,
-		},
-		"python-pyproject": defaultTestArg,
 		"rust-cargo": defaultTestArg,
-		"rust-plain": {
-			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
-				tg`${buildOutput}/bin/main`,
-		},
 	};
 };
 
@@ -250,11 +202,7 @@ const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
 		go: goTest,
 		"js-node": jsNodeTest,
 		"js-plain": jsPlainTest,
-		python: pythonTest,
-		"python-plain": pythonPlainTest,
-		"python-pyproject": pythonPyprojectTest,
 		"rust-cargo": rustCargoTest,
-		"rust-plain": rustPlainTest,
 	};
 };
 
@@ -289,7 +237,6 @@ export const testKind = tg.target(async (kind: Kind) => {
 /** We need to generate the distribution bundle for the `cc-autotools` test package, generating the configure scripts and intermediate makefile templates. */
 export const prepareAutotoolsTestDistributionBundle = tg.target(async () => {
 	const originalSource = ccAutotoolsTest;
-	// FIXME - this isn't a test-only concern. This should be part of the autotools build itself - if there is a configure.ac without a configure, do this step!
 	return $`set -eux
 			cp -R ${originalSource} $OUTPUT
 			chmod -R u+w $OUTPUT
