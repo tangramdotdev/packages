@@ -139,37 +139,10 @@ fn main_inner() -> std::io::Result<()> {
 	tracing::trace!(?wrapper_args);
 	command.args(wrapper_args);
 
-	// Exec the command.
-	// #[cfg(feature = "tracing")]
-	// tracing::debug!(?executable_path);
-	// if let Some(fd) = is_dev_fd(executable_path.display().to_string().as_str()) {
-	// 	let ret = unsafe { libc::fexecve(fd, std::ptr::null(), std::ptr::null()) };
-	// 	if ret == -1 {
-	// 		#[cfg(feature = "tracing")]
-	// 		tracing::error!("failed fexecve");
-	// 		Err(std::io::Error::last_os_error())
-	// 	} else {
-	// 		unreachable!()
-	// 	}
-	// } else {
-	// 	#[cfg(feature = "tracing")]
-	// 	tracing::trace!(?command);
-	// 	Err(command.exec())
-	// }
 	#[cfg(feature = "tracing")]
 	tracing::trace!(?command);
 	Err(command.exec())
 }
-
-// fn is_dev_fd(path: &str) -> Option<i32> {
-// 	if path.starts_with("/dev/fd/") {
-// 		let num_part = &path[8..]; // Skip "/dev/fd/"
-// 		if num_part.chars().all(|c| c.is_ascii_digit()) {
-// 			return num_part.parse().ok();
-// 		}
-// 	}
-// 	None
-// }
 
 /// Unset all currently set env vars.
 fn clear_env() {
@@ -181,7 +154,6 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 	tracing::trace!("producing content executable.");
 	let fd = unsafe {
 		// Create a temporary file.
-		let old_mask = libc::umask(0o022);
 		let temp_path = c"/tmp/XXXXXX".to_owned();
 		let fd = libc::mkstemp(temp_path.as_ptr().cast_mut());
 		if fd == -1 {
@@ -189,7 +161,6 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 			tracing::error!(?temp_path, "Failed to create temporary file.");
 			return Err(std::io::Error::last_os_error());
 		}
-		libc::umask(old_mask);
 
 		// Unlink the temporary file.
 		let ret = libc::unlink(temp_path.as_ptr());
