@@ -71,7 +71,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	const majorMinor = metadata.version.split(".").slice(0,2).join(".");
+	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
 	await std.assert.pkg({
 		buildFn: default_,
 		binaries: [

@@ -72,6 +72,8 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		bootstrapMusl: bootstrap.musl.build,
 		wrapArgAndEnvDump: wrap.argAndEnvDump,
 		wrapBasic: wrap.testSingleArgObjectNoMutations,
+		wrapContent: wrap.testContentExecutable,
+		wrapContentVariadic: wrap.testContentExecutableVariadic,
 		wrap: wrap.test,
 		env: env.test,
 		proxyBasic: sdk.proxy.testBasic,
@@ -163,7 +165,15 @@ const testActions = (): Record<string, () => Promise<any>> => {
 };
 
 /** A subset of all defined tests to run in the correct order. */
-const defaultTests = ["hostSystem", "triple", "certificates", "sdkDefault"];
+const defaultTests = [
+	"hostSystem",
+	"triple",
+	"certificates",
+	"proxy",
+	"wrap",
+	"sdkDefault",
+	"dollar",
+];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
 export const test = tg.target(async (...testNames: Array<string>) => {

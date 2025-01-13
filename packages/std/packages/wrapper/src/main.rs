@@ -66,8 +66,6 @@ fn main_inner() -> std::io::Result<()> {
 			content_executable(&tangram_std::render_template_data(template)?)?
 		},
 	};
-	#[cfg(feature = "tracing")]
-	tracing::debug!(?executable_path);
 
 	// Choose the identity path.
 	let identity_path = match &manifest.identity {
@@ -141,7 +139,6 @@ fn main_inner() -> std::io::Result<()> {
 	tracing::trace!(?wrapper_args);
 	command.args(wrapper_args);
 
-	// Exec the command.
 	#[cfg(feature = "tracing")]
 	tracing::trace!(?command);
 	Err(command.exec())
@@ -154,6 +151,7 @@ fn clear_env() {
 
 /// Create a temporary file with the given contents and return the path to the file.
 fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
+	tracing::trace!("producing content executable.");
 	let fd = unsafe {
 		// Create a temporary file.
 		let temp_path = c"/tmp/XXXXXX".to_owned();
@@ -197,11 +195,13 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 			);
 			return Err(std::io::Error::last_os_error());
 		}
+
 		fd
 	};
 
 	// Create a path to the temporary file.
-	Ok(PathBuf::from(format!("/dev/fd/{fd}")))
+	let path = PathBuf::from(format!("/dev/fd/{fd}"));
+	Ok(path)
 }
 
 #[allow(clippy::too_many_lines)]

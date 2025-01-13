@@ -75,6 +75,9 @@ export type Arg = {
 	/** The system to build python upon. */
 	build?: string;
 
+	/** Build with --enable-optimizations? Not supported on macOS at the moment, enabled by default on Linux. */
+	enableOptimizations?: boolean;
+
 	/** The system to use python. Currently must be the same as build. */
 	host?: string;
 
@@ -101,6 +104,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 			sqlite: sqliteArg = {},
 			zlib: zlibArg = {},
 		} = {},
+		enableOptimizations: enableOptimizations_,
 		env: env_,
 		host,
 		requirements: requirementsArg,
@@ -109,6 +113,11 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const os = std.triple.os(host);
+
+	if (os === "darwin" && enableOptimizations_ === true) {
+		throw new Error("enableOptimizations is not supported on macOS.");
+	}
+	const enableOptimizations = enableOptimizations_ ?? false;
 
 	// Set up build dependencies.
 	const buildDependencies = [];
@@ -208,10 +217,19 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
 	}
 
+	const configureArgs = [];
+	if (enableOptimizations) {
+		configureArgs.push("--enable-optimizations");
+	}
+
+	const configure = { args: configureArgs };
+	const phases = { configure };
+
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(env),
+			phases,
 			opt: "3",
 			sdk,
 			setRuntimeLibraryPath: true,

@@ -427,7 +427,7 @@ export const testUnproxiedWorkspace = tg.target(async () => {
 		},
 		pre: "set -x",
 		proxy: false,
-		verbose: true
+		verbose: true,
 	});
 
 	const helloOutput = await $`

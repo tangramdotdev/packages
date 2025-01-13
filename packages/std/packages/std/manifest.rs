@@ -35,12 +35,38 @@ pub struct Manifest {
 	pub args: Option<Vec<tg::template::Data>>,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Identity {
-	Wrapper,
-	Interpreter,
 	Executable,
+	Interpreter,
+	Wrapper,
+}
+
+impl std::str::FromStr for Identity {
+	type Err = std::io::Error;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.to_ascii_lowercase().as_str() {
+			"executable" => Ok(Identity::Executable),
+			"interpreter" => Ok(Identity::Interpreter),
+			"wrapper" => Ok(Identity::Wrapper),
+			_ => Err(std::io::Error::new(
+				std::io::ErrorKind::InvalidInput,
+				format!("unrecognized identity: ${s}"),
+			)),
+		}
+	}
+}
+
+impl std::fmt::Display for Identity {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Identity::Executable => write!(f, "executable"),
+			Identity::Interpreter => write!(f, "interpreter"),
+			Identity::Wrapper => write!(f, "wrapper"),
+		}
+	}
 }
 
 /// An interpreter is another program that is used to launch the executable.
@@ -62,6 +88,16 @@ pub enum Interpreter {
 	// A dyld interpreter.
 	#[serde(rename = "dyld")]
 	DyLd(DyLdInterpreter),
+}
+
+impl Interpreter {
+	#[must_use]
+	pub fn is_dynamic(&self) -> bool {
+		matches!(
+			self,
+			Interpreter::LdLinux(_) | Interpreter::LdMusl(_) | Interpreter::DyLd(_)
+		)
+	}
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

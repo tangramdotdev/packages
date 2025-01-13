@@ -130,10 +130,10 @@ export namespace wrap {
 		identity?: Identity;
 
 		/** The interpreter to run the executable with. If not provided, a default is detected. */
-		interpreter?: tg.File | tg.Symlink | Interpreter;
+		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter;
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
-		libraryPaths?: Array<tg.Directory | tg.Symlink>;
+		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template>;
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
@@ -216,10 +216,9 @@ export namespace wrap {
 					return { executable: arg };
 				} else if (typeof arg === "string" || arg instanceof tg.Template) {
 					// This is a "content" executable.
-					const defaultShell = await defaultShellInterpreter();
 					return {
-						identity: "executable" as const,
-						interpreter: defaultShell,
+						identity: "wrapper" as const,
+						interpreter: await wrap.defaultShell(),
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
@@ -248,6 +247,8 @@ export namespace wrap {
 			merge: merge_ = true,
 			libraryPaths,
 		} = await std.args.applyMutations(mutationArgs);
+
+		tg.assert(executable !== undefined);
 
 		// If the executable arg is a wrapper, obtain its manifest.
 		const existingManifest =
@@ -284,6 +285,21 @@ export namespace wrap {
 
 		const env = await std.env.arg(...env_);
 
+		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
+		if (executable instanceof tg.Template || typeof executable === "string") {
+			if (interpreter === undefined) {
+				interpreter = await wrap.defaultShell();
+			}
+			if (identity === undefined) {
+				identity = "interpreter" as const;
+			}
+			if (identity === "executable") {
+				throw new Error(
+					"cannot use the executable identity with content executables, select interpreter or wrapper",
+				);
+			}
+		}
+
 		return {
 			args: args_,
 			buildToolchain,
@@ -295,6 +311,81 @@ export namespace wrap {
 			merge,
 			libraryPaths,
 		};
+	};
+
+	export type DefaultShellArg = {
+		/** The toolchain to use to build constituent components. Default: `std.sdk()`. */
+		buildToolchain?: std.env.Arg;
+		/** Should scripts treat unset variables as errors? Equivalent to setting `-u`. Default: true. */
+		disallowUnset?: boolean;
+		/** Should scripts exit on errors? Equivalent to setting `-e`. Default: true. */
+		exitOnErr?: boolean;
+		/** Which identity should we use for the shell? Default: "wrapper". */
+		identity?: "interpreter" | "wrapper";
+		/** Whether to incldue the complete `std.utils()` environment. Default: true. */
+		includeUtils?: boolean;
+		/** Should failures inside pipelines cause the whole pipeline to fail? Equivalent to setting `-o pipefail`. Default: true. */
+		pipefail?: boolean;
+	};
+
+	/** Helper to configure a `bash` executable to use as the interpreter for content executables. */
+	export const defaultShell = async (arg?: DefaultShellArg) => {
+		const {
+			buildToolchain: buildToolchain_,
+			disallowUnset = true,
+			exitOnErr = true,
+			identity = "wrapper",
+			includeUtils = true,
+			pipefail = true,
+		} = arg ?? {};
+
+		// Provide bash for the detected host system.
+		let buildArg:
+			| undefined
+			| { sdk: boolean; env: tg.Unresolved<std.env.Arg> } = undefined;
+		if (buildToolchain_) {
+			buildArg = { sdk: false, env: buildToolchain_ };
+		} else {
+			buildArg = { sdk: false, env: std.sdk() };
+		}
+		const shellExecutable = await std.utils.bash
+			.build(buildArg)
+			.then((artifact) => artifact.get("bin/bash"))
+			.then(tg.File.expect);
+
+		const wrapArgs: Array<wrap.Arg> = [
+			{
+				executable: shellExecutable,
+				identity,
+			},
+		];
+		if (buildToolchain_ !== undefined) {
+			wrapArgs.push({ buildToolchain: buildToolchain_ });
+		}
+
+		// Set up args.
+		const args: Array<string> = [];
+		if (disallowUnset) {
+			args.push("-u");
+		}
+		if (exitOnErr) {
+			args.push("-e");
+		}
+		if (pipefail) {
+			args.push("-o");
+			args.push("pipefail");
+		}
+		if (args.length > 0) {
+			wrapArgs.push({ args });
+		}
+
+		// Add utils.
+		if (includeUtils) {
+			wrapArgs.push({ env: await std.utils.env(buildArg) });
+		}
+
+		// Produce wrapped shell.
+		return wrap(...wrapArgs);
 	};
 
 	export const envArgFromManifestEnv = async (
@@ -708,6 +799,7 @@ const isArgObject = (arg: unknown): arg is wrap.ArgObject => {
 	);
 };
 
+/** The magic number is `tangram\0`. */
 const MANIFEST_MAGIC_NUMBER: Uint8Array = new Uint8Array([
 	116, 97, 110, 103, 114, 97, 109, 0,
 ]);
@@ -749,7 +841,12 @@ const isManifestExecutable = (
 };
 
 const manifestInterpreterFromArg = async (
-	arg: tg.File | tg.Symlink | wrap.Interpreter | wrap.Manifest.Interpreter,
+	arg:
+		| tg.File
+		| tg.Symlink
+		| tg.Template
+		| wrap.Interpreter
+		| wrap.Manifest.Interpreter,
 	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Manifest.Interpreter> => {
 	if (isManifestInterpreter(arg)) {
@@ -757,7 +854,11 @@ const manifestInterpreterFromArg = async (
 	}
 
 	// If the arg is an executable, then wrap it and create a normal interpreter.
-	if (arg instanceof tg.File || arg instanceof tg.Symlink) {
+	if (
+		arg instanceof tg.File ||
+		arg instanceof tg.Symlink ||
+		arg instanceof tg.Template
+	) {
 		const interpreter = await std.wrap({
 			buildToolchain: buildToolchainArg,
 			executable: arg,
@@ -1003,7 +1104,7 @@ const manifestInterpreterFromExecutableArg = async (
 		case "shebang": {
 			if (metadata.interpreter === undefined) {
 				return manifestInterpreterFromArg(
-					await defaultShellInterpreter(buildToolchainArg),
+					await wrap.defaultShell({ buildToolchain: buildToolchainArg }),
 					buildToolchainArg,
 				);
 			} else {
@@ -1076,33 +1177,6 @@ const manifestInterpreterFromElf = async (
 	} else {
 		throw new Error(`Unsupported interpreter: "${metadata.interpreter}".`);
 	}
-};
-
-export const defaultShellInterpreter = async (
-	buildToolchainArg?: std.env.Arg,
-) => {
-	// Provide bash for the detected host system.
-	let buildArg: undefined | { sdk: boolean; env: tg.Unresolved<std.env.Arg> } =
-		undefined;
-	if (buildToolchainArg) {
-		buildArg = { sdk: false, env: buildToolchainArg };
-	} else {
-		buildArg = { sdk: false, env: std.sdk() };
-	}
-	const shellArtifact = await std.utils.bash.build(buildArg);
-	const shellExecutable = tg.File.expect(await shellArtifact.get("bin/bash"));
-
-	//  Add the standard utils.
-	const env = await std.utils.env(buildArg);
-
-	const bash = wrap({
-		buildToolchain: buildToolchainArg,
-		executable: shellExecutable,
-		identity: "wrapper",
-		args: ["-euo", "pipefail"],
-		env,
-	});
-	return bash;
 };
 
 const valueIsTemplateLike = (
@@ -1622,6 +1696,8 @@ export const test = tg.target(async () => {
 		testSingleArgObjectNoMutations(),
 		testDependencies(),
 		testDylibPath(),
+		testContentExecutable(),
+		testContentExecutableVariadic(),
 	]);
 	return true;
 });
@@ -1709,6 +1785,55 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
 
 	return wrapper;
+});
+
+export const testContentExecutable = tg.target(async () => {
+	const buildToolchain = bootstrap.sdk();
+	const wrapper = await std.wrap({
+		buildToolchain,
+		executable: `echo $NAME`,
+		env: {
+			NAME: "Tangram",
+		},
+	});
+
+	console.log("wrapper", await wrapper.id());
+	// Check the output matches the expected output.
+	const output = await tg
+		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+		})
+		.then((target) => target.output())
+		.then(tg.File.expect);
+	const text = await output.text().then((t) => t.trim());
+	console.log("text", text);
+	tg.assert(text.includes("Tangram"));
+
+	return true;
+});
+
+export const testContentExecutableVariadic = tg.target(async () => {
+	const buildToolchain = bootstrap.sdk();
+	const wrapper = await std.wrap(
+		`echo "$NAME"`,
+		{ env: { NAME: "Tangram" } },
+		{
+			buildToolchain,
+		},
+	);
+	console.log("wrapper", await wrapper.id());
+	// Check the output matches the expected output.
+	const output = await tg
+		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+		})
+		.then((target) => target.output())
+		.then(tg.File.expect);
+	const text = await output.text().then((t) => t.trim());
+	console.log("text", text);
+	tg.assert(text.includes("Tangram"));
+
+	return true;
 });
 
 export const testDependencies = tg.target(async () => {

@@ -1,7 +1,7 @@
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
-import { cargo, toolchain } from "./tangram.ts";
+import { cargo, toolchain, VERSION } from "./tangram.ts";
 
 import cargoToml from "./proxy/Cargo.toml" with { type: "file" };
 import cargoLock from "./proxy/Cargo.lock" with { type: "file" };
@@ -43,7 +43,7 @@ export const test = tg.target(async () => {
 		.env(proxy(), toolchain())
 		.then(tg.File.expect);
 	const versionText = await version.text();
-	tg.assert(versionText.trim().includes("nightly"));
+	tg.assert(versionText.trim().includes(VERSION));
 
 	// Build the basic proxy test.
 	const helloWorld = await cargo.build({
