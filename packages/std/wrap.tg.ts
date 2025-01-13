@@ -1634,7 +1634,7 @@ export const test = tg.target(async () => {
 		testSingleArgObjectNoMutations(),
 		testDependencies(),
 		testDylibPath(),
-		// testContentExecutable(),
+		testContentExecutable(),
 		testContentExecutableVariadic(),
 	]);
 	return true;
