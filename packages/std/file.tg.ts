@@ -472,7 +472,6 @@ const machoExecutableMetadata = (
 			offset += cmdsize;
 		}
 	} else if (startsWithBytes(bytes, MACHO_MAGIC_UNIVERSAL)) {
-		console.log("here");
 		// Read the number of entries.
 		const n = data.getUint32(0x4);
 
