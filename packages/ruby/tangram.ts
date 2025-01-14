@@ -19,18 +19,20 @@ export const metadata = {
 	name: "ruby",
 	license: "BSD-2-Clause",
 	repository: "https://git.ruby-lang.org/ruby.git",
-	version: "3.3.0",
+	version: "3.4.1",
 };
 
 export const source = tg.target(async () => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:96518814d9832bece92a85415a819d4893b307db5921ae1f0f751a9a89a56b7d";
+		"sha256:3d385e5d22d368b064c817a13ed8e3cc3f71a7705d7ed1bae78013c33aa7c87f";
 	const extension = ".tar.gz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${extension}`;
-	const outer = tg.Directory.expect(await std.download({ url, checksum }));
-	return std.directory.unwrap(outer);
+	return std
+		.download({ url, checksum })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 });
 
 export type Arg = {

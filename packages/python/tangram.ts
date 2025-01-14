@@ -390,7 +390,7 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 		toolchain({ ...pythonArg, build: buildTriple, host }),
 		{
 			["lib/python3/site-packages"]: {
-				[name]: tg.symlink(tg`${source}/${name}`),
+				[name]: tg.symlink(tg`${source}/src/${name}`),
 			},
 		},
 	);
