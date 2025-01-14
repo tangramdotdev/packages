@@ -1,4 +1,5 @@
 import * as std from "./tangram.ts";
+import * as bootstrap from "./bootstrap.tg.ts";
 
 export type ExecutableMetadata =
 	| ElfExecutableMetadata
@@ -14,6 +15,12 @@ export type ElfExecutableMetadata = {
 
 	/** The executable's interpreter. */
 	interpreter?: string | undefined;
+
+	/** The SONAME of the library (for shared libraries) */
+	soname?: string | undefined;
+
+	/** Required shared libraries. */
+	needed?: Array<string>;
 };
 
 export type MachOExecutableMetadata = {
@@ -22,6 +29,12 @@ export type MachOExecutableMetadata = {
 
 	/** The executable's architectures. */
 	arches: Array<string>;
+
+	/** The install name of the library (for shared libraries) */
+	installName?: string | undefined;
+
+	/** Required shared libraries. */
+	dependencies?: Array<string>;
 };
 
 export type ShebangExecutableMetadata = {
@@ -40,11 +53,11 @@ export const executableMetadata = async (
 	const bytes = await file.bytes();
 	const kind = detectExecutableKind(bytes);
 	if (kind === "elf") {
-		const { arch, interpreter } = elfExecutableMetadata(bytes);
-		return { format: "elf", arch, interpreter };
+		const elfMetadata = elfExecutableMetadata(bytes);
+		return { ...elfMetadata, format: "elf" };
 	} else if (kind === "mach-o") {
-		const { arches } = machoExecutableMetadata(bytes);
-		return { format: "mach-o", arches };
+		const machOMetadata = machoExecutableMetadata(bytes);
+		return { ...machOMetadata, format: "mach-o" };
 	} else if (kind === "shebang") {
 		const text = await file.text();
 		const interpreter = text.match(/^#!\s*(\S+)/)?.[1];
@@ -97,13 +110,23 @@ export const detectExecutableKind = (bytes: Uint8Array): ExecutableKind => {
 	}
 };
 
+const DT_NEEDED = 1 as const;
+const DT_SONAME = 14 as const;
+
 const elfExecutableMetadata = (
 	bytes: Uint8Array,
-): { arch: string; interpreter: string | undefined } => {
+): {
+	arch: string;
+	interpreter: string | undefined;
+	soname: string | undefined;
+	needed: Array<string>;
+} => {
 	const fileHeader = parseElfFileHeader(bytes);
 	const arch = fileHeader.arch;
-
 	let interpreter = undefined;
+	let soname: string | undefined;
+	const needed: Array<string | undefined> = [];
+
 	for (const programHeader of Array.from(parseElfProgramHeaders(bytes))) {
 		// Find the PT_INTERP program header.
 		if (programHeader.type === 0x03) {
@@ -119,9 +142,31 @@ const elfExecutableMetadata = (
 				interpreter = interpreter.slice(0, -1);
 			}
 		}
+		// Find the PT_DYNAMIC segment (type 2)
+		else if (programHeader.type === 0x02) {
+			const dynamicEntries = parseDynamicSection(
+				bytes,
+				programHeader.offset,
+				programHeader.fileSize,
+				fileHeader,
+			);
+
+			for (const entry of dynamicEntries) {
+				if (entry.tag === DT_SONAME) {
+					soname = entry.string;
+				} else if (entry.tag === DT_NEEDED) {
+					needed.push(entry.string);
+				}
+			}
+		}
 	}
 
-	return { arch, interpreter };
+	return {
+		arch,
+		interpreter,
+		soname,
+		needed: needed.filter((el): el is string => el !== undefined),
+	};
 };
 
 type ElfFileHeader = {
@@ -305,6 +350,72 @@ function* parseElfProgramHeaders(
 	return null;
 }
 
+type ElfDynamicEntry = {
+	tag: number;
+	val: bigint;
+	string?: string | undefined;
+};
+
+function* parseDynamicSection(
+	bytes: Uint8Array,
+	offset: bigint,
+	size: bigint,
+	fileHeader: ElfFileHeader,
+): Iterable<ElfDynamicEntry> {
+	const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const start = bigIntToNumber(offset);
+	const end = bigIntToNumber(offset + size);
+
+	// First pass: collect string table offset
+	let strTabOffset = BigInt(0);
+	for (let i = start; i < end; i += fileHeader.bits === 32 ? 8 : 16) {
+		const tag =
+			fileHeader.bits === 32
+				? data.getInt32(i, fileHeader.isLittleEndian)
+				: Number(data.getBigInt64(i, fileHeader.isLittleEndian));
+
+		const val =
+			fileHeader.bits === 32
+				? BigInt(data.getUint32(i + 4, fileHeader.isLittleEndian))
+				: data.getBigInt64(i + 8, fileHeader.isLittleEndian);
+
+		if (tag === 5) {
+			// DT_STRTAB
+			strTabOffset = val;
+			break;
+		}
+	}
+
+	// Second pass: yield entries with resolved strings
+	for (let i = start; i < end; i += fileHeader.bits === 32 ? 8 : 16) {
+		const tag =
+			fileHeader.bits === 32
+				? data.getInt32(i, fileHeader.isLittleEndian)
+				: Number(data.getBigInt64(i, fileHeader.isLittleEndian));
+
+		const val =
+			fileHeader.bits === 32
+				? BigInt(data.getUint32(i + 4, fileHeader.isLittleEndian))
+				: data.getBigInt64(i + 8, fileHeader.isLittleEndian);
+
+		if (tag === 0) break; // DT_NULL
+
+		const entry: ElfDynamicEntry = { tag, val };
+
+		// For NEEDED and SONAME, resolve the string
+		if (tag === DT_NEEDED || tag === DT_SONAME) {
+			entry.string = readNullTerminatedString(
+				bytes,
+				bigIntToNumber(strTabOffset + val),
+			);
+		}
+
+		yield entry;
+	}
+}
+
+const LC_ID_DYLIB = 0x0000000d as const;
+const LC_LOAD_DYLIB = 0x0000000c as const;
 const MACHO_CPU_TYPE_ARM64 = 0x0100000c as const;
 const MACHO_CPU_TYPE_X86_64 = 0x01000007 as const;
 const MACHO_MAGIC_UNIVERSAL = [0xca, 0xfe, 0xba, 0xbe];
@@ -313,8 +424,14 @@ const MACHO_MAGIC_64_LE = [0xcf, 0xfa, 0xed, 0xfe];
 
 const machoExecutableMetadata = (
 	bytes: Uint8Array,
-): { arches: Array<string> } => {
+): {
+	arches: Array<string>;
+	installName?: string | undefined;
+	dependencies: Array<string>;
+} => {
 	const arches: Set<string> = new Set();
+	const dependencies: Array<string> = [];
+	let installName: string | undefined;
 	const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
 	// Read the arches.
@@ -323,6 +440,7 @@ const machoExecutableMetadata = (
 		startsWithBytes(bytes, MACHO_MAGIC_64_LE)
 	) {
 		// Read the CPU type.
+		const is64 = startsWithBytes(bytes, MACHO_MAGIC_64_LE);
 		const cpuType = data.getUint32(0x4, true);
 
 		// Push any recognized machine types found.
@@ -331,7 +449,30 @@ const machoExecutableMetadata = (
 		} else if (cpuType === MACHO_CPU_TYPE_ARM64) {
 			arches.add("aarch64");
 		}
+
+		// Parse load commands
+		const ncmds = data.getUint32(0x10, true);
+		let offset = is64 ? 0x20 : 0x1c;
+
+		for (let i = 0; i < ncmds; i++) {
+			const cmd = data.getUint32(offset, true);
+			const cmdsize = data.getUint32(offset + 4, true);
+
+			if (cmd === LC_ID_DYLIB || cmd === LC_LOAD_DYLIB) {
+				const nameOffset = data.getUint32(offset + 8, true);
+				const name = readNullTerminatedString(bytes, offset + nameOffset);
+
+				if (cmd === LC_ID_DYLIB) {
+					installName = name;
+				} else {
+					dependencies.push(name);
+				}
+			}
+
+			offset += cmdsize;
+		}
 	} else if (startsWithBytes(bytes, MACHO_MAGIC_UNIVERSAL)) {
+		console.log("here");
 		// Read the number of entries.
 		const n = data.getUint32(0x4);
 
@@ -355,7 +496,7 @@ const machoExecutableMetadata = (
 		}
 	}
 
-	return { arches: Array.from(arches) };
+	return { arches: Array.from(arches), installName, dependencies };
 };
 
 /** Check if a byte array starts with the provided prefix of bytes. */
@@ -386,3 +527,123 @@ const bigIntToNumber = (value: bigint): number => {
 		throw new Error(`Value ${value} cannot be converted to a number.`);
 	}
 };
+
+/** Read a null-terminated C-string into a JS string. */
+const readNullTerminatedString = (
+	bytes: Uint8Array,
+	offset: number,
+): string => {
+	let end = offset;
+	while (end < bytes.length && bytes[end] !== 0) {
+		end++;
+	}
+	return tg.encoding.utf8.decode(bytes.slice(offset, end));
+};
+
+export const test = tg.target(async () => {
+	// Set up platform details.
+	const bootstrapSDK = await bootstrap.sdk();
+	const host = await std.triple.host();
+	const os = std.triple.os(host);
+	const arch = std.triple.arch(host);
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
+	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
+
+	// Define sources.
+	const greetSource = await tg.file(`
+	#include <stdio.h>
+	void greet() {
+		printf("Hello from the shared library!\\n");
+	}
+			`);
+	const greetHeader = await tg.file(`
+	void greet();
+			`);
+
+	const mainSource = await tg.file(`
+	#include <greet.h>
+	int main() {
+		greet();
+		return 0;
+	}
+		`);
+	const source = await tg.directory({
+		"main.c": mainSource,
+		"greet.c": greetSource,
+		"greet.h": greetHeader,
+	});
+
+	// Produce a library and executable.
+	const output = await tg
+		.target(
+			tg`
+			set -x
+			mkdir -p $OUTPUT
+			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o $OUTPUT/libgreet.${dylibExt}
+			cc -v -L$OUTPUT -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT/exe
+			`,
+			{
+				env: await std.env.arg(bootstrapSDK, {
+					TANGRAM_LINKER_PASSTHROUGH: true,
+				}),
+			},
+		)
+		.then((t) => t.output())
+		.then(tg.Directory.expect);
+
+	// Obtain the output files.
+	const libgreetFile = await output
+		.get(`libgreet.${dylibExt}`)
+		.then(tg.File.expect);
+	console.log("libgreet file", await libgreetFile.id());
+	const exeFile = await output.get("exe").then(tg.File.expect);
+	console.log("exe file", await exeFile.id());
+
+	// Read the metadata.
+	const libgreetMetadata = await executableMetadata(libgreetFile);
+	console.log("libgreet metadata", libgreetMetadata);
+	const exeMetadata = await executableMetadata(exeFile);
+	console.log("exe metadata", exeMetadata);
+
+	// Assert the results.
+	if (os === "linux") {
+		tg.assert(libgreetMetadata.format === "elf");
+		tg.assert(libgreetMetadata.arch === arch);
+		tg.assert(libgreetMetadata.interpreter === undefined);
+		tg.assert(libgreetMetadata.soname === `libgreet.${versionedDylibExt}`);
+		tg.assert(libgreetMetadata.needed !== undefined);
+		tg.assert(libgreetMetadata.needed.length === 1);
+		tg.assert(libgreetMetadata.needed.includes("libc.so"));
+
+		tg.assert(exeMetadata.format === "elf");
+		tg.assert(exeMetadata.arch === arch);
+		tg.assert(exeMetadata.interpreter === `/lib/ld-musl-${arch}.so.1`);
+		tg.assert(exeMetadata.soname === undefined);
+		tg.assert(exeMetadata.needed !== undefined);
+		tg.assert(exeMetadata.needed.length === 2);
+		tg.assert(exeMetadata.needed.includes("libc.so"));
+		tg.assert(exeMetadata.needed.includes(libgreetMetadata.soname));
+	}
+
+	if (os === "darwin") {
+		tg.assert(libgreetMetadata.format === "mach-o");
+		tg.assert(libgreetMetadata.arches.includes(arch));
+		tg.assert(libgreetMetadata.installName === `libgreet.${versionedDylibExt}`);
+		tg.assert(libgreetMetadata.dependencies !== undefined);
+		tg.assert(libgreetMetadata.dependencies.length === 1);
+		tg.assert(
+			libgreetMetadata.dependencies.includes("/usr/lib/libSystem.B.dylib"),
+		);
+
+		tg.assert(exeMetadata.format === "mach-o");
+		tg.assert(exeMetadata.arches.includes(arch));
+		tg.assert(exeMetadata.installName === undefined);
+		tg.assert(exeMetadata.dependencies !== undefined);
+		tg.assert(exeMetadata.dependencies.length === 2);
+		tg.assert(exeMetadata.dependencies.includes(libgreetMetadata.installName));
+		tg.assert(exeMetadata.dependencies.includes("/usr/lib/libSystem.B.dylib"));
+	}
+
+	return true;
+});

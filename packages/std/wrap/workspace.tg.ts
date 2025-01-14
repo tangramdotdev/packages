@@ -241,7 +241,7 @@ export const build = async (arg: BuildArg) => {
 		host: isCross ? host : host_,
 	});
 	if (setSysroot) {
-		suffix = tg` --sysroot ${directory}`;
+		suffix = tg.Template.raw` --sysroot ${directory}`;
 	}
 
 	// Get the Rust toolchain.

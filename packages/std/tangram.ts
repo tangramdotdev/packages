@@ -22,6 +22,7 @@ import caCertificates from "./certificates.tg.ts";
 import * as dollar from "./dollar.tg.ts";
 import * as download from "./download.tg.ts";
 import * as env from "./env.tg.ts";
+import * as file from "./file.tg.ts";
 import * as image from "./image.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as phases from "./phases.tg.ts";
@@ -70,6 +71,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		bootstrapSdk: bootstrap.sdk.test,
 		bootstrapMake: bootstrap.make.test,
 		bootstrapMusl: bootstrap.musl.build,
+		file: file.test,
 		wrapArgAndEnvDump: wrap.argAndEnvDump,
 		wrapBasic: wrap.testSingleArgObjectNoMutations,
 		wrapContent: wrap.testContentExecutable,
@@ -170,6 +172,7 @@ const defaultTests = [
 	"triple",
 	"certificates",
 	"proxy",
+	"file",
 	"wrap",
 	"sdkDefault",
 	"dollar",

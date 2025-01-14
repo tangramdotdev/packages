@@ -51,7 +51,7 @@ class Dollar {
 		this.#executable = executable;
 		return this;
 	}
-	
+
 	exitOnErr(bool: boolean): Dollar {
 		this.#exitOnErr = bool;
 		return this;
@@ -70,7 +70,7 @@ class Dollar {
 	async output(): Promise<tg.Value> {
 		return await (await this.target()).output();
 	}
-	
+
 	pipefail(bool: boolean): Dollar {
 		this.#pipefail = bool;
 		return this;
@@ -111,7 +111,11 @@ class Dollar {
 
 		// Construct the env.
 		if (this.#includeUtils) {
-			const utilsEnv = std.utils.env({ sdk: false, env: std.sdk(), host: arg.host });
+			const utilsEnv = std.utils.env({
+				sdk: false,
+				env: std.sdk(),
+				host: arg.host,
+			});
 			if (this.#env !== undefined) {
 				arg.env = await std.env.arg(utilsEnv, this.#env);
 			} else {
@@ -119,7 +123,7 @@ class Dollar {
 			}
 		} else {
 			if (this.#env !== undefined) {
-				arg.env = std.env.arg(this.#env);
+				arg.env = await std.env.arg(this.#env);
 			}
 		}
 
