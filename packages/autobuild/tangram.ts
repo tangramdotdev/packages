@@ -9,6 +9,7 @@ import * as cmake from "./cmake";
 import * as go from "./go";
 import * as js from "./js";
 import * as python from "./python";
+import * as ruby from "./ruby";
 import * as rust from "./rust";
 
 import ccAutotoolsTest from "./tests/cc-autotools" with { type: "directory" };
@@ -21,6 +22,7 @@ import pythonPlainTest from "./tests/python-plain" with { type: "directory" };
 import pythonPyprojectTest from "./tests/python-pyproject" with {
 	type: "directory",
 };
+import rubyPlainTest from "./tests/ruby-plain" with { type: "directory" };
 import rustCargoTest from "./tests/rust-cargo" with { type: "directory" };
 import rustPlainTest from "./tests/rust-plain" with { type: "directory" };
 
@@ -73,6 +75,9 @@ export const build = tg.target(async (arg: Arg) => {
 		case "python-pyproject": {
 			return python.pyproject(arg_);
 		}
+		case "ruby-plain": {
+			return ruby.plain(arg_);
+		}
 		case "rust-cargo": {
 			return rust.cargo(arg_);
 		}
@@ -122,6 +127,9 @@ export const env = tg.target(async (arg: EnvArg) => {
 		case "python-pyproject": {
 			return python.env(arg_);
 		}
+		case "ruby-plain": {
+			return ruby.env(arg_);
+		}
 		case "rust-cargo":
 		case "rust-plain": {
 			return rust.env(arg_);
@@ -143,6 +151,7 @@ export type Kind =
 	| "python"
 	| "python-plain"
 	| "python-pyproject"
+	| "ruby-plain"
 	| "rust-cargo"
 	| "rust-plain";
 
@@ -171,6 +180,7 @@ export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 	if (hasFile("go.mod") || hasDir("vendor")) return "go";
 
 	if (hasFileWithExtension(".py")) return "python-plain";
+	if (hasFileWithExtension(".rb")) return "ruby-plain";
 	if (hasFileWithExtension(".rs")) return "rust-plain";
 	if (hasFileWithExtension(".js")) return "js-plain";
 
@@ -185,6 +195,7 @@ export const test = tg.target(async () => {
 		"go",
 		"js-plain",
 		"python-plain",
+		"ruby-plain",
 		"rust-cargo",
 		"rust-plain",
 	];
@@ -230,6 +241,11 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 				tg`${buildOutput}/main.py`,
 		},
 		"python-pyproject": defaultTestArg,
+		"ruby-plain": {
+			...defaultTestArg,
+			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
+				tg`${buildOutput}/main.rb`,
+		},
 		"rust-cargo": defaultTestArg,
 		"rust-plain": {
 			...defaultTestArg,
@@ -250,6 +266,7 @@ const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
 		python: pythonTest,
 		"python-plain": pythonPlainTest,
 		"python-pyproject": pythonPyprojectTest,
+		"ruby-plain": rubyPlainTest,
 		"rust-cargo": rustCargoTest,
 		"rust-plain": rustPlainTest,
 	};
