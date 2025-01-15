@@ -79,10 +79,11 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	sourceDir = await std.patch(sourceDir, skipUpdateGems);
 
 	const gmpArtifact = gmp.default_({ build, host }, gmpArg);
+	const libYamlArtifact = libyaml.default_({ build, host }, libyamlArg);
 	const deps = [
 		gmpArtifact,
 		libffi.default_({ build, host }, libffiArg),
-		libyaml.default_({ build, host }, libyamlArg),
+		libYamlArtifact,
 		ncurses.default_({ build, host }, ncursesArg),
 		openssl.default_({ build, host }, opensslArg),
 		readline.default_({ build, host }, readlineArg),
@@ -99,7 +100,14 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 			env: std.env.arg(...deps, env_),
 			phases: {
 				configure: {
-					args: ["--disable-install-doc", tg`--with-gmp-dir=${gmpArtifact}`],
+					args: [
+						// Skip documentation.
+						"--disable-install-doc",
+						// Enable optimized bignum.
+						tg`--with-gmp-dir=${gmpArtifact}`,
+						// Required for `psych` to work with rdoc.
+						tg`--with-opt-dir=${libYamlArtifact}`,
+					],
 				},
 			},
 			...(await std.triple.rotate({ build, host })),
@@ -110,12 +118,10 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	// Create the RUBYLIB environment variable.
 	let { arch: hostArch, os: hostOs } = std.triple.components(host);
 	const os = std.triple.os(host);
-	// On macOS, these are a little different.
 	if (os === "darwin") {
 		if (hostArch === "aarch64") {
 			hostArch = "arm64";
 		}
-		// TODO - how to get this string automatically?
 		hostOs = "darwin24.2.0";
 	}
 	const version = libraryVersion(metadata.version);
@@ -163,6 +169,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	for (const name of binNames) {
 		bin = tg.directory(bin, {
 			[name]: std.wrap({
+				env: std.env.arg(libYamlArtifact),
 				executable: tg.symlink(tg`${ruby}/bin/${name}`),
 				interpreter: rubyBin,
 			}),
