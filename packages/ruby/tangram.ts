@@ -2,10 +2,12 @@ import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
 import * as libffi from "libffi" with { path: "../libffi" };
+import * as gmp from "gmp" with { path: "../gmp" };
 import * as libyaml from "libyaml" with { path: "../libyaml" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as readline from "readline" with { path: "../readline" };
+import * as rust from "rust" with { path: "../rust" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
@@ -36,29 +38,39 @@ export const source = tg.target(async () => {
 });
 
 export type Arg = {
-	env: std.env.Arg;
-	phases: std.phases.Arg;
+	autotools?: std.autotools.Arg;
+	dependencies?: {
+		gmp?: gmp.Arg;
+		libffi?: libffi.Arg;
+		libyaml?: libyaml.Arg;
+		ncurses?: ncurses.Arg;
+		openssl?: openssl.Arg;
+		readline?: readline.Arg;
+		zlib?: zlib.Arg;
+	};
+	env?: std.env.Arg;
 	source?: tg.Directory;
 	build?: string;
 	host?: string;
 };
 
 export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
-	const mutationArgs = await std.args.createMutations<
-		Arg,
-		std.args.MakeArrayKeys<Arg, "env" | "phases">
-	>(std.flatten(args), {
-		env: "append",
-		phases: "append",
-		source: "set",
-	});
-	let {
-		env: envs,
-		phases: phases_,
+	const {
+		autotools = {},
+		dependencies: {
+			gmp: gmpArg = {},
+			libffi: libffiArg = {},
+			libyaml: libyamlArg = {},
+			ncurses: ncursesArg = {},
+			openssl: opensslArg = {},
+			readline: readlineArg = {},
+			zlib: zlibArg = {},
+		} = {},
+		env: env_,
 		source: source_,
-		build: build_,
-		host: host_,
-	} = await std.args.applyMutations(mutationArgs);
+		build,
+		host,
+	} = await std.args.apply<Arg>(...args);
 
 	// Get the source code.
 	let sourceDir = source_ ?? (await source());
@@ -66,45 +78,47 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	// We need to skip the makefile step that attempts to update any .gem files in the bundle and replace them with the .gems we download ourself.
 	sourceDir = await std.patch(sourceDir, skipUpdateGems);
 
-	// The ruby build will attempt to download and install several .gem files. Explicitly forbid this.
-	source_ = await tg.directory(sourceDir, {
-		gems: bundledGems(),
-		"gems/bundled_gems": "",
-	});
-
-	// Generate the host and target.
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
-
-	const env_ = [
-		libffi.default_({ host }),
-		libyaml.default_({ host }),
-		ncurses.default_({ host }),
-		openssl.default_({ host }),
-		readline.default_({ host }),
-		zlib.default_({ host }),
-		bootstrap.ruby(host),
-		envs,
+	const gmpArtifact = gmp.default_({ build, host }, gmpArg);
+	const deps = [
+		gmpArtifact,
+		libffi.default_({ build, host }, libffiArg),
+		libyaml.default_({ build, host }, libyamlArg),
+		ncurses.default_({ build, host }, ncursesArg),
+		openssl.default_({ build, host }, opensslArg),
+		readline.default_({ build, host }, readlineArg),
+		rust.toolchain({ host: build, target: build }),
+		zlib.default_({ build, host }, zlibArg),
+		// Ruby requires an existing Ruby to build, so we pull in an older version.
+		bootstrap.ruby(build),
 	];
 
 	// Build ruby.
-	const ruby = await std.autotools.build({
-		source: source_,
-		// Ruby requires an existing Ruby to build, so we pull in an older version.
-		env: std.env.arg(env_),
-		phases: {
-			configure: {
-				// Disable documentation.
-				args: ["--disable-install-doc"],
+	const ruby = await std.autotools.build(
+		{
+			source: sourceDir,
+			env: std.env.arg(...deps, env_),
+			phases: {
+				configure: {
+					args: ["--disable-install-doc", tg`--with-gmp-dir=${gmpArtifact}`],
+				},
 			},
-			//install: tg.Mutation.set("find ./bin -empty -delete && make install"),
+			...(await std.triple.rotate({ build, host })),
 		},
-		...(await std.triple.rotate({ build, host })),
-	});
+		autotools,
+	);
 
 	// Create the RUBYLIB environment variable.
-	const { arch: hostArch, os: hostOs } = std.triple.components(host);
-	const version = metadata.version;
+	let { arch: hostArch, os: hostOs } = std.triple.components(host);
+	const os = std.triple.os(host);
+	// On macOS, these are a little different.
+	if (os === "darwin") {
+		if (hostArch === "aarch64") {
+			hostArch = "arm64";
+		}
+		// TODO - how to get this string automatically?
+		hostOs = "darwin24.2.0";
+	}
+	const version = libraryVersion(metadata.version);
 	const libs = [
 		tg`${ruby}/lib/ruby/site_ruby/${version}`,
 		tg`${ruby}/lib/ruby/site_ruby/${version}/${hostArch}-${hostOs}`,
@@ -122,7 +136,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	const gemPath = tg.Template.join(":", ...(await Promise.all(gems)));
 
 	// Create the env used for wrapping ruby bins.
-	const env = std.env({
+	const env = std.env.arg({
 		RUBYLIB: rubylib,
 		GEM_PATH: gemPath,
 		GEM_HOME: gemPath,
@@ -181,6 +195,8 @@ export const downloadGem = (arg: DownloadGemArg) => {
 	const gemFile = std.download({
 		url: `https://rubygems.org/downloads/${arg.name}-${arg.version}.gem`,
 		checksum: arg.checksum,
+		decompress: false,
+		extract: false,
 	});
 
 	return tg.directory({
@@ -188,56 +204,62 @@ export const downloadGem = (arg: DownloadGemArg) => {
 	});
 };
 
-/** These are the gems required by the ruby build itself and installed by default. */
+/** Libraries are installed under `x.y.0`. */
+const libraryVersion = (version: string) => {
+	const [major, minor] = version.split(".");
+	return `${major}.${minor}.0`;
+};
+
+/** These are the gems required by the ruby build itself and installed by default. See `https://stdgems.org`. */
 const bundledGems = (): Promise<tg.Directory> => {
 	const args = [
 		{
 			name: "minitest",
-			version: "5.16.3",
+			version: "5.25.4",
 			checksum:
-				"sha256:60f81ad96ca5518e1457bd29eb826db60f86fbbdf8c05eac63b4824ef1f52614",
+				"sha256:9cf2cae25ac4dfc90c988ebc3b917f53c054978b673273da1bd20bcb0778f947",
 		},
 		{
 			name: "power_assert",
-			version: "2.0.3",
+			version: "2.0.5",
 			checksum:
-				"sha256:cd5e13c267370427c9804ce6a57925d6030613e341cb48e02eec1f3c772d4cf8",
+				"sha256:63b511b85bb8ea57336d25156864498644f5bbf028699ceda27949e0125bc323",
 		},
 		{
 			name: "rake",
-			version: "13.0.6",
+			version: "13.2.1",
 			checksum:
-				"sha256:5ce4bf5037b4196c24ac62834d8db1ce175470391026bd9e557d669beeb19097",
+				"sha256:46cb38dae65d7d74b6020a4ac9d48afed8eb8149c040eccf0523bec91907059d",
 		},
 		{
 			name: "test-unit",
-			version: "3.5.7",
+			version: "3.6.7",
 			checksum:
-				"sha256:0e162a55d8be7032068758c6dfe548b8b40b19ace3f79b369767d28a62bbb0e5",
+				"sha256:c342bb9f7334ea84a361b43c20b063f405c0bf3c7dbe3ff38f61a91661d29221",
 		},
 		{
 			name: "rexml",
-			version: "3.2.5",
+			version: "3.4.0",
 			checksum:
-				"sha256:a33c3bf95fda7983ec7f05054f3a985af41dbc25a0339843bd2479e93cabb123",
+				"sha256:efbea1efba7fa151158e0ee1e643525834da2d8eb4cf744aa68f6480bc9804b2",
 		},
 		{
 			name: "rss",
-			version: "0.2.9",
+			version: "0.3.1",
 			checksum:
-				"sha256:a045876bea9b35456241d4d57b9340d9e3a042264d6b4aea9d93983c0fe83fac",
+				"sha256:b46234c04551b925180f8bedfc6f6045bf2d9998417feda72f300e7980226737",
 		},
 		{
 			name: "net-ftp",
-			version: "0.2.0",
+			version: "0.3.8",
 			checksum:
-				"sha256:c9ddc46d8ddce05b4f19c4598ae272dcee1530c6418e830408bd08515e4f1e2f",
+				"sha256:28d63e407a7edb9739c320a4faaec515e43e963815248d06418aba322478874f",
 		},
 		{
 			name: "net-imap",
-			version: "0.3.4",
+			version: "0.5.4",
 			checksum:
-				"sha256:a82a59e2a429433dc54cae5a8b2979ffe49da8c66085740811bfa337dc3729b5",
+				"sha256:b665d23a4eeea6af725a9bda0e3dbb65f06b7907e7a3986c1bbcc5d09444599d",
 		},
 		{
 			name: "net-pop",
@@ -247,9 +269,9 @@ const bundledGems = (): Promise<tg.Directory> => {
 		},
 		{
 			name: "net-smtp",
-			version: "0.3.3",
+			version: "0.5.0",
 			checksum:
-				"sha256:3d51dcaa981b74aff2d89cbe89de4503bc2d682365ea5176366e950a0d68d5b0",
+				"sha256:5fc0415e6ea1cc0b3dfea7270438ec22b278ca8d524986a3ae4e5ae8d087b42a",
 		},
 		{
 			name: "matrix",
@@ -259,9 +281,9 @@ const bundledGems = (): Promise<tg.Directory> => {
 		},
 		{
 			name: "prime",
-			version: "0.1.2",
+			version: "0.1.3",
 			checksum:
-				"sha256:d4e956cadfaf04de036dc7dc74f95bf6a285a62cc509b28b7a66b245d19fe3a4",
+				"sha256:baf031c50d6ce923594913befc8ac86a3251bffb9d6a5e8b03687962054e53e3",
 		},
 	];
 
@@ -269,9 +291,32 @@ const bundledGems = (): Promise<tg.Directory> => {
 };
 
 export const test = tg.target(async () => {
-	return await $`
-			echo "Checking that we can run Ruby and Rubygems."
-			ruby -e 'puts "Hello, tangram!"'
-			gem --version
-		`.env(toolchain());
+	const hasVersion = (name: string, version: string) => {
+		return {
+			name,
+			testPredicate: (stdout: string) => stdout.toLowerCase().includes(version),
+		};
+	};
+
+	const binaries = [
+		hasVersion("bundle", "2.6.2"),
+		hasVersion("bundler", "2.6.2"),
+		hasVersion("erb", "4.0.4"),
+		hasVersion("gem", "3.6.2"),
+		hasVersion("irb", "1.14.3"),
+		hasVersion("racc", "1.8.1"),
+		hasVersion("rdoc", "6.10.0"),
+		"ruby",
+		hasVersion("ri", "6.10.0"),
+	];
+	await std.assert.pkg({ buildFn: toolchain, binaries, metadata });
+
+	const output = await $`ruby -e 'puts "Hello, tangram!"' > $OUTPUT`
+		.env(toolchain())
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((t) => t.trim());
+	tg.assert(output.includes("Hello, tangram!"));
+
+	return true;
 });
