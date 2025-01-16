@@ -16,10 +16,10 @@ export type Arg = {
 };
 
 export const build = tg.target(async (arg: Arg) => {
-	const { build, env: envArg, host, source } = arg ?? {};
+	const { env: envArg, ...rest } = arg ?? {};
 
-	const env_ = envArg ?? env({ build, host });
-	const arg_ = { build, env: env_, host, source };
+	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
+	const arg_ = { ...rest, env: env_ };
 	return std.autotools.build(arg_);
 });
 

@@ -342,6 +342,9 @@ export type BuildArg = {
 	/** The machine this package will build on. */
 	build?: string;
 
+	/** Additi8onal environment to include. */
+	env?: std.env.Arg;
+
 	/** The machine this package produces binaries for. */
 	host?: string;
 
@@ -361,6 +364,7 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 	);
 	const {
 		build: buildTriple_,
+		env,
 		host: host_,
 		python: pythonArg,
 		pyprojectToml: pyprojectToml_,
@@ -387,7 +391,7 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// Construct the python environment.
 	const pythonArtifact = await tg.directory(
-		toolchain({ ...pythonArg, build: buildTriple, host }),
+		toolchain({ ...pythonArg, build: buildTriple, env, host }),
 		{
 			["lib/python3/site-packages"]: {
 				[name]: tg.symlink(tg`${source}/src/${name}`),

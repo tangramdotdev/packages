@@ -11,10 +11,11 @@ export type Arg = {
 };
 
 export const cargo = tg.target(async (arg: Arg) => {
-	const { build, env: envArg, host, source } = arg ?? {};
+	const { env: envArg, ...rest } = arg ?? {};
 
-	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
-	const arg_ = { build, env: env_, host, source };
+	const env_ =
+		envArg ?? std.env.arg(env({ build: arg.build, host: arg.host }), envArg);
+	const arg_ = { ...rest, env: env_ };
 
 	return await rust.cargo.build(arg_);
 });
@@ -22,10 +23,10 @@ export const cargo = tg.target(async (arg: Arg) => {
 export default cargo;
 
 export const plain = tg.target(async (arg: Arg) => {
-	const { build, env: envArg, host, source } = arg ?? {};
+	const { env: envArg, ...rest } = arg ?? {};
 
-	const env_ = envArg ?? env({ build, host });
-	const arg_ = { build, env: env_, host, source };
+	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
+	const arg_ = { ...rest, env: env_ };
 
 	return await rust.build.build(arg_);
 });

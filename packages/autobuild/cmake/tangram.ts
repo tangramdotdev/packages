@@ -9,10 +9,11 @@ export type Arg = {
 };
 
 export const build = tg.target(async (arg: Arg) => {
-	const { build, env: envArg, host, source } = arg ?? {};
+	const { env: envArg, ...rest } = arg ?? {};
 
-	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
-	const arg_ = { build, env: env_, host, source };
+	const env_ =
+		envArg ?? std.env.arg(env({ build: arg.build, host: arg.host }), envArg);
+	const arg_ = { ...rest, env: env_ };
 
 	return cmake.build(arg_);
 });

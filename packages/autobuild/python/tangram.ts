@@ -11,15 +11,17 @@ export type Arg = {
 };
 
 export const build = tg.target(async (arg: Arg) => {
-	const { build, env: envArg, host, source } = arg ?? {};
+	const { env: envArg, source, ...rest } = arg ?? {};
 
-	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
-	let arg_: python.BuildArg = { build, env: env_, host, source };
+	const env_ =
+		envArg ??
+		(await std.env.arg(env({ build: arg.build, host: arg.host }), envArg));
+	let arg_: python.BuildArg = { ...rest, env: env_, source };
 
 	const maybeRequirements = source.tryGet("requirements.txt");
 	if (maybeRequirements) {
 		if (maybeRequirements instanceof tg.File) {
-			arg_ = { ...arg_, requirements: maybeRequirements };
+			arg_ = { ...arg_, python: { requirements: maybeRequirements } };
 		}
 	}
 
@@ -38,7 +40,7 @@ export const plain = tg.target(async (arg: Arg) => {
 		directory: source,
 		extension: ".py",
 		interpreter,
-		env: std.env.arg(
+		env: await std.env.arg(
 			{
 				PYTHONPATH: toolchain,
 			},
@@ -56,11 +58,13 @@ export const plain = tg.target(async (arg: Arg) => {
 // });
 
 export const pyproject = tg.target(async (arg: Arg) => {
-	const { build, env: envArg, host, source } = arg ?? {};
+	const { env: envArg, source, ...rest } = arg ?? {};
 
-	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
+	const env_ =
+		envArg ??
+		(await std.env.arg(env({ build: arg.build, host: arg.host }), envArg));
 	const pyprojectToml = await source.get("pyproject.toml").then(tg.File.expect);
-	const arg_ = { build, env: env_, host, pyprojectToml, source };
+	const arg_ = { ...rest, env: env_, pyprojectToml, source };
 	return python.build(arg_);
 });
 

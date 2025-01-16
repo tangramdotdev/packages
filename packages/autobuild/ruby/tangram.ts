@@ -10,9 +10,11 @@ export type Arg = {
 };
 
 export const plain = tg.target(async (arg: Arg) => {
-	const { build, env: envArg, host, source } = arg ?? {};
+	const { env: envArg, source } = arg ?? {};
 
-	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
+	const env_ =
+		envArg ??
+		(await std.env.arg(env({ build: arg.build, host: arg.host }), envArg));
 	const toolchain = await ruby.toolchain();
 	const interpreter = await toolchain.get("bin/ruby").then(tg.File.expect);
 	return wrapScripts({
