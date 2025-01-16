@@ -509,7 +509,7 @@ try:
 except ImportError as e:
 	print(f"Failed to import zlib: {str(e)}")`);
 	const importZlibOutput =
-		await $`set -x && python ${testImportZlibScript} > $OUTPUT`
+		await $`set -x && python --tangram-print-manifest && python ${testImportZlibScript} > $OUTPUT`
 			.env(toolchain())
 			.then(tg.File.expect)
 			.then((f) => f.text())
