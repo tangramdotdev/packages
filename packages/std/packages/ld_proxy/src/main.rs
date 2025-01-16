@@ -94,8 +94,8 @@ struct Options {
 	/// The path to the injection library.
 	injection_path: Option<String>,
 
-	/// Library path optimization level. Select `none`, `filter`, `resolve`, `isolate`, or `combine`. Defaults to `isolate`.
-	library_path_optimization: LibraryPathOptimizationLevel,
+	/// Library path optimization strategy. Select `none`, `filter`, `resolve`, `isolate`, or `combine`. Defaults to `isolate`.
+	library_path_strategy: LibraryPathStrategy,
 
 	/// The library paths.
 	library_paths: Vec<String>,
@@ -162,7 +162,7 @@ fn read_options() -> tg::Result<Options> {
 	// Get the option to disable combining library paths. Enabled by default.
 	let mut library_path_optimization = std::env::var("TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL")
 		.ok()
-		.map_or(LibraryPathOptimizationLevel::default(), |s| {
+		.map_or(LibraryPathStrategy::default(), |s| {
 			s.parse().unwrap_or_default()
 		});
 
@@ -183,7 +183,7 @@ fn read_options() -> tg::Result<Options> {
 			if arg.starts_with("--tg-library-path-opt-level=") {
 				let option = arg.strip_prefix("--tg-library-path-opt-level=").unwrap();
 				library_path_optimization =
-					LibraryPathOptimizationLevel::from_str(option).unwrap_or_default();
+					LibraryPathStrategy::from_str(option).unwrap_or_default();
 			} else if arg.starts_with("--tg-max-depth=") {
 				let option = arg.strip_prefix("--tg-max-depth=").unwrap();
 				if let Ok(max_depth_arg) = option.parse() {
@@ -253,7 +253,7 @@ fn read_options() -> tg::Result<Options> {
 		interpreter_path,
 		interpreter_args,
 		injection_path,
-		library_path_optimization,
+		library_path_strategy: library_path_optimization,
 		library_paths,
 		max_depth,
 		output_path,
@@ -417,7 +417,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let library_paths: HashSet<tg::Referent<tg::directory::Id>, Hasher> =
 			library_paths.into_iter().collect();
 
-		let strategy = options.library_path_optimization;
+		let strategy = options.library_path_strategy;
 		tracing::trace!(
 			?library_paths,
 			?needed_libraries,
@@ -430,7 +430,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			&output_file,
 			library_paths,
 			&mut needed_libraries,
-			options.library_path_optimization,
+			options.library_path_strategy,
 			options.max_depth,
 			options.disallow_missing,
 		)
@@ -781,39 +781,31 @@ enum InterpreterRequirement {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-enum LibraryPathOptimizationLevel {
-	/// Do not optimize library paths.
-	None = 0,
+enum LibraryPathStrategy {
+	/// Do not manipulate library paths.
+	None,
 	/// Only retain paths containing needed libraries.
-	Filter = 1,
+	Filter,
 	/// Resolve any artifacts with subpaths to their innermost directory.
-	Resolve = 2,
+	Resolve,
 	/// Create individual library paths for each library.
 	#[default]
-	Isolate = 3,
+	Isolate,
 	/// Combine library paths into a single directory.
-	Combine = 4,
+	Combine,
 }
 
-impl std::str::FromStr for LibraryPathOptimizationLevel {
+impl std::str::FromStr for LibraryPathStrategy {
 	type Err = tg::Error;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s.to_ascii_lowercase().as_str() {
-			"none" | "0" => Ok(Self::None),
-			"filter" | "1" => Ok(Self::Filter),
-			"resolve" | "2" => Ok(Self::Resolve),
-			"isolate" | "3" => Ok(Self::Isolate),
-			"combine" | "4" => Ok(Self::Combine),
-			_ => {
-				// If the string is a digit greater than 4, fall back to 4.
-				if let Ok(level) = s.parse::<usize>() {
-					if level > 4 {
-						return Ok(Self::Combine);
-					}
-				}
-				Err(tg::error!("invalid library path optimization strategy {s}"))
-			},
+			"none" => Ok(Self::None),
+			"filter" => Ok(Self::Filter),
+			"resolve" => Ok(Self::Resolve),
+			"isolate" => Ok(Self::Isolate),
+			"combine" => Ok(Self::Combine),
+			_ => Err(tg::error!("invalid library path optimization strategy {s}")),
 		}
 	}
 }
@@ -925,11 +917,11 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	file: &tg::File,
 	library_paths: HashSet<tg::Referent<tg::directory::Id>, H>,
 	needed_libraries: &mut HashMap<String, Option<tg::Referent<tg::directory::Id>>, H>,
-	strategy: LibraryPathOptimizationLevel,
+	strategy: LibraryPathStrategy,
 	max_depth: usize,
 	disallow_missing: bool,
 ) -> tg::Result<HashSet<tg::Referent<tg::directory::Id>, H>> {
-	if matches!(strategy, LibraryPathOptimizationLevel::None) || library_paths.is_empty() {
+	if matches!(strategy, LibraryPathStrategy::None) || library_paths.is_empty() {
 		return Ok(library_paths);
 	}
 
@@ -941,7 +933,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	let filtered_library_paths = needed_libraries.values().flatten().cloned().collect();
 	tracing::debug!(?filtered_library_paths, "post-filter");
 
-	if matches!(strategy, LibraryPathOptimizationLevel::Filter) {
+	if matches!(strategy, LibraryPathStrategy::Filter) {
 		return finalize_library_paths(
 			tg,
 			disallow_missing,
@@ -952,7 +944,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 	}
 
 	match strategy {
-		LibraryPathOptimizationLevel::Resolve => {
+		LibraryPathStrategy::Resolve => {
 			let resolved_library_paths: HashSet<tg::Referent<tg::directory::Id>, H> =
 				resolve_directories(tg, &filtered_library_paths).await?;
 			tracing::trace!(?resolved_library_paths, "post-resolve");
@@ -964,7 +956,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			)
 			.await;
 		},
-		LibraryPathOptimizationLevel::Isolate => {
+		LibraryPathStrategy::Isolate => {
 			// Create an individual library path for every found library.
 			let mut isolated_library_paths: HashSet<tg::Referent<tg::directory::Id>, H> =
 				HashSet::default();
@@ -990,7 +982,7 @@ async fn optimize_library_paths<H: BuildHasher + Default + Send + Sync>(
 			)
 			.await;
 		},
-		LibraryPathOptimizationLevel::Combine => {
+		LibraryPathStrategy::Combine => {
 			// Create a directory combining all located library files.
 			let mut entries = BTreeMap::new();
 			for (name, dir_id_referent) in needed_libraries.iter() {

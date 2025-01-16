@@ -17,6 +17,7 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Get the wrapper path.
 	let wrapper_path = std::env::current_exe()?.canonicalize()?;
+	#[cfg(feature = "tracing")]
 	tracing::trace!(?wrapper_path);
 
 	// Read the manifest.

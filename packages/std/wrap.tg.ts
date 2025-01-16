@@ -33,12 +33,14 @@ export async function wrap(
 			? await gnu.toolchain({ host: detectedBuild, target: host })
 			: await bootstrap.sdk.env(host);
 
-	const manifestInterpreter = arg.interpreter
-		? await manifestInterpreterFromArg(arg.interpreter, buildToolchain)
-		: await manifestInterpreterFromExecutableArg(
-				arg.executable,
-				buildToolchain,
-			);
+	// Construct the interpreter.
+	const manifestInterpreter = await manifestInterpreterFromWrapArgObject({
+		buildToolchain,
+		interpreter: arg.interpreter,
+		executable: arg.executable,
+		libraryPaths: arg.libraryPaths,
+		libraryPathStrategy: arg.libraryPathStrategy,
+	});
 
 	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
 	if (
@@ -61,17 +63,6 @@ export async function wrap(
 				`Found a statically-linked executable but selected the "executable" identity.  This combination is not supported.  Please select the "wrapper" identity instead.`,
 			);
 		}
-	}
-
-	// Add remaining library paths.
-	if (manifestInterpreter && "libraryPaths" in manifestInterpreter) {
-		let paths = manifestInterpreter.libraryPaths ?? [];
-		if (arg.libraryPaths) {
-			paths = paths.concat(
-				await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg)),
-			);
-		}
-		manifestInterpreter.libraryPaths = paths;
 	}
 
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
@@ -133,7 +124,11 @@ export namespace wrap {
 		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter;
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
+		// FIXME - normal interpreters should just add these to the env? Maybe? Maybe not? Right now they're discarded, which is certainly wrong. Maybe LD_LIBRARY_PATH.
 		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template>;
+
+		/** Which library path strategy should we use? Default is "none" for normal/undefined interpreters, "isolate" for LdLinux/LdMusl/Dyld. */
+		libraryPathStrategy?: LibraryPathStrategy;
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
@@ -149,6 +144,8 @@ export namespace wrap {
 		| DyLdInterpreter;
 
 	export type NormalInterpreter = {
+		kind: "normal";
+
 		/** The interpreter executable. */
 		executable: tg.File | tg.Symlink;
 
@@ -198,6 +195,23 @@ export namespace wrap {
 		preloads?: Array<tg.Template.Arg> | undefined;
 	};
 
+	/** Wrappers for dynamically linked executables can employ one of these strategies to optimize the set of library paths.
+	 * This strategy is only used to produce the manifest, and is not retained as a property once complete.
+	 * These mirror the strategies available in the Tangram `ld` proxy.
+	 *
+	 * - "none": Do not manipulate library paths. The paths provided by the user will be retained as-is. This is the strategy used for all wrappers for non-dynamically-linked executables (static binaries, scripts).
+	 * - "filter": Paths that do not contain libraries marked as needed by the executable are dropped.
+	 * - "resolve": After filtering, all library paths are resolved to their innermost directory. If you provided `${someArtifact}/lib`, it will be transformed to `${someArtifactLib}`, with no trailing subpath. This prevents, for example, the `"include" directory from being retained as a dependency of your wrapper.`
+	 * - "isolate": Each needed library will be placed in its own unique directory. This is the default strategy, which maximizes cache hits between wrappers.
+	 * - "combine": Each needed library will be placed together in a single directory. This is the most space-efficient, but likely to cause cache misses and duplication. If one wrapper needs `libc.so` and another needs `libc.so` and `libm.so`, you'll wind up with two copies of `libc.so` in your dependencies. If not checking out or bundling your artifact, this is not a concern, but external checkouts will incur the extra cost. To share a single copy of the common dependency, consider the "isolate" strategy.
+	 */
+	export type LibraryPathStrategy =
+		| "none"
+		| "filter"
+		| "resolve"
+		| "isolate"
+		| "combine";
+
 	export type Manifest = {
 		identity: Identity;
 		interpreter?: Manifest.Interpreter | undefined;
@@ -246,6 +260,7 @@ export namespace wrap {
 			interpreter,
 			merge: merge_ = true,
 			libraryPaths,
+			libraryPathStrategy,
 		} = await std.args.applyMutations(mutationArgs);
 
 		tg.assert(executable !== undefined);
@@ -310,6 +325,7 @@ export namespace wrap {
 			interpreter,
 			merge,
 			libraryPaths,
+			libraryPathStrategy,
 		};
 	};
 
@@ -405,9 +421,11 @@ export namespace wrap {
 		if (manifestInterpreter === undefined) {
 			return undefined;
 		}
-		switch (manifestInterpreter.kind) {
+		const kind = manifestInterpreter.kind;
+		switch (kind) {
 			case "normal": {
 				return {
+					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
@@ -421,7 +439,7 @@ export namespace wrap {
 			}
 			case "ld-linux": {
 				return {
-					kind: "ld-linux",
+					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
@@ -451,7 +469,7 @@ export namespace wrap {
 			}
 			case "ld-musl": {
 				return {
-					kind: "ld-musl",
+					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
@@ -481,7 +499,7 @@ export namespace wrap {
 			}
 			case "dyld": {
 				return {
-					kind: "dyld",
+					kind,
 					libraryPaths:
 						manifestInterpreter.libraryPaths === undefined
 							? undefined
@@ -840,233 +858,262 @@ const isManifestExecutable = (
 	);
 };
 
-const manifestInterpreterFromArg = async (
-	arg:
+/** The subset of `wrap.ArgObject` relevant to producing a `wrap.Manifest.Interpreter`. */
+type ManifestInterpreterArg = {
+	buildToolchain?: std.env.Arg;
+	interpreter?:
 		| tg.File
 		| tg.Symlink
 		| tg.Template
 		| wrap.Interpreter
-		| wrap.Manifest.Interpreter,
-	buildToolchainArg?: std.env.Arg,
-): Promise<wrap.Manifest.Interpreter> => {
-	if (isManifestInterpreter(arg)) {
-		return arg;
+		| undefined;
+	executable: string | tg.Template | tg.File | tg.Symlink;
+	libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template> | undefined;
+	libraryPathStrategy?: wrap.LibraryPathStrategy | undefined;
+};
+
+/** Produce the manifest interpreter object given a set of parameters. */
+const manifestInterpreterFromWrapArgObject = async (
+	arg: ManifestInterpreterArg,
+): Promise<wrap.Manifest.Interpreter | undefined> => {
+	let interpreter = arg.interpreter
+		? await interpreterFromArg(arg.interpreter, arg.buildToolchain)
+		: await interpreterFromExecutableArg(arg.executable, arg.buildToolchain);
+	if (interpreter === undefined) {
+		return undefined;
 	}
 
+	// If this is not a "normal" interpreter run the library path optimization, including any additional paths from the user.
+	if (interpreter.kind !== "normal") {
+		const { executable, libraryPaths, libraryPathStrategy } = arg;
+		interpreter = await optimizeLibraryPaths({
+			executable,
+			interpreter,
+			libraryPaths,
+			libraryPathStrategy,
+		});
+	}
+
+	return manifestInterpreterFromWrapInterpreter(interpreter);
+};
+
+/** Serialize an interpreter into its manifest form. */
+const manifestInterpreterFromWrapInterpreter = async (
+	interpreter: wrap.Interpreter,
+): Promise<wrap.Manifest.Interpreter> => {
+	// Process each field present in the incoming object.
+	const { kind } = interpreter;
+
+	// Process all fields concurrently
+	const [path, libraryPaths, preloads, args] = await Promise.all([
+		// Only process executable if it exists
+		"executable" in interpreter
+			? manifestTemplateFromArg(interpreter.executable)
+			: Promise.resolve(undefined),
+
+		// Only process libraryPaths if it exists
+		"libraryPaths" in interpreter && interpreter.libraryPaths !== undefined
+			? Promise.all(interpreter.libraryPaths.map(manifestTemplateFromArg))
+			: Promise.resolve(undefined),
+
+		// Only process preloads if it exists
+		"preloads" in interpreter && interpreter.preloads !== undefined
+			? Promise.all(interpreter.preloads.map(manifestTemplateFromArg))
+			: Promise.resolve(undefined),
+
+		// Only process args if it exists
+		"args" in interpreter && interpreter.args !== undefined
+			? Promise.all(interpreter.args.map(manifestTemplateFromArg))
+			: Promise.resolve(undefined),
+	]);
+
+	// COnstruct a `manifest.Interpreter` using only fields that are not `undefined`.
+	switch (kind) {
+		case "normal": {
+			return {
+				kind,
+				path: path!,
+				...(args && { args }),
+			};
+		}
+		case "ld-linux":
+		case "ld-musl": {
+			return {
+				kind,
+				path: path!,
+				...(libraryPaths && { libraryPaths }),
+				...(preloads && { preloads }),
+				...(args && { args }),
+			};
+		}
+		case "dyld": {
+			return {
+				kind,
+				...(libraryPaths && { libraryPaths }),
+				...(preloads && { preloads }),
+			};
+		}
+		default: {
+			return tg.unreachable(`unrecognized kind ${kind}`);
+		}
+	}
+};
+
+/** Given an interpreter arg, produce an interpreter object with all fields populated. */
+const interpreterFromArg = async (
+	arg: tg.File | tg.Symlink | tg.Template | wrap.Interpreter,
+	buildToolchainArg?: std.env.Arg,
+): Promise<wrap.Interpreter> => {
 	// If the arg is an executable, then wrap it and create a normal interpreter.
 	if (
 		arg instanceof tg.File ||
 		arg instanceof tg.Symlink ||
 		arg instanceof tg.Template
 	) {
-		const interpreter = await std.wrap({
+		const executable = await std.wrap({
 			buildToolchain: buildToolchainArg,
 			executable: arg,
 		});
-		const path = await manifestTemplateFromArg(interpreter);
 		return {
 			kind: "normal",
-			path,
+			executable,
 			args: [],
 		};
 	}
 
-	// Otherwise, create the interpreter specified by the arg object.
-	if ("kind" in arg && arg.kind === "ld-linux") {
-		// Handle an ld-linux interpreter.
-		const path = await manifestTemplateFromArg(arg.executable);
-		const libraryPaths = arg.libraryPaths
-			? await Promise.all(
-					arg.libraryPaths.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: undefined;
+	// We now have a `wrap.Interpreter` object. Fill in any missing fields.
+	tg.assert("kind" in arg);
+	const kind = arg.kind;
+	switch (kind) {
+		case "ld-linux": {
+			const libraryPaths = arg.libraryPaths;
+			const args = arg.args;
+			const preloads = arg.preloads ?? [];
 
-		// Build an injection dylib to match the interpreter.
-		const interpreterFile =
-			arg.executable instanceof tg.Symlink
-				? await arg.executable.resolve()
-				: arg.executable;
-		if (!interpreterFile || interpreterFile instanceof tg.Directory) {
-			throw new Error("Could not resolve the symlink to the interpreter.");
+			// Find the artifact for the interpreter executable.
+			const executable =
+				arg.executable instanceof tg.Symlink
+					? await arg.executable.resolve()
+					: arg.executable;
+			if (!executable || executable instanceof tg.Directory) {
+				throw new Error("Could not resolve the symlink to the interpreter.");
+			}
+			tg.File.assert(executable);
+			const interpreterMetadata = await std.file.executableMetadata(executable);
+			if (interpreterMetadata.format !== "elf") {
+				return tg.unreachable(
+					"Cannot build an ld-linux interpreter for a non-ELF executable.",
+				);
+			}
+
+			// If no preload is defined, add the default injection preload.
+			if (preloads.length === 0) {
+				const arch = interpreterMetadata.arch;
+				const host = `${arch}-unknown-linux-gnu`;
+				const detectedBuild = await std.triple.host();
+				const buildOs = std.triple.os(detectedBuild);
+				const buildToolchain = buildToolchainArg
+					? buildToolchainArg
+					: gnu.toolchain({ host });
+				const injectionLibrary = await injection.default({
+					buildToolchain,
+					build: buildOs === "darwin" ? detectedBuild : undefined,
+					host,
+				});
+
+				preloads.push(injectionLibrary);
+			}
+
+			return {
+				kind,
+				executable,
+				libraryPaths,
+				preloads,
+				args,
+			};
 		}
-		tg.File.assert(interpreterFile);
-		const interpreterMetadata =
-			await std.file.executableMetadata(interpreterFile);
-		if (interpreterMetadata.format !== "elf") {
-			return tg.unreachable(
-				"Cannot build an ld-linux interpreter for a non-ELF executable.",
-			);
+		case "ld-musl": {
+			const libraryPaths = arg.libraryPaths;
+			const args = arg.args;
+			const preloads = arg.preloads ?? [];
+
+			// Find the artifact for the interpreter executable.
+			const executable =
+				arg.executable instanceof tg.Symlink
+					? await arg.executable.resolve()
+					: arg.executable;
+			if (!executable || executable instanceof tg.Directory) {
+				throw new Error("Could not resolve the symlink to the interpreter.");
+			}
+			tg.File.assert(executable);
+			const interpreterMetadata = await std.file.executableMetadata(executable);
+			if (interpreterMetadata.format !== "elf") {
+				return tg.unreachable(
+					"Cannot build an ld-musl interpreter for a non-ELF executable.",
+				);
+			}
+
+			// If no preload is defined, add the default injection preload.
+			if (preloads.length === 0) {
+				const arch = interpreterMetadata.arch;
+				const host = `${arch}-linux-musl`;
+				const buildToolchain = bootstrap.sdk.env(host);
+				const injectionLibrary = await injection.default({
+					buildToolchain,
+					host,
+				});
+				preloads.push(injectionLibrary);
+			}
+
+			return {
+				kind,
+				executable,
+				libraryPaths,
+				preloads,
+				args,
+			};
 		}
+		case "dyld": {
+			const libraryPaths = arg.libraryPaths;
+			const preloads = arg.preloads ?? [];
 
-		const preloads = arg.preloads
-			? await Promise.all(
-					arg.preloads?.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: [];
+			// If no preload is defined, add the default injection preload.
+			if (preloads.length === 0) {
+				const host = await std.triple.host();
+				const buildToolchain = buildToolchainArg
+					? buildToolchainArg
+					: bootstrap.sdk.env(host);
+				const injectionLibrary = await injection.default({
+					buildToolchain,
+					host,
+				});
+				preloads.push(injectionLibrary);
+			}
 
-		// If no preload is defined, add the default injection preload.
-		if (preloads.length === 0) {
-			const arch = interpreterMetadata.arch;
-			const host = `${arch}-unknown-linux-gnu`;
-			const detectedBuild = await std.triple.host();
-			const buildOs = std.triple.os(detectedBuild);
-			const buildToolchain = buildToolchainArg
-				? buildToolchainArg
-				: gnu.toolchain({ host });
-			const injectionLibrary = await injection.default({
-				buildToolchain,
-				build: buildOs === "darwin" ? detectedBuild : undefined,
-				host,
-			});
-
-			const injectionManifestSymlink =
-				await manifestTemplateFromArg(injectionLibrary);
-			preloads.push(injectionManifestSymlink);
+			return {
+				kind,
+				libraryPaths,
+				preloads,
+			};
 		}
-
-		const args = arg.args
-			? await Promise.all(arg.args.map(manifestTemplateFromArg))
-			: undefined;
-		return {
-			kind: "ld-linux",
-			path,
-			libraryPaths,
-			preloads,
-			args,
-		};
-	} else if ("kind" in arg && arg.kind === "ld-musl") {
-		// Handle an ld-musl interpreter.
-		const path = await manifestTemplateFromArg(arg.executable);
-		const libraryPaths = arg.libraryPaths
-			? await Promise.all(
-					arg.libraryPaths.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: undefined;
-
-		// Build an injection dylib to match the interpreter.
-		const interpreterFile =
-			arg.executable instanceof tg.Symlink
-				? await arg.executable.resolve()
-				: arg.executable;
-		if (!interpreterFile || interpreterFile instanceof tg.Directory) {
-			throw new Error("Could not resolve the symlink to the interpreter.");
+		case "normal": {
+			return {
+				kind,
+				executable: arg.executable,
+				args: arg.args,
+			};
 		}
-		tg.File.assert(interpreterFile);
-		const interpreterMetadata =
-			await std.file.executableMetadata(interpreterFile);
-		if (interpreterMetadata.format !== "elf") {
-			return tg.unreachable(
-				"Cannot build an ld-musl interpreter for a non-ELF executable.",
-			);
+		default: {
+			return tg.unreachable(`unrecognized kind ${kind}`);
 		}
-
-		const preloads = arg.preloads
-			? await Promise.all(
-					arg.preloads?.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: [];
-
-		// If no preload is defined, add the default injection preload.
-		if (preloads.length === 0) {
-			const arch = interpreterMetadata.arch;
-			const host = `${arch}-linux-musl`;
-			const buildToolchain = bootstrap.sdk.env(host);
-			const injectionLibrary = await injection.default({
-				buildToolchain,
-				host,
-			});
-
-			const injectionManifestSymlink =
-				await manifestTemplateFromArg(injectionLibrary);
-			preloads.push(injectionManifestSymlink);
-		}
-
-		const args = arg.args
-			? await Promise.all(arg.args.map(manifestTemplateFromArg))
-			: undefined;
-		return {
-			kind: "ld-musl",
-			path,
-			libraryPaths,
-			preloads,
-			args,
-		};
-	} else if ("kind" in arg && arg.kind === "dyld") {
-		// Handle a dyld interpreter.
-		const libraryPaths = arg.libraryPaths
-			? await Promise.all(
-					arg.libraryPaths.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: undefined;
-		const preloads = arg.preloads
-			? await Promise.all(
-					arg.preloads?.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: [];
-
-		// If no preload is defined, add the default injection preload.
-		if (preloads.length === 0) {
-			const host = await std.triple.host();
-			const buildToolchain = buildToolchainArg
-				? buildToolchainArg
-				: bootstrap.sdk.env(host);
-			const injectionLibrary = await injection.default({
-				buildToolchain,
-				host,
-			});
-			preloads.push(await manifestTemplateFromArg(injectionLibrary));
-		}
-		return {
-			kind: "dyld",
-			libraryPaths,
-			preloads,
-		};
-	} else {
-		// Handle a normal interpreter.
-		const path = await manifestTemplateFromArg(arg.executable);
-		const args = await Promise.all(
-			arg.args?.map(manifestTemplateFromArg) ?? [],
-		);
-		return {
-			kind: "normal",
-			path,
-			args,
-		};
 	}
 };
 
-const isManifestInterpreter = (
-	arg: unknown,
-): arg is wrap.Manifest.Interpreter => {
-	return (
-		arg !== undefined &&
-		arg !== null &&
-		typeof arg === "object" &&
-		"kind" in arg &&
-		(arg.kind === "normal" ||
-			arg.kind === "ld-linux" ||
-			arg.kind === "ld-musl" ||
-			arg.kind === "dyld") &&
-		"path" in arg
-	);
-};
-
-const manifestInterpreterFromExecutableArg = async (
+/** Inspect the executable and produce the corresponding interpreter. */
+const interpreterFromExecutableArg = async (
 	arg: string | tg.Template | tg.File | tg.Symlink,
 	buildToolchainArg?: std.env.Arg,
-): Promise<wrap.Manifest.Interpreter | undefined> => {
+): Promise<wrap.Interpreter | undefined> => {
 	// If the arg is a string or template, there is no interpreter.
 	if (typeof arg === "string" || arg instanceof tg.Template) {
 		return undefined;
@@ -1085,7 +1132,7 @@ const manifestInterpreterFromExecutableArg = async (
 	// Handle the executable by its format.
 	switch (metadata.format) {
 		case "elf": {
-			return manifestInterpreterFromElf(metadata, buildToolchainArg);
+			return interpreterFromElf(metadata, buildToolchainArg);
 		}
 		case "mach-o": {
 			const arch = std.triple.arch(await std.triple.host());
@@ -1098,12 +1145,12 @@ const manifestInterpreterFromExecutableArg = async (
 			return {
 				kind: "dyld",
 				libraryPaths: undefined,
-				preloads: [await manifestTemplateFromArg(injectionDylib)],
+				preloads: [injectionDylib],
 			};
 		}
 		case "shebang": {
 			if (metadata.interpreter === undefined) {
-				return manifestInterpreterFromArg(
+				return interpreterFromArg(
 					await wrap.defaultShell({ buildToolchain: buildToolchainArg }),
 					buildToolchainArg,
 				);
@@ -1114,10 +1161,11 @@ const manifestInterpreterFromExecutableArg = async (
 	}
 };
 
-const manifestInterpreterFromElf = async (
+/** Inspect an ELF file and produce the correct interpreter. */
+const interpreterFromElf = async (
 	metadata: std.file.ElfExecutableMetadata,
 	buildToolchainArg?: std.env.Arg,
-): Promise<wrap.Manifest.Interpreter | undefined> => {
+): Promise<wrap.Interpreter | undefined> => {
 	// If there is no interpreter, this is a statically-linked executable. Nothing to do.
 	if (metadata.interpreter === undefined) {
 		return undefined;
@@ -1156,26 +1204,393 @@ const manifestInterpreterFromElf = async (
 		);
 		return {
 			kind: "ld-linux",
-			path: await manifestTemplateFromArg(ldso),
-			libraryPaths: [await manifestTemplateFromArg(libDir)],
-			preloads: [await manifestTemplateFromArg(injectionLib)],
-			args: undefined,
+			executable: ldso,
+			libraryPaths: [libDir],
+			preloads: [injectionLib],
 		};
 	} else if (metadata.interpreter?.includes("ld-musl")) {
 		// Handle an ld-musl interpreter.
 		host = std.triple.create(host, { environment: "musl" });
 		const muslArtifact = await bootstrap.musl.build({ host });
-		const libDir = tg.Directory.expect(await muslArtifact.get("lib"));
-		const ldso = tg.File.expect(await libDir.get("libc.so"));
+		const libDir = await muslArtifact.get("lib").then(tg.Directory.expect);
+		const ldso = await libDir.get("libc.so").then(tg.File.expect);
 		return {
 			kind: "ld-musl",
-			path: await manifestTemplateFromArg(ldso),
-			libraryPaths: [await manifestTemplateFromArg(libDir)],
-			preloads: [await manifestTemplateFromArg(injectionLib)],
-			args: undefined,
+			executable: ldso,
+			libraryPaths: [libDir],
+			preloads: [injectionLib],
 		};
 	} else {
 		throw new Error(`Unsupported interpreter: "${metadata.interpreter}".`);
+	}
+};
+
+type OptimizeLibraryPathsArg = {
+	executable: string | tg.Template | tg.File | tg.Symlink;
+	interpreter:
+		| wrap.DyLdInterpreter
+		| wrap.LdLinuxInterpreter
+		| wrap.LdMuslInterpreter;
+	libraryPaths?: Array<tg.Template.Arg> | undefined;
+	libraryPathStrategy?: wrap.LibraryPathStrategy | undefined;
+};
+
+const optimizeLibraryPaths = async (
+	arg: OptimizeLibraryPathsArg,
+): Promise<
+	wrap.DyLdInterpreter | wrap.LdLinuxInterpreter | wrap.LdMuslInterpreter
+> => {
+	const {
+		interpreter,
+		libraryPaths: additionalLibraryPaths = [],
+		libraryPathStrategy: strategy = "isolate",
+	} = arg;
+	if (strategy === "none") {
+		return interpreter;
+	}
+
+	let executable = arg.executable;
+
+	// Set up the initial set of paths.
+	const paths = interpreter.libraryPaths ?? [];
+
+	// If there are additional library paths, add them to the interpreter.
+	if (additionalLibraryPaths.length > 0) {
+		paths.push(...additionalLibraryPaths);
+	}
+
+	// Discover the containing directories of all transitively needed libraries.
+	// If the arg is a string or template, there is no interpreter.
+	if (typeof executable === "string" || executable instanceof tg.Template) {
+		throw new Error("cannot optimize paths for a non-file executable");
+	}
+
+	// Resolve the arg to a file if it is a symlink.
+	if (executable instanceof tg.Symlink) {
+		const resolvedArg = await executable.resolve();
+		tg.assert(resolvedArg instanceof tg.File);
+		executable = resolvedArg;
+	}
+
+	// Prepare to map needed libraries to their locations.
+	let neededLibraries = await getInitialNeededLibraries(executable);
+
+	// Produce a set of the available library paths as directories with optional subpaths.
+	const libraryPathSet = await createLibraryPathSet(paths);
+
+	// Find any transitively needed libraries in the set and record their location.
+	neededLibraries = await findTransitiveNeededLibraries(
+		executable,
+		libraryPathSet,
+		neededLibraries,
+	);
+
+	// All optimization strategies required filtering first.
+	const filtereredNeededLibraries: Map<string, DirWithSubpath> = new Map();
+	neededLibraries.forEach((val, key) => {
+		if (val !== undefined) {
+			filtereredNeededLibraries.set(key, val);
+		}
+	});
+	if (strategy === "filter") {
+		return interpreter;
+	}
+
+	switch (strategy) {
+		case "resolve": {
+			interpreter.libraryPaths = await resolvePaths(libraryPathSet);
+			break;
+		}
+		case "isolate": {
+			const isolatedPaths: Array<tg.Directory> = [];
+			for (let [name, referent] of filtereredNeededLibraries.entries()) {
+				let innerDir = await getInner(referent);
+				let libraryFile = await innerDir.tryGet(name);
+				if (libraryFile !== undefined) {
+					tg.File.assert(libraryFile);
+					let isolatedDir = await tg.directory({ name: libraryFile });
+					isolatedPaths.push(isolatedDir);
+				}
+				interpreter.libraryPaths = isolatedPaths;
+			}
+			break;
+		}
+		case "combine": {
+			const entries: Record<string, tg.Artifact> = {};
+			for (let [name, referent] of filtereredNeededLibraries.entries()) {
+				let innerDir = await getInner(referent);
+				let libraryFile = await innerDir.tryGet(name);
+				if (libraryFile !== undefined) {
+					tg.File.assert(libraryFile);
+					entries[name] = libraryFile;
+				}
+				interpreter.libraryPaths = [await tg.directory(entries)];
+			}
+			break;
+		}
+		default: {
+			throw new Error(`unexpected library path strategy: ${strategy}`);
+		}
+	}
+
+	return interpreter;
+};
+
+const getInitialNeededLibraries = async (
+	executable: tg.File,
+): Promise<Map<string, DirWithSubpath | undefined>> => {
+	const neededLibraries = new Map();
+	const neededLibNames = await getNeededLibraries(executable);
+	if (neededLibNames.length > 0) {
+		for (let libName of neededLibNames) {
+			// On macOS, libSystem is provided by the runtime.
+			if (libName.includes("libSystem")) {
+				continue;
+			}
+			neededLibraries.set(libName, undefined);
+		}
+	}
+
+	return neededLibraries;
+};
+
+const getNeededLibraries = async (
+	executable: tg.File,
+): Promise<Array<string>> => {
+	const metadata = await std.file.executableMetadata(executable);
+	const fileName = (path: string) => path.split("/").pop();
+	if (metadata.format === "mach-o") {
+		return (metadata.dependencies ?? [])
+			.map(fileName)
+			.filter((el) => el !== undefined);
+	} else if (metadata.format === "elf") {
+		return (metadata.needed ?? [])
+			.map(fileName)
+			.filter((el) => el !== undefined);
+	} else {
+		throw new Error(
+			"cannot determine needed libraries for non-ELF or Mach-O file",
+		);
+	}
+};
+
+type DirWithSubpath = {
+	dir: tg.Directory.Id;
+	subpath?: string | undefined;
+};
+
+const createLibraryPathSet = async (
+	libraryPaths: Array<tg.Template.Arg>,
+): Promise<Set<DirWithSubpath>> => {
+	const set: Set<DirWithSubpath> = new Set();
+
+	for (let path of libraryPaths) {
+		if (path instanceof tg.Directory) {
+			set.add({ dir: await path.id() });
+		}
+		if (path instanceof tg.Template) {
+			const maybeResult = await tryTemplateToDirWithSubpath(path);
+			if (maybeResult !== undefined) {
+				set.add(maybeResult);
+			}
+		}
+		if (path instanceof tg.Symlink) {
+			const artifact = await path.artifact();
+			if (artifact !== undefined) {
+				tg.Directory.assert(artifact);
+				let ret: DirWithSubpath = { dir: await artifact.id() };
+				const subpath = await path.subpath();
+				if (subpath !== undefined) {
+					ret = { ...ret, subpath };
+				}
+				set.add(ret);
+			}
+		}
+		if (path instanceof tg.File) {
+			throw new Error(`found a file in the library paths:  ${await path.id()}`);
+		}
+	}
+
+	return set;
+};
+
+/** If the template represetns a directory and optional subpath, return it. Otherwise, undefined. */
+const tryTemplateToDirWithSubpath = async (
+	t: tg.Template,
+): Promise<DirWithSubpath | undefined> => {
+	const components = await t.components;
+	const numComponents = components.length;
+	if (numComponents === 1) {
+		// Make sure the first component is a directory.
+		const component = components[0];
+		if (component instanceof tg.Directory) {
+			return {
+				dir: await component.id(),
+			};
+		} else {
+			return undefined;
+		}
+	}
+	if (numComponents === 2) {
+		const first = components[0];
+		const second = components[1];
+		// If the first is a string, assume the second is a directory.
+		if (typeof first === "string") {
+			if (second instanceof tg.Directory) {
+				return {
+					dir: await second.id(),
+				};
+			} else {
+				return undefined;
+			}
+		}
+		if (first instanceof tg.Directory) {
+			if (typeof second === "string") {
+				return {
+					dir: await first.id(),
+					subpath: second,
+				};
+			} else {
+				return undefined;
+			}
+		}
+		return undefined;
+	}
+	if (numComponents === 3) {
+		const first = components[0];
+		const second = components[1];
+		const third = components[2];
+		// With three, the first must be a string we discard, the second must be a directory, and the third must be a string subpath.
+		if (
+			typeof first === "string" &&
+			second instanceof tg.Directory &&
+			typeof third === "string"
+		) {
+			return {
+				dir: await second.id(),
+				subpath: third,
+			};
+		} else {
+			return undefined;
+		}
+	}
+	return undefined;
+};
+
+const findTransitiveNeededLibraries = async (
+	executable: tg.File,
+	libraryPaths: Set<DirWithSubpath>,
+	neededLibraries: Map<string, DirWithSubpath | undefined>,
+) => {
+	return findTransitiveNeededLibrariesInner(
+		executable,
+		libraryPaths,
+		neededLibraries,
+		0,
+	);
+};
+
+const findTransitiveNeededLibrariesInner = async (
+	executable: tg.File,
+	libraryPaths: Set<DirWithSubpath>,
+	neededLibraries: Map<string, DirWithSubpath | undefined>,
+	depth: number,
+) => {
+	const maxDepth = 16;
+
+	// Check if we're done.
+	if (foundAllLibraries(neededLibraries) || depth === maxDepth) {
+		return neededLibraries;
+	}
+
+	// Check for transitive dependencies if we've recurred beyond the initial file.
+	if (depth > 0) {
+		// get new needed libraries. add them to the neededLibraries set.
+		const neededLibNames = await getNeededLibraries(executable);
+		for (let lib of neededLibNames) {
+			if (!neededLibraries.has(lib)) {
+				neededLibraries.set(lib, undefined);
+			}
+		}
+	}
+
+	// Locate and record found libraries.
+	for (let referent of libraryPaths) {
+		const directory = await getInner(referent);
+		const copiedNeededLibraryNames = Array.from(neededLibraries.keys());
+		// Search dir for names.
+		for (let libName of copiedNeededLibraryNames) {
+			// If already found, skip it.
+			if (neededLibraries.get(libName) !== undefined) {
+				continue;
+			}
+			// Otherwise, check if it's here.
+			const maybeLibFile = await directory.tryGet(libName);
+			if (maybeLibFile !== undefined && maybeLibFile instanceof tg.File) {
+				// We found it! Record the location, and recurse.
+				neededLibraries.set(libName, referent);
+				neededLibraries = await findTransitiveNeededLibrariesInner(
+					maybeLibFile,
+					libraryPaths,
+					neededLibraries,
+					depth + 1,
+				);
+				// If we're done now, quit.
+				if (foundAllLibraries(neededLibraries)) {
+					return neededLibraries;
+				}
+			}
+		}
+	}
+
+	return neededLibraries;
+};
+
+/** Did we find an entry for every name in the needed libraries set? */
+const foundAllLibraries = (
+	neededLibraries: Map<string, DirWithSubpath | undefined>,
+) => {
+	return Array.from(neededLibraries.values()).every(
+		(value) => value !== undefined,
+	);
+};
+
+/** Resovle all subpaths to the inner directory. */
+const resolvePaths = async (
+	paths: Set<DirWithSubpath>,
+): Promise<Array<tg.Directory>> => {
+	return await Promise.all([...paths].map(getInner));
+};
+
+const getInner = async (
+	dirWithSubpath: DirWithSubpath,
+): Promise<tg.Directory> => {
+	const { dir, subpath } = dirWithSubpath;
+	const directory = tg.Directory.withId(dir);
+	if (subpath === undefined) {
+		return directory;
+	}
+	const inner = await directory.tryGet(subpath);
+	if (inner !== undefined) {
+		if (inner instanceof tg.Directory) {
+			return inner;
+		}
+		const id = await inner.id();
+		throw new Error(`expected a directory, got ${id}`);
+	} else {
+		throw new Error(`could not get ${inner} from ${dir}`);
+	}
+};
+
+const logMap = (map: Map<string, DirWithSubpath | undefined>) => {
+	for (let [k, v] of map.entries()) {
+		console.log(`${k}: ${v}`);
+	}
+};
+
+const logSet = (set: Set<DirWithSubpath>) => {
+	for (let el of set) {
+		console.log(`dir: ${el.dir}, subpath: ${el.subpath}`);
 	}
 };
 
