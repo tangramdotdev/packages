@@ -33,12 +33,13 @@ export async function wrap(
 			? await gnu.toolchain({ host: detectedBuild, target: host })
 			: await bootstrap.sdk.env(host);
 
-	const manifestInterpreter = arg.interpreter
-		? await manifestInterpreterFromArg(arg.interpreter, buildToolchain)
-		: await manifestInterpreterFromExecutableArg(
-				arg.executable,
-				buildToolchain,
-			);
+	// Construct the interpreter.
+	const manifestInterpreter = await manifestInterpreterFromWrapArgObject({
+		buildToolchain,
+		interpreter: arg.interpreter,
+		executable: arg.executable,
+		libraryPaths: arg.libraryPaths,
+	});
 
 	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
 	if (
@@ -61,17 +62,6 @@ export async function wrap(
 				`Found a statically-linked executable but selected the "executable" identity.  This combination is not supported.  Please select the "wrapper" identity instead.`,
 			);
 		}
-	}
-
-	// Add remaining library paths.
-	if (manifestInterpreter && "libraryPaths" in manifestInterpreter) {
-		let paths = manifestInterpreter.libraryPaths ?? [];
-		if (arg.libraryPaths) {
-			paths = paths.concat(
-				await Promise.all(arg.libraryPaths.map(manifestTemplateFromArg)),
-			);
-		}
-		manifestInterpreter.libraryPaths = paths;
 	}
 
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
@@ -149,6 +139,8 @@ export namespace wrap {
 		| DyLdInterpreter;
 
 	export type NormalInterpreter = {
+		kind: "normal";
+
 		/** The interpreter executable. */
 		executable: tg.File | tg.Symlink;
 
@@ -405,9 +397,11 @@ export namespace wrap {
 		if (manifestInterpreter === undefined) {
 			return undefined;
 		}
-		switch (manifestInterpreter.kind) {
+		const kind = manifestInterpreter.kind;
+		switch (kind) {
 			case "normal": {
 				return {
+					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
@@ -421,7 +415,7 @@ export namespace wrap {
 			}
 			case "ld-linux": {
 				return {
-					kind: "ld-linux",
+					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
@@ -451,7 +445,7 @@ export namespace wrap {
 			}
 			case "ld-musl": {
 				return {
-					kind: "ld-musl",
+					kind,
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
@@ -481,7 +475,7 @@ export namespace wrap {
 			}
 			case "dyld": {
 				return {
-					kind: "dyld",
+					kind,
 					libraryPaths:
 						manifestInterpreter.libraryPaths === undefined
 							? undefined
@@ -552,6 +546,50 @@ export namespace wrap {
 			`Expected a map, but got ${value}.`,
 		);
 		return { kind: "set", value };
+	};
+
+	/** Attempt to obtain the needed libraries of the wrapped exectuable of a wrapper. */
+	export const tryNeededLibraries = async (
+		file: tg.File,
+	): Promise<Array<string> | undefined> => {
+		try {
+			return await neededLibraries(file);
+		} catch (_) {
+			return undefined;
+		}
+	};
+
+	/** Obtain the needed libraries of the wrapped executable of a wrapper. */
+	export const neededLibraries = async (
+		file: tg.File,
+	): Promise<Array<string>> => {
+		const manifest = await wrap.Manifest.read(file);
+		if (!manifest) {
+			throw new Error(
+				`Cannot determine needed libraries for ${await file.id()}: not a Tangram wrapper.`,
+			);
+		}
+		tg.assert(
+			manifest.interpreter !== undefined,
+			`cannot determine needed libraries for a wrapper without an interpreter`,
+		);
+		tg.assert(
+			manifest.interpreter.kind !== "normal",
+			`cannot determine needed libraries for a normal interpreter`,
+		);
+		const wrappedExecutable = manifest.executable;
+		tg.assert(
+			wrappedExecutable.kind !== "content",
+			"cannot determine needed libraries for a content executable",
+		);
+		const wrappedExecutableFile = await fileOrSymlinkFromManifestTemplate(
+			manifest.executable.value,
+		);
+		tg.assert(
+			wrappedExecutableFile instanceof tg.File,
+			`executable must be a file, received ${await wrappedExecutableFile.id()}`,
+		);
+		return await getNeededLibraries(wrappedExecutableFile);
 	};
 
 	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */
@@ -840,233 +878,250 @@ const isManifestExecutable = (
 	);
 };
 
-const manifestInterpreterFromArg = async (
-	arg:
+/** The subset of `wrap.ArgObject` relevant to producing a `wrap.Manifest.Interpreter`. */
+type ManifestInterpreterArg = {
+	buildToolchain?: std.env.Arg;
+	interpreter?:
 		| tg.File
 		| tg.Symlink
 		| tg.Template
 		| wrap.Interpreter
-		| wrap.Manifest.Interpreter,
-	buildToolchainArg?: std.env.Arg,
-): Promise<wrap.Manifest.Interpreter> => {
-	if (isManifestInterpreter(arg)) {
-		return arg;
+		| undefined;
+	executable: string | tg.Template | tg.File | tg.Symlink;
+	libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template> | undefined;
+};
+
+/** Produce the manifest interpreter object given a set of parameters. */
+const manifestInterpreterFromWrapArgObject = async (
+	arg: ManifestInterpreterArg,
+): Promise<wrap.Manifest.Interpreter | undefined> => {
+	let interpreter = arg.interpreter
+		? await interpreterFromArg(arg.interpreter, arg.buildToolchain)
+		: await interpreterFromExecutableArg(arg.executable, arg.buildToolchain);
+	if (interpreter === undefined) {
+		return undefined;
 	}
 
+	return manifestInterpreterFromWrapInterpreter(interpreter);
+};
+
+/** Serialize an interpreter into its manifest form. */
+const manifestInterpreterFromWrapInterpreter = async (
+	interpreter: wrap.Interpreter,
+): Promise<wrap.Manifest.Interpreter> => {
+	// Process each field present in the incoming object.
+	const { kind } = interpreter;
+
+	// Process all fields concurrently
+	const [path, libraryPaths, preloads, args] = await Promise.all([
+		// Only process executable if it exists
+		"executable" in interpreter
+			? manifestTemplateFromArg(interpreter.executable)
+			: Promise.resolve(undefined),
+
+		// Only process libraryPaths if it exists
+		"libraryPaths" in interpreter && interpreter.libraryPaths !== undefined
+			? Promise.all(interpreter.libraryPaths.map(manifestTemplateFromArg))
+			: Promise.resolve(undefined),
+
+		// Only process preloads if it exists
+		"preloads" in interpreter && interpreter.preloads !== undefined
+			? Promise.all(interpreter.preloads.map(manifestTemplateFromArg))
+			: Promise.resolve(undefined),
+
+		// Only process args if it exists
+		"args" in interpreter && interpreter.args !== undefined
+			? Promise.all(interpreter.args.map(manifestTemplateFromArg))
+			: Promise.resolve(undefined),
+	]);
+
+	// COnstruct a `manifest.Interpreter` using only fields that are not `undefined`.
+	switch (kind) {
+		case "normal": {
+			return {
+				kind,
+				path: path!,
+				...(args && { args }),
+			};
+		}
+		case "ld-linux":
+		case "ld-musl": {
+			return {
+				kind,
+				path: path!,
+				...(libraryPaths && { libraryPaths }),
+				...(preloads && { preloads }),
+				...(args && { args }),
+			};
+		}
+		case "dyld": {
+			return {
+				kind,
+				...(libraryPaths && { libraryPaths }),
+				...(preloads && { preloads }),
+			};
+		}
+		default: {
+			return tg.unreachable(`unrecognized kind ${kind}`);
+		}
+	}
+};
+
+/** Given an interpreter arg, produce an interpreter object with all fields populated. */
+const interpreterFromArg = async (
+	arg: tg.File | tg.Symlink | tg.Template | wrap.Interpreter,
+	buildToolchainArg?: std.env.Arg,
+): Promise<wrap.Interpreter> => {
 	// If the arg is an executable, then wrap it and create a normal interpreter.
 	if (
 		arg instanceof tg.File ||
 		arg instanceof tg.Symlink ||
 		arg instanceof tg.Template
 	) {
-		const interpreter = await std.wrap({
+		const executable = await std.wrap({
 			buildToolchain: buildToolchainArg,
 			executable: arg,
 		});
-		const path = await manifestTemplateFromArg(interpreter);
 		return {
 			kind: "normal",
-			path,
+			executable,
 			args: [],
 		};
 	}
 
-	// Otherwise, create the interpreter specified by the arg object.
-	if ("kind" in arg && arg.kind === "ld-linux") {
-		// Handle an ld-linux interpreter.
-		const path = await manifestTemplateFromArg(arg.executable);
-		const libraryPaths = arg.libraryPaths
-			? await Promise.all(
-					arg.libraryPaths.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: undefined;
+	// We now have a `wrap.Interpreter` object. Fill in any missing fields.
+	tg.assert("kind" in arg);
+	const kind = arg.kind;
+	switch (kind) {
+		case "ld-linux": {
+			const libraryPaths = arg.libraryPaths;
+			const args = arg.args;
+			const preloads = arg.preloads ?? [];
 
-		// Build an injection dylib to match the interpreter.
-		const interpreterFile =
-			arg.executable instanceof tg.Symlink
-				? await arg.executable.resolve()
-				: arg.executable;
-		if (!interpreterFile || interpreterFile instanceof tg.Directory) {
-			throw new Error("Could not resolve the symlink to the interpreter.");
+			// Find the artifact for the interpreter executable.
+			const executable =
+				arg.executable instanceof tg.Symlink
+					? await arg.executable.resolve()
+					: arg.executable;
+			if (!executable || executable instanceof tg.Directory) {
+				throw new Error("Could not resolve the symlink to the interpreter.");
+			}
+			tg.File.assert(executable);
+			const interpreterMetadata = await std.file.executableMetadata(executable);
+			if (interpreterMetadata.format !== "elf") {
+				return tg.unreachable(
+					"Cannot build an ld-linux interpreter for a non-ELF executable.",
+				);
+			}
+
+			// If no preload is defined, add the default injection preload.
+			if (preloads.length === 0) {
+				const arch = interpreterMetadata.arch;
+				const host = `${arch}-unknown-linux-gnu`;
+				const detectedBuild = await std.triple.host();
+				const buildOs = std.triple.os(detectedBuild);
+				const buildToolchain = buildToolchainArg
+					? buildToolchainArg
+					: gnu.toolchain({ host });
+				const injectionLibrary = await injection.default({
+					buildToolchain,
+					build: buildOs === "darwin" ? detectedBuild : undefined,
+					host,
+				});
+
+				preloads.push(injectionLibrary);
+			}
+
+			return {
+				kind,
+				executable,
+				libraryPaths,
+				preloads,
+				args,
+			};
 		}
-		tg.File.assert(interpreterFile);
-		const interpreterMetadata =
-			await std.file.executableMetadata(interpreterFile);
-		if (interpreterMetadata.format !== "elf") {
-			return tg.unreachable(
-				"Cannot build an ld-linux interpreter for a non-ELF executable.",
-			);
+		case "ld-musl": {
+			const libraryPaths = arg.libraryPaths;
+			const args = arg.args;
+			const preloads = arg.preloads ?? [];
+
+			// Find the artifact for the interpreter executable.
+			const executable =
+				arg.executable instanceof tg.Symlink
+					? await arg.executable.resolve()
+					: arg.executable;
+			if (!executable || executable instanceof tg.Directory) {
+				throw new Error("Could not resolve the symlink to the interpreter.");
+			}
+			tg.File.assert(executable);
+			const interpreterMetadata = await std.file.executableMetadata(executable);
+			if (interpreterMetadata.format !== "elf") {
+				return tg.unreachable(
+					"Cannot build an ld-musl interpreter for a non-ELF executable.",
+				);
+			}
+
+			// If no preload is defined, add the default injection preload.
+			if (preloads.length === 0) {
+				const arch = interpreterMetadata.arch;
+				const host = `${arch}-linux-musl`;
+				const buildToolchain = bootstrap.sdk.env(host);
+				const injectionLibrary = await injection.default({
+					buildToolchain,
+					host,
+				});
+				preloads.push(injectionLibrary);
+			}
+
+			return {
+				kind,
+				executable,
+				libraryPaths,
+				preloads,
+				args,
+			};
 		}
+		case "dyld": {
+			const libraryPaths = arg.libraryPaths;
+			const preloads = arg.preloads ?? [];
 
-		const preloads = arg.preloads
-			? await Promise.all(
-					arg.preloads?.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: [];
+			// If no preload is defined, add the default injection preload.
+			if (preloads.length === 0) {
+				const host = await std.triple.host();
+				const buildToolchain = buildToolchainArg
+					? buildToolchainArg
+					: bootstrap.sdk.env(host);
+				const injectionLibrary = await injection.default({
+					buildToolchain,
+					host,
+				});
+				preloads.push(injectionLibrary);
+			}
 
-		// If no preload is defined, add the default injection preload.
-		if (preloads.length === 0) {
-			const arch = interpreterMetadata.arch;
-			const host = `${arch}-unknown-linux-gnu`;
-			const detectedBuild = await std.triple.host();
-			const buildOs = std.triple.os(detectedBuild);
-			const buildToolchain = buildToolchainArg
-				? buildToolchainArg
-				: gnu.toolchain({ host });
-			const injectionLibrary = await injection.default({
-				buildToolchain,
-				build: buildOs === "darwin" ? detectedBuild : undefined,
-				host,
-			});
-
-			const injectionManifestSymlink =
-				await manifestTemplateFromArg(injectionLibrary);
-			preloads.push(injectionManifestSymlink);
+			return {
+				kind,
+				libraryPaths,
+				preloads,
+			};
 		}
-
-		const args = arg.args
-			? await Promise.all(arg.args.map(manifestTemplateFromArg))
-			: undefined;
-		return {
-			kind: "ld-linux",
-			path,
-			libraryPaths,
-			preloads,
-			args,
-		};
-	} else if ("kind" in arg && arg.kind === "ld-musl") {
-		// Handle an ld-musl interpreter.
-		const path = await manifestTemplateFromArg(arg.executable);
-		const libraryPaths = arg.libraryPaths
-			? await Promise.all(
-					arg.libraryPaths.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: undefined;
-
-		// Build an injection dylib to match the interpreter.
-		const interpreterFile =
-			arg.executable instanceof tg.Symlink
-				? await arg.executable.resolve()
-				: arg.executable;
-		if (!interpreterFile || interpreterFile instanceof tg.Directory) {
-			throw new Error("Could not resolve the symlink to the interpreter.");
+		case "normal": {
+			return {
+				kind,
+				executable: arg.executable,
+				args: arg.args,
+			};
 		}
-		tg.File.assert(interpreterFile);
-		const interpreterMetadata =
-			await std.file.executableMetadata(interpreterFile);
-		if (interpreterMetadata.format !== "elf") {
-			return tg.unreachable(
-				"Cannot build an ld-musl interpreter for a non-ELF executable.",
-			);
+		default: {
+			return tg.unreachable(`unrecognized kind ${kind}`);
 		}
-
-		const preloads = arg.preloads
-			? await Promise.all(
-					arg.preloads?.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: [];
-
-		// If no preload is defined, add the default injection preload.
-		if (preloads.length === 0) {
-			const arch = interpreterMetadata.arch;
-			const host = `${arch}-linux-musl`;
-			const buildToolchain = bootstrap.sdk.env(host);
-			const injectionLibrary = await injection.default({
-				buildToolchain,
-				host,
-			});
-
-			const injectionManifestSymlink =
-				await manifestTemplateFromArg(injectionLibrary);
-			preloads.push(injectionManifestSymlink);
-		}
-
-		const args = arg.args
-			? await Promise.all(arg.args.map(manifestTemplateFromArg))
-			: undefined;
-		return {
-			kind: "ld-musl",
-			path,
-			libraryPaths,
-			preloads,
-			args,
-		};
-	} else if ("kind" in arg && arg.kind === "dyld") {
-		// Handle a dyld interpreter.
-		const libraryPaths = arg.libraryPaths
-			? await Promise.all(
-					arg.libraryPaths.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: undefined;
-		const preloads = arg.preloads
-			? await Promise.all(
-					arg.preloads?.map(async (arg) =>
-						manifestTemplateFromArg(await tg.template(arg)),
-					),
-				)
-			: [];
-
-		// If no preload is defined, add the default injection preload.
-		if (preloads.length === 0) {
-			const host = await std.triple.host();
-			const buildToolchain = buildToolchainArg
-				? buildToolchainArg
-				: bootstrap.sdk.env(host);
-			const injectionLibrary = await injection.default({
-				buildToolchain,
-				host,
-			});
-			preloads.push(await manifestTemplateFromArg(injectionLibrary));
-		}
-		return {
-			kind: "dyld",
-			libraryPaths,
-			preloads,
-		};
-	} else {
-		// Handle a normal interpreter.
-		const path = await manifestTemplateFromArg(arg.executable);
-		const args = await Promise.all(
-			arg.args?.map(manifestTemplateFromArg) ?? [],
-		);
-		return {
-			kind: "normal",
-			path,
-			args,
-		};
 	}
 };
 
-const isManifestInterpreter = (
-	arg: unknown,
-): arg is wrap.Manifest.Interpreter => {
-	return (
-		arg !== undefined &&
-		arg !== null &&
-		typeof arg === "object" &&
-		"kind" in arg &&
-		(arg.kind === "normal" ||
-			arg.kind === "ld-linux" ||
-			arg.kind === "ld-musl" ||
-			arg.kind === "dyld") &&
-		"path" in arg
-	);
-};
-
-const manifestInterpreterFromExecutableArg = async (
+/** Inspect the executable and produce the corresponding interpreter. */
+const interpreterFromExecutableArg = async (
 	arg: string | tg.Template | tg.File | tg.Symlink,
 	buildToolchainArg?: std.env.Arg,
-): Promise<wrap.Manifest.Interpreter | undefined> => {
+): Promise<wrap.Interpreter | undefined> => {
 	// If the arg is a string or template, there is no interpreter.
 	if (typeof arg === "string" || arg instanceof tg.Template) {
 		return undefined;
@@ -1085,7 +1140,7 @@ const manifestInterpreterFromExecutableArg = async (
 	// Handle the executable by its format.
 	switch (metadata.format) {
 		case "elf": {
-			return manifestInterpreterFromElf(metadata, buildToolchainArg);
+			return interpreterFromElf(metadata, buildToolchainArg);
 		}
 		case "mach-o": {
 			const arch = std.triple.arch(await std.triple.host());
@@ -1098,12 +1153,12 @@ const manifestInterpreterFromExecutableArg = async (
 			return {
 				kind: "dyld",
 				libraryPaths: undefined,
-				preloads: [await manifestTemplateFromArg(injectionDylib)],
+				preloads: [injectionDylib],
 			};
 		}
 		case "shebang": {
 			if (metadata.interpreter === undefined) {
-				return manifestInterpreterFromArg(
+				return interpreterFromArg(
 					await wrap.defaultShell({ buildToolchain: buildToolchainArg }),
 					buildToolchainArg,
 				);
@@ -1114,10 +1169,11 @@ const manifestInterpreterFromExecutableArg = async (
 	}
 };
 
-const manifestInterpreterFromElf = async (
+/** Inspect an ELF file and produce the correct interpreter. */
+const interpreterFromElf = async (
 	metadata: std.file.ElfExecutableMetadata,
 	buildToolchainArg?: std.env.Arg,
-): Promise<wrap.Manifest.Interpreter | undefined> => {
+): Promise<wrap.Interpreter | undefined> => {
 	// If there is no interpreter, this is a statically-linked executable. Nothing to do.
 	if (metadata.interpreter === undefined) {
 		return undefined;
@@ -1156,26 +1212,44 @@ const manifestInterpreterFromElf = async (
 		);
 		return {
 			kind: "ld-linux",
-			path: await manifestTemplateFromArg(ldso),
-			libraryPaths: [await manifestTemplateFromArg(libDir)],
-			preloads: [await manifestTemplateFromArg(injectionLib)],
-			args: undefined,
+			executable: ldso,
+			libraryPaths: [libDir],
+			preloads: [injectionLib],
 		};
 	} else if (metadata.interpreter?.includes("ld-musl")) {
 		// Handle an ld-musl interpreter.
 		host = std.triple.create(host, { environment: "musl" });
 		const muslArtifact = await bootstrap.musl.build({ host });
-		const libDir = tg.Directory.expect(await muslArtifact.get("lib"));
-		const ldso = tg.File.expect(await libDir.get("libc.so"));
+		const libDir = await muslArtifact.get("lib").then(tg.Directory.expect);
+		const ldso = await libDir.get("libc.so").then(tg.File.expect);
 		return {
 			kind: "ld-musl",
-			path: await manifestTemplateFromArg(ldso),
-			libraryPaths: [await manifestTemplateFromArg(libDir)],
-			preloads: [await manifestTemplateFromArg(injectionLib)],
-			args: undefined,
+			executable: ldso,
+			libraryPaths: [libDir],
+			preloads: [injectionLib],
 		};
 	} else {
 		throw new Error(`Unsupported interpreter: "${metadata.interpreter}".`);
+	}
+};
+
+const getNeededLibraries = async (
+	executable: tg.File,
+): Promise<Array<string>> => {
+	const metadata = await std.file.executableMetadata(executable);
+	const fileName = (path: string) => path.split("/").pop();
+	if (metadata.format === "mach-o") {
+		return (metadata.dependencies ?? [])
+			.map(fileName)
+			.filter((el) => el !== undefined);
+	} else if (metadata.format === "elf") {
+		return (metadata.needed ?? [])
+			.map(fileName)
+			.filter((el) => el !== undefined);
+	} else {
+		throw new Error(
+			"cannot determine needed libraries for non-ELF or Mach-O file",
+		);
 	}
 };
 
