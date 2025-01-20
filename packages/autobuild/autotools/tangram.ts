@@ -17,13 +17,34 @@ export type Arg = {
 
 export const build = tg.target(async (arg: Arg) => {
 	const { env: envArg, ...rest } = arg ?? {};
-
 	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
-	const arg_ = { ...rest, env: env_ };
+
+	let source = arg.source;
+	if (needsReconf(source)) {
+		source = await reconfigure(source);
+	}
+	
+	const arg_ = { ...rest, env: env_, source };
 	return std.autotools.build(arg_);
 });
 
 export default build;
+
+export const needsReconf = async (source: tg.Directory): boolean => {
+	const entries = await source.entries();
+	const hasFile = (name: string) =>
+		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
+	return hasFile("configure.ac") && !hasFile("configure");
+}
+
+export const reconfigure = async (source: tg.Directory) => {
+	return $`cp -R ${source} $OUTPUT
+			chmod -R u+w $OUTPUT
+			cd $OUTPUT
+			autoreconf --install --verbose`
+		.env(autoconf(), automake())
+		.then(tg.Directory.expect);
+}
 
 export type EnvArg = {
 	build?: string | undefined;

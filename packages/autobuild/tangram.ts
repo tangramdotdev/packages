@@ -256,9 +256,8 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 };
 
 const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
-	const preparedAutotoolsTest = await prepareAutotoolsTestDistributionBundle();
 	return {
-		"cc-autotools": preparedAutotoolsTest,
+		"cc-autotools": ccAutotoolsTest,
 		cmake: cmakeTest,
 		go: goTest,
 		"js-node": jsNodeTest,
@@ -298,16 +297,4 @@ export const testKind = tg.target(async (kind: Kind) => {
 	};
 	await testStdout(testParamaters()[kind]);
 	return true;
-});
-
-/** We need to generate the distribution bundle for the `cc-autotools` test package, generating the configure scripts and intermediate makefile templates. */
-export const prepareAutotoolsTestDistributionBundle = tg.target(async () => {
-	const originalSource = ccAutotoolsTest;
-	return $`set -eux
-			cp -R ${originalSource} $OUTPUT
-			chmod -R u+w $OUTPUT
-			cd $OUTPUT
-			autoreconf --install --verbose`
-		.env(autoconf(), automake())
-		.then(tg.Directory.expect);
 });
