@@ -1,4 +1,5 @@
 import * as attr from "attr" with { path: "../attr" };
+import * as bash from "bash" with { path: "../bash" };
 import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
 
@@ -8,19 +9,32 @@ export const metadata = {
 	license: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/License",
 	name: "libcap",
 	repository: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
-	version: "2.24",
+	version: "2.73",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:cee4568f78dc851d726fc93f25f4ed91cc223b1fe8259daa4a77158d174e6c65";
+		"sha256:6405f6089cf4cdd8c271540cd990654d78dd0b1989b2d9bda20f933a75a795a5";
 	const base = `https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2`;
-	return await std
+	let source = await std
 		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
+
+	// Wrap the mkcapshdoc.sh script to use bash, to avoid the shebang failing to find /bin/bash.
+	const scriptSubpath = "progs/mkcapshdoc.sh";
+	const mkCapShDoc = await source.get(scriptSubpath).then(tg.File.expect);
+	const wrappedMkCapShDoc = await bash.wrapScript(
+		mkCapShDoc,
+		await std.triple.host(),
+	);
+	source = await tg.directory(source, {
+		[scriptSubpath]: wrappedMkCapShDoc,
+	});
+
+	return source;
 });
 
 export type Arg = {
@@ -28,7 +42,6 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		attr?: attr.Arg;
-		perl?: perl.Arg;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -40,7 +53,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { attr: attrArg = {}, perl: perlArg = {} } = {},
+		dependencies: { attr: attrArg = {} } = {},
 		env: env_,
 		host,
 		sdk,
@@ -51,15 +64,18 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const install = {
 		command: tg.Mutation.set(`
+		set -x
 		mkdir -p $OUTPUT/bin $OUTPUT/lib/pkgconfig
 		bins="capsh getcap setcap getpcaps"
 		for bin in $bins; do
-			cp "progs/$bin" "$OUTPUT/bin"
+			install -m 0755 "progs/$bin" "$OUTPUT/bin"
 		done
-		cp -R libcap/include "$OUTPUT"
-		cp libcap/libcap.pc "$OUTPUT/lib/pkgconfig"
-		cp libcap/libcap.a "$OUTPUT/lib"
-		cp libcap/libcap.so.${metadata.version} "$OUTPUT/lib"
+		install -d "$OUTPUT/include/sys" "$OUTPUT/include/uapi/linux"
+		install -m 0644 libcap/include/sys/*.h "$OUTPUT/include/sys"
+		install -m 0644 libcap/include/uapi/linux/*.h "$OUTPUT/include/uapi/linux"
+		install -m 0644 libcap/libcap.pc "$OUTPUT/lib/pkgconfig"
+		install -m 0644 libcap/libcap.a "$OUTPUT/lib"
+		install -m 0755 libcap/libcap.so.${metadata.version} "$OUTPUT/lib"
 		cd $OUTPUT/lib
 		ln -s libcap.so.${metadata.version} libcap.so.2
 		ln -s libcap.so.2 libcap.so
@@ -72,10 +88,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		{ build, env: env_, host, sdk },
 		attrArg,
 	);
-	const dependencies = [
-		attrArtifact,
-		perl.default_({ build, env: env_, host, sdk }, perlArg),
-	];
+	const dependencies = [attrArtifact, perl.default_({ build, host: build })];
 	const env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
@@ -85,7 +98,6 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 			env,
 			phases,
 			sdk,
-			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
 		autotools,
@@ -98,7 +110,7 @@ export const test = tg.target(async () => {
 	const binTest = (name: string) => {
 		return {
 			name,
-			testArgs: [],
+			testArgs: ["-h"],
 			testPredicate: (stdout: string) => stdout.includes("usage:"),
 		};
 	};
