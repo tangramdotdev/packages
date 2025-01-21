@@ -902,6 +902,19 @@ const manifestInterpreterFromWrapArgObject = async (
 		return undefined;
 	}
 
+	// If there are additional library paths, add them to the interpreter.
+	if (
+		interpreter.kind !== "normal" &&
+		arg.libraryPaths !== undefined &&
+		arg.libraryPaths.length > 0
+	) {
+		if (interpreter.libraryPaths === undefined) {
+			interpreter.libraryPaths = arg.libraryPaths;
+		} else {
+			interpreter.libraryPaths.push(...arg.libraryPaths);
+		}
+	}
+
 	return manifestInterpreterFromWrapInterpreter(interpreter);
 };
 

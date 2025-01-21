@@ -506,8 +506,8 @@ try:
 	import zlib
 	print("zlib is successfully imported!")
 	print(f"zlib version: {zlib.ZLIB_VERSION}")
-except ImportError:
-	print("Failed to import zlib")`);
+except ImportError as e:
+	print(f"Failed to import zlib: {str(e)}")`);
 	const importZlibOutput =
 		await $`set -x && python ${testImportZlibScript} > $OUTPUT`
 			.env(toolchain())
