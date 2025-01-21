@@ -5,8 +5,8 @@
   },
   "scripts": {
     "auto": "bun scripts/package_automation.ts $@",
-    "check": "biome check scripts",
-    "format": "biome check --write scripts",
-    "test": "bun scripts/package_automation.ts -t"
+    "check": "biome check scripts && bun scripts/package_automation.ts --check",
+    "format": "biome check --write scripts && bun scripts/package_automation.ts --format",
+    "test": "bun scripts/package_automation.ts --test"
   }
 }

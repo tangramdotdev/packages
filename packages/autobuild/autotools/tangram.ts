@@ -23,7 +23,7 @@ export const build = tg.target(async (arg: Arg) => {
 	if (needsReconf(source)) {
 		source = await reconfigure(source);
 	}
-	
+
 	const arg_ = { ...rest, env: env_, source };
 	return std.autotools.build(arg_);
 });
@@ -35,7 +35,7 @@ export const needsReconf = async (source: tg.Directory): boolean => {
 	const hasFile = (name: string) =>
 		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
 	return hasFile("configure.ac") && !hasFile("configure");
-}
+};
 
 export const reconfigure = async (source: tg.Directory) => {
 	return $`cp -R ${source} $OUTPUT
@@ -44,7 +44,7 @@ export const reconfigure = async (source: tg.Directory) => {
 			autoreconf --install --verbose`
 		.env(autoconf(), automake())
 		.then(tg.Directory.expect);
-}
+};
 
 export type EnvArg = {
 	build?: string | undefined;
