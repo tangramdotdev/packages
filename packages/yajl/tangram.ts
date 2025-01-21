@@ -73,6 +73,10 @@ export const test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFn: default_,
 		binaries: [hasUsage("json_reformat"), hasUsage("json_verify")],
+		libraries: [
+			{ name: "yajl", dylib: true, staticlib: false },
+			{ name: "yajl_s", dylib: false, staticlib: true },
+		],
 		metadata,
 	});
 	return true;
