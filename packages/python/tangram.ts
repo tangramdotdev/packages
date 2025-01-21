@@ -24,7 +24,7 @@ export const metadata = {
 	name: "Python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.13.1",
+	version: "3.13.2",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -37,7 +37,7 @@ export const versionString = () => {
 export const source = tg.command(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:9cf9427bee9e2242e3877dd0f6b641c1853ca461f39d6503ce260a59c80bf0d9";
+		"sha256:d984bcc57cd67caab26f7def42e523b1c015bbc5dc07836cf4f0b63fa159eb56";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std
@@ -45,6 +45,7 @@ export const source = tg.command(async (): Promise<tg.Directory> => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });
+// import source from "./python-source" with { type: "directory" };
 
 export type Arg = {
 	/** Optional autotools configuration. */
@@ -121,7 +122,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
 	];
 	if (os === "darwin") {
-		dependencies.push(std.env.buildDependency(pkgConf.build));
+		// dependencies.push(std.env.buildDependency(pkgConf.build));
 	} else if (os === "linux") {
 		dependencies.push(std.env.buildDependency(pkgConfig.build) as any);
 	}
@@ -160,7 +161,17 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	}
 
 	const configure = { args: configureArgs };
-	const phases = { configure };
+	const fixup = tg`
+		set -x
+		otool -L $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
+		#install_name_tool -change libz.1.dylib ${zlibForHost}/lib/libz.1.dylib $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
+		#otool -L $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
+		`;
+	const phases = { configure, fixup };
+
+	// let sourceWithModules = await tg.directory(source, {
+	// 	[`Modules/Setup.local`]: tg.file(`*static* zlib  zlibmodule.c -lz`)
+	// });
 
 	const output = await std.autotools.build(
 		{
@@ -170,6 +181,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 			opt: "3",
 			sdk,
 			setRuntimeLibraryPath: true,
+			// source
 			source: source_ ?? (await source()),
 		},
 		autotools,
@@ -198,6 +210,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		["bin/pip3"]: std.wrap(tg.File.expect(await output.get("bin/pip3")), {
 			interpreter: pythonInterpreter,
 			args: ["--python", pythonInterpreter],
+			libraryPaths,
 		}),
 	});
 
@@ -206,6 +219,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		["bin/python"]: tg.symlink("python3"),
 		["bin/python3"]: tg.symlink(`python${versionString()}`),
 		[`bin/python${versionString()}`]: pythonInterpreter,
+		// [`lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so`]: undefined // FIXME - remove, sanity test
 	});
 
 	if (requirementsArg) {
@@ -452,22 +466,42 @@ except ImportError as e:
 			.then(tg.File.expect)
 			.then((f) => f.text())
 			.then((t) => t.trim());
+	console.log("zlib test", importZlibOutput);
 	tg.assert(
 		importZlibOutput.includes(zlib.metadata.version),
 		"failed to import the zlib module",
 	);
 
-	const pipVersionOutput = await $`set -x && pip3 --version > $OUTPUT`
+	const pipVersionOutput = await $`set -x && pip3 --version | tee -a $OUTPUT`
 		.env(self())
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());
 	tg.assert(pipVersionOutput.includes("24.3"), "failed to run pip3");
 
-	const venv = await $`set -x && python -m venv $OUTPUT --copies`
-		.env(self())
-		.then(tg.Directory.expect);
-	console.log("venv", await venv.id());
+	// FIXME - zlib not available!
+	// const zlibArtifact = zlib.build();
+	let selfArtifact = self();
+	const ensurePipOutput =
+		await $`
+			set -x
+			env
+			otool -L ${selfArtifact}/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
+			python -m ensurepip --default-pip | tee -a $OUTPUT`
+			.env(selfArtifact, std.sdk())
+			.env({ WATERMARK: "1" })
+			// .env({ DYLD_LIBRARY_PATH: tg`${zlibArtifact}/lib`}) // This allows ensurepip to work - where is it getting swallowed?
+			// .env({ DYLD_LIBRARY_PATH: tg`${zlibArtifact}/lib:${opensslArtifact}/lib`})
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((f) => f.trim());
+	console.log("ensurepip output", ensurePipOutput);
+
+	// const venv = await $`set -x && python -m venv $OUTPUT --copies`
+	// 	.env(self())
+	// 		.env({ DYLD_LIBRARY_PATH: tg`${zlibArtifact}/lib:${opensslArtifact}/lib`})
+	// 	.then(tg.Directory.expect);
+	// console.log("venv", await venv.id());
 
 	return true;
 });

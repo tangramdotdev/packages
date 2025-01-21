@@ -1,0 +1,30 @@
+diff -Naur ./python-source/Lib/subprocess.py /Users/benlovy/code/packages/packages/python/python-source/Lib/subprocess.py
+--- ./python-source/Lib/subprocess.py	1969-12-31 19:00:00
++++ /Users/benlovy/code/packages/packages/python/python-source/Lib/subprocess.py	2025-03-13 17:15:14
+@@ -553,6 +553,26 @@
+         kwargs['stdout'] = PIPE
+         kwargs['stderr'] = PIPE
+ 
++    # Ensure environment variables are properly passed to the subprocess
++    import os
++    if 'env' not in kwargs:
++        # Create a copy of the current environment
++        env = os.environ.copy()
++        kwargs['env'] = env
++    
++    # Ensure DYLD variables are preserved even if macOS would strip them
++    dyld_vars = [
++        "DYLD_LIBRARY_PATH",
++        "DYLD_FRAMEWORK_PATH",
++        "DYLD_INSERT_LIBRARIES",
++        "DYLD_FALLBACK_LIBRARY_PATH",
++        "DYLD_FALLBACK_FRAMEWORK_PATH"
++    ]
++    
++    for var in dyld_vars:
++        if var in os.environ and var not in kwargs['env']:
++            kwargs['env'][var] = os.environ[var]
++
+     with Popen(*popenargs, **kwargs) as process:
+         try:
+             stdout, stderr = process.communicate(input, timeout=timeout)

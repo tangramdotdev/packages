@@ -6,16 +6,13 @@ export const metadata = {
 	license: "MIT",
 	name: "gh",
 	repository: "https://github.com/cli/cli",
-	version: "2.60.0",
-	provides: {
-		binaries: ["gh"],
-	},
+	version: "2.65.0",
 };
 
 export const source = tg.command(() => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:1936a80a668caef437b2f409eaa10e48613a3502db7da9eea011b163769218a7";
+		"sha256:af026f1b0368b1444a67a941f179ddce7e97333881ec0bbcb49fed29f4151241";
 	return std.download.fromGithub({
 		checksum,
 		owner: "cli",
