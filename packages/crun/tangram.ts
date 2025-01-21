@@ -69,19 +69,23 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		],
 	};
 
-	const deps = [
-		git.default_({ build, host: build }),
-		gperf.default_({ build, host: build }),
-		pkgConf.default_({ build, host: build }),
-		python.toolchain({ build, host: build }),
+	const libs = [
 		libcap.default_({ build, host }, libcapArg),
 		libseccomp.default_({ build, host }, libseccompArg),
 		yajl.default_({ build, host }, yajlArg),
 	];
 
+	const deps = [
+		...libs,
+		git.default_({ build, host: build }),
+		gperf.default_({ build, host: build }),
+		pkgConf.default_({ build, host: build }),
+		python.toolchain({ build, host: build }),
+	];
+
 	const env = std.env.arg(...deps, env_);
 
-	return std.autotools.build(
+	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -91,6 +95,16 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+	return output;
+
+	// const libraryPaths = await Promise.all(
+	// 	libs.map(async (lib) => (await lib).get("lib").then(tg.Directory.expect)),
+	// );
+	// const crun = await output.get("bin/crun").then(tg.File.expect);
+	// output = await tg.directory(output, {
+	// 	["bin/crun"]: std.wrap(crun, { libraryPaths }),
+	// });
+	// return output;
 });
 
 export default default_;
@@ -98,6 +112,7 @@ export default default_;
 export const test = tg.target(async () => {
 	await std.assert.pkg({
 		buildFn: default_,
+		binaries: ["crun"],
 		metadata,
 	});
 	return true;
