@@ -279,15 +279,15 @@ export const wrapBin = tg.target(
 		bins: Record<string, string>,
 		dependencies: tg.Directory,
 	) => {
-		// Grap the interpreter.
-		const interpreter = tg`${node}/bin/node`;
+		// Grab the interpreter.
+		const interpreter = await node.get("bin/node").then(tg.File.expect);
 
 		// Iterate the list of binaries in the `bin` field of the package.json and wrap.
 		let bin = tg.directory();
 		for (const [name, path] of Object.entries(bins)) {
 			const wrapped = std.wrap({
 				// The executable probably references other files in the same directory, so we wrap it through a symlink.
-				executable: tg`${arg}/${path}`,
+				executable: tg.symlink(tg`${arg}/${path}`),
 				interpreter,
 				env: {
 					NODE_PATH: tg.Mutation.suffix(tg`${dependencies}/node_modules`, ":"),

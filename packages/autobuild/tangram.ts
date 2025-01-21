@@ -1,9 +1,6 @@
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
-import autoconf from "autoconf" with { path: "../autoconf" };
-import automake from "automake" with { path: "../automake" };
-
 import * as autotools from "./autotools";
 import * as cmake from "./cmake";
 import * as go from "./go";
@@ -194,6 +191,7 @@ export const test = tg.target(async () => {
 		"cmake",
 		"go",
 		"js-plain",
+		"js-node",
 		"python-plain",
 		"ruby-plain",
 		"rust-cargo",
@@ -224,11 +222,7 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
 				tg`${buildOutput}/bin/hello`,
 		},
-		"js-node": {
-			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
-				tg`${buildOutput}/index.js`,
-		},
+		"js-node": defaultTestArg,
 		"js-plain": {
 			...defaultTestArg,
 			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
