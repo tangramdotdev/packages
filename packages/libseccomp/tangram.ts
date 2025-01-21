@@ -77,6 +77,18 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 export default default_;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, libraries: ["seccomp"] });
+	const hasUsage = (name: string) => {
+		return {
+			name,
+			testArgs: ["-h"],
+			testPredicate: (stdout: string) => stdout.includes("usage:"),
+		};
+	};
+	await std.assert.pkg({
+		buildFn: default_,
+		binaries: [hasUsage("scmp_sys_resolver")],
+		libraries: ["seccomp"],
+		metadata,
+	});
 	return true;
 });
