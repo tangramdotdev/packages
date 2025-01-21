@@ -101,13 +101,14 @@ export default default_;
 
 export const test = tg.target(async () => {
 	const result = await $`
+		set -x
 		echo "Checking that we can run curl."
 		curl --version
 		echo "Checking that we can download a file."
 		mkdir -p $OUTPUT
 		curl -o $OUTPUT/example http://example.com
 		echo "Checking that we can download via HTTPS."
-		curl -o $OUTPUT/tangram.svg https://www.tangram.dev/tangram.svg
+		curl -o $OUTPUT/tangram https://www.tangram.dev
 	`
 		.env(default_())
 		.checksum("unsafe")
@@ -120,11 +121,11 @@ export const test = tg.target(async () => {
 	tg.assert(exampleContents.length > 0);
 	tg.assert(exampleContents.startsWith("<!doctype html>"));
 
-	const svgContents = await result
-		.get("tangram.svg")
+	const tangramContents = await result
+		.get("tangram")
 		.then(tg.File.expect)
 		.then((f) => f.text());
-	tg.assert(svgContents.length > 0);
-	tg.assert(svgContents.startsWith("<svg"));
+	tg.assert(tangramContents.length > 0);
+	tg.assert(tangramContents.startsWith("<!DOCTYPE html>"));
 	return true;
 });
