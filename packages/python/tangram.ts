@@ -260,6 +260,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 		["bin/pip3"]: std.wrap(tg.File.expect(await output.get("bin/pip3")), {
 			interpreter: pythonInterpreter,
 			args: ["--python", pythonInterpreter],
+			libraryPaths
 		}),
 	});
 
@@ -526,7 +527,7 @@ except ImportError as e:
 		.then((t) => t.trim());
 	tg.assert(pipVersionOutput.includes("24.3"), "failed to run pip3");
 
-	const ensurePipOutput = await $`set -x && python -m ensurepip --default-pip`
+	const ensurePipOutput = await $`set -x && python -m ensurepip --default-pip | tee -a $OUTPUT`
 		.env(toolchain())
 		.then(tg.File.expect)
 		.then((f) => f.text())
