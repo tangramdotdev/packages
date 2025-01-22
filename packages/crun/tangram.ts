@@ -64,7 +64,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const configure = {
 		args: [
 			"--disable-dependency-tracking",
-			"--enable-shared",
+			"--without-shared",
+			"--disable-shared",
+			// "--enable-shared",
 			"--disable-systemd",
 		],
 	};
@@ -83,7 +85,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		python.toolchain({ build, host: build }),
 	];
 
-	const env = std.env.arg(...deps, env_);
+	const env = std.env.arg(
+		...deps,
+		// { CC: "gcc --static", CXX: "g++ --static" },
+		{ CFLAGS: tg.Mutation.prefix("--static", " ") },
+		env_,
+	);
 
 	let output = await std.autotools.build(
 		{
