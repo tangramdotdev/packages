@@ -1,8 +1,9 @@
-diff -ur a/common.mk b/common.mk
---- a/common.mk	2023-06-20 12:55:39.909678948 -0500
-+++ b/common.mk	2023-06-20 12:56:06.221960421 -0500
-@@ -1379,17 +1379,6 @@
-
+diff --git a/common.mk b/common.mk
+index 0ea360c..4005aff 100644
+--- a/common.mk
++++ b/common.mk
+@@ -1523,17 +1523,6 @@ extract-gems: $(HAVE_BASERUBY:yes=update-gems)
+ 
  update-gems$(gnumake:yes=-sequential): PHONY
  	$(ECHO) Downloading bundled gem files...
 -	$(Q) $(BASERUBY) -C "$(srcdir)" \
@@ -16,6 +17,6 @@ diff -ur a/common.mk b/common.mk
 -	    -e 'File.unlink(*old) and' \
 -	    -e 'FileUtils.rm_rf(old.map{'"|n|"'n.chomp(".gem")})' \
 -	    gems/bundled_gems
-
+ 
  extract-gems$(gnumake:yes=-sequential): PHONY
  	$(ECHO) Extracting bundled gem files...
