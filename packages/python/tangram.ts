@@ -526,7 +526,14 @@ except ImportError as e:
 		.then((t) => t.trim());
 	tg.assert(pipVersionOutput.includes("24.3"), "failed to run pip3");
 
-	const venv = await $`set -x && python -m venv $OUTPUT --copies`
+	const ensurePipOutput = await $`set -x && python -m ensurepip --default-pip`
+		.env(toolchain())
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((f) => f.trim());
+	console.log("ensurepip output", ensurePipOutput);
+
+	const venv = await $`set -x && python -m venv --without-pip $OUTPUT --copies`
 		.env(toolchain())
 		.then(tg.Directory.expect);
 	console.log("venv", await venv.id());
