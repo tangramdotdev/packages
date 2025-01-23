@@ -45,6 +45,18 @@ export type ShebangExecutableMetadata = {
 	interpreter: string;
 };
 
+/** Attempt to get executable metadata. Returns undefined if unable. */
+export const tryExecutableMetadata = async (
+	file: tg.File,
+): Promise<ExecutableMetadata | undefined> => {
+	try {
+		const metadata = await executableMetadata(file);
+		return metadata;
+	} catch (_) {
+		return undefined;
+	}
+};
+
 /** Get metadata from an executable. */
 export const executableMetadata = async (
 	file: tg.File,
