@@ -1501,7 +1501,7 @@ const tryTemplateToDirWithSubpath = async (
 			if (typeof second === "string") {
 				return {
 					dir: await first.id(),
-					subpath: second,
+					subpath: second.slice(1),
 				};
 			} else {
 				return undefined;
@@ -1521,7 +1521,7 @@ const tryTemplateToDirWithSubpath = async (
 		) {
 			return {
 				dir: await second.id(),
-				subpath: third,
+				subpath: third.slice(1),
 			};
 		} else {
 			return undefined;
@@ -1618,10 +1618,14 @@ const resolvePaths = async (
 const getInner = async (
 	dirWithSubpath: DirWithSubpath,
 ): Promise<tg.Directory> => {
-	const { dir, subpath } = dirWithSubpath;
+	const dir = dirWithSubpath.dir;
+	let subpath = dirWithSubpath.subpath;
 	const directory = tg.Directory.withId(dir);
 	if (subpath === undefined) {
 		return directory;
+	}
+	if (subpath.startsWith("/")) {
+		subpath = subpath.slice(1);
 	}
 	const inner = await directory.tryGet(subpath);
 	if (inner !== undefined) {
