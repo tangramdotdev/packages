@@ -10,8 +10,8 @@ export type PackageSpec = {
 	binaries?: Array<BinarySpec>;
 	/** Use bootstrap mode. This prevents including the standard environments to build and test components, all required dependencies must be explicitly provided via the `env` argument. */
 	bootstrapMode?: boolean;
-	/** The directory to check. This should be the output of the default target for a package. If no other options are given, just asserts the directory is non-empty. */
-	buildFn: (arg: PackageArg) => tg.Unresolved<tg.Directory>;
+	// /** The directory to check. This should be the output of the default target for a package. If no other options are given, just asserts the directory is non-empty. */
+	// buildFn: (arg: PackageArg) => tg.Unresolved<tg.Directory>;
 	/** Any documentation files that should exist under `share/`. */
 	docs?: Array<string>;
 	/** Additional env to include when running tests. */
