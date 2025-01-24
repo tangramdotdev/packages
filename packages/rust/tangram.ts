@@ -133,8 +133,15 @@ export const self = tg.target(async (arg?: ToolchainArg) => {
 	const zlibArtifact = await zlib({ host });
 
 	for (const executable of executables) {
-		const wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
-			libraryPaths: [tg`${rustInstall}/lib`, tg`${zlibArtifact}/lib`],
+		// Add the zlib library path with the default strategy, isolating libz.
+		let wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
+			libraryPaths: [tg`${zlibArtifact}/lib`],
+		});
+
+		// Add the rust library path with no library path handling, preserving the whole structure and `rustlib` subdirectory.
+		wrapped = std.wrap(wrapped, {
+			libraryPaths: [tg`${rustInstall}/lib`],
+			libraryPathStrategy: "none",
 		});
 
 		artifact = tg.directory(artifact, {
