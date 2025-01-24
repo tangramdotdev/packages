@@ -153,7 +153,7 @@ export default default_;
 // These are all equivalent ways to create an executable target to run with `tgx`. A is sugar for B is sugar for C is sugar for D.
 // TODO - is it a function (...args: Array<tg.Value>) or `(...args: std.Args<tg.Target.Arg>)`?
 
-export const execA = makeExecCommand(default_, "bin/sqlite3");
+export const run = makeExecCommand(default_, "bin/sqlite3");
 
 export const execB = makeExecCommand(default_, "bin/sqlite3", "file"); // can choose `file` or `symlink`
 
@@ -169,6 +169,7 @@ export const execD = async () => {
 		.then((dir) => dir.get("bin/sqlite3"))
 		.then(tg.File.expect);
 	return (...args: Array<tg.Value>) => {
+		// TODO - this should tg.run(...);
 		// Should we instead return a function that accepts any target args?
 		return tg.target({ executable, args });
 	};
