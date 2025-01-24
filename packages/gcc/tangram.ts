@@ -9,7 +9,7 @@ import zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://gcc.gnu.org/",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",

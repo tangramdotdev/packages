@@ -2,7 +2,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/strace/strace",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	name: "strace",
 	license: "https://github.com/strace/strace/blob/master/COPYING",
 	repository: "https://github.com/strace/strace",

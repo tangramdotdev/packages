@@ -5,7 +5,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/License",
 	name: "libcap",
 	repository: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",

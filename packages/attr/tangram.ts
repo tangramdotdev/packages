@@ -4,7 +4,7 @@ import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
 	homepage: "https://savannah.nongnu.org/projects/attr",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-2.0-or-later",
 	name: "attr",
 	repository: "https://git.savannah.nongnu.org/cgit/attr.git",

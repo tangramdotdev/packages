@@ -7,7 +7,7 @@ import texinfo from "texinfo" with { path: "../texinfo" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/glibc/",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "LGPL-2.1-or-later",
 	name: "glibc",
 	repository: "https://sourceware.org/git/?p=glibc.git",

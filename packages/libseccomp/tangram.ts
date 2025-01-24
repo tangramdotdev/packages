@@ -3,7 +3,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/seccomp/libseccomp",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "LGPLv2.1",
 	name: "libseccomp",
 	repository: "https://github.com/seccomp/libseccomp",

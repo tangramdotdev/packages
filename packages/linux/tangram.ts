@@ -2,7 +2,7 @@ import * as std from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://www.kernel.org",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",

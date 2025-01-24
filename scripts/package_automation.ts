@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { platform } from "node:os";
 import * as path from "node:path";
 import { $ } from "bun";
 
@@ -93,7 +94,7 @@ const ok = (message?: string): Result => {
 /** Run the given options. */
 const run = async (options: Options): Promise<Results> => {
 	const results = new Results();
-	const buildTracker = new BuildTracker(options.tangram_exe);
+	const buildTracker = new BuildTracker(options.tangramExe);
 	const processAndLog = async (name: string) => {
 		const result = await processPackage(name, options, buildTracker);
 		results.log(name, result);
@@ -164,20 +165,25 @@ class Options {
 	/** Whether to run each package concurrently. If false, will run in the order they are defined. */
 	readonly parallel: boolean;
 	/** The path to the tangram executable to use for each invocation. */
-	readonly tangram_exe: string;
+	readonly tangramExe: string;
+	/** The currently running platform. Any errors indicating an incompatible platform are ignored. */
+	readonly currentPlatform: string;
 
 	constructor(...args: Array<string>) {
 		let packages: Set<string> = new Set();
 		let actions: Set<Action> = new Set();
 		let parallel = true;
 
+		// Determine the current platform.
+		this.currentPlatform = Options.detectPlatform();
+
 		// Set the tangram executable path.
 		// Read the TG_EXE env var
 		const envVar = Bun.env.TG_EXE;
 		if (envVar === undefined) {
-			this.tangram_exe = "tangram";
+			this.tangramExe = "tangram";
 		} else {
-			this.tangram_exe = envVar;
+			this.tangramExe = envVar;
 		}
 
 		// Helper to process an individual flag.
@@ -281,6 +287,26 @@ class Options {
 		this.parallel = parallel;
 	}
 
+	/** Produce the Tangram-compatible platform string from the process metadata. */
+	static detectPlatform() {
+		const detectedArch = process.arch;
+		let tangramArch: string | undefined;
+		if (detectedArch === "x64") {
+			tangramArch = "x86_64";
+		} else if (detectedArch === "arm64") {
+			tangramArch = "aarch64";
+		} else {
+			throw new Error(`unsupported host arch: ${detectedArch}`);
+		}
+
+		const os = process.platform;
+		if (os !== "linux" && os !== "darwin") {
+			throw new Error(`unsupported host os: ${os}`);
+		}
+
+		return `${tangramArch}-${os}`;
+	}
+
 	/** Parse the process args to instantiate the options. */
 	static parseFromArgs() {
 		// argv0 is bun, argv1 is the script name. Omit these and pass the remainder to the constructor.
@@ -289,17 +315,16 @@ class Options {
 
 	async validateTangram() {
 		try {
-			const result =
-				await $`${this.tangram_exe} --mode client --version`.text();
+			const result = await $`${this.tangramExe} --mode client --version`.text();
 			const goodStdout = result.includes("tangram");
 			if (!goodStdout) {
 				throw new Error(
-					`${this.tangram_exe} --help produced an unexpected result, provide a different executable.`,
+					`${this.tangramExe} --help produced an unexpected result, provide a different executable.`,
 				);
 			}
 		} catch (err) {
 			throw new Error(
-				`Error running ${this.tangram_exe}, provide a different executable: ${err}`,
+				`Error running ${this.tangramExe}, provide a different executable: ${err}`,
 			);
 		}
 	}
@@ -309,8 +334,9 @@ class Options {
 		const actions = `Actions: ${Array.from(this.actions).join(", ")}`;
 		const packages = `Packages: ${Array.from(this.packages).join(", ")}`;
 		const config = `Parallel: ${this.parallel}`;
-		const tangram = `Tangram: ${this.tangram_exe}`;
-		return `${actions}\n${packages}\n${config}\n${tangram}`;
+		const tangram = `Tangram: ${this.tangramExe}`;
+		const currentPlatform = `Platform: ${this.currentPlatform}`;
+		return `${actions}\n${packages}\n${config}\n${tangram}\n${currentPlatform}`;
 	}
 }
 
@@ -361,7 +387,7 @@ const processPackage = async (
 ): Promise<Result> => {
 	const path = getPackagePath(name);
 	log(`processing ${name}: ${path}`);
-	const tg = `${options.tangram_exe}`;
+	const tg = `${options.tangramExe}`;
 
 	const actionMap: Record<Action, () => Promise<Result>> = {
 		format: () => formatAction(tg, path),
@@ -556,7 +582,12 @@ const buildDefaultTarget = async (
 		return ok(buildId);
 	} catch (err) {
 		log(`error building ${path}`);
-		return result("buildError", err.stderr.toString());
+		const stderr = err.stderr.toString();
+		if (isUnsupportedPlatformError(stderr)) {
+			log(`${path}: unsupported host`);
+			return ok("unsupported host");
+		}
+		return result("buildError", stderr);
 	}
 };
 
@@ -579,9 +610,17 @@ const buildTestTarget = async (
 		return ok(buildId);
 	} catch (err) {
 		log(`error building ${path}#test`);
-		return result("testError", err.stderr.toString());
+		const stderr = err.stderr.toString();
+		if (isUnsupportedPlatformError(stderr)) {
+			log(`${path}: unsupported host`);
+			return ok("unsupported host");
+		}
+		return result("testError", stderr);
 	}
 };
+
+const isUnsupportedPlatformError = (stderr: string): boolean =>
+	stderr.includes("not found in supported hosts");
 
 /** Class for managing builds created by this script. */
 class BuildTracker {

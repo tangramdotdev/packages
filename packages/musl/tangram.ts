@@ -4,7 +4,7 @@ import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://musl.libc.org/",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "MIT",
 	name: "musl",
 	repository: "https://git.musl-libc.org/cgit/musl",

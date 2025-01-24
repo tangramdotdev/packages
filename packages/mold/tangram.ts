@@ -5,7 +5,7 @@ import * as zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
 	homepage: "https://github.com/rui314/mold",
-	hosts: ["aarch64-linux", "x86_64-linux"],
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "MIT",
 	name: "mold",
 	repository: "https://github.com/rui314/mold",
