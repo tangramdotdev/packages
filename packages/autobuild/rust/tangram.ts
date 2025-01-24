@@ -41,7 +41,7 @@ export const env = tg.target(async (arg?: EnvArg) => {
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(
-		rust.toolchain({ ...std.triple.rotate({ build, host }) }),
+		rust.self({ ...std.triple.rotate({ build, host }) }),
 		cmake({ ...std.triple.rotate({ build, host }) }),
 		openssl({ build, host }),
 	);

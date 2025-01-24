@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build: build_,
 		cargo: cargoArg = {},
@@ -54,8 +54,8 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const build = build_ ?? host;
 
 	const env = std.env.arg(
-		pkgConfig.default_({ build, host: build }, pkgconfigArg),
-		pcre2.default_({ build, env: env_, host, sdk }, pcre2Arg),
+		pkgConfig.build({ build, host: build }, pkgconfigArg),
+		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
 		env_,
 	);
 
@@ -72,27 +72,27 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["rg"], metadata });
+	await std.assert.pkg({ buildFn: build, binaries: ["rg"], metadata });
 	return true;
 });
 
 export const cross = tg.target(async () => {
 	// TODO - assert the outputs. Make sure the linux-musl ones produce a static binary.
 	return tg.directory({
-		"aarch64-unknown-linux-gnu": default_({
+		"aarch64-unknown-linux-gnu": build({
 			host: "aarch64-unknown-linux-gnu",
 		}),
-		"aarch64-unknown-linux-musl": default_({
+		"aarch64-unknown-linux-musl": build({
 			host: "aarch64-unknown-linux-musl",
 		}),
-		"x86_64-unknown-linux-gnu": default_({ host: "x86_64-unknown-linux-gnu" }),
-		"x86_64-unknown-linux-musl": default_({
+		"x86_64-unknown-linux-gnu": build({ host: "x86_64-unknown-linux-gnu" }),
+		"x86_64-unknown-linux-musl": build({
 			host: "x86_64-unknown-linux-musl",
 		}),
-		"aarch64-apple-darwin": default_({ host: "aarch64-apple-darwin" }),
-		"x86_64-apple-darwin": default_({ host: "x86_64-apple-darwin" }),
+		"aarch64-apple-darwin": build({ host: "aarch64-apple-darwin" }),
+		"x86_64-apple-darwin": build({ host: "x86_64-apple-darwin" }),
 	});
 });

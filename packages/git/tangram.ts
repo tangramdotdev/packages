@@ -41,7 +41,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -71,15 +71,15 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	};
 
 	let dependencies = [
-		curl.default_({ build, env: env_, host, sdk }, curlArg),
-		gettext.default_({ build, env: env_, host, sdk }, gettextArg),
-		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
-		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		curl.build({ build, env: env_, host, sdk }, curlArg),
+		gettext.build({ build, env: env_, host, sdk }, gettextArg),
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 
 	if (std.triple.os(host) === "darwin") {
 		dependencies.push(
-			libiconv.default_({ build, env: env_, host, sdk }, libiconvArg),
+			libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
 		);
 	}
 
@@ -99,9 +99,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["git"], metadata });
+	await std.assert.pkg({ buildFn: build, binaries: ["git"], metadata });
 	return true;
 });

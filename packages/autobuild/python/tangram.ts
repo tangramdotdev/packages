@@ -34,7 +34,7 @@ export const plain = tg.target(async (arg: Arg) => {
 	const { build, env: envArg, host, source } = arg ?? {};
 
 	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
-	const toolchain = await python.toolchain();
+	const toolchain = await python.self();
 	const interpreter = await toolchain.get("bin/python3").then(tg.File.expect);
 	return wrapScripts({
 		directory: source,
@@ -77,5 +77,5 @@ export const env = tg.target(async (arg: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
-	return std.env(python.toolchain({ ...std.triple.rotate({ build, host }) }));
+	return std.env(python.self({ ...std.triple.rotate({ build, host }) }));
 });

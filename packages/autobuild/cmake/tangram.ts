@@ -30,7 +30,7 @@ export const env = tg.target(async (arg: EnvArg) => {
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(
-		cmake.cmake({ ...std.triple.rotate({ build, host }) }),
-		cmake.ninja.default_({ ...std.triple.rotate({ build, host }) }),
+		cmake.self({ ...std.triple.rotate({ build, host }) }),
+		cmake.ninja.build({ ...std.triple.rotate({ build, host }) }),
 	);
 });

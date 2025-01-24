@@ -37,7 +37,7 @@ export type ToolchainArg = {
 	host?: string;
 };
 
-export const toolchain = tg.target(
+export const self = tg.target(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		const host = arg?.host ?? (await std.triple.host());
 		const system = std.triple.archAndOs(host);
@@ -72,7 +72,7 @@ export const toolchain = tg.target(
 	},
 );
 
-export default toolchain;
+export default self;
 
 export type Arg = {
 	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
@@ -182,7 +182,7 @@ export const build = tg.target(
 		}
 
 		// Build the vendored source code without internet access.
-		const goArtifact = toolchain({ host });
+		const goArtifact = self({ host });
 
 		const certFile = tg`${std.caCertificates()}/cacert.pem`;
 		const cgoEnabled = cgo ? "1" : "0";
@@ -289,7 +289,7 @@ export const vendor = async ({
 
 				mv -T ./vendor "$OUTPUT" || true
 			`
-		.env(toolchain(), { SSL_CERT_DIR: std.caCertificates() })
+		.env(self(), { SSL_CERT_DIR: std.caCertificates() })
 		.checksum("unsafe")
 		.then(tg.Directory.expect);
 };
@@ -342,5 +342,5 @@ export const test = tg.target(async () => {
 				go mod tidy
 				go run main.go
 				go run ./subcommand.go
-			`.env(std.sdk(), toolchain());
+			`.env(std.sdk(), self());
 });

@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -42,7 +42,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const env = [
-		gmp.default_({ build, env: env_, host, sdk }, gmpArg),
+		gmp.build({ build, env: env_, host, sdk }, gmpArg),
 		m4({ build, host: build }),
 		env_,
 	];
@@ -68,7 +68,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const source = tg.directory({
@@ -81,5 +81,5 @@ export const test = tg.target(async () => {
 	return await $`
 			echo "Checking if we can link against nettle and hogweed."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp
-		`.env(std.sdk(), default_(), gmp.default_());
+		`.env(std.sdk(), build(), gmp.build());
 });

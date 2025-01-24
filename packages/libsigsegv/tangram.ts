@@ -26,7 +26,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -47,7 +47,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const source = tg.directory({
@@ -60,5 +60,5 @@ export const test = tg.target(async () => {
 	return await $`
 			echo "Checking if we can link against libsigsegv."
 			cc ${source}/main.c -o $OUTPUT -lsigsegv
-		`.env(std.sdk(), default_());
+		`.env(std.sdk(), build());
 });

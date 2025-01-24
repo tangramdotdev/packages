@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -61,18 +61,18 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const perlArtifact = await perl.default_({ build, host: build }, perlArg);
+	const perlArtifact = await perl.build({ build, host: build }, perlArg);
 	const interpreter = tg.symlink({
 		artifact: perlArtifact,
 		subpath: "bin/perl",
 	});
 	const dependencies = [
-		autoconf.default_({ build, env: env_, host, sdk }, autoconfArg),
-		bison.default_({ build, host: build }, bisonArg),
-		m4.default_({ build, host: build }, m4Arg),
+		autoconf.build({ build, env: env_, host, sdk }, autoconfArg),
+		bison.build({ build, host: build }, bisonArg),
+		m4.build({ build, host: build }, m4Arg),
 		perlArtifact,
-		texinfo.default_({ build, host: build }, texinfoArg),
-		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		texinfo.build({ build, host: build }, texinfoArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	const env = std.env.arg(...dependencies, env_);
 	const artifact = std.autotools.build(
@@ -97,9 +97,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["help2man"], metadata });
+	await std.assert.pkg({ buildFn: build, binaries: ["help2man"], metadata });
 	return true;
 });

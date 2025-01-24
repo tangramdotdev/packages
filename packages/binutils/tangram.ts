@@ -37,7 +37,7 @@ type Arg = {
 	target?: string;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -84,7 +84,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	const deps = [texinfo.default_({ build, env: env_, host, sdk }, texinfoArg)];
+	const deps = [texinfo.build({ build, env: env_, host, sdk }, texinfoArg)];
 	const env = [...deps, additionalEnv, env_];
 
 	// Collect configuration.
@@ -118,7 +118,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const os = std.triple.os(await std.triple.host());
@@ -141,6 +141,6 @@ export const test = tg.target(async () => {
 					"strip",
 				];
 
-	await std.assert.pkg({ buildFn: default_, binaries, metadata });
+	await std.assert.pkg({ buildFn: build, binaries, metadata });
 	return true;
 });

@@ -41,7 +41,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const arg = await std.args.apply<Arg>(...args);
 	const {
 		autotools = {},
@@ -58,15 +58,15 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = arg;
 
-	const perlArtifact = await perl.default_(
+	const perlArtifact = await perl.build(
 		{ build, env: env_, host, sdk },
 		perlArg,
 	);
 	const dependencies = [
 		perlArtifact,
-		bison.default_({ build, host: build }, bisonArg),
-		m4.default_({ build, host: build }, m4Arg),
-		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		bison.build({ build, host: build }, bisonArg),
+		m4.build({ build, host: build }, m4Arg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	const env = std.env.arg(...dependencies, env_);
 
@@ -111,7 +111,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		{
 			interpreter,
 			args: ["-B", await tg`${shareDirectory}/autoconf`],
-			env: std.env.arg(grep({ build, host }), m4.default_({ build, host }), {
+			env: std.env.arg(grep({ build, host }), m4.build({ build, host }), {
 				autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
 				AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
 				M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
@@ -204,11 +204,11 @@ export const patchAutom4teCfg = tg.target(
 	},
 );
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries: [
 			"autoconf",
 			"autoheader",

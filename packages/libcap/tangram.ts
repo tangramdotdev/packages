@@ -49,7 +49,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -84,11 +84,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure: tg.Mutation.unset(), install };
 
-	const attrArtifact = await attr.default_(
+	const attrArtifact = await attr.build(
 		{ build, env: env_, host, sdk },
 		attrArg,
 	);
-	const dependencies = [attrArtifact, perl.default_({ build, host: build })];
+	const dependencies = [attrArtifact, perl.build({ build, host: build })];
 	const env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(
@@ -104,7 +104,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const binTest = (name: string) => {
@@ -116,7 +116,7 @@ export const test = tg.target(async () => {
 	};
 	const binaries = ["capsh", "getcap", "setcap", "getpcaps"].map(binTest);
 	await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries,
 		libraries: ["cap"],
 		metadata,

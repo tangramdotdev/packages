@@ -20,7 +20,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const default_ = tg.target(async (arg?: Arg) => {
+export const build = tg.target(async (arg?: Arg) => {
 	const host = arg?.host ?? (await std.triple.host());
 
 	const configure = {
@@ -54,11 +54,11 @@ export const default_ = tg.target(async (arg?: Arg) => {
 	});
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	return await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries: ["make"],
 		metadata,
 	});

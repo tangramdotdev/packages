@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		env,
 		host,
@@ -54,11 +54,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	return await $`
 			echo "Checking that we can run vsce." | tee $OUTPUT
 			vsce --version | tee -a $OUTPUT
-		`.env(default_());
+		`.env(build());
 });

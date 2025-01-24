@@ -45,7 +45,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -64,7 +64,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const perlArtifact = await perl.default_(
+	const perlArtifact = await perl.build(
 		{ build, env: env_, host, sdk },
 		perlArg,
 	);
@@ -77,18 +77,18 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const { version } = metadata;
 	let binDirectory = tg.directory({});
-	const autoconfArtifact = autoconf.default_(
+	const autoconfArtifact = autoconf.build(
 		{ build, env: env_, host, sdk },
 		autoconfArg,
 	);
 	const dependencies = [
 		autoconfArtifact,
-		bison.default_({ build, env: env_, host, sdk }, bisonArg),
-		help2man.default_({ build, env: env_, host, sdk }, help2manArg),
-		m4.default_({ build, env: env_, host, sdk }, m4Arg),
-		pkgConfig.default_({ build, host: build }, pkgconfigArg),
+		bison.build({ build, env: env_, host, sdk }, bisonArg),
+		help2man.build({ build, env: env_, host, sdk }, help2manArg),
+		m4.build({ build, env: env_, host, sdk }, m4Arg),
+		pkgConfig.build({ build, host: build }, pkgconfigArg),
 		perlArtifact,
-		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 
 	const env = std.env.arg(env_, ...dependencies);
@@ -150,12 +150,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const { version } = metadata;
 	await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries: [
 			"aclocal",
 			`aclocal-${version}`,

@@ -28,7 +28,7 @@ export type ToolchainArg = {
 	targets?: Array<string>;
 };
 
-export const toolchain = tg.target(async (arg?: ToolchainArg) => {
+export const self = tg.target(async (arg?: ToolchainArg) => {
 	// Determine the list of target triples to support other than the inferred host.
 	const detectedHost = await std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);
@@ -145,7 +145,7 @@ export const toolchain = tg.target(async (arg?: ToolchainArg) => {
 	return artifact;
 });
 
-export default toolchain;
+export default self;
 
 type ProxyRustObjcopyArg = {
 	build: string;
@@ -253,7 +253,7 @@ export const test = tg.target(async () => {
 });
 
 export const testHostToolchain = tg.target(async () => {
-	const rustArtifact = await toolchain();
+	const rustArtifact = await self();
 	await $`rustc --version && cargo --version`.env(rustArtifact);
 	return rustArtifact;
 });
@@ -272,7 +272,7 @@ export const testCrossToolchain = tg.target(async () => {
 		environment: "gnu",
 	});
 
-	const crossRust = await toolchain({ targets: [target] });
+	const crossRust = await self({ targets: [target] });
 
 	await $`rustc --version && cargo --version`.env(crossRust);
 	return crossRust;

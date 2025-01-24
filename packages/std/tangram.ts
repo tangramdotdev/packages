@@ -38,10 +38,10 @@ export const metadata = {
 };
 
 /** The default export produces the default SDK env for the detected host, asserts its validity, and returns the env. */
-export const default_ = tg.target(() => {
+export const build = tg.target(() => {
 	return sdk.testDefault();
 });
-export default default_;
+export default build;
 
 export const flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
 	if (value instanceof Array) {

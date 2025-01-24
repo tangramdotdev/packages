@@ -1,7 +1,7 @@
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 import tests from "./tests" with { type: "directory" };
-import { toolchain, rustTriple } from "./tangram.ts";
+import { self, rustTriple } from "./tangram.ts";
 import rustcProxy from "./proxy.tg.ts";
 
 export type Arg = {
@@ -101,7 +101,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	// Obtain the SDK and toolchain.
 	const sdk = await std.sdk({ host, target });
 	envs.push(sdk);
-	const rustToolchain = toolchain({ host, target });
+	const rustToolchain = self({ host, target });
 	envs.push(rustToolchain);
 
 	// Find the main.rs or lib.rs file.
@@ -386,11 +386,11 @@ export const testLinkLibcurl = tg.target(async () => {
 	const crateName = "native_exe_libcurl";
 
 	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.
-	const libcurl = curl.default_();
-	const libpslArtifact = libpsl.default_();
-	const sslArtifact = openssl.default_();
-	const zlibArtifact = zlib.default_();
-	const zstdArtifact = zstd.default_();
+	const libcurl = curl.build();
+	const libpslArtifact = libpsl.build();
+	const sslArtifact = openssl.build();
+	const zlibArtifact = zlib.build();
+	const zstdArtifact = zstd.build();
 	const deps = [
 		libcurl,
 		libpslArtifact,

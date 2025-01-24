@@ -38,7 +38,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -50,7 +50,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const dependencies = [
-		ncurses.default_({ build, env: env_, host, sdk }, ncursesArg),
+		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
 	];
 	const env = [...dependencies, env_];
 
@@ -68,12 +68,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
 	await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries: [
 			{ name: "vim", testPredicate: (stdout) => stdout.includes(majorMinor) },
 		],

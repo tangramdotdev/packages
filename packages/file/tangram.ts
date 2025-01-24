@@ -39,7 +39,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -59,13 +59,13 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 	};
 	const dependencies = [
-		bison.default_({ build, host: build }, bisonArg),
-		m4.default_({ build, host: build }, m4Arg),
-		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
+		bison.build({ build, host: build }, bisonArg),
+		m4.build({ build, host: build }, m4Arg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];
 	if (std.triple.os(host) === "linux") {
 		dependencies.push(
-			libseccomp.default_({ build, env: env_, host, sdk }, libseccompArg),
+			libseccomp.build({ build, env: env_, host, sdk }, libseccompArg),
 		);
 	}
 	const env = [...dependencies, env_];
@@ -98,9 +98,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["file"], metadata });
+	await std.assert.pkg({ buildFn: build, binaries: ["file"], metadata });
 	return true;
 });

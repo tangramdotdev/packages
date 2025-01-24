@@ -62,7 +62,7 @@ export const cmake = tg.target(async (arg?: Arg) => {
 	const bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
 	const env = std.env.arg(
 		bootstrapSdk,
-		bootstrap.make.default_({ host }),
+		bootstrap.make.build({ host }),
 		{
 			CC: "cc -static",
 			CXX: "c++ -static",

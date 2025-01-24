@@ -27,5 +27,5 @@ export const env = tg.target(async (arg: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
-	return std.env(go.toolchain({ ...std.triple.rotate({ build, host }) }));
+	return std.env(go.self({ ...std.triple.rotate({ build, host }) }));
 });

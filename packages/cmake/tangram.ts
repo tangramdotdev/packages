@@ -57,7 +57,7 @@ export type Arg = {
 };
 
 /** Build `cmake`. */
-export const cmake = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		dependencies: {
@@ -76,21 +76,18 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 	const sourceDir = source_ ?? source();
 	const os = std.triple.os(host);
 
-	const curlRoot = curl.default_({ build, env: env_, host, sdk }, curlArg);
-	const ncursesRoot = ncurses.default_(
+	const curlRoot = curl.build({ build, env: env_, host, sdk }, curlArg);
+	const ncursesRoot = ncurses.build(
 		{ build, env: env_, host, sdk },
 		ncursesArg,
 	);
-	const libpslRoot = libpsl.default_(
-		{ build, env: env_, host, sdk },
-		libpslArg,
-	);
-	const opensslRoot = openssl.default_(
+	const libpslRoot = libpsl.build({ build, env: env_, host, sdk }, libpslArg);
+	const opensslRoot = openssl.build(
 		{ build, env: env_, host, sdk },
 		opensslArg,
 	);
-	const zlibRoot = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
-	const zstdRoot = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
+	const zlibRoot = zlib.build({ build, env: env_, host, sdk }, zlibArg);
+	const zstdRoot = zstd.build({ build, env: env_, host, sdk }, zstdArg);
 
 	let configureArgs = ["--parallel=$(nproc)", "--system-curl", "--"];
 	if (os === "linux") {
@@ -147,7 +144,7 @@ export const cmake = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
-export default cmake;
+export default self;
 
 export type BuildArg = {
 	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
@@ -334,13 +331,13 @@ export const target = tg.target(async (...args: std.Args<BuildArg>) => {
 	}
 
 	// Add cmake to env.
-	env = await std.env.arg(await cmake({ host }), env);
+	env = await std.env.arg(await self({ host }), env);
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		env = await std.env.arg(await ninja.default_({ host }), env);
+		env = await std.env.arg(await ninja.build({ host }), env);
 	} else if (generator === "Unix Makefiles") {
-		env = await std.env.arg(await make.default_({ host }), env);
+		env = await std.env.arg(await make.build({ host }), env);
 	}
 
 	if (includeSdk) {
@@ -433,7 +430,7 @@ export const pushOrSet = (
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: cmake, binaries: ["cmake"], metadata });
+	await std.assert.pkg({ buildFn: self, binaries: ["cmake"], metadata });
 
 	await ninja.test();
 

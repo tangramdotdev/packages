@@ -1,7 +1,7 @@
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
-import { cargo, toolchain, VERSION } from "./tangram.ts";
+import { cargo, self, VERSION } from "./tangram.ts";
 
 import cargoToml from "./proxy/Cargo.toml" with { type: "file" };
 import cargoLock from "./proxy/Cargo.lock" with { type: "file" };
@@ -40,7 +40,7 @@ import tests from "./tests" with { type: "directory" };
 export const test = tg.target(async () => {
 	// Make sure the proxy compiles and runs.
 	const version = await $`tangram_rustc_proxy rustc - --version | tee $OUTPUT`
-		.env(proxy(), toolchain())
+		.env(proxy(), self())
 		.then(tg.File.expect);
 	const versionText = await version.text();
 	tg.assert(versionText.trim().includes(VERSION));

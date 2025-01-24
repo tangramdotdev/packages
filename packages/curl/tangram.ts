@@ -47,7 +47,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -75,12 +75,12 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const env = [
-		perl.default_({ build, host: build }),
-		pkgConfig.default_({ build, host: build }),
-		libpsl.default_({ build, env: env_, host, sdk }, libpslArg),
-		openssl.default_({ build, env: env_, host, sdk }, opensslArg),
-		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
-		zstd.default_({ build, env: env_, host, sdk }, zstdArg),
+		perl.build({ build, host: build }),
+		pkgConfig.build({ build, host: build }),
+		libpsl.build({ build, env: env_, host, sdk }, libpslArg),
+		openssl.build({ build, env: env_, host, sdk }, opensslArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		zstd.build({ build, env: env_, host, sdk }, zstdArg),
 		env_,
 	];
 
@@ -97,7 +97,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const result = await $`
@@ -110,7 +110,7 @@ export const test = tg.target(async () => {
 		echo "Checking that we can download via HTTPS."
 		curl -o $OUTPUT/tangram https://www.tangram.dev
 	`
-		.env(default_())
+		.env(build())
 		.checksum("unsafe")
 		.then(tg.Directory.expect);
 

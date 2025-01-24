@@ -14,7 +14,7 @@ export type Arg = {
 };
 
 /** Download a pre-compiled binary and wrap it. */
-export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.target(async (...args: std.Args<Arg>) => {
 	const { host: host_ } = await std.args.apply<Arg>(...args);
 	const { name, version } = metadata;
 	const tag = `${name}-v${version}`;
@@ -39,7 +39,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default toolchain;
+export default self;
 
 // Taken from https://github.com/oven-sh/bun/releases/download/bun-v${version}/SHASUMS256.txt.asc
 const binaryChecksums: { [key: string]: tg.Checksum } = {
@@ -54,7 +54,7 @@ const binaryChecksums: { [key: string]: tg.Checksum } = {
 };
 
 export const test = tg.target(async () => {
-	const bun = toolchain();
+	const bun = self();
 	const version = await $`bun --version | tee $OUTPUT`
 		.env(bun)
 		.then(tg.File.expect)

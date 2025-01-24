@@ -8,7 +8,7 @@ export type Arg = tg.File;
 export const install = tg.target(
 	async (pythonArtifact: tg.Directory, requirements: Arg) => {
 		// Construct an env with the standard C/C++ sdks, the Rust toolchain, and Python.
-		const toolchains = std.env.arg(std.sdk(), rust.toolchain(), pythonArtifact);
+		const toolchains = std.env.arg(std.sdk(), rust.self(), pythonArtifact);
 
 		// Download the requirements specified in any requirements.txt files.
 		const downloads = await $`

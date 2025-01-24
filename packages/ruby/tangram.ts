@@ -54,7 +54,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		dependencies: {
@@ -78,17 +78,17 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	// We need to skip the makefile step that attempts to update any .gem files in the bundle and replace them with the .gems we download ourself.
 	sourceDir = await std.patch(sourceDir, skipUpdateGems);
 
-	const gmpArtifact = gmp.default_({ build, host }, gmpArg);
-	const libYamlArtifact = libyaml.default_({ build, host }, libyamlArg);
+	const gmpArtifact = gmp.build({ build, host }, gmpArg);
+	const libYamlArtifact = libyaml.build({ build, host }, libyamlArg);
 	const deps = [
 		gmpArtifact,
-		libffi.default_({ build, host }, libffiArg),
+		libffi.build({ build, host }, libffiArg),
 		libYamlArtifact,
-		ncurses.default_({ build, host }, ncursesArg),
-		openssl.default_({ build, host }, opensslArg),
-		readline.default_({ build, host }, readlineArg),
-		rust.toolchain({ host: build, target: build }),
-		zlib.default_({ build, host }, zlibArg),
+		ncurses.build({ build, host }, ncursesArg),
+		openssl.build({ build, host }, opensslArg),
+		readline.build({ build, host }, readlineArg),
+		rust.self({ host: build, target: build }),
+		zlib.build({ build, host }, zlibArg),
 		// Ruby requires an existing Ruby to build, so we pull in an older version.
 		bootstrap.ruby(build),
 	];
@@ -184,7 +184,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default toolchain;
+export default self;
 
 export type DownloadGemArg = {
 	/** The name of the gem. */
@@ -316,10 +316,10 @@ export const test = tg.target(async () => {
 		"ruby",
 		hasVersion("ri", "6.10.0"),
 	];
-	await std.assert.pkg({ buildFn: toolchain, binaries, metadata });
+	await std.assert.pkg({ buildFn: self, binaries, metadata });
 
 	const output = await $`ruby -e 'puts "Hello, tangram!"' > $OUTPUT`
-		.env(toolchain())
+		.env(self())
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());

@@ -56,7 +56,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -78,28 +78,28 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const os = std.triple.os(host);
 
-	const icuArtifact = icu.default_({ build, env: env_, host, sdk }, icuArg);
+	const icuArtifact = icu.build({ build, env: env_, host, sdk }, icuArg);
 	const opensslArtifact = openssl.default(
 		{ build, env: env_, host, sdk },
 		opensslArg,
 	);
-	const lz4Artifact = lz4.default_({ build, env: env_, host, sdk }, lz4Arg);
-	const ncursesArtifact = ncurses.default_(
+	const lz4Artifact = lz4.build({ build, env: env_, host, sdk }, lz4Arg);
+	const ncursesArtifact = ncurses.build(
 		{ build, env: env_, host, sdk },
 		ncursesArg,
 	);
-	const readlineArtifact = readline.default_(
+	const readlineArtifact = readline.build(
 		{ build, env: env_, host, sdk },
 		readlineArg,
 	);
-	const zlibArtifact = zlib.default_({ build, env: env_, host, sdk }, zlibArg);
-	const zstdArtifact = zstd.default_({ build, env: env_, host, sdk }, zstdArg);
+	const zlibArtifact = zlib.build({ build, env: env_, host, sdk }, zlibArg);
+	const zstdArtifact = zstd.build({ build, env: env_, host, sdk }, zstdArg);
 
 	let pkgConfigArtifact;
 	if (os === "darwin") {
-		pkgConfigArtifact = pkgConf.default_({ build, host: build });
+		pkgConfigArtifact = pkgConf.build({ build, host: build });
 	} else if (os === "linux") {
-		pkgConfigArtifact = pkgConfig.default_({ build, host: build });
+		pkgConfigArtifact = pkgConfig.build({ build, host: build });
 	}
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [
@@ -107,10 +107,10 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 		lz4Artifact,
 		ncursesArtifact,
 		opensslArtifact,
-		bison.default_({ build, host: build }),
-		flex.default_({ build, host: build }),
-		m4.default_({ build, host: build }),
-		perl.default_({ build, host: build }, perlArg),
+		bison.build({ build, host: build }),
+		flex.build({ build, host: build }),
+		m4.build({ build, host: build }),
+		perl.build({ build, host: build }, perlArg),
 		pkgConfigArtifact,
 		readlineArtifact,
 		zlibArtifact,
@@ -167,11 +167,11 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries: ["postgres", "psql"],
 		libraries: ["pq"],
 		metadata,

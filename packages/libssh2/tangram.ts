@@ -42,7 +42,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -54,9 +54,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let dependencies = [
-		pkgConfig.default_({ build, host: build }),
-		openssl.default_({ build, host }, opensslArg),
-		zlib.default_({ build, host }, zlibArg),
+		pkgConfig.build({ build, host: build }),
+		openssl.build({ build, host }, opensslArg),
+		zlib.build({ build, host }, zlibArg),
 	];
 	let env = std.env.arg(...dependencies, env_);
 
@@ -71,9 +71,9 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	);
 });
 
-export default default_;
+export default build;
 
 export let test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, libraries: ["ssh2"] });
+	await std.assert.pkg({ buildFn: build, libraries: ["ssh2"] });
 	return true;
 });

@@ -1,7 +1,7 @@
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
-import { rustTriple, toolchain } from "./tangram.ts";
+import { rustTriple, self } from "./tangram.ts";
 
 export type Arg = {
 	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
@@ -103,7 +103,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		sdkArgs.push({ toolchain: "gnu" });
 	}
 	const sdk = std.sdk(...sdkArgs);
-	const rustArtifact = toolchain({ host, target });
+	const rustArtifact = self({ host, target });
 
 	// Download the dependencies using the cargo vendor.
 	tg.assert(source, "Must provide a source directory.");
@@ -269,7 +269,7 @@ const vendoredSources = async (
 			cd "$OUTPUT"
 			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "$OUTPUT/config"
 		`;
-		const rustArtifact = toolchain();
+		const rustArtifact = self();
 		const sdk = std.sdk();
 		const result = await $`${vendorScript}`
 			.checksum("unsafe")
@@ -469,7 +469,7 @@ export const testVendorDependencies = tg.target(async () => {
 		SOURCE="$(realpath ${sourceDirectory})"
 		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
 	`;
-	const rustArtifact = toolchain();
+	const rustArtifact = self();
 	const sdk = std.sdk();
 
 	const cargoVendored = await $`${vendorScript}`

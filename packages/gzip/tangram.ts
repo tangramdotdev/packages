@@ -29,7 +29,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -78,7 +78,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default default_;
+export default build;
 
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
 export const changeShebang = async (scriptFile: tg.File) => {
@@ -101,6 +101,6 @@ export const changeShebang = async (scriptFile: tg.File) => {
 };
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["gzip"], metadata });
+	await std.assert.pkg({ buildFn: build, binaries: ["gzip"], metadata });
 	return true;
 });

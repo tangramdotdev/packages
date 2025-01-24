@@ -45,7 +45,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -67,15 +67,15 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	const env = [
 		gettext({ build, host: build }),
-		gmp.default_({ build, env: env_, host, sdk }, gmpArg),
-		gnutls.default_({ build, env: env_, host, sdk }, gnutlsArg),
-		nettle.default_({ build, env: env_, host, sdk }, nettleArg),
-		libiconv.default_({ build, env: env_, host, sdk }, libiconvArg),
-		libpsl.default_({ build, env: env_, host, sdk }, libpslArg),
-		pcre2.default_({ build, env: env_, host, sdk }, pcre2Arg),
+		gmp.build({ build, env: env_, host, sdk }, gmpArg),
+		gnutls.build({ build, env: env_, host, sdk }, gnutlsArg),
+		nettle.build({ build, env: env_, host, sdk }, nettleArg),
+		libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
+		libpsl.build({ build, env: env_, host, sdk }, libpslArg),
+		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
 		pkgConfig({ build, host: build }),
-		zlib.default_({ build, env: env_, host, sdk }, zlibArg),
-		zstd.default_({ build, env: env_, host, sdk }, zstdArg),
+		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		zstd.build({ build, env: env_, host, sdk }, zstdArg),
 		{
 			LDFLAGS: tg.Mutation.suffix(
 				"-lnettle -lhogweed -lpcre2-8 -lgmp -lgnutls -lz",
@@ -106,7 +106,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const result = await $`
@@ -118,7 +118,7 @@ export const test = tg.target(async () => {
 		echo "Checking that we can download via HTTPS."
 		wget -O $OUTPUT/tangram https://www.tangram.dev
 	`
-		.env(default_())
+		.env(build())
 		.checksum("unsafe")
 		.then(tg.Directory.expect);
 

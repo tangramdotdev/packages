@@ -81,7 +81,7 @@ export const prerequisites = tg.target(async (hostArg?: string) => {
 	const components: std.Args<std.env.Arg> = [await bootstrap.utils(host)];
 
 	// Add GNU make.
-	const makeArtifact = await bootstrap.make.default_({ host });
+	const makeArtifact = await bootstrap.make.build({ host });
 	components.push(makeArtifact);
 
 	// Add patched GNU coreutils.

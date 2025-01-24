@@ -20,7 +20,7 @@ export const build = tg.target(async (arg: Arg) => {
 	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
 
 	let source = arg.source;
-	if (needsReconf(source)) {
+	if (await needsReconf(source)) {
 		source = await reconfigure(source);
 	}
 
@@ -30,7 +30,7 @@ export const build = tg.target(async (arg: Arg) => {
 
 export default build;
 
-export const needsReconf = async (source: tg.Directory): boolean => {
+export const needsReconf = async (source: tg.Directory): Promise<boolean> => {
 	const entries = await source.entries();
 	const hasFile = (name: string) =>
 		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;

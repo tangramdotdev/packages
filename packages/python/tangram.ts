@@ -89,7 +89,7 @@ export type Arg = {
 };
 
 /** Build and create a python environment. */
-export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -121,24 +121,24 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up build dependencies.
 	const buildDependencies = [];
-	const bisonForBuild = bison.default_({ build, host: build }).then((d) => {
+	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
 		return { BISON: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(bisonForBuild);
-	const m4ForBuild = m4.default_({ build, host: build }).then((d) => {
+	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
 		return { M4: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(m4ForBuild);
 	if (os === "darwin") {
 		const pkgConfigForBuild = pkgConf
-			.default_({ build, host: build })
+			.build({ build, host: build })
 			.then((d) => {
 				return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 			});
 		buildDependencies.push(pkgConfigForBuild);
 	} else if (os === "linux") {
 		const pkgConfigForBuild = pkgConfig
-			.default_({ build, host: build })
+			.build({ build, host: build })
 			.then((d) => {
 				return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
 			});
@@ -148,39 +148,39 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	// Set yup host dependencies.
 	const hostDependencies = [];
 	const bzip2ForHost = await bzip2
-		.default_({ build, host, sdk }, bzip2Arg)
+		.build({ build, host, sdk }, bzip2Arg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(bzip2ForHost);
 	const libffiForHost = await libffi
-		.default_({ build, host, sdk }, libffiArg)
+		.build({ build, host, sdk }, libffiArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(libffiForHost);
 	const libxcryptForHost = await libxcrypt
-		.default_({ build, host, sdk }, libxcryptArg)
+		.build({ build, host, sdk }, libxcryptArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(libxcryptForHost);
 	const ncursesForHost = await ncurses
-		.default_({ build, host, sdk }, ncursesArg)
+		.build({ build, host, sdk }, ncursesArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(ncursesForHost);
 	const opensslForHost = await openssl
-		.default_({ build, host, sdk }, opensslArg)
+		.build({ build, host, sdk }, opensslArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(opensslForHost);
 	const mpdecimalForHost = await mpdecimal
-		.default_({ build, host, sdk }, mpdecimalArg)
+		.build({ build, host, sdk }, mpdecimalArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(mpdecimalForHost);
 	const readlineForHost = await readline
-		.default_({ build, host, sdk }, readlineArg)
+		.build({ build, host, sdk }, readlineArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(readlineForHost);
 	const sqliteForHost = await sqlite
-		.default_({ build, host, sdk }, sqliteArg)
+		.build({ build, host, sdk }, sqliteArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(sqliteForHost);
 	const zlibForHost = await zlib
-		.default_({ build, host, sdk }, zlibArg)
+		.build({ build, host, sdk }, zlibArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 	hostDependencies.push(zlibForHost);
 
@@ -278,7 +278,7 @@ export const toolchain = tg.target(async (...args: std.Args<Arg>) => {
 	return python;
 });
 
-export default toolchain;
+export default self;
 
 /** Internal: wrap a directory containing a /bin subdirectory with python scripts. */
 export const wrapScripts = async (
@@ -391,7 +391,7 @@ export const build = tg.target(async (...args: std.Args<BuildArg>) => {
 
 	// Construct the python environment.
 	const pythonArtifact = await tg.directory(
-		toolchain({ ...pythonArg, build: buildTriple, env, host }),
+		self({ ...pythonArg, build: buildTriple, env, host }),
 		{
 			["lib/python3/site-packages"]: {
 				[name]: tg.symlink(tg`${source}/src/${name}`),
@@ -492,7 +492,7 @@ sys.exit(${attribute}())
 export const test = tg.target(async () => {
 	const helloOutput =
 		await $`set -x && python -c 'print("Hello, world!")' > $OUTPUT`
-			.env(toolchain())
+			.env(self())
 			.then(tg.File.expect)
 			.then((f) => f.text())
 			.then((t) => t.trim());
@@ -510,7 +510,7 @@ except ImportError as e:
 	print(f"Failed to import zlib: {str(e)}")`);
 	const importZlibOutput =
 		await $`set -x && python ${testImportZlibScript} > $OUTPUT`
-			.env(toolchain())
+			.env(self())
 			.then(tg.File.expect)
 			.then((f) => f.text())
 			.then((t) => t.trim());
@@ -520,14 +520,14 @@ except ImportError as e:
 	);
 
 	const pipVersionOutput = await $`set -x && pip3 --version > $OUTPUT`
-		.env(toolchain())
+		.env(self())
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());
 	tg.assert(pipVersionOutput.includes("24.3"), "failed to run pip3");
 
 	const venv = await $`set -x && python -m venv $OUTPUT --copies`
-		.env(toolchain())
+		.env(self())
 		.then(tg.Directory.expect);
 	console.log("venv", await venv.id());
 

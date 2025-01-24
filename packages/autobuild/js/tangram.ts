@@ -25,7 +25,7 @@ export default node;
 export const plain = tg.target(async (arg: Arg) => {
 	// FIXME - env!
 	const { source } = arg;
-	const toolchain = await nodejs.toolchain();
+	const toolchain = await nodejs.self();
 	const interpreter = await toolchain.get("bin/node").then(tg.File.expect);
 	return wrapScripts({ directory: source, extension: ".js", interpreter });
 });
@@ -39,5 +39,5 @@ export const env = tg.target(async (arg?: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
-	return std.env(nodejs.toolchain({ ...std.triple.rotate({ build, host }) }));
+	return std.env(nodejs.self({ ...std.triple.rotate({ build, host }) }));
 });

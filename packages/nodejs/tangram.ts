@@ -68,7 +68,7 @@ const source = async (): Promise<tg.Directory> => {
 	return node;
 };
 
-export const toolchain = tg.target(async (args?: ToolchainArg) => {
+export const self = tg.target(async (args?: ToolchainArg) => {
 	// Download Node
 	const artifact = source();
 
@@ -88,7 +88,7 @@ export const toolchain = tg.target(async (args?: ToolchainArg) => {
 });
 
 export const test = tg.target(async () => {
-	const node = toolchain();
+	const node = self();
 	return await $`
 		set -x
 		mkdir -p $OUTPUT
@@ -106,7 +106,7 @@ type PackageJson = {
 	};
 };
 
-export default toolchain;
+export default self;
 
 export type Arg = {
 	build?: string;
@@ -142,7 +142,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const host = hostArg ?? (await std.triple.host());
 	const build = buildArg ?? host;
 
-	const node = toolchain({
+	const node = self({
 		host: build,
 		target: host,
 	});

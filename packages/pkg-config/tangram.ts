@@ -36,7 +36,7 @@ export type Arg = {
 	proxy?: boolean;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -50,18 +50,18 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 
 	// Set up default build dependencies.
 	const buildDependencies = [];
-	const m4ForBuild = m4.default_({ build, host: build }).then((d) => {
+	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
 		return { M4: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(m4ForBuild);
-	const bisonForBuild = bison.default_({ build, host: build }).then((d) => {
+	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
 		return { BISON: std.directory.keepSubdirectories(d, "bin") };
 	});
 	buildDependencies.push(bisonForBuild);
 
 	// Set up host dependencies.
 	const zlibForHost = await zlib
-		.default_({ build, host, sdk }, zlibArg)
+		.build({ build, host, sdk }, zlibArg)
 		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
 
 	// Resolve env.
@@ -140,7 +140,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	});
 });
 
-export default default_;
+export default build;
 
 export const path = tg.target(
 	async (
@@ -167,7 +167,7 @@ export const path = tg.target(
 
 export const test = tg.target(async () => {
 	await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries: ["pkg-config"],
 		metadata,
 	});

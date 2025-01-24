@@ -38,17 +38,15 @@ export type Arg = {
 };
 
 /** Create an environment with poetry installed. */
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		host,
 		requirements: requirements_,
 	} = await std.args.apply<Arg>(...args);
 	const requirements = requirements_ ?? requirementsTxt;
-	return python.toolchain({ build, host, requirements });
+	return python.self({ build, host, requirements });
 });
-
-export default default_;
 
 export type BuildArgs = {
 	/** The source directory to build. */
@@ -71,7 +69,7 @@ export const build = tg.target(async (args: BuildArgs) => {
 	const host = args.host ?? (await std.triple.host());
 	const build = args.build ?? host;
 	// Construct the basic build environment.
-	const poetryArtifact = await default_({
+	const poetryArtifact = await self({
 		build,
 		host,
 	});
@@ -131,6 +129,6 @@ export const build = tg.target(async (args: BuildArgs) => {
 });
 
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: default_, binaries: ["poetry"], metadata });
+	await std.assert.pkg({ buildFn: self, binaries: ["poetry"], metadata });
 	return true;
 });

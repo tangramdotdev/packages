@@ -34,7 +34,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const default_ = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		cmake: cmakeArg = {},
@@ -68,7 +68,7 @@ export const default_ = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export default default_;
+export default build;
 
 export const test = tg.target(async () => {
 	const dylibOnly = (name: string) => {
@@ -76,10 +76,10 @@ export const test = tg.target(async () => {
 	};
 	let env = {};
 	if ((await std.triple.host().then(std.triple.os)) === "linux") {
-		env = { LD_LIBRARY_PATH: await tg`${default_()}/lib` };
+		env = { LD_LIBRARY_PATH: await tg`${build()}/lib` };
 	}
 	await std.assert.pkg({
-		buildFn: default_,
+		buildFn: build,
 		binaries: ["brotli"],
 		env,
 		libraries: ["brotlicommon", "brotlidec", "brotlienc"].map(dylibOnly),

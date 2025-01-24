@@ -51,14 +51,10 @@ export const build = tg.target(async (arg?: Arg) => {
 		fixup,
 	};
 
-	const env = std.env.arg(
-		bootstrap.sdk(host),
-		bootstrap.make.default_({ host }),
-		{
-			CPATH: tg.Mutation.unset(),
-			LIBRARY_PATH: tg.Mutation.unset(),
-		},
-	);
+	const env = std.env.arg(bootstrap.sdk(host), bootstrap.make.build({ host }), {
+		CPATH: tg.Mutation.unset(),
+		LIBRARY_PATH: tg.Mutation.unset(),
+	});
 
 	return await std.autotools.build({
 		env,
