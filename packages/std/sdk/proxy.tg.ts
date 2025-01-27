@@ -493,15 +493,9 @@ void printGreeting();
 		cc -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
 		cc -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
 		cc -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
-		ls -al
 		cp libconstants.${dylibExt} $OUTPUT/lib
 		cp libprinter.${dylibExt} $OUTPUT/lib
 		cp main $OUTPUT/bin
-		ls -al $OUTPUT/lib
-		strip $OUTPUT/lib/libconstants.${dylibExt}
-		strip $OUTPUT/lib/libprinter.${dylibExt}
-		strip $OUTPUT/bin/main
-		ls -al $OUTPUT/lib
 	`;
 
 	const output = await tg
@@ -676,35 +670,44 @@ const char* getGreetingB();
 	const libraryPaths = interpreter.libraryPaths;
 	tg.assert(libraryPaths !== undefined);
 	console.log("manifest library paths", libraryPaths);
-	// NOTE - the input has six paths: libc, greeta, constantsa, greetb, constantsb, empty. The output will differ based on the opt level.
+	// NOTE - the input has six paths: libc, greeta, constantsa, greetb, constantsb, empty. The output will differ based on the opt level and OS.
 	const numLibraryPaths = libraryPaths.length;
 	console.log("numLibraryPaths", numLibraryPaths);
 	switch (opt) {
 		case "none": {
 			// All the paths are retained.
-			tg.assert(numLibraryPaths === 10);
+			// On Linux, we get the 6 from our libraries plus an additional 4 from the toolchain, none of which are filtered out.
+			const expectedNumLibraryPaths = os === "linux" ? 10 : 6;
+			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
 			break;
 		}
 		case "filter": {
 			// The empty path with no needed library was dropped.
-			tg.assert(numLibraryPaths === 5);
-			// each path should have a single directory component and a single string component.
+			// On Linux, we also have a path for libc.
+			const expectedNumLibraryPaths = os === "linux" ? 5 : 4;
+			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
+			// each path should have a single directory component and optionally a single string component.
 			for (let path of libraryPaths) {
-				tg.assert(path.components.length === 2);
+				const pathLength = path.components.length;
+				tg.assert(pathLength === 1 || pathLength === 2);
 				const artifactComponent = path.components[0];
 				tg.assert(artifactComponent !== undefined);
 				tg.assert(artifactComponent.kind === "artifact");
 				tg.assert(artifactComponent.value.startsWith("dir_"));
-				const subpathComponent = path.components[1];
-				tg.assert(subpathComponent !== undefined);
-				tg.assert(subpathComponent.kind === "string");
-				tg.assert(subpathComponent.value === "/lib");
+				if (pathLength === 2) {
+					const subpathComponent = path.components[1];
+					tg.assert(subpathComponent !== undefined);
+					tg.assert(subpathComponent.kind === "string");
+					tg.assert(subpathComponent.value === "/lib");
+				}
 			}
 			break;
 		}
 		case "resolve": {
 			// The empty path with no needed library was dropped.
-			tg.assert(numLibraryPaths === 5);
+			// On Linux, we also have a path for libc.
+			const expectedNumLibraryPaths = os === "linux" ? 5 : 4;
+			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
 			// each path should have a single directory component.
 			for (let path of libraryPaths) {
 				tg.assert(path.components.length === 1);
@@ -717,7 +720,9 @@ const char* getGreetingB();
 		}
 		case "isolate": {
 			// There are as many library paths as libraries.
-			tg.assert(numLibraryPaths === 5);
+			// On Linux, we also have a path for libc.
+			const expectedNumLibraryPaths = os === "linux" ? 5 : 4;
+			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
 			// each path should have a single directory component.
 			for (let path of libraryPaths) {
 				tg.assert(path.components.length === 1);
@@ -741,16 +746,24 @@ const char* getGreetingB();
 			tg.assert(component.value.startsWith("dir_"));
 			const combinedDir = tg.Directory.withId(component.value);
 			const entries = await combinedDir.entries();
-			tg.assert(Object.keys(entries).length === 5);
-			const libc = await combinedDir.tryGet("libc.so");
-			tg.assert(libc instanceof tg.File);
-			const libgreeta = await combinedDir.tryGet("libgreeta.so");
+
+			const expectedNumEntries = os === "linux" ? 5 : 4;
+			tg.assert(Object.keys(entries).length === expectedNumEntries);
+			if (os === "linux") {
+				const libc = await combinedDir.tryGet("libc.so");
+				tg.assert(libc instanceof tg.File);
+			}
+			const libgreeta = await combinedDir.tryGet(`libgreeta.${dylibExt}`);
 			tg.assert(libgreeta instanceof tg.File);
-			const libconstantsa = await combinedDir.tryGet("libconstantsa.so");
+			const libconstantsa = await combinedDir.tryGet(
+				`libconstantsa.${dylibExt}`,
+			);
 			tg.assert(libconstantsa instanceof tg.File);
-			const libgreetb = await combinedDir.tryGet("libgreetb.so");
+			const libgreetb = await combinedDir.tryGet(`libgreetb.${dylibExt}`);
 			tg.assert(libgreetb instanceof tg.File);
-			const libconstantsb = await combinedDir.tryGet("libconstantsb.so");
+			const libconstantsb = await combinedDir.tryGet(
+				`libconstantsb.${dylibExt}`,
+			);
 			tg.assert(libconstantsb instanceof tg.File);
 			break;
 		}
