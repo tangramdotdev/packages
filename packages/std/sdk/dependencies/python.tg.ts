@@ -4,6 +4,9 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "Python",
 	version: "3.13.1",
+	provides: {
+		binaries: ["python"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -20,25 +23,21 @@ export const source = tg.target(async () => {
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
-	build?: string | undefined;
+	build?: string;
 	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	host?: string;
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
-		build: build_,
+		build,
 		env,
-		host: host_,
-		sdk,
+		host,
 		source: source_,
-	} = arg ?? {};
+	} = await std.args.apply<Arg>(...args);
 
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
 	const os = std.triple.os(build);
 
 	const configure = {
@@ -63,7 +62,7 @@ export const build = tg.target(async (arg?: Arg) => {
 			...(await std.triple.rotate({ build, host })),
 			env,
 			phases,
-			sdk,
+			sdk: false,
 			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
@@ -77,8 +76,11 @@ export default build;
 
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, binaries: ["python3"], metadata });
-	return true;
+	const env = await bootstrap.sdk(host);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		bootstrapMode: true,
+		env,
+	};
+	return await std.assert.pkg(build, spec);
 });

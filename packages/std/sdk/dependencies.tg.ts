@@ -39,20 +39,22 @@ export const buildTools = async (
 ) => {
 	const arg = await tg.resolve(unresolvedArg);
 	const { host, buildToolchain } = arg;
+	console.log("buildToolchain", buildToolchain);
+	throw new Error("hakt");
 	const utils = std.utils.env({ host, sdk: false, env: buildToolchain });
 	// This env is used to build the remaining dependencies only. It includes the bootstrap SDK.
 	let utilsEnv = std.env.arg(utils, buildToolchain);
 
 	// Some dependencies depend on previous builds, so they are manually ordered here.
-	const m4Artifact = m4({ host, sdk: false, env: utilsEnv });
+	const m4Artifact = m4({ host, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, m4Artifact);
 
-	const bisonArtifact = bison({ host, sdk: false, env: utilsEnv });
+	const bisonArtifact = bison({ host, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, bisonArtifact);
 
-	const flexArtifact = flex({ host, sdk: false, env: utilsEnv });
+	const flexArtifact = flex({ host, env: utilsEnv });
 
-	const perlArtifact = perl({ host, sdk: false, env: utilsEnv });
+	const perlArtifact = perl({ host, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, perlArtifact);
 
 	const libxcryptArtifact = libxcrypt({
@@ -62,7 +64,7 @@ export const buildTools = async (
 	});
 	utilsEnv = std.env.arg(utilsEnv, libxcryptArtifact);
 
-	const pythonArtifact = python({ host, sdk: false, env: utilsEnv });
+	const pythonArtifact = python({ host, env: utilsEnv });
 
 	// This env contains the standard utils and additional tools, but NO SDK, so each build step can swap the compiler out accordingly.
 	return await std.env.arg(
@@ -88,32 +90,29 @@ export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
 
 	const zlibArtifact = zlib({
 		host,
-		sdk: false,
 		env: buildToolchain,
 	});
 	const zstdArtifact = zstd({
 		host,
-		sdk: false,
 		env: buildToolchain,
 	});
 	const ret = [zlibArtifact, zstdArtifact];
 
 	if (withGccLibs) {
 		// These libraries depend on m4, but no other library depends on them. Build them here and use a separate env to thread dependencies..
-		const gmpArtifact = gmp({ host, sdk: false, env: buildToolchain });
+		const gmpArtifact = gmp({ host, env: buildToolchain });
 		ret.push(gmpArtifact);
 		let gmpEnv = std.env.arg(buildToolchain, gmpArtifact);
 
-		const islArtifact = isl({ host, sdk: false, env: gmpEnv });
+		const islArtifact = isl({ host, env: gmpEnv });
 		ret.push(islArtifact);
 
-		const mpfrArtifact = mpfr({ host, sdk: false, env: gmpEnv });
+		const mpfrArtifact = mpfr({ host, env: gmpEnv });
 		ret.push(mpfrArtifact);
 		gmpEnv = std.env.arg(gmpEnv, mpfrArtifact);
 
 		const mpcArtifact = mpc({
 			host,
-			sdk: false,
 			env: gmpEnv,
 		});
 		ret.push(mpcArtifact);

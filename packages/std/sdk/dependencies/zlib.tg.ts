@@ -3,6 +3,9 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "zlib",
 	version: "1.3.1",
+	provides: {
+		libraries: ["z"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -18,24 +21,19 @@ export const source = tg.target(async () => {
 });
 
 export type Arg = {
-	build?: string | undefined;
+	build?: string;
 	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	host?: string;
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
-		build: build_,
+		build,
 		env: env_,
-		host: host_,
-		sdk,
+		host,
 		source: source_,
-	} = arg ?? {};
-
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
+	} = await std.args.apply<Arg>(...args);
 
 	const envs = [env_];
 	if (build !== host) {
@@ -49,7 +47,7 @@ export const build = tg.target(async (arg?: Arg) => {
 		...(await std.triple.rotate({ build, host })),
 		defaultCrossArgs: false,
 		env,
-		sdk,
+		sdk: false,
 		source: source_ ?? source(),
 	});
 
@@ -61,8 +59,11 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, libraries: ["z"] });
-	return true;
+	const env = await bootstrap.sdk(host);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		bootstrapMode: true,
+		env,
+	};
+	return await std.assert.pkg(build, spec);
 });

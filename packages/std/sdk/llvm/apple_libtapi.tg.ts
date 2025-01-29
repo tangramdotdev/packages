@@ -21,10 +21,7 @@ export const build = tg.target(async () => {
 	const llvmSdk = std.sdk({ host, toolchain: "llvm" });
 	const cmakeArtifact = cmake({ host });
 	const ninjaArtifact = ninja({ host });
-	const python = dependencies.python.build({
-		host,
-		sdk: bootstrap.sdk.arg(host),
-	});
+	const python = dependencies.python.build({ host });
 	const env = std.env.arg(llvmSdk, cmakeArtifact, ninjaArtifact, python);
 
 	return await $`

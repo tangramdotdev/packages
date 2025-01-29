@@ -18,15 +18,14 @@ export const source = tg.target(() => {
 });
 
 export type Arg = {
-	build?: string | undefined;
+	build?: string;
 	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	host?: string;
 	source?: tg.Directory;
 };
 
 export const build = tg.target(async (arg?: Arg) => {
-	const { build, env: env_, host, sdk, source: source_ } = arg ?? {};
+	const { build, env: env_, host, source: source_ } = arg ?? {};
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -38,7 +37,7 @@ export const build = tg.target(async (arg?: Arg) => {
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
-		sdk,
+		sdk: false,
 		source: source_ ?? source(),
 	});
 

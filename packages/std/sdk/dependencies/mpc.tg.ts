@@ -4,6 +4,9 @@ export const metadata = {
 	homepage: "https://www.multiprecision.org",
 	name: "mpc",
 	version: "1.3.1",
+	provides: {
+		libraries: ["mpc"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -14,18 +17,19 @@ export const source = tg.target(() => {
 });
 
 export type Arg = {
-	build?: string | undefined;
+	build?: string;
 	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	host?: string;
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
-	const { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
-
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
+export const build = tg.target(async (...args: std.Args<Arg>) => {
+	const {
+		build,
+		env,
+		host,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -35,7 +39,7 @@ export const build = tg.target(async (arg?: Arg) => {
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },
-		sdk,
+		sdk: false,
 		source: source_ ?? source(),
 	});
 
@@ -47,6 +51,11 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
-	const sdk = await bootstrap.sdk.arg(host);
-	return await build({ host, sdk });
+	const env = await bootstrap.sdk(host);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		bootstrapMode: true,
+		env,
+	};
+	return await std.assert.pkg(build, spec);
 });

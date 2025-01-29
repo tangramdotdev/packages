@@ -316,7 +316,6 @@ export const ociImageFromLayers = async (
 	if (layerCompression === "zstd") {
 		additionalEnv.push(
 			zstd({
-				sdk: false,
 				env: await std.env.arg(additionalEnv, bootstrap.sdk()),
 			}),
 		);

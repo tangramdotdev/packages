@@ -5,6 +5,9 @@ import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 export const metadata = {
 	name: "perl",
 	version: "5.40.0",
+	provides: {
+		binaries: ["perl"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -21,23 +24,19 @@ export const source = tg.target(async () => {
 });
 
 export type Arg = {
-	build?: string | undefined;
+	build?: string;
 	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	host?: string;
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
-		build: buildTriple_,
+		build,
 		env,
-		host: host_,
-		sdk,
+		host,
 		source: source_,
-	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
-	const build = buildTriple_ ?? host;
+	} = await std.args.apply<Arg>(...args);
 
 	const sourceDir = source_ ?? source();
 
@@ -68,7 +67,7 @@ export const build = tg.target(async (arg?: Arg) => {
 		env,
 		phases,
 		prefixArg: "-Dprefix=",
-		sdk,
+		sdk: false,
 		source: sourceDir,
 	});
 
@@ -132,8 +131,11 @@ export default build;
 
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, binaries: ["perl"], metadata });
-	return true;
+	const env = await bootstrap.sdk(host);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		bootstrapMode: true,
+		env,
+	};
+	return await std.assert.pkg(build, spec);
 });

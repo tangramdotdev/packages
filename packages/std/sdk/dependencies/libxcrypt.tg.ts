@@ -6,6 +6,9 @@ export const metadata = {
 	license: "LGPL-2.1",
 	repository: "https://github.com/besser82/libxcrypt",
 	version: "4.4.36",
+	provides: {
+		libraries: ["crypt"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -31,12 +34,17 @@ export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
-	const { autotools = {}, build, env, host, sdk, source: source_ } = arg ?? {};
+export const build = tg.target(async (...args: std.Args<Arg>) => {
+	const {
+		autotools = {},
+		build,
+		env,
+		host,
+		source: source_,
+	} = await std.args.apply<Arg>(...args);
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -60,8 +68,11 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ metadata, buildFn: build, libraries: ["xcrypt"] });
-	return true;
+	const env = await bootstrap.sdk(host);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		bootstrapMode: true,
+		env,
+	};
+	return await std.assert.pkg(build, spec);
 });

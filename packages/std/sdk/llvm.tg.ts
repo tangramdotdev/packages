@@ -86,7 +86,6 @@ export const toolchain = tg.target(async (arg?: LLVMArg) => {
 	const pythonForBuild = dependencies.python.build({
 		build,
 		host: build,
-		sdk: bootstrap.sdk.arg(build),
 	});
 	const ncursesArtifact = ncurses({ build, host });
 	const zlibArtifact = dependencies.zlib.build({ build, host });
