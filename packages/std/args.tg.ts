@@ -9,17 +9,38 @@ export type PackageArg = { [key: string]: tg.Value } & {
 	sdk?: std.sdk.Arg | undefined;
 };
 
+/** A function that accepts a variable amount of package args and produces a directory. This is the standard type for the default exports of most packages. */
+export type BuildCommand<T extends PackageArg> =
+	| ((...args: UnresolvedArgs<T>) => Promise<tg.Directory>)
+	| tg.Target<Args<T>, tg.Directory>;
+
+/** Evaluate the command with a single arg. */
+export const buildCommandOutput = async <T extends PackageArg>(
+	cmd: BuildCommand<T>,
+	arg: T,
+): Promise<tg.Directory> => {
+	return (cmd as (...args: Array<T>) => Promise<tg.Directory>)(arg);
+};
+
 /** After application, the resulting type always has concrete values for build, host, and sdk. */
 export type ResolvedPackageArg<T extends PackageArg> = Omit<
 	T,
-	"build" | "host" | "sdk"
+	"build" | "env" | "host" | "sdk" | "dependencies"
 > & {
 	build: string;
+	dependencies?: ResolvedDependencyArgs;
+	env?: std.env.Arg;
 	host: string;
 	sdk: std.sdk.Arg;
 };
 
-export type DependencyArgs = { [key: string]: PackageArg };
+export type ResolvedDependencyArgs = {
+	[key: string]: ResolvedPackageArg<PackageArg>;
+};
+
+export type DependencyArgs = { [key: string]: boolean | PackageArg };
+
+export type DependencyArg<T> = Omit<T, "build" | "host">;
 
 /** Variadic argument type. */
 export type Args<T extends tg.Value = tg.Value> = Array<
@@ -57,23 +78,52 @@ export const apply = async <T extends PackageArg>(
 
 	// Process dependency args.
 	const dependencyArgs = arg.dependencies ?? [];
-	const dependencies: DependencyArgs = {};
+	const resolvedDependencies: ResolvedDependencyArgs = {};
 	for (const dependency of dependencyArgs) {
 		if (dependency === undefined) {
 			continue;
 		}
-		for (const [key, value] of Object.entries(dependency)) {
-			if (dependencies[key] === undefined) {
-				dependencies[key] = {};
+		for (let [key, value] of Object.entries(dependency)) {
+			// Skip if false, omitting the key.
+			if (value === false) {
+				delete resolvedDependencies[key];
+				continue;
 			}
 
-			const existing = dependencies[key];
+			// Convert true to empty object
+			if (value === true) {
+				if (!(key in resolvedDependencies)) {
+					value = {
+						build,
+						dependencies: {},
+						env: {},
+						host,
+						sdk: {},
+					};
+				}
+			}
 
-			dependencies[key] = {
+			// Ensure we no longer have a boolean.
+			tg.assert(typeof value !== "boolean");
+
+			const existing = resolvedDependencies[key];
+
+			resolvedDependencies[key] = {
 				...existing,
-				build: value.build ?? existing?.build,
+				build: value.build ?? existing?.build ?? build,
+				dependencies:
+					(value.dependencies
+						? (
+								await apply({
+									dependencies: {
+										...existing?.dependencies,
+										...value.dependencies,
+									},
+								})
+							).dependencies
+						: existing?.dependencies) ?? {},
 				env: await std.env.arg(existing?.env, value.env),
-				host: value.host ?? existing?.host,
+				host: value.host ?? existing?.host ?? host,
 				sdk: await std.sdk.arg(existing?.sdk, value.sdk),
 			};
 		}
@@ -82,7 +132,7 @@ export const apply = async <T extends PackageArg>(
 	return {
 		...arg,
 		build,
-		dependencies,
+		dependencies: resolvedDependencies,
 		env,
 		host,
 		sdk,

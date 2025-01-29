@@ -41,19 +41,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = resolved;
 
-	// Set up default build dependencies.
-	const buildDependencies = [];
-	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
-		return { M4: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(m4ForBuild);
+	const dependencies = [std.env.buildDependency(m4.build)].map((dep) =>
+		std.env.envArgFromDependency(build, env_, host, sdk, dep),
+	);
 
 	// Resolve environment.
-	let env = await std.env.arg(...buildDependencies, env_);
-
-	// Add final build dependencies to environment.
-	const finalM4 = await std.env.getArtifactByKey({ env, key: "M4" });
-	env = await std.env.arg(env, finalM4);
+	const env = await std.env.arg(...dependencies, env_);
 
 	// Set up phases.
 	const configure = {
@@ -94,7 +87,13 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	// FIXME - yacc requires sed
+	binaries: ["bison"],
+	libraries: [{ name: "y", dylib: false, staticlib: true }],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, binaries: ["bison"], metadata });
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

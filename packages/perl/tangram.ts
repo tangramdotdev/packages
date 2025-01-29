@@ -33,8 +33,8 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		libffi?: libffi.Arg;
-		zlib?: zlib.Arg;
+		libffi?: boolean | std.args.DependencyArg<libffi.Arg>;
+		zlib?: boolean | std.args.DependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -43,53 +43,45 @@ export type Arg = {
 };
 
 export const build = tg.target(async (...args: std.Args<Arg>) => {
+	const defaultDependencies = {
+		libffi: true,
+		zlib: true,
+	};
+
 	const {
 		autotools = {},
-		build: build_,
-		dependencies: { libffi: libffiArg = {}, zlib: zlibArg = {} } = {},
+		build,
+		dependencies: dependencyArgs = {},
 		env: env_,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
-
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
+	} = await std.args.apply<Arg>({ dependencies: defaultDependencies }, ...args);
 
 	const sourceDir = source_ ?? source();
 
-	// Set up default build dependencies.
-	const buildDependencies = [];
-	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
-		return { M4: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(m4ForBuild);
-	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
-		return { BISON: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(bisonForBuild);
-
-	// Set up host dependencies.
-	const hostDependencies = [];
-	const libffiForHost = await libffi
-		.build({ build, host, sdk }, libffiArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(libffiForHost);
-	const zlibForHost = await zlib
-		.build({ build, host, sdk }, zlibArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(zlibForHost);
+	const dependencies = [
+		std.env.buildDependency(m4.build),
+		std.env.buildDependency(bison.build),
+	];
+	if (dependencyArgs.libffi !== undefined) {
+		dependencies.push(
+			std.env.runtimeDependency(libffi.build, dependencyArgs.libffi),
+		);
+	}
+	if (dependencyArgs.zlib !== undefined) {
+		dependencies.push(
+			std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
+		);
+	}
 
 	// Resolve env.
-	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
-
-	// Add final build dependencies to environment.
-	const resolvedBuildDependencies = [];
-	const finalM4 = await std.env.getArtifactByKey({ env, key: "M4" });
-	resolvedBuildDependencies.push(finalM4);
-	const finalBison = await std.env.getArtifactByKey({ env, key: "BISON" });
-	resolvedBuildDependencies.push(finalBison);
-	env = await std.env.arg(env, ...resolvedBuildDependencies);
+	const env = std.env.arg(
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		env_,
+	);
 
 	const configure = {
 		args: [
@@ -195,8 +187,13 @@ export const wrapScript = async (script: tg.File) => {
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
+export const provides = {
+	binaries: ["perl"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, binaries: ["perl"], metadata });
+	const spec = std.assert.defaultSpec(provides, metadata);
+	await std.assert.pkg(build, spec);
 
 	const output = await $`perl -e 'print "hello\n"' > $OUTPUT`
 		.env(build())

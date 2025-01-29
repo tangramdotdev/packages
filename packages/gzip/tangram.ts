@@ -100,7 +100,11 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	return newFile;
 };
 
+export const provides = {
+	binaries: ["gzip"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, binaries: ["gzip"], metadata });
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

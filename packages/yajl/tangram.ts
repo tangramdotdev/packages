@@ -61,6 +61,14 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["json_reformat", "json_verify"],
+	libraries: [
+		{ name: "yajl", dylib: true, staticlib: false },
+		{ name: "yajl_s", dylib: false, staticlib: true },
+	],
+};
+
 export const test = tg.target(async () => {
 	const hasUsage = (name: string) => {
 		return {
@@ -70,14 +78,9 @@ export const test = tg.target(async () => {
 				stdout.toLowerCase().includes("usage:"),
 		};
 	};
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [hasUsage("json_reformat"), hasUsage("json_verify")],
-		libraries: [
-			{ name: "yajl", dylib: true, staticlib: false },
-			{ name: "yajl_s", dylib: false, staticlib: true },
-		],
-		metadata,
-	});
-	return true;
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		binaries: provides.binaries.map(hasUsage),
+	};
+	return await std.assert.pkg(build, spec);
 });

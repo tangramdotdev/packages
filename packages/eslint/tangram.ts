@@ -1,6 +1,5 @@
 import * as node from "nodejs" with { path: "../nodejs" };
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 import packageLock from "./package-lock.json" with { type: "file" };
 
@@ -57,9 +56,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["eslint"],
+};
+
 export const test = tg.target(async () => {
-	return await $`
-			echo "Checking that we can run eslint." | tee $OUTPUT
-			echo "$(eslint --version)" | tee -a $OUTPUT
-		`.env(build());
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

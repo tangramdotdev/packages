@@ -5,14 +5,14 @@ export const metadata = {
 	name: "bc",
 	license: "BSD-2-Clause",
 	repository: "https://git.gavinhoward.com/gavin/bc",
-	version: "6.7.5",
+	version: "7.0.3",
 };
 
 export const source = tg.target(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:c3e02c948d51f3ca9cdb23e011050d2d3a48226c581e0749ed7cbac413ce5461";
+		"sha256:91eb74caed0ee6655b669711a4f350c25579778694df248e28363318e03c7fc4";
 	const base = `https://git.gavinhoward.com/gavin/${name}/releases/download/${version}`;
 	return await std
 		.download({ base, checksum, name, version, extension })
@@ -69,7 +69,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["bc", "dc"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, binaries: ["bc"], metadata });
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

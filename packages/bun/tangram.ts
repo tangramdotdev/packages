@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://bun.sh",
@@ -53,16 +52,11 @@ const binaryChecksums: { [key: string]: tg.Checksum } = {
 		"sha256:3f5630e0641d0824eb334cfe89d17cf69b1b6019b68d118afba7b62045794f58",
 };
 
+export const provides = {
+	binaries: ["bun"],
+};
+
 export const test = tg.target(async () => {
-	const bun = self();
-	const version = await $`bun --version | tee $OUTPUT`
-		.env(bun)
-		.then(tg.File.expect)
-		.then((f) => f.text())
-		.then((t) => t.trim());
-	tg.assert(
-		version === metadata.version,
-		`expected ${metadata.version}, got ${version}`,
-	);
-	return bun;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(self, spec);
 });

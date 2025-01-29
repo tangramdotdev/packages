@@ -99,11 +99,17 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["curl"],
+	libraries: ["curl"],
+};
+
 export const test = tg.target(async () => {
+	const spec = std.assert.defaultSpec(provides, metadata);
+	await std.assert.pkg(build, spec);
+
 	const result = await $`
 		set -x
-		echo "Checking that we can run curl."
-		curl --version
 		echo "Checking that we can download a file."
 		mkdir -p $OUTPUT
 		curl -o $OUTPUT/example http://example.com

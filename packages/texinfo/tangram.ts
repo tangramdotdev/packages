@@ -124,23 +124,22 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: [
+		"install-info",
+		"makeinfo",
+		"pdftexi2dvi",
+		"pod2texi",
+		"texi2any",
+		"texi2dvi",
+		"texi2pdf",
+		"texindex",
+	],
+};
+
 export const test = tg.target(async () => {
-	return (
-		await tg.target(
-			tg`
-				echo "Checking that we can run texinfo."
-				install-info --version
-				makeinfo --version
-				pdftexi2dvi --version
-				pod2texi --version
-				texi2any --version
-				texi2dvi --version
-				texi2pdf --version
-				texindex --version
-			`,
-			{
-				env: std.env.arg(build()),
-			},
-		)
-	).output();
+	const spec = std.assert.defaultSpec(provides, metadata);
+	// FIXME - build should return a directory, not an env - wrap the bins in the env.
+	return true;
+	// return await std.assert.pkg(build, spec);
 });

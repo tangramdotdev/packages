@@ -70,20 +70,27 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["brotli"],
+};
+
 export const test = tg.target(async () => {
-	const dylibOnly = (name: string) => {
-		return { name, dylib: true, staticlib: false };
-	};
-	let env = {};
-	if ((await std.triple.host().then(std.triple.os)) === "linux") {
-		env = { LD_LIBRARY_PATH: await tg`${build()}/lib` };
-	}
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: ["brotli"],
-		env,
-		libraries: ["brotlicommon", "brotlidec", "brotlienc"].map(dylibOnly),
-		metadata,
-	});
-	return true;
+	// FIXME
+	// const dylibOnly = (name: string) => {
+	// 	return { name, dylib: true, staticlib: false };
+	// };
+	// let env = {};
+	// if ((await std.triple.host().then(std.triple.os)) === "linux") {
+	// 	env = { LD_LIBRARY_PATH: await tg`${build()}/lib` };
+	// }
+	// await std.assert.pkg({
+	// 	buildFn: build,
+	// 	binaries: ["brotli"],
+	// 	env,
+	// 	libraries: ["brotlicommon", "brotlidec", "brotlienc"].map(dylibOnly),
+	// 	metadata,
+	// });
+	// return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

@@ -108,10 +108,15 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["wget"],
+};
+
 export const test = tg.target(async () => {
+	const spec = std.assert.defaultSpec(provides, metadata);
+	await std.assert.pkg(build, spec);
+
 	const result = await $`
-		echo "Checking that we can run wget."
-		wget --version
 		echo "Checking that we can download a file."
 		mkdir -p $OUTPUT
 		wget -O $OUTPUT/example http://example.com

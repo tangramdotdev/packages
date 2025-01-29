@@ -77,21 +77,24 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["chacl", "getfacl", "setfacl"],
+	headers: ["acl/libacl.h", "sys/acl.h"],
+	libraries: ["acl"],
+};
+
 export const test = tg.target(async () => {
-	const binTest = (name: string) => {
+	const displaysUsage = (name: string) => {
 		return {
 			name,
 			testArgs: [],
 			testPredicate: (stdout: string) => stdout.includes("Usage:"),
 		};
 	};
-	const binaries = ["chacl", "getfacl", "setfacl"].map(binTest);
-
-	await std.assert.pkg({
-		binaries,
-		buildFn: build,
-		libraries: ["acl"],
+	const spec = {
+		...provides,
+		binaries: provides.binaries.map(displaysUsage),
 		metadata,
-	});
-	return true;
+	};
+	return await std.assert.pkg(build, spec);
 });

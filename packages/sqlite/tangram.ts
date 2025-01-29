@@ -1,5 +1,5 @@
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -38,9 +38,10 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		ncurses?: ncurses.Arg;
-		readline?: readline.Arg;
-		zlib?: zlib.Arg;
+		pkgConf?: std.args.DependencyArg<pkgConf.Arg>;
+		ncurses?: boolean | std.args.DependencyArg<ncurses.Arg>;
+		readline?: boolean | std.args.DependencyArg<readline.Arg>;
+		zlib?: boolean | std.args.DependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -49,28 +50,52 @@ export type Arg = {
 };
 
 export const build = tg.target(async (...args: std.Args<Arg>) => {
+	const defaultDependencies = {
+		ncurses: false,
+		readline: false,
+		zlib: false,
+	};
 	const {
 		autotools = {},
 		build: build_,
-		dependencies: {
-			ncurses: ncursesArg = {},
-			readline: readlineArg = {},
-			zlib: zlibArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.args.apply<Arg>({ dependencies: defaultDependencies }, ...args);
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
+	console.log("dependencyArgs", dependencyArgs);
+
+	const dependencies = [
+		std.env.buildDependency(pkgConf.build, dependencyArgs.pkgConf),
+	];
+	// FIXME these all got added wtf.
+	if (dependencyArgs.ncurses !== undefined) {
+		console.log("adding ncurses");
+		dependencies.push(
+			std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
+		);
+	}
+	if (dependencyArgs.readline !== undefined) {
+		// FIXME - check that ncurses is also enabled.
+		dependencies.push(
+			std.env.runtimeDependency(readline.build, dependencyArgs.readline),
+		);
+	}
+	if (dependencyArgs.zlib !== undefined) {
+		dependencies.push(
+			std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
+		);
+	}
+	console.log("deps", dependencies);
 
 	const env = std.env.arg(
-		pkgConfig.build({ build, host: build }),
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		readline.build({ build, env: env_, host, sdk }, readlineArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
 		env_,
 	);
 
@@ -87,12 +112,13 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["sqlite3"],
+	headers: ["sqlite3.h"],
+	libraries: ["sqlite3"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: ["sqlite3"],
-		libraries: ["sqlite3"],
-		metadata,
-	});
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

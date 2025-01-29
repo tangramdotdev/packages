@@ -55,14 +55,20 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["fzf"],
+};
+
 export const test = tg.target(async () => {
 	const majorMinor = metadata.version.split(".").slice(2).join(".");
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [
-			{ name: "fzf", testPredicate: (stdout) => stdout.includes(majorMinor) },
-		],
-		metadata,
-	});
-	return true;
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		binaries: provides.binaries.map((name) => {
+			return {
+				name,
+				testPredicate: (stdout: string) => stdout.includes(majorMinor),
+			};
+		}),
+	};
+	return await std.assert.pkg(build, spec);
 });

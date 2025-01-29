@@ -165,11 +165,11 @@ export const path = tg.target(
 	},
 );
 
+export const provides = {
+	binaries: ["pkg-config"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: ["pkg-config"],
-		metadata,
-	});
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

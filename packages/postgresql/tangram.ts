@@ -169,12 +169,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["postgres", "psql"],
+	libraries: ["pq"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: ["postgres", "psql"],
-		libraries: ["pq"],
-		metadata,
-	});
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

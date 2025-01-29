@@ -294,7 +294,7 @@ export const vendor = async ({
 		.then(tg.Directory.expect);
 };
 
-// add cgo test.
+//TODO spec, add cgo test.
 
 export const test = tg.target(async () => {
 	const source = tg.directory({

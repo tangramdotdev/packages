@@ -113,3 +113,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
+
+export const test = tg.target(() => {
+	return tg.unimplemented();
+});

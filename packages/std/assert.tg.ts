@@ -5,13 +5,22 @@ import {
 	wrap,
 } from "./wrap.tg.ts";
 
+/** Define the expected contents of the built package. */
+export type PackageProvides = {
+	/** All executables that should exist under `bin/`. */
+	binaries?: Array<string>;
+	/** The names of all header files that should exist under `include/`. */
+	headers?: Array<string>;
+	/** All libraries that should exist under `lib/`. By default, checks for both staticlibs and dylibs */
+	libraries?: Array<LibrarySpec>;
+};
+
+/** Define the expected behavior of each package component. A `PackageProvides` object is a valid `PackageSpec`, but most packages will have additional behavior to assert. */
 export type PackageSpec = {
 	/** All executables that should exist under `bin/`, with optional behavior to check. */
 	binaries?: Array<BinarySpec>;
 	/** Use bootstrap mode. This prevents including the standard environments to build and test components, all required dependencies must be explicitly provided via the `env` argument. */
 	bootstrapMode?: boolean;
-	/** The directory to check. This should be the output of the default target for a package. If no other options are given, just asserts the directory is non-empty. */
-	buildFn: (arg: PackageArg) => tg.Unresolved<tg.Directory>;
 	/** Any documentation files that should exist under `share/`. */
 	docs?: Array<string>;
 	/** Additional env to include when running tests. */
@@ -20,17 +29,8 @@ export type PackageSpec = {
 	headers?: Array<string>;
 	/** All libraries that should exist under `lib/`. By default, checks for both staticlibs and dylibs */
 	libraries?: Array<LibrarySpec>;
-	/** Does the package provide an overall .pc file? */
-	pkgConfigName?: string;
-	/** Additional packages required at runtime to use this package. */
-	runtimeDeps?: Array<RuntimeDep>;
-	/** The metadata of the package being tested */
-	metadata?: Metadata;
-};
-
-export type PackageArg = {
-	build?: string;
-	host?: string;
+	/** The metadata for the package. */
+	metadata: Metadata;
 };
 
 /** Optionally specify some behavior for a particular binary. */
@@ -43,17 +43,23 @@ export type BinarySpec =
 			testArgs?: Array<string>;
 			// /** The expected output of the binary when run with testArgs. If unspecified, just assert a 0 exit code. */
 			testPredicate?: (stdout: string) => boolean;
-			runtimeDeps?: Array<RuntimeDep>;
 	  };
 
 /** Optionally specify whether a particular library provides staticlibs, dylibs, or both. */
 export type LibrarySpec =
 	| string
 	| {
+			/** The base library name. For libz, this is `z`. */
 			name: string;
+			/** The package config name. This indicates we should expect a `lib/pkgconfig/${name}.pc` file. If not provided, assumes the same as `name`. Use `false` to indicate it should not be expected. */
+			pkgConfigName?: boolean | string;
+			/** Is there a dynamically linked library? E.g. `libz.so` or `libz.dylib`. */
 			dylib?: boolean;
+			/** Is there a static library? E.g. `libz.a`. */
 			staticlib?: boolean;
+			/** What additional dependencies are required at runtime to use this library? */
 			runtimeDeps?: Array<RuntimeDep>;
+			/** What symbols should we expect this library to provide? */
 			symbols?: Array<string>;
 	  };
 
@@ -64,35 +70,65 @@ export type RuntimeDep = {
 
 export type Metadata = {
 	/** The package name. */
-	name?: string;
+	name: string;
 	/** The package version. */
-	version?: string;
+	version: string;
+	/** The license name or URL. */
+	license?: string;
+	/** The project homepage. */
+	homepage?: string;
+	/** The project repository. */
+	repository?: string;
 	/** The support build platforms (arch-os pairs) for producing this package. If not provided, assumes all supported Tangram platorms. */
 	buildPlatforms?: Array<string>;
 	/** The supported host platforms (arch-os pairs) for the output of this package. If not provided, assumes all supported Tangram platforms. */
 	hostPlatforms?: Array<string>;
 };
 
-/** Assert a package contains the specified contents in the conventional locations. Set `allPlatforms` to `true` to test all supported build/host platform pairs. If `allPlatforms: false`, will only test the native case for the detected platform. As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
-export const pkg = async (spec: PackageSpec, allPlatforms?: boolean) => {
-	const metadata = spec.metadata ?? {};
-
+/** Assert a package contains the specified contents in the conventional locations.  As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
+export const pkg = async <T extends std.args.PackageArg>(
+	/** The function that builds the package directory. */
+	buildCmd: std.args.BuildCommand<T>,
+	/** The spec for the package produced when run with no arguments. */
+	defaultSpec: PackageSpec,
+	/** Additional arguments with their corresponding package specs to test, if any. */
+	...buildVariants: Array<[T, PackageSpec]>
+) => {
 	const currentHost = await std.triple.host();
-	supportedHost(currentHost, metadata);
+	supportedHost(currentHost, defaultSpec.metadata);
 
-	// Determine the set of arguments to test.
-	const packageArgs: Array<PackageArg> =
-		(allPlatforms ?? false) ? allBuildHostPairs(metadata) : [{}];
+	// Determine the set of arguments to test. Always test the command with no args against the default spec.
+	const packageArgs: Array<[T, PackageSpec]> = [[{} as T, defaultSpec]];
+	// If the user specified additional pairs, add them.
+	if (buildVariants !== undefined && buildVariants.length > 0) {
+		packageArgs.push(...buildVariants);
+	}
 
 	const results = await Promise.all(
-		packageArgs.map(async (packageArg) => {
+		packageArgs.map(async ([packageArg, spec]) => {
 			const host = packageArg.host ?? (await std.triple.host());
-			const directory = await spec.buildFn(packageArg);
+			let directory = await std.args.buildCommandOutput(buildCmd, packageArg);
 			return await singlePackageArg(directory, host, spec);
 		}),
 	);
 
 	return results.every((result) => result);
+};
+
+/** Utility to produce the default spec from a `PackageProvides`. In addition to existence checks, it will also test that all binaries report the expected version when executed with the `--version` flag. */
+export const defaultSpec = (
+	provides: PackageProvides,
+	metadata: Metadata,
+): PackageSpec => {
+	return {
+		...provides,
+		metadata,
+		...(provides.binaries && {
+			binaries: provides.binaries.map((name) =>
+				displaysVersion(name, metadata.version),
+			),
+		}),
+	};
 };
 
 const singlePackageArg = async (
@@ -109,9 +145,7 @@ const singlePackageArg = async (
 	if (spec.binaries) {
 		for (const binarySpec of spec.binaries) {
 			const binary =
-				typeof binarySpec === "string"
-					? { name: binarySpec, runtimeDeps: spec.runtimeDeps ?? [] }
-					: binarySpec;
+				typeof binarySpec === "string" ? { name: binarySpec } : binarySpec;
 			tests.push(runnableBin({ directory, binary, env, host, metadata }));
 		}
 	}
@@ -119,7 +153,7 @@ const singlePackageArg = async (
 	// Assert the package contains the specified documentation.
 	if (spec.docs) {
 		for (const docPath of spec.docs) {
-			tests.push(assertFileExists({ directory, subpath: `share/${docPath}` }));
+			tests.push(fileExists({ directory, subpath: `share/${docPath}` }));
 		}
 	}
 
@@ -137,13 +171,15 @@ const singlePackageArg = async (
 			if (typeof lib === "string") {
 				library = {
 					name: lib,
+					pkgConfigName: lib,
 					dylib: true,
 					staticlib: true,
-					runtimeDeps: spec.runtimeDeps ?? [],
+					runtimeDeps: [],
 				};
 			} else {
 				library = {
 					name: lib.name,
+					pkgConfigName: lib.pkgConfigName ?? lib.name,
 					dylib: lib.dylib ?? true,
 					staticlib: lib.staticlib ?? true,
 					runtimeDeps: lib.runtimeDeps ?? [],
@@ -153,16 +189,6 @@ const singlePackageArg = async (
 				tests.push(linkableLib({ directory, env, host, library }));
 			}
 		});
-	}
-
-	// Assert the toplevel pkg-config file exists.
-	if (spec.pkgConfigName) {
-		tests.push(
-			assertFileExists({
-				directory,
-				subpath: `lib/pkgconfig/${spec.pkgConfigName}.pc`,
-			}),
-		);
 	}
 
 	await Promise.all(tests);
@@ -182,7 +208,7 @@ type FileExistsArg = {
 };
 
 /** Assert the provided path exists and refers to a file. */
-export const assertFileExists = tg.target(async (arg: FileExistsArg) => {
+export const fileExists = tg.target(async (arg: FileExistsArg) => {
 	const maybeFile = await arg.directory.tryGet(arg.subpath);
 	tg.assert(maybeFile, `Path ${arg.subpath} does not exist.`);
 	tg.File.assert(maybeFile);
@@ -206,11 +232,9 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 	let testPredicate = (stdout: string) =>
 		stdout.includes(arg.metadata?.version ?? "");
 	let testArgs = ["--version"];
-	let runtimeDeps;
 	if (typeof arg.binary === "string") {
 		name = arg.binary;
 	} else {
-		runtimeDeps = arg.binary.runtimeDeps;
 		if (arg.binary.name) {
 			name = arg.binary.name;
 		}
@@ -222,38 +246,25 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		}
 	}
 	// Assert the binary exists.
-	await assertFileExists({
+	await fileExists({
 		directory: arg.directory,
 		subpath: `bin/${name}`,
 	});
-
-	const path = (runtimeDeps ?? [])
-		.flatMap((dep) => dep.directory)
-		.reduce((t, depDir) => {
-			return tg`${t}:${depDir}`;
-		}, tg``);
-	const env = std.env.arg(
-		{
-			PATH: path,
-		},
-		arg.env,
-	);
 
 	// Run the binary with the provided test invocation.
 	const executable = tg`${arg.directory}/bin/${name} ${tg.Template.join(
 		" ",
 		...testArgs,
-	)} > $OUTPUT 2>&1 || true`;
+	)} > $OUTPUT 2>&1`;
 
-	const output = tg.File.expect(
-		await (
-			await tg.target(executable, {
-				env: await std.env.arg(env),
-				host: arg.host,
-			})
-		).output(),
-	);
-	const stdout = await output.text();
+	const stdout = await tg
+		.target(executable, {
+			env: std.env.arg(arg.env),
+			host: arg.host,
+		})
+		.then((target) => target.output())
+		.then(tg.File.expect)
+		.then((file) => file.text());
 	tg.assert(
 		testPredicate(stdout),
 		`Binary ${name} did not produce expected output. Received: ${stdout}`,
@@ -312,7 +323,7 @@ type HeaderArg = {
 /** Assert the directory contains a header file with the provided name. */
 export const headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
 	// Ensure the file exists.
-	await assertFileExists({
+	await fileExists({
 		directory: arg.directory,
 		subpath: `include/${arg.header}`,
 	});
@@ -348,7 +359,9 @@ type LibraryArg = {
 
 /** Assert the directory contains a library conforming to the provided spec. */
 export const linkableLib = tg.target(async (arg: LibraryArg) => {
+	// Set up parameters.
 	let name: string | undefined;
+	let pkgConfigName: string | undefined;
 	let host = arg.host;
 	let dylib = true;
 	let staticlib = true;
@@ -370,43 +383,64 @@ export const linkableLib = tg.target(async (arg: LibraryArg) => {
 		}
 	}
 
+	// Collect tests.
+	const tests = [];
+
 	const hostOs = std.triple.os(await std.triple.host());
 	const dylibExtension = hostOs === "darwin" ? "dylib" : "so";
 
 	const dylibName = (name: string) => `lib${name}.${dylibExtension}`;
 
-	if (dylib) {
-		// Combine internal libnames with external runtime dependency libnames.
-		const dylibName_ = dylibName(name);
-
-		// Assert the files exist.
-		await assertFileExists({
-			directory: arg.directory,
-			subpath: `lib/${dylibName_}`,
-		});
-
-		// Assert it can be dlopened.
-		const runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
-		const runtimeDepLibs = runtimeDeps.flatMap((dep) =>
-			dep.libs.map(dylibName),
+	// Check for the pkg-config file if requested.
+	if (pkgConfigName !== undefined) {
+		tests.push(
+			fileExists({
+				directory: arg.directory,
+				subpath: `lib/pkgconfig/${pkgConfigName}.pc`,
+			}),
 		);
-		await dlopen({
-			directory: arg.directory,
-			dylib: dylibName_,
-			env,
-			host,
-			runtimeDepDirs,
-			runtimeDepLibs,
-			sdk,
+	}
+
+	// Check for the dylib if requested.
+	if (dylib) {
+		tests.push(async () => {
+			// Combine internal libnames with external runtime dependency libnames.
+			const dylibName_ = dylibName(name);
+
+			// Assert the files exist.
+			await fileExists({
+				directory: arg.directory,
+				subpath: `lib/${dylibName_}`,
+			});
+
+			// Assert it can be dlopened.
+			const runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
+			const runtimeDepLibs = runtimeDeps.flatMap((dep) =>
+				dep.libs.map(dylibName),
+			);
+			await dlopen({
+				directory: arg.directory,
+				dylib: dylibName_,
+				env,
+				host,
+				runtimeDepDirs,
+				runtimeDepLibs,
+				sdk,
+			});
 		});
 	}
 
+	// Check for the staticlib if requested.
 	if (staticlib) {
-		await assertFileExists({
-			directory: arg.directory,
-			subpath: `lib/lib${name}.a`,
-		});
+		tests.push(
+			fileExists({
+				directory: arg.directory,
+				subpath: `lib/lib${name}.a`,
+			}),
+		);
 	}
+
+	await Promise.all(tests);
 	return true;
 });
 
@@ -451,22 +485,21 @@ export const dlopen = async (arg: DlopenArg) => {
 	// Compile the program.
 	const linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
 	const sdkEnv = std.sdk(arg?.sdk);
-	tg.File.expect(
-		await (
-			await tg.target(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
-				env: std.env.arg(
-					sdkEnv,
-					directory,
-					...arg.runtimeDepDirs,
-					{
-						TANGRAM_LINKER_TRACING: "tangram=trace",
-					},
-					arg.env,
-				),
-				host: arg.host,
-			})
-		).output(),
-	);
+	await tg
+		.target(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
+			env: std.env.arg(
+				sdkEnv,
+				directory,
+				...arg.runtimeDepDirs,
+				{
+					TANGRAM_LINKER_TRACING: "tangram=trace",
+				},
+				arg.env,
+			),
+			host: arg.host,
+		})
+		.then((target) => target.output())
+		.then(tg.File.expect);
 
 	return true;
 };
@@ -516,6 +549,15 @@ export const stdoutIncludes = async (
 	tg.assert(stdout.includes(expected));
 };
 
+/** Spec helper to assert the given package displays the given version. */
+export const displaysVersion = (name: string, version: string) => {
+	return {
+		name,
+		testArgs: ["--version"],
+		testPredicate: (stdout: string) => stdout.includes(version),
+	};
+};
+
 const allPlatforms = [
 	"aarch64-linux",
 	"aarch64-macos",
@@ -523,14 +565,34 @@ const allPlatforms = [
 	"x86_64-linux",
 ];
 
-const allBuildHostPairs = (metadata: Metadata): Array<PackageArg> => {
+const allBuildHostPairs = (metadata: Metadata): Array<std.args.PackageArg> => {
 	const buildPlatforms = metadata.buildPlatforms ?? allPlatforms;
 	const hostPlatforms = metadata.hostPlatforms ?? allPlatforms;
-	const results: Array<PackageArg> = [];
+	const results: Array<std.args.PackageArg> = [];
 	for (const build of buildPlatforms) {
 		for (const host of hostPlatforms) {
 			results.push({ build, host });
 		}
 	}
 	return results;
+};
+
+// Some options for tuning the generation - this can generate huge matrices quickly.
+type GenerateArgsOptions = {
+	// Should we be able to cross-compile to a different arch, same OS?
+	crossArch?: boolean;
+	// Should we be able to cross-compile to a different OS, same arch?
+	crossOs?: boolean;
+	// Should we be able to cross both arch and os?
+	crossArchAndOs?: boolean;
+	// Should we try toggling all booleans on and off?
+	toggleBools?: boolean;
+};
+
+/** Generate all permutations of package arg. */
+const generatePackageArgs = <T extends std.args.PackageArg>(
+	metadata: std.assert.Metadata,
+	options?: GenerateArgsOptions,
+): Array<T> => {
+	return tg.unimplemented();
 };

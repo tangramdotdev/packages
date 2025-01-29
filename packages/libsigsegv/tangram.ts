@@ -49,16 +49,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const test = tg.target(async () => {
-	const source = tg.directory({
-		["main.c"]: tg.file(`
-			#include <stdio.h>
-			int main () {}
-		`),
-	});
+export const provides = {
+	libraries: ["sigsegv"],
+};
 
-	return await $`
-			echo "Checking if we can link against libsigsegv."
-			cc ${source}/main.c -o $OUTPUT -lsigsegv
-		`.env(std.sdk(), build());
+export const test = tg.target(async () => {
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

@@ -152,17 +152,16 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: [
+		"aclocal",
+		`aclocal-${metadata.version}`,
+		"automake",
+		`automake-${metadata.version}`,
+	],
+};
+
 export const test = tg.target(async () => {
-	const { version } = metadata;
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [
-			"aclocal",
-			`aclocal-${version}`,
-			"automake",
-			`automake-${version}`,
-		],
-		metadata,
-	});
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

@@ -106,20 +106,22 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["capsh", "getcap", "setcap", "getpcaps"],
+	libraries: ["cap"],
+};
+
 export const test = tg.target(async () => {
-	const binTest = (name: string) => {
+	const hasUsage = (name: string) => {
 		return {
 			name,
 			testArgs: ["-h"],
 			testPredicate: (stdout: string) => stdout.includes("usage:"),
 		};
 	};
-	const binaries = ["capsh", "getcap", "setcap", "getpcaps"].map(binTest);
-	await std.assert.pkg({
-		buildFn: build,
-		binaries,
-		libraries: ["cap"],
-		metadata,
-	});
-	return true;
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		binaries: provides.binaries.map(hasUsage),
+	};
+	return await std.assert.pkg(build, spec);
 });

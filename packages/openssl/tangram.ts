@@ -111,6 +111,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.target(async () => {
+	// FIXME spec
 	const source = tg.directory({
 		["main.c"]: tg.file(`
 			#include <stdio.h>

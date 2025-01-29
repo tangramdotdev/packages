@@ -36,7 +36,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const glibc = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -117,7 +117,7 @@ export const glibc = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
-export default glibc;
+export default build;
 
 type SysrootFixArg = {
 	directory: tg.Directory;
@@ -156,3 +156,12 @@ export const interpreterName = (triple: string) => {
 	const soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;
 };
+
+export const provides = {
+	libraries: ["c"],
+};
+
+export const test = tg.target(async () => {
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
+});

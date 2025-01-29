@@ -73,6 +73,22 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: [
+		"derb",
+		"genbrk",
+		"genfcu",
+		"gencnval",
+		"gendict",
+		"icuexportdata",
+		"icuinfo",
+		"makeconv",
+		"pkgdata",
+		"uconv",
+	],
+	libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
+};
+
 export const test = tg.target(async () => {
 	const hasUsage = (name: string) => {
 		return {
@@ -82,8 +98,8 @@ export const test = tg.target(async () => {
 				stdout.toLowerCase().includes("usage:"),
 		};
 	};
-	await std.assert.pkg({
-		buildFn: build,
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
 		binaries: [
 			"derb",
 			hasUsage("genbrk"),
@@ -99,8 +115,6 @@ export const test = tg.target(async () => {
 			hasUsage("pkgdata"),
 			hasUsage("uconv"),
 		],
-		libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
-		metadata,
-	});
-	return true;
+	};
+	return await std.assert.pkg(build, spec);
 });

@@ -32,7 +32,8 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		perl?: perl.Arg;
+		perl?: std.args.DependencyArg<perl.Arg>;
+		pkgConf?: std.args.DependencyArg<pkgConf.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -44,7 +45,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { perl: perlArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -57,10 +58,15 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const dependencies = [
-		perl.build({ build, host: build }, perlArg),
-		pkgConf.build({ build, host: build }),
+		std.env.buildDependency(perl.build, dependencyArgs.perl),
+		std.env.buildDependency(pkgConf.build, dependencyArgs.pkgConf),
 	];
-	const env = std.env.arg(...dependencies, env_);
+	const env = std.env.arg(
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		env_,
+	);
 
 	return std.autotools.build(
 		{
@@ -76,7 +82,12 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	headers: ["crypt.h"],
+	libraries: ["crypt"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, libraries: ["crypt"] });
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

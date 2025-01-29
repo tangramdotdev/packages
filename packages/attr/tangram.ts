@@ -62,21 +62,24 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+const provides = {
+	binaries: ["attr", "getfattr", "setfattr"],
+	headers: ["attr/attributes.h", "attr/error_context.h", "attr/libattr.h"],
+	libraries: ["attr"],
+};
+
 export const test = tg.target(async () => {
-	const binTest = (name: string) => {
+	const displaysUsage = (name: string) => {
 		return {
 			name,
 			testArgs: [],
 			testPredicate: (stdout: string) => stdout.includes("Usage:"),
 		};
 	};
-	const binaries = ["attr", "getfattr", "setfattr"].map(binTest);
-
-	await std.assert.pkg({
-		binaries,
-		buildFn: build,
-		libraries: ["attr"],
+	const spec = {
+		...provides,
+		binaries: provides.binaries.map(displaysUsage),
 		metadata,
-	});
-	return true;
+	};
+	return await std.assert.pkg(build, spec);
 });

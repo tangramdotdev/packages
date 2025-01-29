@@ -206,19 +206,19 @@ export const patchAutom4teCfg = tg.target(
 
 export default build;
 
+export const provides = {
+	binaries: [
+		"autoconf",
+		"autoheader",
+		"autom4te",
+		"autoreconf",
+		"autoscan",
+		"autoupdate",
+		"ifnames",
+	],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [
-			"autoconf",
-			"autoheader",
-			"autom4te",
-			"autoreconf",
-			"autoscan",
-			"autoupdate",
-			"ifnames",
-		],
-		metadata,
-	});
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

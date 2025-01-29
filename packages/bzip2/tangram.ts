@@ -86,12 +86,21 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["bzip2"],
+	libraries: [{ name: "bz2", staticlib: true, dylib: false }],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [{ name: "bzip2", testArgs: ["--help"] }],
-		libraries: [{ name: "bz2", staticlib: true, dylib: false }],
+	const spec = {
+		...provides,
 		metadata,
-	});
-	return true;
+		binaries: provides.binaries.map((name) => {
+			return {
+				name,
+				testArgs: ["--help"],
+			};
+		}),
+	};
+	return await std.assert.pkg(build, spec);
 });

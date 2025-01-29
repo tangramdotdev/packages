@@ -115,7 +115,11 @@ export const wrapScript = async (script: tg.File, host: string) => {
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
+export const provides = {
+	binaries: ["bash"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, binaries: ["bash"], metadata });
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

@@ -429,8 +429,13 @@ export const pushOrSet = (
 	}
 };
 
+export const provides = {
+	binaries: ["cmake"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: self, binaries: ["cmake"], metadata });
+	const spec = std.assert.defaultSpec(provides, metadata);
+	await std.assert.pkg(self, spec);
 
 	await ninja.test();
 

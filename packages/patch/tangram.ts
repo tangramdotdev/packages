@@ -1,5 +1,4 @@
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
@@ -51,7 +50,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["patch"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: build, binaries: ["patch"], metadata });
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

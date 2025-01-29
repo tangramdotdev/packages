@@ -76,6 +76,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["scmp_sys_resolver"],
+	libraries: ["seccomp"],
+};
+
 export const test = tg.target(async () => {
 	const hasUsage = (name: string) => {
 		return {
@@ -84,11 +89,9 @@ export const test = tg.target(async () => {
 			testPredicate: (stdout: string) => stdout.includes("usage:"),
 		};
 	};
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [hasUsage("scmp_sys_resolver")],
-		libraries: ["seccomp"],
-		metadata,
-	});
-	return true;
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		binaries: provides.binaries.map(hasUsage),
+	};
+	return await std.assert.pkg(build, spec);
 });

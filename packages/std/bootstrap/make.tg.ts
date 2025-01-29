@@ -20,8 +20,8 @@ export type Arg = {
 	host?: string;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
-	const host = arg?.host ?? (await std.triple.host());
+export const build = tg.target(async (...args: std.Args<Arg>) => {
+	const { host } = await std.args.apply<Arg>(...args);
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -56,10 +56,14 @@ export const build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["make"],
+};
+
 export const test = tg.target(async () => {
-	return await std.assert.pkg({
-		buildFn: build,
-		binaries: ["make"],
-		metadata,
-	});
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		bootstrapMode: true,
+	};
+	return await std.assert.pkg(build, spec);
 });

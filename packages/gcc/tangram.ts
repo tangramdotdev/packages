@@ -36,7 +36,7 @@ type Arg = {
 	target?: string;
 };
 
-export const gcc = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -130,7 +130,7 @@ export const gcc = tg.target(async (...args: std.Args<Arg>) => {
 	return result;
 });
 
-export default gcc;
+export default build;
 
 export const libgcc = tg.target(async (...args: std.Args<Arg>) => {
 	// FIXME - write in terms of gcc above, pass phases down.
@@ -333,7 +333,11 @@ export const mergeLibDirs = async (dir: tg.Directory) => {
 	return dir;
 };
 
+export const provides = {
+	binaries: ["gcc"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({ buildFn: gcc, binaries: ["gcc"], metadata });
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

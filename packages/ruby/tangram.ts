@@ -297,6 +297,20 @@ const bundledGems = (): Promise<tg.Directory> => {
 	return tg.directory(...args.map(downloadGem));
 };
 
+export const provides = {
+	binaries: [
+		"bundle",
+		"bundler",
+		"erb",
+		"gem",
+		"irb",
+		"racc",
+		"rdoc",
+		"ruby",
+		"ri",
+	],
+};
+
 export const test = tg.target(async () => {
 	const hasVersion = (name: string, version: string) => {
 		return {
@@ -313,10 +327,14 @@ export const test = tg.target(async () => {
 		hasVersion("irb", "1.14.3"),
 		hasVersion("racc", "1.8.1"),
 		hasVersion("rdoc", "6.10.0"),
-		"ruby",
+		hasVersion("ruby", metadata.version),
 		hasVersion("ri", "6.10.0"),
 	];
-	await std.assert.pkg({ buildFn: self, binaries, metadata });
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		binaries,
+	};
+	await std.assert.pkg(self, spec);
 
 	const output = await $`ruby -e 'puts "Hello, tangram!"' > $OUTPUT`
 		.env(self())

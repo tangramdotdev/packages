@@ -70,14 +70,21 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["vim"],
+};
+
 export const test = tg.target(async () => {
 	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [
-			{ name: "vim", testPredicate: (stdout) => stdout.includes(majorMinor) },
-		],
-		metadata,
-	});
-	return true;
+	const hasVersion = (name: string) => {
+		return {
+			name,
+			testPredicate: (stdout: string) => stdout.includes(majorMinor),
+		};
+	};
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		binaries: provides.binaries.map(hasVersion),
+	};
+	return await std.assert.pkg(build, spec);
 });

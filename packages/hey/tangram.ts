@@ -56,16 +56,19 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	binaries: ["hey"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFn: build,
-		binaries: [
-			{
-				name: "hey",
-				testPredicate: (stdout) => stdout.includes(metadata.name),
-			},
-		],
-		metadata,
-	});
-	return true;
+	const spec = {
+		...std.assert.defaultSpec(provides, metadata),
+		binaries: provides.binaries.map((name) => {
+			return {
+				name,
+				testPredicate: (stdout: string) => stdout.includes(metadata.name),
+			};
+		}),
+	};
+	return await std.assert.pkg(build, spec);
 });

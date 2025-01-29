@@ -64,19 +64,19 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const provides = {
+	docs: [
+		"info/libffi.info",
+		"man/man3/ffi.3",
+		"man/man3/ffi_call.3",
+		"man/man3/ffi_prep_cif.3",
+		"man/man3/ffi_prep_cif_var.3",
+	],
+	headers: ["ffi.h"],
+	libraries: ["ffi"],
+};
+
 export const test = tg.target(async () => {
-	await std.assert.pkg({
-		buildFn: build,
-		docs: [
-			"info/libffi.info",
-			"man/man3/ffi.3",
-			"man/man3/ffi_call.3",
-			"man/man3/ffi_prep_cif.3",
-			"man/man3/ffi_prep_cif_var.3",
-		],
-		headers: ["ffi.h"],
-		libraries: ["ffi"],
-		pkgConfigName: "libffi",
-	});
-	return true;
+	const spec = std.assert.defaultSpec(provides, metadata);
+	return await std.assert.pkg(build, spec);
 });

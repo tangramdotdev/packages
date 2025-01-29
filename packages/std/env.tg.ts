@@ -661,6 +661,95 @@ export namespace env {
 		}
 		return undefined;
 	};
+
+	// NOTE - the return type could be any `std.env.Arg` but in practice it is always `tg.Directory`.
+	/** Produce the requested `std.env.Arg` from a `Dependency` specification. */
+	export const envArgFromDependency = async <T extends std.args.PackageArg>(
+		build: string,
+		env: std.env.Arg,
+		host: string,
+		sdk: std.sdk.Arg,
+		dependency: Dependency<T>,
+	): Promise<tg.Directory> => {
+		const { buildCmd, arg, subdirs, setHostToBuild, inheritEnv, inheritSdk } =
+			dependencyObjectFromDependency(dependency);
+
+		const host_ = setHostToBuild ? build : host;
+
+		let buildArg = { ...arg, build, host: host_ } as T;
+
+		if (inheritEnv) {
+			buildArg = { ...buildArg, env };
+		}
+
+		if (inheritSdk) {
+			buildArg = { ...buildArg, sdk };
+		}
+
+		let output = await std.args.buildCommandOutput(buildCmd, buildArg);
+
+		if (subdirs !== undefined) {
+			output = await std.directory.keepSubdirectories(output, ...subdirs);
+		}
+
+		return output;
+	};
+
+	/** A `Dependency` can simply be a command that builds a directory, or an object describing how to build and post-process that directory. */
+	export type Dependency<T extends std.args.PackageArg> =
+		| std.args.BuildCommand<T>
+		| DependencyObject<T>;
+
+	/** Object defining the options for producing and post-processing a directory to be used as a build dependency. */
+	export type DependencyObject<T extends std.args.PackageArg> = {
+		arg?: std.args.ResolvedPackageArg<T> | undefined;
+		buildCmd: std.args.BuildCommand<T>;
+		subdirs?: Array<string>;
+		setHostToBuild?: boolean;
+		inheritEnv?: boolean;
+		inheritSdk?: boolean;
+	};
+
+	/** Produce a `DependencyObject` with all the defaults applied. */
+	export const dependency = <T extends std.args.PackageArg>(
+		buildCmd: std.args.BuildCommand<T>,
+		arg?: std.args.ResolvedPackageArg<T>,
+	): DependencyObject<T> => {
+		return {
+			buildCmd,
+			arg,
+		};
+	};
+
+	/** Produce a `DependencyObject` for a buildtime dependency. */
+	export const buildDependency = <T extends std.args.PackageArg>(
+		buildCmd: std.args.BuildCommand<T>,
+		arg?: std.args.ResolvedPackageArg<T>,
+	): DependencyObject<T> => {
+		return {
+			subdirs: ["bin"],
+			buildCmd,
+			arg,
+			inheritEnv: false,
+			inheritSdk: false,
+			setHostToBuild: true,
+		};
+	};
+
+	/** Produce a `DependencyObject` fro a runtime dependency. */
+	export const runtimeDependency = <T extends std.args.PackageArg>(
+		buildCmd: std.args.BuildCommand<T>,
+		arg?: std.args.ResolvedPackageArg<T>,
+	): DependencyObject<T> => {
+		return {
+			subdirs: ["include", "lib"],
+			buildCmd,
+			arg,
+			inheritEnv: false,
+			inheritSdk: true,
+			setHostToBuild: false,
+		};
+	};
 }
 
 const isUtilsToggle = (arg: unknown): arg is env.UtilsToggle => {
@@ -683,6 +772,51 @@ function* separateTemplate(
 	}
 	yield chunk;
 }
+
+const dependencyObjectFromDependency = <T extends std.args.PackageArg>(
+	dependency: env.Dependency<T>,
+): env.DependencyObject<T> => {
+	if (isDependencyObject(dependency)) {
+		return dependency as env.DependencyObject<T>;
+	} else {
+		// FIXME - avoid this as cast, maybe need an `is` for build command.
+		return { buildCmd: dependency as std.args.BuildCommand<T> };
+	}
+};
+
+const isDependencyObject = <T extends std.args.PackageArg>(
+	arg: unknown,
+): arg is env.DependencyObject<T> => {
+	if (!arg || typeof arg !== "object") {
+		return false;
+	}
+
+	const obj = arg as Record<string, unknown>;
+
+	// Check if buildCmd exists and is required
+	if (!("buildCmd" in obj)) {
+		return false;
+	}
+
+	// Check optional properties have correct types if they exist
+	if ("subdirs" in obj && !Array.isArray(obj.subdirs)) {
+		return false;
+	}
+
+	if ("setHostToBuild" in obj && typeof obj.setHostToBuild !== "boolean") {
+		return false;
+	}
+
+	if ("inheritEnv" in obj && typeof obj.inheritEnv !== "boolean") {
+		return false;
+	}
+
+	if ("inheritSdk" in obj && typeof obj.inheritSdk !== "boolean") {
+		return false;
+	}
+
+	return true;
+};
 
 export const test = tg.target(async () => {
 	const envFile = await env({ FOO: "bar" });
