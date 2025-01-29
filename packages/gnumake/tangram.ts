@@ -6,6 +6,9 @@ export const metadata = {
 	name: "make",
 	repository: "https://git.savannah.gnu.org/cgit/make.git",
 	version: "4.4.1",
+	provides: {
+		binaries: ["make"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -46,12 +49,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["make"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

@@ -14,6 +14,9 @@ export const metadata = {
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
 	version: "14.1.0",
+	provides: {
+		binaries: ["gcc"],
+	},
 };
 
 /* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
@@ -332,12 +335,7 @@ export const mergeLibDirs = async (dir: tg.Directory) => {
 	}
 	return dir;
 };
-
-export const provides = {
-	binaries: ["gcc"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

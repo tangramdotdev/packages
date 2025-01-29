@@ -9,6 +9,9 @@ export const metadata = {
 	name: "pkg-config",
 	repository: "https://gitlab.freedesktop.org/pkg-config/pkg-config",
 	version: "0.29.2",
+	provides: {
+		binaries: ["pkg-config"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -164,12 +167,7 @@ export const path = tg.target(
 		return tg.Template.join(":", ...allPaths);
 	},
 );
-
-export const provides = {
-	binaries: ["pkg-config"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

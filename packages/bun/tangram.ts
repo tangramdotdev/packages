@@ -6,6 +6,9 @@ export const metadata = {
 	name: "bun",
 	repository: "https://github.com/oven-sh/bun",
 	version: "1.1.42",
+	provides: {
+		binaries: ["bun"],
+	},
 };
 
 export type Arg = {
@@ -51,12 +54,7 @@ const binaryChecksums: { [key: string]: tg.Checksum } = {
 	["x86_64-darwin"]:
 		"sha256:3f5630e0641d0824eb334cfe89d17cf69b1b6019b68d118afba7b62045794f58",
 };
-
-export const provides = {
-	binaries: ["bun"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);
 });

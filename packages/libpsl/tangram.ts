@@ -7,6 +7,9 @@ export const metadata = {
 	name: "libpsl",
 	repository: "https://github.com/rockdaboot/libpsl",
 	version: "0.21.5",
+	provides: {
+		libraries: ["psl"],
+	},
 };
 
 export const source = tg.target(async (): Promise<tg.Directory> => {
@@ -64,12 +67,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	libraries: ["psl"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

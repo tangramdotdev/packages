@@ -13,6 +13,10 @@ export const metadata = {
 	name: "curl",
 	repository: "https://github.com/curl/curl",
 	version: "8.11.0",
+	provides: {
+		binaries: ["curl"],
+		libraries: ["curl"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -98,14 +102,8 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["curl"],
-	libraries: ["curl"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
 	const result = await $`

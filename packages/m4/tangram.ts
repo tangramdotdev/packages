@@ -6,6 +6,9 @@ export const metadata = {
 	name: "m4",
 	repository: "https://git.savannah.gnu.org/cgit/m4.git",
 	version: "1.4.19",
+	provides: {
+		binaries: ["m4"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -51,12 +54,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["m4"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

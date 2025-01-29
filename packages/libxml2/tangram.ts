@@ -13,6 +13,10 @@ export const metadata = {
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
 	version: "2.13.5",
+	provides: {
+		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
+		libraries: ["xml2"],
+	},
 };
 
 export const source = tg.target(async (): Promise<tg.Directory> => {
@@ -111,13 +115,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["xml2-config", "xmlcatalog", "xmllint"],
-	libraries: ["xml2"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

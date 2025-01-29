@@ -6,6 +6,9 @@ export const metadata = {
 	name: "pkgconf",
 	repository: "https://github.com/pkgconf/pkgconf",
 	version: "2.3.0",
+	provides: {
+		binaries: ["pkgconf"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -97,12 +100,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["pkgconf"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

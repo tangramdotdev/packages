@@ -7,6 +7,10 @@ export const metadata = {
 	name: "lz4",
 	repository: "https://github.com/lz4/lz4",
 	version: "1.10.0",
+	provides: {
+		binaries: ["lz4"],
+		libraries: ["lz4"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -67,13 +71,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["lz4"],
-	libraries: ["lz4"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

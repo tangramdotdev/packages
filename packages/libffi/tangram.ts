@@ -6,6 +6,17 @@ export const metadata = {
 	name: "libffi",
 	repository: "https://github.com/libffi/libffi",
 	version: "3.4.6",
+	provides: {
+		docs: [
+			"info/libffi.info",
+			"man/man3/ffi.3",
+			"man/man3/ffi_call.3",
+			"man/man3/ffi_prep_cif.3",
+			"man/man3/ffi_prep_cif_var.3",
+		],
+		headers: ["ffi.h"],
+		libraries: ["ffi"],
+	},
 };
 
 export const source = tg.target(async (): Promise<tg.Directory> => {
@@ -63,20 +74,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	docs: [
-		"info/libffi.info",
-		"man/man3/ffi.3",
-		"man/man3/ffi_call.3",
-		"man/man3/ffi_prep_cif.3",
-		"man/man3/ffi_prep_cif_var.3",
-	],
-	headers: ["ffi.h"],
-	libraries: ["ffi"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

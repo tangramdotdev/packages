@@ -7,6 +7,9 @@ export const metadata = {
 	name: "gh",
 	repository: "https://github.com/cli/cli",
 	version: "2.60.0",
+	provides: {
+		binaries: ["gh"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -55,15 +58,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["gh"],
-};
-
 export const test = tg.target(async () => {
 	const spec = {
-		...std.assert.defaultSpec(provides, metadata),
-		binaries: provides.binaries.map((name) => {
+		...std.assert.defaultSpec(metadata),
+		binaries: metadata.provides.binaries.map((name) => {
 			return {
 				name,
 				testPredicate: (stdout: string) => stdout.includes(metadata.name),

@@ -10,6 +10,11 @@ export const metadata = {
 	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",
 	repository: "https://www.sqlite.org/src/",
 	version: "3.47.2",
+	provides: {
+		binaries: ["sqlite3"],
+		headers: ["sqlite3.h"],
+		libraries: ["sqlite3"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -111,14 +116,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["sqlite3"],
-	headers: ["sqlite3.h"],
-	libraries: ["sqlite3"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

@@ -12,6 +12,17 @@ export const metadata = {
 	name: "autoconf",
 	repository: "https://git.savannah.gnu.org/git/autoconf.git",
 	version: "2.72",
+	provides: {
+		binaries: [
+			"autoconf",
+			"autoheader",
+			"autom4te",
+			"autoreconf",
+			"autoscan",
+			"autoupdate",
+			"ifnames",
+		],
+	},
 };
 
 export const source = tg.target(() => {
@@ -205,20 +216,7 @@ export const patchAutom4teCfg = tg.target(
 );
 
 export default build;
-
-export const provides = {
-	binaries: [
-		"autoconf",
-		"autoheader",
-		"autom4te",
-		"autoreconf",
-		"autoscan",
-		"autoupdate",
-		"ifnames",
-	],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

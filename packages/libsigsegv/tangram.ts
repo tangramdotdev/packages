@@ -7,6 +7,9 @@ export const metadata = {
 	name: "libsigsegv",
 	repository: "https://git.savannah.gnu.org/gitweb/?p=libsigsegv.git",
 	version: "2.14",
+	provides: {
+		libraries: ["sigsegv"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -48,12 +51,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	libraries: ["sigsegv"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

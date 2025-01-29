@@ -6,6 +6,9 @@ export const metadata = {
 	name: "gperf",
 	repository: "https://git.savannah.gnu.org/git/gperf.git",
 	version: "3.1",
+	provides: {
+		binaries: ["gperf"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -52,12 +55,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["gperf"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

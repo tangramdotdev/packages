@@ -7,6 +7,11 @@ export const metadata = {
 	name: "bison",
 	repository: "https://savannah.gnu.org/projects/bison/",
 	version: "3.8.2",
+	provides: {
+		// FIXME - yacc requires sed
+		binaries: ["bison"],
+		libraries: [{ name: "y", dylib: false, staticlib: true }],
+	},
 };
 
 export const source = tg.target(() => {
@@ -86,14 +91,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	// FIXME - yacc requires sed
-	binaries: ["bison"],
-	libraries: [{ name: "y", dylib: false, staticlib: true }],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

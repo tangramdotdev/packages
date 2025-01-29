@@ -5,6 +5,9 @@ export const metadata = {
 	license: "https://invisible-island.net/ncurses/ncurses-license.html",
 	name: "ncurses",
 	version: "6.5",
+	provides: {
+		libraries: ["formw", "menuw", "ncursesw", "panelw"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -118,12 +121,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	libraries: ["formw", "menuw", "ncursesw", "panelw"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

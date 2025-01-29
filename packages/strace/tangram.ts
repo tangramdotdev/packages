@@ -7,6 +7,9 @@ export const metadata = {
 	license: "https://github.com/strace/strace/blob/master/COPYING",
 	repository: "https://github.com/strace/strace",
 	version: "6.10",
+	provides: {
+		binaries: ["strace"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -60,12 +63,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["strace"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

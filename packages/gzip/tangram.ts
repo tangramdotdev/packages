@@ -6,6 +6,9 @@ export const metadata = {
 	name: "gzip",
 	repository: "https://git.savannah.gnu.org/git/gzip.git",
 	version: "1.13",
+	provides: {
+		binaries: ["gzip"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -100,11 +103,7 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	return newFile;
 };
 
-export const provides = {
-	binaries: ["gzip"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

@@ -22,6 +22,19 @@ export const metadata = {
 	license: "BSD-2-Clause",
 	repository: "https://git.ruby-lang.org/ruby.git",
 	version: "3.4.1",
+	provides: {
+		binaries: [
+			"bundle",
+			"bundler",
+			"erb",
+			"gem",
+			"irb",
+			"racc",
+			"rdoc",
+			"ruby",
+			"ri",
+		],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -296,21 +309,6 @@ const bundledGems = (): Promise<tg.Directory> => {
 
 	return tg.directory(...args.map(downloadGem));
 };
-
-export const provides = {
-	binaries: [
-		"bundle",
-		"bundler",
-		"erb",
-		"gem",
-		"irb",
-		"racc",
-		"rdoc",
-		"ruby",
-		"ri",
-	],
-};
-
 export const test = tg.target(async () => {
 	const hasVersion = (name: string, version: string) => {
 		return {
@@ -331,7 +329,7 @@ export const test = tg.target(async () => {
 		hasVersion("ri", "6.10.0"),
 	];
 	const spec = {
-		...std.assert.defaultSpec(provides, metadata),
+		...std.assert.defaultSpec(metadata),
 		binaries,
 	};
 	await std.assert.pkg(self, spec);

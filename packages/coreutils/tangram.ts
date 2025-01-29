@@ -10,6 +10,25 @@ export const metadata = {
 	name: "coreutils",
 	repository: "http://git.savannah.gnu.org/gitweb/?p=coreutils.git",
 	version: "9.5",
+	provides: {
+		binaries: [
+			"cp",
+			"ls",
+			"mv",
+			"rm",
+			"shuf",
+			"sort",
+			"tail",
+			"tee",
+			"touch",
+			"true",
+			"uname",
+			"uniq",
+			"wc",
+			"whoami",
+			"yes",
+		],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -87,28 +106,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: [
-		"cp",
-		"ls",
-		"mv",
-		"rm",
-		"shuf",
-		"sort",
-		"tail",
-		"tee",
-		"touch",
-		"true",
-		"uname",
-		"uniq",
-		"wc",
-		"whoami",
-		"yes",
-	],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

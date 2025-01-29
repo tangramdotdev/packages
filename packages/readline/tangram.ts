@@ -8,6 +8,9 @@ export const metadata = {
 	name: "readline",
 	repository: "http://git.savannah.gnu.org/cgit/readline.git/log/",
 	version: "8.2.13",
+	provides: {
+		libraries: ["readline"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -88,12 +91,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	libraries: ["readline"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

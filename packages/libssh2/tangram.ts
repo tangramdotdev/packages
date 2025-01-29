@@ -9,6 +9,9 @@ export let metadata = {
 	name: "libssh2",
 	repository: "https://github.com/libssh2/libssh2",
 	version: "1.11.1",
+	provides: {
+		libraries: ["ssh2"],
+	},
 };
 
 export let source = tg.target(async () => {
@@ -72,12 +75,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	libraries: ["ssh2"],
-};
-
 export let test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

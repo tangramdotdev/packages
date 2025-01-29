@@ -10,6 +10,9 @@ export const metadata = {
 	name: "httpie",
 	repository: "https://github.com/httpie/cli",
 	version: "3.2.3",
+	provides: {
+		binaries: ["http", "https", "httpie"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -59,12 +62,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["http", "https", "httpie"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

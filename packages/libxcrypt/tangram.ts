@@ -8,6 +8,10 @@ export const metadata = {
 	license: "LGPL-2.1",
 	repository: "https://github.com/besser82/libxcrypt",
 	version: "4.4.37",
+	provides: {
+		headers: ["crypt.h"],
+		libraries: ["crypt"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -81,13 +85,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	headers: ["crypt.h"],
-	libraries: ["crypt"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

@@ -10,6 +10,9 @@ export const metadata = {
 	name: "mold",
 	repository: "https://github.com/rui314/mold",
 	version: "2.36.0",
+	provides: {
+		binaries: ["mold"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -74,12 +77,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["mold"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

@@ -6,6 +6,9 @@ export const metadata = {
 	name: "diffutils",
 	repository: "https://git.savannah.gnu.org/cgit/diffutils.git",
 	version: "3.8",
+	provides: {
+		binaries: ["cmp", "diff", "diff3"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -51,12 +54,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["cmp", "diff", "diff3"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

@@ -7,6 +7,9 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	repository: "https://git.savannah.gnu.org/cgit/findutils.git",
 	version: "4.10.0",
+	provides: {
+		binaries: ["find", "locate", "updatedb", "xargs"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -48,12 +51,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["find", "locate", "updatedb", "xargs"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

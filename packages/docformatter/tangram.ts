@@ -8,6 +8,9 @@ export const metadata = {
 	license: "MIT",
 	repository: "https://github.com/PyCQA/docformatter",
 	version: "1.7.2",
+	provides: {
+		binaries: ["docformatter"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -45,12 +48,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["docformatter"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

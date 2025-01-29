@@ -8,6 +8,11 @@ export const metadata = {
 	name: "acl",
 	repository: "https://git.savannah.nongnu.org/cgit/acl.git",
 	version: "2.3.2",
+	provides: {
+		binaries: ["chacl", "getfacl", "setfacl"],
+		headers: ["acl/libacl.h", "sys/acl.h"],
+		libraries: ["acl"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -76,13 +81,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["chacl", "getfacl", "setfacl"],
-	headers: ["acl/libacl.h", "sys/acl.h"],
-	libraries: ["acl"],
-};
-
 export const test = tg.target(async () => {
 	const displaysUsage = (name: string) => {
 		return {
@@ -92,9 +90,8 @@ export const test = tg.target(async () => {
 		};
 	};
 	const spec = {
-		...provides,
-		binaries: provides.binaries.map(displaysUsage),
-		metadata,
+		...std.assert.defaultSpec(metadata),
+		binaries: metadata.provides.binaries.map(displaysUsage),
 	};
 	return await std.assert.pkg(build, spec);
 });

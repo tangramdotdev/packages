@@ -5,16 +5,6 @@ import {
 	wrap,
 } from "./wrap.tg.ts";
 
-/** Define the expected contents of the built package. */
-export type PackageProvides = {
-	/** All executables that should exist under `bin/`. */
-	binaries?: Array<string>;
-	/** The names of all header files that should exist under `include/`. */
-	headers?: Array<string>;
-	/** All libraries that should exist under `lib/`. By default, checks for both staticlibs and dylibs */
-	libraries?: Array<LibrarySpec>;
-};
-
 /** Define the expected behavior of each package component. A `PackageProvides` object is a valid `PackageSpec`, but most packages will have additional behavior to assert. */
 export type PackageSpec = {
 	/** All executables that should exist under `bin/`, with optional behavior to check. */
@@ -29,8 +19,16 @@ export type PackageSpec = {
 	headers?: Array<string>;
 	/** All libraries that should exist under `lib/`. By default, checks for both staticlibs and dylibs */
 	libraries?: Array<LibrarySpec>;
-	/** The metadata for the package. */
-	metadata: Metadata;
+};
+
+/** Define the expected contents of a built package. */
+export type Provides = {
+	/** All executables that should exist under `bin/`. */
+	binaries?: Array<string>;
+	/** The names of all header files that should exist under `include/`. */
+	headers?: Array<string>;
+	/** All libraries that should exist under `lib/`. By default, checks for both staticlibs and dylibs */
+	libraries?: Array<LibrarySpec>;
 };
 
 /** Optionally specify some behavior for a particular binary. */
@@ -77,6 +75,8 @@ export type Metadata = {
 	license?: string;
 	/** The project homepage. */
 	homepage?: string;
+	/** The expected contents of a build package. */
+	provides?: Provides;
 	/** The project repository. */
 	repository?: string;
 	/** The support build platforms (arch-os pairs) for producing this package. If not provided, assumes all supported Tangram platorms. */
@@ -95,7 +95,6 @@ export const pkg = async <T extends std.args.PackageArg>(
 	...buildVariants: Array<[T, PackageSpec]>
 ) => {
 	const currentHost = await std.triple.host();
-	supportedHost(currentHost, defaultSpec.metadata);
 
 	// Determine the set of arguments to test. Always test the command with no args against the default spec.
 	const packageArgs: Array<[T, PackageSpec]> = [[{} as T, defaultSpec]];
@@ -116,14 +115,11 @@ export const pkg = async <T extends std.args.PackageArg>(
 };
 
 /** Utility to produce the default spec from a `PackageProvides`. In addition to existence checks, it will also test that all binaries report the expected version when executed with the `--version` flag. */
-export const defaultSpec = (
-	provides: PackageProvides,
-	metadata: Metadata,
-): PackageSpec => {
+export const defaultSpec = (metadata: Metadata): PackageSpec => {
+	const { provides } = metadata;
 	return {
 		...provides,
-		metadata,
-		...(provides.binaries && {
+		...(provides?.binaries && {
 			binaries: provides.binaries.map((name) =>
 				displaysVersion(name, metadata.version),
 			),
@@ -136,7 +132,6 @@ const singlePackageArg = async (
 	host: string,
 	spec: PackageSpec,
 ) => {
-	const metadata = spec.metadata;
 	const env = spec.env ?? {};
 	// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
 	const tests = [nonEmpty(directory)];
@@ -146,7 +141,7 @@ const singlePackageArg = async (
 		for (const binarySpec of spec.binaries) {
 			const binary =
 				typeof binarySpec === "string" ? { name: binarySpec } : binarySpec;
-			tests.push(runnableBin({ directory, binary, env, host, metadata }));
+			tests.push(runnableBin({ directory, binary, env, host }));
 		}
 	}
 
@@ -220,7 +215,6 @@ type RunnableBinArg = {
 	binary: BinarySpec;
 	env?: std.env.Arg | undefined;
 	host: string;
-	metadata?: Metadata | undefined;
 };
 
 /** Assert the directory contains a binary conforming to the provided spec. */
@@ -229,8 +223,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		return true;
 	}
 	let name: string | undefined;
-	let testPredicate = (stdout: string) =>
-		stdout.includes(arg.metadata?.version ?? "");
+	let testPredicate;
 	let testArgs = ["--version"];
 	if (typeof arg.binary === "string") {
 		name = arg.binary;
@@ -265,10 +258,12 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		.then((target) => target.output())
 		.then(tg.File.expect)
 		.then((file) => file.text());
-	tg.assert(
-		testPredicate(stdout),
-		`Binary ${name} did not produce expected output. Received: ${stdout}`,
-	);
+	if (testPredicate !== undefined) {
+		tg.assert(
+			testPredicate(stdout),
+			`Binary ${name} did not produce expected output. Received: ${stdout}`,
+		);
+	}
 	return true;
 };
 

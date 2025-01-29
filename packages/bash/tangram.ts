@@ -10,6 +10,9 @@ export const metadata = {
 	name: "bash",
 	repository: "https://git.savannah.gnu.org/git/bash.git",
 	version: "5.2.37",
+	provides: {
+		binaries: ["bash"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -114,12 +117,7 @@ export const wrapScript = async (script: tg.File, host: string) => {
 	);
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
-
-export const provides = {
-	binaries: ["bash"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

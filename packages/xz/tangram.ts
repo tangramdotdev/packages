@@ -4,6 +4,19 @@ export const metadata = {
 	homepage: "https://tukaani.org/xz/",
 	name: "xz",
 	version: "5.6.3",
+	provides: {
+		binaries: [
+			"lzmadec",
+			"lzmainfo",
+			"xz",
+			"xzdec",
+			"xzdiff",
+			"xzgrep",
+			"xzless",
+			"xzmore",
+		],
+		libraries: ["lzma"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -58,22 +71,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: [
-		"lzmadec",
-		"lzmainfo",
-		"xz",
-		"xzdec",
-		"xzdiff",
-		"xzgrep",
-		"xzless",
-		"xzmore",
-	],
-	libraries: ["lzma"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

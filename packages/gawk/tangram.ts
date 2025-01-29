@@ -6,6 +6,9 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	repository: "https://git.savannah.gnu.org/git/gawk.git",
 	version: "5.3.1",
+	provides: {
+		binaries: ["gawk"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -51,12 +54,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["gawk"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

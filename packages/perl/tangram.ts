@@ -12,6 +12,9 @@ export const metadata = {
 	license: "GPL-1.0-or-later",
 	repository: "https://github.com/Perl/perl5",
 	version: "5.40.0",
+	provides: {
+		binaries: ["perl"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -186,13 +189,8 @@ export const wrapScript = async (script: tg.File) => {
 	const interpreter = tg.File.expect(await (await build()).get("bin/bash"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
-
-export const provides = {
-	binaries: ["perl"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
 	const output = await $`perl -e 'print "hello\n"' > $OUTPUT`

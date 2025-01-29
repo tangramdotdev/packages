@@ -9,6 +9,9 @@ export const metadata = {
 	name: "musl",
 	repository: "https://git.musl-libc.org/cgit/musl",
 	version: "1.2.5",
+	provides: {
+		libraries: ["c"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -106,12 +109,7 @@ export const interpreterName = (triple: string) => {
 	const arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;
 };
-
-export const provides = {
-	libraries: ["c"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

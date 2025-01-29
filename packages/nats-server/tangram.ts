@@ -7,6 +7,9 @@ export const metadata = {
 	name: "nats-server",
 	repository: "https://github.com/nats-io/nats-server",
 	version: "2.10.23",
+	provides: {
+		binaries: ["nats-server"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -57,12 +60,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["nats-server"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

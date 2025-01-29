@@ -10,6 +10,10 @@ export const metadata = {
 	name: "libcap",
 	repository: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
 	version: "2.73",
+	provides: {
+		binaries: ["capsh", "getcap", "setcap", "getpcaps"],
+		libraries: ["cap"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -105,12 +109,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["capsh", "getcap", "setcap", "getpcaps"],
-	libraries: ["cap"],
-};
-
 export const test = tg.target(async () => {
 	const hasUsage = (name: string) => {
 		return {
@@ -120,8 +118,8 @@ export const test = tg.target(async () => {
 		};
 	};
 	const spec = {
-		...std.assert.defaultSpec(provides, metadata),
-		binaries: provides.binaries.map(hasUsage),
+		...std.assert.defaultSpec(metadata),
+		binaries: metadata.provides.binaries.map(hasUsage),
 	};
 	return await std.assert.pkg(build, spec);
 });

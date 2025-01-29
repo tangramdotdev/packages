@@ -14,6 +14,10 @@ export const metadata = {
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
 	version: "0.23.1",
+	provides: {
+		binaries: ["msgfmt", "msgmerge", "xgettext"],
+		// TODO libraries
+	},
 };
 
 export const source = tg.target(() => {
@@ -156,13 +160,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["msgfmt", "msgmerge", "xgettext"],
-	// TODO libraries
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

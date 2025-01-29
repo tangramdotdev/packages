@@ -7,6 +7,9 @@ export const metadata = {
 	name: "blake3",
 	repository: "https://github.com/BLAKE3-team/BLAKE3",
 	version: "1.5.5",
+	provides: {
+		binaries: ["b3sum"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -54,12 +57,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["b3sum"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

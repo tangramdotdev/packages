@@ -7,6 +7,9 @@ export const metadata = {
 	name: "fzf",
 	repository: "https://github.com/junegunn/fzf",
 	version: "0.57.0",
+	provides: {
+		binaries: ["fzf"],
+	},
 };
 
 export const source = tg.target((): Promise<tg.Directory> => {
@@ -54,16 +57,11 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["fzf"],
-};
-
 export const test = tg.target(async () => {
 	const majorMinor = metadata.version.split(".").slice(2).join(".");
 	const spec = {
-		...std.assert.defaultSpec(provides, metadata),
-		binaries: provides.binaries.map((name) => {
+		...std.assert.defaultSpec(metadata),
+		binaries: metadata.provides.binaries.map((name) => {
 			return {
 				name,
 				testPredicate: (stdout: string) => stdout.includes(majorMinor),

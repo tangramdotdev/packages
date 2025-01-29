@@ -6,6 +6,9 @@ export const metadata = {
 	license: "https://github.com/jqlang/jq?tab=License-1-ov-file#readme",
 	repository: "https://github.com/jqlang/jq",
 	version: "1.7.1",
+	provides: {
+		binaries: ["jq"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -58,12 +61,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["jq"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

@@ -12,6 +12,10 @@ export const metadata = {
 	name: "bzip2",
 	repository: "https://sourceware.org/git/bzip2.git",
 	version: "1.0.8",
+	provides: {
+		binaries: ["bzip2"],
+		libraries: [{ name: "bz2", staticlib: true, dylib: false }],
+	},
 };
 
 export const source = tg.target(() => {
@@ -85,17 +89,10 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["bzip2"],
-	libraries: [{ name: "bz2", staticlib: true, dylib: false }],
-};
-
 export const test = tg.target(async () => {
 	const spec = {
-		...provides,
-		metadata,
-		binaries: provides.binaries.map((name) => {
+		...std.assert.defaultSpec(metadata),
+		binaries: metadata.provides.binaries.map((name) => {
 			return {
 				name,
 				testArgs: ["--help"],

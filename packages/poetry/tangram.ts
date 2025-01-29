@@ -11,6 +11,9 @@ export const metadata = {
 	name: "poetry",
 	repository: "https://github.com/python-poetry/poetry",
 	version: "1.8.4",
+	provides: {
+		binaries: ["poetry"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -127,12 +130,7 @@ export const build = tg.target(async (args: BuildArgs) => {
 		installed,
 	);
 });
-
-export const provides = {
-	binaries: ["poetry"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);
 });

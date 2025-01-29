@@ -9,6 +9,14 @@ export const metadata = {
 	name: "sphinx",
 	repository: "https://github.com/sphinx-doc/sphinx",
 	version: "8.1.3",
+	provides: {
+		binaries: [
+			"sphinx-apidoc",
+			"sphinx-autogen",
+			"sphinx-build",
+			"sphinx-quickstart",
+		],
+	},
 };
 
 // Generated using pip-tools/pip-compile: https://pypi.org/project/pip-tools
@@ -59,17 +67,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: [
-		"sphinx-apidoc",
-		"sphinx-autogen",
-		"sphinx-build",
-		"sphinx-quickstart",
-	],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

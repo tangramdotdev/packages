@@ -21,6 +21,10 @@ export const metadata = {
 	name: "postgresql",
 	repository: "https://git.postgresql.org/gitweb/?p=postgresql.git;a=summary",
 	version: "16.6",
+	provides: {
+		binaries: ["postgres", "psql"],
+		libraries: ["pq"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -168,13 +172,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["postgres", "psql"],
-	libraries: ["pq"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

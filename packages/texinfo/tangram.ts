@@ -12,6 +12,18 @@ export const metadata = {
 	name: "texinfo",
 	repository: "https://git.savannah.gnu.org/git/texinfo.git",
 	version: "7.2",
+	provides: {
+		binaries: [
+			"install-info",
+			"makeinfo",
+			"pdftexi2dvi",
+			"pod2texi",
+			"texi2any",
+			"texi2dvi",
+			"texi2pdf",
+			"texindex",
+		],
+	},
 };
 
 export const source = tg.target(() => {
@@ -123,22 +135,8 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: [
-		"install-info",
-		"makeinfo",
-		"pdftexi2dvi",
-		"pod2texi",
-		"texi2any",
-		"texi2dvi",
-		"texi2pdf",
-		"texindex",
-	],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	// FIXME - build should return a directory, not an env - wrap the bins in the env.
 	return true;
 	// return await std.assert.pkg(build, spec);

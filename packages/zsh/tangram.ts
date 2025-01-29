@@ -8,6 +8,9 @@ export const metadata = {
 	name: "zsh",
 	repository: "https://sourceforge.net/p/zsh/code/ci/master/tree/",
 	version: "5.9",
+	provides: {
+		binaries: ["zsh"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -93,12 +96,7 @@ export const wrapScript = async (script: tg.File) => {
 	const interpreter = tg.File.expect(await (await build()).get("bin/zsh"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
-
-export const provides = {
-	binaries: ["zsh"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

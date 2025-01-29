@@ -7,6 +7,9 @@ export const metadata = {
 	name: "brotli",
 	repository: "https://github.com/google/brotli",
 	version: "1.1.0",
+	provides: {
+		binaries: ["brotli"],
+	},
 };
 
 export const source = tg.target(async (): Promise<tg.Directory> => {
@@ -69,11 +72,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["brotli"],
-};
-
 export const test = tg.target(async () => {
 	// FIXME
 	// const dylibOnly = (name: string) => {
@@ -91,6 +89,6 @@ export const test = tg.target(async () => {
 	// 	metadata,
 	// });
 	// return true;
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

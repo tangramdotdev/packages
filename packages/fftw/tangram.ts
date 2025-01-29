@@ -6,6 +6,11 @@ export const metadata = {
 	name: "fftw",
 	repository: "https://github.com/FFTW/fftw3",
 	version: "3.3.10",
+	provides: {
+		// FIXME cat not found for fftw-wisdom-to-conf
+		binaries: ["fftw-wisdom", "fftw-wisdom-to-conf"],
+		libraries: ["fftw3"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -66,14 +71,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	// FIXME cat not found for fftw-wisdom-to-conf
-	binaries: ["fftw-wisdom", "fftw-wisdom-to-conf"],
-	libraries: ["fftw3"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

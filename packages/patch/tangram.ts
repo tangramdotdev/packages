@@ -7,6 +7,9 @@ export const metadata = {
 	name: "patch",
 	repository: "https://git.savannah.gnu.org/cgit/patch.git",
 	version: "2.7.6",
+	provides: {
+		binaries: ["patch"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -49,12 +52,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["patch"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

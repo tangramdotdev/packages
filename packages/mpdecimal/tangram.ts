@@ -5,6 +5,10 @@ export const metadata = {
 	license: "Simplified BSD",
 	name: "mpdecimal",
 	version: "4.0.0",
+	provides: {
+		headers: ["mpdecimal.h"],
+		libraries: ["mpdec"],
+	},
 };
 
 export const source = tg.target(async (): Promise<tg.Directory> => {
@@ -56,13 +60,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	headers: ["mpdecimal.h"],
-	libraries: ["mpdec"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

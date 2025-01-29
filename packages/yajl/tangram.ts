@@ -7,6 +7,13 @@ export const metadata = {
 	name: "yajl",
 	repository: "https://github.com/lloyd/yajl",
 	version: "2.1.0",
+	provides: {
+		binaries: ["json_reformat", "json_verify"],
+		libraries: [
+			{ name: "yajl", dylib: true, staticlib: false },
+			{ name: "yajl_s", dylib: false, staticlib: true },
+		],
+	},
 };
 
 export const source = tg.target(async (): Promise<tg.Directory> => {
@@ -60,15 +67,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["json_reformat", "json_verify"],
-	libraries: [
-		{ name: "yajl", dylib: true, staticlib: false },
-		{ name: "yajl_s", dylib: false, staticlib: true },
-	],
-};
-
 export const test = tg.target(async () => {
 	const hasUsage = (name: string) => {
 		return {
@@ -79,8 +77,8 @@ export const test = tg.target(async () => {
 		};
 	};
 	const spec = {
-		...std.assert.defaultSpec(provides, metadata),
-		binaries: provides.binaries.map(hasUsage),
+		...std.assert.defaultSpec(metadata),
+		binaries: metadata.provides.binaries.map(hasUsage),
 	};
 	return await std.assert.pkg(build, spec);
 });

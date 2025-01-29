@@ -6,6 +6,9 @@ export const metadata = {
 	name: "libyaml",
 	repository: "https://github.com/yaml/libyaml",
 	version: "0.2.5",
+	provides: {
+		libraries: ["yaml"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -51,12 +54,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	libraries: ["yaml"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

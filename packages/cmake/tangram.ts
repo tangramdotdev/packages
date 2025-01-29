@@ -18,6 +18,9 @@ export const metadata = {
 	name: "cmake",
 	repository: "https://gitlab.kitware.com/cmake/cmake",
 	version: "3.31.4",
+	provides: {
+		binaries: ["cmake"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -428,13 +431,8 @@ export const pushOrSet = (
 		obj[key] = a;
 	}
 };
-
-export const provides = {
-	binaries: ["cmake"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(self, spec);
 
 	await ninja.test();

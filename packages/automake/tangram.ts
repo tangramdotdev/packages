@@ -7,12 +7,21 @@ import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
+const version = "1.17";
 export const metadata = {
 	homepage: "https://www.gnu.org/software/automake/",
 	license: "GPL-2.0-or-later",
 	name: "automake",
 	repository: "https://git.savannah.gnu.org/git/automake.git",
-	version: "1.17",
+	version,
+	provides: {
+		binaries: [
+			"aclocal",
+			`aclocal-${version}`,
+			"automake",
+			`automake-${version}`,
+		],
+	},
 };
 
 export const source = tg.target(() => {
@@ -151,17 +160,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: [
-		"aclocal",
-		`aclocal-${metadata.version}`,
-		"automake",
-		`automake-${metadata.version}`,
-	],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

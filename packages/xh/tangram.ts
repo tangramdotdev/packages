@@ -9,6 +9,9 @@ export const metadata = {
 	name: "xh",
 	repository: "https://github.com/ducaale/xh",
 	version: "0.23.0",
+	provides: {
+		binaries: ["xh"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -77,12 +80,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["xh"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

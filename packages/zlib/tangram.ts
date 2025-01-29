@@ -5,6 +5,10 @@ export const metadata = {
 	license: "https://zlib.net/zlib_license.html",
 	name: "zlib",
 	version: "1.3.1",
+	provides: {
+		docs: ["man/man3/zlib.3"],
+		libraries: ["z"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -69,12 +73,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const provides = {
-	docs: ["man/man3/zlib.3"],
-	libraries: ["z"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

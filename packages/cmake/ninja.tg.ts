@@ -7,6 +7,9 @@ export const metadata = {
 	name: "ninja",
 	repository: "https://github.com/ninja-build/ninja",
 	version: "1.12.1",
+	provides: {
+		binaries: ["ninja"],
+	},
 };
 
 export const source = () => {
@@ -64,12 +67,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["ninja"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

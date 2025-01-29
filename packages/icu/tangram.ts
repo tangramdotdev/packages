@@ -7,6 +7,21 @@ export const metadata = {
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
 	version: "76.1",
+	provides: {
+		binaries: [
+			"derb",
+			"genbrk",
+			"genfcu",
+			"gencnval",
+			"gendict",
+			"icuexportdata",
+			"icuinfo",
+			"makeconv",
+			"pkgdata",
+			"uconv",
+		],
+		libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -72,23 +87,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: [
-		"derb",
-		"genbrk",
-		"genfcu",
-		"gencnval",
-		"gendict",
-		"icuexportdata",
-		"icuinfo",
-		"makeconv",
-		"pkgdata",
-		"uconv",
-	],
-	libraries: ["icudata", "icui18n", "icuio", "icutest", "icutu", "icuuc"],
-};
-
 export const test = tg.target(async () => {
 	const hasUsage = (name: string) => {
 		return {
@@ -99,7 +97,7 @@ export const test = tg.target(async () => {
 		};
 	};
 	const spec = {
-		...std.assert.defaultSpec(provides, metadata),
+		...std.assert.defaultSpec(metadata),
 		binaries: [
 			"derb",
 			hasUsage("genbrk"),

@@ -9,6 +9,11 @@ export const metadata = {
 	name: "attr",
 	repository: "https://git.savannah.nongnu.org/cgit/attr.git",
 	version: "2.5.2",
+	provides: {
+		binaries: ["attr", "getfattr", "setfattr"],
+		headers: ["attr/attributes.h", "attr/error_context.h", "attr/libattr.h"],
+		libraries: ["attr"],
+	},
 };
 
 export const source = tg.target(async () => {

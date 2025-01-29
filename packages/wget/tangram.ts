@@ -17,6 +17,9 @@ export const metadata = {
 	name: "wget",
 	repository: "https://gitlab.com/gnuwget/wget2",
 	version: "1.24.5",
+	provides: {
+		binaries: ["wget"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -107,13 +110,8 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["wget"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
 	const result = await $`

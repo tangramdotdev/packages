@@ -6,6 +6,9 @@ export const metadata = {
 	license: "BSD-2-Clause",
 	repository: "https://git.gavinhoward.com/gavin/bc",
 	version: "7.0.3",
+	provides: {
+		binaries: ["bc", "dc"],
+	},
 };
 
 export const source = tg.target(async () => {
@@ -68,12 +71,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["bc", "dc"],
-};
-
 export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(provides, metadata);
+	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

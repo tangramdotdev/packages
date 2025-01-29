@@ -3,6 +3,9 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "bison",
 	version: "3.8.2",
+	provides: {
+		binaries: ["bison"],
+	},
 };
 
 export const source = tg.target(() => {
@@ -63,11 +66,6 @@ export const build = tg.target(async (arg?: Arg) => {
 });
 
 export default build;
-
-export const provides = {
-	binaries: ["bison"],
-};
-
 import * as bootstrap from "../../bootstrap.tg.ts";
 export const test = tg.target(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
