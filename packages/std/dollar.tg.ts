@@ -136,7 +136,7 @@ class Dollar {
 		} else {
 			arg.host = await std.triple.host();
 		}
-		return await tg.target(arg);
+		return await tg.command(arg);
 	}
 
 	then<TResult1 = tg.Value, TResult2 = never>(
@@ -153,7 +153,7 @@ class Dollar {
 	}
 }
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const f = tg.file("hello there!!!\n");
 	const output = await $`cat ${f} > $OUTPUT
 		echo $NAME >> $OUTPUT

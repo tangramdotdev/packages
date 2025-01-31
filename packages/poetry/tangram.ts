@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:909cc7651508ee6c1eabdfa56c3eded62222516029bf2fc313c47270bba1ad9a";
@@ -41,7 +41,7 @@ export type Arg = {
 };
 
 /** Create an environment with poetry installed. */
-export const self = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		host,
@@ -68,7 +68,7 @@ export type BuildArgs = {
 };
 
 /** Build a poetry project. */
-export const build = tg.target(async (args: BuildArgs) => {
+export const build = tg.command(async (args: BuildArgs) => {
 	const host = args.host ?? (await std.triple.host());
 	const build = args.build ?? host;
 	// Construct the basic build environment.
@@ -130,7 +130,7 @@ export const build = tg.target(async (args: BuildArgs) => {
 		installed,
 	);
 });
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);
 });

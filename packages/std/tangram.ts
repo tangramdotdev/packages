@@ -38,7 +38,7 @@ export const metadata = {
 };
 
 /** The default export produces the default SDK env for the detected host, asserts its validity, and returns the env. */
-export const build = tg.target(() => {
+export const build = tg.command(() => {
 	return sdk.testDefault();
 });
 export default build;
@@ -180,7 +180,7 @@ const defaultTests = [
 ];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
-export const test = tg.target(async (...testNames: Array<string>) => {
+export const test = tg.command(async (...testNames: Array<string>) => {
 	let tests: Array<string> = flatten(testNames);
 	if (tests.length === 0) {
 		tests = defaultTests;

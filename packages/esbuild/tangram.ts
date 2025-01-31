@@ -11,7 +11,7 @@ export const metadata = {
 	version: "0.21.3",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f81cc2add471cab752845a778f23dace9ece17c487fe178202c07481b9a678b5";
@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		dependencies: { go: goArg = {}, nodejs: nodejsArg = {} } = {},
 		env: env_,
@@ -80,7 +80,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	return await $`
 			echo "Checking that we can run esbuild." | tee $OUTPUT
 			echo "$(esbuild --version)" | tee -a $OUTPUT

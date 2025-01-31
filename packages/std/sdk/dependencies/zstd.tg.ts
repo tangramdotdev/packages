@@ -5,7 +5,7 @@ export const metadata = {
 	version: "1.5.6",
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:4aa8dd1c1115c0fd6b6b66c35c7f6ce7bd58cc1dfd3e4f175b45b39e84b14352";
@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
 
 	const host = host_ ?? (await std.triple.host());
@@ -57,7 +57,7 @@ export const build = tg.target(async (arg?: Arg) => {
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME

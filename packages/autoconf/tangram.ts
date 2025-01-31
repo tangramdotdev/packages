@@ -25,7 +25,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
@@ -52,7 +52,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const arg = await std.args.apply<Arg>(...args);
 	const {
 		autotools = {},
@@ -183,8 +183,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export const patchAutom4teCfg = tg.target(
-	async (autoconf: tg.Directory, arg?: Arg): Promise<tg.Directory> => {
+export const patchAutom4teCfg = tg.command(async (autoconf: tg.Directory, arg?: Arg): Promise<tg.Directory> => {
 		const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
 		tg.assert(autom4teCfg instanceof tg.File);
 
@@ -209,11 +208,10 @@ export const patchAutom4teCfg = tg.target(
 		return tg.directory(autoconf, {
 			["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
 		});
-	},
-);
+	});
 
 export default build;
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

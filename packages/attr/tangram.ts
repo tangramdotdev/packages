@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
@@ -38,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -73,7 +73,7 @@ const provides = {
 	libraries: ["attr"],
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const displaysUsage = (name: string) => {
 		return {
 			name,

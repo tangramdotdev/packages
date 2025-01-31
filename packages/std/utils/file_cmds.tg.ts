@@ -6,7 +6,7 @@ export const metadata = {
 	version: "448.0.3",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:d5cf241a751a9d36f43a4cd759d06835f4346c3150c62147a05c7bdec67b057c";
@@ -31,7 +31,7 @@ export type Arg = {
 };
 
 /** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
-export const macOsXattrCmds = tg.target(async (arg?: Arg) => {
+export const macOsXattrCmds = tg.command(async (arg?: Arg) => {
 	const build = arg?.build ?? (await std.triple.host());
 	const os = std.triple.os(build);
 

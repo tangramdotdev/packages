@@ -14,7 +14,7 @@ type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export const workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
+export const workspace = tg.command(async (arg?: Arg): Promise<tg.Directory> => {
 	const {
 		build: build_,
 		buildToolchain,
@@ -66,8 +66,7 @@ type ToolchainArg = {
 	target?: string;
 };
 
-export const rust = tg.target(
-	async (arg?: ToolchainArg): Promise<tg.Directory> => {
+export const rust = tg.command(async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		const host = standardizeTriple(await std.triple.host());
 		const target = standardizeTriple(arg?.target ?? host);
 		const hostSystem = std.triple.archAndOs(host);
@@ -134,8 +133,7 @@ export const rust = tg.target(
 				env,
 			}),
 		);
-	},
-);
+	});
 
 type RustupManifest = {
 	"manifest-version": "2";
@@ -390,7 +388,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	return result;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 
@@ -422,7 +420,7 @@ export const test = tg.target(async () => {
 	return nativeWorkspace;
 });
 
-export const testCross = tg.target(async () => {
+export const testCross = tg.command(async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 

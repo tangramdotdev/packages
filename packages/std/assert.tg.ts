@@ -203,7 +203,7 @@ type FileExistsArg = {
 };
 
 /** Assert the provided path exists and refers to a file. */
-export const fileExists = tg.target(async (arg: FileExistsArg) => {
+export const fileExists = tg.command(async (arg: FileExistsArg) => {
 	const maybeFile = await arg.directory.tryGet(arg.subpath);
 	tg.assert(maybeFile, `Path ${arg.subpath} does not exist.`);
 	tg.File.assert(maybeFile);
@@ -316,7 +316,7 @@ type HeaderArg = {
 };
 
 /** Assert the directory contains a header file with the provided name. */
-export const headerCanBeIncluded = tg.target(async (arg: HeaderArg) => {
+export const headerCanBeIncluded = tg.command(async (arg: HeaderArg) => {
 	// Ensure the file exists.
 	await fileExists({
 		directory: arg.directory,
@@ -353,7 +353,7 @@ type LibraryArg = {
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
-export const linkableLib = tg.target(async (arg: LibraryArg) => {
+export const linkableLib = tg.command(async (arg: LibraryArg) => {
 	// Set up parameters.
 	let name: string | undefined;
 	let pkgConfigName: string | undefined;

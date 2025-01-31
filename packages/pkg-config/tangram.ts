@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const base = `https://pkgconfig.freedesktop.org/releases`;
@@ -39,7 +39,7 @@ export type Arg = {
 	proxy?: boolean;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -145,8 +145,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const path = tg.target(
-	async (
+export const path = tg.command(async (
 		dependencies: Array<tg.Artifact>,
 	): Promise<tg.Template | undefined> => {
 		const standardPaths = [
@@ -165,9 +164,8 @@ export const path = tg.target(
 		}
 
 		return tg.Template.join(":", ...allPaths);
-	},
-);
-export const test = tg.target(async () => {
+	});
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

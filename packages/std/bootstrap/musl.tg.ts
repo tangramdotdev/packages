@@ -10,7 +10,7 @@ export const metadata = {
 	version: "1.2.5",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const host = arg?.host ?? (await std.triple.host());
 	const hostSystem = std.triple.archAndOs(host);
 

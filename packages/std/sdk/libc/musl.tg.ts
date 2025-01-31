@@ -7,7 +7,7 @@ export const metadata = {
 	version: "1.2.5",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -29,7 +29,7 @@ export type Arg = {
 	libcc?: tg.File;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,

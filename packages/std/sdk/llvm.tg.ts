@@ -27,7 +27,7 @@ export const metadata = {
 	version: "19.1.6",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:e3f79317adaa9196d2cfffe1c869d7c100b7540832bc44fe0d3f44a12861fa34";
@@ -52,7 +52,7 @@ export type LLVMArg = {
 };
 
 /** Produce a complete clang+lld distribution using a 2-stage bootstrapping build. */
-export const toolchain = tg.target(async (arg?: LLVMArg) => {
+export const toolchain = tg.command(async (arg?: LLVMArg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -216,7 +216,7 @@ export const toolchain = tg.target(async (arg?: LLVMArg) => {
 });
 
 /** Grab the LLD linker from the toolchain. */
-export const lld = tg.target(async (arg?: LLVMArg) => {
+export const lld = tg.command(async (arg?: LLVMArg) => {
 	const toolchainDir = await toolchain(arg);
 	tg.assert(toolchainDir instanceof tg.Directory);
 	// Use a template instead of the file directly so the linker proxy invokes the linker by its full name.
@@ -230,7 +230,7 @@ type LinuxToDarwinArg = {
 
 /** Produce a linux to darwin toolchain. */
 import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
-export const linuxToDarwin = tg.target(async (arg?: LinuxToDarwinArg) => {
+export const linuxToDarwin = tg.command(async (arg?: LinuxToDarwinArg) => {
 	const { host, target: target_ } = arg ?? {
 		host: await std.triple.host(),
 		target: "aarch64-apple-darwin",
@@ -263,7 +263,7 @@ export const linuxToDarwin = tg.target(async (arg?: LinuxToDarwinArg) => {
 	return await std.env.arg(clangToolchain, cctoolsForTarget);
 });
 
-export const testLinuxToDarwin = tg.target(async (arg?: LinuxToDarwinArg) => {
+export const testLinuxToDarwin = tg.command(async (arg?: LinuxToDarwinArg) => {
 	const { target } = arg ?? {
 		host: await std.triple.host(),
 		target: "aarch64-apple-darwin",

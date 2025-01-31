@@ -37,8 +37,7 @@ export type ToolchainArg = {
 	host?: string;
 };
 
-export const self = tg.target(
-	async (arg?: ToolchainArg): Promise<tg.Directory> => {
+export const self = tg.command(async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		const host = arg?.host ?? (await std.triple.host());
 		const system = std.triple.archAndOs(host);
 		tg.assert(
@@ -69,8 +68,7 @@ export const self = tg.target(
 		}
 
 		return artifact;
-	},
-);
+	});
 
 export default self;
 
@@ -127,8 +125,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export const build = tg.target(
-	async (...args: std.Args<Arg>): Promise<tg.Directory> => {
+export const build = tg.command(async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 		const mutationArgs = await std.args.createMutations<
 			Arg,
 			std.args.MakeArrayKeys<Arg, "env" | "sdk">
@@ -262,8 +259,7 @@ export const build = tg.target(
 		return tg.directory(source, {
 			["bin"]: binDir,
 		});
-	},
-);
+	});
 
 export type VendorArgs = {
 	source: tg.Directory;
@@ -296,7 +292,7 @@ export const vendor = async ({
 
 //TODO spec, add cgo test.
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const source = tg.directory({
 		["main.go"]: tg.file(`
 			package main

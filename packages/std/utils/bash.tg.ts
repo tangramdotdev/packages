@@ -21,7 +21,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9599b22ecd1d5787ad7d3b7bf0c59f312b3396d1e281175dd1f8a4014da621ff";
@@ -30,7 +30,7 @@ export const source = tg.target(async () => {
 	return source;
 });
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_ = [],
@@ -93,7 +93,7 @@ const providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 	return false;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	// FIXME - build assert args properly!

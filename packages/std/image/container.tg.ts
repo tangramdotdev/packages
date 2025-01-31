@@ -47,8 +47,7 @@ type RootFsArg = {
 	cmd?: Array<string>;
 };
 
-export const image = tg.target(
-	async (...args: std.Args<Arg>): Promise<tg.File> => {
+export const image = tg.command(async (...args: std.Args<Arg>): Promise<tg.File> => {
 		type CombinedArgObject = {
 			cmdString?: Array<string>;
 			format?: ImageFormat;
@@ -200,8 +199,7 @@ export const image = tg.target(
 		} else {
 			throw new Error(`Unsupported image format: ${format}`);
 		}
-	},
-);
+	});
 
 export const dockerImageFromLayers = async (
 	config: ImageConfigV1,
@@ -403,21 +401,17 @@ export type Layer = {
 	diffId: string;
 };
 
-export const layer = tg.target(
-	async (directory: tg.Directory): Promise<Layer> => {
+export const layer = tg.command(async (directory: tg.Directory): Promise<Layer> => {
 		const bundle = tg.Artifact.bundle(directory).then(tg.Directory.expect);
 		const tarball = await createTarball(bundle);
 		const bytes = await tarball.bytes();
 		const diffId = await tg.checksum(bytes, "sha256");
 		return { tarball, diffId };
-	},
-);
+	});
 
-export const createTarball = tg.target(
-	async (directory: tg.Directory): Promise<tg.File> => {
+export const createTarball = tg.command(async (directory: tg.Directory): Promise<tg.File> => {
 		return await tg.archive(directory, "tar").then(tg.file);
-	},
-);
+	});
 
 export type Platform = {
 	architecture: string;

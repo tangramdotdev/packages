@@ -2184,7 +2184,7 @@ export const pushOrSet = (
 };
 
 /** Basic program for testing the wrapper code. */
-export const argAndEnvDump = tg.target(async () => {
+export const argAndEnvDump = tg.command(async () => {
 	const sdkEnv = await std.env.arg(bootstrap.sdk(), {
 		TANGRAM_LINKER_TRACING: "tangram=trace",
 	});
@@ -2198,7 +2198,7 @@ export const argAndEnvDump = tg.target(async () => {
 	);
 });
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	await Promise.all([
 		testSingleArgObjectNoMutations(),
 		testDependencies(),
@@ -2209,7 +2209,7 @@ export const test = tg.target(async () => {
 	return true;
 });
 
-export const testSingleArgObjectNoMutations = tg.target(async () => {
+export const testSingleArgObjectNoMutations = tg.command(async () => {
 	const executable = await argAndEnvDump();
 	const executableID = await executable.id();
 	// The program is a wrapper produced by the LD proxy.
@@ -2294,7 +2294,7 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	return wrapper;
 });
 
-export const testContentExecutable = tg.target(async () => {
+export const testContentExecutable = tg.command(async () => {
 	const buildToolchain = bootstrap.sdk();
 	const wrapper = await std.wrap({
 		buildToolchain,
@@ -2319,7 +2319,7 @@ export const testContentExecutable = tg.target(async () => {
 	return true;
 });
 
-export const testContentExecutableVariadic = tg.target(async () => {
+export const testContentExecutableVariadic = tg.command(async () => {
 	const buildToolchain = bootstrap.sdk();
 	const wrapper = await std.wrap(
 		`echo "$NAME"`,
@@ -2343,7 +2343,7 @@ export const testContentExecutableVariadic = tg.target(async () => {
 	return true;
 });
 
-export const testDependencies = tg.target(async () => {
+export const testDependencies = tg.command(async () => {
 	const buildToolchain = await bootstrap.sdk.env();
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	const transitiveDependencyId = await transitiveDependency.id();
@@ -2382,7 +2382,7 @@ export const testDependencies = tg.target(async () => {
 
 import libGreetSource from "./wrap/test/greet.c" with { type: "file" };
 import driverSource from "./wrap/test/driver.c" with { type: "file" };
-export const testDylibPath = tg.target(async () => {
+export const testDylibPath = tg.command(async () => {
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";

@@ -50,7 +50,7 @@ export type Arg = {
 	verbose?: boolean;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "sdk">
@@ -310,7 +310,7 @@ directory = "${vendoredSources}"`;
 };
 
 // Implementation of `cargo vendor` in tg typescript.
-export const vendorDependencies = tg.target(async (cargoLock: tg.File) => {
+export const vendorDependencies = tg.command(async (cargoLock: tg.File) => {
 	type CargoLock = {
 		package: Array<{
 			name: string;
@@ -406,7 +406,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 };
 
 import tests from "./tests" with { type: "directory" };
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const tests = [];
 
 	tests.push(testUnproxiedWorkspace());
@@ -419,7 +419,7 @@ export const test = tg.target(async () => {
 
 import pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import openssl from "openssl" with { path: "../openssl" };
-export const testUnproxiedWorkspace = tg.target(async () => {
+export const testUnproxiedWorkspace = tg.command(async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
@@ -455,7 +455,7 @@ export const testUnproxiedWorkspace = tg.target(async () => {
 });
 
 // Compare the results of cargo vendor and vendorDependencies.
-export const testVendorDependencies = tg.target(async () => {
+export const testVendorDependencies = tg.command(async () => {
 	const sourceDirectory = await tests
 		.get("hello-openssl")
 		.then(tg.Directory.expect);

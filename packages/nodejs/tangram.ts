@@ -68,7 +68,7 @@ const source = async (): Promise<tg.Directory> => {
 	return node;
 };
 
-export const self = tg.target(async (args?: ToolchainArg) => {
+export const self = tg.command(async (args?: ToolchainArg) => {
 	// Download Node
 	const artifact = source();
 
@@ -87,7 +87,7 @@ export const self = tg.target(async (args?: ToolchainArg) => {
 	});
 });
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const node = self();
 	return await $`
 		set -x
@@ -119,7 +119,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">
@@ -254,8 +254,7 @@ type PackageLockJson = {
 	>;
 };
 
-export const install = tg.target(
-	async (packageLockJson: tg.File): Promise<[tg.Directory, tg.Directory]> => {
+export const install = tg.command(async (packageLockJson: tg.File): Promise<[tg.Directory, tg.Directory]> => {
 		// Parse the package-lock.json.
 		const packageLock = tg.encoding.json.decode(
 			await packageLockJson.text(),
@@ -268,12 +267,10 @@ export const install = tg.target(
 			await installPackages(downloads, false),
 			await installPackages(downloads, true),
 		];
-	},
-);
+	});
 
 /** Wrap any scripts pointed to by the "bin" field in the package.json. */
-export const wrapBin = tg.target(
-	async (
+export const wrapBin = tg.command(async (
 		node: tg.Directory,
 		arg: tg.Directory,
 		bins: Record<string, string>,
@@ -300,8 +297,7 @@ export const wrapBin = tg.target(
 		}
 
 		return tg.directory({ bin });
-	},
-);
+	});
 
 /** Given a package-lock.json, return a list of the paths to install and tarballs to use. */
 const downloadPackages = async (

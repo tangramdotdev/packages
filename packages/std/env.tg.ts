@@ -818,7 +818,7 @@ const isDependencyObject = <T extends std.args.PackageArg>(
 	return true;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const envFile = await env({ FOO: "bar" });
 	const foundFooVal = await env.tryGetKey({ env: envFile, key: "FOO" });
 	tg.assert(

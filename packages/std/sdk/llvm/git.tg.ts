@@ -6,7 +6,7 @@ const metadata = {
 	version: "2.47.1",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/git`;
@@ -26,7 +26,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const git = tg.target(async (arg?: Arg) => {
+export const git = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -68,7 +68,7 @@ export const git = tg.target(async (arg?: Arg) => {
 
 export default git;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// FIXME
 	// await std.assert.pkg({ buildFn: git, binaries: ["git"], metadata });
 	return true;

@@ -20,14 +20,13 @@ export const metadata = {
 };
 
 /* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
-export const source = tg.target(() =>
+export const source = tg.command(() =>
 	tg.directory(gccSource(), {
 		gmp: gmpSource(),
 		isl: islSource(),
 		mpfr: mpfrSource(),
 		mpc: mpcSource(),
-	}),
-);
+	}));
 
 type Arg = {
 	autotools?: std.autotools.Arg;
@@ -39,7 +38,7 @@ type Arg = {
 	target?: string;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -135,7 +134,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const libgcc = tg.target(async (...args: std.Args<Arg>) => {
+export const libgcc = tg.command(async (...args: std.Args<Arg>) => {
 	// FIXME - write in terms of gcc above, pass phases down.
 	const {
 		autotools = {},
@@ -228,7 +227,7 @@ export const libgcc = tg.target(async (...args: std.Args<Arg>) => {
 	return libgcc;
 });
 
-export const gccSource = tg.target(async () => {
+export const gccSource = tg.command(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -240,7 +239,7 @@ export const gccSource = tg.target(async () => {
 		.then(std.directory.unwrap);
 });
 
-export const gmpSource = tg.target(async () => {
+export const gmpSource = tg.command(async () => {
 	const name = "gmp";
 	const version = "6.2.1";
 	const extension = ".tar.xz";
@@ -253,7 +252,7 @@ export const gmpSource = tg.target(async () => {
 		.then(std.directory.unwrap);
 });
 
-export const islSource = tg.target(async () => {
+export const islSource = tg.command(async () => {
 	const name = "isl";
 	const version = "0.24";
 	const extension = ".tar.xz";
@@ -266,7 +265,7 @@ export const islSource = tg.target(async () => {
 		.then(std.directory.unwrap);
 });
 
-export const mpcSource = tg.target(() => {
+export const mpcSource = tg.command(() => {
 	const name = "mpc";
 	const version = "1.2.1";
 	const checksum =
@@ -274,7 +273,7 @@ export const mpcSource = tg.target(() => {
 	return std.download.fromGnu({ checksum, name, version });
 });
 
-export const mpfrSource = tg.target(async () => {
+export const mpfrSource = tg.command(async () => {
 	const name = "mpfr";
 	const version = "4.1.0";
 	const checksum =
@@ -335,7 +334,7 @@ export const mergeLibDirs = async (dir: tg.Directory) => {
 	}
 	return dir;
 };
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

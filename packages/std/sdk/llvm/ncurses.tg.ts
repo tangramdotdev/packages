@@ -7,7 +7,7 @@ export const metadata = {
 	version: "6.5",
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6";
@@ -23,7 +23,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const ncurses = tg.target(async (arg?: Arg) => {
+export const ncurses = tg.command(async (arg?: Arg) => {
 	const {
 		autotools = [],
 		build: build_,
@@ -91,6 +91,6 @@ export const ncurses = tg.target(async (arg?: Arg) => {
 
 export default ncurses;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	return await ncurses();
 });

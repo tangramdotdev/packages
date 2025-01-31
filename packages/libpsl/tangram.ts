@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(async (): Promise<tg.Directory> => {
+export const source = tg.command(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:1dcc9ceae8b128f3c0b3f654decd0e1e891afc6ff81098f227ef260449dae208";
@@ -38,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = [],
 		build,
@@ -67,7 +67,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

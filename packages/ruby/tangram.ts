@@ -37,7 +37,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:3d385e5d22d368b064c817a13ed8e3cc3f71a7705d7ed1bae78013c33aa7c87f";
@@ -67,7 +67,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const self = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		dependencies: {
@@ -309,7 +309,7 @@ const bundledGems = (): Promise<tg.Directory> => {
 
 	return tg.directory(...args.map(downloadGem));
 };
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const hasVersion = (name: string, version: string) => {
 		return {
 			name,

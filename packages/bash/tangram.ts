@@ -78,7 +78,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9599b22ecd1d5787ad7d3b7bf0c59f312b3396d1e281175dd1f8a4014da621ff";
@@ -98,7 +98,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -158,12 +158,6 @@ export const wrapScript = async (script: tg.File, host: string) => {
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
-export const provides = tg.target(async () => {
-	console.log(await std.directory.provides(await build()));
-	return true;
-});
-
-export const test = tg.target(async () => {
-	const spec = std.assert.defaultSpec(metadata);
+export const test = tg.command(async () => {
 	return await std.assert.pkg(build, spec);
 });

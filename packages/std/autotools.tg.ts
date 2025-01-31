@@ -74,7 +74,7 @@ export type Arg = {
 	target?: string;
 };
 
-export const target = tg.target(async (...args: std.Args<Arg>) => {
+export const target = tg.command(async (...args: std.Args<Arg>) => {
 	const mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">

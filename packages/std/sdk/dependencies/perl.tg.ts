@@ -7,7 +7,7 @@ export const metadata = {
 	version: "5.40.0",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -28,7 +28,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const {
 		build: buildTriple_,
 		env,
@@ -130,7 +130,7 @@ export const build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME

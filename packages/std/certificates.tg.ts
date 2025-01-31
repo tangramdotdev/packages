@@ -7,7 +7,7 @@ export type Arg = {
 	source?: tg.File;
 };
 
-export const caCertificates = tg.target((arg?: Arg) => {
+export const caCertificates = tg.command((arg?: Arg) => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:a3f328c21e39ddd1f2be1cea43ac0dec819eaa20a90425d7da901a11531b3aa5";

@@ -10,7 +10,7 @@ export const metadata = {
 	version: "3.31.4",
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:a6130bfe75f5ba5c73e672e34359f7c0a1931521957e8393a5c2922c8b0f7f25";
@@ -36,7 +36,7 @@ export type Arg = {
 };
 
 /** Build `cmake`. */
-export const cmake = tg.target(async (arg?: Arg) => {
+export const cmake = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -139,7 +139,7 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export const target = tg.target(async (...args: std.Args<BuildArg>) => {
+export const target = tg.command(async (...args: std.Args<BuildArg>) => {
 	const mutationArgs = await std.args.createMutations<
 		BuildArg,
 		std.args.MakeArrayKeys<BuildArg, "env" | "phases" | "sdk">
@@ -349,11 +349,9 @@ export const target = tg.target(async (...args: std.Args<BuildArg>) => {
 });
 
 /** Build a cmake package. */
-export const build = tg.target(
-	async (...args: std.Args<BuildArg>): Promise<tg.Directory> => {
+export const build = tg.command(async (...args: std.Args<BuildArg>): Promise<tg.Directory> => {
 		return tg.Directory.expect(await (await target(...args)).output());
-	},
-);
+	});
 
 export const pushOrSet = (
 	obj: { [key: string]: unknown },
@@ -376,7 +374,7 @@ export const pushOrSet = (
 	}
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// FIXME
 	// await std.assert.pkg({ buildFn: cmake, binaries: ["cmake"], metadata });
 	return true;

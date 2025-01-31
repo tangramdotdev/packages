@@ -11,7 +11,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const injection = tg.target(async (arg: Arg) => {
+export const injection = tg.command(async (arg: Arg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const os = std.triple.os(host);
@@ -61,7 +61,7 @@ type MacOsInjectionArg = {
 	source: tg.File;
 };
 
-export const macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
+export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const os = std.triple.os(host);
 	if (os !== "darwin") {
@@ -177,7 +177,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	return output;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	const hostArch = std.triple.arch(detectedHost);
 	tg.assert(hostArch);
@@ -202,7 +202,7 @@ export const test = tg.target(async () => {
 	return nativeInjection;
 });
 
-export const testCross = tg.target(async () => {
+export const testCross = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) === "darwin") {
 		console.log("Skipping cross test on darwin");

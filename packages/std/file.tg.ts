@@ -551,7 +551,7 @@ const readNullTerminatedString = (
 	return tg.encoding.utf8.decode(bytes.slice(offset, end));
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// Set up platform details.
 	const bootstrapSDK = await bootstrap.sdk();
 	const host = await std.triple.host();

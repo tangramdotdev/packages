@@ -133,8 +133,7 @@ export const patch = async (
 		.then(tg.File.expect);
 	const utilsArtifact = utils(host);
 
-	const patchedSource = await tg
-		.target({
+	const patchedSource = await tg.command({
 			executable: shellExecutable,
 			args: ["-c", script],
 			env: {
@@ -194,7 +193,7 @@ export const componentList = async (arg?: Arg) => {
 	return expectedComponents[host];
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await std.triple.host();
 	// Assert that all expected components exist and provide a non-empty `bin/` subdirectory.
 	const components = await componentList({ host });

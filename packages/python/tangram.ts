@@ -33,7 +33,7 @@ export const versionString = () => {
 };
 
 /** Return the source code for the python specified by `metadata`. */
-export const source = tg.target(async (): Promise<tg.Directory> => {
+export const source = tg.command(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9cf9427bee9e2242e3877dd0f6b641c1853ca461f39d6503ce260a59c80bf0d9";
@@ -88,7 +88,7 @@ export type Arg = {
 };
 
 /** Build and create a python environment. */
-export const self = tg.target(async (...args: std.Args<Arg>) => {
+export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -292,7 +292,7 @@ export type BuildArg = {
 	python?: Arg;
 };
 
-export const build = tg.target(async (...args: std.Args<BuildArg>) => {
+export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	const mutationArgs = await std.args.createMutations<BuildArg>(
 		std.flatten(args),
 	);
@@ -423,7 +423,7 @@ sys.exit(${attribute}())
 	return bin;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const helloOutput =
 		await $`set -x && python -c 'print("Hello, world!")' > $OUTPUT`
 			.env(self())

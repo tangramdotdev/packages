@@ -9,7 +9,7 @@ export const metadata = {
 	version: "6.12.8",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:2291da065ca04b715c89ee50362aec3f021a7414bc963f1b56736682c8122979";
@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const kernelHeaders = tg.target(async (arg?: Arg) => {
+export const kernelHeaders = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -107,7 +107,7 @@ export const kernelHeaders = tg.target(async (arg?: Arg) => {
 
 export default kernelHeaders;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	const host = await bootstrap.toolchainTriple(detectedHost);
 	if (std.triple.os(host) !== "linux") {

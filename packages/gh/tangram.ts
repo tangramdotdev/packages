@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:1936a80a668caef437b2f409eaa10e48613a3502db7da9eea011b163769218a7";
@@ -34,7 +34,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		go: goArg = {},
 		build,
@@ -58,7 +58,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: metadata.provides.binaries.map((name) => {

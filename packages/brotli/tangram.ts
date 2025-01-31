@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(async (): Promise<tg.Directory> => {
+export const source = tg.command(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:e720a6ca29428b803f4ad165371771f5398faba397edf6778837a18599ea13ff";
@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		cmake: cmakeArg = {},
@@ -73,7 +73,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// FIXME
 	// const dylibOnly = (name: string) => {
 	// 	return { name, dylib: true, staticlib: false };

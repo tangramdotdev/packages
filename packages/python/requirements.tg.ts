@@ -5,8 +5,7 @@ import { $ } from "std" with { path: "../std" };
 import { versionString, wrapScripts } from "./tangram.ts";
 export type Arg = tg.File;
 
-export const install = tg.target(
-	async (pythonArtifact: tg.Directory, requirements: Arg) => {
+export const install = tg.command(async (pythonArtifact: tg.Directory, requirements: Arg) => {
 		// Construct an env with the standard C/C++ sdks, the Rust toolchain, and Python.
 		const toolchains = std.env.arg(std.sdk(), rust.self(), pythonArtifact);
 
@@ -89,8 +88,7 @@ export const install = tg.target(
 			await tg`${installed}/lib/python3/site-packages`,
 			installed,
 		);
-	},
-);
+	});
 
 /** Detect any potentially conflicting installations in a site-packages directory and merge if necessary. */
 const mergeSitePackages = async (output: tg.Directory, input: tg.Directory) => {

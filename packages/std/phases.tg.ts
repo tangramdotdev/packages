@@ -46,7 +46,7 @@ export type CommandArgObject = {
 		| undefined;
 };
 
-export const target = tg.target(async (...args: std.Args<Arg>) => {
+export const target = tg.command(async (...args: std.Args<Arg>) => {
 	const objectArgs = await Promise.all(
 		args.map((arg) => {
 			if (arg === undefined) {
@@ -515,12 +515,12 @@ export const constructCommandTemplate = (
 	}
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	await Promise.all([basic(), order(), override(), mutateEnv()]);
 	return true;
 });
 
-export const basic = tg.target(async () => {
+export const basic = tg.command(async () => {
 	const prepare = `echo "preparing" >> $OUTPUT`;
 	const configure = `echo "configuring" >> $OUTPUT`;
 	const build_ = `echo "building" >> $OUTPUT`;
@@ -549,7 +549,7 @@ export const basic = tg.target(async () => {
 	return true;
 });
 
-export const order = tg.target(async () => {
+export const order = tg.command(async () => {
 	const prepare = `echo "preparing" >> $OUTPUT`;
 	const configure = `echo "configuring" >> $OUTPUT`;
 	const build_ = `echo "building" >> $OUTPUT`;
@@ -579,7 +579,7 @@ export const order = tg.target(async () => {
 	return true;
 });
 
-export const override = tg.target(async () => {
+export const override = tg.command(async () => {
 	const prepare = `echo "preparing"`;
 	const configure = {
 		command: `echo "configuring"`,
@@ -630,7 +630,7 @@ export const override = tg.target(async () => {
 	return build(arg1, arg2);
 });
 
-export const mutateEnv = tg.target(async () => {
+export const mutateEnv = tg.command(async () => {
 	const a = await std.env.arg({
 		HELLO: tg.mutation({
 			kind: "prefix",

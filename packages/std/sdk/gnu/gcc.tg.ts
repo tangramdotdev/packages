@@ -14,7 +14,7 @@ export const metadata = {
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
-export const source = tg.target((bundledSources?: boolean) => {
+export const source = tg.command((bundledSources?: boolean) => {
 	const { name, version } = metadata;
 
 	// Download and unpack the GCC source.
@@ -64,7 +64,7 @@ export type Variant =
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
-export const build = tg.target(async (arg: Arg) => {
+export const build = tg.command(async (arg: Arg) => {
 	const {
 		autotools = {},
 		build: build_,

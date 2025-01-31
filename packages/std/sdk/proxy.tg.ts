@@ -29,7 +29,7 @@ export type Arg = {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export const env = tg.target(async (arg?: Arg): Promise<std.env.Arg> => {
+export const env = tg.command(async (arg?: Arg): Promise<std.env.Arg> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -377,7 +377,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	});
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const tests = [
 		testBasic(),
 		testTransitiveAll(),
@@ -391,7 +391,7 @@ export const test = tg.target(async () => {
 });
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
-export const testBasic = tg.target(async () => {
+export const testBasic = tg.command(async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const helloSource = await tg.file(`
 #include <stdio.h>
@@ -443,7 +443,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 		.then(tg.Directory.expect);
 };
 
-export const testSharedLibraryWithDep = tg.target(async () => {
+export const testSharedLibraryWithDep = tg.command(async () => {
 	const bootstrapSdk = bootstrap.sdk();
 	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
@@ -512,7 +512,7 @@ void printGreeting();
 
 type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 
-export const testTransitiveAll = tg.target(async () => {
+export const testTransitiveAll = tg.command(async () => {
 	return await Promise.all([
 		testTransitive(),
 		testTransitiveNone(),
@@ -521,13 +521,13 @@ export const testTransitiveAll = tg.target(async () => {
 		testTransitiveCombine(),
 	]);
 });
-export const testTransitiveNone = tg.target(() => testTransitive("none"));
-export const testTransitiveResolve = tg.target(() => testTransitive("resolve"));
-export const testTransitiveIsolate = tg.target(() => testTransitive("isolate"));
-export const testTransitiveCombine = tg.target(() => testTransitive("combine"));
+export const testTransitiveNone = tg.command(() => testTransitive("none"));
+export const testTransitiveResolve = tg.command(() => testTransitive("resolve"));
+export const testTransitiveIsolate = tg.command(() => testTransitive("isolate"));
+export const testTransitiveCombine = tg.command(() => testTransitive("combine"));
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
-export const testTransitive = tg.target(async (optLevel?: OptLevel) => {
+export const testTransitive = tg.command(async (optLevel?: OptLevel) => {
 	const opt = optLevel ?? "filter";
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
@@ -782,7 +782,7 @@ const char* getGreetingB();
 });
 
 /** This test checks that the common case of linking against a library in the working directory still works post-install. */
-export const testSamePrefix = tg.target(async () => {
+export const testSamePrefix = tg.command(async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -839,7 +839,7 @@ export const testSamePrefix = tg.target(async () => {
 });
 
 /** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
-export const testSamePrefixDirect = tg.target(async () => {
+export const testSamePrefixDirect = tg.command(async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -894,7 +894,7 @@ export const testSamePrefixDirect = tg.target(async () => {
 });
 
 /** This test checks that the less-common case of linking against a library in a different Tangram artifact by name instead of library path still works post-install. */
-export const testDifferentPrefixDirect = tg.target(async () => {
+export const testDifferentPrefixDirect = tg.command(async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -963,7 +963,7 @@ export const testDifferentPrefixDirect = tg.target(async () => {
 import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 	type: "file",
 };
-export const testStrip = tg.target(async () => {
+export const testStrip = tg.command(async () => {
 	const toolchain = await bootstrap.sdk();
 	const output = await tg
 		.target(
