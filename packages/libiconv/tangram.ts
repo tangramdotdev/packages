@@ -8,6 +8,7 @@ export const metadata = {
 	version: "1.18",
 	provides: {
 		binaries: ["iconv"],
+		headers: ["iconv.h", "libcharset.h", "localcharset.h"],
 		libraries: ["charset", { name: "iconv", dylib: true, staticlib: false }],
 	},
 };
@@ -48,6 +49,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
+
 export const test = tg.target(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

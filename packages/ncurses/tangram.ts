@@ -6,6 +6,37 @@ export const metadata = {
 	name: "ncurses",
 	version: "6.5",
 	provides: {
+		// FIXME all of this is broken.
+		// binaries: [
+		// "clear",
+		// "infocmp",
+		// "ncursesw6-config",
+		// "tabs",
+		// "tic",
+		// "toe",
+		// "tput",
+		// "tset",
+		// ],
+		// headers: [
+		// "ncursesw/curses.h",
+		// "ncursesw/cursesapp.h",
+		// "ncursesw/cursesf.h",
+		// "ncursesw/cursesm.h",
+		// "ncursesw/cursesp.h",
+		// "ncursesw/cursesw.h",
+		// "ncursesw/cursslk.h",
+		// "ncursesw/eti.h",
+		// "ncursesw/etip.h",
+		// "ncursesw/form.h",
+		// "ncursesw/menu.h",
+		// "ncursesw/ncurses_dll.h",
+		// "ncursesw/panel.h",
+		// "ncursesw/term.h",
+		// "ncursesw/term_entry.h",
+		// "ncursesw/termcap.h",
+		// "ncursesw/unctrl.h",
+		// ],
+		// FIXME ncurses++w
 		libraries: ["formw", "menuw", "ncursesw", "panelw"],
 	},
 };
@@ -121,6 +152,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
+
 export const test = tg.target(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

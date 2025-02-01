@@ -15,8 +15,40 @@ export const metadata = {
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
 	version: "0.23.1",
 	provides: {
-		binaries: ["msgfmt", "msgmerge", "xgettext"],
-		// TODO libraries
+		binaries: [
+			"autopoint",
+			"envsubst",
+			"gettext",
+			"gettext.sh",
+			"gettextize",
+			"msgattrib",
+			"msgcat",
+			"msgcmp",
+			"msgcomm",
+			"msgconv",
+			"msgen",
+			"msgexec",
+			"msgfilter",
+			"msgfmt",
+			"msggrep",
+			"msginit",
+			"msgmerge",
+			"msgunfmt",
+			"msguniq",
+			"ngettext",
+			"recode-sr-latin",
+			"xgettext",
+		],
+		headers: [
+			// FIXME - - cannot find `<sting>`, c++ header.
+			// 	"autosprintf.h",
+			"gettext-po.h",
+			"libintl.h",
+			"textstyle/stdbool.h",
+			"textstyle/version.h",
+			"textstyle/woe32dll.h",
+			"textstyle.h",
+		],
 	},
 };
 
@@ -36,10 +68,10 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		acl?: acl.Arg;
-		attr?: attr.Arg;
-		libiconv?: libiconv.Arg;
-		ncurses?: ncurses.Arg;
+		acl?: std.args.DependencyArg<acl.Arg>;
+		attr?: std.args.DependencyArg<attr.Arg>;
+		libiconv?: std.args.DependencyArg<libiconv.Arg>;
+		ncurses?: std.args.DependencyArg<ncurses.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -51,12 +83,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			acl: aclArg = {},
-			attr: attrArg = {},
-			libiconv: libiconvArg = {},
-			ncurses: ncursesArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -65,66 +92,37 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	const os = std.triple.os(host);
 
-	// Set up default build dependencies.
-	const buildDependencies = [];
-	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
-		return { BISON: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(bisonForBuild);
-	const pkgConfigForBuild = pkgConfig
-		.build({ build, host: build })
-		.then((d) => {
-			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
-		});
-	buildDependencies.push(pkgConfigForBuild);
-	const perlForBuild = perl.build({ build, host: build }).then((d) => {
-		return { PERL: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(perlForBuild);
-	const xzForBuild = xz.build({ build, host: build }).then((d) => {
-		return { XZ: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(xzForBuild);
-
-	// Set up host dependencies.
-	const hostDependencies = [];
-	let aclForHost = undefined;
-	let attrForHost = undefined;
-	let libiconvForHost = undefined;
+	const dependencies: Array<std.env.Dependency<any>> = [
+		std.env.buildDependency(bison.build),
+		std.env.buildDependency(perl.build),
+		std.env.buildDependency(xz.build),
+		std.env.buildDependency(pkgConfig.build),
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
+	];
 	if (os === "linux") {
-		aclForHost = await acl.build({ build, host, sdk }, aclArg);
-		hostDependencies.push(aclForHost);
-		attrForHost = await attr.build({ build, host, sdk }, attrArg);
-		hostDependencies.push(attrForHost);
-		// Work around a warning using the glibc-provided iconv.
-		hostDependencies.push({
+		dependencies.push(
+			std.env.runtimeDependency(acl.build, dependencyArgs.acl),
+			std.env.runtimeDependency(attr.build, dependencyArgs.attr),
+		);
+	}
+	if (os === "darwin") {
+		dependencies.push(
+			std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
+		);
+	}
+
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+	];
+	if (os === "darwin") {
+		envs.push({
 			CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
 		});
 	}
-	if (os === "darwin") {
-		libiconvForHost = await libiconv.build({ build, host, sdk }, libiconvArg);
-		hostDependencies.push(libiconvForHost);
-	}
-	const ncursesForHost = await ncurses.build({ build, host, sdk }, ncursesArg);
-	hostDependencies.push(ncursesForHost);
 
-	// Resolve env.
-	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
-
-	// Add final build dependencies to env.
-	const resolvedBuildDependencies = [];
-	const finalBison = await std.env.getArtifactByKey({ env, key: "BISON" });
-	resolvedBuildDependencies.push(finalBison);
-	const finalPkgConfig = await std.env.getArtifactByKey({
-		env,
-		key: "PKGCONFIG",
-	});
-	resolvedBuildDependencies.push(finalPkgConfig);
-	const finalPerl = await std.env.getArtifactByKey({ env, key: "PERL" });
-	resolvedBuildDependencies.push(finalPerl);
-	const finalXz = await std.env.getArtifactByKey({ env, key: "XZ" });
-	resolvedBuildDependencies.push(finalXz);
-	env = await std.env.arg(env, ...resolvedBuildDependencies);
+	const env = std.env.arg(...envs, env_);
 
 	const configure = {
 		args: [
@@ -160,6 +158,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
+
 export const test = tg.target(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

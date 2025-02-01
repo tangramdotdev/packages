@@ -41,10 +41,10 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bison?: bison.Arg;
-		m4?: m4.Arg;
-		perl?: perl.Arg;
-		zlib?: zlib.Arg;
+		bison?: std.args.DependencyArg<bison.Arg>;
+		m4?: std.args.DependencyArg<m4.Arg>;
+		perl?: std.args.DependencyArg<perl.Arg>;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -57,29 +57,26 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			bison: bisonArg = {},
-			m4: m4Arg = {},
-			perl: perlArg = {},
-			zlib: zlibArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = arg;
 
-	const perlArtifact = await perl.build(
-		{ build, env: env_, host, sdk },
-		perlArg,
+	const envArgFromDependency = <T extends std.args.PackageArg>(
+		dep: std.env.Dependency<T>,
+	) => std.env.envArgFromDependency(build, env_, host, sdk, dep);
+
+	const perlArtifact = await envArgFromDependency(
+		std.env.buildDependency(perl.build, dependencyArgs.perl),
 	);
 	const dependencies = [
-		perlArtifact,
-		bison.build({ build, host: build }, bisonArg),
-		m4.build({ build, host: build }, m4Arg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-	];
-	const env = std.env.arg(...dependencies, env_);
+		std.env.buildDependency(bison.build, dependencyArgs.bison),
+		std.env.buildDependency(m4.build, dependencyArgs.m4),
+		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
+	].map(envArgFromDependency);
+	const env = std.env.arg(...dependencies, perlArtifact, env_);
 
 	let autoconf = await std.autotools.build(
 		{

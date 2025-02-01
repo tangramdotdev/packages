@@ -36,7 +36,7 @@ export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	dependencies?: {
-		gperf?: gperf.Arg;
+		gperf?: std.args.DependencyArg<gperf.Arg>;
 	};
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -47,7 +47,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { gperf: gperfArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -57,14 +57,20 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	std.assert.supportedHost(host, metadata);
 
+	const dependencies = [
+		std.env.buildDependency(gperf.build, dependencyArgs.gperf),
+	];
+
+	const env = std.env.arg(
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		env_,
+	);
+
 	const configure = {
 		args: ["--disable-dependency-tracking"],
 	};
-
-	const env = std.env.arg(
-		gperf.build({ build, env: env_, host, sdk }, gperfArg),
-		env_,
-	);
 
 	return std.autotools.build(
 		{

@@ -30,7 +30,7 @@ export const source = tg.target(async () => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	dependencies?: {
-		attr?: attr.Arg;
+		attr?: std.args.DependencyArg<attr.Arg>;
 	};
 	build?: string;
 	env?: std.env.Arg;
@@ -43,7 +43,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { attr: attrArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -52,12 +52,16 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 	std.assert.supportedHost(host, metadata);
 
-	// Set up host dependencies.
-	const attrForHost = await attr
-		.build({ build, host, sdk }, attrArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	const dependencies = [
+		std.env.runtimeDependency(attr.build, dependencyArgs.attr),
+	];
 
-	const env = await std.env.arg(attrForHost, env_);
+	const env = std.env.arg(
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		env_,
+	);
 
 	const configure = {
 		args: [

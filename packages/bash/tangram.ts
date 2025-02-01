@@ -11,7 +11,70 @@ export const metadata = {
 	repository: "https://git.savannah.gnu.org/git/bash.git",
 	version: "5.2.37",
 	provides: {
+		// FIXME bashbug
+		// binaries: ["bash", "bashbug"],
 		binaries: ["bash"],
+		// headers: [
+		// 	"bash/alias.h",
+		// 	"bash/array.h",
+		// 	"bash/arrayfunc.h",
+		// 	"bash/assoc.h",
+		// 	"bash/bashansi.h",
+		// 	"bash/bashintl.h",
+		// 	"bash/bashjmp.h",
+		// 	"bash/bashtypes.h",
+		// 	"bash/builtins/bashgetopt.h",
+		// 	"bash/builtins/builtext.h",
+		// 	"bash/builtins/common.h",
+		// 	"bash/builtins/getopt.h",
+		// 	"bash/builtins.h",
+		// 	"bash/command.h",
+		// 	"bash/config-bot.h",
+		// 	"bash/config-top.h",
+		// 	"bash/config.h",
+		// 	"bash/conftypes.h",
+		// 	"bash/dispose_cmd.h",
+		// 	"bash/error.h",
+		// 	"bash/execute_cmd.h",
+		// 	"bash/externs.h",
+		// 	"bash/general.h",
+		// 	"bash/hashlib.h",
+		// 	"bash/include/ansi_stdlib.h",
+		// 	"bash/include/chartypes.h",
+		// 	"bash/include/filecntl.h",
+		// 	"bash/include/gettext.h",
+		// 	"bash/include/maxpath.h",
+		// 	"bash/include/memalloc.h",
+		// 	"bash/include/ocache.h",
+		// 	"bash/include/posixdir.h",
+		// 	"bash/include/posixjmp.h",
+		// 	"bash/include/posixstat.h",
+		// 	"bash/include/posixtime.h",
+		// 	"bash/include/posixwait.h",
+		// 	"bash/include/shmbchar.h",
+		// 	"bash/include/shmbutil.h",
+		// 	"bash/include/shtty.h",
+		// 	"bash/include/stat-time.h",
+		// 	"bash/include/stdc.h",
+		// 	"bash/include/systimes.h",
+		// 	"bash/include/typemax.h",
+		// 	"bash/include/unionwait.h",
+		// 	"bash/jobs.h",
+		// 	"bash/make_cmd.h",
+		// 	"bash/pathnames.h",
+		// 	"bash/quit.h",
+		// 	"bash/shell.h",
+		// 	"bash/sig.h",
+		// 	"bash/siglist.h",
+		// 	"bash/signames.h",
+		// 	"bash/subst.h",
+		// 	"bash/syntax.h",
+		// 	"bash/unwind_prot.h",
+		// 	"bash/variables.h",
+		// 	"bash/version.h",
+		// 	"bash/xmalloc.h",
+		// 	"bash/y.tab.h",
+		// ],
 	},
 };
 
@@ -26,8 +89,8 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		libiconv?: libiconv.Arg;
-		ncurses?: ncurses.Arg;
+		libiconv?: std.args.DependencyArg<libiconv.Arg>;
+		ncurses?: std.args.DependencyArg<ncurses.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -39,50 +102,27 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { libiconv: libiconvArg = {}, ncurses: ncursesArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	// Set up default build dependencies.
-	const buildDependencies = [];
-	const pkgConfigForBuild = pkgConfig
-		.build({ build, host: build })
-		.then((d) => {
-			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
-		});
-	buildDependencies.push(pkgConfigForBuild);
-	const gettextForBuild = gettext.build({ build, host: build }).then((d) => {
-		return { GETTEXT: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(gettextForBuild);
-
-	// Set up host dependencies.
-	const hostDependencies = [];
-	const libiconvForHost = await libiconv
-		.build({ build, host, sdk }, libiconvArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(libiconvForHost);
-	const ncursesForHost = await ncurses
-		.build({ build, host, sdk }, ncursesArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(ncursesForHost);
+	const dependencies = [
+		std.env.buildDependency(pkgConfig.build),
+		std.env.buildDependency(gettext.build), // TODO optional.
+		std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
+	];
 
 	// Resolve env.
-	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
-
-	// Add final build dependencies to env.
-	const resolvedBuildDependencies = [];
-	const finalPkgConfig = await std.env.getArtifactByKey({
-		env,
-		key: "PKGCONFIG",
-	});
-	resolvedBuildDependencies.push(finalPkgConfig);
-	const finalGettext = await std.env.getArtifactByKey({ env, key: "GETTEXT" });
-	resolvedBuildDependencies.push(finalGettext);
-	env = await std.env.arg(env, ...resolvedBuildDependencies);
+	const env = std.env.arg(
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		env_,
+	);
 
 	const configure = {
 		args: ["--without-bash-malloc", "--with-curses"],
@@ -117,6 +157,12 @@ export const wrapScript = async (script: tg.File, host: string) => {
 	);
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
+
+export const provides = tg.target(async () => {
+	console.log(await std.directory.provides(await build()));
+	return true;
+});
+
 export const test = tg.target(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

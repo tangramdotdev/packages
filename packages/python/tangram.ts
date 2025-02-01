@@ -10,7 +10,6 @@ import * as mpdecimal from "mpdecimal" with { path: "../mpdecimal" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -52,15 +51,15 @@ export type Arg = {
 
 	/** Args for dependencies. */
 	dependencies?: {
-		bzip2?: bzip2.Arg;
-		libffi?: libffi.Arg;
-		libxcrypt?: libxcrypt.Arg;
-		mpdecimal?: mpdecimal.Arg;
-		ncurses?: ncurses.Arg;
-		openssl?: openssl.Arg;
-		readline?: readline.Arg;
-		sqlite?: sqlite.Arg;
-		zlib?: zlib.Arg;
+		bzip2?: std.args.DependencyArg<bzip2.Arg>;
+		libffi?: std.args.DependencyArg<libffi.Arg>;
+		libxcrypt?: std.args.DependencyArg<libxcrypt.Arg>;
+		mpdecimal?: std.args.DependencyArg<mpdecimal.Arg>;
+		ncurses?: std.args.DependencyArg<ncurses.Arg>;
+		openssl?: std.args.DependencyArg<openssl.Arg>;
+		readline?: std.args.DependencyArg<readline.Arg>;
+		sqlite?: std.args.DependencyArg<sqlite.Arg>;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
 	};
 
 	/** Optional environment variables to set. */
@@ -93,17 +92,7 @@ export const self = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			bzip2: bzip2Arg = {},
-			libffi: libffiArg = {},
-			libxcrypt: libxcryptArg = {},
-			mpdecimal: mpdecimalArg = {},
-			ncurses: ncursesArg = {},
-			openssl: opensslArg = {},
-			readline: readlineArg = {},
-			sqlite: sqliteArg = {},
-			zlib: zlibArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		enableOptimizations: enableOptimizations_,
 		env: env_,
 		host,
@@ -119,103 +108,47 @@ export const self = tg.target(async (...args: std.Args<Arg>) => {
 	}
 	const enableOptimizations = enableOptimizations_ ?? false;
 
-	// Set up build dependencies.
-	const buildDependencies = [];
-	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
-		return { BISON: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(bisonForBuild);
-	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
-		return { M4: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(m4ForBuild);
-	if (os === "darwin") {
-		const pkgConfigForBuild = pkgConf
-			.build({ build, host: build })
-			.then((d) => {
-				return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
-			});
-		buildDependencies.push(pkgConfigForBuild);
-	} else if (os === "linux") {
-		const pkgConfigForBuild = pkgConfig
-			.build({ build, host: build })
-			.then((d) => {
-				return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
-			});
-		buildDependencies.push(pkgConfigForBuild);
-	}
+	const processDependency = <T extends std.args.PackageArg>(
+		dep: std.env.Dependency<T>,
+	) => std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
-	// Set yup host dependencies.
-	const hostDependencies = [];
-	const bzip2ForHost = await bzip2
-		.build({ build, host, sdk }, bzip2Arg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(bzip2ForHost);
-	const libffiForHost = await libffi
-		.build({ build, host, sdk }, libffiArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(libffiForHost);
-	const libxcryptForHost = await libxcrypt
-		.build({ build, host, sdk }, libxcryptArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(libxcryptForHost);
-	const ncursesForHost = await ncurses
-		.build({ build, host, sdk }, ncursesArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(ncursesForHost);
-	const opensslForHost = await openssl
-		.build({ build, host, sdk }, opensslArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(opensslForHost);
-	const mpdecimalForHost = await mpdecimal
-		.build({ build, host, sdk }, mpdecimalArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(mpdecimalForHost);
-	const readlineForHost = await readline
-		.build({ build, host, sdk }, readlineArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(readlineForHost);
-	const sqliteForHost = await sqlite
-		.build({ build, host, sdk }, sqliteArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(sqliteForHost);
-	const zlibForHost = await zlib
-		.build({ build, host, sdk }, zlibArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
-	hostDependencies.push(zlibForHost);
+	const dependencies = [
+		std.env.buildDependency(bison.build, dependencyArgs.bison),
+		std.env.buildDependency(m4.build, dependencyArgs.m4),
+		std.env.buildDependency(pkgConf.build, dependencyArgs.pkgConf),
+		std.env.runtimeDependency(bzip2.build, dependencyArgs.bzip2),
+		std.env.runtimeDependency(libxcrypt.build, dependencyArgs.libxcrypt),
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
+		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
+	].map(processDependency);
 
-	// Resolve env.
-	const resolvedEnv = await std.env.arg(
-		...buildDependencies,
-		...hostDependencies,
-		env_,
+	// Set up additional runtime dependencies that will end up in the wrapper.
+	const libffiForHost = await processDependency(
+		std.env.runtimeDependency(libffi.build, dependencyArgs.libffi),
+	);
+	const mpdecimalForHost = await processDependency(
+		std.env.runtimeDependency(mpdecimal.build, dependencyArgs.mpdecimal),
+	);
+	const opensslForHost = await processDependency(
+		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
+	);
+	const zlibForHost = await processDependency(
+		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	);
 
-	// Add final build dependencies to env.
-	const resolvedBuildDependencies = [];
-	const finalBison = await std.env.getArtifactByKey({
-		env: resolvedEnv,
-		key: "BISON",
-	});
-	resolvedBuildDependencies.push(finalBison);
-	const finalM4 = await std.env.getArtifactByKey({
-		env: resolvedEnv,
-		key: "M4",
-	});
-	resolvedBuildDependencies.push(finalM4);
-	const finalPkgConfig = await std.env.getArtifactByKey({
-		env: resolvedEnv,
-		key: "PKGCONFIG",
-	});
-	resolvedBuildDependencies.push(finalPkgConfig);
-	const env: tg.Unresolved<Array<std.env.Arg>> = [
-		resolvedEnv,
-		...resolvedBuildDependencies,
+	// Resolve env.
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [
+		...dependencies,
+		libffiForHost,
+		mpdecimalForHost,
+		opensslForHost,
+		zlibForHost,
 	];
 
 	if (os === "darwin") {
-		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
+		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
 	}
+	const env = std.env.arg(...envs, env_);
 
 	const configureArgs = [];
 	if (enableOptimizations) {
@@ -228,7 +161,7 @@ export const self = tg.target(async (...args: std.Args<Arg>) => {
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env,
 			phases,
 			opt: "3",
 			sdk,
@@ -238,6 +171,7 @@ export const self = tg.target(async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
+	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper.
 	const libraryPaths = [
 		libffiForHost,
 		mpdecimalForHost,

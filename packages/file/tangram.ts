@@ -12,7 +12,8 @@ export const metadata = {
 	version: "5.45",
 	provides: {
 		binaries: ["file"],
-		libraries: ["magic"],
+		headers: ["magic.h"],
+		libraries: [{ name: "magic", staticlib: false, dylib: true }],
 	},
 };
 
@@ -32,10 +33,10 @@ type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bison?: bison.Arg;
-		libseccomp?: libseccomp.Arg;
-		m4?: m4.Arg;
-		zlib?: zlib.Arg;
+		bison?: std.args.DependencyArg<bison.Arg>;
+		libseccomp?: std.args.DependencyArg<libseccomp.Arg>;
+		m4?: std.args.DependencyArg<m4.Arg>;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -47,12 +48,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			bison: bisonArg = {},
-			libseccomp: libseccompArg = {},
-			m4: m4Arg = {},
-			zlib: zlibArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -63,16 +59,21 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 	};
 	const dependencies = [
-		bison.build({ build, host: build }, bisonArg),
-		m4.build({ build, host: build }, m4Arg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		std.env.buildDependency(bison.build, dependencyArgs.bison),
+		std.env.buildDependency(m4.build, dependencyArgs.m4),
+		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	];
 	if (std.triple.os(host) === "linux") {
 		dependencies.push(
-			libseccomp.build({ build, env: env_, host, sdk }, libseccompArg),
+			std.env.runtimeDependency(libseccomp.build, dependencyArgs.libseccomp),
 		);
 	}
-	const env = [...dependencies, env_];
+	const env = std.env.arg(
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		env_,
+	);
 
 	const output = await std.autotools.build(
 		{
