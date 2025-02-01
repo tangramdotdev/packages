@@ -251,11 +251,11 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 	)} > $OUTPUT 2>&1`;
 
 	const stdout = await tg
-		.target(executable, {
+		.command(executable, {
 			env: std.env.arg(arg.env),
 			host: arg.host,
 		})
-		.then((target) => target.output())
+		.then((command) => command.build())
 		.then(tg.File.expect)
 		.then((file) => file.text());
 	if (testPredicate !== undefined) {
@@ -333,14 +333,14 @@ export const headerCanBeIncluded = tg.command(async (arg: HeaderArg) => {
 
 	// Compile the program, ensuring the env properly made the header discoverable.
 	const program = await tg
-		.target(tg`cc -xc "${source}" -o $OUTPUT`, {
+		.command(tg`cc -xc "${source}" -o $OUTPUT`, {
 			env: std.env.arg(std.sdk(), arg.directory),
 		})
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect);
 
 	// Run the program.
-	await tg.target(tg`${program}`).then((t) => t.output());
+	await tg.command(tg`${program}`).then((c) => c.build());
 	return true;
 });
 
@@ -481,7 +481,7 @@ export const dlopen = async (arg: DlopenArg) => {
 	const linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
 	const sdkEnv = std.sdk(arg?.sdk);
 	await tg
-		.target(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
+		.command(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
 			env: std.env.arg(
 				sdkEnv,
 				directory,
@@ -493,7 +493,7 @@ export const dlopen = async (arg: DlopenArg) => {
 			),
 			host: arg.host,
 		})
-		.then((target) => target.output())
+		.then((command) => command.build())
 		.then(tg.File.expect);
 
 	return true;
@@ -533,12 +533,12 @@ export const stdoutIncludes = async (
 	expected: string,
 ) => {
 	const stdout = await tg
-		.target(tg`${file} > $OUTPUT`, {
+		.command(tg`${file} > $OUTPUT`, {
 			env: {
 				TANGRAM_WRAPPER_TRACING: "tangram=trace",
 			},
 		})
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect)
 		.then((f) => f.text());
 	tg.assert(stdout.includes(expected));

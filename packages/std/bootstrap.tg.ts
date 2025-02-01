@@ -133,7 +133,8 @@ export const patch = async (
 		.then(tg.File.expect);
 	const utilsArtifact = utils(host);
 
-	const patchedSource = await tg.command({
+	const patchedSource = await tg
+		.command({
 			executable: shellExecutable,
 			args: ["-c", script],
 			env: {
@@ -141,7 +142,7 @@ export const patch = async (
 			},
 			host,
 		})
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.Directory.expect);
 
 	return patchedSource;

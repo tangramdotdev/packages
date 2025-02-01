@@ -587,7 +587,7 @@ export const test = tg.command(async () => {
 
 	// Produce a library and executable.
 	const output = await tg
-		.target(
+		.command(
 			tg`
 			set -x
 			mkdir -p $OUTPUT
@@ -600,7 +600,7 @@ export const test = tg.command(async () => {
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.Directory.expect);
 
 	// Obtain the output files.
