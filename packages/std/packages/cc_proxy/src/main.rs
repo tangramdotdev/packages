@@ -372,15 +372,15 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	// Create a process.
 	let id = command.id(tg).await?;
 	let spawn_arg = tg::process::spawn::Arg {
-		create: true,
-		parent: None,
-		remote: None,
-		retry: false,
 		checksum: None,
 		command: Some(id),
+		create: true,
 		cwd: None,
 		env: None,
 		network: false,
+		parent: None,
+		remote: None,
+		retry: false,
 	};
 	let build_directory = tg::Process::run(tg, spawn_arg)
 		.await?
