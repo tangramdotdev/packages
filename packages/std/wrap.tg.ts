@@ -2191,10 +2191,10 @@ export const argAndEnvDump = tg.command(async () => {
 
 	return tg.File.expect(
 		await (
-			await tg.target(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
+			await tg.command(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
 				env: sdkEnv,
 			})
-		).output(),
+		).build(),
 	);
 });
 
@@ -2247,8 +2247,8 @@ export const testSingleArgObjectNoMutations = tg.command(async () => {
 
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`${wrapper} > $OUTPUT`)
-		.then((target) => target.output())
+		.command(tg`${wrapper} > $OUTPUT`)
+		.then((command) => command.build())
 		.then(tg.File.expect);
 	const text = await output.text();
 	console.log("text", text);
@@ -2307,10 +2307,10 @@ export const testContentExecutable = tg.command(async () => {
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((target) => target.output())
+		.then((command) => command.build())
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
@@ -2331,10 +2331,10 @@ export const testContentExecutableVariadic = tg.command(async () => {
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((target) => target.output())
+		.then((command) => command.build())
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
@@ -2392,22 +2392,22 @@ export const testDylibPath = tg.command(async () => {
 
 	// Compile the greet library
 	const sharedLibraryDir = await (
-		await tg.target(
+		await tg.command(
 			tg`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`,
 			{ env: await std.env.arg(bootstrapSdk) },
 		)
 	)
-		.output()
+		.build()
 		.then(tg.Directory.expect);
 	console.log("sharedLibraryDir", await sharedLibraryDir.id());
 
 	// Compile the driver.
 	const driver = await (
-		await tg.target(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
+		await tg.command(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
 			env: await std.env.arg(bootstrapSdk),
 		})
 	)
-		.output()
+		.build()
 		.then(tg.File.expect);
 	console.log("unwrapped driver", await driver.id());
 
