@@ -223,7 +223,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		{
 			phases,
 			env,
-			target: { host },
+			command: { host },
 		},
 		...additionalPhasesArgs,
 	);
@@ -254,7 +254,8 @@ type PackageLockJson = {
 	>;
 };
 
-export const install = tg.command(async (packageLockJson: tg.File): Promise<[tg.Directory, tg.Directory]> => {
+export const install = tg.command(
+	async (packageLockJson: tg.File): Promise<[tg.Directory, tg.Directory]> => {
 		// Parse the package-lock.json.
 		const packageLock = tg.encoding.json.decode(
 			await packageLockJson.text(),
@@ -267,10 +268,12 @@ export const install = tg.command(async (packageLockJson: tg.File): Promise<[tg.
 			await installPackages(downloads, false),
 			await installPackages(downloads, true),
 		];
-	});
+	},
+);
 
 /** Wrap any scripts pointed to by the "bin" field in the package.json. */
-export const wrapBin = tg.command(async (
+export const wrapBin = tg.command(
+	async (
 		node: tg.Directory,
 		arg: tg.Directory,
 		bins: Record<string, string>,
@@ -297,7 +300,8 @@ export const wrapBin = tg.command(async (
 		}
 
 		return tg.directory({ bin });
-	});
+	},
+);
 
 /** Given a package-lock.json, return a list of the paths to install and tarballs to use. */
 const downloadPackages = async (
