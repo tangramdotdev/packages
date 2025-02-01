@@ -401,7 +401,7 @@ int main() {
 }
 	`);
 	const output = await tg
-		.target(
+		.command(
 			tg`
 				set -x
 				/usr/bin/env
@@ -414,7 +414,7 @@ int main() {
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from a TGLD-wrapped binary!");
 	return output;
@@ -433,13 +433,13 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
 	return await tg
-		.target(
+		.command(
 			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`,
 			{
 				env: std.env.arg(sdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.Directory.expect);
 };
 
@@ -499,12 +499,12 @@ void printGreeting();
 	`;
 
 	const output = await tg
-		.target(script, {
+		.command(script, {
 			env: std.env.arg(bootstrapSdk, {
 				TANGRAM_LINKER_TRACING: "tangram=trace",
 			}),
 		})
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.Directory.expect);
 	console.log("STRING CONSTANTS A", await output.id());
 	return output;
@@ -522,9 +522,15 @@ export const testTransitiveAll = tg.command(async () => {
 	]);
 });
 export const testTransitiveNone = tg.command(() => testTransitive("none"));
-export const testTransitiveResolve = tg.command(() => testTransitive("resolve"));
-export const testTransitiveIsolate = tg.command(() => testTransitive("isolate"));
-export const testTransitiveCombine = tg.command(() => testTransitive("combine"));
+export const testTransitiveResolve = tg.command(() =>
+	testTransitive("resolve"),
+);
+export const testTransitiveIsolate = tg.command(() =>
+	testTransitive("isolate"),
+);
+export const testTransitiveCombine = tg.command(() =>
+	testTransitive("combine"),
+);
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
 export const testTransitive = tg.command(async (optLevel?: OptLevel) => {
@@ -645,7 +651,7 @@ const char* getGreetingB();
 
 	// Compile the executable.
 	const output = await tg
-		.target(
+		.command(
 			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
@@ -654,7 +660,7 @@ const char* getGreetingB();
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect);
 
 	// Assert the library paths of the wrapper are set appropriately.
@@ -813,7 +819,7 @@ export const testSamePrefix = tg.command(async () => {
 	});
 
 	const output = await tg
-		.target(
+		.command(
 			tg`
 			set -x
 			env
@@ -831,7 +837,7 @@ export const testSamePrefix = tg.command(async () => {
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect);
 	console.log("wrapped_exe", await output.id());
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
@@ -870,7 +876,7 @@ export const testSamePrefixDirect = tg.command(async () => {
 	});
 
 	const output = await tg
-		.target(
+		.command(
 			tg`
 			set -x
 			mkdir -p .bins
@@ -887,7 +893,7 @@ export const testSamePrefixDirect = tg.command(async () => {
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
@@ -925,7 +931,7 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 	});
 
 	const libgreetArtifact = await tg
-		.target(
+		.command(
 			tg`
 			set -x
 			mkdir -p $OUTPUT
@@ -938,11 +944,11 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.Directory.expect);
 
 	const output = await tg
-		.target(
+		.command(
 			tg`
 			set -x
 			cc -v ${libgreetArtifact}/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
@@ -954,7 +960,7 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
@@ -966,7 +972,7 @@ import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 export const testStrip = tg.command(async () => {
 	const toolchain = await bootstrap.sdk();
 	const output = await tg
-		.target(
+		.command(
 			tg`
 		set -eux
 		cc -g -o main -xc ${inspectProcessSource}
@@ -978,7 +984,7 @@ export const testStrip = tg.command(async () => {
 				}),
 			},
 		)
-		.then((t) => t.output())
+		.then((c) => c.build())
 		.then(tg.File.expect);
 	return output;
 });

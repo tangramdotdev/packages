@@ -96,7 +96,7 @@ export const kernelHeaders = tg.command(async (arg?: Arg) => {
 				env,
 				phases: { build, install },
 				order,
-				target: { host: system },
+				command: { host: system },
 			},
 			phasesArg,
 		),

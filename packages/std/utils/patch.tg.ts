@@ -160,7 +160,7 @@ export const test = tg.command(async () => {
 			: attr({ host, sdk: false, env: sdk });
 	const output = tg.File.expect(
 		await (
-			await tg.target(script, {
+			await tg.command(script, {
 				env: std.env.arg(
 					coreutils({ host, sdk: false, env: sdk }),
 					diffutils({ host, sdk: false, env: sdk }),
@@ -168,7 +168,7 @@ export const test = tg.command(async () => {
 					patchArtifact,
 				),
 			})
-		).output(),
+		).build(),
 	);
 
 	const contents = (await output.text()).trim();

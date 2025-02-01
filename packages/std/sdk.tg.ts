@@ -619,11 +619,11 @@ export namespace sdk {
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		const output = tg.File.expect(
 			await (
-				await tg.target(tg`${cmd} -dumpmachine > $OUTPUT`, {
+				await tg.command(tg`${cmd} -dumpmachine > $OUTPUT`, {
 					env: std.env.arg(env),
 					host: std.triple.archAndOs(detectedHost),
 				})
-			).output(),
+			).build(),
 		);
 		const host = (await output.text()).trim();
 		std.triple.assert(host);
@@ -716,7 +716,7 @@ export namespace sdk {
 		}
 		const compiledProgram = tg.File.expect(
 			await (
-				await tg.target(
+				await tg.command(
 					tg`echo "testing ${lang}"
 				set -x
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
@@ -727,7 +727,7 @@ export namespace sdk {
 						host: std.triple.archAndOs(expectedHost),
 					},
 				)
-			).output(),
+			).build(),
 		);
 
 		// Assert the resulting program was compiled for the expected target.
@@ -768,11 +768,11 @@ export namespace sdk {
 		if (!isCross && proxiedLinker) {
 			const testOutput = tg.File.expect(
 				await (
-					await tg.target(tg`${compiledProgram} > $OUTPUT`, {
+					await tg.command(tg`${compiledProgram} > $OUTPUT`, {
 						host: std.triple.archAndOs(expectedHost),
 						env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 					})
-				).output(),
+				).build(),
 			);
 			const outputText = (await testOutput.text()).trim();
 			tg.assert(outputText === expectedOutput);
@@ -1034,13 +1034,13 @@ export const assertComment = async (
 ) => {
 	const elfComment = tg.File.expect(
 		await (
-			await tg.target(
+			await tg.command(
 				tg`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`,
 				{
 					env: await std.env.arg(toolchain, bootstrap.utils()),
 				},
 			)
-		).output(),
+		).build(),
 	);
 	const text = await elfComment.text();
 	tg.assert(text.includes(textToMatch));

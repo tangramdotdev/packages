@@ -93,11 +93,11 @@ export const compileUtil = async (arg: UtilArg) => {
 
 	const util = tg.File.expect(
 		await (
-			await tg.target(await tg.template(script), {
+			await tg.command(await tg.template(script), {
 				host: std.triple.archAndOs(build),
 				env: std.env.arg(arg.env ?? {}, bootstrap.sdk.env(host)),
 			})
-		).output(),
+		).build(),
 	);
 
 	// Combine with destination.

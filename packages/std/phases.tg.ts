@@ -9,7 +9,8 @@ export type ArgObject = {
 	env?: std.env.Arg;
 	order?: Array<string>;
 	phases?: PhasesArg;
-	target?: tg.Target.Arg;
+	checksum?: tg.Checksum | undefined;
+	command?: tg.Command.Arg;
 };
 
 export type PhasesArg = {
@@ -46,7 +47,7 @@ export type CommandArgObject = {
 		| undefined;
 };
 
-export const target = tg.command(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const objectArgs = await Promise.all(
 		args.map((arg) => {
 			if (arg === undefined) {
@@ -60,20 +61,21 @@ export const target = tg.command(async (...args: std.Args<Arg>) => {
 	);
 	const mutationArgs = await std.args.createMutations<
 		ArgObject,
-		std.args.MakeArrayKeys<ArgObject, "env" | "phases" | "target">
+		std.args.MakeArrayKeys<ArgObject, "env" | "phases" | "command">
 	>(objectArgs, {
 		debug: "set",
 		env: "append",
 		order: "set",
 		phases: "append",
-		target: "append",
+		command: "append",
 	});
 	const {
+		checksum,
 		debug,
 		env: env_,
 		order: order_,
 		phases: phases_,
-		target: targetArgs,
+		command: commandArgs,
 	} = await std.args.applyMutations(mutationArgs);
 
 	// Merge the phases into a single object.
@@ -163,23 +165,21 @@ export const target = tg.command(async (...args: std.Args<Arg>) => {
 	const env = await std.env.arg(env_);
 
 	// Produce a target arg with the env and optionally the shell executable.
+	let command;
 	if (maybeShellExe === undefined) {
-		return tg.target(script, { env }, ...(targetArgs ?? []));
+		command = await tg.command(script, { env }, ...(commandArgs ?? []));
 	} else {
-		return tg.target(
+		command = await tg.command(
 			{
 				executable: maybeShellExe,
 				args: ["-euc", script],
 				env,
 			},
-			...(targetArgs ?? []),
+			...(commandArgs ?? []),
 		);
 	}
+	return await command.build({ checksum });
 });
-
-export const build = async (...args: std.args.UnresolvedArgs<Arg>) => {
-	return await target(...args).then((t) => t.output());
-};
 
 export type Phases = {
 	[key: string]: Phase;
@@ -668,7 +668,7 @@ export const mutateEnv = tg.command(async () => {
 
 	return build(
 		{ phases: { build: "env > $OUTPUT" } },
-		{ target: { env: a } },
-		{ target: { env: b } },
+		{ command: { env: a } },
+		{ command: { env: b } },
 	);
 });

@@ -220,10 +220,10 @@ export const test = tg.command(async () => {
 			: attr({ host, sdk: false, env: sdk });
 	const output = tg.File.expect(
 		await (
-			await tg.target(script, {
+			await tg.command(script, {
 				env: std.env.arg(platformSupportLib, coreutils),
 			})
-		).output(),
+		).build(),
 	);
 
 	const contents = (await output.text()).trim();

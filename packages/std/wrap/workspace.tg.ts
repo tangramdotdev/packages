@@ -14,33 +14,35 @@ type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export const workspace = tg.command(async (arg?: Arg): Promise<tg.Directory> => {
-	const {
-		build: build_,
-		buildToolchain,
-		host: host_,
-		release = true,
-		source: source_,
-	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
-	const buildTriple = build_ ?? host;
+export const workspace = tg.command(
+	async (arg?: Arg): Promise<tg.Directory> => {
+		const {
+			build: build_,
+			buildToolchain,
+			host: host_,
+			release = true,
+			source: source_,
+		} = arg ?? {};
+		const host = host_ ?? (await std.triple.host());
+		const buildTriple = build_ ?? host;
 
-	// Get the source.
-	const source = source_
-		? source_
-		: await tg.directory({
-				"Cargo.toml": cargoToml,
-				"Cargo.lock": cargoLock,
-				packages: packages,
-			});
+		// Get the source.
+		const source = source_
+			? source_
+			: await tg.directory({
+					"Cargo.toml": cargoToml,
+					"Cargo.lock": cargoLock,
+					packages: packages,
+				});
 
-	return build({
-		...(await std.triple.rotate({ build: buildTriple, host })),
-		buildToolchain,
-		release,
-		source,
-	});
-});
+		return build({
+			...(await std.triple.rotate({ build: buildTriple, host })),
+			buildToolchain,
+			release,
+			source,
+		});
+	},
+);
 
 export const ccProxy = (arg?: Arg) =>
 	workspace(arg)
@@ -66,7 +68,8 @@ type ToolchainArg = {
 	target?: string;
 };
 
-export const rust = tg.command(async (arg?: ToolchainArg): Promise<tg.Directory> => {
+export const rust = tg.command(
+	async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		const host = standardizeTriple(await std.triple.host());
 		const target = standardizeTriple(arg?.target ?? host);
 		const hostSystem = std.triple.archAndOs(host);
@@ -128,12 +131,13 @@ export const rust = tg.command(async (arg?: ToolchainArg): Promise<tg.Directory>
 
 		return tg.Directory.expect(
 			await std.phases.build({
-				target: { host: hostSystem },
+				command: { host: hostSystem },
 				phases: { build: script },
 				env,
 			}),
 		);
-	});
+	},
+);
 
 type RustupManifest = {
 	"manifest-version": "2";
@@ -350,10 +354,10 @@ export const build = async (arg: BuildArg) => {
 		await std.phases.build({
 			env: std.env.arg(env),
 			phases: { prepare, build, install },
-			target: {
+			command: {
 				host: system,
-				checksum: "unsafe",
 			},
+			checksum: "unsafe",
 		}),
 	);
 };

@@ -74,7 +74,7 @@ export type Arg = {
 	target?: string;
 };
 
-export const target = tg.command(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">
@@ -94,6 +94,7 @@ export const target = tg.command(async (...args: std.Args<Arg>) => {
 	});
 	const {
 		buildInTree = false,
+		checksum,
 		debug = false,
 		defaultCFlags = true,
 		defaultCrossArgs = true,
@@ -309,22 +310,19 @@ export const target = tg.command(async (...args: std.Args<Arg>) => {
 	const phaseArgs = (phases ?? []).filter(
 		(arg): arg is std.phases.Arg => arg !== undefined,
 	);
-	return await std.phases.target(
-		{
-			debug,
-			phases: defaultPhases,
-			env,
-			target: { env: { TANGRAM_HOST: system }, host: system },
-		},
-		...phaseArgs,
-	);
-});
-
-export const build = async (...args: std.args.UnresolvedArgs<Arg>) => {
-	return await target(...args)
-		.then((t) => t.output())
+	return await std.phases
+		.build(
+			{
+				debug,
+				phases: defaultPhases,
+				env,
+				command: { env: { TANGRAM_HOST: system }, host: system },
+				checksum,
+			},
+			...phaseArgs,
+		)
 		.then(tg.Directory.expect);
-};
+});
 
 export const pushOrSet = (
 	obj: { [key: string]: unknown },

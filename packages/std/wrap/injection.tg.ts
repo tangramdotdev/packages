@@ -101,11 +101,11 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const system = std.triple.archAndOs(host);
 	const injection = tg.File.expect(
 		await (
-			await tg.target(
+			await tg.command(
 				tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
 				{ host: system, env: std.env.arg(arg.buildToolchain, env) },
 			)
-		).output(),
+		).build(),
 	);
 	return injection;
 });
@@ -164,7 +164,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	);
 	const output = tg.File.expect(
 		await (
-			await tg.target(
+			await tg.command(
 				tg`${executable} -xc ${arg.source} -o $OUTPUT \
 				${tg.Template.join(" ", ...args)}`,
 				{
@@ -172,7 +172,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 					env,
 				},
 			)
-		).output(),
+		).build(),
 	);
 	return output;
 };

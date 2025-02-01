@@ -139,7 +139,7 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export const target = tg.command(async (...args: std.Args<BuildArg>) => {
+export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	const mutationArgs = await std.args.createMutations<
 		BuildArg,
 		std.args.MakeArrayKeys<BuildArg, "env" | "phases" | "sdk">
@@ -337,21 +337,18 @@ export const target = tg.command(async (...args: std.Args<BuildArg>) => {
 	const phaseArgs = (phases ?? []).filter(
 		(arg): arg is std.phases.Arg => arg !== undefined,
 	);
-	return await std.phases.target(
-		{
-			debug,
-			phases: defaultPhases,
-			env,
-			target: { env: { TANGRAM_HOST: system }, host: system },
-		},
-		...phaseArgs,
-	);
+	return await std.phases
+		.build(
+			{
+				debug,
+				phases: defaultPhases,
+				env,
+				command: { env: { TANGRAM_HOST: system }, host: system },
+			},
+			...phaseArgs,
+		)
+		.then(tg.Directory.expect);
 });
-
-/** Build a cmake package. */
-export const build = tg.command(async (...args: std.Args<BuildArg>): Promise<tg.Directory> => {
-		return tg.Directory.expect(await (await target(...args)).output());
-	});
 
 export const pushOrSet = (
 	obj: { [key: string]: unknown },
