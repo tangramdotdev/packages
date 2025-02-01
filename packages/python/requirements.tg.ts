@@ -25,7 +25,7 @@ export const install = tg.command(async (pythonArtifact: tg.Directory, requireme
 				--disable-pip-version-check \\
 				-r ${requirements}`
 			.env(toolchains)
-			.checksum("unsafe")
+			.checksum("any")
 			.then(tg.Directory.expect);
 
 		let installedBins = tg.directory();
@@ -48,7 +48,7 @@ export const install = tg.command(async (pythonArtifact: tg.Directory, requireme
 					--no-deps                   \\
 				${name} || true # allow failure, needed to skip unnecessary errors in pip install.`
 				.env(toolchains)
-				.checksum("unsafe")
+				.checksum("any")
 				.then(tg.Directory.expect);
 
 			// Get any site-packages or bin directories that were installed by pip.

@@ -73,7 +73,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			env,
 			phases,
 			source: source_ ?? source(),
-			checksum: "unsafe",
+			checksum: "any",
 		})
 		.then(tg.Directory.expect);
 });

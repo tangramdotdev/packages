@@ -115,7 +115,7 @@ export const test = tg.command(async () => {
 		curl -o $OUTPUT/tangram https://www.tangram.dev
 	`
 		.env(build())
-		.checksum("unsafe")
+		.checksum("any")
 		.then(tg.Directory.expect);
 
 	const exampleContents = await result

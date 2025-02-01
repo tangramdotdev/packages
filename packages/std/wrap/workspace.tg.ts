@@ -357,7 +357,7 @@ export const build = async (arg: BuildArg) => {
 			command: {
 				host: system,
 			},
-			checksum: "unsafe",
+			checksum: "any",
 		}),
 	);
 };

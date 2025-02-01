@@ -37,7 +37,8 @@ export type ToolchainArg = {
 	host?: string;
 };
 
-export const self = tg.command(async (arg?: ToolchainArg): Promise<tg.Directory> => {
+export const self = tg.command(
+	async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		const host = arg?.host ?? (await std.triple.host());
 		const system = std.triple.archAndOs(host);
 		tg.assert(
@@ -68,12 +69,13 @@ export const self = tg.command(async (arg?: ToolchainArg): Promise<tg.Directory>
 		}
 
 		return artifact;
-	});
+	},
+);
 
 export default self;
 
 export type Arg = {
-	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
 
 	/** The source directory. */
@@ -125,7 +127,8 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>): Promise<tg.Directory> => {
+export const build = tg.command(
+	async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 		const mutationArgs = await std.args.createMutations<
 			Arg,
 			std.args.MakeArrayKeys<Arg, "env" | "sdk">
@@ -259,7 +262,8 @@ export const build = tg.command(async (...args: std.Args<Arg>): Promise<tg.Direc
 		return tg.directory(source, {
 			["bin"]: binDir,
 		});
-	});
+	},
+);
 
 export type VendorArgs = {
 	source: tg.Directory;
@@ -286,7 +290,7 @@ export const vendor = async ({
 				mv -T ./vendor "$OUTPUT" || true
 			`
 		.env(self(), { SSL_CERT_DIR: std.caCertificates() })
-		.checksum("unsafe")
+		.checksum("any")
 		.then(tg.Directory.expect);
 };
 

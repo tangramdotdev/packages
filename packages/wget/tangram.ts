@@ -122,7 +122,7 @@ export const test = tg.command(async () => {
 		wget -O $OUTPUT/tangram https://www.tangram.dev
 	`
 		.env(build())
-		.checksum("unsafe")
+		.checksum("any")
 		.then(tg.Directory.expect);
 
 	const exampleContents = await result

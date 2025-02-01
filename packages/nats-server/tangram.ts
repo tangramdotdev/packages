@@ -50,7 +50,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return go.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			checksum: "unsafe",
+			checksum: "any",
 			env,
 			sdk,
 			source: source_ ?? source(),

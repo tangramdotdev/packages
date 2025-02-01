@@ -7,7 +7,7 @@ export type Arg = {
 	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
-	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
 
 	/** Should the default features get disabled? Default: false. */
@@ -272,7 +272,7 @@ const vendoredSources = async (
 		const rustArtifact = self();
 		const sdk = std.sdk();
 		const result = await $`${vendorScript}`
-			.checksum("unsafe")
+			.checksum("any")
 			.env(sdk, rustArtifact, {
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 				CARGO_HTTP_CAINFO: certFile,
@@ -473,7 +473,7 @@ export const testVendorDependencies = tg.command(async () => {
 	const sdk = std.sdk();
 
 	const cargoVendored = await $`${vendorScript}`
-		.checksum("unsafe")
+		.checksum("any")
 		.env(sdk, rustArtifact, {
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 			CARGO_HTTP_CAINFO: certFile,
