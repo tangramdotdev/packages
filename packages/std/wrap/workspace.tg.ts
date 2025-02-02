@@ -358,6 +358,7 @@ export const build = async (arg: BuildArg) => {
 				host: system,
 			},
 			checksum: "any",
+			network: true,
 		}),
 	);
 };
