@@ -305,7 +305,7 @@ export const build = async (arg: BuildArg) => {
 	}
 
 	// Define phases.
-	const prepare = tg`
+	const prepare = tg`	
 		export CARGO_HOME=$PWD/cargo_home
 		mkdir -p $CARGO_HOME
 

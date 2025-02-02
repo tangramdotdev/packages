@@ -10,6 +10,7 @@ export type ArgObject = {
 	order?: Array<string>;
 	phases?: PhasesArg;
 	checksum?: tg.Checksum | undefined;
+	network?: boolean;
 	command?: tg.Command.Arg;
 };
 
@@ -71,6 +72,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	});
 	const {
 		checksum,
+		network = false,
 		debug,
 		env: env_,
 		order: order_,
@@ -178,7 +180,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			...(commandArgs ?? []),
 		);
 	}
-	return await command.build({ checksum });
+	return await command.build({ checksum, network });
 });
 
 export type Phases = {
