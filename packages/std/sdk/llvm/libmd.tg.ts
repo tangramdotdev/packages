@@ -19,6 +19,7 @@ export const source = tg.command(async () => {
 export const build = tg.command(async () =>
 	std.autotools.build({
 		source: source(),
-	}));
+	}),
+);
 
 export default build;

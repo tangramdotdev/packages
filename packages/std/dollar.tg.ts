@@ -68,7 +68,10 @@ class Dollar {
 	}
 
 	async build(): Promise<tg.Value> {
-		return await (await this.command()).build({ checksum: this.#checksum });
+		return await (await this.command()).build({
+			checksum: this.#checksum,
+			network: this.#checksum !== undefined,
+		});
 	}
 
 	pipefail(bool: boolean): Dollar {

@@ -21,6 +21,7 @@ export const build = tg.command(async () =>
 	std.autotools.build({
 		env: libmd(),
 		source: source(),
-	}));
+	}),
+);
 
 export default build;
