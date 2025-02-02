@@ -18,7 +18,7 @@ export type ToolchainArg = {
 };
 
 /** Construct a complete binutils + libc + gcc toolchain. */
-export const toolchain = tg.target(async (arg: ToolchainArg) => {
+export const toolchain = tg.command(async (arg: ToolchainArg) => {
 	const { host: host_, target: target_ } = arg;
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const target = std.sdk.canonicalTriple(target_ ?? host);
@@ -74,7 +74,7 @@ type CanadianCrossArg = {
 	env?: std.env.Arg;
 };
 
-export const canadianCross = tg.target(async (arg?: CanadianCrossArg) => {
+export const canadianCross = tg.command(async (arg?: CanadianCrossArg) => {
 	const { host: host_, env: env_ } = arg ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 
@@ -169,7 +169,7 @@ export type CrossToolchainArg = {
 	variant?: gcc.Variant;
 };
 
-export const crossToolchain = tg.target(async (arg: CrossToolchainArg) => {
+export const crossToolchain = tg.command(async (arg: CrossToolchainArg) => {
 	const {
 		buildToolchain,
 		build: build_,
@@ -238,7 +238,7 @@ export type BuildSysrootArg = {
 	targetBinutils?: tg.Directory;
 };
 
-export const buildSysroot = tg.target(async (arg: BuildSysrootArg) => {
+export const buildSysroot = tg.command(async (arg: BuildSysrootArg) => {
 	const {
 		build: build_,
 		buildToolchain,

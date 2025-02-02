@@ -14,7 +14,7 @@ export const metadata = {
 	version: "0.191",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871";
@@ -43,7 +43,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -114,6 +114,6 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const test = tg.target(() => {
+export const test = tg.command(() => {
 	return tg.unimplemented();
 });

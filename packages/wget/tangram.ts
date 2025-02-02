@@ -22,7 +22,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:fa2dc35bab5184ecbc46a9ef83def2aaaa3f4c9f3c97d4bd19dcb07d4da637de";
@@ -48,7 +48,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -110,7 +110,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
@@ -122,7 +122,7 @@ export const test = tg.target(async () => {
 		wget -O $OUTPUT/tangram https://www.tangram.dev
 	`
 		.env(build())
-		.checksum("unsafe")
+		.checksum("any")
 		.then(tg.Directory.expect);
 
 	const exampleContents = await result

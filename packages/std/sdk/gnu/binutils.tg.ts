@@ -9,7 +9,7 @@ export const metadata = {
 	version: "2.43",
 };
 
-export const source = tg.target(async (build: string) => {
+export const source = tg.command(async (build: string) => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ba5e600af2d0e823312b4e04d265722594be7d94906ebabe6eaf8d0817ef48ed";
@@ -32,7 +32,7 @@ export type Arg = {
 };
 
 /** Obtain the GNU binutils. */
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -89,7 +89,7 @@ export const build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 

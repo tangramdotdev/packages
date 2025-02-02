@@ -28,7 +28,7 @@ export type ToolchainArg = {
 	targets?: Array<string>;
 };
 
-export const self = tg.target(async (arg?: ToolchainArg) => {
+export const self = tg.command(async (arg?: ToolchainArg) => {
 	// Determine the list of target triples to support other than the inferred host.
 	const detectedHost = await std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);
@@ -161,8 +161,7 @@ type ProxyRustObjcopyArg = {
 	rustInstall: tg.Directory;
 };
 
-export const proxyRustObjcopy = tg.target(
-	async (arg: ProxyRustObjcopyArg): Promise<tg.Directory> => {
+export const proxyRustObjcopy = tg.command(async (arg: ProxyRustObjcopyArg): Promise<tg.Directory> => {
 		const { build, buildToolchain, host, rustInstall } = arg;
 
 		// Get the rust-objcopy executable.
@@ -184,8 +183,7 @@ export const proxyRustObjcopy = tg.target(
 		return tg.directory(rustInstall, {
 			[rustObjcopySubpath]: wrappedRustObjcopyExe,
 		});
-	},
-);
+	});
 
 type RustupManifestV2 = {
 	"manifest-version": "2";
@@ -245,7 +243,7 @@ export const rustTriple = (triple: string): string => {
 	}
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const tests = [];
 
 	tests.push(testHostToolchain());
@@ -259,13 +257,13 @@ export const test = tg.target(async () => {
 	return true;
 });
 
-export const testHostToolchain = tg.target(async () => {
+export const testHostToolchain = tg.command(async () => {
 	const rustArtifact = await self();
 	await $`rustc --version && cargo --version`.env(rustArtifact);
 	return rustArtifact;
 });
 
-export const testCrossToolchain = tg.target(async () => {
+export const testCrossToolchain = tg.command(async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 
@@ -285,14 +283,14 @@ export const testCrossToolchain = tg.target(async () => {
 	return crossRust;
 });
 
-export const testCargo = tg.target(async () => {
+export const testCargo = tg.command(async () => {
 	return await cargo_.test();
 });
 
-export const testCargoProxy = tg.target(async () => {
+export const testCargoProxy = tg.command(async () => {
 	return await proxy_.test();
 });
 
-export const testNativeBuild = tg.target(async () => {
+export const testNativeBuild = tg.command(async () => {
 	return await build_.test();
 });

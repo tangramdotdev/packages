@@ -2,7 +2,7 @@ import * as std from "../../tangram.ts";
 import libDispatch from "./apple_libdispatch.tg.ts";
 import libTapi from "./apple_libtapi.tg.ts";
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const url = `https://github.com/tpoechtrager/cctools-port/archive/856d7d1bfcc890357bfe79b3f4aa206a0487b416.zip`;
 	const checksum =
 		"sha256:d3a912976e9467c5df3bed4f6e2f44cf62b20a5ecaffa074acd26484e4444f51";
@@ -22,7 +22,7 @@ export const source = tg.target(async () => {
 	return directory;
 });
 
-export const build = tg.target(async (targetArch?: string) => {
+export const build = tg.command(async (targetArch?: string) => {
 	const host = await std.triple.host();
 	const targetArch_ = targetArch ?? std.triple.arch(host);
 	const target = `${targetArch_}-apple-darwin`;

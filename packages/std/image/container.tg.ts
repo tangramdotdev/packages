@@ -47,7 +47,7 @@ type RootFsArg = {
 	cmd?: Array<string>;
 };
 
-export const image = tg.target(
+export const image = tg.command(
 	async (...args: std.Args<Arg>): Promise<tg.File> => {
 		type CombinedArgObject = {
 			cmdString?: Array<string>;
@@ -324,10 +324,10 @@ export const ociImageFromLayers = async (
 	const layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
 			const file = await tg
-				.target(tg`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`, {
+				.command(tg`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`, {
 					env: std.env.arg(additionalEnv),
 				})
-				.then((target) => target.output())
+				.then((command) => command.build())
 				.then(tg.File.expect);
 			const descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,
@@ -403,7 +403,7 @@ export type Layer = {
 	diffId: string;
 };
 
-export const layer = tg.target(
+export const layer = tg.command(
 	async (directory: tg.Directory): Promise<Layer> => {
 		const bundle = tg.Artifact.bundle(directory).then(tg.Directory.expect);
 		const tarball = await createTarball(bundle);
@@ -413,7 +413,7 @@ export const layer = tg.target(
 	},
 );
 
-export const createTarball = tg.target(
+export const createTarball = tg.command(
 	async (directory: tg.Directory): Promise<tg.File> => {
 		return await tg.archive(directory, "tar").then(tg.file);
 	},

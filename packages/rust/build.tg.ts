@@ -70,7 +70,7 @@ export type RustDependency = {
 	checksum?: tg.Checksum;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		crateName: crateName_,
 		crateType: crateType_,
@@ -219,7 +219,7 @@ export const flagForDependency = async (
 	return tg`--extern ${dep.name}=${builtDependency}/lib/lib${dep.name}.rlib`;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const tests = [];
 
 	tests.push(testBasicExeUnproxied());
@@ -237,7 +237,7 @@ export const test = tg.target(async () => {
 	return true;
 });
 
-export const testBasicExeUnproxied = tg.target(async () => {
+export const testBasicExeUnproxied = tg.command(async () => {
 	const crateName = "native_basic_exe";
 	const basicExe = await build({
 		crateName,
@@ -253,7 +253,7 @@ export const testBasicExeUnproxied = tg.target(async () => {
 	return true;
 });
 
-export const testBasicExeProxied = tg.target(async () => {
+export const testBasicExeProxied = tg.command(async () => {
 	const crateName = "native_basic_exe";
 	const basicExe = await build({
 		crateName,
@@ -274,7 +274,7 @@ export const testBasicExeProxied = tg.target(async () => {
 	return true;
 });
 
-export const testBasicLib = tg.target(async () => {
+export const testBasicLib = tg.command(async () => {
 	const crateName = "native_basic_lib";
 	const basicLib = await build({
 		crateName,
@@ -286,7 +286,7 @@ export const testBasicLib = tg.target(async () => {
 	return true;
 });
 
-export const testBasicExeModules = tg.target(async () => {
+export const testBasicExeModules = tg.command(async () => {
 	const crateName = "native_basic_exe_modules";
 	const basicExeModules = await build({
 		crateName,
@@ -301,7 +301,7 @@ export const testBasicExeModules = tg.target(async () => {
 	return true;
 });
 
-export const testBasicExeWithLib = tg.target(async () => {
+export const testBasicExeWithLib = tg.command(async () => {
 	const crateName = "native_basic_exe_with_lib";
 	const depName = "native_basic_lib";
 	const basicExeWithLib = await build({
@@ -323,7 +323,7 @@ export const testBasicExeWithLib = tg.target(async () => {
 	return true;
 });
 
-export const testExeWithCratesIoDependency = tg.target(async () => {
+export const testExeWithCratesIoDependency = tg.command(async () => {
 	const crateName = "native_deps_exe";
 	const depsExe = await build({
 		crateName,
@@ -348,7 +348,7 @@ export const testExeWithCratesIoDependency = tg.target(async () => {
 	return true;
 });
 
-export const testConditionalCompilation = tg.target(async () => {
+export const testConditionalCompilation = tg.command(async () => {
 	const crateName = "native_cfg_exe";
 	// Test without the optional feature.
 	const cfgDisabled = await build({
@@ -382,7 +382,7 @@ import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
-export const testLinkLibcurl = tg.target(async () => {
+export const testLinkLibcurl = tg.command(async () => {
 	const crateName = "native_exe_libcurl";
 
 	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.

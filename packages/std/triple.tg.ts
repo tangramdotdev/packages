@@ -47,7 +47,7 @@ export const tryArchAndOs = (s: string): string | undefined => {
 
 /** Retrieve the configured host for the current running target. */
 export const host = async (): Promise<string> => {
-	return (await tg.Target.current.env())["TANGRAM_HOST"] as string;
+	return (await tg.process.env("TANGRAM_HOST")) as string;
 };
 
 /** Retrieve the arch field from a triple string. Throws if unable to parse the input. */
@@ -223,8 +223,7 @@ export const rotate = async (arg: {
 	build?: string | undefined;
 	host?: string | undefined;
 }): Promise<{ host: string; target: string }> => {
-	const host =
-		arg.host ?? ((await tg.Target.current.env())["TANGRAM_HOST"] as string);
+	const host = arg.host ?? ((await tg.process.env("TANGRAM_HOST")) as string);
 	const build = arg.build ?? host;
 	return { host: build, target: host };
 };
@@ -287,7 +286,7 @@ export const allHosts = [
 	"x86_64-linux",
 ];
 
-export const test = tg.target(() => {
+export const test = tg.command(() => {
 	const t0 = "aarch64-linux";
 	const c0 = components(t0);
 	tg.assert(c0.arch === "aarch64");

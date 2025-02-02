@@ -10,7 +10,7 @@ export const metadata = {
 	name: "glibc",
 };
 
-export const source = tg.target((version?: GlibcVersion) => {
+export const source = tg.command((version?: GlibcVersion) => {
 	const { name } = metadata;
 	const version_ = version ?? defaultGlibcVersion;
 
@@ -34,7 +34,7 @@ export type Arg = {
 	linuxHeaders: tg.Directory;
 };
 
-export const build = tg.target(async (arg: Arg) => {
+export const build = tg.command(async (arg: Arg) => {
 	const {
 		build: build_,
 		env: env_,

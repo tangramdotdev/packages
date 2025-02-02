@@ -11,7 +11,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const injection = tg.target(async (arg: Arg) => {
+export const injection = tg.command(async (arg: Arg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const os = std.triple.os(host);
@@ -61,7 +61,7 @@ type MacOsInjectionArg = {
 	source: tg.File;
 };
 
-export const macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
+export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const os = std.triple.os(host);
 	if (os !== "darwin") {
@@ -99,14 +99,15 @@ export const macOsInjection = tg.target(async (arg: MacOsInjectionArg) => {
 
 	// Combine into universal dylib.
 	const system = std.triple.archAndOs(host);
-	const injection = tg.File.expect(
+	const injectionDir = tg.Directory.expect(
 		await (
-			await tg.target(
-				tg`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`,
+			await tg.command(
+				tg`mkdir -p $OUTPUT && lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT/out`,
 				{ host: system, env: std.env.arg(arg.buildToolchain, env) },
 			)
-		).output(),
+		).build(),
 	);
+	const injection = await injectionDir.get("out").then(tg.File.expect);
 	return injection;
 });
 
@@ -164,7 +165,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	);
 	const output = tg.File.expect(
 		await (
-			await tg.target(
+			await tg.command(
 				tg`${executable} -xc ${arg.source} -o $OUTPUT \
 				${tg.Template.join(" ", ...args)}`,
 				{
@@ -172,12 +173,12 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 					env,
 				},
 			)
-		).output(),
+		).build(),
 	);
 	return output;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	const hostArch = std.triple.arch(detectedHost);
 	tg.assert(hostArch);
@@ -202,7 +203,7 @@ export const test = tg.target(async () => {
 	return nativeInjection;
 });
 
-export const testCross = tg.target(async () => {
+export const testCross = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) === "darwin") {
 		console.log("Skipping cross test on darwin");

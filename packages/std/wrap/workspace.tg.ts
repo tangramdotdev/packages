@@ -14,33 +14,35 @@ type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export const workspace = tg.target(async (arg?: Arg): Promise<tg.Directory> => {
-	const {
-		build: build_,
-		buildToolchain,
-		host: host_,
-		release = true,
-		source: source_,
-	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
-	const buildTriple = build_ ?? host;
+export const workspace = tg.command(
+	async (arg?: Arg): Promise<tg.Directory> => {
+		const {
+			build: build_,
+			buildToolchain,
+			host: host_,
+			release = true,
+			source: source_,
+		} = arg ?? {};
+		const host = host_ ?? (await std.triple.host());
+		const buildTriple = build_ ?? host;
 
-	// Get the source.
-	const source = source_
-		? source_
-		: await tg.directory({
-				"Cargo.toml": cargoToml,
-				"Cargo.lock": cargoLock,
-				packages: packages,
-			});
+		// Get the source.
+		const source = source_
+			? source_
+			: await tg.directory({
+					"Cargo.toml": cargoToml,
+					"Cargo.lock": cargoLock,
+					packages: packages,
+				});
 
-	return build({
-		...(await std.triple.rotate({ build: buildTriple, host })),
-		buildToolchain,
-		release,
-		source,
-	});
-});
+		return build({
+			...(await std.triple.rotate({ build: buildTriple, host })),
+			buildToolchain,
+			release,
+			source,
+		});
+	},
+);
 
 export const ccProxy = (arg?: Arg) =>
 	workspace(arg)
@@ -66,7 +68,7 @@ type ToolchainArg = {
 	target?: string;
 };
 
-export const rust = tg.target(
+export const rust = tg.command(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		const host = standardizeTriple(await std.triple.host());
 		const target = standardizeTriple(arg?.target ?? host);
@@ -129,7 +131,7 @@ export const rust = tg.target(
 
 		return tg.Directory.expect(
 			await std.phases.build({
-				target: { host: hostSystem },
+				command: { host: hostSystem },
 				phases: { build: script },
 				env,
 			}),
@@ -303,7 +305,7 @@ export const build = async (arg: BuildArg) => {
 	}
 
 	// Define phases.
-	const prepare = tg`
+	const prepare = tg`	
 		export CARGO_HOME=$PWD/cargo_home
 		mkdir -p $CARGO_HOME
 
@@ -352,10 +354,11 @@ export const build = async (arg: BuildArg) => {
 		await std.phases.build({
 			env: std.env.arg(env),
 			phases: { prepare, build, install },
-			target: {
+			command: {
 				host: system,
-				checksum: "unsafe",
 			},
+			checksum: "any",
+			network: true,
 		}),
 	);
 };
@@ -390,7 +393,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	return result;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 
@@ -422,7 +425,7 @@ export const test = tg.target(async () => {
 	return nativeWorkspace;
 });
 
-export const testCross = tg.target(async () => {
+export const testCross = tg.command(async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 

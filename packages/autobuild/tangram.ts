@@ -36,7 +36,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.target(async (arg: Arg) => {
+export const build = tg.command(async (arg: Arg) => {
 	const { env: envArg, source } = arg;
 	const sourceId = await source.id();
 	console.log("received source dir", sourceId);
@@ -97,7 +97,7 @@ export type EnvArg = {
 	source: tg.Directory;
 };
 
-export const env = tg.target(async (arg: EnvArg) => {
+export const env = tg.command(async (arg: EnvArg) => {
 	const { build, host, source } = arg;
 	const sourceId = await source.id();
 	console.log("received source dir", sourceId);
@@ -185,7 +185,7 @@ export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 	throw new Error("failed to detect project kind");
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const allKinds: Array<Kind> = [
 		"cc-autotools",
 		"cmake",
@@ -265,7 +265,7 @@ const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
 	};
 };
 
-export const testKind = tg.target(async (kind: Kind) => {
+export const testKind = tg.command(async (kind: Kind) => {
 	console.log(`testing ${kind}...`);
 	const dirs = await testDirs();
 	const source = dirs[kind];

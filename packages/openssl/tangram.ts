@@ -10,7 +10,7 @@ export const metadata = {
 	version: "3.4.0",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:e15dda82fe2fe8139dc2ac21a36d4ca01d5313c75f99f46c4e8a27709b7294bf";
@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -110,7 +110,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// FIXME spec
 	const source = tg.directory({
 		["main.c"]: tg.file(`

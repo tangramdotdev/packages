@@ -9,7 +9,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const node = tg.target(async (arg: Arg) => {
+export const node = tg.command(async (arg: Arg) => {
 	const { build: build_, env: envArg, host: host_, source } = arg ?? {};
 
 	const host = host_ ?? (await std.triple.host());
@@ -22,7 +22,7 @@ export const node = tg.target(async (arg: Arg) => {
 
 export default node;
 
-export const plain = tg.target(async (arg: Arg) => {
+export const plain = tg.command(async (arg: Arg) => {
 	// FIXME - env!
 	const { source } = arg;
 	const toolchain = await nodejs.self();
@@ -35,7 +35,7 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = tg.target(async (arg?: EnvArg) => {
+export const env = tg.command(async (arg?: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;

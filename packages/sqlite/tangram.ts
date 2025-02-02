@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f1b2ee412c28d7472bc95ba996368d6f0cdcf00362affdadb27ed286c179540b";
@@ -54,7 +54,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const defaultDependencies = {
 		ncurses: false,
 		readline: false,
@@ -116,7 +116,7 @@ export const build = tg.target(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });

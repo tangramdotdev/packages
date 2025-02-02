@@ -14,7 +14,7 @@ export const metadata = {
 	version: "2.36.0",
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3f57fe75535500ecce7a80fa1ba33675830b7d7deb1e5ee9a737e2bc43cdb1c7";
@@ -38,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const mold = tg.target(async (arg?: Arg) => {
+export const mold = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -74,7 +74,7 @@ export const mold = tg.target(async (arg?: Arg) => {
 
 export default mold;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// FIXME
 	// await std.assert.pkg({ buildFn: mold, binaries: ["mold"], metadata });
 	return true;

@@ -10,7 +10,7 @@ export const metadata = {
 	version: "4.10.0",
 };
 
-export const source = tg.target(async (os: string) => {
+export const source = tg.command(async (os: string) => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
@@ -36,7 +36,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -73,7 +73,7 @@ export const build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });

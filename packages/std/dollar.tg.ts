@@ -67,8 +67,11 @@ class Dollar {
 		return this;
 	}
 
-	async output(): Promise<tg.Value> {
-		return await (await this.target()).output();
+	async build(): Promise<tg.Value> {
+		return await (await this.command()).build({
+			checksum: this.#checksum,
+			network: this.#checksum !== undefined,
+		});
 	}
 
 	pipefail(bool: boolean): Dollar {
@@ -76,8 +79,8 @@ class Dollar {
 		return this;
 	}
 
-	async target(): Promise<tg.Target> {
-		const arg: tg.Target.ArgObject = {};
+	async command(): Promise<tg.Command> {
+		const arg: tg.Command.ArgObject = {};
 
 		// Construct the executable.
 		if (this.#executable !== undefined) {
@@ -128,15 +131,12 @@ class Dollar {
 		}
 
 		// Set remaining fields.
-		if (this.#checksum !== undefined) {
-			arg.checksum = this.#checksum;
-		}
 		if (this.#host !== undefined) {
 			arg.host = this.#host;
 		} else {
 			arg.host = await std.triple.host();
 		}
-		return await tg.target(arg);
+		return await tg.command(arg);
 	}
 
 	then<TResult1 = tg.Value, TResult2 = never>(
@@ -149,11 +149,11 @@ class Dollar {
 			| undefined
 			| null,
 	): PromiseLike<TResult1 | TResult2> {
-		return this.output().then(onfulfilled, onrejected);
+		return this.build().then(onfulfilled, onrejected);
 	}
 }
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const f = tg.file("hello there!!!\n");
 	const output = await $`cat ${f} > $OUTPUT
 		echo $NAME >> $OUTPUT

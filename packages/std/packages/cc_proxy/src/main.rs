@@ -361,32 +361,28 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		args.push(value.into())
 	}
 
-	// Create the target.
-	let target = tg::Target::with_object(tg::target::Object {
-		args,
-		checksum: None,
-		env: environment.env,
-		executable,
-		host: tg::host().to_string(),
-	});
+	// Create the command.
+	let host = tg::host().to_string();
+	let command = tg::command::Builder::new(host)
+		.executable(executable)
+		.args(args)
+		.env(environment.env)
+		.build();
 
-	// Create a build.
-	let id = target.id(tg).await?;
-	let build_arg = tg::target::build::Arg {
+	// Create a process.
+	let id = command.id(tg).await?;
+	let spawn_arg = tg::process::spawn::Arg {
+		checksum: None,
+		command: Some(id),
 		create: true,
+		cwd: None,
+		env: None,
+		network: false,
 		parent: None,
 		remote: None,
-		retry: tg::build::Retry::Canceled,
+		retry: false,
 	};
-	let build_output = tg
-		.try_build_target(&id, build_arg)
-		.await?
-		.ok_or(tg::error!("expected build to be created"))?;
-	let build = tg::Build::with_id(build_output.build);
-
-	// Await the outcome.
-	let build_directory = build
-		.output(tg)
+	let build_directory = tg::Process::run(tg, spawn_arg)
 		.await?
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?

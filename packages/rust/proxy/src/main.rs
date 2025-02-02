@@ -234,7 +234,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	// Create/Unrender the arguments passed to driver.sh.
 	let rustc = unrender(&args.rustc)?;
 	let name = "tangram_rustc_proxy".to_string().into();
-	let mut target_args: Vec<tg::Value> = vec![
+	let mut command_args: Vec<tg::Value> = vec![
 		name,
 		"--rustc".to_owned().into(),
 		rustc.into(),
@@ -247,7 +247,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	for arg in &args.rustc_args {
 		let template = unrender(arg)?;
-		target_args.push(template.into());
+		command_args.push(template.into());
 	}
 
 	// Check in any -L dependency=PATH directories, and splice any matching --extern name=PATH args.
@@ -271,7 +271,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		let template = tg::Template {
 			components: vec!["dependency=".to_owned().into(), directory.clone().into()],
 		};
-		target_args.extend(["-L".to_owned().into(), template.into()]);
+		command_args.extend(["-L".to_owned().into(), template.into()]);
 		let externs = args
 			.externs
 			.iter()
@@ -294,7 +294,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				Some(["--extern".to_owned().into(), template.into()])
 			})
 			.flatten();
-		target_args.extend(externs);
+		command_args.extend(externs);
 	}
 
 	// Add any externs that were not already handled.
@@ -304,7 +304,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.filter(|(name, _)| !used_externs.contains(name));
 	#[cfg(feature = "tracing")]
 	tracing::info!(?unhandled_externs, "adding unhandled externs");
-	target_args.extend(unhandled_externs.flat_map(|(name, path)| {
+	command_args.extend(unhandled_externs.flat_map(|(name, path)| {
 		let template = if path.is_empty() {
 			tg::Template {
 				components: vec![name.to_string().into()],
@@ -317,40 +317,31 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		["--extern".to_owned().into(), template.into()]
 	}));
 
-	// Create the target.
+	// Create the command.
 	let host = host().to_string();
 	let checksum = None;
-	let object = tg::target::Object {
-		args: target_args,
-		checksum,
-		env,
-		executable,
-		host,
-	};
-	let target = tg::Target::with_object(object);
-	let target_id = target.id(tg).await?;
-	#[cfg(feature = "tracing")]
-	tracing::info!(?target_id, "created target");
+	let command = tg::command::Builder::new(host)
+		.executable(executable)
+		.args(command_args)
+		.env(env)
+		.build();
 
-	// Create the build and mark it as a child.
-	let build_options = tg::target::build::Arg {
+	// Create the process.
+	let id = command.id(tg).await?;
+	let spawn_arg = tg::process::spawn::Arg {
+		checksum,
+		command: Some(id),
 		create: true,
+		cwd: None,
+		env: None,
+		network: false,
 		parent: None,
 		remote: None,
-		retry: tg::build::Retry::Failed,
+		retry: false,
 	};
-	#[cfg(feature = "tracing")]
-	tracing::info!(?build_options, "building target");
-	let build_output = tg
-		.try_build_target(&target_id, build_options)
-		.await?
-		.ok_or(tg::error!("expected a result"))?;
-	#[cfg(feature = "tracing")]
-	tracing::info!(?build_output, "built target");
 
 	// Get the build output.
-	let output = tg::Build::with_id(build_output.build)
-		.output(tg)
+	let output = tg::Process::run(tg, spawn_arg)
 		.await?
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?

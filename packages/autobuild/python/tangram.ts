@@ -10,7 +10,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.target(async (arg: Arg) => {
+export const build = tg.command(async (arg: Arg) => {
 	const { env: envArg, source, ...rest } = arg ?? {};
 
 	const env_ =
@@ -30,7 +30,7 @@ export const build = tg.target(async (arg: Arg) => {
 
 export default build;
 
-export const plain = tg.target(async (arg: Arg) => {
+export const plain = tg.command(async (arg: Arg) => {
 	const { build, env: envArg, host, source } = arg ?? {};
 
 	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
@@ -57,7 +57,7 @@ export const plain = tg.target(async (arg: Arg) => {
 // 	return poetry.build(arg_);
 // });
 
-export const pyproject = tg.target(async (arg: Arg) => {
+export const pyproject = tg.command(async (arg: Arg) => {
 	const { env: envArg, source, ...rest } = arg ?? {};
 
 	const env_ =
@@ -73,7 +73,7 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = tg.target(async (arg: EnvArg) => {
+export const env = tg.command(async (arg: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;

@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 
 	// Download raw source.
@@ -45,7 +45,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const defaultDependencies = {
 		libffi: true,
 		zlib: true,
@@ -189,7 +189,7 @@ export const wrapScript = async (script: tg.File) => {
 	const interpreter = tg.File.expect(await (await build()).get("bin/bash"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 

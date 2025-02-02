@@ -14,7 +14,7 @@ export const metadata = {
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
-export const source = tg.target((bundledSources?: boolean) => {
+export const source = tg.command((bundledSources?: boolean) => {
 	const { name, version } = metadata;
 
 	// Download and unpack the GCC source.
@@ -64,7 +64,7 @@ export type Variant =
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
-export const build = tg.target(async (arg: Arg) => {
+export const build = tg.command(async (arg: Arg) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -296,7 +296,7 @@ async function getGccVersion(
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
 	const envObject = std.env.arg(bootstrap.utils(), env);
 	const result = tg.File.expect(
-		await (await tg.target(script, { env: envObject })).output(),
+		await (await tg.command(script, { env: envObject })).build(),
 	);
 	return (await result.text()).trim();
 }

@@ -13,7 +13,7 @@ export const metadata = {
 	version: "9.5",
 };
 
-export const source = tg.target(async (os: string) => {
+export const source = tg.command(async (os: string) => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a";
@@ -44,7 +44,7 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -127,7 +127,7 @@ export const build = tg.target(async (arg?: Arg) => {
 export default build;
 
 /** Obtain just the `env` binary. */
-export const gnuEnv = tg.target(async () => {
+export const gnuEnv = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const os = std.triple.os(host);
 	const sdk = bootstrap.sdk(host);
@@ -144,7 +144,7 @@ export const gnuEnv = tg.target(async () => {
 });
 
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
@@ -220,10 +220,10 @@ export const test = tg.target(async () => {
 			: attr({ host, sdk: false, env: sdk });
 	const output = tg.File.expect(
 		await (
-			await tg.target(script, {
+			await tg.command(script, {
 				env: std.env.arg(platformSupportLib, coreutils),
 			})
-		).output(),
+		).build(),
 	);
 
 	const contents = (await output.text()).trim();

@@ -2184,21 +2184,21 @@ export const pushOrSet = (
 };
 
 /** Basic program for testing the wrapper code. */
-export const argAndEnvDump = tg.target(async () => {
+export const argAndEnvDump = tg.command(async () => {
 	const sdkEnv = await std.env.arg(bootstrap.sdk(), {
 		TANGRAM_LINKER_TRACING: "tangram=trace",
 	});
 
 	return tg.File.expect(
 		await (
-			await tg.target(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
+			await tg.command(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
 				env: sdkEnv,
 			})
-		).output(),
+		).build(),
 	);
 });
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	await Promise.all([
 		testSingleArgObjectNoMutations(),
 		testDependencies(),
@@ -2209,7 +2209,7 @@ export const test = tg.target(async () => {
 	return true;
 });
 
-export const testSingleArgObjectNoMutations = tg.target(async () => {
+export const testSingleArgObjectNoMutations = tg.command(async () => {
 	const executable = await argAndEnvDump();
 	const executableID = await executable.id();
 	// The program is a wrapper produced by the LD proxy.
@@ -2247,8 +2247,8 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`${wrapper} > $OUTPUT`)
-		.then((target) => target.output())
+		.command(tg`${wrapper} > $OUTPUT`)
+		.then((command) => command.build())
 		.then(tg.File.expect);
 	const text = await output.text();
 	console.log("text", text);
@@ -2294,7 +2294,7 @@ export const testSingleArgObjectNoMutations = tg.target(async () => {
 	return wrapper;
 });
 
-export const testContentExecutable = tg.target(async () => {
+export const testContentExecutable = tg.command(async () => {
 	const buildToolchain = bootstrap.sdk();
 	const wrapper = await std.wrap({
 		buildToolchain,
@@ -2307,10 +2307,10 @@ export const testContentExecutable = tg.target(async () => {
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((target) => target.output())
+		.then((command) => command.build())
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
@@ -2319,7 +2319,7 @@ export const testContentExecutable = tg.target(async () => {
 	return true;
 });
 
-export const testContentExecutableVariadic = tg.target(async () => {
+export const testContentExecutableVariadic = tg.command(async () => {
 	const buildToolchain = bootstrap.sdk();
 	const wrapper = await std.wrap(
 		`echo "$NAME"`,
@@ -2331,10 +2331,10 @@ export const testContentExecutableVariadic = tg.target(async () => {
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
 	const output = await tg
-		.target(tg`set -x; ${wrapper} > $OUTPUT`, {
+		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((target) => target.output())
+		.then((command) => command.build())
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
@@ -2343,7 +2343,7 @@ export const testContentExecutableVariadic = tg.target(async () => {
 	return true;
 });
 
-export const testDependencies = tg.target(async () => {
+export const testDependencies = tg.command(async () => {
 	const buildToolchain = await bootstrap.sdk.env();
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	const transitiveDependencyId = await transitiveDependency.id();
@@ -2382,7 +2382,7 @@ export const testDependencies = tg.target(async () => {
 
 import libGreetSource from "./wrap/test/greet.c" with { type: "file" };
 import driverSource from "./wrap/test/driver.c" with { type: "file" };
-export const testDylibPath = tg.target(async () => {
+export const testDylibPath = tg.command(async () => {
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -2392,22 +2392,22 @@ export const testDylibPath = tg.target(async () => {
 
 	// Compile the greet library
 	const sharedLibraryDir = await (
-		await tg.target(
+		await tg.command(
 			tg`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`,
 			{ env: await std.env.arg(bootstrapSdk) },
 		)
 	)
-		.output()
+		.build()
 		.then(tg.Directory.expect);
 	console.log("sharedLibraryDir", await sharedLibraryDir.id());
 
 	// Compile the driver.
 	const driver = await (
-		await tg.target(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
+		await tg.command(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
 			env: await std.env.arg(bootstrapSdk),
 		})
 	)
-		.output()
+		.build()
 		.then(tg.File.expect);
 	console.log("unwrapped driver", await driver.id());
 

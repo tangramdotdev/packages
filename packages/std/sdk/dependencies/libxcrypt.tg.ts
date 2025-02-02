@@ -8,7 +8,7 @@ export const metadata = {
 	version: "4.4.36",
 };
 
-export const source = tg.target(() => {
+export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const owner = "besser82";
 	const repo = name;
@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const { autotools = {}, build, env, host, sdk, source: source_ } = arg ?? {};
 
 	const configure = {
@@ -58,7 +58,7 @@ export const build = tg.target(async (arg?: Arg) => {
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME

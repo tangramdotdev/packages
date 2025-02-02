@@ -4,7 +4,7 @@ export type Arg = {
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
-	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
 
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
@@ -74,7 +74,7 @@ export type Arg = {
 	target?: string;
 };
 
-export const target = tg.target(async (...args: std.Args<Arg>) => {
+export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const mutationArgs = await std.args.createMutations<
 		Arg,
 		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">
@@ -94,6 +94,7 @@ export const target = tg.target(async (...args: std.Args<Arg>) => {
 	});
 	const {
 		buildInTree = false,
+		checksum,
 		debug = false,
 		defaultCFlags = true,
 		defaultCrossArgs = true,
@@ -309,22 +310,19 @@ export const target = tg.target(async (...args: std.Args<Arg>) => {
 	const phaseArgs = (phases ?? []).filter(
 		(arg): arg is std.phases.Arg => arg !== undefined,
 	);
-	return await std.phases.target(
-		{
-			debug,
-			phases: defaultPhases,
-			env,
-			target: { env: { TANGRAM_HOST: system }, host: system },
-		},
-		...phaseArgs,
-	);
-});
-
-export const build = async (...args: std.args.UnresolvedArgs<Arg>) => {
-	return await target(...args)
-		.then((t) => t.output())
+	return await std.phases
+		.build(
+			{
+				debug,
+				phases: defaultPhases,
+				env,
+				command: { env: { TANGRAM_HOST: system }, host: system },
+				checksum,
+			},
+			...phaseArgs,
+		)
 		.then(tg.Directory.expect);
-};
+});
 
 export const pushOrSet = (
 	obj: { [key: string]: unknown },

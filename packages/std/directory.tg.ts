@@ -145,7 +145,7 @@ export const provides = async (
 	};
 };
 
-export let testKeepSubdirectories = tg.target(async () => {
+export let testKeepSubdirectories = tg.command(async () => {
 	let orig = await tg.directory({
 		a: tg.directory(),
 		b: tg.directory(),

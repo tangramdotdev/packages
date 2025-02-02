@@ -152,6 +152,7 @@ fn clear_env() {
 
 /// Create a temporary file with the given contents and return the path to the file.
 fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
+	#[cfg(feature = "tracing")]
 	tracing::trace!("producing content executable.");
 	let fd = unsafe {
 		// Create a temporary file.

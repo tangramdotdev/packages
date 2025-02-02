@@ -39,7 +39,7 @@ export type Arg = {
 };
 
 /** A basic set of GNU system utilites. */
-export const env = tg.target(async (arg?: Arg) => {
+export const env = tg.command(async (arg?: Arg) => {
 	const { build, env: env_, host: host_, sdk } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 
@@ -76,7 +76,7 @@ export const env = tg.target(async (arg?: Arg) => {
 export default env;
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
-export const prerequisites = tg.target(async (hostArg?: string) => {
+export const prerequisites = tg.command(async (hostArg?: string) => {
 	const host = hostArg ?? (await std.triple.host());
 	const components: std.Args<std.env.Arg> = [await bootstrap.utils(host)];
 
@@ -102,7 +102,7 @@ type BuildUtilArg = std.autotools.Arg & {
 };
 
 /** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag. */
-export const buildUtil = tg.target(async (arg: BuildUtilArg) => {
+export const buildUtil = tg.command(async (arg: BuildUtilArg) => {
 	const { opt: opt_, wrapBashScriptPaths, ...rest } = arg;
 	const opt = opt_ ?? "s";
 	let output = await std.autotools.build({
@@ -162,14 +162,14 @@ export const assertProvides = async (env: std.env.Arg) => {
 	return true;
 };
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = bootstrap.toolchainTriple(await std.triple.host());
 	const utilsEnv = await env({ host, sdk: false, env: bootstrap.sdk() });
 	await assertProvides(utilsEnv);
 	return utilsEnv;
 });
 
-export const testPrerequisites = tg.target(async () => {
+export const testPrerequisites = tg.command(async () => {
 	const host = bootstrap.toolchainTriple(await std.triple.host());
 	return await prerequisites(host);
 });

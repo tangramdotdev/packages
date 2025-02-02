@@ -12,7 +12,7 @@ export const metadata = {
 	version: "2.7.6",
 };
 
-export const source = tg.target(async () => {
+export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd";
@@ -36,7 +36,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.target(async (arg?: Arg) => {
+export const build = tg.command(async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -81,7 +81,7 @@ export const build = tg.target(async (arg?: Arg) => {
 
 export default build;
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	const system = std.triple.archAndOs(host);
@@ -160,7 +160,7 @@ export const test = tg.target(async () => {
 			: attr({ host, sdk: false, env: sdk });
 	const output = tg.File.expect(
 		await (
-			await tg.target(script, {
+			await tg.command(script, {
 				env: std.env.arg(
 					coreutils({ host, sdk: false, env: sdk }),
 					diffutils({ host, sdk: false, env: sdk }),
@@ -168,7 +168,7 @@ export const test = tg.target(async () => {
 					patchArtifact,
 				),
 			})
-		).output(),
+		).build(),
 	);
 
 	const contents = (await output.text()).trim();

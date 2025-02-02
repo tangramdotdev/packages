@@ -619,11 +619,11 @@ export namespace sdk {
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		const output = tg.File.expect(
 			await (
-				await tg.target(tg`${cmd} -dumpmachine > $OUTPUT`, {
+				await tg.command(tg`${cmd} -dumpmachine > $OUTPUT`, {
 					env: std.env.arg(env),
 					host: std.triple.archAndOs(detectedHost),
 				})
-			).output(),
+			).build(),
 		);
 		const host = (await output.text()).trim();
 		std.triple.assert(host);
@@ -716,7 +716,7 @@ export namespace sdk {
 		}
 		const compiledProgram = tg.File.expect(
 			await (
-				await tg.target(
+				await tg.command(
 					tg`echo "testing ${lang}"
 				set -x
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
@@ -727,7 +727,7 @@ export namespace sdk {
 						host: std.triple.archAndOs(expectedHost),
 					},
 				)
-			).output(),
+			).build(),
 		);
 
 		// Assert the resulting program was compiled for the expected target.
@@ -768,11 +768,11 @@ export namespace sdk {
 		if (!isCross && proxiedLinker) {
 			const testOutput = tg.File.expect(
 				await (
-					await tg.target(tg`${compiledProgram} > $OUTPUT`, {
+					await tg.command(tg`${compiledProgram} > $OUTPUT`, {
 						host: std.triple.archAndOs(expectedHost),
 						env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 					})
-				).output(),
+				).build(),
 			);
 			const outputText = (await testOutput.text()).trim();
 			tg.assert(outputText === expectedOutput);
@@ -1034,13 +1034,13 @@ export const assertComment = async (
 ) => {
 	const elfComment = tg.File.expect(
 		await (
-			await tg.target(
+			await tg.command(
 				tg`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`,
 				{
 					env: await std.env.arg(toolchain, bootstrap.utils()),
 				},
 			)
-		).output(),
+		).build(),
 	);
 	const text = await elfComment.text();
 	tg.assert(text.includes(textToMatch));
@@ -1090,14 +1090,14 @@ type ProxyTestParameters = {
 	testProgram: tg.Unresolved<tg.File>;
 };
 
-export const testDefault = tg.target(async () => {
+export const testDefault = tg.command(async () => {
 	const env = await sdk();
 	const detectedHost = await std.triple.host();
 	await sdk.assertValid(env, { host: detectedHost });
 	return env;
 });
 
-export const testMold = tg.target(async () => {
+export const testMold = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1112,7 +1112,7 @@ export const testMold = tg.target(async () => {
 	return moldSdk;
 });
 
-export const testGccLld = tg.target(async () => {
+export const testGccLld = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1127,7 +1127,7 @@ export const testGccLld = tg.target(async () => {
 	return lldSdk;
 });
 
-export const testMusl = tg.target(async () => {
+export const testMusl = tg.command(async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
@@ -1139,7 +1139,7 @@ export const testMusl = tg.target(async () => {
 	return env;
 });
 
-export const testCrossGcc = tg.target(async () => {
+export const testCrossGcc = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
@@ -1156,13 +1156,13 @@ export const testCrossGcc = tg.target(async () => {
 	return env;
 });
 
-export const testLLVM = tg.target(async () => {
+export const testLLVM = tg.command(async () => {
 	const env = await sdk({ toolchain: "llvm" });
 	await sdk.assertValid(env, { toolchain: "llvm" });
 	return env;
 });
 
-export const testLLVMMold = tg.target(async () => {
+export const testLLVMMold = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1182,7 +1182,7 @@ export const testLLVMMold = tg.target(async () => {
 	return moldSdk;
 });
 
-export const testLLVMBfd = tg.target(async () => {
+export const testLLVMBfd = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`bfd is only available on Linux`);
@@ -1201,7 +1201,7 @@ export const testLLVMBfd = tg.target(async () => {
 	return bfdSdk;
 });
 
-export const testExplicitGlibcVersion = tg.target(async () => {
+export const testExplicitGlibcVersion = tg.command(async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`glibc is only available on Linux`);
@@ -1216,7 +1216,7 @@ export const testExplicitGlibcVersion = tg.target(async () => {
 	return env;
 });
 
-export const testLLVMMusl = tg.target(async () => {
+export const testLLVMMusl = tg.command(async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
@@ -1228,7 +1228,7 @@ export const testLLVMMusl = tg.target(async () => {
 	return env;
 });
 
-export const testDarwinToLinux = tg.target(async () => {
+export const testDarwinToLinux = tg.command(async () => {
 	const targets = [
 		"aarch64-unknown-linux-gnu",
 		"aarch64-unknown-linux-musl",
@@ -1241,7 +1241,7 @@ export const testDarwinToLinux = tg.target(async () => {
 	return true;
 });
 
-export const testDarwinToLinuxSingle = tg.target(async (target: string) => {
+export const testDarwinToLinuxSingle = tg.command(async (target: string) => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		throw new Error(`This test is only valid on Darwin`);
@@ -1253,7 +1253,7 @@ export const testDarwinToLinuxSingle = tg.target(async (target: string) => {
 	return env;
 });
 
-export const testLinuxToDarwin = tg.target(async () => {
+export const testLinuxToDarwin = tg.command(async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`This test is only valid on Linux`);

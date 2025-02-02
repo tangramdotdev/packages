@@ -12,7 +12,7 @@ export type PackageArg = { [key: string]: tg.Value } & {
 /** A function that accepts a variable amount of package args and produces a directory. This is the standard type for the default exports of most packages. */
 export type BuildCommand<T extends PackageArg> =
 	| ((...args: UnresolvedArgs<T>) => Promise<tg.Directory>)
-	| tg.Target<Args<T>, tg.Directory>;
+	| tg.Command<Args<T>, tg.Directory>;
 
 /** Evaluate the command with a single arg. */
 export const buildCommandOutput = async <T extends PackageArg>(
@@ -241,7 +241,7 @@ export type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
 	| tg.Directory
 	| tg.File
 	| tg.Symlink
-	| tg.Target
+	| tg.Command
 	| tg.Mutation
 	| tg.Template
 	| Array<infer _U extends tg.Value>

@@ -7,7 +7,7 @@ import cargoToml from "./proxy/Cargo.toml" with { type: "file" };
 import cargoLock from "./proxy/Cargo.lock" with { type: "file" };
 import src from "./proxy/src" with { type: "directory" };
 
-export let source = tg.target(async () => {
+export let source = tg.command(async () => {
 	return tg.directory({
 		"Cargo.toml": cargoToml,
 		"Cargo.lock": cargoLock,
@@ -23,7 +23,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const proxy = tg.target(async (arg?: Arg) => {
+export const proxy = tg.command(async (arg?: Arg) => {
 	return cargo.build({
 		source: source(),
 		features: ["tracing"],
@@ -37,7 +37,7 @@ export default proxy;
 import pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	// Make sure the proxy compiles and runs.
 	const version = await $`tangram_rustc_proxy rustc - --version | tee $OUTPUT`
 		.env(proxy(), self())

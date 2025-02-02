@@ -37,7 +37,7 @@ export type ToolchainArg = {
 	host?: string;
 };
 
-export const self = tg.target(
+export const self = tg.command(
 	async (arg?: ToolchainArg): Promise<tg.Directory> => {
 		const host = arg?.host ?? (await std.triple.host());
 		const system = std.triple.archAndOs(host);
@@ -75,7 +75,7 @@ export const self = tg.target(
 export default self;
 
 export type Arg = {
-	/** If the build requires network access, provide a checksum or the string "unsafe" to accept any result. */
+	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
 
 	/** The source directory. */
@@ -127,7 +127,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export const build = tg.target(
+export const build = tg.command(
 	async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 		const mutationArgs = await std.args.createMutations<
 			Arg,
@@ -290,13 +290,13 @@ export const vendor = async ({
 				mv -T ./vendor "$OUTPUT" || true
 			`
 		.env(self(), { SSL_CERT_DIR: std.caCertificates() })
-		.checksum("unsafe")
+		.checksum("any")
 		.then(tg.Directory.expect);
 };
 
 //TODO spec, add cgo test.
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	const source = tg.directory({
 		["main.go"]: tg.file(`
 			package main

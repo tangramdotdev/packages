@@ -1,5 +1,5 @@
 export type Arg = download.BuildUrlArg & {
-	/** The expected checksum of the downloaded file. Use "unsafe" to allow network access without verifying the result. */
+	/** The expected checksum of the downloaded file. Use "any" to allow network access without verifying the result. */
 	checksum: tg.Checksum;
 	/** The format of the file to unpack. If `true`, will infer from the URL. Default: `true`. */
 	decompress?: boolean | tg.Blob.CompressionFormat | undefined;
@@ -308,20 +308,20 @@ export namespace download {
 	};
 }
 
-export const test = tg.target(async () => {
+export const test = tg.command(async () => {
 	return await Promise.all([testTgDownload(), testStdDownload()]);
 });
 
-export const testTgDownload = tg.target(async () => {
+export const testTgDownload = tg.command(async () => {
 	return await tg.download(
 		"https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
-		"unsafe",
+		"any",
 	);
 });
 
-export const testStdDownload = tg.target(async () => {
+export const testStdDownload = tg.command(async () => {
 	return await download({
 		url: "https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
-		checksum: "unsafe",
+		checksum: "any",
 	});
 });
