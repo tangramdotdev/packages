@@ -25,6 +25,9 @@ export type Arg = {
 	/** Parent of the directory containing the Cargo.toml relative to the source dir if not at the expected location. */
 	manifestSubdir?: string;
 
+	/** Should this build have network access? Must set a checksum to enable. Default: false. */
+	network?: boolean;
+
 	/** Number of parallel jobs to use. */
 	parallelJobs?: number;
 
@@ -76,6 +79,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		features = [],
 		host: host_,
 		manifestSubdir,
+		network = false,
 		parallelJobs,
 		pre,
 		proxy = false,
@@ -197,6 +201,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const artifact = await $`${buildScript}`
 		.checksum(checksum)
+		.network(network)
 		.env(
 			sdk,
 			rustArtifact,

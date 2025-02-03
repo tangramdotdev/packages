@@ -16,6 +16,7 @@ class Dollar {
 	#exitOnErr: boolean;
 	#includeUtils: boolean;
 	#host?: string;
+	#network?: boolean;
 	#pipefail: boolean;
 	#placeholders: std.args.UnresolvedArgs<tg.Template.Arg>;
 	#strings: TemplateStringsArray;
@@ -29,7 +30,15 @@ class Dollar {
 		this.#disallowUnset = true;
 		this.#exitOnErr = true;
 		this.#includeUtils = true;
+		this.#network = false;
 		this.#pipefail = true;
+	}
+	
+	async build(): Promise<tg.Value> {
+		return await (await this.command()).build({
+			checksum: this.#checksum,
+			network: this.#network,
+		});
 	}
 
 	checksum(checksum: tg.Checksum | undefined): Dollar {
@@ -67,11 +76,9 @@ class Dollar {
 		return this;
 	}
 
-	async build(): Promise<tg.Value> {
-		return await (await this.command()).build({
-			checksum: this.#checksum,
-			network: this.#checksum !== undefined,
-		});
+	network(bool: boolean): Dollar {
+		this.#network = bool;
+		return this;
 	}
 
 	pipefail(bool: boolean): Dollar {

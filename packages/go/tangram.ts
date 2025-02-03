@@ -120,6 +120,9 @@ export type Arg = {
 	/** The machine that will run the compilation. */
 	host?: string;
 
+	/** Should this build have network access? Must set a checksum to enable. Default: false. */
+	network?: boolean;
+
 	/** The machine the produced artifacts will run on. */
 	target?: string;
 
@@ -144,6 +147,7 @@ export const build = tg.command(
 			generate,
 			host: host_,
 			install,
+			network = false,
 			sdk: sdkArgs,
 			source,
 			target: target_,
@@ -241,6 +245,7 @@ export const build = tg.command(
 			.env(env)
 			.host(host)
 			.checksum(checksum)
+			.network(network)
 			.then(tg.Directory.expect);
 
 		// Get a list of all dynamically-linked binaries in the output.

@@ -40,6 +40,9 @@ export type Arg = {
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
 	mtune?: string;
 
+	/** Should this build have network access? Must set a checksum to enable. Default: false. */
+	network?: boolean;
+
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
 
@@ -106,6 +109,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		host: host_,
 		march,
 		mtune = "generic",
+		network = false,
 		opt = "2",
 		parallel = true,
 		phases,
@@ -318,6 +322,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 				env,
 				command: { env: { TANGRAM_HOST: system }, host: system },
 				checksum,
+				network
 			},
 			...phaseArgs,
 		)
