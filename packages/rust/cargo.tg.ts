@@ -278,6 +278,7 @@ const vendoredSources = async (
 		const sdk = std.sdk();
 		const result = await $`${vendorScript}`
 			.checksum("any")
+			.network(true)
 			.env(sdk, rustArtifact, {
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 				CARGO_HTTP_CAINFO: certFile,

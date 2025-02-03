@@ -69,9 +69,11 @@ export const test = tg.command(async () => {
 		env: std.env.arg(openssl(), pkgConfig(), {
 			TANGRAM_RUSTC_TRACING: "tangram=trace",
 		}),
+		parallelJobs: 1,
 		proxy: true,
+		verbose: true,
 	});
-	console.log("helloOpenssl result", await helloWorld.id());
+	console.log("helloOpenssl result", await helloOpenssl.id());
 
 	// Assert it produces the correct output.
 	const opensslOutput = await $`hello-openssl | tee $OUTPUT`
