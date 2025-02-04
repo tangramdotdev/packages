@@ -296,6 +296,7 @@ export const vendor = async ({
 			`
 		.env(self(), { SSL_CERT_DIR: std.caCertificates() })
 		.checksum("any")
+		.network(true)
 		.then(tg.Directory.expect);
 };
 
