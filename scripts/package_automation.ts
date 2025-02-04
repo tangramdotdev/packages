@@ -576,7 +576,7 @@ const buildDefaultTarget = async (
 			.then((t) => t.trim());
 		buildTracker.add(buildId);
 		log(`${path}: ${buildId}`);
-		await $`${tangram} build output ${buildId}`.quiet();
+		await $`${tangram} process output ${buildId}`.quiet();
 		buildTracker.remove(buildId);
 		log(`finished building ${path}`);
 		return ok(buildId);
@@ -604,7 +604,7 @@ const buildTestTarget = async (
 			.then((t) => t.trim());
 		buildTracker.add(buildId);
 		log(`${path}#test: ${buildId}`);
-		await $`${tangram} build output ${buildId}`.quiet();
+		await $`${tangram} process output ${buildId}`.quiet();
 		buildTracker.remove(buildId);
 		log(`finished building ${path}#test`);
 		return ok(buildId);
