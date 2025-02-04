@@ -115,12 +115,10 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		...dependencies.map((dep) =>
 			std.env.envArgFromDependency(build, env_, host, sdk, dep),
 		),
-	];
-	if (os === "darwin") {
-		envs.push({
+		{
 			CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
-		});
-	}
+		},
+	];
 
 	const env = std.env.arg(...envs, env_);
 
