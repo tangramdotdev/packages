@@ -183,7 +183,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return output;
 });
 
-export const patchAutom4teCfg = tg.command(async (autoconf: tg.Directory, arg?: Arg): Promise<tg.Directory> => {
+export const patchAutom4teCfg = tg.command(
+	async (autoconf: tg.Directory, arg?: Arg): Promise<tg.Directory> => {
 		const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
 		tg.assert(autom4teCfg instanceof tg.File);
 
@@ -208,7 +209,8 @@ export const patchAutom4teCfg = tg.command(async (autoconf: tg.Directory, arg?: 
 		return tg.directory(autoconf, {
 			["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
 		});
-	});
+	},
+);
 
 export default build;
 export const test = tg.command(async () => {

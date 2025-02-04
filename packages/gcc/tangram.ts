@@ -26,7 +26,8 @@ export const source = tg.command(() =>
 		isl: islSource(),
 		mpfr: mpfrSource(),
 		mpc: mpcSource(),
-	}));
+	}),
+);
 
 type Arg = {
 	autotools?: std.autotools.Arg;

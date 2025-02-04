@@ -161,7 +161,8 @@ type ProxyRustObjcopyArg = {
 	rustInstall: tg.Directory;
 };
 
-export const proxyRustObjcopy = tg.command(async (arg: ProxyRustObjcopyArg): Promise<tg.Directory> => {
+export const proxyRustObjcopy = tg.command(
+	async (arg: ProxyRustObjcopyArg): Promise<tg.Directory> => {
 		const { build, buildToolchain, host, rustInstall } = arg;
 
 		// Get the rust-objcopy executable.
@@ -183,7 +184,8 @@ export const proxyRustObjcopy = tg.command(async (arg: ProxyRustObjcopyArg): Pro
 		return tg.directory(rustInstall, {
 			[rustObjcopySubpath]: wrappedRustObjcopyExe,
 		});
-	});
+	},
+);
 
 type RustupManifestV2 = {
 	"manifest-version": "2";

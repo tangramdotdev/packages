@@ -322,7 +322,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 				env,
 				command: { env: { TANGRAM_HOST: system }, host: system },
 				checksum,
-				network
+				network,
 			},
 			...phaseArgs,
 		)

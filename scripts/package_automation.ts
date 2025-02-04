@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import { platform } from "node:os";
 import * as path from "node:path";
 import { $ } from "bun";
 
@@ -72,11 +71,11 @@ export type ResultKind =
 /** A result with optional message. */
 type Result = {
 	kind: ResultKind;
-	message?: string;
+	message?: string | Array<string>;
 };
 
 /** Construct a result. */
-const result = (kind: ResultKind, message?: string): Result => {
+const result = (kind: ResultKind, message?: string | Array<string>): Result => {
 	return {
 		kind,
 		message,
@@ -84,7 +83,7 @@ const result = (kind: ResultKind, message?: string): Result => {
 };
 
 /** Construct an OK. */
-const ok = (message?: string): Result => {
+const ok = (message?: string | Array<string>): Result => {
 	return {
 		kind: "ok",
 		message,
@@ -485,24 +484,39 @@ const uploadAction = async (
 	name: string,
 	processTracker: ProcessTracker,
 ): Promise<Result> => {
-	const processIdResult = await buildDefaultTarget(tangram, name, processTracker);
-	if (processIdResult.kind !== "ok" || processIdResult.message === "unsupported host") {
+	const processIdResult = await buildDefaultTarget(
+		tangram,
+		name,
+		processTracker,
+	);
+	if (
+		processIdResult.kind !== "ok" ||
+		processIdResult.message === "unsupported host"
+	) {
 		return processIdResult;
 	}
-	const processId = processIdResult.message;
-	if (processId === undefined) {
-		return result("buildError", `no ID for ${path}`);
+	if (processIdResult.message === undefined) {
+		return result("buildError", `no ID for ${name}`);
 	}
 
-	log(`uploading build ${processId}`);
-	try {
-		await $`${tangram} push ${processId}`.quiet();
-		log(`finished pushing ${processId}`);
-		return ok();
-	} catch (err) {
-		log(`error pushing ${processId}`);
-		return result("pushError", err.stderr.toString());
+	const ids: Array<string> = [];
+	if (typeof processIdResult.message === "string") {
+		ids.push(processIdResult.message);
+	} else {
+		ids.push(...processIdResult.message);
 	}
+
+	for (const processId of ids) {
+		log(`uploading process ${processId}`);
+		try {
+			await $`${tangram} push --recursive ${processId}`.quiet();
+			log(`finished pushing ${processId}`);
+		} catch (err) {
+			log(`error pushing ${processId}`);
+			return result("pushError", err.stderr.toString());
+		}
+	}
+	return ok();
 };
 
 /** Check in a path, returning the resulting ID or "checkinError" on failure. */
@@ -572,25 +586,42 @@ const buildDefaultTarget = async (
 	processTracker: ProcessTracker,
 ): Promise<Result> => {
 	log(`building ${name}`);
-	try {
-		const processId = await $`${tangram} build ${name} -d`
-			.text()
-			.then((t) => t.trim());
-		processTracker.add(processId);
-		log(`${name}: ${processId}`);
-		await $`${tangram} process output ${processId}`.quiet();
-		processTracker.remove(processId);
-		log(`finished building ${name}`);
-		return ok(processId);
-	} catch (err) {
-		log(`error building ${name}`);
-		const stderr = err.stderr.toString();
-		if (isUnsupportedPlatformError(stderr)) {
-			log(`${name}: unsupported host`);
-			return ok("unsupported host");
-		}
-		return result("buildError", stderr);
+	const ids: Array<string> = [];
+
+	// Build default
+	const defaultResult = await buildNamedExport(tangram, name, processTracker);
+	if (
+		defaultResult.kind === "ok" &&
+		typeof defaultResult.message === "string"
+	) {
+		ids.push(defaultResult.message);
+	} else {
+		return defaultResult;
 	}
+
+	// Build #build, ignoring errors.
+	const buildResult = await buildNamedExport(
+		tangram,
+		name,
+		processTracker,
+		"build",
+	);
+	if (buildResult.kind === "ok" && typeof buildResult.message === "string") {
+		ids.push(buildResult.message);
+	}
+
+	// Build #self, ignoring errors.
+	const selfResult = await buildNamedExport(
+		tangram,
+		name,
+		processTracker,
+		"self",
+	);
+	if (selfResult.kind === "ok" && typeof selfResult.message === "string") {
+		ids.push(selfResult.message);
+	}
+
+	return ok(ids);
 };
 
 /** Build the default target given a path. Return the build ID. */
@@ -598,26 +629,35 @@ const buildTestTarget = async (
 	tangram: string,
 	name: string,
 	processTracker: ProcessTracker,
+): Promise<Result> => buildNamedExport(tangram, name, processTracker, "test");
+
+/** Build the default target given a path. Return the build ID. */
+const buildNamedExport = async (
+	tangram: string,
+	name: string,
+	processTracker: ProcessTracker,
+	exportName?: string,
 ): Promise<Result> => {
-	log(`building ${name}#test...`);
+	const exportName_ = exportName !== undefined ? `#${exportName}` : "";
+	log(`building ${name}${exportName_}...`);
 	try {
-		const processId = await $`${tangram} build ${name}#test -d`
+		const processId = await $`${tangram} build ${name}${exportName_} -d`
 			.text()
 			.then((t) => t.trim());
 		processTracker.add(processId);
-		log(`${path}#test: ${processId}`);
+		log(`${name}${exportName_}: ${processId}`);
 		await $`${tangram} process output ${processId}`.quiet();
 		processTracker.remove(processId);
-		log(`finished building ${name}#test`);
+		log(`finished building ${name}${exportName_}`);
 		return ok(processId);
 	} catch (err) {
-		log(`error building ${name}#test`);
+		log(`error building ${name}${exportName_}`);
 		const stderr = err.stderr.toString();
 		if (isUnsupportedPlatformError(stderr)) {
-			log(`${path}: unsupported host`);
+			log(`${name}: unsupported host`);
 			return ok("unsupported host");
 		}
-		return result("testError", stderr);
+		return result("buildError", stderr);
 	}
 };
 

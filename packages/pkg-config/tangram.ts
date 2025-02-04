@@ -145,7 +145,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const path = tg.command(async (
+export const path = tg.command(
+	async (
 		dependencies: Array<tg.Artifact>,
 	): Promise<tg.Template | undefined> => {
 		const standardPaths = [
@@ -164,7 +165,8 @@ export const path = tg.command(async (
 		}
 
 		return tg.Template.join(":", ...allPaths);
-	});
+	},
+);
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

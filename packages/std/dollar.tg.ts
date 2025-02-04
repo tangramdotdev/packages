@@ -33,7 +33,7 @@ class Dollar {
 		this.#network = false;
 		this.#pipefail = true;
 	}
-	
+
 	async build(): Promise<tg.Value> {
 		return await (await this.command()).build({
 			checksum: this.#checksum,

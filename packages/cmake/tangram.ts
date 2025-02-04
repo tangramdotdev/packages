@@ -406,7 +406,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 				env,
 				command: { env: { TANGRAM_HOST: system }, host: system },
 				checksum,
-				network
+				network,
 			},
 			...phaseArgs,
 		)
