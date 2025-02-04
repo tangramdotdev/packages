@@ -486,7 +486,7 @@ const uploadAction = async (
 	processTracker: ProcessTracker,
 ): Promise<Result> => {
 	const processIdResult = await buildDefaultTarget(tangram, name, processTracker);
-	if (processIdResult.kind !== "ok") {
+	if (processIdResult.kind !== "ok" || processIdResult.message === "unsupported host") {
 		return processIdResult;
 	}
 	const processId = processIdResult.message;
