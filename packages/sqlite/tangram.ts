@@ -72,20 +72,19 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
-	console.log("dependencyArgs", dependencyArgs);
 
 	const dependencies = [
 		std.env.buildDependency(pkgConf.build, dependencyArgs.pkgConf),
 	];
-	// FIXME these all got added wtf.
 	if (dependencyArgs.ncurses !== undefined) {
-		console.log("adding ncurses");
 		dependencies.push(
 			std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 		);
 	}
 	if (dependencyArgs.readline !== undefined) {
-		// FIXME - check that ncurses is also enabled.
+		if (dependencyArgs.ncurses === undefined) {
+			throw new Error("cannot enable readline without ncurses");
+		}
 		dependencies.push(
 			std.env.runtimeDependency(readline.build, dependencyArgs.readline),
 		);
@@ -95,7 +94,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 		);
 	}
-	console.log("deps", dependencies);
 
 	const env = std.env.arg(
 		...dependencies.map((dep) =>
