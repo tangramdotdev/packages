@@ -10,6 +10,7 @@ import * as mpdecimal from "mpdecimal" with { path: "../mpdecimal" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
+import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -113,14 +114,18 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	) => std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
 	const dependencies = [
-		std.env.buildDependency(bison.build, dependencyArgs.bison),
-		std.env.buildDependency(m4.build, dependencyArgs.m4),
-		std.env.buildDependency(pkgConf.build, dependencyArgs.pkgConf),
+		std.env.buildDependency(bison.build),
+		std.env.buildDependency(m4.build),
 		std.env.runtimeDependency(bzip2.build, dependencyArgs.bzip2),
 		std.env.runtimeDependency(libxcrypt.build, dependencyArgs.libxcrypt),
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
-	].map(processDependency);
+	];
+	if (os === "darwin") {
+		dependencies.push(std.env.buildDependency(pkgConf.build));
+	} else if (os === "linux") {
+		dependencies.push(std.env.buildDependency(pkgConfig.build));
+	}
 
 	// Set up additional runtime dependencies that will end up in the wrapper.
 	const libffiForHost = await processDependency(
@@ -138,7 +143,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 
 	// Resolve env.
 	const envs: Array<tg.Unresolved<std.env.Arg>> = [
-		...dependencies,
+		...dependencies.map(processDependency),
 		libffiForHost,
 		mpdecimalForHost,
 		opensslForHost,
