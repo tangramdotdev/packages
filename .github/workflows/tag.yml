@@ -5,11 +5,10 @@ on:
     branches: [ "main" ]
 
 env:
-  BUN_VERSION: 1.1.43
+  BUN_VERSION: 1.2.2
 
 jobs:
   tag-and-push:
-    if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -29,5 +28,5 @@ jobs:
     - name: Tag and push all packages
       shell: bash
       run: |
-        bun run auto -p
+        bun run auto --publish
       
