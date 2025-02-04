@@ -94,9 +94,9 @@ const ok = (message?: string): Result => {
 /** Run the given options. */
 const run = async (options: Options): Promise<Results> => {
 	const results = new Results();
-	const buildTracker = new BuildTracker(options.tangramExe);
+	const processTracker = new ProcessTracker(options.tangramExe);
 	const processAndLog = async (name: string) => {
-		const result = await processPackage(name, options, buildTracker);
+		const result = await processPackage(name, options, processTracker);
 		results.log(name, result);
 	};
 
@@ -113,9 +113,9 @@ const run = async (options: Options): Promise<Results> => {
 	}
 
 	// If any builds are still tracked in the build tracker, warn and try to clean up.
-	if (!buildTracker.isEmpty()) {
+	if (!processTracker.isEmpty()) {
 		console.warn("Build tracker not clear after run!");
-		buildTracker.cancelAll();
+		processTracker.cancelAll();
 	}
 
 	return results;
@@ -137,13 +137,13 @@ bun run scripts/package_automation.ts -cbt ripgrep jq
 
 Flags:
 
--b, --build: run tg build on the default target
+-b, --build: run tg build on the default target. Implied --publish.
 -c, --check: run tg check
 -f, --format: run tg format
 -h, --help: print this message and exit
 -p, --publish: if the package tag is out of date, create a new tag and push it
 -t, --test: run tg build on the test target
--u, --upload: push the build for the default target. Implies --build.
+-u, --upload: push the build for the default target. Implies --publish and --build.
 --seq/--sequential: run actions sequentially for each package. If omitted, each package will process in parallel.
 `;
 
@@ -191,6 +191,7 @@ class Options {
 			switch (opt) {
 				case "b":
 				case "build": {
+					actions.add("publish");
 					actions.add("build");
 					break;
 				}
@@ -227,6 +228,7 @@ class Options {
 				}
 				case "u":
 				case "upload": {
+					actions.add("publish");
 					actions.add("build");
 					actions.add("upload");
 					break;
@@ -315,7 +317,7 @@ class Options {
 
 	async validateTangram() {
 		try {
-			const result = await $`${this.tangramExe} --mode client --version`.text();
+			const result = await $`${this.tangramExe} --version`.text();
 			const goodStdout = result.includes("tangram");
 			if (!goodStdout) {
 				throw new Error(
@@ -365,10 +367,10 @@ const sortedActions = (actions: Iterable<Action>): Array<Action> => {
 	const order: { [key in Action]: number } = {
 		format: 0,
 		check: 1,
-		build: 2,
-		test: 3,
+		publish: 2,
+		build: 3,
 		upload: 4,
-		publish: 5,
+		test: 5,
 	};
 	return Array.from(actions).sort((a, b) => order[a] - order[b]);
 };
@@ -383,7 +385,7 @@ export const getPackagePath = (name: string) => path.join(packagesPath(), name);
 const processPackage = async (
 	name: string,
 	options: Options,
-	buildTracker: BuildTracker,
+	processTracker: ProcessTracker,
 ): Promise<Result> => {
 	const path = getPackagePath(name);
 	log(`processing ${name}: ${path}`);
@@ -392,9 +394,9 @@ const processPackage = async (
 	const actionMap: Record<Action, () => Promise<Result>> = {
 		format: () => formatAction(tg, path),
 		check: () => checkAction(tg, path),
-		build: () => buildDefaultTarget(tg, path, buildTracker),
-		test: () => buildTestTarget(tg, path, buildTracker),
-		upload: () => uploadAction(tg, path, buildTracker),
+		build: () => buildDefaultTarget(tg, name, processTracker),
+		test: () => buildTestTarget(tg, path, processTracker),
+		upload: () => uploadAction(tg, name, processTracker),
 		publish: () => publishAction(tg, name, path),
 	};
 
@@ -480,25 +482,25 @@ const publishAction = async (
 /** Perform the upload action for a path. Will do the default build first. */
 const uploadAction = async (
 	tangram: string,
-	path: string,
-	buildTracker: BuildTracker,
+	name: string,
+	processTracker: ProcessTracker,
 ): Promise<Result> => {
-	const buildIdResult = await buildDefaultTarget(tangram, path, buildTracker);
-	if (buildIdResult.kind !== "ok") {
-		return buildIdResult;
+	const processIdResult = await buildDefaultTarget(tangram, name, processTracker);
+	if (processIdResult.kind !== "ok") {
+		return processIdResult;
 	}
-	const buildId = buildIdResult.message;
-	if (buildId === undefined) {
+	const processId = processIdResult.message;
+	if (processId === undefined) {
 		return result("buildError", `no ID for ${path}`);
 	}
 
-	log(`uploading build ${buildId}`);
+	log(`uploading build ${processId}`);
 	try {
-		await $`${tangram} push ${buildId}`.quiet();
-		log(`finished pushing ${buildId}`);
+		await $`${tangram} push ${processId}`.quiet();
+		log(`finished pushing ${processId}`);
 		return ok();
 	} catch (err) {
-		log(`error pushing ${buildId}`);
+		log(`error pushing ${processId}`);
 		return result("pushError", err.stderr.toString());
 	}
 };
@@ -566,25 +568,25 @@ const push = async (tangram: string, arg: string): Promise<Result> => {
 /** Build the default target given a path. Return the build ID. */
 const buildDefaultTarget = async (
 	tangram: string,
-	path: string,
-	buildTracker: BuildTracker,
+	name: string,
+	processTracker: ProcessTracker,
 ): Promise<Result> => {
-	log(`building ${path}`);
+	log(`building ${name}`);
 	try {
-		const buildId = await $`${tangram} build ${path} -d`
+		const processId = await $`${tangram} build ${name} -d`
 			.text()
 			.then((t) => t.trim());
-		buildTracker.add(buildId);
-		log(`${path}: ${buildId}`);
-		await $`${tangram} process output ${buildId}`.quiet();
-		buildTracker.remove(buildId);
-		log(`finished building ${path}`);
-		return ok(buildId);
+		processTracker.add(processId);
+		log(`${name}: ${processId}`);
+		await $`${tangram} process output ${processId}`.quiet();
+		processTracker.remove(processId);
+		log(`finished building ${name}`);
+		return ok(processId);
 	} catch (err) {
-		log(`error building ${path}`);
+		log(`error building ${name}`);
 		const stderr = err.stderr.toString();
 		if (isUnsupportedPlatformError(stderr)) {
-			log(`${path}: unsupported host`);
+			log(`${name}: unsupported host`);
 			return ok("unsupported host");
 		}
 		return result("buildError", stderr);
@@ -594,22 +596,22 @@ const buildDefaultTarget = async (
 /** Build the default target given a path. Return the build ID. */
 const buildTestTarget = async (
 	tangram: string,
-	path: string,
-	buildTracker: BuildTracker,
+	name: string,
+	processTracker: ProcessTracker,
 ): Promise<Result> => {
-	log(`building ${path}#test...`);
+	log(`building ${name}#test...`);
 	try {
-		const buildId = await $`${tangram} build ${path}#test -d`
+		const processId = await $`${tangram} build ${name}#test -d`
 			.text()
 			.then((t) => t.trim());
-		buildTracker.add(buildId);
-		log(`${path}#test: ${buildId}`);
-		await $`${tangram} process output ${buildId}`.quiet();
-		buildTracker.remove(buildId);
-		log(`finished building ${path}#test`);
-		return ok(buildId);
+		processTracker.add(processId);
+		log(`${path}#test: ${processId}`);
+		await $`${tangram} process output ${processId}`.quiet();
+		processTracker.remove(processId);
+		log(`finished building ${name}#test`);
+		return ok(processId);
 	} catch (err) {
-		log(`error building ${path}#test`);
+		log(`error building ${name}#test`);
 		const stderr = err.stderr.toString();
 		if (isUnsupportedPlatformError(stderr)) {
 			log(`${path}: unsupported host`);
@@ -623,7 +625,7 @@ const isUnsupportedPlatformError = (stderr: string): boolean =>
 	stderr.includes("not found in supported hosts");
 
 /** Class for managing builds created by this script. */
-class BuildTracker {
+class ProcessTracker {
 	private ids: Set<string>;
 	private readonly tangram_exe: string;
 	constructor(tangram_exe: string) {
@@ -641,13 +643,13 @@ class BuildTracker {
 		this.ids.delete(id);
 	}
 	async cancelAll(): Promise<void> {
-		log("Cancelling all created builds...");
+		log("Cancelling all created processes...");
 		for (const id of this.ids) {
 			log(`cancelling ${id}`);
 			try {
-				await $`${this.tangram_exe} build cancel ${id}`.quiet();
+				await $`${this.tangram_exe} process cancel ${id}`.quiet();
 			} catch (err) {
-				log(`Failed to cancel build ${id}: ${err}`);
+				log(`Failed to cancel process ${id}: ${err}`);
 			}
 		}
 		this.ids.clear();
