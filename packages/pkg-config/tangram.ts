@@ -114,7 +114,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		pkgConfig = await tg`#!/usr/bin/env sh
 			set -eu
 
-			PKG_CONFIG_PATH=""
+			PKG_CONFIG_PATH="\${PKG_CONFIG_PATH:-}"
 
 			for dir in $(echo $LIBRARY_PATH | tr ":" "\n"); do
 				if [ -d "$dir/pkgconfig" ]; then
