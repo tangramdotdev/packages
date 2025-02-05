@@ -1,0 +1,19 @@
+[package]
+name = "mylib"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A simple wrapper for an external shared library"
+
+[dependencies]
+
+[build-dependencies]
+pkg-config = "0.3"
+
+[lib]
+name = "mylib"
+crate-type = ["lib"]
+
+[[bin]]
+name = "myapp"
+path = "src/main.rs"

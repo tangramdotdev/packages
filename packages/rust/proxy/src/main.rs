@@ -46,6 +46,7 @@ impl Args {
 		let mut externs = Vec::new();
 		let mut rustc_output_directory = None;
 		let mut rustc_args = Vec::new();
+		let cargo_out_directory = std::env::var("OUT_DIR").ok();
 
 		// TODO: sort the arguments into a canonical order to maximize cache hits.
 		let mut args = std::env::args().skip(2).peekable();
@@ -100,7 +101,6 @@ impl Args {
 
 		// Read environment variables set by cargo. CARGO_MANIFEST_DIR isn't guaranteed to be set by cargo, but we don't need to care about that case.
 		let cargo_manifest_directory = std::env::var("CARGO_MANIFEST_DIR").ok();
-		let cargo_out_directory = std::env::var("OUT_DIR").ok();
 
 		// Determine the directory containing the source.
 		let source_directory = if let Some(dir) = cargo_manifest_directory {
@@ -340,9 +340,23 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		retry: false,
 	};
 
-	// Get the build output.
-	let output = tg::Process::run(tg, spawn_arg)
-		.await?
+	// Get the process output.
+	let process = tg::Process::spawn(tg, spawn_arg).await?;
+	let output = process.wait(tg).await?;
+	if let Some(exit) = output.exit {
+		if let tg::process::Exit::Code { code } = exit {
+			if code != 0 {
+				return Err(tg::error!("rustc exited with non-0 exit code: {exit:?}"));
+			}
+		}
+	}
+	if let Some(error) = output.error {
+		return Err(tg::error!(!error, "rustc process exited with errors"));
+	}
+	let Some(output) = output.output else {
+		return Err(tg::error!("rustc exited with no output"));
+	};
+	let output = output
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
 		.try_unwrap_directory()

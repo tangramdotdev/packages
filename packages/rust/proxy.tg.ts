@@ -34,7 +34,7 @@ export const proxy = tg.command(async (arg?: Arg) => {
 
 export default proxy;
 
-import pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import pkgconf from "pkgconf" with { path: "../pkgconf" };
 import openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 export const test = tg.command(async () => {
@@ -56,6 +56,8 @@ export const test = tg.command(async () => {
 	});
 	console.log("helloWorld result", await helloWorld.id());
 
+	await testPkgconfig();
+
 	// Assert it produces the correct output.
 	const helloOutput = await $`hello-world | tee $OUTPUT`
 		.env(helloWorld)
@@ -66,12 +68,15 @@ export const test = tg.command(async () => {
 	// Build the openssl proxy test.
 	const helloOpenssl = await cargo.build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
-		env: std.env.arg(openssl(), pkgConfig(), {
+		pre: "echo WATERMARK 10",
+		env: std.env.arg(openssl(), pkgconf(), {
 			TANGRAM_RUSTC_TRACING: "tangram=trace",
 		}),
+		parallelJobs: 1,
 		proxy: true,
+		verbose: true,
 	});
-	console.log("helloOpenssl result", await helloWorld.id());
+	console.log("helloOpenssl result", await helloOpenssl.id());
 
 	// Assert it produces the correct output.
 	const opensslOutput = await $`hello-openssl | tee $OUTPUT`
@@ -102,3 +107,56 @@ export const test = tg.command(async () => {
 
 	return true;
 });
+
+// import pkgConfig from "pkg-config" with { path: "../pkg-config" };
+export const testPkgconfig = tg.command(async () => {
+	const host = await std.triple.host();
+	const os = std.triple.os(host);
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+	
+	const source = tests.get("hello-c-dylib").then(tg.Directory.expect);
+	
+	// compile the dylib
+	let externalLibDir = await $`
+		mkdir -p $OUTPUT/lib
+		mkdir -p $OUTPUT/include
+		gcc -shared -fPIC ${source}/src/lib.c -o $OUTPUT/lib/libexternal.${dylibExt}
+		cp ${source}/src/lib.h $OUTPUT/include/lib.h`.env(std.sdk()).then(tg.Directory.expect);
+
+	externalLibDir = await tg.directory(externalLibDir, {
+		["lib/pkgconfig/external.pc"]: tg.file(`prefix=/Users/benlovy/.tangram/tmp/06acty0tbnz835v1rxkbgs97fc/output
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: external
+Description: Example shared library
+Version: 1.0.0
+Libs: -L\${libdir} -lexternal
+Cflags: -I\${includedir}
+`)
+	});
+	console.log("externalLibDir", await externalLibDir.id());
+	
+	// compile the rust.
+	const rustOutput = await cargo.build({
+		source,
+		pre: tg`set -x && echo WATERMARK 10`,
+		env: std.env.arg(pkgconf(), externalLibDir, {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+		}),
+		parallelJobs: 1,
+		proxy: true,
+		verbose: true,
+	});
+	console.log("result", await rustOutput.id());
+	
+	// Assert it produces the correct output.
+	const testOutput = await $`myapp | tee $OUTPUT`
+		.env(rustOutput)
+		.then(tg.File.expect);
+	const testText = await testOutput.text();
+	tg.assert(testText.trim() === "You passed the number: 42");
+
+	return externalLibDir;
+})
