@@ -5,17 +5,17 @@ members = [
   "packages/strip_proxy",
   "packages/wrapper",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 authors = ["Tangram <root@tangram.dev>"]
 description = "Userspace utilities for the Tangram standard library"
-edition = "2021"
+edition = "2024"
 homepage = "https://www.tangram.dev"
 license = "MIT"
 publish = false
 repository = "https://github.com/tangramdotdev/packages"
-rust-version = "1.80.0"
+rust-version = "1.85.0"
 version = "0.0.0"
 
 [workspace.lints.clippy]
@@ -33,7 +33,7 @@ itertools = "0.14"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "9952e05928ef6835a011826c1b5e5a84cfc8a1fd" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "ace67145b64a093b07ed175787feae93bba77a0b" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",

@@ -110,7 +110,9 @@ fn main_inner() -> std::io::Result<()> {
 	) = &manifest.interpreter
 	{
 		// Set `TANGRAM_INJECTION_IDENTITY_PATH`.
-		std::env::set_var("TANGRAM_INJECTION_IDENTITY_PATH", identity_path);
+		unsafe {
+			std::env::set_var("TANGRAM_INJECTION_IDENTITY_PATH", identity_path);
+		}
 	}
 
 	// Set interpreter environment variables if necessary.
@@ -147,7 +149,7 @@ fn main_inner() -> std::io::Result<()> {
 
 /// Unset all currently set env vars.
 fn clear_env() {
-	std::env::vars().for_each(|(key, _)| std::env::remove_var(key));
+	std::env::vars().for_each(|(key, _)| unsafe { std::env::remove_var(key) });
 }
 
 /// Create a temporary file with the given contents and return the path to the file.
@@ -368,10 +370,10 @@ fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) -> std::io::Res
 	if let Some(library_paths) = &interpreter.library_paths {
 		let mut user_library_path = None;
 		if let Ok(dyld_library_path) = std::env::var("DYLD_LIBRARY_PATH") {
-			std::env::set_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH", &dyld_library_path);
+			unsafe { std::env::set_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH", &dyld_library_path) };
 			user_library_path = Some(dyld_library_path);
 		} else {
-			std::env::remove_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH");
+			unsafe { std::env::remove_var("TANGRAM_INJECTION_DYLD_LIBRARY_PATH") };
 		}
 		let manifest_library_path = library_paths
 			.iter()
@@ -385,25 +387,27 @@ fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) -> std::io::Res
 		};
 		#[cfg(feature = "tracing")]
 		tracing::trace!(?library_path);
-		std::env::set_var("DYLD_LIBRARY_PATH", library_path);
+		unsafe { std::env::set_var("DYLD_LIBRARY_PATH", library_path) };
 	}
 
 	// Set `TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES`.
 	if let Some(preloads) = &interpreter.preloads {
 		if let Ok(dyld_insert_libraries) = std::env::var("DYLD_INSERT_LIBRARIES") {
-			std::env::set_var(
-				"TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES",
-				dyld_insert_libraries,
-			);
+			unsafe {
+				std::env::set_var(
+					"TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES",
+					dyld_insert_libraries,
+				);
+			};
 		} else {
-			std::env::remove_var("TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES");
+			unsafe { std::env::remove_var("TANGRAM_INJECTION_DYLD_INSERT_LIBRARIES") };
 		}
 		let insert_libraries = preloads
 			.iter()
 			.map(tangram_std::render_template_data)
 			.collect::<std::io::Result<Vec<_>>>()?
 			.join(":");
-		std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries);
+		unsafe { std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries) };
 	}
 	Ok(())
 }
@@ -454,7 +458,7 @@ fn apply_value_to_key(key: &str, value: &tg::value::Data) -> std::io::Result<()>
 	} else if let tg::value::Data::Mutation(mutation) = value {
 		apply_mutation_to_key(key, mutation)?;
 	} else {
-		std::env::set_var(key, render_value_data(value)?);
+		unsafe { std::env::set_var(key, render_value_data(value)?) };
 	}
 	Ok(())
 }
@@ -464,7 +468,7 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 	tracing::debug!(?key, ?mutation, "Applying mutation.");
 	match mutation {
 		tg::mutation::Data::Unset => {
-			std::env::remove_var(key);
+			unsafe { std::env::remove_var(key) };
 		},
 		tg::mutation::Data::Set { value } => {
 			apply_value_to_key(key, value)?;
@@ -482,9 +486,9 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
-				std::env::set_var(key, format!("{s}:{existing_values}"));
+				unsafe { std::env::set_var(key, format!("{s}:{existing_values}")) };
 			} else {
-				std::env::set_var(key, values.join(":"));
+				unsafe { std::env::set_var(key, values.join(":")) };
 			}
 		},
 		tg::mutation::Data::Append { values } => {
@@ -495,9 +499,9 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
-				std::env::set_var(key, format!("{existing_values}:{s}"));
+				unsafe { std::env::set_var(key, format!("{existing_values}:{s}")) };
 			} else {
-				std::env::set_var(key, values.join(":"));
+				unsafe { std::env::set_var(key, values.join(":")) };
 			}
 		},
 		tg::mutation::Data::Prefix {
@@ -508,9 +512,9 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			let existing_value = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_value) = existing_value {
 				let s = separator.clone().unwrap_or(String::new());
-				std::env::set_var(key, format!("{value}{s}{existing_value}"));
+				unsafe { std::env::set_var(key, format!("{value}{s}{existing_value}")) };
 			} else {
-				std::env::set_var(key, value);
+				unsafe { std::env::set_var(key, value) };
 			}
 		},
 		tg::mutation::Data::Suffix {
@@ -521,9 +525,9 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			let existing_value = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_value) = existing_value {
 				let s = separator.clone().unwrap_or(String::new());
-				std::env::set_var(key, format!("{existing_value}{s}{value}"));
+				unsafe { std::env::set_var(key, format!("{existing_value}{s}{value}")) };
 			} else {
-				std::env::set_var(key, value);
+				unsafe { std::env::set_var(key, value) };
 			}
 		},
 	}
@@ -568,19 +572,19 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 				return tg::symlink::Data::Artifact {
 					artifact: id.clone().into(),
 					subpath: None,
-				}
+				};
 			},
 			tg::object::Id::File(id) => {
 				return tg::symlink::Data::Artifact {
 					artifact: id.clone().into(),
 					subpath: None,
-				}
+				};
 			},
 			tg::object::Id::Symlink(id) => {
 				return tg::symlink::Data::Artifact {
 					artifact: id.clone().into(),
 					subpath: None,
-				}
+				};
 			},
 			_ => (),
 		}
@@ -609,7 +613,7 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::tem
 			return Err(std::io::Error::new(
 				std::io::ErrorKind::InvalidInput,
 				"cannot produce a template from a symlink pointing into a graph",
-			))
+			));
 		},
 	};
 	let result = tg::template::Data { components };

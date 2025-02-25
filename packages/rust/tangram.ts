@@ -20,7 +20,7 @@ export const metadata = {
 };
 
 const PROFILE = "minimal" as const;
-export const VERSION = "1.84.1" as const;
+export const VERSION = "1.85.0" as const;
 
 export type ToolchainArg = {
 	host?: string;
@@ -48,7 +48,7 @@ export const self = tg.command(async (arg?: ToolchainArg) => {
 	const manifestArtifact = await std.download({
 		url: `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`,
 		checksum:
-			"sha256:bcc973d331ddba85edae5bb42a3d63129ef5b58157cb2980096f0be23cebccd0",
+			"sha256:009e8b5ff43f12bf644b5e5b9fd89f96453072062a450c623882f64e85405da5",
 		decompress: false,
 		extract: false,
 	});

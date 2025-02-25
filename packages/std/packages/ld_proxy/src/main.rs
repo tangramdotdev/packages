@@ -137,9 +137,7 @@ fn read_options() -> tg::Result<Options> {
 		.map_err(|source| tg::error!(!source, "invalid identity in TANGRAM_LINKER_IDENTITY"))?;
 
 	// Get the interpreter path.
-	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH")
-		.ok()
-		.map(Into::into);
+	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH").ok();
 
 	// Get additional interpreter args, if any.
 	let interpreter_args = std::env::var("TANGRAM_LINKER_INTERPRETER_ARGS")
@@ -193,7 +191,10 @@ fn read_options() -> tg::Result<Options> {
 				}
 			} else if arg.starts_with("--tg-identity=") {
 				if let Some(current_identity) = identity {
-					tracing::warn!(?current_identity, "The --tg-identity argument is overwriting the identity set by TANGRAM_LINKER_IDENTITY.");
+					tracing::warn!(
+						?current_identity,
+						"The --tg-identity argument is overwriting the identity set by TANGRAM_LINKER_IDENTITY."
+					);
 				}
 				identity = Some(arg.strip_prefix("--tg-identity").unwrap().parse().map_err(
 					|source| tg::error!(!source, "invalid identity in --tg-identity argument"),
@@ -724,12 +725,16 @@ async fn create_manifest<H: BuildHasher>(
 					// Both Executable and Interpreter require dynamic linking
 					if let Some(interpreter) = &interpreter {
 						if !interpreter.is_dynamic() {
-							return Err(tg::error!("cannot set the Interpreter identity for non-dynamically linked executables"));
+							return Err(tg::error!(
+								"cannot set the Interpreter identity for non-dynamically linked executables"
+							));
 						}
 					}
 
 					if matches!(identity, tangram_std::manifest::Identity::Interpreter) {
-						tracing::warn!("Using the requested Interpreter identity, which may not be what you intended.");
+						tracing::warn!(
+							"Using the requested Interpreter identity, which may not be what you intended."
+						);
 					}
 
 					identity
@@ -830,53 +835,71 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				);
 
 				// Obtain the file object.
-				let library_candidate_file = if library_candidate_path
-					.starts_with(&*tangram_std::CLOSEST_ARTIFACT_PATH)
-				{
-					tracing::trace!("found an artifact, extracting file object");
-					let template =
-						tangram_std::unrender(library_candidate_path.to_str().ok_or_else(
-							|| tg::error!(%path = library_candidate_path.display(), "unable to convert path to str"),
-						)?)?;
-					tracing::trace!(?template, "unrendered library candidate path");
-					// Obtain the file object from the artifact.
-					// We expect to underender one of two forms:
-					// - A single file artifact.
-					// - Two components, a directory artifact and string subpath.
-					match template.components() {
-						[tg::template::Component::Artifact(artifact)] => {
-							artifact.clone().try_unwrap_file().map_err(|source| tg::error!(!source, "expected a file"))?
-						},
-						[tg::template::Component::Artifact(artifact), tg::template::Component::String(subpath)] => {
-							let d = artifact.clone().try_unwrap_directory().map_err(|source| tg::error!(!source, "expected a directory"))?;
-							if let Some(inner) = d.try_get(tg, subpath.strip_prefix('/').unwrap_or(subpath)).await? {
-								inner.try_unwrap_file().map_err(|source| tg::error!(!source, "expected a file"))?
-							} else {
-								let artifact = artifact.id(tg).await?;
-								return Err(tg::error!(%artifact, %subpath, "failed to get inner artifact at subpath"));
-							}
-						},
-						_ => return Err(tg::error!(?template, "expected a template with one artifact and zero or one string components"))
-					}
-				} else {
-					tracing::trace!("found a path in the current build temp, checking in");
-					// The file is located in our own build directory. Check it in.
-					tg::Artifact::check_in(
-						tg,
-						tg::artifact::checkin::Arg {
-							cache: true,
-							destructive: false,
-							deterministic: true,
-							ignore: false,
-							locked: true,
-							lockfile: false,
-							path: library_candidate_path.clone(),
-						},
-					)
-					.await?
-					.try_unwrap_file()
-					.map_err(|error| tg::error!(source = error, "expected a file"))?
-				};
+				let library_candidate_file =
+					if library_candidate_path.starts_with(&*tangram_std::CLOSEST_ARTIFACT_PATH) {
+						tracing::trace!("found an artifact, extracting file object");
+						let template =
+							tangram_std::unrender(library_candidate_path.to_str().ok_or_else(
+								|| tg::error!(%path = library_candidate_path.display(), "unable to convert path to str"),
+							)?)?;
+						tracing::trace!(?template, "unrendered library candidate path");
+						// Obtain the file object from the artifact.
+						// We expect to underender one of two forms:
+						// - A single file artifact.
+						// - Two components, a directory artifact and string subpath.
+						match template.components() {
+							[tg::template::Component::Artifact(artifact)] => artifact
+								.clone()
+								.try_unwrap_file()
+								.map_err(|source| tg::error!(!source, "expected a file"))?,
+							[
+								tg::template::Component::Artifact(artifact),
+								tg::template::Component::String(subpath),
+							] => {
+								let d =
+									artifact.clone().try_unwrap_directory().map_err(|source| {
+										tg::error!(!source, "expected a directory")
+									})?;
+								if let Some(inner) = d
+									.try_get(tg, subpath.strip_prefix('/').unwrap_or(subpath))
+									.await?
+								{
+									inner
+										.try_unwrap_file()
+										.map_err(|source| tg::error!(!source, "expected a file"))?
+								} else {
+									let artifact = artifact.id(tg).await?;
+									return Err(
+										tg::error!(%artifact, %subpath, "failed to get inner artifact at subpath"),
+									);
+								}
+							},
+							_ => {
+								return Err(tg::error!(
+									?template,
+									"expected a template with one artifact and zero or one string components"
+								));
+							},
+						}
+					} else {
+						tracing::trace!("found a path in the current build temp, checking in");
+						// The file is located in our own build directory. Check it in.
+						tg::Artifact::check_in(
+							tg,
+							tg::artifact::checkin::Arg {
+								cache: true,
+								destructive: false,
+								deterministic: true,
+								ignore: false,
+								locked: true,
+								lockfile: false,
+								path: library_candidate_path.clone(),
+							},
+						)
+						.await?
+						.try_unwrap_file()
+						.map_err(|error| tg::error!(source = error, "expected a file"))?
+					};
 
 				// Add an entry to the directory.
 				entries.insert(name, tg::Artifact::File(library_candidate_file));
@@ -1413,7 +1436,7 @@ pub async fn dir_id_referent_from_directory(
 
 #[cfg(test)]
 mod tests {
-	use super::{analyze_output_file, AnalyzeOutputFileOutput, InterpreterRequirement};
+	use super::{AnalyzeOutputFileOutput, InterpreterRequirement, analyze_output_file};
 
 	#[tokio::test]
 	async fn read_output_files() {

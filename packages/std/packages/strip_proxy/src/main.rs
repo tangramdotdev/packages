@@ -1,7 +1,7 @@
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 
 use tangram_client as tg;
-use tangram_std::{manifest, Manifest};
+use tangram_std::{Manifest, manifest};
 
 fn main() {
 	// Setup tracing.
@@ -226,7 +226,9 @@ async fn run_proxy(
 		tracing::info!("checked out the new output file");
 	} else {
 		#[cfg(feature = "tracing")]
-		tracing::warn!("found a content executable. passing through, but this is probably an error and likely to fail");
+		tracing::warn!(
+			"found a content executable. passing through, but this is probably an error and likely to fail"
+		);
 		// If the executable is not a path, pass through the arguments to strip unchanged.
 		run_strip(strip_program, strip_args, Some(target_path))?;
 		return Ok(());
@@ -362,7 +364,7 @@ fn set_runtime_library_path(path: &str) -> Option<String> {
 	let current_value = std::env::var(var_name).ok();
 
 	// Set the new value.
-	std::env::set_var(var_name, path);
+	unsafe { std::env::set_var(var_name, path) };
 
 	current_value
 }
