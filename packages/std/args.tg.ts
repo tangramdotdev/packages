@@ -69,8 +69,8 @@ export const apply = async <T extends PackageArg>(
 	const arg = await applyMutations<Collect>(mutations);
 
 	// Determine build and host;
-	const build = arg.build ?? (await std.triple.host());
 	const host = arg.host ?? (await std.triple.host());
+	const build = arg.build ?? host;
 
 	// Create env and SDK.
 	const env = await std.env.arg(arg.env);

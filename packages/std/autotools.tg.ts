@@ -148,6 +148,9 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
 		}
 	}
+	console.log("incoming args", sdkArgs_);
+
+	console.log("processed args", sdkArgs);
 
 	// Set up env.
 	let env: std.env.Arg = {};

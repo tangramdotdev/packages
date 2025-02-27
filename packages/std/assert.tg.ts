@@ -589,5 +589,108 @@ const generatePackageArgs = <T extends std.args.PackageArg>(
 	metadata: std.assert.Metadata,
 	options?: GenerateArgsOptions,
 ): Array<T> => {
-	return tg.unimplemented();
+	// Default options
+  const {
+    crossArch = false,
+    crossOs = false,
+    crossArchAndOs = false,
+    toggleBools = false,
+  } = options;
+
+  // Start with a base package arg
+  const baseArg: T = {} as T;
+  const results: Array<T> = [baseArg];
+
+  // Helper to generate combinations
+  const generateCombinations = <T>(
+    key: string,
+    values: Array<T>,
+    currentResults: Array<T>
+  ): Array<T> => {
+    if (!values.length) return currentResults;
+    
+    const newResults: Array<T> = [];
+    
+    for (const result of currentResults) {
+      for (const value of values) {
+        const newResult = { ...result };
+        newResult[key] = value;
+        newResults.push(newResult);
+      }
+    }
+    
+    return newResults;
+  };
+
+  // Get target info from metadata
+  const hostTriple = metadata.target?.triple;
+  if (!hostTriple) {
+    throw new Error("Target triple not found in metadata");
+  }
+
+  const { arch, os: hostOs } = std.triple.components(hostTriple);
+
+  // Generate build values
+  const buildValues: string[] = [];
+  if (crossArch || crossArchAndOs) {
+    // Add different architectures for build
+    const alternativeArchs = ['x86_64', 'aarch64'].filter(arch => arch !== hostArch);
+    for (const arch of alternativeArchs) {
+      buildValues.push(`${arch}-${hostOs}`);
+    }
+  }
+
+  // Generate host values
+  const hostValues: string[] = [];
+  if (crossOs || crossArchAndOs) {
+    // Add different OSes for host
+    const alternativeOses = ['linux', 'darwin', 'windows'].filter(os => os !== hostOs);
+    for (const os of alternativeOses) {
+      hostValues.push(`${hostArch}-${os}`);
+    }
+  }
+
+  if (crossArchAndOs) {
+    // Add combinations of different archs and OSes
+    const alternativeArchs = ['x86_64', 'aarch64'].filter(arch => arch !== hostArch);
+    const alternativeOses = ['linux', 'darwin'].filter(os => os !== hostOs);
+    
+    for (const arch of alternativeArchs) {
+      for (const os of alternativeOses) {
+        hostValues.push(`${arch}-${os}`);
+      }
+    }
+  }
+
+  // Apply build values
+  if (buildValues.length > 0) {
+    results.push(...generateCombinations('build', buildValues, results));
+  }
+
+  // Apply host values
+  if (hostValues.length > 0) {
+    results.push(...generateCombinations('host', hostValues, results));
+  }
+
+  // Toggle boolean values if needed
+  if (toggleBools) {
+    // Get all boolean keys from the metadata
+    const booleanKeys = Object.keys(metadata)
+      .filter(key => typeof metadata[key] === 'boolean');
+    
+    let currentResults = [...results];
+    
+    for (const key of booleanKeys) {
+      currentResults = generateCombinations(key, [true, false], currentResults);
+    }
+    
+    results.push(...currentResults);
+  }
+
+  // Remove the empty base arg if we have other results
+  if (results.length > 1) {
+    results.shift();
+  }
+
+  return results;
 };

@@ -77,3 +77,14 @@ export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 });
+
+// export const testAll = tg.command(async () => {
+// 	const spec = std.assert.defaultSpec(metadata);
+// 	const allArgs = std.assert.generatePackageArgs(metadata);
+// 	return await std.assert.pkg(build, ...specs);
+// });
+
+export const mismatch = tg.command(() => build({ host: "x86_64-linux"})); // Fixme - failed to find a runtime for the process. Server should kick back.
+export const crossArch = tg.command(() => build({ build: "aarch64-darwin", host: "x86-64-darwin"}));
+export const crossOsArch = tg.command(() => build({ build: "aarch64-darwin", host: "x86-64-linux"}));
+export const crossOs = tg.command(() => build({ build: "aarch64-darwin", host: "aarch64-linux"}));
