@@ -54,6 +54,7 @@ const binaryChecksums: { [key: string]: tg.Checksum } = {
 	["x86_64-darwin"]:
 		"sha256:3f5630e0641d0824eb334cfe89d17cf69b1b6019b68d118afba7b62045794f58",
 };
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);

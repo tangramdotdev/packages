@@ -159,6 +159,7 @@ export const interpreterName = (triple: string) => {
 	const soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;
 };
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

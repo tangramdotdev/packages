@@ -144,6 +144,7 @@ export const gnuEnv = tg.command(async () => {
 });
 
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
+
 export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const system = std.triple.archAndOs(host);

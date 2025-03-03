@@ -37,6 +37,7 @@ export default proxy;
 import pkgconf from "pkgconf" with { path: "../pkgconf" };
 import openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
+
 export const test = tg.command(async () => {
 	// Make sure the proxy compiles and runs.
 	const version = await $`tangram_rustc_proxy rustc - --version | tee $OUTPUT`

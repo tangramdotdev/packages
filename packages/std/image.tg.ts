@@ -15,6 +15,7 @@ export const image = tg.command(
 export default image;
 
 import * as bootstrap from "./bootstrap.tg.ts";
+
 export const test = tg.command(async () => {
 	const tests = [
 		testWrappedEntrypoint(),

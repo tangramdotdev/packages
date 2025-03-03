@@ -51,6 +51,7 @@ export const build = tg.command(async (arg?: Arg) => {
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
+
 export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk.arg(host);

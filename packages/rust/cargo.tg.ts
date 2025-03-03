@@ -410,6 +410,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 };
 
 import tests from "./tests" with { type: "directory" };
+
 export const test = tg.command(async () => {
 	const tests = [];
 

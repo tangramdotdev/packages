@@ -109,6 +109,7 @@ export const interpreterName = (triple: string) => {
 	const arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;
 };
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

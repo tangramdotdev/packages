@@ -213,6 +213,7 @@ export const patchAutom4teCfg = tg.command(
 );
 
 export default build;
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

@@ -180,6 +180,7 @@ const defaultTests = [
 ];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
+
 export const test = tg.command(async (...testNames: Array<string>) => {
 	let tests: Array<string> = flatten(testNames);
 	if (tests.length === 0) {

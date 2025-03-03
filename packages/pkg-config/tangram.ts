@@ -167,6 +167,7 @@ export const path = tg.command(
 		return tg.Template.join(":", ...allPaths);
 	},
 );
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

@@ -96,6 +96,7 @@ export const wrapScript = async (script: tg.File) => {
 	const interpreter = tg.File.expect(await (await build()).get("bin/zsh"));
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

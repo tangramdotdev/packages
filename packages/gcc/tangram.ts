@@ -335,6 +335,7 @@ export const mergeLibDirs = async (dir: tg.Directory) => {
 	}
 	return dir;
 };
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);

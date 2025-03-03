@@ -72,6 +72,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
+
 export const test = tg.command(async () => {
 	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
 	const hasVersion = (name: string) => {

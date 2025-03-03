@@ -433,6 +433,7 @@ export const pushOrSet = (
 		obj[key] = a;
 	}
 };
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(self, spec);
