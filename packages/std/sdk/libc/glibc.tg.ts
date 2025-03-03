@@ -20,7 +20,7 @@ export const source = tg.command((version?: GlibcVersion) => {
 	return std.download.fromGnu({
 		name,
 		version: version_,
-		compressionFormat: "xz",
+		compression: "xz",
 		checksum,
 	});
 });

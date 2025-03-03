@@ -14,10 +14,10 @@ export const metadata = {
 
 export const source = tg.command(() => {
 	const { name, version } = metadata;
-	const compressionFormat = "xz";
+	const compression = "xz";
 	const checksum =
 		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
-	return std.download.fromGnu({ name, version, checksum, compressionFormat });
+	return std.download.fromGnu({ name, version, checksum, compression });
 });
 
 type Arg = {

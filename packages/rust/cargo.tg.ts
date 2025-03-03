@@ -341,8 +341,6 @@ export const vendorDependencies = tg.command(async (cargoLock: tg.File) => {
 			const url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
 			const artifact = await std.download({
 				checksum,
-				decompress: "gz",
-				extract: "tar",
 				url,
 			});
 			tg.assert(artifact instanceof tg.Directory);

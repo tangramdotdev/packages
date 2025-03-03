@@ -12,7 +12,7 @@ export const source = tg.command(() => {
 	return std.download.fromGnu({
 		name,
 		version,
-		compressionFormat: "xz",
+		compression: "xz",
 		checksum,
 	});
 });

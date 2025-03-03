@@ -94,7 +94,6 @@ export const rust = tg.command(
 			if (pkg?.available) {
 				const artifact = std.download({
 					checksum: `sha256:${pkg.xz_hash}`,
-					decompress: "xz",
 					url: pkg.xz_url,
 				});
 				packages = tg.directory(packages, {
@@ -110,7 +109,6 @@ export const rust = tg.command(
 			if (pkg?.available) {
 				const artifact = std.download({
 					checksum: `sha256:${pkg.xz_hash}`,
-					decompress: "xz",
 					url: pkg.xz_url,
 				});
 				packages = tg.directory(packages, {

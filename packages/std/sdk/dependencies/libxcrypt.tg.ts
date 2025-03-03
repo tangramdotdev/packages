@@ -17,7 +17,7 @@ export const source = tg.command(() => {
 		"sha256:e5e1f4caee0a01de2aee26e3138807d6d3ca2b8e67287966d1fefd65e1fd8943";
 	return std.download.fromGithub({
 		checksum,
-		compressionFormat: "xz",
+		compression: "xz",
 		owner,
 		source: "release",
 		repo,

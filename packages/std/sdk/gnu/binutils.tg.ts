@@ -16,7 +16,7 @@ export const source = tg.command(async (build: string) => {
 	return std.download.fromGnu({
 		name,
 		version,
-		compressionFormat: "zst",
+		compression: "zst",
 		checksum,
 	});
 });

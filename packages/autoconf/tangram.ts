@@ -33,7 +33,7 @@ export const source = tg.command(() => {
 		name,
 		version,
 		checksum,
-		compressionFormat: "xz",
+		compression: "xz",
 	});
 });
 

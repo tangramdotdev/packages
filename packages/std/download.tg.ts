@@ -1,10 +1,10 @@
 export type Arg = download.BuildUrlArg & {
 	/** The expected checksum of the downloaded file. Use "any" to allow network access without verifying the result. */
 	checksum: tg.Checksum;
-	/** The format of the file to unpack. If `true`, will infer from the URL. Default: `true`. */
-	decompress?: boolean | tg.Blob.CompressionFormat | undefined;
-	/** The format of the archive file to unpack. If `true`, will infer from the URL. Default: `true`. */
-	extract?: boolean | tg.Artifact.ArchiveFormat | undefined;
+	/** Should the downloaded blob get decompressed?. Default: `true`. */
+	decompress?: boolean;
+	/** Should the downloaded blob get extracted as an archive? Default: `true`. */
+	extract?: boolean;
 	/** Optional list of mirror URLs to try if the primary URL fails. */
 	mirrors?: Array<string>;
 };
@@ -13,8 +13,8 @@ export type Arg = download.BuildUrlArg & {
 export async function download(arg: Arg): Promise<tg.Artifact> {
 	const {
 		checksum,
-		decompress: decompress_ = true,
-		extract: extract_ = true,
+		decompress = true,
+		extract = true,
 		mirrors = [],
 		...rest
 	} = arg;
@@ -33,35 +33,8 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 	}
 	tg.assert(blob !== undefined, "unable to download blob");
 
-	// If there's nothing to unpack, return the blob.
-	if (!decompress_ && !extract_) {
-		return tg.file(blob);
-	}
-
 	// Otherwise, unpack the blob.
-	// If both values are given explictly, skip inferrence.
-	if (typeof decompress_ !== "boolean" && typeof extract_ !== "boolean") {
-		return await download.unpackBlob({
-			decompress: decompress_,
-			extract: extract_,
-			blob,
-		});
-	}
-
 	// If either or both is `true`, infer the formats from the URL and fill in the missing values.
-	const formats = download.inferFormats(primaryUrl);
-	const decompress =
-		typeof decompress_ === "boolean"
-			? decompress_ === true
-				? formats.decompress
-				: undefined
-			: decompress_;
-	const extract =
-		typeof extract_ === "boolean"
-			? extract_ === true
-				? formats.extract
-				: undefined
-			: extract_;
 	return await download.unpackBlob({ decompress, extract, blob });
 }
 
@@ -71,7 +44,7 @@ export namespace download {
 	export type fromGitHubArg = GithubSource & {
 		archiveFormat?: tg.Artifact.ArchiveFormat | undefined;
 		checksum: tg.Checksum;
-		compressionFormat?: tg.Blob.CompressionFormat | undefined;
+		compression?: tg.Blob.CompressionFormat | undefined;
 		owner: string;
 		repo: string;
 		tag: string;
@@ -90,9 +63,9 @@ export namespace download {
 
 	export const fromGithub = async (arg: fromGitHubArg) => {
 		const {
-			archiveFormat: extract = "tar",
+			archiveFormat = "tar",
 			checksum,
-			compressionFormat: decompress = "gz",
+			compression = "gz",
 			owner,
 			repo,
 			source,
@@ -101,9 +74,9 @@ export namespace download {
 
 		// Build the url.
 		let url = `https://github.com/${owner}/${repo}`;
-		let extension = `.${extract}`;
-		if (decompress !== undefined) {
-			extension += `.${decompress}`;
+		let extension = `.${archiveFormat}`;
+		if (compression !== undefined) {
+			extension += `.${compression}`;
 		}
 
 		if (source === "release") {
@@ -123,8 +96,8 @@ export namespace download {
 		const outer = tg.Directory.expect(
 			await download({
 				checksum,
-				decompress,
-				extract,
+				decompress: compression !== undefined,
+				extract: archiveFormat !== undefined,
 				url,
 			}),
 		);
@@ -133,32 +106,20 @@ export namespace download {
 
 	export type FromGnuArg = {
 		checksum: tg.Checksum;
-		compressionFormat?: tg.Blob.CompressionFormat | undefined;
+		compression?: tg.Blob.CompressionFormat | undefined;
 		name: string;
 		version: string;
 	};
 
 	/** Download a source package hosted in the GNU FTP repository. */
 	export const fromGnu = async (arg: FromGnuArg) => {
-		const {
-			checksum,
-			compressionFormat: decompress = "gz",
-			name,
-			version,
-		} = arg;
-		const extract = "tar" as tg.Artifact.ArchiveFormat;
-		const extension = `.${extract}.${decompress}`;
+		const { checksum, compression = "gz", name, version } = arg;
+		const archiveFormat = "tar" as tg.Artifact.ArchiveFormat;
+		const extension = `.${archiveFormat}.${compression}`;
 		const archive = packageArchive({ extension, name, version });
 		const url = gnuUrl(name, archive);
 
-		const outer = tg.Directory.expect(
-			await download({
-				checksum,
-				decompress,
-				extract,
-				url,
-			}),
-		);
+		const outer = tg.Directory.expect(await download({ checksum, url }));
 		return download.unwrapDirectory(outer);
 	};
 
@@ -168,27 +129,24 @@ export namespace download {
 
 	export type UnpackArg = {
 		blob: tg.Blob;
-		decompress?: tg.Blob.CompressionFormat | undefined;
-		extract?: tg.Artifact.ArchiveFormat | undefined;
+		decompress?: boolean;
+		extract?: boolean;
 	};
 
 	export const unpackBlob = async (arg: UnpackArg): Promise<tg.Artifact> => {
 		let { blob, decompress, extract } = arg;
-		if (decompress === undefined && extract === undefined) {
-			return tg.file(blob);
-		}
 
-		// Decompress if necessary.
-		if (decompress) {
-			blob = await tg.Blob.decompress(blob, decompress);
-		}
-
-		// Unpack if necessary.
+		// If extract is set, `tg.Artifact.extract` will handle both compressed and uncompressed blobs.
 		if (extract) {
-			return tg.Artifact.extract(blob, extract);
-		} else {
-			return tg.file(blob);
+			return tg.Artifact.extract(blob);
 		}
+
+		// If asked to decompress but not extract, decompress the blob.
+		if (decompress) {
+			blob = await tg.Blob.decompress(blob);
+		}
+
+		return tg.file(blob);
 	};
 
 	export type BuildUrlArg =
@@ -239,55 +197,6 @@ export namespace download {
 		"packageName" in arg
 			? arg.packageName
 			: `${arg.name}${arg.version ? `-${arg.version}` : ""}`;
-
-	/** Determine the archive formats from the file extension of the url. */
-	export const inferFormats = (
-		url: string,
-	): {
-		decompress?: tg.Blob.CompressionFormat;
-		extract?: tg.Artifact.ArchiveFormat;
-	} => {
-		let decompress: tg.Blob.CompressionFormat | undefined = undefined;
-		let extract: tg.Artifact.ArchiveFormat | undefined = undefined;
-
-		const split = url.split(".");
-		const last = split.pop();
-		switch (last) {
-			case "tar":
-			case "zip":
-				extract = last;
-				break;
-			case "tgz":
-				extract = "tar";
-				decompress = "gz";
-				break;
-			case "bz2":
-			case "gz":
-			case "xz":
-			case "zst":
-			case "zstd":
-				// Coerce `"zstd"` to `"zst"`.
-				decompress = last === "zstd" ? "zst" : last;
-				const prev = split.pop();
-				if (prev === "tar") {
-					extract = prev;
-				}
-				break;
-			default:
-				throw new Error(`could not infer compression format from URL: ${url}`);
-		}
-
-		if (extract === undefined && decompress === undefined) {
-			return {};
-		} else if (extract === undefined) {
-			tg.assert(decompress !== undefined);
-			return { decompress };
-		} else if (decompress === undefined) {
-			return { extract };
-		} else {
-			return { decompress, extract };
-		}
-	};
 
 	/** If the given directory contains a single child directory, return the inner child. */
 	export const unwrapDirectory = async (

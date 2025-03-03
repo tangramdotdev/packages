@@ -3,7 +3,7 @@ import * as std from "./tangram.ts";
 /** Standard values that packages pass to their dependencies */
 export type PackageArg = { [key: string]: tg.Value } & {
 	build?: string | undefined;
-	dependencies?: DependencyArgs;
+	dependencies?: DependencyArgs | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
 	sdk?: std.sdk.Arg | undefined;

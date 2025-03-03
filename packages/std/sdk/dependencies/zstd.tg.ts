@@ -14,7 +14,7 @@ export const source = tg.command(() => {
 	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
-		compressionFormat: "zst",
+		compression: "zst",
 		owner,
 		repo,
 		source: "release",

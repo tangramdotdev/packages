@@ -14,7 +14,7 @@ export const source = tg.command(async () => {
 		checksum,
 		name,
 		version,
-		compressionFormat: "xz",
+		compression: "xz",
 	});
 });
 

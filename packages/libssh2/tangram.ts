@@ -23,7 +23,7 @@ export let source = tg.command(async () => {
 	let tag = `${name}-${version}`;
 	return std.download.fromGithub({
 		checksum,
-		compressionFormat: "xz",
+		compression: "xz",
 		owner,
 		repo,
 		source: "release",

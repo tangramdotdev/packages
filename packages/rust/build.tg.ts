@@ -192,8 +192,6 @@ export const flagForDependency = async (
 		source = await std
 			.download({
 				checksum,
-				decompress: "gz",
-				extract: "tar",
 				url,
 			})
 			.then(tg.Directory.expect)

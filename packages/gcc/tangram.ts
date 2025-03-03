@@ -283,7 +283,7 @@ export const mpfrSource = tg.command(async () => {
 		checksum,
 		name,
 		version,
-		compressionFormat: "bz2",
+		compression: "bz2",
 	});
 });
 

@@ -20,7 +20,7 @@ export const source = tg.command(async (os: string) => {
 	let source = await std.download.fromGnu({
 		name,
 		version,
-		compressionFormat: "xz",
+		compression: "xz",
 		checksum,
 	});
 

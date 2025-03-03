@@ -19,7 +19,7 @@ export const source = tg.command(async () => {
 	let source = await std.download.fromGnu({
 		name,
 		version,
-		compressionFormat: "xz",
+		compression: "xz",
 		checksum,
 	});
 	// Apply rlimit fix.

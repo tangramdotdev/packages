@@ -87,8 +87,6 @@ export const self = tg.command(async (arg?: ToolchainArg) => {
 	for (const [name, pkg] of packages) {
 		const artifact = await std.download({
 			checksum: `sha256:${pkg.xz_hash}`,
-			decompress: "xz",
-			extract: "tar",
 			url: pkg.xz_url,
 		});
 		packagesArtifact = await tg.directory(packagesArtifact, {

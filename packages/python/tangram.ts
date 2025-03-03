@@ -109,9 +109,8 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	}
 	const enableOptimizations = enableOptimizations_ ?? false;
 
-	const processDependency = <T extends std.args.PackageArg>(
-		dep: std.env.Dependency<T>,
-	) => std.env.envArgFromDependency(build, env_, host, sdk, dep);
+	const processDependency = (dep: any) =>
+		std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
 	const dependencies = [
 		std.env.buildDependency(bison.build),
@@ -124,7 +123,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	if (os === "darwin") {
 		dependencies.push(std.env.buildDependency(pkgConf.build));
 	} else if (os === "linux") {
-		dependencies.push(std.env.buildDependency(pkgConfig.build));
+		dependencies.push(std.env.buildDependency(pkgConfig.build) as any);
 	}
 
 	// Set up additional runtime dependencies that will end up in the wrapper.

@@ -113,18 +113,21 @@ export const testPkgconfig = tg.command(async () => {
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
-	
+
 	const source = tests.get("hello-c-dylib").then(tg.Directory.expect);
-	
+
 	// compile the dylib
 	let externalLibDir = await $`
 		mkdir -p $OUTPUT/lib
 		mkdir -p $OUTPUT/include
 		gcc -shared -fPIC ${source}/src/lib.c -o $OUTPUT/lib/libexternal.${dylibExt}
-		cp ${source}/src/lib.h $OUTPUT/include/lib.h`.env(std.sdk()).then(tg.Directory.expect);
+		cp ${source}/src/lib.h $OUTPUT/include/lib.h`
+		.env(std.sdk())
+		.then(tg.Directory.expect);
 
 	externalLibDir = await tg.directory(externalLibDir, {
-		["lib/pkgconfig/external.pc"]: tg.file(`prefix=/Users/benlovy/.tangram/tmp/06acty0tbnz835v1rxkbgs97fc/output
+		["lib/pkgconfig/external.pc"]:
+			tg.file(`prefix=/Users/benlovy/.tangram/tmp/06acty0tbnz835v1rxkbgs97fc/output
 exec_prefix=\${prefix}
 libdir=\${exec_prefix}/lib
 includedir=\${prefix}/include
@@ -134,10 +137,10 @@ Description: Example shared library
 Version: 1.0.0
 Libs: -L\${libdir} -lexternal
 Cflags: -I\${includedir}
-`)
+`),
 	});
 	console.log("externalLibDir", await externalLibDir.id());
-	
+
 	// compile the rust.
 	const rustOutput = await cargo.build({
 		source,
@@ -150,7 +153,7 @@ Cflags: -I\${includedir}
 		verbose: true,
 	});
 	console.log("result", await rustOutput.id());
-	
+
 	// Assert it produces the correct output.
 	const testOutput = await $`myapp | tee $OUTPUT`
 		.env(rustOutput)
@@ -159,4 +162,4 @@ Cflags: -I\${includedir}
 	tg.assert(testText.trim() === "You passed the number: 42");
 
 	return externalLibDir;
-})
+});

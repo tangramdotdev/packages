@@ -19,7 +19,7 @@ export const source = tg.command(() => {
 	const checksum =
 		"sha256:9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2";
 	return std.download.fromGnu({
-		compressionFormat: "xz",
+		compression: "xz",
 		name,
 		version,
 		checksum,

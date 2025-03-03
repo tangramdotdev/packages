@@ -19,7 +19,7 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5";
 	return await std
-		.download({ url, checksum, decompress: "xz", extract: "tar" })
+		.download({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });
