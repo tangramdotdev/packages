@@ -257,7 +257,7 @@ impl Manifest {
 
 		// Obtain the contents of the wrapper file.
 		let wrapper_contents = TANGRAM_WRAPPER.contents(tg).await?;
-		let wrapper_size = wrapper_contents.size(tg).await?;
+		let wrapper_length = wrapper_contents.size(tg).await?;
 
 		// Serialize the manifest.
 		let mut manifest = serde_json::to_vec(self).map_err(|error| {
@@ -278,22 +278,22 @@ impl Manifest {
 		let manifest = std::io::Cursor::new(manifest);
 
 		let manifest_blob = tg::Blob::with_reader(tg, manifest).await?;
-		let manifest_size = manifest_blob.size(tg).await?;
+		let manifest_length = manifest_blob.size(tg).await?;
 		#[cfg(feature = "tracing")]
 		{
 			let blob_id = manifest_blob.id(tg).await?;
-			tracing::trace!(?blob_id, ?manifest_size, "created manifest blob");
+			tracing::trace!(?blob_id, ?manifest_length, "created manifest blob");
 		}
 
 		// Create a new blob with the wrapper contents and the manifest, keeping the wrapper in a separate blob.
 		let output_blob = tg::Blob::new(vec![
 			tg::branch::Child {
 				blob: wrapper_contents,
-				size: wrapper_size,
+				length: wrapper_length,
 			},
 			tg::branch::Child {
 				blob: manifest_blob,
-				size: manifest_size,
+				length: manifest_length,
 			},
 		]);
 		#[cfg(feature = "tracing")]
