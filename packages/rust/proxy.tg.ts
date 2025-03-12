@@ -38,14 +38,17 @@ import pkgconf from "pkgconf" with { path: "../pkgconf" };
 import openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 
-export const test = tg.command(async () => {
+export const testProxyCompiles = tg.command(async () => {
 	// Make sure the proxy compiles and runs.
 	const version = await $`tangram_rustc_proxy rustc - --version | tee $OUTPUT`
 		.env(proxy(), self())
 		.then(tg.File.expect);
 	const versionText = await version.text();
 	tg.assert(versionText.trim().includes(VERSION));
+	return true;
+});
 
+export const testHello = tg.command(async () => {
 	// Build the basic proxy test.
 	const helloWorld = await cargo.build({
 		source: tests.get("hello-world").then(tg.Directory.expect),
@@ -57,59 +60,15 @@ export const test = tg.command(async () => {
 	});
 	console.log("helloWorld result", await helloWorld.id());
 
-	await testPkgconfig();
-
 	// Assert it produces the correct output.
 	const helloOutput = await $`hello-world | tee $OUTPUT`
 		.env(helloWorld)
 		.then(tg.File.expect);
 	const helloText = await helloOutput.text();
 	tg.assert(helloText.trim() === "hello, proxy!\n128\nHello, build!");
-
-	// Build the openssl proxy test.
-	const helloOpenssl = await cargo.build({
-		source: tests.get("hello-openssl").then(tg.Directory.expect),
-		pre: "echo WATERMARK 10",
-		env: std.env.arg(openssl(), pkgconf(), {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
-		}),
-		parallelJobs: 1,
-		proxy: true,
-		verbose: true,
-	});
-	console.log("helloOpenssl result", await helloOpenssl.id());
-
-	// Assert it produces the correct output.
-	const opensslOutput = await $`hello-openssl | tee $OUTPUT`
-		.env(helloOpenssl)
-		.then(tg.File.expect);
-	const opensslText = await opensslOutput.text();
-	tg.assert(
-		opensslText.trim() === "Hello, from a crate that links against libssl!",
-	);
-
-	// Build the workspace test.
-	const helloWorkspace = await cargo.build({
-		source: tests.get("hello-workspace").then(tg.Directory.expect),
-		proxy: true,
-		env: {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
-			TANGRAM_STRIP_PROXY_TRACING: "tangram=trace",
-		},
-	});
-	console.log("helloWorkspace result", await helloWorkspace.id());
-
-	// Assert it produces the correct output.
-	const workspaceOutput = await $`cli | tee $OUTPUT`
-		.env(helloWorkspace)
-		.then(tg.File.expect);
-	const workspaceText = await workspaceOutput.text();
-	tg.assert(workspaceText.trim() === "Hello from a workspace!");
-
 	return true;
 });
 
-// import pkgConfig from "pkg-config" with { path: "../pkg-config" };
 export const testPkgconfig = tg.command(async () => {
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
@@ -163,4 +122,60 @@ Cflags: -I\${includedir}
 	tg.assert(testText.trim() === "You passed the number: 42");
 
 	return externalLibDir;
+});
+
+export const testOpenSSL = tg.command(async () => {
+	// Build the openssl proxy test.
+	const helloOpenssl = await cargo.build({
+		source: tests.get("hello-openssl").then(tg.Directory.expect),
+		pre: "echo WATERMARK 10",
+		env: std.env.arg(openssl(), pkgconf(), {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+		}),
+		parallelJobs: 1,
+		proxy: true,
+		verbose: true,
+	});
+	console.log("helloOpenssl result", await helloOpenssl.id());
+
+	// Assert it produces the correct output.
+	const opensslOutput = await $`hello-openssl | tee $OUTPUT`
+		.env(helloOpenssl)
+		.then(tg.File.expect);
+	const opensslText = await opensslOutput.text();
+	tg.assert(
+		opensslText.trim() === "Hello, from a crate that links against libssl!",
+	);
+	return true;
+});
+
+export const testWorkspace = tg.command(async () => {
+	// Build the workspace test.
+	const helloWorkspace = await cargo.build({
+		source: tests.get("hello-workspace").then(tg.Directory.expect),
+		proxy: true,
+		env: {
+			TANGRAM_RUSTC_TRACING: "tangram=trace",
+			TANGRAM_STRIP_PROXY_TRACING: "tangram=trace",
+		},
+	});
+	console.log("helloWorkspace result", await helloWorkspace.id());
+
+	// Assert it produces the correct output.
+	const workspaceOutput = await $`cli | tee $OUTPUT`
+		.env(helloWorkspace)
+		.then(tg.File.expect);
+	const workspaceText = await workspaceOutput.text();
+	tg.assert(workspaceText.trim() === "Hello from a workspace!");
+
+	return true;
+});
+
+export const test = tg.command(async () => {
+	tg.assert(await testProxyCompiles());
+	tg.assert(await testHello());
+	tg.assert(await testPkgconfig());
+	tg.assert(await testOpenSSL());
+	tg.assert(await testWorkspace());
+	return true;
 });
