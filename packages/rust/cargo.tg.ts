@@ -305,17 +305,11 @@ const vendoredSources = async (
 			? await source.get(manifestSubdir).then(tg.Directory.expect)
 			: source;
 		const cargoLock = sourcePath.get("Cargo.lock").then(tg.File.expect);
-		const vendoredSources = vendorDependencies(cargoLock);
-		return tg`
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "${vendoredSources}"`;
+		return vendorDependencies(cargoLock);
 	}
 };
 
-// Implementation of `cargo vendor` in tg typescript.
+// Implementation of `cargo vendor` in tg typescript, retuning a config.toml.
 export const vendorDependencies = tg.command(async (cargoLock: tg.File) => {
 	type CargoLock = {
 		package: Array<{
@@ -327,31 +321,143 @@ export const vendorDependencies = tg.command(async (cargoLock: tg.File) => {
 		}>;
 	};
 
+	type CargoToml = {
+		package?: {
+			name: string;
+			version: string;
+		};
+		workspace?: {
+			members?: Array<string>;
+		};
+	};
+
+	type CargoConfig = {
+		source: {
+			[key: string]: {
+				"replace-with"?: string;
+				directory?: string;
+				git?: string;
+				rev?: string;
+			};
+		};
+	};
+
+	// Set up return value.
+	const cargoConfig: CargoConfig = { source: {} };
+	cargoConfig.source["crates-io"] = { "replace-with": "vendored-sources" };
+
 	const cargoLockToml = tg.encoding.toml.decode(
 		await cargoLock.text(),
 	) as CargoLock;
 	const downloads = cargoLockToml.package
 		.filter((pkg) => {
-			return pkg.source?.startsWith("registry+") ?? false;
+			return pkg.source !== undefined;
 		})
 		.map(async (pkg) => {
 			tg.assert(pkg.source);
-			tg.assert(pkg.checksum);
-			const checksum = `sha256:${pkg.checksum}`;
-			const url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
-			const artifact = await std.download({
-				checksum,
-				url,
-			});
-			tg.assert(artifact instanceof tg.Directory);
-			const child = await artifact.get(`${pkg.name}-${pkg.version}`);
-			tg.assert(child instanceof tg.Directory);
-			return tg.directory({
-				[`${pkg.name}-${pkg.version}`]: vendorPackage(child, checksum),
-			});
+
+			if (pkg.source.startsWith("registry+")) {
+				tg.assert(pkg.checksum);
+				const checksum = `sha256:${pkg.checksum}`;
+				const url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
+				const artifact = await std
+					.download({
+						checksum,
+						url,
+					})
+					.then(tg.Directory.expect);
+				const child = await artifact
+					.get(`${pkg.name}-${pkg.version}`)
+					.then(tg.Directory.expect);
+				return tg.directory({
+					[`${pkg.name}-${pkg.version}`]: vendorPackage(child, checksum),
+				});
+			} else if (pkg.source.startsWith("git+")) {
+				const gitPrefix = "git+";
+				let url = pkg.source.substring(gitPrefix.length);
+				const hashIndex = url.lastIndexOf("#");
+				const rev = url.substring(hashIndex + 1);
+				url = url.substring(0, hashIndex);
+				const sourceUrl = url;
+				const queryIndex = url.indexOf("?");
+				if (queryIndex !== -1) {
+					const query = url.substring(queryIndex + 1);
+					url = url.substring(0, queryIndex);
+				}
+
+				cargoConfig.source[`${sourceUrl}`] = {
+					git: url,
+					rev,
+					"replace-with": "vendored-sources",
+				};
+
+				url = `${url}/archive/${rev}.tar.gz`;
+
+				const artifact = await std
+					.download({ checksum: "any", url })
+					.then(tg.Directory.expect);
+				const child = await std.directory.unwrap(artifact);
+				let packageDir = child;
+
+				// Check if this is a workspace.
+				let isWorkspace = false;
+				const cargoTomlFile = await child
+					.get("Cargo.toml")
+					.then(tg.File.expect);
+				const cargoToml = tg.encoding.toml.decode(
+					await cargoTomlFile.text(),
+				) as CargoToml;
+				if (cargoToml.workspace !== undefined) {
+					isWorkspace = true;
+					let foundPackageDir = undefined;
+					const members = cargoToml.workspace.members || [];
+					// Try to find the matching packge name in each member toml.
+					for (const member of members) {
+						const dir = await child.get(member);
+						if (dir instanceof tg.Directory) {
+							const memberCargoToml = await dir.get("Cargo.toml");
+							if (memberCargoToml instanceof tg.File) {
+								const memberManifest = tg.encoding.toml.decode(
+									await memberCargoToml.text(),
+								) as CargoToml;
+								if (
+									memberManifest.package &&
+									memberManifest.package.name === pkg.name
+								) {
+									// Found the package!
+									foundPackageDir = dir;
+									break;
+								}
+							}
+						}
+					}
+					if (foundPackageDir === undefined) {
+						throw new Error(
+							`failed to locate package for workspace member ${pkg.name}`,
+						);
+					}
+					packageDir = foundPackageDir;
+				}
+
+				return tg.directory({
+					[`${pkg.name}-${rev}`]: vendorPackage(
+						isWorkspace ? child : packageDir,
+						`git:${rev}`,
+					),
+				});
+			} else {
+				throw new Error(`unsupported dependency type: ${pkg.source}`);
+			}
 		});
 
-	return tg.directory(...downloads);
+	const vendoredSources = tg.directory(...downloads);
+	const cargoConfigToml = await tg.encoding.toml.encode(cargoConfig);
+	return tg`
+${cargoConfigToml}
+
+[source.vendored-sources]
+directory = "${vendoredSources}"
+`;
 });
 
 // Given a crate directory downloaded from crates.io and its checksum, strip excess files and generate the .cargo-checksum.json.
@@ -459,35 +565,36 @@ export const testUnproxiedWorkspace = tg.command(async () => {
 	return true;
 });
 
-// Compare the results of cargo vendor and vendorDependencies.
-export const testVendorDependencies = tg.command(async () => {
-	const sourceDirectory = await tests
-		.get("hello-openssl")
-		.then(tg.Directory.expect);
-	const cargoLock = await sourceDirectory
-		.get("Cargo.lock")
-		.then(tg.File.expect);
-	const tgVendored = vendorDependencies(cargoLock);
+// FIXME - we now produce a toml directly.
+// // Compare the results of cargo vendor and vendorDependencies.
+// export const testVendorDependencies = tg.command(async () => {
+// 	const sourceDirectory = await tests
+// 		.get("hello-openssl")
+// 		.then(tg.Directory.expect);
+// 	const cargoLock = await sourceDirectory
+// 		.get("Cargo.lock")
+// 		.then(tg.File.expect);
+// 	const tgVendored = vendorDependencies(cargoLock);
 
-	const certFile = tg`${std.caCertificates()}/cacert.pem`;
-	const vendorScript = tg`
-		SOURCE="$(realpath ${sourceDirectory})"
-		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
-	`;
-	const rustArtifact = self();
-	const sdk = std.sdk();
+// 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
+// 	const vendorScript = tg`
+// 		SOURCE="$(realpath ${sourceDirectory})"
+// 		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
+// 	`;
+// 	const rustArtifact = self();
+// 	const sdk = std.sdk();
 
-	const cargoVendored = await $`${vendorScript}`
-		.checksum("any")
-		.env(sdk, rustArtifact, {
-			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-			CARGO_HTTP_CAINFO: certFile,
-			RUST_TARGET: rustTriple(await std.triple.host()),
-			SSL_CERT_FILE: certFile,
-		})
-		.then(tg.Directory.expect);
-	return tg.directory({
-		tgVendored,
-		cargoVendored,
-	});
-});
+// 	const cargoVendored = await $`${vendorScript}`
+// 		.checksum("any")
+// 		.env(sdk, rustArtifact, {
+// 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+// 			CARGO_HTTP_CAINFO: certFile,
+// 			RUST_TARGET: rustTriple(await std.triple.host()),
+// 			SSL_CERT_FILE: certFile,
+// 		})
+// 		.then(tg.Directory.expect);
+// 	return tg.directory({
+// 		tgVendored,
+// 		cargoVendored,
+// 	});
+// });

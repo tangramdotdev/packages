@@ -341,8 +341,10 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	};
 
 	// Get the process output.
+	tracing::debug!(?spawn_arg, "spawning rustc");
 	let process = tg::Process::spawn(tg, spawn_arg).await?;
 	let output = process.wait(tg).await?;
+	tracing::debug!(?output, "rustc process output");
 	if let Some(exit) = output.exit {
 		if let tg::process::Exit::Code { code } = exit {
 			if code != 0 {
@@ -452,6 +454,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			})?;
 		}
 	}
+	tracing::debug!("done copying build");
 	Ok(())
 }
 
@@ -655,19 +658,25 @@ pub fn template_data_to_symlink_data(
 			Ok(tg::symlink::Data::Target { target: s.into() })
 		},
 		[tg::template::component::Data::Artifact(id)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
-			Ok(tg::symlink::Data::Artifact {
-				artifact: id.clone(),
-				subpath: None,
-			})
-		},
-		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
-			Ok(tg::symlink::Data::Artifact {
-				artifact: artifact_id.clone(),
-				subpath: Some(s.chars().skip(1).collect::<String>().into()),
-			})
-		},
+		| [
+			tg::template::component::Data::String(_),
+			tg::template::component::Data::Artifact(id),
+		] => Ok(tg::symlink::Data::Artifact {
+			artifact: id.clone(),
+			subpath: None,
+		}),
+		[
+			tg::template::component::Data::Artifact(artifact_id),
+			tg::template::component::Data::String(s),
+		]
+		| [
+			tg::template::component::Data::String(_),
+			tg::template::component::Data::Artifact(artifact_id),
+			tg::template::component::Data::String(s),
+		] => Ok(tg::symlink::Data::Artifact {
+			artifact: artifact_id.clone(),
+			subpath: Some(s.chars().skip(1).collect::<String>().into()),
+		}),
 		_ => Err(tg::error!(
 			"expected a template with 1-3 components, got {:?}",
 			components
