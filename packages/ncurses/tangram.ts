@@ -127,6 +127,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 				return line;
 			}
 		});
+		console.log(`fixing ${libName}`);
 		result = await tg.directory(result, {
 			[`lib/lib${libName}.${dylibExt}`]: tg.symlink(
 				`lib${libName}w.${dylibExt}`,
