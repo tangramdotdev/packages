@@ -115,32 +115,26 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
-	// Create widechar-to-normal symlinks and fix pkgconfig files.
-	await Promise.all(
-		libNames.map(async (libName) => {
-			const pc = tg.File.expect(
-				await result.get(`lib/pkgconfig/${libName}w.pc`),
-			);
-			const content = await pc.text();
-			let lines = content.split("\n");
-			lines = lines.map((line) => {
-				if (line.startsWith("Libs:")) {
-					return line.replace("-L/output/output/lib", "-L${libdir}");
-				} else {
-					return line;
-				}
-			});
-			result = await tg.directory(result, {
-				lib: {
-					[`lib${libName}.${dylibExt}`]: tg.symlink(
-						`lib${libName}w.${dylibExt}`,
-					),
-					[`pkgconfig/${libName}w.pc`]: tg.file(lines.join("\n")),
-					[`pkgconfig/${libName}.pc`]: tg.symlink(`./${libName}w.pc`),
-				},
-			});
-		}),
-	);
+	// Create widechar symlinks and fix pkgconfig files.
+	for await (const libName of libNames) {
+		const pc = tg.File.expect(await result.get(`lib/pkgconfig/${libName}w.pc`));
+		const content = await pc.text();
+		let lines = content.split("\n");
+		lines = lines.map((line) => {
+			if (line.startsWith("Libs:")) {
+				return line.replace("-L/output/output/lib", "-L${libdir}");
+			} else {
+				return line;
+			}
+		});
+		result = await tg.directory(result, {
+			[`lib/lib${libName}.${dylibExt}`]: tg.symlink(
+				`lib${libName}w.${dylibExt}`,
+			),
+			[`lib/pkgconfig/${libName}w.pc`]: tg.file(lines.join("\n")),
+			[`lib/pkgconfig/${libName}.pc`]: tg.symlink(`${libName}w.pc`),
+		});
+	}
 
 	// Add links from curses to ncurses.
 	result = await tg.directory(result, {

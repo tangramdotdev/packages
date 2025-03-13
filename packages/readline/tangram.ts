@@ -1,5 +1,5 @@
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as pkgConf from "pkgconf" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -36,43 +36,30 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { ncurses: ncursesArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	// Set up default build dependencies.
-	const buildDependencies = [];
-	const pkgConfigForBuild = pkgConfig
-		.build({ build, host: build })
-		.then((d) => {
-			return { PKGCONFIG: std.directory.keepSubdirectories(d, "bin") };
-		});
-	buildDependencies.push(pkgConfigForBuild);
+	const dependencies = [
+		std.env.buildDependency(pkgConf.build),
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
+	];
 
-	// Set up host dependencies.
-	const hostDependencies = [];
-	const ncursesForHost = await ncurses.build({ build, host, sdk }, ncursesArg);
-	hostDependencies.push(ncursesForHost);
-
-	// Resolve env.
-	let env = await std.env.arg(...buildDependencies, ...hostDependencies, env_);
-
-	// Add final build dependencies to env.
-	const resolvedBuildDependencies = [];
-	const finalPkConfig = await std.env.getArtifactByKey({
-		env,
-		key: "PKGCONFIG",
-	});
-	resolvedBuildDependencies.push(finalPkConfig);
-	env = await std.env.arg(env, ...resolvedBuildDependencies);
+	const env = await std.env.arg(
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		env_,
+	);
 
 	const configure = {
 		args: [
 			"--with-curses",
 			"--disable-install-examples",
+			"--enable-multibyte",
 			"--with-shared-termcap-library",
 		],
 	};
