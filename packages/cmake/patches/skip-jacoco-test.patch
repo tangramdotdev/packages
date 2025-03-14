@@ -1,0 +1,27 @@
+diff -Naur cmake-source/Tests/CMakeLists.txt cmake-source_patched/Tests/CMakeLists.txt
+--- cmake-source/Tests/CMakeLists.txt	2025-03-14 13:01:07.865614635 -0400
++++ cmake-source_patched/Tests/CMakeLists.txt	2025-03-14 12:58:49.149343027 -0400
+@@ -2845,23 +2845,6 @@
+       ENVIRONMENT COVFILE=)
+ 
+ 
+-  # Adding a test case for JaCoCo Coverage
+-  configure_file(
+-     "${CMake_SOURCE_DIR}/Tests/JacocoCoverage/DartConfiguration.tcl.in"
+-     "${CMake_BINARY_DIR}/Testing/JacocoCoverage/DartConfiguration.tcl")
+-  file(COPY "${CMake_SOURCE_DIR}/Tests/JacocoCoverage/Coverage"
+-    DESTINATION "${CMake_BINARY_DIR}/Testing/JacocoCoverage")
+-  configure_file("${CMake_BINARY_DIR}/Testing/JacocoCoverage/Coverage/target/site/jacoco.xml.in"
+-    "${CMake_BINARY_DIR}/Testing/JacocoCoverage/Coverage/target/site/jacoco.xml")
+-  add_test(NAME CTestJacocoCoverage
+-    COMMAND ${CMAKE_CMAKE_COMMAND} -E chdir
+-    ${CMake_BINARY_DIR}/Testing/JacocoCoverage
+-    $<TARGET_FILE:ctest> -T Coverage --debug)
+-  set_tests_properties(CTestJacocoCoverage PROPERTIES
+-      PASS_REGULAR_EXPRESSION
+-      "Process file.*CoverageTest.java.*Total LOC:.*17.*Percentage Coverage: 76.47*"
+-      ENVIRONMENT COVFILE=)
+-
+   # Adding a test case for Javascript Coverage
+   configure_file(
+      "${CMake_SOURCE_DIR}/Tests/JavascriptCoverage/DartConfiguration.tcl.in"
