@@ -28,7 +28,7 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 		try {
 			blob = await tg.download(url, checksum);
 		} catch (e) {
-			lastError = e as Error;
+			lastError = e;
 			continue;
 		}
 	}
