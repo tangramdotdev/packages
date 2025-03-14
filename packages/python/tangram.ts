@@ -164,8 +164,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const fixup = tg`
 		set -x
 		otool -L $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
-		#install_name_tool -change libz.1.dylib ${zlibForHost}/lib/libz.1.dylib $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
-		#otool -L $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
+		install_name_tool -change libz.1.dylib ${zlibForHost}/lib/libz.1.dylib $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
+		otool -L $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
+		PYTHON=$OUTPUT/python3 make regen-frozen
 		`;
 	const phases = { configure, fixup };
 
