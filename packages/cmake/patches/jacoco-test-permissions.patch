@@ -1,0 +1,11 @@
+diff -Naur cmake-source/Tests/CMakeLists.txt cmake-source_patched/Tests/CMakeLists.txt
+--- cmake-source/Tests/CMakeLists.txt	2025-03-17 13:16:49.151599751 -0400
++++ cmake-source_patched/Tests/CMakeLists.txt	2025-03-17 13:13:31.205334862 -0400
+@@ -2851,6 +2851,7 @@
+      "${CMake_BINARY_DIR}/Testing/JacocoCoverage/DartConfiguration.tcl")
+   file(COPY "${CMake_SOURCE_DIR}/Tests/JacocoCoverage/Coverage"
+     DESTINATION "${CMake_BINARY_DIR}/Testing/JacocoCoverage")
++  execute_process(COMMAND chmod -R 755 "${CMake_BINARY_DIR}/Testing/JacocoCoverage")
+   configure_file("${CMake_BINARY_DIR}/Testing/JacocoCoverage/Coverage/target/site/jacoco.xml.in"
+     "${CMake_BINARY_DIR}/Testing/JacocoCoverage/Coverage/target/site/jacoco.xml")
+   add_test(NAME CTestJacocoCoverage
