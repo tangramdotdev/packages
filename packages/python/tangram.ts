@@ -34,18 +34,18 @@ export const versionString = () => {
 };
 
 /** Return the source code for the python specified by `metadata`. */
-// export const source = tg.command(async (): Promise<tg.Directory> => {
-// 	const { name, version } = metadata;
-// 	const checksum =
-// 		"sha256:d984bcc57cd67caab26f7def42e523b1c015bbc5dc07836cf4f0b63fa159eb56";
-// 	const extension = ".tar.xz";
-// 	const base = `https://www.python.org/ftp/python/${version}`;
-// 	return await std
-// 		.download({ checksum, base, name, version, extension })
-// 		.then(tg.Directory.expect)
-// 		.then(std.directory.unwrap);
-// });
-import source from "./python-source" with { type: "directory" };
+export const source = tg.command(async (): Promise<tg.Directory> => {
+	const { name, version } = metadata;
+	const checksum =
+		"sha256:d984bcc57cd67caab26f7def42e523b1c015bbc5dc07836cf4f0b63fa159eb56";
+	const extension = ".tar.xz";
+	const base = `https://www.python.org/ftp/python/${version}`;
+	return await std
+		.download({ checksum, base, name, version, extension })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
+});
+// import source from "./python-source" with { type: "directory" };
 
 export type Arg = {
 	/** Optional autotools configuration. */
@@ -153,7 +153,6 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	if (os === "darwin") {
 		envs.push({
 			MACOSX_DEPLOYMENT_TARGET: "15.2",
-			// LDFLAGS: tg.Mutation.suffix("-static", " "),
 		});
 	}
 	const env = std.env.arg(...envs, env_);
@@ -173,10 +172,12 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	// `.then(tg.File.expect);
 	// console.log("setup", await modulesSetupLocal.id());
 	// throw new Error("halt");
-	const sourceWithModules = await tg.directory(source, {
-		[`Modules/Setup.local`]: tg.file(`zlib zlibmodule.c $(ZLIB_LIBS) -lz`)
-	})
-	
+	const sourceDir = source_ ?? (await source());
+	// const sourceWithModules = await tg.directory(sourceDir, {
+	// 	[`Modules/Setup.local`]: tg.file(`zlib zlibmodule.c $(ZLIB_LIBS) -lz`)
+	// })
+
+	const prepare = `set -x && mkdir Modules && echo '*static*\nzlib zlibmodule.c \$(ZLIB_LIBS) -lz' > Modules/Setup.local && set +x`;
 	// FIXME - if this otool command works, its a no-go because it hardcoded the tmp path. we could read it from the zlib PC file, but the better question is why is it here at all.
 	const fixup = tg`
 		set -x
@@ -185,7 +186,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		#otool -L $OUTPUT/lib/python3.13/lib-dynload/zlib.cpython-313-darwin.so
 		#PYTHON=$OUTPUT/python3 make regen-frozen
 		`;
-	const phases = { configure, fixup };
+	const phases = { prepare, configure, fixup };
 
 
 	const output = await std.autotools.build(
@@ -195,9 +196,8 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 			phases,
 			opt: "3",
 			sdk,
-			// setRuntimeLibraryPath: true,
-			source: sourceWithModules,
-			// source: source_ ?? (await source()),
+			setRuntimeLibraryPath: true,
+			source: sourceDir,
 		},
 		autotools,
 	);
