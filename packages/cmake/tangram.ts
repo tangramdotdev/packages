@@ -63,14 +63,7 @@ export type Arg = {
 export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		build,
-		dependencies: {
-			curl: curlArg = {},
-			libpsl: libpslArg = {},
-			ncurses: ncursesArg = {},
-			openssl: opensslArg = {},
-			zlib: zlibArg = {},
-			zstd: zstdArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -79,18 +72,27 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const sourceDir = source_ ?? source();
 	const os = std.triple.os(host);
 
-	const curlRoot = curl.build({ build, env: env_, host, sdk }, curlArg);
-	const ncursesRoot = ncurses.build(
-		{ build, env: env_, host, sdk },
-		ncursesArg,
+	const processDependency = (dep: any) =>
+		std.env.envArgFromDependency(build, env_, host, sdk, dep);
+
+	const curlRoot = processDependency(
+		std.env.runtimeDependency(curl.build, dependencyArgs.curl),
 	);
-	const libpslRoot = libpsl.build({ build, env: env_, host, sdk }, libpslArg);
-	const opensslRoot = openssl.build(
-		{ build, env: env_, host, sdk },
-		opensslArg,
+	const ncursesRoot = processDependency(
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	);
-	const zlibRoot = zlib.build({ build, env: env_, host, sdk }, zlibArg);
-	const zstdRoot = zstd.build({ build, env: env_, host, sdk }, zstdArg);
+	const libpslRoot = processDependency(
+		std.env.runtimeDependency(libpsl.build, dependencyArgs.libpsl),
+	);
+	const opensslRoot = processDependency(
+		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
+	);
+	const zlibRoot = processDependency(
+		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
+	);
+	const zstdRoot = processDependency(
+		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
+	);
 
 	let configureArgs = ["--parallel=$(nproc)", "--system-curl", "--"];
 	if (os === "linux") {
