@@ -180,7 +180,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			...(commandArgs ?? []),
 		);
 	}
-	return await command.build({ checksum, network });
+	if (debug) {
+		console.log("phases.build command", await command.id());
+	}
+	// TODO - This should be tg.run? Or do we have separately phases.command, phases.build, phases.run?
+	return await std.build(command, { checksum, network });
 });
 
 export type Phases = {

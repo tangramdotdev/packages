@@ -378,9 +378,13 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		cwd: None,
 		env: None,
 		network: false,
+		mounts: vec![],
 		parent: None,
 		remote: None,
 		retry: false,
+		stdout: None,
+		stderr: None,
+		stdin: None,
 	};
 	let build_directory = tg::Process::run(tg, spawn_arg)
 		.await?

@@ -86,10 +86,11 @@ export const build = tg.command(async (arg?: Arg) => {
 			}),
 		);
 	}
-	const env = [env_, ...dependencies];
+	const env = [...dependencies, { FORCE_UNSAFE_CONFIGURE: true }];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
 	}
+	env.push(env_);
 
 	const configure = {
 		args: [

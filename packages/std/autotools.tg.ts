@@ -263,7 +263,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	let defaultPrepareCommand = tg.template();
 	if (buildInTree) {
-		defaultPrepareCommand = tg`${defaultPrepareCommand}\ncp -R ${source}/. . && chmod -R u+w .`;
+		defaultPrepareCommand = tg`${defaultPrepareCommand}\nmkdir work\ncp -R ${source}/. ./work && chmod -R u+w work\ncd work`;
 	}
 	if (setRuntimeLibraryPath) {
 		const os = std.triple.os(host);

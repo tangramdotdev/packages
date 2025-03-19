@@ -11,7 +11,7 @@ export const metadata = {
 	license: "LGPL-2.1-or-later",
 	name: "glibc",
 	repository: "https://sourceware.org/git/?p=glibc.git",
-	version: "2.39",
+	version: "2.41",
 	provides: {
 		libraries: ["c"],
 	},
@@ -20,7 +20,7 @@ export const metadata = {
 export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:f77bd47cf8170c57365ae7bf86696c118adb3b120d3259c64c502d3dc1e2d926";
+		"sha256:a5a26b22f545d6b7d7b3dd828e11e428f24f4fac43c934fb071b6a7d0828e901";
 	return std.download.fromGnu({
 		name,
 		version,

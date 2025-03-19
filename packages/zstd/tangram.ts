@@ -5,7 +5,7 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "zstd",
 	repository: "https://github.com/facebook/zstd",
-	version: "1.5.6",
+	version: "1.5.7",
 	provides: {
 		binaries: ["zstd"],
 		libraries: ["zstd"],
@@ -15,7 +15,7 @@ export const metadata = {
 export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:4aa8dd1c1115c0fd6b6b66c35c7f6ce7bd58cc1dfd3e4f175b45b39e84b14352";
+		"sha256:5b331d961d6989dc21bb03397fc7a2a4d86bc65a14adc5ffbbce050354e30fd2";
 	const owner = "facebook";
 	const repo = name;
 	const tag = `v${version}`;

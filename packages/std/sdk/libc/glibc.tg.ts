@@ -1,9 +1,9 @@
 import * as std from "../../tangram.ts";
 
 // Define supported versions.
-type GlibcVersion = "2.37" | "2.38" | "2.39" | "2.40";
-export const AllGlibcVersions = ["2.37", "2.38", "2.39", "2.40"];
-export const defaultGlibcVersion: GlibcVersion = "2.39";
+type GlibcVersion = "2.37" | "2.38" | "2.39" | "2.40" | "2.41";
+export const AllGlibcVersions = ["2.37", "2.38", "2.39", "2.40", "2.41"];
+export const defaultGlibcVersion: GlibcVersion = "2.41";
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/libc/",
@@ -55,7 +55,12 @@ export const build = tg.command(async (arg: Arg) => {
 		additionalFlags.push("--enable-crypt");
 	}
 
-	if (version === "2.38" || version === "2.39" || version === "2.40") {
+	if (
+		version === "2.38" ||
+		version === "2.39" ||
+		version === "2.40" ||
+		version === "2.41"
+	) {
 		// This flag is not available in previous versions. The `-DFORTIFY_SOURCE` macro was already available to users of glibc. This flag additionally uses this macro to build libc itself. It's used to detect buffer overflows at compile time.
 		additionalFlags.push("--enable-fortify-source");
 	}
@@ -90,6 +95,10 @@ export const build = tg.command(async (arg: Arg) => {
 		CPATH: tg.Mutation.unset(),
 		LIBRARY_PATH: tg.Mutation.unset(),
 		TANGRAM_LINKER_PASSTHROUGH: true,
+		CFLAGS: tg.Mutation.suffix(
+			`-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection`,
+			" ",
+		),
 	});
 
 	let result = await std.autotools.build({
@@ -97,6 +106,7 @@ export const build = tg.command(async (arg: Arg) => {
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
 		env: std.env.arg(env),
+		hardeningCFlags: false,
 		opt: "3",
 		phases,
 		prefixPath: "/",
@@ -193,5 +203,9 @@ const checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 	[
 		"2.40",
 		"sha256:19a890175e9263d748f627993de6f4b1af9cd21e03f080e4bfb3a1fac10205a2",
+	],
+	[
+		"2.41",
+		"sha256:a5a26b22f545d6b7d7b3dd828e11e428f24f4fac43c934fb071b6a7d0828e901",
 	],
 ]);

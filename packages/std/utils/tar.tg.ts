@@ -36,12 +36,22 @@ export const build = tg.command(async (arg?: Arg) => {
 	} = arg ?? {};
 
 	const host = host_ ?? (await std.triple.host());
+	const os = std.triple.os(host);
 	const build = build_ ?? host;
 
 	const dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [
 		prerequisites(host),
 	];
-	const additionalEnv = {};
+	let additionalEnv: tg.Unresolved<std.env.Arg> = {
+		FORCE_UNSAFE_CONFIGURE: true,
+	};
+	if (os === "darwin") {
+		dependencies.push(libiconv({ build, env: env_, host, sdk }));
+		additionalEnv = {
+			...additionalEnv,
+			LDFLAGS: tg.Mutation.suffix("-liconv", " "),
+		};
+	}
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],

@@ -6,13 +6,13 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "binutils",
 	repository: "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git",
-	version: "2.43",
+	version: "2.44",
 };
 
 export const source = tg.command(async (build: string) => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ba5e600af2d0e823312b4e04d265722594be7d94906ebabe6eaf8d0817ef48ed";
+		"sha256:79cb120b39a195ad588cd354aed886249bfab36c808e746b30208d15271cc95c";
 	return std.download.fromGnu({
 		name,
 		version,
