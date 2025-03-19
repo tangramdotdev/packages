@@ -3,6 +3,7 @@ export { type Args } from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
+export { build } from "./command.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
 export { $ } from "./dollar.tg.ts";
@@ -38,10 +39,10 @@ export const metadata = {
 };
 
 /** The default export produces the default SDK env for the detected host, asserts its validity, and returns the env. */
-export const build = tg.command(() => {
+export const default_ = tg.command(() => {
 	return sdk.testDefault();
 });
-export default build;
+export default default_;
 
 export const flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
 	if (value instanceof Array) {

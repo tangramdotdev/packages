@@ -255,7 +255,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 			env: std.env.arg(arg.env),
 			host: arg.host,
 		})
-		.then((command) => command.build())
+		.then((command) => std.build(command))
 		.then(tg.File.expect)
 		.then((file) => file.text());
 	if (testPredicate !== undefined) {
@@ -336,11 +336,11 @@ export const headerCanBeIncluded = tg.command(async (arg: HeaderArg) => {
 		.command(tg`cc -xc "${source}" -o $OUTPUT`, {
 			env: std.env.arg(std.sdk(), arg.directory),
 		})
-		.then((c) => c.build())
+		.then((c) => std.build(c))
 		.then(tg.File.expect);
 
 	// Run the program.
-	await tg.command(tg`${program}`).then((c) => c.build());
+	await tg.command(tg`${program}`).then((c) => std.build(c));
 	return true;
 });
 
@@ -493,7 +493,7 @@ export const dlopen = async (arg: DlopenArg) => {
 			),
 			host: arg.host,
 		})
-		.then((command) => command.build())
+		.then((command) => std.build(command))
 		.then(tg.File.expect);
 
 	return true;
@@ -538,7 +538,7 @@ export const stdoutIncludes = async (
 				TANGRAM_WRAPPER_TRACING: "tangram=trace",
 			},
 		})
-		.then((c) => c.build())
+		.then((c) => std.build(c))
 		.then(tg.File.expect)
 		.then((f) => f.text());
 	tg.assert(stdout.includes(expected));

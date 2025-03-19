@@ -180,7 +180,10 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			...(commandArgs ?? []),
 		);
 	}
-	return await command.build({ checksum, network });
+	if (debug) {
+		console.log("phases.build command", await command.id());
+	}
+	return await std.build(command, { checksum, network });
 });
 
 export type Phases = {

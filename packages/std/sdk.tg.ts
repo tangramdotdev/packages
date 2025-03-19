@@ -618,12 +618,12 @@ export namespace sdk {
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		const output = tg.File.expect(
-			await (
+			await std.build(
 				await tg.command(tg`${cmd} -dumpmachine > $OUTPUT`, {
 					env: std.env.arg(env),
 					host: std.triple.archAndOs(detectedHost),
-				})
-			).build(),
+				}),
+			),
 		);
 		const host = (await output.text()).trim();
 		std.triple.assert(host);
@@ -715,7 +715,7 @@ export namespace sdk {
 			langStr = "f95";
 		}
 		const compiledProgram = tg.File.expect(
-			await (
+			await std.build(
 				await tg.command(
 					tg`echo "testing ${lang}"
 				set -x
@@ -727,7 +727,7 @@ export namespace sdk {
 						host: std.triple.archAndOs(expectedHost),
 					},
 				)
-			).build(),
+			),
 		);
 
 		// Assert the resulting program was compiled for the expected target.
@@ -1033,14 +1033,14 @@ export const assertComment = async (
 	textToMatch: string,
 ) => {
 	const elfComment = tg.File.expect(
-		await (
+		await std.build(
 			await tg.command(
 				tg`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`,
 				{
 					env: await std.env.arg(toolchain, bootstrap.utils()),
 				},
 			)
-		).build(),
+		),
 	);
 	const text = await elfComment.text();
 	tg.assert(text.includes(textToMatch));
