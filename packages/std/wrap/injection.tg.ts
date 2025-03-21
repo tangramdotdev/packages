@@ -100,12 +100,12 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	// Combine into universal dylib.
 	const system = std.triple.archAndOs(host);
 	const injectionDir = tg.Directory.expect(
-		await (
+		await std.build(
 			await tg.command(
 				tg`mkdir -p $OUTPUT && lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT/out`,
 				{ host: system, env: std.env.arg(arg.buildToolchain, env) },
-			)
-		).build(),
+			),
+		),
 	);
 	const injection = await injectionDir.get("out").then(tg.File.expect);
 	return injection;
@@ -164,7 +164,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		arg.env,
 	);
 	const output = tg.File.expect(
-		await (
+		await std.build(
 			await tg.command(
 				tg`${executable} -xc ${arg.source} -o $OUTPUT \
 				${tg.Template.join(" ", ...args)}`,
@@ -172,8 +172,8 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 					host: system,
 					env,
 				},
-			)
-		).build(),
+			),
+		),
 	);
 	return output;
 };

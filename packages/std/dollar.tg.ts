@@ -16,6 +16,7 @@ class Dollar {
 	#exitOnErr: boolean;
 	#includeUtils: boolean;
 	#host?: string;
+	#mounts: Array<string | tg.Template | tg.command.Mount>;
 	#network?: boolean;
 	#pipefail: boolean;
 	#placeholders: std.args.UnresolvedArgs<tg.Template.Arg>;
@@ -30,12 +31,13 @@ class Dollar {
 		this.#disallowUnset = true;
 		this.#exitOnErr = true;
 		this.#includeUtils = true;
+		this.#mounts = [];
 		this.#network = false;
 		this.#pipefail = true;
 	}
 
 	async build(): Promise<tg.Value> {
-		return await (await this.command()).build({
+		return await std.build(await this.command(), {
 			checksum: this.#checksum,
 			network: this.#network,
 		});
@@ -76,6 +78,11 @@ class Dollar {
 		return this;
 	}
 
+	mount(m: string | tg.Template | tg.command.Mount): Dollar {
+		this.#mounts.push(m);
+		return this;
+	}
+
 	network(bool: boolean): Dollar {
 		this.#network = bool;
 		return this;
@@ -84,6 +91,13 @@ class Dollar {
 	pipefail(bool: boolean): Dollar {
 		this.#pipefail = bool;
 		return this;
+	}
+
+	async run(): Promise<tg.Value> {
+		return await tg.run(this.command(), {
+			checksum: this.#checksum,
+			network: this.#network,
+		});
 	}
 
 	async command(): Promise<tg.Command> {
@@ -156,7 +170,7 @@ class Dollar {
 			| undefined
 			| null,
 	): PromiseLike<TResult1 | TResult2> {
-		return this.build().then(onfulfilled, onrejected);
+		return this.run().then(onfulfilled, onrejected);
 	}
 }
 

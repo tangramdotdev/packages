@@ -46,6 +46,15 @@ export const dash = (host?: string) => {
 };
 export const shell = dash;
 
+/** Retrieve just the env component. */
+export const env = async (host?: string) => {
+	const host_ = host ?? (await std.triple.host());
+	if (std.triple.os(host_) !== "linux") {
+		throw new Error("the env bootstrap component is only available for Linux");
+	}
+	return bootstrap({ host: host_, component: "env" });
+};
+
 /** Retrieve just the toolchain component. */
 export const toolchain = (host?: string) => {
 	return bootstrap({ host, component: "toolchain" });
@@ -142,7 +151,7 @@ export const patch = async (
 			},
 			host,
 		})
-		.then((c) => c.build())
+		.then((c) => std.build(c))
 		.then(tg.Directory.expect);
 
 	return patchedSource;
