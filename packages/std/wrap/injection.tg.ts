@@ -1,6 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.ts";
+import { $ } from "../tangram.ts";
 import injectionSource from "./injection" with { type: "directory" };
 
 type Arg = {
@@ -99,15 +100,13 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 
 	// Combine into universal dylib.
 	const system = std.triple.archAndOs(host);
-	const injectionDir = tg.Directory.expect(
-		await std.build(
-			await tg.command(
-				tg`mkdir -p $OUTPUT && lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT/out`,
-				{ host: system, env: std.env.arg(arg.buildToolchain, env) },
-			),
-		),
-	);
-	const injection = await injectionDir.get("out").then(tg.File.expect);
+	const injection =
+		await $`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
+			.pipefail(false)
+			.includeUtils(false)
+			.host(system)
+			.env(arg.buildToolchain, env)
+			.then(tg.File.expect);
 	return injection;
 });
 
@@ -163,18 +162,14 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		},
 		arg.env,
 	);
-	const output = tg.File.expect(
-		await std.build(
-			await tg.command(
-				tg`${executable} -xc ${arg.source} -o $OUTPUT \
-				${tg.Template.join(" ", ...args)}`,
-				{
-					host: system,
-					env,
-				},
-			),
-		),
-	);
+	const output =
+		$`${executable} -xc ${arg.source} -o $OUTPUT ${tg.Template.join(" ", ...args)}`
+			.pipefail(false)
+			.executable("/bin/sh")
+			.includeUtils(false)
+			.env(env)
+			.host(system)
+			.then(tg.File.expect);
 	return output;
 };
 

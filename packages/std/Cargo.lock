@@ -81,9 +81,9 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "async-compression"
-version = "0.4.21"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0cf008e5e1a9e9e22a7d3c9a4992e21a350290069e36d8fb72304ed17e8f2d2"
+checksum = "59a194f9d963d8099596278594b3107448656ba73831c9d8c783e613ce86da64"
 dependencies = [
  "brotli",
  "bzip2",
@@ -92,6 +92,7 @@ dependencies = [
  "futures-core",
  "futures-io",
  "liblzma",
+ "lz4",
  "memchr",
  "pin-project-lite",
  "tokio",
@@ -1171,6 +1172,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4"
+version = "1.28.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a20b523e860d03443e98350ceaac5e71c6ba89aea7d960769ec3ce37f4de5af4"
+dependencies = [
+ "lz4-sys",
+]
+
+[[package]]
+name = "lz4-sys"
+version = "1.11.1+lz4-1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bd8c0d6c6ed0cd30b3652886bb8711dc4bb01d637a68105a3d5158039b418e6"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1862,7 +1882,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=c3aa405497ec7e740294445c6fcca8f734fbaf73#c3aa405497ec7e740294445c6fcca8f734fbaf73"
+source = "git+https://github.com/tangramdotdev/tangram?rev=ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d#ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1909,7 +1929,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=c3aa405497ec7e740294445c6fcca8f734fbaf73#c3aa405497ec7e740294445c6fcca8f734fbaf73"
+source = "git+https://github.com/tangramdotdev/tangram?rev=ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d#ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d"
 dependencies = [
  "serde",
 ]
@@ -1917,7 +1937,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=c3aa405497ec7e740294445c6fcca8f734fbaf73#c3aa405497ec7e740294445c6fcca8f734fbaf73"
+source = "git+https://github.com/tangramdotdev/tangram?rev=ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d#ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d"
 dependencies = [
  "dashmap",
  "futures",
@@ -1929,7 +1949,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=c3aa405497ec7e740294445c6fcca8f734fbaf73#c3aa405497ec7e740294445c6fcca8f734fbaf73"
+source = "git+https://github.com/tangramdotdev/tangram?rev=ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d#ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d"
 dependencies = [
  "async-compression",
  "bytes",
@@ -1999,7 +2019,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=c3aa405497ec7e740294445c6fcca8f734fbaf73#c3aa405497ec7e740294445c6fcca8f734fbaf73"
+source = "git+https://github.com/tangramdotdev/tangram?rev=ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d#ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -2010,7 +2030,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=c3aa405497ec7e740294445c6fcca8f734fbaf73#c3aa405497ec7e740294445c6fcca8f734fbaf73"
+source = "git+https://github.com/tangramdotdev/tangram?rev=ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d#ce4d20b03624f1bd3c0f308d6abf16c8aae04a5d"
 dependencies = [
  "derive_more",
  "winnow",

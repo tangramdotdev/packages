@@ -128,7 +128,7 @@ export const rust = tg.command(
 		const env = bootstrap.sdk.env(host);
 
 		return tg.Directory.expect(
-			await std.phases.build({
+			await std.phases.run({
 				command: { host: hostSystem },
 				phases: { build: script },
 				env,
@@ -349,7 +349,7 @@ export const build = async (arg: BuildArg) => {
 
 	// Build and return.
 	return tg.Directory.expect(
-		await std.phases.build({
+		await std.phases.run({
 			env: std.env.arg(env),
 			phases: { prepare, build, install },
 			command: {

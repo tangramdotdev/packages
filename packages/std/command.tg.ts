@@ -5,118 +5,142 @@ import * as bootstrap from "./bootstrap.tg.ts";
 export function $(
 	strings: TemplateStringsArray,
 	...placeholders: std.args.UnresolvedArgs<tg.Template.Arg>
-): CommandBuilder {
-	const script = tg(strings, ...std.flatten(placeholders));
-	const executable = std.utils.bash
-		.build({ sdk: false, env: std.sdk() })
-		.then((dir) => dir.get("bin/bash"))
-		.then(tg.File.expect);
-	let args = ["-c", script];
-	return new CommandBuilder()
-		.executable(executable)
-		.args(args)
-		.disallowUnset(true)
-		.exitOnErr(true)
-		.includeUtils(true);
+): Dollar {
+	return new Dollar(strings, placeholders);
 }
 
-class CommandBuilder {
-	#args?: Array<tg.Unresolved<tg.Value>>;
-	#checksum?: tg.Checksum | undefined;
-	#disallowUnset: boolean;
-	#env?: std.args.UnresolvedArgs<std.env.Arg>;
-	#executable?: tg.Unresolved<tg.Artifact | undefined>;
-	#exitOnErr: boolean;
-	#includeUtils: boolean;
-	#host?: string;
-	#mounts?: Array<tg.Unresolved<string | tg.Template | tg.Command.Mount>>;
-	#network?: boolean;
-	#pipefail: boolean;
+// FIXME - uncomment cwd.
+// FIXME - split mounts.
 
-	constructor() {
-		this.#disallowUnset = false;
-		this.#exitOnErr = false;
-		this.#includeUtils = false;
-		this.#network = false;
-		this.#pipefail = true;
+/** Helper to construct commands with additional spawn args. */
+class CommandBuilder {
+	protected _args?: Array<tg.Unresolved<tg.Value>>;
+	protected _bootstrap?: boolean; // This prevents any implicit addition of artifacts not supplied by the user directly.
+	protected _checksum?: tg.Checksum | undefined;
+	// protected _cwd?: string | undefined;
+	protected _defaultMount?: boolean;
+	protected _env?: std.args.UnresolvedArgs<std.env.Arg>;
+	protected _executable?: tg.Unresolved<tg.Command.ExecutableArg>;
+	protected _includeUtils: boolean;
+	protected _host?: string;
+	protected _commandMounts?: Array<tg.Command.Mount>;
+	protected _mounts?: Array<tg.Process.Mount>;
+	protected _network: boolean;
+
+	constructor(arg?: tg.Process.SpawnArgObject) {
+		this._bootstrap = false;
+		this._defaultMount = true;
+		this._includeUtils = false;
+		this._network = false;
+
+		if (arg !== undefined) {
+			if (arg.command !== undefined) {
+				const command = arg.command as tg.Command.Object;
+				if (command.args !== undefined) {
+					this._args = command.args;
+				}
+				if (command.env !== undefined) {
+					this.env(command.env as std.env.Arg);
+				}
+				if (command.executable !== undefined) {
+					this._executable = command.executable;
+				}
+				if (command.host !== undefined) {
+					this._host = command.host;
+				}
+			}
+			if (arg.checksum !== undefined) {
+				this._checksum = arg.checksum;
+			}
+			if (arg.env !== undefined) {
+				this.env(arg.env as std.env.Arg);
+			}
+			if (arg.executable !== undefined) {
+				this._executable = arg.executable;
+			}
+			if (arg.host !== undefined) {
+				this._host = arg.host;
+			}
+			// if (arg.cwd !== undefined) {
+			// 	this.#cwd = arg.cwd;
+			// }
+			if (arg.mounts !== undefined) {
+				this._mounts = arg.mounts;
+			}
+			if (arg.network !== undefined) {
+				this._network = arg.network;
+			}
+		}
 	}
 
 	args(...args: Array<tg.Unresolved<tg.Value>>): CommandBuilder {
 		if (args.length > 0) {
-			if (this.#args === undefined) {
-				this.#args = [];
+			if (this._args === undefined) {
+				this._args = [];
 			}
-			this.#args.push(...args);
+			this._args.push(...args);
 		}
 		return this;
 	}
 
 	async build(): Promise<tg.Value> {
-		return await std.build(await this.command(), {
-			checksum: this.#checksum,
-			network: this.#network,
+		return await tg.build(await this.command(), {
+			checksum: this._checksum,
+			network: this._network,
 		});
 	}
 
 	checksum(checksum: tg.Checksum | undefined): CommandBuilder {
-		this.#checksum = checksum;
+		this._checksum = checksum;
 		return this;
 	}
 
-	disallowUnset(bool: boolean): CommandBuilder {
-		this.#disallowUnset = bool;
-		return this;
-	}
+	// cwd(cwd: string | undefined): CommandBuilder {
+	// 	this.#cwd = cwd;
+	// 	return this;
+	// }
 
 	env(...envArgs: std.args.UnresolvedArgs<std.env.Arg>): CommandBuilder {
-		this.#env = std.flatten([this.#env, ...envArgs]);
+		this._env = std.flatten([this._env, ...envArgs]);
 		return this;
 	}
 
 	executable(executable: tg.Unresolved<tg.Artifact>): CommandBuilder {
-		this.#executable = executable;
-		return this;
-	}
-
-	exitOnErr(bool: boolean): CommandBuilder {
-		this.#exitOnErr = bool;
+		this._executable = executable;
 		return this;
 	}
 
 	host(host: string): CommandBuilder {
-		this.#host = host;
+		this._host = host;
 		return this;
 	}
 
 	includeUtils(bool: boolean): CommandBuilder {
-		this.#includeUtils = bool;
+		this._includeUtils = bool;
 		return this;
 	}
 
 	mount(
-		m: tg.Unresolved<string | tg.Template | tg.Command.Mount>,
+		m: tg.Unresolved<
+			string | tg.Template | tg.Command.Mount | tg.Process.Mount
+		>,
 	): CommandBuilder {
-		if (this.#mounts === undefined) {
-			this.#mounts = [];
+		if (this._mounts === undefined) {
+			this._mounts = [];
 		}
-		this.#mounts.push(m);
+		this._mounts.push(m);
 		return this;
 	}
 
 	network(bool: boolean): CommandBuilder {
-		this.#network = bool;
-		return this;
-	}
-
-	pipefail(bool: boolean): CommandBuilder {
-		this.#pipefail = bool;
+		this._network = bool;
 		return this;
 	}
 
 	async run(): Promise<tg.Value> {
 		return await tg.run(this.command(), {
-			checksum: this.#checksum,
-			network: this.#network,
+			checksum: this._checksum,
+			network: this._network,
 		});
 	}
 
@@ -124,15 +148,164 @@ class CommandBuilder {
 		const arg: tg.Command.ArgObject = {};
 
 		// Construct the executable.
-		if (this.#executable !== undefined) {
+		if (this._executable !== undefined) {
 			// If the user specified a custom executable, use that.
-			arg.executable = await tg.resolve(this.#executable);
+			arg.executable = await tg.resolve(this._executable);
+		}
+
+		// Construct the args.
+		arg.args = [];
+		if (this._args !== undefined) {
+			arg.args.push(
+				...(await Promise.all(
+					this._args.map(async (a) => await tg.resolve(a)),
+				)),
+			);
+		}
+
+		// Construct the env.
+		if (this._includeUtils) {
+			const utilsEnv = std.utils.env({
+				sdk: false,
+				env: std.sdk(),
+				host: arg.host,
+			});
+			if (this._env !== undefined) {
+				arg.env = await std.env.arg(utilsEnv, this._env);
+			} else {
+				arg.env = await utilsEnv;
+			}
 		} else {
-			// Otherwise, use the default bash executable from the standard utils.
-			arg.executable = await std.utils.bash
-				.build({ sdk: false, env: std.sdk(), host: arg.host })
-				.then((dir) => dir.get("bin/bash"))
-				.then(tg.File.expect);
+			if (this._env !== undefined) {
+				arg.env = await std.env.arg(this._env);
+			}
+		}
+
+		// Set host.
+		if (this._host !== undefined) {
+			arg.host = this._host;
+		} else {
+			arg.host = await std.triple.host();
+		}
+
+		// // Set cwd.
+		// if (this.#cwd !== undefined) {
+		// 	arg.cwd = this.#cwd;
+		// }
+
+		// Set mounts.
+		if (this._defaultMount) {
+			const defaultMount_ = await defaultMount(arg.host);
+			if (defaultMount_ !== undefined) {
+				this.mount(defaultMount_);
+			}
+		}
+		if (this._mounts !== undefined) {
+			arg.mounts = await Promise.all(
+				this._mounts.map(async (m) => await tg.resolve(m)),
+			);
+		}
+
+		return await tg.command(arg);
+	}
+
+	then<TResult1 = tg.Value, TResult2 = never>(
+		onfulfilled?:
+			| ((value: tg.Value) => TResult1 | PromiseLike<TResult1>)
+			| undefined
+			| null,
+		onrejected?:
+			| ((reason: any) => TResult2 | PromiseLike<TResult2>)
+			| undefined
+			| null,
+	): PromiseLike<TResult1 | TResult2> {
+		return this.run().then(onfulfilled, onrejected);
+	}
+}
+
+/** Specialized command builder to specifically aid in producing shell commands. */
+class Dollar extends CommandBuilder {
+	#disallowUnset: boolean;
+	#exitOnErr: boolean;
+	#pipefail: boolean;
+	#placeholders: std.args.UnresolvedArgs<tg.Template.Arg>;
+	#strings: TemplateStringsArray;
+
+	constructor(
+		strings: TemplateStringsArray,
+		...placeholders: std.args.UnresolvedArgs<tg.Template.Arg>
+	) {
+		super();
+		this.includeUtils(true);
+		this.#strings = strings;
+		this.#placeholders = placeholders;
+		this.#disallowUnset = true;
+		this.#exitOnErr = true;
+		this.#pipefail = true;
+	}
+
+	disallowUnset(bool: boolean): Dollar {
+		this.#disallowUnset = bool;
+		return this;
+	}
+
+	exitOnErr(bool: boolean): Dollar {
+		this.#exitOnErr = bool;
+		return this;
+	}
+
+	pipefail(bool: boolean): Dollar {
+		this.#pipefail = bool;
+		return this;
+	}
+
+	async command(): Promise<tg.Command> {
+		const arg: tg.Command.ArgObject = {};
+
+		// Set host.
+		if (this._host !== undefined) {
+			arg.host = this._host;
+		} else {
+			arg.host = await std.triple.host();
+		}
+
+		// Construct the env.
+		if (this._includeUtils) {
+			const utilsEnv = std.utils.env({
+				sdk: false,
+				env: std.sdk(),
+				host: arg.host,
+			});
+			if (this._env !== undefined) {
+				arg.env = await std.env.arg(utilsEnv, this._env);
+			} else {
+				arg.env = await utilsEnv;
+			}
+		} else {
+			if (this.env !== undefined) {
+				arg.env = await std.env.arg(this._env);
+			}
+		}
+
+		// Construct the executable.
+		if (this._executable !== undefined) {
+			// If the user specified a custom executable, use that.
+			arg.executable = await tg.resolve(this._executable);
+		} else {
+			// If the env has the SHELL key set to an artifact, use that.
+			const shellArtifact = await std.env.tryGetArtifactByKey({
+				env: arg.env,
+				key: "SHELL",
+			});
+			if (shellArtifact !== undefined) {
+				arg.executable = shellArtifact;
+			} else {
+				// Otherwise, use the default bash executable from the standard utils.
+				arg.executable = await std.utils.bash
+					.build({ sdk: false, env: std.sdk(), host: arg.host })
+					.then((dir) => dir.get("bin/bash"))
+					.then(tg.File.expect);
+			}
 		}
 
 		// Construct the args.
@@ -147,43 +320,24 @@ class CommandBuilder {
 			arg.args.push("-o");
 			arg.args.push("pipefail");
 		}
-		if (this.#args !== undefined) {
-			arg.args.push(
-				...(await Promise.all(
-					this.#args.map(async (a) => await tg.resolve(a)),
-				)),
-			);
-		}
+		arg.args.push("-c");
+		arg.args.push(await tg(this.#strings, ...std.flatten(this.#placeholders)));
 
-		// Construct the env.
-		if (this.#includeUtils) {
-			const utilsEnv = std.utils.env({
-				sdk: false,
-				env: std.sdk(),
-				host: arg.host,
-			});
-			if (this.#env !== undefined) {
-				arg.env = await std.env.arg(utilsEnv, this.#env);
-			} else {
-				arg.env = await utilsEnv;
-			}
-		} else {
-			if (this.#env !== undefined) {
-				arg.env = await std.env.arg(this.#env);
+		// // Set cwd.
+		// if (this.#cwd !== undefined) {
+		// 	arg.cwd = this.#cwd;
+		// }
+
+		// Set mounts.
+		if (this._defaultMount) {
+			const defaultMount_ = await defaultMount(arg.host);
+			if (defaultMount_ !== undefined) {
+				this.mount(defaultMount_);
 			}
 		}
-
-		// Set remaining fields.
-		if (this.#host !== undefined) {
-			arg.host = this.#host;
-		} else {
-			arg.host = await std.triple.host();
-		}
-
-		// Mounts
-		if (this.#mounts !== undefined) {
+		if (this._mounts !== undefined) {
 			arg.mounts = await Promise.all(
-				this.#mounts.map(async (m) => await tg.resolve(m)),
+				this._mounts.map(async (m) => await tg.resolve(m)),
 			);
 		}
 
@@ -205,32 +359,37 @@ class CommandBuilder {
 }
 
 /** Wrapper for tg.command that includes the default mounts. */
-export const command_ = async (
-	...args: std.Args<tg.Command.Arg>
-): Promise<tg.Command> => {
-	const commandArg_ = await commandArg(...args);
-	tg.assert(commandArg_, "spawn args must include a command");
-	const orig = await tg.command(commandArg_);
-	const mountArg = defaultMountArg(await orig.host());
-	return tg.command(orig, mountArg);
+export const command = async (
+	...args: std.Args<tg.Process.SpawnArg>
+): Promise<CommandBuilder> => {
+	const arg = await processArg(...args);
+	return new CommandBuilder(arg);
 };
 
 /** Wrapper around tg.build that attaches the default mount to commands. */
 export const build = async (
 	...args: std.Args<tg.Process.SpawnArg>
 ): Promise<tg.Value> => {
-	const { command: commandArg, ...arg } = await processArg(...args);
-	tg.assert(commandArg, "spawn args must include a command");
-	const command__ = await command_(commandArg);
-	return tg.build(command__, arg);
+	const arg = await processArg(...args);
+	const commandBuilder = new CommandBuilder(arg);
+	return await commandBuilder.build();
+};
+
+/** Wrapper around tg.run that attaches the default mount to commands. */
+export const run = async (
+	...args: std.Args<tg.Process.SpawnArg>
+): Promise<tg.Value> => {
+	const arg = await processArg(...args);
+	const commandBuilder = new CommandBuilder(arg);
+	return await commandBuilder.run();
 };
 
 /** Wrap a command with a default mount if the host is linux. For darwin, does not change the command. */
-export const defaultMountArg = tg.command(
-	async (host: string): Promise<tg.Command.Arg> => {
+export const defaultMount = tg.command(
+	async (host: string): Promise<tg.Command.Mount | undefined> => {
 		const os = std.triple.os(host);
 		if (os === "darwin") {
-			return {};
+			return undefined;
 		} else if (os === "linux") {
 			const shellExe = bootstrap
 				.shell(host)
@@ -244,9 +403,8 @@ export const defaultMountArg = tg.command(
 				[`bin/sh`]: shellExe,
 				[`usr/bin/env`]: envExe,
 			});
-			return {
-				mounts: [await tg`${root}:/`],
-			};
+			const mountArg = await tg`${root}:/`;
+			return await tg.Command.Mount.parse(mountArg);
 		} else {
 			return tg.unreachable(`unexpected OS ${os}`);
 		}
@@ -285,40 +443,6 @@ export const processArg = async (
 		env: "append",
 	});
 	const arg = await applyMutations(mutations);
-	return arg;
-};
-
-export const commandArg = async (
-	...args: std.Args<tg.Command.Arg>
-): Promise<tg.Command.ArgObject> => {
-	let resolved = await Promise.all(args.map(tg.resolve));
-	let flattened = std.flatten(resolved);
-	let objects = await Promise.all(
-		flattened.map(async (arg) => {
-			if (arg === undefined) {
-				return {};
-			} else if (
-				typeof arg === "string" ||
-				tg.Artifact.is(arg) ||
-				arg instanceof tg.Template
-			) {
-				return {
-					args: ["-c", arg],
-					executable: "/bin/sh",
-					host: await std.triple.host(),
-				};
-			} else if (arg instanceof tg.Command) {
-				return await arg.object();
-			} else {
-				return arg;
-			}
-		}),
-	);
-	let mutations = await createMutations(objects, {
-		args: "append",
-		env: "append",
-	});
-	let arg = await applyMutations(mutations);
 	return arg;
 };
 

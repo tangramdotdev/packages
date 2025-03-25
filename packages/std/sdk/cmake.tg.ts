@@ -338,7 +338,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		(arg): arg is std.phases.Arg => arg !== undefined,
 	);
 	return await std.phases
-		.build(
+		.run(
 			{
 				debug,
 				phases: defaultPhases,

@@ -3,7 +3,7 @@ export { type Args } from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
-export { build, $, command_ as command } from "./command.tg.ts";
+export { $, build, command, run } from "./command.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
 export { download } from "./download.tg.ts";
