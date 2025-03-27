@@ -9,26 +9,21 @@ export function $(
 	return new Dollar(strings, placeholders);
 }
 
-// FIXME - uncomment cwd.
-// FIXME - split mounts.
-
 /** Helper to construct commands with additional spawn args. */
 class CommandBuilder {
 	protected _args?: Array<tg.Unresolved<tg.Value>>;
-	protected _bootstrap?: boolean; // This prevents any implicit addition of artifacts not supplied by the user directly.
 	protected _checksum?: tg.Checksum | undefined;
-	// protected _cwd?: string | undefined;
+	protected _cwd?: string | undefined;
 	protected _defaultMount?: boolean;
-	protected _env?: std.args.UnresolvedArgs<std.env.Arg>;
+	protected _env?: Array<tg.Unresolved<std.env.Arg>>;
 	protected _executable?: tg.Unresolved<tg.Command.ExecutableArg>;
 	protected _includeUtils: boolean;
 	protected _host?: string;
 	protected _commandMounts?: Array<tg.Command.Mount>;
-	protected _mounts?: Array<tg.Process.Mount>;
+	protected _mounts?: Array<string | tg.Template | tg.Process.Mount>;
 	protected _network: boolean;
 
-	constructor(arg?: tg.Process.SpawnArgObject) {
-		this._bootstrap = false;
+	constructor(arg?: tg.Process.RunArgObject) {
 		this._defaultMount = true;
 		this._includeUtils = false;
 		this._network = false;
@@ -61,11 +56,11 @@ class CommandBuilder {
 			if (arg.host !== undefined) {
 				this._host = arg.host;
 			}
-			// if (arg.cwd !== undefined) {
-			// 	this.#cwd = arg.cwd;
-			// }
+			if (arg.cwd !== undefined) {
+				this._cwd = arg.cwd;
+			}
 			if (arg.mounts !== undefined) {
-				this._mounts = arg.mounts;
+				this.mount(...arg.mounts);
 			}
 			if (arg.network !== undefined) {
 				this._network = arg.network;
@@ -84,6 +79,7 @@ class CommandBuilder {
 	}
 
 	async build(): Promise<tg.Value> {
+		// FIXME - process mounts
 		return await tg.build(await this.command(), {
 			checksum: this._checksum,
 			network: this._network,
@@ -95,17 +91,23 @@ class CommandBuilder {
 		return this;
 	}
 
-	// cwd(cwd: string | undefined): CommandBuilder {
-	// 	this.#cwd = cwd;
-	// 	return this;
-	// }
-
-	env(...envArgs: std.args.UnresolvedArgs<std.env.Arg>): CommandBuilder {
-		this._env = std.flatten([this._env, ...envArgs]);
+	cwd(cwd: string | undefined): CommandBuilder {
+		this._cwd = cwd;
 		return this;
 	}
 
-	executable(executable: tg.Unresolved<tg.Artifact>): CommandBuilder {
+	env(...envArgs: Array<tg.Unresolved<std.env.Arg>>): CommandBuilder {
+		if (this._env === undefined) {
+			this._env = envArgs;
+		} else {
+			this._env.push(...envArgs);
+		}
+		return this;
+	}
+
+	executable(
+		executable: tg.Unresolved<tg.Command.ExecutableArg>,
+	): CommandBuilder {
 		this._executable = executable;
 		return this;
 	}
@@ -121,14 +123,28 @@ class CommandBuilder {
 	}
 
 	mount(
-		m: tg.Unresolved<
-			string | tg.Template | tg.Command.Mount | tg.Process.Mount
-		>,
+		...mounts: Array<string | tg.Template | tg.Command.Mount | tg.Process.Mount>
 	): CommandBuilder {
-		if (this._mounts === undefined) {
-			this._mounts = [];
+		for (const mount of mounts) {
+			if (typeof mount === "string" || mount instanceof tg.Template) {
+				if (this._mounts === undefined) {
+					this._mounts = [];
+				}
+				this._mounts.push(mount);
+			} else {
+				if ("readonly" in mount) {
+					if (this._mounts === undefined) {
+						this._mounts = [];
+					}
+					this._mounts.push(mount);
+				} else {
+					if (this._commandMounts === undefined) {
+						this._commandMounts = [];
+					}
+					this._commandMounts.push(mount);
+				}
+			}
 		}
-		this._mounts.push(m);
 		return this;
 	}
 
@@ -138,6 +154,7 @@ class CommandBuilder {
 	}
 
 	async run(): Promise<tg.Value> {
+		// FIXME - process mounts
 		return await tg.run(this.command(), {
 			checksum: this._checksum,
 			network: this._network,
@@ -188,10 +205,10 @@ class CommandBuilder {
 			arg.host = await std.triple.host();
 		}
 
-		// // Set cwd.
-		// if (this.#cwd !== undefined) {
-		// 	arg.cwd = this.#cwd;
-		// }
+		// Set cwd.
+		if (this._cwd !== undefined) {
+			arg.cwd = this._cwd;
+		}
 
 		// Set mounts.
 		if (this._defaultMount) {
@@ -200,10 +217,9 @@ class CommandBuilder {
 				this.mount(defaultMount_);
 			}
 		}
-		if (this._mounts !== undefined) {
-			arg.mounts = await Promise.all(
-				this._mounts.map(async (m) => await tg.resolve(m)),
-			);
+
+		if (this._commandMounts !== undefined) {
+			arg.mounts = this._commandMounts;
 		}
 
 		return await tg.command(arg);
@@ -294,7 +310,7 @@ class Dollar extends CommandBuilder {
 		} else {
 			// If the env has the SHELL key set to an artifact, use that.
 			const shellArtifact = await std.env.tryGetArtifactByKey({
-				env: arg.env,
+				env: arg.env as std.env.Arg,
 				key: "SHELL",
 			});
 			if (shellArtifact !== undefined) {
@@ -323,10 +339,10 @@ class Dollar extends CommandBuilder {
 		arg.args.push("-c");
 		arg.args.push(await tg(this.#strings, ...std.flatten(this.#placeholders)));
 
-		// // Set cwd.
-		// if (this.#cwd !== undefined) {
-		// 	arg.cwd = this.#cwd;
-		// }
+		// Set cwd.
+		if (this._cwd !== undefined) {
+			arg.cwd = this._cwd;
+		}
 
 		// Set mounts.
 		if (this._defaultMount) {
@@ -335,10 +351,8 @@ class Dollar extends CommandBuilder {
 				this.mount(defaultMount_);
 			}
 		}
-		if (this._mounts !== undefined) {
-			arg.mounts = await Promise.all(
-				this._mounts.map(async (m) => await tg.resolve(m)),
-			);
+		if (this._commandMounts !== undefined) {
+			arg.mounts = this._commandMounts;
 		}
 
 		return await tg.command(arg);
@@ -360,7 +374,7 @@ class Dollar extends CommandBuilder {
 
 /** Wrapper for tg.command that includes the default mounts. */
 export const command = async (
-	...args: std.Args<tg.Process.SpawnArg>
+	...args: std.Args<tg.Process.RunArg>
 ): Promise<CommandBuilder> => {
 	const arg = await processArg(...args);
 	return new CommandBuilder(arg);
@@ -368,7 +382,7 @@ export const command = async (
 
 /** Wrapper around tg.build that attaches the default mount to commands. */
 export const build = async (
-	...args: std.Args<tg.Process.SpawnArg>
+	...args: std.Args<tg.Process.RunArg>
 ): Promise<tg.Value> => {
 	const arg = await processArg(...args);
 	const commandBuilder = new CommandBuilder(arg);
@@ -377,7 +391,7 @@ export const build = async (
 
 /** Wrapper around tg.run that attaches the default mount to commands. */
 export const run = async (
-	...args: std.Args<tg.Process.SpawnArg>
+	...args: std.Args<tg.Process.RunArg>
 ): Promise<tg.Value> => {
 	const arg = await processArg(...args);
 	const commandBuilder = new CommandBuilder(arg);
@@ -413,8 +427,8 @@ export const defaultMount = tg.command(
 
 /** Process a set of spawn args. */
 export const processArg = async (
-	...args: std.Args<tg.Process.SpawnArg>
-): Promise<tg.Process.SpawnArgObject> => {
+	...args: std.Args<tg.Process.RunArg>
+): Promise<tg.Process.RunArgObject> => {
 	const resolved = await Promise.all(args.map(tg.resolve));
 	const flattened = std.flatten(resolved);
 	const objects = await Promise.all(

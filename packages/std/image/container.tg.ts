@@ -21,6 +21,8 @@ import zstd from "../sdk/dependencies/zstd.tg.ts";
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
 export type ArgObject = (ExecutableArg | RootFsArg) & {
+	/** The toolchain to use for any intermediate build processes. */
+	buildToolchain?: std.env.Arg;
 	/** The format for the container image, docker or OCI. Default: docker */
 	format?: ImageFormat;
 	/** The compression type to use for the image layers. Default: "zstd". */
@@ -50,6 +52,7 @@ type RootFsArg = {
 export const image = tg.command(
 	async (...args: std.Args<Arg>): Promise<tg.File> => {
 		type CombinedArgObject = {
+			buildToolchain?: std.env.Arg;
 			cmdString?: Array<string>;
 			format?: ImageFormat;
 			entrypointArtifact?: std.wrap.Arg;
@@ -93,6 +96,9 @@ export const image = tg.command(
 					};
 				} else {
 					const object: std.args.MaybeMutationMap<CombinedArgObject> = {};
+					if ("buildToolchain" in arg && arg.buildToolchain !== undefined) {
+						object.buildToolchain = arg.buildToolchain;
+					}
 					if ("executable" in arg && arg.executable !== undefined) {
 						object.entrypointArtifact = arg.executable;
 					}
@@ -126,6 +132,7 @@ export const image = tg.command(
 				"entrypointArtifact" | "rootDir"
 			>
 		>(objectArgs, {
+			buildToolchain: "set",
 			cmdString: "set",
 			format: "set",
 			entrypointArtifact: "append",
@@ -135,6 +142,7 @@ export const image = tg.command(
 			system: "set",
 		});
 		let {
+			buildToolchain,
 			cmdString = [],
 			format = "docker",
 			entrypointArtifact: entrypointArtifact_,
@@ -157,7 +165,10 @@ export const image = tg.command(
 			const entrypointArtifactArgs = entrypointArtifact_.filter(
 				(arg) => arg !== undefined,
 			) as Array<std.wrap.Arg>;
-			entrypointArtifact = await std.wrap(...entrypointArtifactArgs);
+			entrypointArtifact = await std.wrap(
+				{ buildToolchain },
+				...entrypointArtifactArgs,
+			);
 		}
 
 		// Verify that the arguments supplied are correct.
@@ -196,7 +207,12 @@ export const image = tg.command(
 		if (format === "docker") {
 			return dockerImageFromLayers(config, ...layers);
 		} else if (format === "oci") {
-			return ociImageFromLayers(config, layerCompression, ...layers);
+			return ociImageFromLayers(
+				buildToolchain,
+				config,
+				layerCompression,
+				...layers,
+			);
 		} else {
 			throw new Error(`Unsupported image format: ${format}`);
 		}
@@ -273,6 +289,7 @@ export const dockerImageFromLayers = async (
 };
 
 export const ociImageFromLayers = async (
+	buildToolchain: std.env.Arg | undefined,
 	config: ImageConfigV1,
 	layerCompression: "gzip" | "zstd",
 	...layers: Array<Layer>
@@ -310,14 +327,20 @@ export const ociImageFromLayers = async (
 		layerCompression === "gzip"
 			? MediaTypeV1.imageLayerTarGzip
 			: MediaTypeV1.imageLayerTarZstd;
-	const additionalEnv: tg.Unresolved<Array<std.env.Arg>> = [
-		std.utils.env({ sdk: false, env: bootstrap.sdk() }),
-	];
+	const additionalEnv: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (buildToolchain === undefined) {
+		additionalEnv.push(
+			bootstrap.sdk(),
+			std.utils.env({ sdk: false, env: bootstrap.sdk() }),
+		);
+	} else {
+		additionalEnv.push(buildToolchain);
+	}
 	if (layerCompression === "zstd") {
 		additionalEnv.push(
 			zstd({
 				sdk: false,
-				env: await std.env.arg(additionalEnv, bootstrap.sdk()),
+				env: await std.env.arg(additionalEnv),
 			}),
 		);
 	}
@@ -406,7 +429,9 @@ export type Layer = {
 export const layer = tg.command(
 	async (directory: tg.Directory): Promise<Layer> => {
 		const bundle = tg.Artifact.bundle(directory).then(tg.Directory.expect);
+		console.log("bundle", await (await bundle).id());
 		const tarball = await createTarball(bundle);
+		console.log("layer", await tarball.id());
 		const bytes = await tarball.bytes();
 		const diffId = await tg.checksum(bytes, "sha256");
 		return { tarball, diffId };

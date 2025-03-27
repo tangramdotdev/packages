@@ -221,11 +221,11 @@ export const test = tg.command(async () => {
 			? libiconv({ host, sdk: false, env: sdk })
 			: attr({ host, sdk: false, env: sdk });
 	const output = tg.File.expect(
-		await (
+		await std.build(
 			await tg.command(script, {
 				env: std.env.arg(platformSupportLib, coreutils),
 			})
-		).build(),
+		),
 	);
 
 	const contents = (await output.text()).trim();
