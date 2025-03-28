@@ -224,7 +224,7 @@ export const test = tg.command(async () => {
 		await std.build(
 			await tg.command(script, {
 				env: std.env.arg(platformSupportLib, coreutils),
-			})
+			}),
 		),
 	);
 

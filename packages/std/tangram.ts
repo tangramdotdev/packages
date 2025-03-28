@@ -217,12 +217,3 @@ const validateTestNames = (...testNames: Array<string>) => {
 	}
 	return [...uniqueTests];
 };
-
-export const testBasicWrapper = async () => {
-	const bash = await utils.bash.build({ sdk: false, env: bootstrap.sdk() });
-	console.log("bash pre-bundle", await bash.id());
-	const bashExe = await make.get("bin/make").then(tg.File.expect);
-	console.log("pre-bundle bash exe", await bashExe.id()); // missing dependency!
-	const bundle = await tg.Artifact.bundle(bash).then(tg.Directory.expect);
-	return bundle;
-}
