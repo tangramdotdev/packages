@@ -600,7 +600,7 @@ export const test = tg.command(async () => {
 				}),
 			},
 		)
-		.then((c) => c.build())
+		.then((c) => std.build(c))
 		.then(tg.Directory.expect);
 
 	// Obtain the output files.

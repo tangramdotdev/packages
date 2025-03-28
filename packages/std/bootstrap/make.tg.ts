@@ -47,7 +47,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 
 	return std.autotools.build({
-		env: sdk(host),
+		env: std.env.arg(sdk(host)),
 		host,
 		opt: "s",
 		phases,

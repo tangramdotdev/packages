@@ -86,10 +86,11 @@ export const build = tg.command(async (arg?: Arg) => {
 			}),
 		);
 	}
-	const env = [env_, ...dependencies];
+	const env = [...dependencies, { FORCE_UNSAFE_CONFIGURE: true }];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
 	}
+	env.push(env_);
 
 	const configure = {
 		args: [
@@ -220,11 +221,11 @@ export const test = tg.command(async () => {
 			? libiconv({ host, sdk: false, env: sdk })
 			: attr({ host, sdk: false, env: sdk });
 	const output = tg.File.expect(
-		await (
+		await std.build(
 			await tg.command(script, {
 				env: std.env.arg(platformSupportLib, coreutils),
-			})
-		).build(),
+			}),
+		),
 	);
 
 	const contents = (await output.text()).trim();

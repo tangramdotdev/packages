@@ -92,7 +92,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		);
 	}
 
-	const env = [...dependencies, env_];
+	const env = [...dependencies, { FORCE_UNSAFE_CONFIGURE: true }, env_];
 
 	return std.autotools.build(
 		{

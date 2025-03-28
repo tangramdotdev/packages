@@ -3,9 +3,9 @@ export { type Args } from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
+export { $, build, command, run } from "./command.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
-export { $ } from "./dollar.tg.ts";
 export { download } from "./download.tg.ts";
 export { env } from "./env.tg.ts";
 export * as file from "./file.tg.ts";
@@ -19,7 +19,7 @@ export { stripProxy } from "./sdk/proxy.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
 import caCertificates from "./certificates.tg.ts";
-import * as dollar from "./dollar.tg.ts";
+import * as command from "./command.tg.ts";
 import * as download from "./download.tg.ts";
 import * as env from "./env.tg.ts";
 import * as file from "./file.tg.ts";
@@ -38,10 +38,10 @@ export const metadata = {
 };
 
 /** The default export produces the default SDK env for the detected host, asserts its validity, and returns the env. */
-export const build = tg.command(() => {
+export const default_ = tg.command(() => {
 	return sdk.testDefault();
 });
-export default build;
+export default default_;
 
 export const flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
 	if (value instanceof Array) {
@@ -159,11 +159,14 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		crossWorkspace: workspace.testCross,
 		imageWrappedEntrypoint: image.testWrappedEntrypoint,
 		imageBasicRootfs: image.testBasicRootfs,
+		imageBootstrapEnv: image.testBootstrapEnv,
+		imageBootstrapEnvImageDocker: image.testBootstrapEnvImageDocker,
+		imageBootstrapEnvImageOci: image.testBootstrapEnvImageOci,
 		imageBasicEnv: image.testBasicEnv,
 		imageBasicEnvImageDocker: image.testBasicEnvImageDocker,
 		imageBasicEnvImageOci: image.testBasicEnvImageOci,
 		image: image.test,
-		dollar: dollar.test,
+		dollar: command.testDollar,
 	};
 };
 

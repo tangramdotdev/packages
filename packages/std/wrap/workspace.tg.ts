@@ -75,11 +75,11 @@ export const rust = tg.command(
 		const hostSystem = std.triple.archAndOs(host);
 
 		// Download and parse the Rust manifest for the selected version.
-		const version = "1.85.0";
+		const version = "1.85.1";
 		const manifestFile = await tg.file(
 			await tg.download(
 				`https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
-				"sha256:009e8b5ff43f12bf644b5e5b9fd89f96453072062a450c623882f64e85405da5",
+				"sha256:1e7dae690cd12e27405a97e64704917489a27c650201bf47780a936055d67909",
 			),
 		);
 		tg.assert(manifestFile instanceof tg.File);
@@ -128,7 +128,7 @@ export const rust = tg.command(
 		const env = bootstrap.sdk.env(host);
 
 		return tg.Directory.expect(
-			await std.phases.build({
+			await std.phases.run({
 				command: { host: hostSystem },
 				phases: { build: script },
 				env,
@@ -303,7 +303,7 @@ export const build = async (arg: BuildArg) => {
 	}
 
 	// Define phases.
-	const prepare = tg`	
+	const prepare = tg`
 		export CARGO_HOME=$PWD/cargo_home
 		mkdir -p $CARGO_HOME
 
@@ -349,7 +349,7 @@ export const build = async (arg: BuildArg) => {
 
 	// Build and return.
 	return tg.Directory.expect(
-		await std.phases.build({
+		await std.phases.run({
 			env: std.env.arg(env),
 			phases: { prepare, build, install },
 			command: {

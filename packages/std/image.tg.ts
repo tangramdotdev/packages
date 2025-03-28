@@ -20,8 +20,8 @@ export const test = tg.command(async () => {
 	const tests = [
 		testWrappedEntrypoint(),
 		testBasicRootfs(),
-		testBasicEnvImageDocker(),
-		testBasicEnvImageOci(),
+		testBootstrapEnvImageDocker(),
+		testBootstrapEnvImageOci(),
 	];
 	await Promise.all(tests);
 	return true;
@@ -49,6 +49,39 @@ export const testBasicRootfs = tg.command(async () => {
 	return imageFile;
 });
 
+export const testBootstrapEnv = tg.command(async () => {
+	const utils = await bootstrap.utils();
+	const basicEnv = await std.env(utils, { NAME: "Tangram" }, { utils: false });
+	return basicEnv;
+});
+
+export const testBootstrapEnvImageDocker = tg.command(async () => {
+	const basicEnv = await testBootstrapEnv();
+	const buildToolchain = await std.env.arg(
+		bootstrap.sdk(),
+		bootstrap.make.build(),
+	);
+	const imageFile = await image(basicEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+	});
+	return imageFile;
+});
+
+export const testBootstrapEnvImageOci = tg.command(async () => {
+	const basicEnv = await testBootstrapEnv();
+	const buildToolchain = await std.env.arg(
+		bootstrap.sdk(),
+		bootstrap.make.build(),
+	);
+	const imageFile = await image(basicEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		format: "oci",
+	});
+	return imageFile;
+});
+
 export const testBasicEnv = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	const host = bootstrap.toolchainTriple(detectedHost);
@@ -59,7 +92,12 @@ export const testBasicEnv = tg.command(async () => {
 
 export const testBasicEnvImageDocker = tg.command(async () => {
 	const basicEnv = await testBasicEnv();
+	const buildToolchain = await std.env.arg(
+		bootstrap.sdk(),
+		bootstrap.make.build(),
+	);
 	const imageFile = await image(basicEnv, {
+		buildToolchain,
 		cmd: ["bash"],
 	});
 	return imageFile;
@@ -67,7 +105,12 @@ export const testBasicEnvImageDocker = tg.command(async () => {
 
 export const testBasicEnvImageOci = tg.command(async () => {
 	const basicEnv = await testBasicEnv();
+	const buildToolchain = await std.env.arg(
+		bootstrap.sdk(),
+		bootstrap.make.build(),
+	);
 	const imageFile = await image(basicEnv, {
+		buildToolchain,
 		cmd: ["bash"],
 		format: "oci",
 	});

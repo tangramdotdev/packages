@@ -2248,7 +2248,7 @@ export const testSingleArgObjectNoMutations = tg.command(async () => {
 	// Check the output matches the expected output.
 	const output = await tg
 		.command(tg`${wrapper} > $OUTPUT`)
-		.then((command) => command.build())
+		.then((command) => std.build(command))
 		.then(tg.File.expect);
 	const text = await output.text();
 	console.log("text", text);
@@ -2310,7 +2310,7 @@ export const testContentExecutable = tg.command(async () => {
 		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((command) => command.build())
+		.then((command) => std.build(command))
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
@@ -2334,7 +2334,7 @@ export const testContentExecutableVariadic = tg.command(async () => {
 		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((command) => command.build())
+		.then((command) => std.build(command))
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);

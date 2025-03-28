@@ -48,7 +48,7 @@ export type CommandArgObject = {
 		| undefined;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const run = tg.command(async (...args: std.Args<Arg>) => {
 	const objectArgs = await Promise.all(
 		args.map((arg) => {
 			if (arg === undefined) {
@@ -180,7 +180,10 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			...(commandArgs ?? []),
 		);
 	}
-	return await command.build({ checksum, network });
+	if (debug) {
+		console.log("phases.build command", await command.id());
+	}
+	return await std.run(command, { checksum, network });
 });
 
 export type Phases = {
@@ -543,7 +546,7 @@ export const basic = tg.command(async () => {
 		phases,
 	};
 
-	const output = await build(arg).then(tg.File.expect);
+	const output = await run(arg).then(tg.File.expect);
 	const text = await output.text();
 	const expected =
 		"preparing\nconfiguring\nbuilding\nchecking\ninstalling\nfixing up\n";
@@ -574,7 +577,7 @@ export const order = tg.command(async () => {
 		order,
 	};
 
-	const output = await build(arg).then(tg.File.expect);
+	const output = await run(arg).then(tg.File.expect);
 	const text = await output.text();
 	const expected = "fixing up\npreparing\ninstalling\nbuilding\nconfiguring\n";
 	tg.assert(text === expected);
@@ -629,7 +632,7 @@ export const override = tg.command(async () => {
 		phases: overrides,
 	};
 
-	return build(arg1, arg2);
+	return run(arg1, arg2);
 });
 
 export const mutateEnv = tg.command(async () => {
@@ -668,7 +671,7 @@ export const mutateEnv = tg.command(async () => {
 		GOODBYE: tg.Mutation.unset(),
 	});
 
-	return build(
+	return run(
 		{ phases: { build: "env > $OUTPUT" } },
 		{ command: { env: a } },
 		{ command: { env: b } },

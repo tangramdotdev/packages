@@ -515,7 +515,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 					dependencies: false,
 					force: true,
 					lockfile: true,
-					path: Some(output_path),
+					path: Some(output_path.clone()),
 				},
 			)
 			.await?;
