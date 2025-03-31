@@ -86,6 +86,9 @@ export const cmake = tg.command(async (arg?: Arg) => {
 export default cmake;
 
 export type BuildArg = {
+	/** Path to use for the build directory. Default: "build". */
+	buildDir?: string;
+
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
 	debug?: boolean;
 
@@ -159,6 +162,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		source: "set",
 	});
 	const {
+		buildDir = "build",
 		debug = false,
 		defaultCFlags = true,
 		env: userEnv,
@@ -302,6 +306,8 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		`-G`,
 		`"${generator}"`,
 		tg`-DCMAKE_INSTALL_PREFIX=${prefixPath}`,
+		`-B`,
+		buildDir,
 	];
 	const defaultConfigure = {
 		command: `cmake`,
@@ -312,12 +318,12 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	const jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
 	const defaultBuild = {
 		command: `cmake`,
-		args: [`--build`, `.`, jobsArg],
+		args: [`--build`, buildDir, jobsArg],
 	};
 
 	const defaultInstall = {
 		command: `cmake`,
-		args: [`--build`, `.`, `--target`, `install`],
+		args: [`--build`, buildDir, `--target`, `install`],
 	};
 
 	const defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {

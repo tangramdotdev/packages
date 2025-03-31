@@ -152,6 +152,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 export default self;
 
 export type BuildArg = {
+	/** Path to use for the build directory. Default: "build". */
+	buildDir?: string;
+
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
 
@@ -231,6 +234,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		source: "set",
 	});
 	const {
+		buildDir = "build",
 		checksum,
 		debug = false,
 		defaultCFlags = true,
@@ -365,6 +369,8 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		`-G`,
 		`"${generator}"`,
 		tg`-DCMAKE_INSTALL_PREFIX=${prefixPath}`,
+		`-B`,
+		buildDir,
 	];
 	const defaultConfigure = {
 		command: `cmake`,
@@ -375,12 +381,12 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	const jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
 	const defaultBuild = {
 		command: `cmake`,
-		args: [`--build`, `.`, jobsArg],
+		args: [`--build`, buildDir, jobsArg],
 	};
 
 	const defaultInstall = {
 		command: `cmake`,
-		args: [`--build`, `.`, `--target`, `install`],
+		args: [`--build`, buildDir, `--target`, `install`],
 	};
 
 	const defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
