@@ -166,6 +166,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		imageBasicEnvImageDocker: image.testBasicEnvImageDocker,
 		imageBasicEnvImageOci: image.testBasicEnvImageOci,
 		image: image.test,
+		stdBuild: command.testBuild,
 		dollar: command.testDollar,
 	};
 };

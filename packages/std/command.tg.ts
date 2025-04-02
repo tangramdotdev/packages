@@ -44,6 +44,9 @@ class CommandBuilder {
 					this._host = command.host;
 				}
 			}
+			if (arg.args !== undefined) {
+				this._args = arg.args;
+			}
 			if (arg.checksum !== undefined) {
 				this._checksum = arg.checksum;
 			}
@@ -79,7 +82,9 @@ class CommandBuilder {
 	}
 
 	async build(): Promise<tg.Value> {
-		// FIXME - process mounts
+		if (this._mounts !== undefined && this._mounts.length > 0) {
+			throw new Error("cannot build a command with process mounts");
+		}
 		return await tg.build(await this.command(), {
 			checksum: this._checksum,
 			network: this._network,
@@ -154,9 +159,9 @@ class CommandBuilder {
 	}
 
 	async run(): Promise<tg.Value> {
-		// FIXME - process mounts
 		return await tg.run(this.command(), {
 			checksum: this._checksum,
+			mounts: this._mounts,
 			network: this._network,
 		});
 	}
@@ -197,6 +202,10 @@ class CommandBuilder {
 				arg.env = await std.env.arg(this._env);
 			}
 		}
+		let tangramHost = tg.process.env("TANGRAM_HOST") as string;
+		arg.env = await std.env.arg({
+			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
+		});
 
 		// Set host.
 		if (this._host !== undefined) {
@@ -222,7 +231,8 @@ class CommandBuilder {
 			arg.mounts = this._commandMounts;
 		}
 
-		return await tg.command(arg);
+		let command = await tg.command(arg);
+		return command;
 	}
 
 	then<TResult1 = tg.Value, TResult2 = never>(
@@ -302,6 +312,10 @@ class Dollar extends CommandBuilder {
 				arg.env = await std.env.arg(this._env);
 			}
 		}
+		let tangramHost = tg.process.env("TANGRAM_HOST") as string;
+		arg.env = await std.env.arg({
+			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
+		});
 
 		// Construct the executable.
 		if (this._executable !== undefined) {
@@ -458,6 +472,16 @@ export const processArg = async (
 	});
 	const arg = await applyMutations(mutations);
 	return arg;
+};
+
+export const testBuild = async () => {
+	const expected = await tg.process.env("TANGRAM_HOST");
+	const output = await std
+		.build(`echo $TANGRAM_HOST > $OUTPUT`)
+		.then(tg.File.expect);
+	const actual = (await output.text()).trim();
+	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
+	return true;
 };
 
 export const testDollar = tg.command(async () => {
