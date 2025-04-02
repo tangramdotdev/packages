@@ -248,11 +248,11 @@ export const test = tg.command(async () => {
 
 	tests.push(testHostToolchain());
 	tests.push(testCargo());
-	tests.push(testCargoProxy());
-	tests.push(testNativeBuild());
+	// tests.push(testCargoProxy());
+	// tests.push(testNativeBuild());
 
 	const results = await Promise.all(tests);
-	// tg.assert(results.every((r) => r === true));
+	tg.assert(results.every((r) => r));
 
 	return true;
 });

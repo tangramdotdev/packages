@@ -122,7 +122,16 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		let lines = content.split("\n");
 		lines = lines.map((line) => {
 			if (line.startsWith("Libs:")) {
-				return line.replace("-L/output/output/lib", "-L${libdir}");
+				// Replace library paths with the libdir.
+				return line.replace(/-L(\/\S+)/g, "-L${libdir}");
+			} else if (line.startsWith("Cflags:")) {
+				// Strip include paths besides the `-I${includedir}` line.
+				return line
+					.split(/\s+/)
+					.filter(
+						(part) => !part.startsWith("-I") || part === "-I${includedir}",
+					)
+					.join(" ");
 			} else {
 				return line;
 			}

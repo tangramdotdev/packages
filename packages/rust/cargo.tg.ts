@@ -121,7 +121,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const preparePathCommands = [
 		`mkdir -p "$OUTPUT/target"`,
 		`export TARGET_DIR="$(realpath "$OUTPUT/target")"`,
-		tg`mkdir -p "$HOME/.cargo"\necho '${cargoConfig}' >> "$HOME/.cargo/config.toml"\nexport CARGO_HOME=$HOME/.cargo`,
+		tg`mkdir -p "$PWD/.cargo"\necho '${cargoConfig}' >> "$PWD/.cargo/config.toml"\nexport CARGO_HOME=$PWD/.cargo`,
 	];
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
