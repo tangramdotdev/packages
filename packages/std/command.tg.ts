@@ -186,26 +186,23 @@ class CommandBuilder {
 		}
 
 		// Construct the env.
+		const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+		if (this._env !== undefined) {
+			envs.push(this._env);
+		}
 		if (this._includeUtils) {
 			const utilsEnv = std.utils.env({
 				sdk: false,
 				env: std.sdk(),
 				host: arg.host,
 			});
-			if (this._env !== undefined) {
-				arg.env = await std.env.arg(utilsEnv, this._env);
-			} else {
-				arg.env = await utilsEnv;
-			}
-		} else {
-			if (this._env !== undefined) {
-				arg.env = await std.env.arg(this._env);
-			}
+			envs.push(utilsEnv);
 		}
 		let tangramHost = tg.process.env("TANGRAM_HOST") as string;
-		arg.env = await std.env.arg({
+		envs.push({
 			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
 		});
+		arg.env = await std.env.arg(...envs);
 
 		// Set host.
 		if (this._host !== undefined) {
@@ -296,26 +293,23 @@ class Dollar extends CommandBuilder {
 		}
 
 		// Construct the env.
+		const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+		if (this._env !== undefined) {
+			envs.push(this._env);
+		}
 		if (this._includeUtils) {
 			const utilsEnv = std.utils.env({
 				sdk: false,
 				env: std.sdk(),
 				host: arg.host,
 			});
-			if (this._env !== undefined) {
-				arg.env = await std.env.arg(utilsEnv, this._env);
-			} else {
-				arg.env = await utilsEnv;
-			}
-		} else {
-			if (this.env !== undefined) {
-				arg.env = await std.env.arg(this._env);
-			}
+			envs.push(utilsEnv);
 		}
 		let tangramHost = tg.process.env("TANGRAM_HOST") as string;
-		arg.env = await std.env.arg({
+		envs.push({
 			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
 		});
+		arg.env = await std.env.arg(...envs);
 
 		// Construct the executable.
 		if (this._executable !== undefined) {
