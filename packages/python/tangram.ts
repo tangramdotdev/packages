@@ -122,7 +122,6 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	];
 
 	// Set up additional runtime dependencies that will end up in the wrapper.
-	// TODO - curses, readline here too.
 	const libffiForHost = await processDependency(
 		std.env.runtimeDependency(libffi.build, dependencyArgs.libffi),
 	);
