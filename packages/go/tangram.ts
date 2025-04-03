@@ -6,29 +6,29 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "go",
 	repository: "https://github.com/golang/go",
-	version: "1.23.4",
+	version: "1.24.2",
 };
 
 // See https://go.dev/dl.
 const RELEASES = {
 	["aarch64-linux"]: {
 		checksum:
-			"sha256:16e5017863a7f6071363782b1b8042eb12c6ca4f4cd71528b2123f0a1275b13e",
+			"sha256:756274ea4b68fa5535eb9fe2559889287d725a8da63c6aae4d5f23778c229f4b",
 		url: `https://go.dev/dl/go${metadata.version}.linux-arm64.tar.gz`,
 	},
 	["x86_64-linux"]: {
 		checksum:
-			"sha256:6924efde5de86fe277676e929dc9917d466efa02fb934197bc2eba35d5680971",
+			"sha256:68097bd680839cbc9d464a0edce4f7c333975e27a90246890e9f1078c7e702ad",
 		url: `https://go.dev/dl/go${metadata.version}.linux-amd64.tar.gz`,
 	},
 	["aarch64-darwin"]: {
 		checksum:
-			"sha256:87d2bb0ad4fe24d2a0685a55df321e0efe4296419a9b3de03369dbe60b8acd3a",
+			"sha256:b70f8b3c5b4ccb0ad4ffa5ee91cd38075df20fdbd953a1daedd47f50fbcff47a",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-arm64.tar.gz`,
 	},
 	["x86_64-darwin"]: {
 		checksum:
-			"sha256:6700067389a53a1607d30aa8d6e01d198230397029faa0b109e89bc871ab5a0e",
+			"sha256:238d9c065d09ff6af229d2e3b8b5e85e688318d69f4006fb85a96e41c216ea83",
 		url: `https://go.dev/dl/go${metadata.version}.darwin-amd64.tar.gz`,
 	},
 };
@@ -227,8 +227,9 @@ export const build = tg.command(
 		const env = std.env.arg(...envs);
 
 		const output = await $`
-				cp -R ${source}/. .
-				chmod -R u+w .
+				cp -R ${source}/. ./work
+				chmod -R u+w ./work
+				cd ./work
 
 				export TMPDIR=$PWD/tmp
 				mkdir -p $TMPDIR
@@ -334,15 +335,16 @@ export const test = tg.command(async () => {
 
 	return await $`
 				set -ex
-				echo $TMPDIR
 				export TMPDIR=$PWD/tmp
 				mkdir -p $TMPDIR
 				export GOCACHE=$TMPDIR
 				export GOMODCACHE=$TMPDIR
 				export GOTMPDIR=$TMPDIR
 				mkdir -p $OUTPUT
-				cp -R ${source}/. .
-				chmod -R u+w .
+				export WORK=$PWD/work
+				cp -R ${source}/. $WORK
+				chmod -R u+w $WORK
+				cd $WORK
 				go env
 				go mod init main.go
 				go mod tidy

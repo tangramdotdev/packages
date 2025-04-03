@@ -127,7 +127,7 @@ export namespace download {
 	};
 
 	export const gnuUrl = (name: string, archive: string) => {
-		return `https://ftp.gnu.org/gnu/${name}/${archive}`;
+		return `http://ftpmirror.gnu.org/gnu/${name}/${archive}`;
 	};
 
 	export type UnpackArg = {

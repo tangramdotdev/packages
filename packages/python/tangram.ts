@@ -10,7 +10,6 @@ import * as mpdecimal from "mpdecimal" with { path: "../mpdecimal" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -115,16 +114,12 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const dependencies = [
 		std.env.buildDependency(bison.build),
 		std.env.buildDependency(m4.build),
+		std.env.buildDependency(pkgConf.build),
 		std.env.runtimeDependency(bzip2.build, dependencyArgs.bzip2),
 		std.env.runtimeDependency(libxcrypt.build, dependencyArgs.libxcrypt),
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
 	];
-	if (os === "darwin") {
-		dependencies.push(std.env.buildDependency(pkgConf.build));
-	} else if (os === "linux") {
-		dependencies.push(std.env.buildDependency(pkgConfig.build) as any);
-	}
 
 	// Set up additional runtime dependencies that will end up in the wrapper.
 	const libffiForHost = await processDependency(
@@ -151,11 +146,6 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 
 	if (os === "darwin") {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
-		envs.push({
-			LIFFFI_LIBS: tg`-L${libffiForHost}/lib -lffi`,
-			LIBMPDEC_LIBS: tg`-L${mpdecimalForHost}/lib -lmpdec`,
-			ZLIB_LIBS: tg`-L${zlibForHost}/lib -lz`
-		})
 	}
 	const env = std.env.arg(...envs, env_);
 
@@ -179,11 +169,12 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+	console.log("out", await output.id());
 
 	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper.
 	const libraryPaths = [
 		libffiForHost,
-		// mpdecimalForHost,
+		mpdecimalForHost,
 		opensslForHost,
 		zlibForHost,
 	].map((dir) => dir.get("lib").then(tg.Directory.expect));

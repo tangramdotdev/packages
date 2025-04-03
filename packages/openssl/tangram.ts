@@ -7,13 +7,13 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "openssl",
 	repository: "https://github.com/openssl/openssl",
-	version: "3.4.0",
+	version: "3.4.1",
 };
 
 export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:e15dda82fe2fe8139dc2ac21a36d4ca01d5313c75f99f46c4e8a27709b7294bf";
+		"sha256:002a2d6b30b58bf4bea46c43bdd96365aaf8daa6c428782aa4feee06da197df3";
 	const owner = name;
 	const repo = name;
 	const tag = `${name}-${version}`;

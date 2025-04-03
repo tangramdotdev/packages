@@ -5,7 +5,7 @@ export const metadata = {
 	license: "https://github.com/pkgconf/pkgconf?tab=License-1-ov-file#readme",
 	name: "pkgconf",
 	repository: "https://github.com/pkgconf/pkgconf",
-	version: "2.3.0",
+	version: "2.4.3",
 	provides: {
 		binaries: ["pkgconf"],
 	},
@@ -16,7 +16,7 @@ export const source = tg.command(async () => {
 	const extension = ".tar.xz";
 	const base = `https://distfiles.ariadne.space/pkgconf`;
 	const checksum =
-		"sha256:3a9080ac51d03615e7c1910a0a2a8df08424892b5f13b0628a204d3fcce0ea8b";
+		"sha256:51203d99ed573fa7344bf07ca626f10c7cc094e0846ac4aa0023bd0c83c25a41";
 	return std
 		.download({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
@@ -44,11 +44,9 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	// Set up phases.
 	const configure = {
 		args: ["--disable-dependency-tracking"],
 	};
-
 	const phases = { configure };
 
 	const output = await std.autotools.build(
@@ -91,7 +89,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		`;
 	}
 
-	const wrappedBin = std.wrap(pkgconf);
+	const wrappedBin = std.wrap(pkgconf, { args: ["--define-prefix"] });
 
 	return tg.directory(output, {
 		["bin/pkgconf"]: wrappedBin,

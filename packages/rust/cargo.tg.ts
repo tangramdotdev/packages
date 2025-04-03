@@ -121,13 +121,13 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const preparePathCommands = [
 		`mkdir -p "$OUTPUT/target"`,
 		`export TARGET_DIR="$(realpath "$OUTPUT/target")"`,
-		tg`mkdir -p "$HOME/.cargo"\necho '${cargoConfig}' >> "$HOME/.cargo/config.toml"\nexport CARGO_HOME=$HOME/.cargo`,
+		tg`mkdir -p "$PWD/.cargo"\necho '${cargoConfig}' >> "$PWD/.cargo/config.toml"\nexport CARGO_HOME=$PWD/.cargo`,
 	];
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
 	// Set the SOURCE variable.
 	const prepareSource = buildInTree
-		? tg`cp -R ${source}/. .\nchmod -R u+w .\nexport SOURCE="$PWD"`
+		? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport SOURCE="$PWD/work"`
 		: tg`export SOURCE=$(realpath ${source})`;
 
 	// Set up cargo args.
@@ -136,13 +136,14 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		"--release",
-		"--frozen",
-		"--offline",
 		`--target-dir "$OUTPUT/target"`,
 		`--manifest-path "$SOURCE/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
 	];
+	if (!network) {
+		cargoArgs.push("--offline", "--frozen");
+	}
 	if (disableDefaultFeatures) {
 		cargoArgs.push("--no-default-features");
 	}
@@ -166,6 +167,16 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	let toolchainEnv = {
 		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: compilerName,
 	};
+
+	// If network is enabled, set the certificates.
+	let networkEnv = undefined;
+	if (network) {
+		const certFile = tg`${std.caCertificates()}/cacert.pem`;
+		networkEnv = {
+			SSL_CERT_FILE: certFile,
+			CARGO_HTTP_CAINFO: certFile,
+		}
+	}
 
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
@@ -211,6 +222,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 				...toolchainEnv,
 			},
 			proxyEnv,
+			networkEnv,
 			jobsEnv,
 			verbosityEnv,
 			{ TANGRAM_HOST: std.triple.archAndOs(host) },
