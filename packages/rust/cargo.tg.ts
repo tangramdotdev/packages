@@ -127,7 +127,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	// Set the SOURCE variable.
 	const prepareSource = buildInTree
-		? tg`cp -R ${source}/. .\nchmod -R u+w .\nexport SOURCE="$PWD"`
+		? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport SOURCE="$PWD/work"`
 		: tg`export SOURCE=$(realpath ${source})`;
 
 	// Set up cargo args.
