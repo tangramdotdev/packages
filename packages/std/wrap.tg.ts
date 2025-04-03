@@ -2190,11 +2190,11 @@ export const argAndEnvDump = tg.command(async () => {
 	});
 
 	return tg.File.expect(
-		await (
+		await std.build(
 			await tg.command(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
 				env: sdkEnv,
-			})
-		).build(),
+			}),
+		),
 	);
 });
 
@@ -2376,7 +2376,7 @@ export const testDependencies = tg.command(async () => {
 
 	// return wrapper;
 
-	const bundle = tg.Artifact.bundle(wrapper);
+	const bundle = tg.Artifact.bundle(tg.directory({ wrapper }));
 	return bundle;
 });
 
@@ -2391,23 +2391,23 @@ export const testDylibPath = tg.command(async () => {
 	const bootstrapSdk = bootstrap.sdk.env();
 
 	// Compile the greet library
-	const sharedLibraryDir = await (
-		await tg.command(
-			tg`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`,
-			{ env: await std.env.arg(bootstrapSdk) },
+	const sharedLibraryDir = await std
+		.build(
+			await tg.command(
+				tg`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`,
+				{ env: await std.env.arg(bootstrapSdk) },
+			),
 		)
-	)
-		.build()
 		.then(tg.Directory.expect);
 	console.log("sharedLibraryDir", await sharedLibraryDir.id());
 
 	// Compile the driver.
-	const driver = await (
-		await tg.command(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
-			env: await std.env.arg(bootstrapSdk),
-		})
-	)
-		.build()
+	const driver = await std
+		.build(
+			await tg.command(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
+				env: await std.env.arg(bootstrapSdk),
+			}),
+		)
 		.then(tg.File.expect);
 	console.log("unwrapped driver", await driver.id());
 
