@@ -154,7 +154,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		configureArgs.push("--enable-optimizations");
 	}
 
-	// const prepare = `set -x && pkg-config --libs curses && exit 1`;
+	// const prepare = `set -x && echo $DYLD_FALLBACK_LIBRARY_PATH && export DYLD_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH`;
 	const configure = { args: configureArgs };
 	const phases = { configure };
 	// const phases = { prepare, configure };
@@ -162,7 +162,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			debug: true,
+			// debug: true,
 			env,
 			phases,
 			opt: "3",
