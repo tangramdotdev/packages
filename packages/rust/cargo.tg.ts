@@ -168,6 +168,16 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: compilerName,
 	};
 
+	// If network is enabled, set the certificates.
+	let networkEnv = undefined;
+	if (network) {
+		const certFile = tg`${std.caCertificates()}/cacert.pem`;
+		networkEnv = {
+			SSL_CERT_FILE: certFile,
+			CARGO_HTTP_CAINFO: certFile,
+		}
+	}
+
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
 		toolchainEnv = {
@@ -212,6 +222,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 				...toolchainEnv,
 			},
 			proxyEnv,
+			networkEnv,
 			jobsEnv,
 			verbosityEnv,
 			{ TANGRAM_HOST: std.triple.archAndOs(host) },
