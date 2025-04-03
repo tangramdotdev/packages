@@ -122,6 +122,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	];
 
 	// Set up additional runtime dependencies that will end up in the wrapper.
+	// TODO - curses, readline here too.
 	const libffiForHost = await processDependency(
 		std.env.runtimeDependency(libffi.build, dependencyArgs.libffi),
 	);
@@ -134,28 +135,34 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const zlibForHost = await processDependency(
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	);
-
-	// Resolve env.
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [
-		...dependencies.map(processDependency),
+	let hostLibDirs = [
 		libffiForHost,
 		mpdecimalForHost,
 		opensslForHost,
 		zlibForHost,
 	];
 
-	if (os === "darwin") {
-		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
-	}
-	const env = std.env.arg(...envs, env_);
-
+	// Resolve env.
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [
+		...dependencies.map(processDependency),
+		...hostLibDirs,
+	];
 	const configureArgs = [];
 	if (enableOptimizations) {
 		configureArgs.push("--enable-optimizations");
 	}
 
+	const makeArgs = [];
+	if (os === "darwin") {
+		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
+		makeArgs.push("RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH");
+	}
+	const env = std.env.arg(...envs, env_);
+
 	const configure = { args: configureArgs };
-	const phases = { configure };
+	const buildPhase = { args: makeArgs };
+	const install = { args: makeArgs };
+	const phases = { configure, build: buildPhase, install };
 
 	const output = await std.autotools.build(
 		{
@@ -169,7 +176,6 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-	console.log("out", await output.id());
 
 	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper.
 	const libraryPaths = [
