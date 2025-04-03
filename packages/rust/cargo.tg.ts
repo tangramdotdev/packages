@@ -136,13 +136,14 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		"--release",
-		"--frozen",
-		"--offline",
 		`--target-dir "$OUTPUT/target"`,
 		`--manifest-path "$SOURCE/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
 	];
+	if (!network) {
+		cargoArgs.push("--offline", "--frozen");
+	}
 	if (disableDefaultFeatures) {
 		cargoArgs.push("--no-default-features");
 	}
