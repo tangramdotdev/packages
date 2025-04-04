@@ -175,7 +175,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		networkEnv = {
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
-		}
+		};
 	}
 
 	// If cross-compiling, set additional environment variables.
@@ -282,6 +282,7 @@ const vendoredSources = async (
 			: `"Cargo.toml"`;
 		const vendorScript = tg`
 			SOURCE="$(realpath ${source})"
+			export CARGO_HOME=$PWD
 			mkdir -p "$OUTPUT/tg_vendor_dir"
 			cd "$OUTPUT"
 			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "$OUTPUT/config"
@@ -427,7 +428,7 @@ export const test = tg.command(async () => {
 	const tests = [];
 
 	tests.push(testUnproxiedWorkspace());
-	// tests.push(testVendorDependencies());
+	tests.push(testVendorDependencies());
 
 	await Promise.all(tests);
 
@@ -480,24 +481,11 @@ export const testVendorDependencies = tg.command(async () => {
 		.get("Cargo.lock")
 		.then(tg.File.expect);
 	const tgVendored = vendorDependencies(cargoLock);
+	const cargoVendored = vendoredSources({
+		source: sourceDirectory,
+		useCargoVendor: true,
+	});
 
-	const certFile = tg`${std.caCertificates()}/cacert.pem`;
-	const vendorScript = tg`
-		SOURCE="$(realpath ${sourceDirectory})"
-		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/Cargo.toml "$OUTPUT"
-	`;
-	const rustArtifact = self();
-	const sdk = std.sdk();
-
-	const cargoVendored = await $`${vendorScript}`
-		.checksum("any")
-		.env(sdk, rustArtifact, {
-			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-			CARGO_HTTP_CAINFO: certFile,
-			RUST_TARGET: rustTriple(await std.triple.host()),
-			SSL_CERT_FILE: certFile,
-		})
-		.then(tg.Directory.expect);
 	return tg.directory({
 		tgVendored,
 		cargoVendored,
