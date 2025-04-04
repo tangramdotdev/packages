@@ -221,13 +221,13 @@ export const test = tg.command(async () => {
 	const tests = [];
 
 	tests.push(testBasicExeUnproxied());
-	// tests.push(testBasicExeProxied());
+	tests.push(testBasicExeProxied());
 	tests.push(testBasicLib());
 	tests.push(testBasicExeModules());
 	tests.push(testBasicExeWithLib());
 	tests.push(testExeWithCratesIoDependency());
 	tests.push(testConditionalCompilation());
-	// tests.push(testLinkLibcurl());
+	tests.push(testLinkLibcurl());
 
 	const results = await Promise.all(tests);
 	tg.assert(results.every((r) => r === true));
