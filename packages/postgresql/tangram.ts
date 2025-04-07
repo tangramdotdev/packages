@@ -7,7 +7,6 @@ import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as perl from "perl" with { path: "../perl" };
 import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -45,14 +44,13 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		icu?: icu.Arg;
-		lz4?: lz4.Arg;
-		ncurses?: ncurses.Arg;
-		openssl?: openssl.Arg;
-		perl?: perl.Arg;
-		readline?: readline.Arg;
-		zlib?: zlib.Arg;
-		zstd?: zstd.Arg;
+		icu?: std.args.DependencyArg<icu.Arg>;
+		lz4?: std.args.DependencyArg<lz4.Arg>;
+		ncurses?: std.args.DependencyArg<ncurses.Arg>;
+		openssl?: std.args.DependencyArg<openssl.Arg>;
+		readline?: std.args.DependencyArg<readline.Arg>;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
+		zstd?: std.args.DependencyArg<zstd.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -64,16 +62,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			icu: icuArg = {},
-			lz4: lz4Arg = {},
-			ncurses: ncursesArg = {},
-			openssl: opensslArg = {},
-			perl: perlArg = {},
-			readline: readlineArg = {},
-			zlib: zlibArg = {},
-			zstd: zstdArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -82,39 +71,54 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const os = std.triple.os(host);
 
-	const icuArtifact = icu.build({ build, env: env_, host, sdk }, icuArg);
-	const opensslArtifact = openssl.default(
-		{ build, env: env_, host, sdk },
-		opensslArg,
-	);
-	const lz4Artifact = lz4.build({ build, env: env_, host, sdk }, lz4Arg);
-	const ncursesArtifact = ncurses.build(
-		{ build, env: env_, host, sdk },
-		ncursesArg,
-	);
-	const readlineArtifact = readline.build(
-		{ build, env: env_, host, sdk },
-		readlineArg,
-	);
-	const zlibArtifact = zlib.build({ build, env: env_, host, sdk }, zlibArg);
-	const zstdArtifact = zstd.build({ build, env: env_, host, sdk }, zstdArg);
+	const processDependency = (dep: any) =>
+		std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
-	let pkgConfigArtifact;
-	if (os === "darwin") {
-		pkgConfigArtifact = pkgConf.build({ build, host: build });
-	} else if (os === "linux") {
-		pkgConfigArtifact = pkgConfig.build({ build, host: build });
-	}
+	const icuArtifact = await processDependency(
+		std.env.runtimeDependency(icu.build, dependencyArgs.icu),
+	);
+	const opensslArtifact = await processDependency(
+		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
+	);
+	const lz4Artifact = await processDependency(
+		std.env.runtimeDependency(lz4.build, dependencyArgs.lz4),
+	);
+	const ncursesArtifact = await processDependency(
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
+	);
+	const readlineArtifact = await processDependency(
+		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
+	);
+	const zlibArtifact = await processDependency(
+		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
+	);
+	const zstdArtifact = await processDependency(
+		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
+	);
+
+	const pkgConfigArtifact = await processDependency(
+		std.env.buildDependency(pkgConf.build),
+	);
+	const bisonArtifact = await processDependency(
+		std.env.buildDependency(bison.build),
+	);
+	const flexArtifact = await processDependency(
+		std.env.buildDependency(flex.build),
+	);
+	const m4Artifact = await processDependency(std.env.buildDependency(m4.build));
+	const perlArtifact = await processDependency(
+		std.env.buildDependency(perl.build),
+	);
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [
 		icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
 		opensslArtifact,
-		bison.build({ build, host: build }),
-		flex.build({ build, host: build }),
-		m4.build({ build, host: build }),
-		perl.build({ build, host: build }, perlArg),
+		bisonArtifact,
+		flexArtifact,
+		m4Artifact,
+		perlArtifact,
 		pkgConfigArtifact,
 		readlineArtifact,
 		zlibArtifact,
@@ -124,8 +128,15 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
+	const configureArgs = ["--disable-rpath", "--with-lz4", "--with-zstd"];
+	if (os === "darwin") {
+		configureArgs.push(
+			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+		);
+	}
+
 	const configure = {
-		args: ["--disable-rpath", "--with-lz4", "--with-zstd"],
+		args: configureArgs,
 	};
 	const phases = { configure };
 
@@ -156,9 +167,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		lz4Artifact,
 		zlibArtifact,
 		zstdArtifact,
-	].map((dir) =>
-		dir.then((dir: tg.Directory) => dir.get("lib").then(tg.Directory.expect)),
-	);
+	].map((dir) => dir.get("lib").then(tg.Directory.expect));
 	libraryPaths.push(output.get("lib").then(tg.Directory.expect));
 
 	let binDir = await output.get("bin").then(tg.Directory.expect);
