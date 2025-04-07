@@ -12,7 +12,7 @@ export const metadata = {
 	license: "https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright",
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
-	version: "2.13.5",
+	version: "2.14.1",
 	provides: {
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],
@@ -22,7 +22,7 @@ export const metadata = {
 export const source = tg.command(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:74fc163217a3964257d3be39af943e08861263c4231f9ef5b496b6f6d4c7b2b6";
+		"sha256:310df85878b65fa717e5e28e0d9e8f6205fd29d883929303a70a4f2fc4f6f1f2";
 	const extension = ".tar.xz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const base = `https://download.gnome.org/sources/${name}/${majorMinor}`;
@@ -36,13 +36,10 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		ncurses?: ncurses.Arg;
-		perl?: perl.Arg;
-		pkgconfig?: pkgConfig.Arg;
-		python?: python.Arg;
-		readline?: readline.Arg;
-		xz?: xz.Arg;
-		zlib?: zlib.Arg;
+		ncurses?: std.args.dependencyArg<ncurses.Arg>;
+		readline?: std.args.dependencyArg<readline.Arg>;
+		xz?: std.args.dependencyArg<xz.Arg>;
+		zlib?: std.args.dependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -54,15 +51,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			ncurses: ncursesArg = {},
-			perl: perlArg = {},
-			pkgconfig: pkgconfigArg = {},
-			python: pythonArg = {},
-			readline: readlineArg = {},
-			xz: xzArg = {},
-			zlib: zlibArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -80,18 +69,23 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const phases = { configure };
 
-	const pythonArtifact = python.self(pythonArg);
+	const processDependency = (dep: any) =>
+		std.env.envArgFromDependency(build, env_, host, sdk, dep);
+
+	const pythonArtifact = processDependency(
+		std.env.buildDependency(python.self),
+	);
 	const deps = [
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-		perl.build({ build, host: build }, perlArg),
-		pkgConfig.build({ build, host: build }, pkgconfigArg),
-		pythonArtifact,
-		readline.build({ build, env: env_, host, sdk }, readlineArg),
-		xz.build({ build, env: env_, host, sdk }, xzArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
+		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
+		std.env.runtimeDependency(xz.build, dependencyArgs.xz),
+		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
+		std.env.buildDependency(perl.build),
+		std.env.buildDependency(pkgConfig.build),
 	];
 	const env = [
-		...deps,
+		...deps.map(processDependency),
+		pythonArtifact,
 		{
 			CPATH: tg.Mutation.suffix(
 				tg`${pythonArtifact}/include/python${python.versionString()}`,
@@ -117,6 +111,25 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.command(async () => {
-	const spec = std.assert.defaultSpec(metadata);
+	const outputIncludes = (
+		name: string,
+		includes: string,
+		args?: Array<string>,
+	) => {
+		return {
+			name,
+			testArgs: args ?? ["--version"],
+			testPredicate: (stdout: string) =>
+				stdout.toLowerCase().includes(includes),
+		};
+	};
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		binaries: [
+			"xml2-config",
+			outputIncludes("xmlcatalog", "catalogs cleanup", ["--verbose"]),
+			outputIncludes("xmllint", "21401"),
+		],
+	};
 	return await std.assert.pkg(build, spec);
 });

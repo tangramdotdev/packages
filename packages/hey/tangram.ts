@@ -50,6 +50,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
+			network: true,
 			sdk,
 			source: source_ ?? source(),
 		},
@@ -65,6 +66,7 @@ export const test = tg.command(async () => {
 		binaries: metadata.provides.binaries.map((name) => {
 			return {
 				name,
+				testArgs: ["--help"],
 				testPredicate: (stdout: string) => stdout.includes(metadata.name),
 			};
 		}),

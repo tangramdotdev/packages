@@ -6,7 +6,7 @@ export const metadata = {
 	name: "icu",
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
-	version: "76.1",
+	version: "77.1",
 	provides: {
 		binaries: [
 			"derb",
@@ -29,7 +29,7 @@ export const source = tg.command(async () => {
 	const owner = "unicode-org";
 	const repo = name;
 	const checksum =
-		"sha256:dfacb46bfe4747410472ce3e1144bf28a102feeaa4e3875bac9b4c6cf30f4f3e";
+		"sha256:588e431f77327c39031ffbb8843c0e3bc122c211374485fa87dc5f3faff24061";
 	const releaseVersion = version.replace(/\./, "-");
 	const pkgVersion = version.replace(/\./, "_");
 	const pkgName = `icu4c-${pkgVersion}-src`;
@@ -42,7 +42,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		python?: python.Arg;
+		python?: std.args.DependencyArg<python.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -65,7 +65,15 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-	const dependencies = [python.self(pythonArg)];
+	const dependencies = [
+		std.env.envArgFromDependency(
+			build,
+			env_,
+			host,
+			sdk,
+			std.env.buildDependency(python.self, pythonArg),
+		),
+	];
 	const env = [...dependencies, env_];
 
 	const configure = {

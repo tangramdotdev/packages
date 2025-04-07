@@ -188,7 +188,7 @@ class CommandBuilder {
 		// Construct the env.
 		const envs: Array<tg.Unresolved<std.env.Arg>> = [];
 		if (this._env !== undefined) {
-			envs.push(this._env);
+			envs.push(...this._env);
 		}
 		if (this._includeUtils) {
 			const utilsEnv = std.utils.env({
@@ -198,7 +198,7 @@ class CommandBuilder {
 			});
 			envs.push(utilsEnv);
 		}
-		let tangramHost = tg.process.env("TANGRAM_HOST") as string;
+		const tangramHost = (await tg.process.env("TANGRAM_HOST")) as string;
 		envs.push({
 			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
 		});
@@ -295,7 +295,7 @@ class Dollar extends CommandBuilder {
 		// Construct the env.
 		const envs: Array<tg.Unresolved<std.env.Arg>> = [];
 		if (this._env !== undefined) {
-			envs.push(this._env);
+			envs.push(...this._env);
 		}
 		if (this._includeUtils) {
 			const utilsEnv = std.utils.env({
@@ -305,7 +305,7 @@ class Dollar extends CommandBuilder {
 			});
 			envs.push(utilsEnv);
 		}
-		let tangramHost = tg.process.env("TANGRAM_HOST") as string;
+		let tangramHost = (await tg.process.env("TANGRAM_HOST")) as string;
 		envs.push({
 			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
 		});
@@ -385,7 +385,8 @@ export const command = async (
 	...args: std.Args<tg.Process.RunArg>
 ): Promise<CommandBuilder> => {
 	const arg = await processArg(...args);
-	return new CommandBuilder(arg);
+	const builder = new CommandBuilder(arg);
+	return await builder.command();
 };
 
 /** Wrapper around tg.build that attaches the default mount to commands. */

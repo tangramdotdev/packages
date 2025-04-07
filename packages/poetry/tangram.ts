@@ -10,7 +10,7 @@ export const metadata = {
 	license: "MIT",
 	name: "poetry",
 	repository: "https://github.com/python-poetry/poetry",
-	version: "1.8.4",
+	version: "2.1.2",
 	provides: {
 		binaries: ["poetry"],
 	},
@@ -19,7 +19,7 @@ export const metadata = {
 export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:909cc7651508ee6c1eabdfa56c3eded62222516029bf2fc313c47270bba1ad9a";
+		"sha256:6a0694645ee24ba93cb94254db66e47971344562ddd5578e82bf35e572bc546d";
 	const owner = "python-poetry";
 	const repo = name;
 	const tag = version;
@@ -50,6 +50,8 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const requirements = requirements_ ?? requirementsTxt;
 	return python.self({ build, host, requirements });
 });
+
+export default self;
 
 export type BuildArgs = {
 	/** The source directory to build. */

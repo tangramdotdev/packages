@@ -68,7 +68,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		["bin/brotli"]: std.wrap(exe, { libraryPaths: [libDir] }),
 	});
 
-	console.log(await std.directory.provides(output));
 	return output;
 });
 

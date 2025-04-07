@@ -12,7 +12,6 @@ export const install = tg.command(
 
 		// Download the requirements specified in any requirements.txt files.
 		const downloads = await $`
-			set -eu
 			mkdir tmp
 			export TMPDIR=tmp
 			mkdir -p $OUTPUT
@@ -27,6 +26,7 @@ export const install = tg.command(
 				-r ${requirements}`
 			.env(toolchains)
 			.checksum("any")
+			.network(true)
 			.then(tg.Directory.expect);
 
 		let installedBins = tg.directory();
@@ -35,7 +35,6 @@ export const install = tg.command(
 		// For each download, install to a local directory.
 		for await (const [name, file] of downloads) {
 			const installed = await $`
-				set -eu
 				cp "${file}" "${name}"
 				mkdir tmp
 				export TMPDIR=tmp
@@ -50,6 +49,7 @@ export const install = tg.command(
 				${name} || true # allow failure, needed to skip unnecessary errors in pip install.`
 				.env(toolchains)
 				.checksum("any")
+				.network(true)
 				.then(tg.Directory.expect);
 
 			// Get any site-packages or bin directories that were installed by pip.

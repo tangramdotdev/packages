@@ -1,20 +1,20 @@
+import * as make from "gnumake" with { path: "../gnumake" };
 import * as nodejs from "nodejs" with { path: "../nodejs" };
 import * as go from "go" with { path: "../go" };
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	home: "https://esbuild.github.io",
 	license: "MIT",
 	name: "esbuild",
 	repository: "https://github.com/evanw/esbuild",
-	version: "0.21.3",
+	version: "0.25.2",
 };
 
 export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:f81cc2add471cab752845a778f23dace9ece17c487fe178202c07481b9a678b5";
+		"sha256:01a6c0a5949e5c2d53e19be52aec152b3186f8bbcf98df6996a20a972a78c330";
 	const owner = "evanw";
 	const repo = name;
 	const tag = `v${version}`;
@@ -48,7 +48,13 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const sourceDir = source_ ?? source();
 
 	const phases = {
-		prepare: tg`set -x && cp -R ${sourceDir}/* . && chmod -R u+w .`,
+		prepare: tg`cp -R ${sourceDir}/* .
+			chmod -R u+w .
+			TMPDIR=$PWD/tmp
+			mkdir -p $TMPDIR
+			export GOCACHE=$TMPDIR
+			export GOTMPDIR=$TMPDIR
+			export GOMODCACHE=$TMPDIR`,
 		build: { command: "make" },
 		install: {
 			command: "mkdir -p $OUTPUT/bin && cp esbuild $OUTPUT/bin",
@@ -62,6 +68,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		std.sdk({ host }),
 		go.self(goArg),
 		nodejs.self(nodejsArg),
+		make.build({ host }),
 		{
 			SSL_CERT_FILE: certFile,
 		},
@@ -69,11 +76,13 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	);
 
 	return std.phases
-		.build({
+		.run({
+			command: { host },
 			env,
 			phases,
 			source: source_ ?? source(),
 			checksum: "any",
+			network: true,
 		})
 		.then(tg.Directory.expect);
 });
@@ -81,8 +90,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = tg.command(async () => {
-	return await $`
-			echo "Checking that we can run esbuild." | tee $OUTPUT
-			echo "$(esbuild --version)" | tee -a $OUTPUT
-		`.env(build());
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
 });
