@@ -370,13 +370,11 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		.build();
 
 	// Create a process.
-	let id = command.id(tg).await?;
-	let spawn_arg = tg::process::spawn::Arg {
+	let run_arg = tg::process::run::Arg {
+		cached: None,
 		checksum: None,
-		command: Some(id),
-		create: true,
-		network: false,
-		mounts: vec![],
+		network: Some(false),
+		mounts: None,
 		parent: None,
 		remote: None,
 		retry: false,
@@ -384,7 +382,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		stderr: None,
 		stdin: None,
 	};
-	let build_directory = tg::Process::run(tg, spawn_arg)
+	let build_directory = tg::Process::run(tg, &command, run_arg)
 		.await?
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?

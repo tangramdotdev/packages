@@ -1,6 +1,9 @@
 use itertools::Itertools;
 use std::{
-	collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf, str::FromStr,
+	collections::BTreeMap,
+	os::unix::process::CommandExt,
+	path::{Path, PathBuf},
+	str::FromStr,
 	sync::LazyLock,
 };
 use tangram_client as tg;
@@ -327,13 +330,11 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.build();
 
 	// Create the process.
-	let id = command.id(tg).await?;
-	let spawn_arg = tg::process::spawn::Arg {
+	let run_arg = tg::process::run::Arg {
+		cached: None,
 		checksum,
-		command: Some(id),
-		create: true,
-		mounts: vec![],
-		network: false,
+		mounts: None,
+		network: Some(false),
 		parent: None,
 		remote: None,
 		retry: false,
@@ -343,21 +344,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	};
 
 	// Get the process output.
-	let process = tg::Process::spawn(tg, spawn_arg).await?;
-	let output = process.wait(tg).await?;
-	if let Some(exit) = output.exit {
-		if let tg::process::Exit::Code { code } = exit {
-			if code != 0 {
-				return Err(tg::error!("rustc exited with non-0 exit code: {exit:?}"));
-			}
-		}
-	}
-	if let Some(error) = output.error {
-		return Err(tg::error!(!error, "rustc process exited with errors"));
-	}
-	let Some(output) = output.output else {
-		return Err(tg::error!("rustc exited with no output"));
-	};
+	let output = tg::Process::run(tg, &command, run_arg).await?;
 	let output = output
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
@@ -687,7 +674,12 @@ pub fn template_data_to_symlink_data(
 pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
 	let mut closest_artifact_path = None;
 	let cwd = std::env::current_dir().expect("Failed to get the current directory");
-	for path in cwd.ancestors().skip(1) {
+	let paths = if cwd == Path::new("/") {
+		vec![cwd.as_path()]
+	} else {
+		vec![]
+	};
+	for path in paths.into_iter().chain(cwd.ancestors().skip(1)) {
 		let directory = path.join(".tangram/artifacts");
 		if directory.exists() {
 			closest_artifact_path = Some(

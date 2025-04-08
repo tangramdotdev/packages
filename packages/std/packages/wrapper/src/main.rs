@@ -615,7 +615,7 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::tem
 				"cannot produce a template from a symlink pointing into a graph",
 			));
 		},
-	};
+	}
 	let result = tg::template::Data { components };
 	Ok(result)
 }

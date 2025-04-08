@@ -213,7 +213,7 @@ impl Manifest {
 				buf
 			);
 			return Ok(None);
-		};
+		}
 
 		// Read and verify the manifest version.
 		reader.seek(std::io::SeekFrom::Current(-8))?;
@@ -389,7 +389,7 @@ impl Manifest {
 			Executable::Content(template) => {
 				collect_dependencies_from_template_data(template, &mut dependencies);
 			},
-		};
+		}
 
 		// Collect the references from the env.
 		if let Some(env) = &self.env {

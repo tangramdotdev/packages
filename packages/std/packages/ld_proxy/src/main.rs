@@ -1214,7 +1214,7 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				if found_all_libraries(all_needed_libraries) {
 					return Ok(());
 				}
-			};
+			}
 		}
 	}
 
