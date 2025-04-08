@@ -361,18 +361,16 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		args.push(value.into())
 	}
 
-	// Create the command.
-	let host = tg::host().to_string();
-	let command = tg::command::Builder::new(host)
-		.executable(executable)
-		.args(args)
-		.env(environment.env)
-		.build();
-
 	// Create a process.
+	let host = tg::host().to_string();
 	let run_arg = tg::process::run::Arg {
+		args,
 		cached: None,
 		checksum: None,
+		cwd: None,
+		env: environment.env,
+		executable,
+		host: Some(host),
 		network: Some(false),
 		mounts: None,
 		parent: None,
@@ -381,8 +379,9 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		stdout: None,
 		stderr: None,
 		stdin: None,
+		user: None,
 	};
-	let build_directory = tg::Process::run(tg, &command, run_arg)
+	let build_directory = tg::Process::run(tg, run_arg)
 		.await?
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
