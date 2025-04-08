@@ -29,21 +29,6 @@ class CommandBuilder {
 		this._network = false;
 
 		if (arg !== undefined) {
-			if (arg.command !== undefined) {
-				const command = arg.command as tg.Command.Object;
-				if (command.args !== undefined) {
-					this._args = command.args;
-				}
-				if (command.env !== undefined) {
-					this.env(command.env as std.env.Arg);
-				}
-				if (command.executable !== undefined) {
-					this._executable = command.executable;
-				}
-				if (command.host !== undefined) {
-					this._host = command.host;
-				}
-			}
 			if (arg.args !== undefined) {
 				this._args = arg.args;
 			}
@@ -159,11 +144,13 @@ class CommandBuilder {
 	}
 
 	async run(): Promise<tg.Value> {
-		return await tg.run(this.command(), {
-			checksum: this._checksum,
-			mounts: this._mounts,
-			network: this._network,
-		});
+		const args: Array<tg.Process.RunArg> = [
+			{ checksum: this._checksum, network: this._network },
+		];
+		if (this._mounts?.length > 0) {
+			args.push({ mounts: this._mounts });
+		}
+		return await tg.run(this.command(), ...args);
 	}
 
 	async command(): Promise<tg.Command> {
@@ -452,10 +439,9 @@ export const processArg = async (
 				return {
 					args: ["-c", arg],
 					executable: "/bin/sh",
-					host: await std.triple.host(),
 				};
 			} else if (arg instanceof tg.Command) {
-				return { command: await arg.object() };
+				return { ...(await arg.object()) };
 			} else {
 				return arg;
 			}
