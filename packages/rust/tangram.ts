@@ -246,9 +246,9 @@ export const rustTriple = (triple: string): string => {
 export const test = tg.command(async () => {
 	const tests = [];
 
-	// tests.push(testHostToolchain());
-	// tests.push(testCargo());
-	// tests.push(testCargoProxy());
+	tests.push(testHostToolchain());
+	tests.push(testCargo());
+	tests.push(testCargoProxy());
 	tests.push(testNativeBuild());
 
 	const results = await Promise.all(tests);

@@ -2,7 +2,7 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 
 #[link(name = "curl")]
-extern "C" {
+unsafe extern "C" {
     fn curl_version() -> *mut c_char;
 }
 
