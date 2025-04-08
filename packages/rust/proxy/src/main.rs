@@ -320,19 +320,16 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		["--extern".to_owned().into(), template.into()]
 	}));
 
-	// Create the command.
-	let host = host().to_string();
-	let checksum = None;
-	let command = tg::command::Builder::new(host)
-		.executable(executable)
-		.args(command_args)
-		.env(env)
-		.build();
-
 	// Create the process.
+	let host = host().to_string();
 	let run_arg = tg::process::run::Arg {
+		args: command_args,
+		cwd: None,
 		cached: None,
-		checksum,
+		checksum: None,
+		env,
+		executable,
+		host: Some(host),
 		mounts: None,
 		network: Some(false),
 		parent: None,
@@ -341,10 +338,11 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		stderr: None,
 		stdout: None,
 		stdin: None,
+		user: None,
 	};
 
 	// Get the process output.
-	let output = tg::Process::run(tg, &command, run_arg).await?;
+	let output = tg::Process::run(tg, run_arg).await?;
 	let output = output
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
