@@ -1,7 +1,7 @@
 import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
+import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
 import * as std from "std" with { path: "../std" };
@@ -12,7 +12,7 @@ export const metadata = {
 	license: "MIT",
 	name: "curl",
 	repository: "https://github.com/curl/curl",
-	version: "8.11.0",
+	version: "8.12.0",
 	provides: {
 		binaries: ["curl"],
 		libraries: ["curl"],
@@ -22,7 +22,7 @@ export const metadata = {
 export const source = tg.command(() => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:264537d90e58d2b09dddc50944baf3c38e7089151c8986715e2aaeaaf2b8118f";
+		"sha256:b72ec874e403c90462dc3019c5b24cc3cdd895247402bf23893b3b59419353bc";
 	const owner = name;
 	const repo = name;
 	const tag = `curl-${version.replace(/\./g, "_")}`;
@@ -40,10 +40,10 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		libpsl?: libpsl.Arg;
-		openssl?: openssl.Arg;
-		zlib?: zlib.Arg;
-		zstd?: zstd.Arg;
+		libpsl?: std.env.dependencyArg<libpsl.Arg>;
+		openssl?: std.env.dependencyArg<openssl.Arg>;
+		zlib?: std.env.dependencyArg<zlib.Arg>;
+		zstd?: std.env.dependencyArg<zstd.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -55,12 +55,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			libpsl: libpslArg = {},
-			openssl: opensslArg = {},
-			zlib: zlibArg = {},
-			zstd: zstdArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -78,13 +73,19 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure };
 
+	const deps = [
+		std.env.buildDependency(perl.build),
+		std.env.buildDependency(pkgConf.build),
+		std.env.runtimeDependency(libpsl.build, dependencyArgs.libpsl),
+		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
+		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
+		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
+	];
+
 	const env = [
-		perl.build({ build, host: build }),
-		pkgConfig.build({ build, host: build }),
-		libpsl.build({ build, env: env_, host, sdk }, libpslArg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-		zstd.build({ build, env: env_, host, sdk }, zstdArg),
+		...deps.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
 		env_,
 	];
 
@@ -117,6 +118,7 @@ export const test = tg.command(async () => {
 	`
 		.env(build())
 		.checksum("any")
+		.network(true)
 		.then(tg.Directory.expect);
 
 	const exampleContents = await result
