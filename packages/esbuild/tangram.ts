@@ -2,6 +2,7 @@ import * as make from "gnumake" with { path: "../gnumake" };
 import * as nodejs from "nodejs" with { path: "../nodejs" };
 import * as go from "go" with { path: "../go" };
 import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	home: "https://esbuild.github.io",
@@ -47,23 +48,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-	const phases = {
-		prepare: tg`cp -R ${sourceDir}/* .
-			chmod -R u+w .
-			TMPDIR=$PWD/tmp
-			mkdir -p $TMPDIR
-			export GOCACHE=$TMPDIR
-			export GOTMPDIR=$TMPDIR
-			export GOMODCACHE=$TMPDIR`,
-		build: { command: "make" },
-		install: {
-			command: "mkdir -p $OUTPUT/bin && cp esbuild $OUTPUT/bin",
-			args: tg.Mutation.unset(),
-		},
-	};
-
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
-
 	const env = std.env.arg(
 		std.sdk({ host }),
 		go.self(goArg),
@@ -75,15 +60,22 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		env_,
 	);
 
-	return std.phases
-		.run({
-			command: { host },
-			env,
-			phases,
-			source: source_ ?? source(),
-			checksum: "any",
-			network: true,
-		})
+	return await $`mkdir work
+		cp -R ${sourceDir}/* ./work
+		chmod -R u+w ./work
+		TMPDIR=$PWD/tmp
+		mkdir -p $TMPDIR
+		export GOCACHE=$TMPDIR
+		export GOTMPDIR=$TMPDIR
+		export GOMODCACHE=$TMPDIR
+		cd work
+		make
+		mkdir -p $OUTPUT/bin
+		cp esbuild $OUTPUT/bin
+	`
+		.env(env)
+		.checksum("any")
+		.network(true)
 		.then(tg.Directory.expect);
 });
 

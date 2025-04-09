@@ -45,6 +45,9 @@ export type Arg = {
 	/** Dependencies to include in the build */
 	rustDependencies?: Array<RustDependency>;
 
+	/** Should we mirror the contents `LIBRARY_PATH` in `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`? Default: false */
+	setRuntimeLibraryPath?: boolean;
+
 	/** If a directory, locate either main.rs or lib.rs, and infer the crate type. If a file, must specify the crate type. */
 	source: tg.Directory;
 
@@ -83,11 +86,13 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		proxy = true,
 		rustcFlags,
 		rustDependencies,
+		setRuntimeLibraryPath = false,
 		source,
 		target: target_,
 		verbose = false,
 	} = await std.args.apply<Arg>(args);
 
+	const os = std.triple.os(host);
 	const target = target_ ?? host;
 	const targetPrefix = host === target ? "" : `${target}-`;
 	const rustTarget = rustTriple(target);
@@ -163,12 +168,20 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		" ",
 		...flags,
 	)}`;
+	let pre = "";
+	if (setRuntimeLibraryPath) {
+		const runtimeLibEnvVar =
+			os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+		pre = `${pre}\nexport ${runtimeLibEnvVar}=$LIBRARY_PATH`;
+	}
 
 	// Combine the envs with the user env last.
 	const env = std.env.arg(...envs, env_);
 
 	// Run the rustc command in the source directory.
-	const result = await $`${rustcCommand}`.env(env).then(tg.Directory.expect);
+	const result = await $`${pre}\n${rustcCommand}`
+		.env(env)
+		.then(tg.Directory.expect);
 
 	return result;
 });
@@ -221,13 +234,13 @@ export const test = tg.command(async () => {
 	const tests = [];
 
 	// tests.push(testBasicExeUnproxied());
-	tests.push(testBasicExeProxied());
+	// tests.push(testBasicExeProxied());
 	// tests.push(testBasicLib());
 	// tests.push(testBasicExeModules());
 	// tests.push(testBasicExeWithLib());
 	// tests.push(testExeWithCratesIoDependency());
 	// tests.push(testConditionalCompilation());
-	// tests.push(testLinkLibcurl());
+	tests.push(testLinkLibcurl());
 
 	const results = await Promise.all(tests);
 	tg.assert(results.every((r) => r === true));
@@ -401,6 +414,7 @@ export const testLinkLibcurl = tg.command(async () => {
 	const exe = await build({
 		crateName,
 		env: std.env.arg(...deps),
+		setRuntimeLibraryPath: true,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
 	console.log("exe", await exe.id());

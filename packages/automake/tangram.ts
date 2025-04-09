@@ -7,19 +7,18 @@ import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
-const version = "1.17";
 export const metadata = {
 	homepage: "https://www.gnu.org/software/automake/",
 	license: "GPL-2.0-or-later",
 	name: "automake",
 	repository: "https://git.savannah.gnu.org/git/automake.git",
-	version,
+	version: "1.17",
 	provides: {
 		binaries: [
 			"aclocal",
-			`aclocal-${version}`,
+			"aclocal-1.17",
 			"automake",
-			`automake-${version}`,
+			"automake-1.17",
 		],
 	},
 };
