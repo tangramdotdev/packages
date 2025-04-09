@@ -1,10 +1,10 @@
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
-	homepage: "https://git.gavinhoward.com/gavin/bc",
+	homepage: "https://github.com/gavinhoward/bc",
 	name: "bc",
 	license: "BSD-2-Clause",
-	repository: "https://git.gavinhoward.com/gavin/bc",
+	repository: "https://github.com/gavinhoward/bc",
 	version: "7.0.3",
 	provides: {
 		binaries: ["bc", "dc"],
@@ -13,14 +13,22 @@ export const metadata = {
 
 export const source = tg.command(async () => {
 	const { name, version } = metadata;
-	const extension = ".tar.xz";
 	const checksum =
 		"sha256:91eb74caed0ee6655b669711a4f350c25579778694df248e28363318e03c7fc4";
-	const base = `https://git.gavinhoward.com/gavin/${name}/releases/download/${version}`;
-	return await std
-		.download({ base, checksum, name, version, extension })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
+	const tag = version;
+	const owner = "gavinhoward";
+	const repo = name;
+	return await std.download
+		.fromGithub({
+			checksum,
+			compression: "xz",
+			owner,
+			repo,
+			tag,
+			source: "release",
+			version,
+		})
+		.then(tg.Directory.expect);
 });
 
 type Arg = {
