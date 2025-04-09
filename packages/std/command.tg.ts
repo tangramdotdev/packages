@@ -147,7 +147,7 @@ class CommandBuilder {
 		const args: Array<tg.Process.RunArg> = [
 			{ checksum: this._checksum, network: this._network },
 		];
-		if (this._mounts?.length > 0) {
+		if ((this._mounts?.length ?? 0) > 0) {
 			args.push({ mounts: this._mounts });
 		}
 		return await tg.run(this.command(), ...args);

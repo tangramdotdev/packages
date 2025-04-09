@@ -2376,7 +2376,7 @@ export const testDependencies = tg.command(async () => {
 
 	// return wrapper;
 
-	const bundle = tg.Artifact.bundle(tg.directory({ wrapper }));
+	const bundle = tg.Artifact.bundle(await tg.directory({ wrapper }));
 	return bundle;
 });
 
