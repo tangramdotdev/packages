@@ -82,6 +82,40 @@ export const testBootstrapEnvImageOci = tg.command(async () => {
 	return imageFile;
 });
 
+export const testBootstrapMakeEnv = tg.command(async () => {
+	const utils = await bootstrap.utils();
+	const make = await bootstrap.make();
+	const basicEnv = await std.env(utils, make, { NAME: "Tangram" }, { utils: false });
+	return basicEnv;
+});
+
+export const testBootstrapMakeEnvImageDocker = tg.command(async () => {
+	const basicEnv = await testBootstrapMakeEnv();
+	const buildToolchain = await std.env.arg(
+		bootstrap.sdk(),
+		bootstrap.make.build(),
+	);
+	const imageFile = await image(basicEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+	});
+	return imageFile;
+});
+
+export const testBootstrapMakeEnvImageOci = tg.command(async () => {
+	const basicEnv = await testBootstrapMakeEnv();
+	const buildToolchain = await std.env.arg(
+		bootstrap.sdk(),
+		bootstrap.make.build(),
+	);
+	const imageFile = await image(basicEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		format: "oci",
+	});
+	return imageFile;
+});
+
 export const testBasicEnv = tg.command(async () => {
 	const detectedHost = await std.triple.host();
 	const host = bootstrap.toolchainTriple(detectedHost);
