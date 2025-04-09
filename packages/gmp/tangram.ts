@@ -49,6 +49,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			doCheck: true,
+			debug: true,
 			env,
 			sdk,
 			source: source_ ?? source(),

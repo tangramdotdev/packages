@@ -178,11 +178,13 @@ class CommandBuilder {
 			envs.push(...this._env);
 		}
 		if (this._includeUtils) {
-			const utilsEnv = std.utils.env({
-				sdk: false,
-				env: std.sdk(),
-				host: arg.host,
-			});
+			const utilsEnv = std.build(
+				std.utils.env({
+					sdk: false,
+					env: std.sdk(),
+					host: arg.host,
+				}),
+			) as Promise<std.env.EnvObject>;
 			envs.push(utilsEnv);
 		}
 		const tangramHost = (await tg.process.env("TANGRAM_HOST")) as string;
@@ -285,11 +287,13 @@ class Dollar extends CommandBuilder {
 			envs.push(...this._env);
 		}
 		if (this._includeUtils) {
-			const utilsEnv = std.utils.env({
-				sdk: false,
-				env: std.sdk(),
-				host: arg.host,
-			});
+			const utilsEnv = std.build(
+				std.utils.env({
+					sdk: false,
+					env: std.sdk(),
+					host: arg.host,
+				}),
+			) as Promise<std.env.EnvObject>;
 			envs.push(utilsEnv);
 		}
 		let tangramHost = (await tg.process.env("TANGRAM_HOST")) as string;
@@ -312,8 +316,15 @@ class Dollar extends CommandBuilder {
 				arg.executable = shellArtifact;
 			} else {
 				// Otherwise, use the default bash executable from the standard utils.
-				arg.executable = await std.utils.bash
-					.build({ sdk: false, env: std.sdk(), host: arg.host })
+				arg.executable = await std
+					.build(
+						std.utils.bash.build({
+							sdk: false,
+							env: std.sdk(),
+							host: arg.host,
+						}),
+					)
+					.then(tg.Directory.expect)
 					.then((dir) => dir.get("bin/bash"))
 					.then(tg.File.expect);
 			}
@@ -369,8 +380,8 @@ class Dollar extends CommandBuilder {
 
 /** Wrapper for tg.command that includes the default mounts. */
 export const command = async (
-	...args: std.Args<tg.Process.RunArg>
-): Promise<CommandBuilder> => {
+	...args: std.args.UnresolvedArgs<tg.Process.RunArg>
+) => {
 	const arg = await processArg(...args);
 	const builder = new CommandBuilder(arg);
 	return await builder.command();
@@ -378,8 +389,8 @@ export const command = async (
 
 /** Wrapper around tg.build that attaches the default mount to commands. */
 export const build = async (
-	...args: std.Args<tg.Process.RunArg>
-): Promise<tg.Value> => {
+	...args: std.args.UnresolvedArgs<tg.Process.RunArg>
+) => {
 	const arg = await processArg(...args);
 	const commandBuilder = new CommandBuilder(arg);
 	return await commandBuilder.build();
@@ -387,8 +398,8 @@ export const build = async (
 
 /** Wrapper around tg.run that attaches the default mount to commands. */
 export const run = async (
-	...args: std.Args<tg.Process.RunArg>
-): Promise<tg.Value> => {
+	...args: std.args.UnresolvedArgs<tg.Process.RunArg>
+) => {
 	const arg = await processArg(...args);
 	const commandBuilder = new CommandBuilder(arg);
 	return await commandBuilder.run();
@@ -423,7 +434,7 @@ export const defaultMount = tg.command(
 
 /** Process a set of spawn args. */
 export const processArg = async (
-	...args: std.Args<tg.Process.RunArg>
+	...args: std.args.UnresolvedArgs<tg.Process.RunArg>
 ): Promise<tg.Process.RunArgObject> => {
 	const resolved = await Promise.all(args.map(tg.resolve));
 	const flattened = std.flatten(resolved);

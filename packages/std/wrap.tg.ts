@@ -365,8 +365,10 @@ export namespace wrap {
 		} else {
 			buildArg = { sdk: false, env: std.sdk() };
 		}
-		const shellExecutable = await std.utils.bash
-			.build(buildArg)
+
+		const shellExecutable = await std
+			.build(std.utils.bash.build(buildArg))
+			.then(tg.Directory.expect)
 			.then((artifact) => artifact.get("bin/bash"))
 			.then(tg.File.expect);
 
@@ -398,7 +400,9 @@ export namespace wrap {
 
 		// Add utils.
 		if (includeUtils) {
-			wrapArgs.push({ env: await std.utils.env(buildArg) });
+			wrapArgs.push({
+				env: (await std.build(std.utils.env(buildArg))) as std.env.EnvObject,
+			});
 		}
 
 		// Produce wrapped shell.

@@ -213,13 +213,15 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
-		const sdk = await std.sdk(sdkArgs);
+		const sdk = (await std.build(sdkCommand(sdkArgs))) as std.env.EnvObject;
 		// Add a set of utils for the host, compiled with the default SDK to improve cache hits.
-		const utils = await std.utils.env({
-			host,
-			sdk: false,
-			env: std.sdk({ host }),
-		});
+		const utils = (await std.build(
+			std.utils.env({
+				host,
+				sdk: false,
+				env: std.sdk({ host }),
+			}),
+		)) as std.env.EnvObject;
 		env = await std.env.arg(sdk, utils, env);
 	}
 
@@ -328,6 +330,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		)
 		.then(tg.Directory.expect);
 });
+
+export const sdkCommand = tg.command(
+	(args: Array<std.sdk.ArgObject> | undefined) => {
+		return std.sdk(args);
+	},
+);
 
 export const pushOrSet = (
 	obj: { [key: string]: unknown },

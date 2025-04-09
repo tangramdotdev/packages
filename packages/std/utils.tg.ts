@@ -39,7 +39,7 @@ export type Arg = {
 };
 
 /** A basic set of GNU system utilites. */
-export const env = tg.command(async (arg?: Arg) => {
+export const env = tg.command(async (arg?: Arg): Promise<std.env.EnvObject> => {
 	const { build, env: env_, host: host_, sdk } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 
