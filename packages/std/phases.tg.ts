@@ -183,7 +183,7 @@ export const run = tg.command(async (...args: std.Args<Arg>) => {
 	if (debug) {
 		console.log("phases.build command", await command.id());
 	}
-	return await std.run(command, { checksum, network });
+	return await tg.run(command, { checksum, network });
 });
 
 export type Phases = {
