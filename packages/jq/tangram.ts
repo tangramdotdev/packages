@@ -63,7 +63,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await std.build(build);
+	// FIXME 'Command<Args<Arg>, Directory>' is not assignable to type 'Command<Value[], Value>'
+	const dir = await std.build(build).then(tg.Directory.expect);
 	return await std.run({ executable: tg.symlink(tg`${dir}/bin/jq`), args });
 });
 

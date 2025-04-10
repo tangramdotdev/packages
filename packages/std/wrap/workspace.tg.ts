@@ -14,7 +14,7 @@ type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export const workspace = tg.command(
+export const workspace = 
 	async (arg?: Arg): Promise<tg.Directory> => {
 		const {
 			build: build_,
@@ -35,14 +35,15 @@ export const workspace = tg.command(
 					packages: packages,
 				});
 
-		return build({
-			...(await std.triple.rotate({ build: buildTriple, host })),
-			buildToolchain,
-			release,
-			source,
-		});
-	},
-);
+		return std.build(
+			build({
+				...(await std.triple.rotate({ build: buildTriple, host })),
+				buildToolchain,
+				release,
+				source,
+			}),
+		).then(tg.Directory.expect);
+	};
 
 export const ccProxy = (arg?: Arg) =>
 	workspace(arg)
@@ -187,7 +188,7 @@ type BuildArg = {
 	target?: string;
 };
 
-export const build = async (arg: BuildArg) => {
+export const build = tg.command(async (arg: BuildArg) => {
 	const enableTracing = arg.enableTracingFeature ?? true;
 	const release = arg.release ?? true;
 	const source = arg.source;
@@ -359,7 +360,7 @@ export const build = async (arg: BuildArg) => {
 			network: true,
 		}),
 	);
-};
+});
 
 /* Ensure the passed triples are what we expect, musl on linxu and standard for macOS. */
 const standardizeTriple = (triple: string): string => {

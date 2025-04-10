@@ -213,7 +213,9 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
+		console.log("about to build sdk");
 		const sdk = (await std.build(sdkCommand(sdkArgs))) as std.env.EnvObject;
+		console.log(sdk, "built");
 		// Add a set of utils for the host, compiled with the default SDK to improve cache hits.
 		const utils = (await std.build(
 			std.utils.env({
