@@ -1,4 +1,5 @@
 import * as std from "./tangram.ts";
+import { buildBootstrap } from "./command.tg.ts";
 
 export * as make from "./bootstrap/make.tg.ts";
 export * as musl from "./bootstrap/musl.tg.ts";
@@ -151,7 +152,7 @@ export const patch = async (
 			},
 			host,
 		})
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 
 	return patchedSource;

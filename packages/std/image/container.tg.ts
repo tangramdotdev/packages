@@ -1,6 +1,7 @@
 import * as std from "../tangram.ts";
 import * as bootstrap from "../bootstrap.tg.ts";
 import zstd from "../sdk/dependencies/zstd.tg.ts";
+import { buildBootstrap } from "../command.tg.ts";
 
 /*
 	notes:
@@ -350,7 +351,7 @@ export const ociImageFromLayers = async (
 				.command(tg`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`, {
 					env: std.env.arg(additionalEnv),
 				})
-				.then((command) => std.build(command))
+				.then((command) => buildBootstrap(command))
 				.then(tg.File.expect);
 			const descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,
