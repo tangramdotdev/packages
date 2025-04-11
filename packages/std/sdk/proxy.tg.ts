@@ -414,7 +414,7 @@ int main() {
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from a TGLD-wrapped binary!");
 	return output;
@@ -439,7 +439,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 				env: std.env.arg(sdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 };
 
@@ -504,7 +504,7 @@ void printGreeting();
 				TANGRAM_LINKER_TRACING: "tangram=trace",
 			}),
 		})
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 	console.log("STRING CONSTANTS A", await output.id());
 	return output;
@@ -660,7 +660,7 @@ const char* getGreetingB();
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 
 	// Assert the library paths of the wrapper are set appropriately.
@@ -837,7 +837,7 @@ export const testSamePrefix = tg.command(async () => {
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	console.log("wrapped_exe", await output.id());
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
@@ -893,7 +893,7 @@ export const testSamePrefixDirect = tg.command(async () => {
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
@@ -944,7 +944,7 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 
 	const output = await tg
@@ -960,7 +960,7 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
@@ -969,6 +969,7 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 	type: "file",
 };
+import { buildBootstrap } from "../command.tg.ts";
 export const testStrip = tg.command(async () => {
 	const toolchain = await bootstrap.sdk();
 	const output = await tg
@@ -984,7 +985,7 @@ export const testStrip = tg.command(async () => {
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	return output;
 });
