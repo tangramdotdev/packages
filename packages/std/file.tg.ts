@@ -1,4 +1,5 @@
 import * as std from "./tangram.ts";
+import { buildBootstrap } from "./command.tg.ts";
 import * as bootstrap from "./bootstrap.tg.ts";
 
 export type ExecutableMetadata =
@@ -600,7 +601,7 @@ export const test = tg.command(async () => {
 				}),
 			},
 		)
-		.then((c) => std.build(c))
+		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 
 	// Obtain the output files.

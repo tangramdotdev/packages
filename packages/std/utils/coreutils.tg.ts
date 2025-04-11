@@ -7,6 +7,7 @@ import libiconv from "./libiconv.tg.ts";
 import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch" with {
 	type: "file",
 };
+import { buildBootstrap } from "../command.tg.ts";
 
 export const metadata = {
 	name: "coreutils",
@@ -221,7 +222,7 @@ export const test = tg.command(async () => {
 			? libiconv({ host, sdk: false, env: sdk })
 			: attr({ host, sdk: false, env: sdk });
 	const output = tg.File.expect(
-		await std.build(
+		await buildBootstrap(
 			await tg.command(script, {
 				env: std.env.arg(platformSupportLib, coreutils),
 			}),

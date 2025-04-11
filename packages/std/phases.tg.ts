@@ -1,3 +1,4 @@
+import { runBootstrap } from "./command.tg.ts";
 import * as std from "./tangram.ts";
 
 /** Helper for constructing multi-phase build targets. */
@@ -183,7 +184,7 @@ export const run = tg.command(async (...args: std.Args<Arg>) => {
 	if (debug) {
 		console.log("phases.build command", await command.id());
 	}
-	return await std.run(command, { checksum, network });
+	return await runBootstrap(command, { checksum, network });
 });
 
 export type Phases = {

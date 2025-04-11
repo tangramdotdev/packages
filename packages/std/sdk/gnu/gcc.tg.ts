@@ -4,6 +4,7 @@ import { interpreterName } from "../libc.tg.ts";
 import { defaultGlibcVersion } from "../libc/glibc.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
 import * as std from "../../tangram.ts";
+import { buildBootstrap } from "../../command.tg.ts";
 
 export const metadata = {
 	homepage: "https://gcc.gnu.org/",
@@ -296,7 +297,7 @@ async function getGccVersion(
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
 	const envObject = std.env.arg(bootstrap.utils(), env);
 	const result = tg.File.expect(
-		await std.build(await tg.command(script, { env: envObject })),
+		await buildBootstrap(await tg.command(script, { env: envObject })),
 	);
 	return (await result.text()).trim();
 }

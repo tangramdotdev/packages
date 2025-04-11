@@ -168,6 +168,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		image: image.test,
 		stdBuild: command.testBuild,
 		dollar: command.testDollar,
+		dollarBootstrap: command.testDollarBootstrap,
 	};
 };
 

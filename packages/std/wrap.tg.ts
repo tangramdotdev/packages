@@ -1,4 +1,5 @@
 import * as bootstrap from "./bootstrap.tg.ts";
+import { buildBootstrap } from "./command.tg.ts";
 import * as gnu from "./sdk/gnu.tg.ts";
 import { interpreterName } from "./sdk/libc.tg.ts";
 import * as std from "./tangram.ts";
@@ -2190,7 +2191,7 @@ export const argAndEnvDump = tg.command(async () => {
 	});
 
 	return tg.File.expect(
-		await std.build(
+		await buildBootstrap(
 			await tg.command(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
 				env: sdkEnv,
 			}),
@@ -2248,7 +2249,7 @@ export const testSingleArgObjectNoMutations = tg.command(async () => {
 	// Check the output matches the expected output.
 	const output = await tg
 		.command(tg`${wrapper} > $OUTPUT`)
-		.then((command) => std.build(command))
+		.then((command) => buildBootstrap(command))
 		.then(tg.File.expect);
 	const text = await output.text();
 	console.log("text", text);
@@ -2310,7 +2311,7 @@ export const testContentExecutable = tg.command(async () => {
 		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((command) => std.build(command))
+		.then((command) => buildBootstrap(command))
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
@@ -2334,7 +2335,7 @@ export const testContentExecutableVariadic = tg.command(async () => {
 		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
 			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
 		})
-		.then((command) => std.build(command))
+		.then((command) => buildBootstrap(command))
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);

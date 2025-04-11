@@ -1,6 +1,7 @@
 /** This module provides environments ready to produce Tangram-wrapped executables from C and C++ code. */
 
 import * as bootstrap from "./bootstrap.tg.ts";
+import { buildBootstrap } from "./command.tg.ts";
 import binutils from "./sdk/gnu/binutils.tg.ts";
 import * as gnu from "./sdk/gnu.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
@@ -618,7 +619,7 @@ export namespace sdk {
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		const output = tg.File.expect(
-			await std.build(
+			await buildBootstrap(
 				await tg.command(tg`${cmd} -dumpmachine > $OUTPUT`, {
 					env: std.env.arg(env),
 					host: std.triple.archAndOs(detectedHost),
@@ -715,7 +716,7 @@ export namespace sdk {
 			langStr = "f95";
 		}
 		const compiledProgram = tg.File.expect(
-			await std.build(
+			await buildBootstrap(
 				await tg.command(
 					tg`echo "testing ${lang}"
 				set -x
@@ -767,7 +768,7 @@ export namespace sdk {
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
 			const testOutput = tg.File.expect(
-				await std.build(
+				await buildBootstrap(
 					await tg.command(tg`${compiledProgram} > $OUTPUT`, {
 						host: std.triple.archAndOs(expectedHost),
 						env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
@@ -1033,7 +1034,7 @@ export const assertComment = async (
 	textToMatch: string,
 ) => {
 	const elfComment = tg.File.expect(
-		await std.build(
+		await buildBootstrap(
 			await tg.command(
 				tg`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`,
 				{
