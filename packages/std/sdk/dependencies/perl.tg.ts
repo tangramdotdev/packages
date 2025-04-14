@@ -4,14 +4,14 @@ import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 
 export const metadata = {
 	name: "perl",
-	version: "5.40.1",
+	version: "5.40.2",
 };
 
 export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:02f8c45bb379ed0c3de7514fad48c714fd46be8f0b536bfd5320050165a1ee26";
+		"sha256:10d4647cfbb543a7f9ae3e5f6851ec49305232ea7621aed24c7cfbb0bef4b70d";
 	const base = `https://www.cpan.org/src/5.0`;
 	return await std
 		.download({ base, checksum, name, version, extension })

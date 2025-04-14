@@ -530,6 +530,12 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 				unsafe { std::env::set_var(key, value) };
 			}
 		},
+		tg::mutation::Data::Merge { .. } => {
+			return Err(std::io::Error::new(
+				std::io::ErrorKind::InvalidInput,
+				"merge mutations are not supported for environment variables",
+			));
+		},
 	}
 	Ok(())
 }

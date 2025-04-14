@@ -47,7 +47,12 @@ export const tryArchAndOs = (s: string): string | undefined => {
 
 /** Retrieve the configured host for the current running target. */
 export const host = async (): Promise<string> => {
-	return (await tg.process.env("TANGRAM_HOST")) as string;
+	let val = await tg.process.env("TANGRAM_HOST");
+	tg.assert(
+		val !== undefined,
+		"unable to read TANGRAM_HOST from current process",
+	);
+	return val as string;
 };
 
 /** Retrieve the arch field from a triple string. Throws if unable to parse the input. */

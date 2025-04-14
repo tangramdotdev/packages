@@ -75,6 +75,7 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
 	const env = await std.env.arg(
 		{
+			SHELL: "/bin/sh",
 			SDKROOT: await bootstrap.macOsSdk(),
 		},
 		arg.env,
@@ -102,10 +103,10 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const system = std.triple.archAndOs(host);
 	const injection =
 		await $`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
-			.pipefail(false)
 			.includeUtils(false)
 			.host(system)
-			.env(arg.buildToolchain, env)
+			.env(arg.buildToolchain)
+			.env(env)
 			.then(tg.File.expect);
 	return injection;
 });
@@ -159,13 +160,12 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		{
 			// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
 			TANGRAM_LINKER_PASSTHROUGH: true,
+			SHELL: "/bin/sh",
 		},
 		arg.env,
 	);
 	const output =
 		$`${executable} -xc ${arg.source} -o $OUTPUT ${tg.Template.join(" ", ...args)}`
-			.pipefail(false)
-			.executable("/bin/sh")
 			.includeUtils(false)
 			.env(env)
 			.host(system)

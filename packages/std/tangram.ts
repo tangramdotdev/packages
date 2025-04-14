@@ -169,6 +169,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		stdBuild: command.testBuild,
 		dollar: command.testDollar,
 		dollarBootstrap: command.testDollarBootstrap,
+		dollarEnvClear: command.testEnvClear,
 	};
 };
 
