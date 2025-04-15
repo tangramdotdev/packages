@@ -489,6 +489,11 @@ pub fn collect_dependencies_from_mutation_data(
 		| tg::mutation::Data::Suffix { template, .. } => {
 			collect_dependencies_from_template_data(template, dependencies);
 		},
+		tg::mutation::Data::Merge { value } => {
+			for value in value.values() {
+				collect_dependencies_from_value_data(value, dependencies);
+			}
+		},
 	}
 }
 

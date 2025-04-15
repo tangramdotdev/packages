@@ -11,7 +11,7 @@ export const metadata = {
 	name: "perl",
 	license: "GPL-1.0-or-later",
 	repository: "https://github.com/Perl/perl5",
-	version: "5.40.1",
+	version: "5.40.2",
 	provides: {
 		binaries: ["perl"],
 	},
@@ -23,7 +23,7 @@ export const source = tg.command(async () => {
 	// Download raw source.
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:02f8c45bb379ed0c3de7514fad48c714fd46be8f0b536bfd5320050165a1ee26";
+		"sha256:10d4647cfbb543a7f9ae3e5f6851ec49305232ea7621aed24c7cfbb0bef4b70d";
 	const base = `https://www.cpan.org/src/5.0`;
 	return await std
 		.download({ base, checksum, extension, name, version })
