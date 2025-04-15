@@ -82,5 +82,8 @@ export const test = tg.command(async () => {
 	return await $`
 			echo "Checking if we can link against nettle and hogweed."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp
-		`.env(std.sdk(), build(), gmp.build());
+		`
+		.env(std.sdk())
+		.env(build())
+		.env(gmp.build());
 });

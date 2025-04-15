@@ -36,10 +36,10 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		ncurses?: std.args.dependencyArg<ncurses.Arg>;
-		readline?: std.args.dependencyArg<readline.Arg>;
-		xz?: std.args.dependencyArg<xz.Arg>;
-		zlib?: std.args.dependencyArg<zlib.Arg>;
+		ncurses?: std.args.DependencyArg<ncurses.Arg>;
+		readline?: std.args.DependencyArg<readline.Arg>;
+		xz?: std.args.DependencyArg<xz.Arg>;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;

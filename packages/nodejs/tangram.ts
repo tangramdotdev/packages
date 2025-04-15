@@ -219,7 +219,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		(arg) => arg !== undefined,
 	) as Array<std.phases.Arg>;
 
-	const built = await std.phases.build(
+	const built = await std.phases.run(
 		{
 			phases,
 			env,

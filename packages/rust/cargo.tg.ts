@@ -213,21 +213,19 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const artifact = await $`${buildScript}`
 		.checksum(checksum)
 		.network(network)
-		.env(
-			sdk,
-			rustArtifact,
-			{
-				RUST_TARGET: target,
-				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-				...toolchainEnv,
-			},
-			proxyEnv,
-			networkEnv,
-			jobsEnv,
-			verbosityEnv,
-			{ TANGRAM_HOST: std.triple.archAndOs(host) },
-			env,
-		)
+		.env(sdk)
+		.env(rustArtifact)
+		.env({
+			RUST_TARGET: target,
+			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+			...toolchainEnv,
+		})
+		.env(proxyEnv)
+		.env(networkEnv)
+		.env(jobsEnv)
+		.env(verbosityEnv)
+		.env({ TANGRAM_HOST: std.triple.archAndOs(host) })
+		.env(std.env.arg(env))
 		.then(tg.Directory.expect);
 
 	// Store a handle to the release directory containing Tangram bundles.
@@ -292,7 +290,9 @@ const vendoredSources = async (
 		const result = await $`${vendorScript}`
 			.checksum("any")
 			.network(true)
-			.env(sdk, rustArtifact, {
+			.env(sdk)
+			.env(rustArtifact)
+			.env({
 				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 				CARGO_HTTP_CAINFO: certFile,
 				RUST_TARGET: rustTarget,
@@ -485,9 +485,7 @@ export const testVendorDependencies = tg.command(async () => {
 		source: sourceDirectory,
 		useCargoVendor: true,
 	});
-
-	return tg.directory({
-		tgVendored,
-		cargoVendored,
-	});
+	console.log("tgVendored", await (await tgVendored).id());
+	console.log("cargoVendored", await cargoVendored);
+	return true;
 });

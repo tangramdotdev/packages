@@ -295,7 +295,8 @@ export const vendor = async ({
 
 				mv -T ./vendor "$OUTPUT" || true
 			`
-		.env(self(), { SSL_CERT_DIR: std.caCertificates() })
+		.env(self())
+		.env({ SSL_CERT_DIR: std.caCertificates() })
 		.checksum("any")
 		.network(true)
 		.then(tg.Directory.expect);
@@ -350,5 +351,7 @@ export const test = tg.command(async () => {
 				go mod tidy
 				go run main.go
 				go run ./subcommand.go
-			`.env(std.sdk(), self());
+			`
+		.env(std.sdk())
+		.env(self());
 });

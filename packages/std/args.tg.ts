@@ -500,6 +500,8 @@ export const mergeMutations = async (
 		return [a, b];
 	} else if (a.inner.kind === "prepend" && b.inner.kind === "prefix") {
 		return [a, b];
+	} else if (a.inner.kind === "merge" || b.inner.kind === "merge") {
+		return [a, b];
 	} else {
 		return tg.unreachable();
 	}

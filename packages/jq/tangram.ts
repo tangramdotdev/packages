@@ -33,6 +33,7 @@ export type Arg = {
 };
 
 export const build = tg.command(async (...args: std.Args<Arg>) => {
+	console.log("INSIDE HOST", await std.triple.host());
 	const {
 		autotools = {},
 		build,
@@ -63,6 +64,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const run = tg.command(async (...args: Array<tg.Value>) => {
+	console.log("OUTSIDE HOST", await std.triple.host());
 	const dir = await build.build();
 	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/jq`), args });
 });

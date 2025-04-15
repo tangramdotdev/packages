@@ -105,13 +105,12 @@ export const test = tg.command(async () => {
 	return await $`
 			echo "Checking if we can link against libarchive."
 			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto -larchive -lz -lbz2 -liconv -llzma
-		`.env(
-		std.sdk(),
-		build(),
-		bzip2.build(),
-		libiconv.build(),
-		openssl.build(),
-		xz.build(),
-		zlib.build(),
-	);
+		`
+		.env(std.sdk())
+		.env(build())
+		.env(bzip2.build())
+		.env(libiconv.build())
+		.env(openssl.build())
+		.env(xz.build())
+		.env(zlib.build());
 });

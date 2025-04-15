@@ -42,7 +42,8 @@ export const reconfigure = async (source: tg.Directory) => {
 			chmod -R u+w $OUTPUT
 			cd $OUTPUT
 			autoreconf --install --verbose`
-		.env(autoconf(), automake())
+		.env(autoconf())
+		.env(automake())
 		.then(tg.Directory.expect);
 };
 

@@ -126,7 +126,8 @@ export const test = tg.command(async () => {
 			echo "Checking if we can link against libssl."
 			cc ${source}/main.c -o $OUTPUT/prog -lssl -lcrypto
 		`
-		.env(std.sdk(), build())
+		.env(std.sdk())
+		.env(build())
 		.then(tg.Directory.expect);
 
 	const text = await output

@@ -80,7 +80,7 @@ export const kernelHeaders = tg.command(async (...args: std.Args<Arg>) => {
 	const order = ["prepare", "build", "install"];
 
 	const result = tg.Directory.expect(
-		await std.phases.build(
+		await std.phases.run(
 			{
 				env: std.env.arg(env),
 				phases: { prepare, build, install },

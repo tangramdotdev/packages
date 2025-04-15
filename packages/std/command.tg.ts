@@ -176,6 +176,7 @@ export class BuildBuilder {
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
+						host: await tg.process.env("TANGRAM_HOST"),
 					};
 				} else if (arg instanceof tg.Command) {
 					let object = await arg.object();
@@ -226,9 +227,6 @@ export class BuildBuilder {
 			envs.push(buildUtilsEnv());
 		}
 		let tangramHost = await std.triple.host();
-		envs.push({
-			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
-		});
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}
@@ -354,6 +352,7 @@ export class CommandBuilder<
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
+						host: await tg.process.env("TANGRAM_HOST"),
 					};
 				} else if (arg instanceof tg.Command) {
 					return await arg.object();
@@ -386,9 +385,6 @@ export class CommandBuilder<
 			envs.push(buildUtilsEnv());
 		}
 		let tangramHost = await std.triple.host();
-		envs.push({
-			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
-		});
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}
@@ -526,6 +522,8 @@ export class RunBuilder {
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
+						host: await tg.process.env("TANGRAM_HOST"),
+
 					};
 				} else if (arg instanceof tg.Command) {
 					let object = await arg.object();
@@ -576,9 +574,6 @@ export class RunBuilder {
 			envs.push(buildUtilsEnv());
 		}
 		let tangramHost = await std.triple.host();
-		envs.push({
-			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
-		});
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}
