@@ -90,6 +90,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/bzip2`), args });
+});
+
 export const test = tg.command(async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),

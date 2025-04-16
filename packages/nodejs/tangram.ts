@@ -87,6 +87,11 @@ export const self = tg.command(async (args?: ToolchainArg) => {
 	});
 });
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/node`), args });
+});
+
 export const test = tg.command(async () => {
 	const node = self();
 	return await $`
@@ -219,7 +224,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		(arg) => arg !== undefined,
 	) as Array<std.phases.Arg>;
 
-	const built = await std.phases.build(
+	const built = await std.phases.run(
 		{
 			phases,
 			env,

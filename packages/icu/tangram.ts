@@ -54,7 +54,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { python: pythonArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -71,7 +71,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			env_,
 			host,
 			sdk,
-			std.env.buildDependency(python.self, pythonArg),
+			std.env.buildDependency(python.self, dependencyArgs.python),
 		),
 	];
 	const env = [...dependencies, env_];

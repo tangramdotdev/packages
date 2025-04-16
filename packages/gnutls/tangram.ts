@@ -105,5 +105,10 @@ export const test = tg.command(async () => {
 	return await $`
 			echo "Checking if we can link against gnutls."
 			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp -lgnutls -lz
-		`.env(std.sdk(), build(), nettle.build(), gmp.build(), zlib.build());
+		`
+		.env(std.sdk())
+		.env(build())
+		.env(nettle.build())
+		.env(gmp.build())
+		.env(zlib.build());
 });

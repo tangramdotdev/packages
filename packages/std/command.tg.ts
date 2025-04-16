@@ -176,6 +176,7 @@ export class BuildBuilder {
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
+						host: await tg.process.env("TANGRAM_HOST"),
 					};
 				} else if (arg instanceof tg.Command) {
 					let object = await arg.object();
@@ -226,9 +227,6 @@ export class BuildBuilder {
 			envs.push(buildUtilsEnv());
 		}
 		let tangramHost = await std.triple.host();
-		envs.push({
-			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
-		});
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}
@@ -275,7 +273,9 @@ export class BuildBuilder {
 				arg.mounts.unshift(linuxMount);
 			}
 		}
-		return tg.build(arg as tg.Process.BuildArgObject).then(onfulfilled, onrejected);
+		return tg
+			.build(arg as tg.Process.BuildArgObject)
+			.then(onfulfilled, onrejected);
 	}
 }
 
@@ -339,8 +339,7 @@ export class CommandBuilder<
 		return this;
 	}
 
-	
-		async mergeArgs(): Promise<CommandArgObject> {
+	async mergeArgs(): Promise<CommandArgObject> {
 		let resolved = await Promise.all(this.#args.map(tg.resolve));
 		let objects = await Promise.all(
 			resolved.map(async (arg) => {
@@ -354,6 +353,7 @@ export class CommandBuilder<
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
+						host: await tg.process.env("TANGRAM_HOST"),
 					};
 				} else if (arg instanceof tg.Command) {
 					return await arg.object();
@@ -368,7 +368,6 @@ export class CommandBuilder<
 		});
 		return arg;
 	}
-
 
 	async then<TResult1 = tg.Command<A, R>, TResult2 = never>(
 		onfulfilled?:
@@ -386,9 +385,6 @@ export class CommandBuilder<
 			envs.push(buildUtilsEnv());
 		}
 		let tangramHost = await std.triple.host();
-		envs.push({
-			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
-		});
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}
@@ -436,7 +432,9 @@ export class CommandBuilder<
 				arg.mounts.unshift(linuxMount);
 			}
 		}
-		const command: Promise<tg.Command<A, R>> = tg.command(arg as tg.Command.ArgObject);
+		const command: Promise<tg.Command<A, R>> = tg.command(
+			arg as tg.Command.ArgObject,
+		);
 		return command.then(onfulfilled, onrejected);
 	}
 }
@@ -526,6 +524,7 @@ export class RunBuilder {
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
+						host: await tg.process.env("TANGRAM_HOST"),
 					};
 				} else if (arg instanceof tg.Command) {
 					let object = await arg.object();
@@ -576,9 +575,6 @@ export class RunBuilder {
 			envs.push(buildUtilsEnv());
 		}
 		let tangramHost = await std.triple.host();
-		envs.push({
-			TANGRAM_HOST: tg.Mutation.setIfUnset(tangramHost),
-		});
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}

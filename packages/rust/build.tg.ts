@@ -426,7 +426,7 @@ export const testLinkLibcurl = tg.command(async () => {
 		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 	const exeOutput =
 		await $`export ${runtimeLibVar}=$LIBRARY_PATH\n${crateName} | tee $OUTPUT`
-			.env(exe, ...deps)
+			.env(std.env.arg(exe, ...deps))
 			.then(tg.File.expect);
 	const exeText = await exeOutput.text();
 	tg.assert(exeText.trim().includes(curl.metadata.version));

@@ -40,10 +40,10 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		libpsl?: std.env.dependencyArg<libpsl.Arg>;
-		openssl?: std.env.dependencyArg<openssl.Arg>;
-		zlib?: std.env.dependencyArg<zlib.Arg>;
-		zstd?: std.env.dependencyArg<zstd.Arg>;
+		libpsl?: std.args.DependencyArg<libpsl.Arg>;
+		openssl?: std.args.DependencyArg<openssl.Arg>;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
+		zstd?: std.args.DependencyArg<zstd.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -83,7 +83,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	];
 
 	const env = [
-		...deps.map((dep) =>
+		...deps.map((dep: any) =>
 			std.env.envArgFromDependency(build, env_, host, sdk, dep),
 		),
 		env_,
@@ -103,6 +103,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
+
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/curl`), args });
+});
 
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);

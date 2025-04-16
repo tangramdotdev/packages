@@ -41,7 +41,8 @@ import tests from "./tests" with { type: "directory" };
 export const testProxyCompiles = tg.command(async () => {
 	// Make sure the proxy compiles and runs.
 	const version = await $`tangram_rustc_proxy rustc - --version | tee $OUTPUT`
-		.env(proxy(), self())
+		.env(proxy())
+		.env(self())
 		.then(tg.File.expect);
 	const versionText = await version.text();
 	tg.assert(versionText.trim().includes(VERSION));

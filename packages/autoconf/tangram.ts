@@ -203,7 +203,8 @@ export const patchAutom4teCfg = tg.command(
 			cat <<'EOF' | tee $OUTPUT
 			${contents}
 		`
-			.env(arg?.env, std.sdk(arg?.sdk))
+			.env(arg?.env)
+			.env(std.sdk(arg?.sdk))
 			.then(tg.File.expect);
 
 		return tg.directory(autoconf, {

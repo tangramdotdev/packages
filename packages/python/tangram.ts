@@ -154,7 +154,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const makeArgs = [];
 	if (os === "darwin") {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
-		makeArgs.push("RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH");
+		makeArgs.push(
+			"RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+		);
 	}
 	const env = std.env.arg(...envs, env_);
 
@@ -427,6 +429,11 @@ sys.exit(${attribute}())
 
 	return bin;
 };
+
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/python3`), args });
+});
 
 export const test = tg.command(async () => {
 	const helloOutput =
