@@ -132,6 +132,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const os = std.triple.os(host);
 
 	// Determine SDK configuration.
+		console.log("incoming args", sdkArgs_);
 	let sdkArgs: Array<std.sdk.ArgObject> | undefined = undefined;
 	// If any SDk arg is `false`, we don't want to include the SDK.
 	const includeSdk = !sdkArgs_?.some((arg) => arg === false);
@@ -148,6 +149,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
 		}
 	}
+
+	console.log("processed args", sdkArgs);
 
 	// Set up env.
 	let env: std.env.Arg = {};

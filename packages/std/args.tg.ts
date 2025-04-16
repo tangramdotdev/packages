@@ -44,12 +44,12 @@ export type DependencyArg<T> = Omit<T, "build" | "host">;
 
 /** Variadic argument type. */
 export type Args<T extends tg.Value = tg.Value> = Array<
-	tg.MaybeNestedArray<ValueOrMaybeMutationMap<T>>
+	tg.MaybeNestedArray<tg.ValueOrMaybeMutationMap<T>>
 >;
 
 /** Variadic argument type. */
 export type UnresolvedArgs<T extends tg.Value = tg.Value> = Array<
-	tg.Unresolved<tg.MaybeNestedArray<ValueOrMaybeMutationMap<T>>>
+	tg.Unresolved<tg.MaybeNestedArray<tg.ValueOrMaybeMutationMap<T>>>
 >;
 
 /** Produce a single argument object from a variadic list of arguments with mutation handling. */
@@ -65,7 +65,7 @@ export const apply = async <T extends PackageArg>(
 		dependencies: "append",
 		env: "append",
 		sdk: "append",
-	} as Rules<T>);
+	} as tg.Args.Rules<T>);
 	const arg = await applyMutations<Collect>(mutations);
 
 	// Determine build and host;
@@ -143,9 +143,9 @@ export const createMutations = async <
 	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },
 	U extends { [key: string]: tg.Value } = T,
 >(
-	args: Array<MaybeMutationMap<T>>,
-	rules?: Rules<T>,
-): Promise<Array<MutationMap<U>>> => {
+	args: Array<tg.MaybeMutationMap<T>>,
+	rules?: tg.Args.Rules<T>,
+): Promise<Array<tg.MutationMap<U>>> => {
 	// Process the objects to the intermediate type.
 	return await Promise.all(
 		args.map(async (arg) => {
@@ -200,6 +200,9 @@ export const createMutations = async <
 							);
 							object[key] = await tg.Mutation.suffix(value);
 							break;
+						case "merge":
+							object[key] = await tg.Mutation.merge(value);
+							break;
 						default:
 							return tg.unreachable(`Unknown mutation kind: ${mutation}`);
 					}
@@ -207,7 +210,7 @@ export const createMutations = async <
 					object[key] = await mutation(value);
 				}
 			}
-			return object as MutationMap<U>;
+			return object as tg.MutationMap<U>;
 		}),
 	);
 };
@@ -215,67 +218,25 @@ export const createMutations = async <
 export const applyMutations = async <
 	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },
 >(
-	args: Array<MaybeMutationMap<T>>,
+	args: Array<tg.MaybeMutationMap<T>>,
 ): Promise<T> => {
 	return await args.reduce(
-		async (object, mutations) => {
+		async (map, mutations) => {
 			if (mutations === undefined) {
 				return Promise.resolve({}) as Promise<T>;
 			}
 			for (const [key, mutation] of Object.entries(mutations)) {
-				await mutate(await object, key, mutation);
+				if (!(mutation instanceof tg.Mutation)) {
+					((await map) as Record<string, tg.Value>)[key] = mutation;
+				} else {
+					await mutation.apply(await map, key);
+				}
 			}
-			return object;
+			return map;
 		},
 		Promise.resolve({}) as Promise<T>,
 	);
 };
-
-export type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
-	| undefined
-	| boolean
-	| number
-	| string
-	| Uint8Array
-	| tg.Blob
-	| tg.Directory
-	| tg.File
-	| tg.Symlink
-	| tg.Command
-	| tg.Mutation
-	| tg.Template
-	| Array<infer _U extends tg.Value>
-	? T
-	: T extends { [key: string]: tg.Value }
-		? MaybeMutationMap<T>
-		: never;
-
-export type MaybeMutationMap<
-	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },
-> = {
-	[K in keyof T]?: tg.MaybeMutation<T[K]>;
-};
-
-export type MutationMap<
-	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },
-> = {
-	[K in keyof T]?: tg.Mutation<T[K]>;
-};
-
-export type Rules<
-	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },
-> = {
-	[K in keyof T]: MutationKind | ((arg: T[K]) => Promise<tg.Mutation<T[K]>>);
-};
-
-export type MutationKind =
-	| "set"
-	| "unset"
-	| "set_if_unset"
-	| "prepend"
-	| "append"
-	| "prefix"
-	| "suffix";
 
 export type MakeRequired<T> = {
 	[K in keyof T]-?: T[K];
@@ -504,69 +465,5 @@ export const mergeMutations = async (
 		return [a, b];
 	} else {
 		return tg.unreachable();
-	}
-};
-
-const mutate = async (
-	object: { [key: string]: tg.Value },
-	key: string,
-	mutation: tg.MaybeMutation,
-) => {
-	if (!(mutation instanceof tg.Mutation)) {
-		object[key] = mutation;
-	} else if (mutation.inner.kind === "unset") {
-		delete object[key];
-	} else if (mutation.inner.kind === "set") {
-		object[key] = mutation.inner.value;
-	} else if (mutation.inner.kind === "set_if_unset") {
-		if (!(key in object)) {
-			object[key] = mutation.inner.value;
-		}
-	} else if (mutation.inner.kind === "prepend") {
-		if (!(key in object) || object[key] === undefined) {
-			object[key] = [];
-		}
-		const array = object[key];
-		tg.assert(array instanceof Array);
-		object[key] = [...std.flatten(mutation.inner.values), ...array];
-	} else if (mutation.inner.kind === "append") {
-		if (!(key in object) || object[key] === undefined) {
-			object[key] = [];
-		}
-		const array = object[key];
-		tg.assert(array instanceof Array);
-		object[key] = [...array, ...std.flatten(mutation.inner.values)];
-	} else if (mutation.inner.kind === "prefix") {
-		if (!(key in object)) {
-			object[key] = await tg.template();
-		}
-		const value = object[key];
-		tg.assert(
-			value === undefined ||
-				typeof value === "string" ||
-				tg.Artifact.is(value) ||
-				value instanceof tg.Template,
-		);
-		object[key] = await tg.Template.join(
-			mutation.inner.separator,
-			mutation.inner.template,
-			value,
-		);
-	} else if (mutation.inner.kind === "suffix") {
-		if (!(key in object)) {
-			object[key] = await tg.template();
-		}
-		const value = object[key];
-		tg.assert(
-			value === undefined ||
-				typeof value === "string" ||
-				tg.Artifact.is(value) ||
-				value instanceof tg.Template,
-		);
-		object[key] = await tg.Template.join(
-			mutation.inner.separator,
-			value,
-			mutation.inner.template,
-		);
 	}
 };
