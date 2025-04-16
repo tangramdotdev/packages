@@ -83,6 +83,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/gzip`), args });
+});
+
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
 export const changeShebang = async (scriptFile: tg.File) => {
 	// Ensure the file has a shebang.

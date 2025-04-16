@@ -84,6 +84,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 export default build;
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/zsh`), args });
+});
+
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
 export const wrapScript = async (script: tg.File) => {
 	const scriptMetadata = await std.file.executableMetadata(script);

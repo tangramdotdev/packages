@@ -302,6 +302,11 @@ export const vendor = async ({
 		.then(tg.Directory.expect);
 };
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/go`), args });
+});
+
 //TODO spec, add cgo test.
 
 export const test = tg.command(async () => {

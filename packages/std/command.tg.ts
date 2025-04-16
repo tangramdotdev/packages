@@ -273,7 +273,9 @@ export class BuildBuilder {
 				arg.mounts.unshift(linuxMount);
 			}
 		}
-		return tg.build(arg as tg.Process.BuildArgObject).then(onfulfilled, onrejected);
+		return tg
+			.build(arg as tg.Process.BuildArgObject)
+			.then(onfulfilled, onrejected);
 	}
 }
 
@@ -337,8 +339,7 @@ export class CommandBuilder<
 		return this;
 	}
 
-	
-		async mergeArgs(): Promise<CommandArgObject> {
+	async mergeArgs(): Promise<CommandArgObject> {
 		let resolved = await Promise.all(this.#args.map(tg.resolve));
 		let objects = await Promise.all(
 			resolved.map(async (arg) => {
@@ -367,7 +368,6 @@ export class CommandBuilder<
 		});
 		return arg;
 	}
-
 
 	async then<TResult1 = tg.Command<A, R>, TResult2 = never>(
 		onfulfilled?:
@@ -432,7 +432,9 @@ export class CommandBuilder<
 				arg.mounts.unshift(linuxMount);
 			}
 		}
-		const command: Promise<tg.Command<A, R>> = tg.command(arg as tg.Command.ArgObject);
+		const command: Promise<tg.Command<A, R>> = tg.command(
+			arg as tg.Command.ArgObject,
+		);
 		return command.then(onfulfilled, onrejected);
 	}
 }
@@ -523,7 +525,6 @@ export class RunBuilder {
 						args: ["-c", arg],
 						executable: "/bin/sh",
 						host: await tg.process.env("TANGRAM_HOST"),
-
 					};
 				} else if (arg instanceof tg.Command) {
 					let object = await arg.object();

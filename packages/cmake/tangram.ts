@@ -421,6 +421,11 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		.then(tg.Directory.expect);
 });
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/cmake`), args });
+});
+
 export const pushOrSet = (
 	obj: { [key: string]: unknown },
 	key: string,

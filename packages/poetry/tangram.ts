@@ -133,6 +133,11 @@ export const build = tg.command(async (args: BuildArgs) => {
 	);
 });
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await self.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/poetry`), args });
+});
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);

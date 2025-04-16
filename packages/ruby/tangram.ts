@@ -199,6 +199,11 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 
 export default self;
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await self.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/ruby`), args });
+});
+
 export type DownloadGemArg = {
 	/** The name of the gem. */
 	name: string;

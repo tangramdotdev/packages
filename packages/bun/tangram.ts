@@ -55,6 +55,11 @@ const binaryChecksums: { [key: string]: tg.Checksum } = {
 		"sha256:0d0fa2220607fd460b9555a57be37a098f4ca79cea4e9936a727e4fc71b364be",
 };
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await self.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/bun`), args });
+});
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);

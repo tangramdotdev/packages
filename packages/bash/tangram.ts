@@ -158,6 +158,11 @@ export const wrapScript = async (script: tg.File, host: string) => {
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
+export const run = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/bash`), args });
+});
+
 export const test = tg.command(async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
