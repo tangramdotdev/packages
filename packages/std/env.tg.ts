@@ -15,7 +15,7 @@ export namespace env {
 		| tg.MaybeMutation<ArgObject>;
 
 	/** An object containing values or potentially nested mutations. */
-	export type ArgObject = std.args.MaybeMutationMap<
+	export type ArgObject = tg.MaybeMutationMap<
 		Record<
 			string,
 			tg.MaybeNestedArray<tg.MaybeMutation<tg.Template.Arg | boolean>>
@@ -23,7 +23,7 @@ export namespace env {
 	>;
 
 	/** An object containing values or mutations for a set of environment variables, ready to pass to `tg.target`. */
-	export type EnvObject = std.args.MaybeMutationMap<
+	export type EnvObject = tg.MaybeMutationMap<
 		Record<string, tg.Template.Arg>
 	>;
 

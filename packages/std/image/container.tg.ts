@@ -96,7 +96,7 @@ export const image = tg.command(
 						rootDir: arg,
 					};
 				} else {
-					const object: std.args.MaybeMutationMap<CombinedArgObject> = {};
+					const object: tg.MaybeMutationMap<CombinedArgObject> = {};
 					if ("buildToolchain" in arg && arg.buildToolchain !== undefined) {
 						object.buildToolchain = arg.buildToolchain;
 					}
