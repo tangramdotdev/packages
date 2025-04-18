@@ -393,9 +393,11 @@ const processPackage = async (
 	const actionMap: Record<Action, () => Promise<Result>> = {
 		format: () => formatAction(tg, path),
 		check: () => checkAction(tg, path),
-		build: () => buildDefaultTarget(tg, name, processTracker),
+		build: () =>
+			buildDefaultTarget(tg, name, options.currentPlatform, processTracker),
 		test: () => buildTestTarget(tg, path, processTracker),
-		upload: () => uploadAction(tg, name, processTracker),
+		upload: () =>
+			uploadAction(tg, name, options.currentPlatform, processTracker),
 		publish: () => publishAction(tg, name, path),
 	};
 
@@ -464,7 +466,7 @@ const publishAction = async (
 	}
 
 	log(`tagging ${name}...`);
-	const tagResult = await tagPackage(tangram, name, path);
+	const tagResult = await tagItem(tangram, name, path);
 	if (tagResult.kind !== "ok") {
 		return tagResult;
 	}
@@ -482,37 +484,39 @@ const publishAction = async (
 const uploadAction = async (
 	tangram: string,
 	name: string,
+	platform: string,
 	processTracker: ProcessTracker,
 ): Promise<Result> => {
-	const processIdResult = await buildDefaultTarget(
+	const processTagResult = await buildDefaultTarget(
 		tangram,
 		name,
+		platform,
 		processTracker,
 	);
 	if (
-		processIdResult.kind !== "ok" ||
-		processIdResult.message === "unsupported host"
+		processTagResult.kind !== "ok" ||
+		processTagResult.message === "unsupported host"
 	) {
-		return processIdResult;
+		return processTagResult;
 	}
-	if (processIdResult.message === undefined) {
+	if (processTagResult.message === undefined) {
 		return result("buildError", `no ID for ${name}`);
 	}
 
-	const ids: Array<string> = [];
-	if (typeof processIdResult.message === "string") {
-		ids.push(processIdResult.message);
+	const tags: Array<string> = [];
+	if (typeof processTagResult.message === "string") {
+		tags.push(processTagResult.message);
 	} else {
-		ids.push(...processIdResult.message);
+		tags.push(...processTagResult.message);
 	}
 
-	for (const processId of ids) {
-		log(`uploading process ${processId}`);
+	for (const tag of tags) {
+		log(`uploading process ${tag}`);
 		try {
-			await $`${tangram} push --recursive ${processId}`.quiet();
-			log(`finished pushing ${processId}`);
+			await $`${tangram} push --recursive ${tag}`.quiet();
+			log(`finished pushing ${tag}`);
 		} catch (err) {
-			log(`error pushing ${processId}`);
+			log(`error pushing ${tag}`);
 			return result("pushError", err.stderr.toString());
 		}
 	}
@@ -551,15 +555,15 @@ const existingTaggedItem = async (
 	}
 };
 
-/** Tag a package at the given path with the given name. */
-const tagPackage = async (
+/** Tag an item. */
+const tagItem = async (
 	tangram: string,
 	name: string,
-	path: string,
+	item: string,
 ): Promise<Result> => {
-	log("tagging", name, path);
+	log("tagging", name, item);
 	try {
-		await $`${tangram} tag ${name} ${path}`.quiet();
+		await $`${tangram} tag ${name} ${item}`.quiet();
 		return ok();
 	} catch (err) {
 		return result("tagError");
@@ -583,10 +587,11 @@ const push = async (tangram: string, arg: string): Promise<Result> => {
 const buildDefaultTarget = async (
 	tangram: string,
 	name: string,
+	platform: string,
 	processTracker: ProcessTracker,
 ): Promise<Result> => {
 	log(`building ${name}`);
-	const ids: Array<string> = [];
+	const tags: Array<string> = [];
 
 	// Build default
 	const defaultResult = await buildNamedExport(tangram, name, processTracker);
@@ -594,7 +599,12 @@ const buildDefaultTarget = async (
 		defaultResult.kind === "ok" &&
 		typeof defaultResult.message === "string"
 	) {
-		ids.push(defaultResult.message);
+		const tag = `${name}/default/${platform}`;
+		const tagResult = await tagItem(tangram, tag, defaultResult.message);
+		if (tagResult.kind !== "ok") {
+			return tagResult;
+		}
+		tags.push(tag);
 	} else {
 		return defaultResult;
 	}
@@ -607,7 +617,12 @@ const buildDefaultTarget = async (
 		"build",
 	);
 	if (buildResult.kind === "ok" && typeof buildResult.message === "string") {
-		ids.push(buildResult.message);
+		const tag = `${name}/build/${platform}`;
+		const tagResult = await tagItem(tangram, tag, buildResult.message);
+		if (tagResult.kind !== "ok") {
+			return tagResult;
+		}
+		tags.push(tag);
 	}
 
 	// Build #self, ignoring errors.
@@ -618,10 +633,15 @@ const buildDefaultTarget = async (
 		"self",
 	);
 	if (selfResult.kind === "ok" && typeof selfResult.message === "string") {
-		ids.push(selfResult.message);
+		const tag = `${name}/self/${platform}`;
+		const tagResult = await tagItem(tangram, tag, selfResult.message);
+		if (tagResult.kind !== "ok") {
+			return tagResult;
+		}
+		tags.push(tag);
 	}
 
-	return ok(ids);
+	return ok(tags);
 };
 
 /** Build the default target given a path. Return the build ID. */
