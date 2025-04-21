@@ -104,6 +104,7 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const injection =
 		await $`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
 			.includeUtils(false)
+			.pipefail(false)
 			.host(system)
 			.env(arg.buildToolchain)
 			.env(env)
@@ -167,6 +168,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	const output =
 		$`${executable} -xc ${arg.source} -o $OUTPUT ${tg.Template.join(" ", ...args)}`
 			.includeUtils(false)
+			.pipefail(false)
 			.env(env)
 			.host(system)
 			.then(tg.File.expect);

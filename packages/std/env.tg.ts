@@ -23,9 +23,7 @@ export namespace env {
 	>;
 
 	/** An object containing values or mutations for a set of environment variables, ready to pass to `tg.target`. */
-	export type EnvObject = tg.MaybeMutationMap<
-		Record<string, tg.Template.Arg>
-	>;
+	export type EnvObject = tg.MaybeMutationMap<Record<string, tg.Template.Arg>>;
 
 	/** An object containing only a `utils` boolean field and no other members. */
 	export type UtilsToggle = { utils: boolean } & Record<string, never>;

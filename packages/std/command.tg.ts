@@ -101,12 +101,18 @@ type CommandArgObject = {
 export class BuildBuilder {
 	#args: tg.Args<BuildArgObject>;
 	#defaultMount: boolean;
+	#disallowUnset: boolean;
+	#exitOnErr: boolean;
 	#includeUtils: boolean;
+	#pipefail: boolean;
 
 	constructor(...args: tg.Args<BuildArgObject>) {
 		this.#args = args;
 		this.#defaultMount = true;
+		this.#disallowUnset = true;
+		this.#exitOnErr = true;
 		this.#includeUtils = true;
+		this.#pipefail = true;
 	}
 
 	args(args: tg.Unresolved<tg.MaybeMutation<Array<tg.Value>>>): this {
@@ -265,6 +271,24 @@ export class BuildBuilder {
 		} else {
 			arg.executable = await buildDefaultBash();
 		}
+		if (this.#pipefail) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-o", "pipefail");
+		}
+		if (this.#disallowUnset) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-u");
+		}
+		if (this.#exitOnErr) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-e");
+		}
 		if (std.triple.os(arg.host) === "linux" && this.#defaultMount) {
 			let linuxMount = await buildLinuxRootMount();
 			if (arg.mounts === undefined) {
@@ -285,12 +309,18 @@ export class CommandBuilder<
 > {
 	#args: tg.Args<CommandArgObject>;
 	#defaultMount: boolean;
+	#disallowUnset: boolean;
+	#exitOnErr: boolean;
 	#includeUtils: boolean;
+	#pipefail: boolean;
 
 	constructor(...args: tg.Args<CommandArgObject>) {
 		this.#args = args;
 		this.#defaultMount = true;
+		this.#disallowUnset = true;
+		this.#exitOnErr = true;
 		this.#includeUtils = true;
+		this.#pipefail = true;
 	}
 
 	args(args: tg.Unresolved<tg.MaybeMutation<Array<tg.Value>>>): this {
@@ -423,7 +453,24 @@ export class CommandBuilder<
 		} else {
 			arg.executable = await buildDefaultBash();
 		}
-
+		if (this.#pipefail) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-o", "pipefail");
+		}
+		if (this.#disallowUnset) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-u");
+		}
+		if (this.#exitOnErr) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-e");
+		}
 		if (std.triple.os(arg.host) === "linux" && this.#defaultMount) {
 			let linuxMount = await buildLinuxRootMount();
 			if (arg.mounts === undefined) {
@@ -442,12 +489,23 @@ export class CommandBuilder<
 export class RunBuilder {
 	#args: tg.Args<RunArgObject>;
 	#defaultMount: boolean;
+	#disallowUnset: boolean;
+	#exitOnErr: boolean;
 	#includeUtils: boolean;
+	#pipefail: boolean;
 
 	constructor(...args: tg.Args<RunArgObject>) {
 		this.#args = args;
 		this.#defaultMount = true;
+		this.#disallowUnset = true;
+		this.#exitOnErr = true;
 		this.#includeUtils = true;
+		this.#pipefail = true;
+	}
+
+	allowUndefined(b: boolean): this {
+		this.#disallowUnset = b;
+		return this;
 	}
 
 	args(args: tg.Unresolved<tg.MaybeMutation<Array<tg.Value>>>): this {
@@ -484,6 +542,11 @@ export class RunBuilder {
 		return this;
 	}
 
+	exitOnErr(b: boolean): this {
+		this.#exitOnErr = b;
+		return this;
+	}
+
 	host(host: tg.Unresolved<tg.MaybeMutation<string>>): this {
 		this.#args.push({ host });
 		return this;
@@ -507,6 +570,11 @@ export class RunBuilder {
 
 	network(network: tg.Unresolved<tg.MaybeMutation<boolean>>): this {
 		this.#args.push({ network });
+		return this;
+	}
+
+	pipefail(b: boolean): this {
+		this.#pipefail = b;
 		return this;
 	}
 
@@ -612,6 +680,24 @@ export class RunBuilder {
 			}
 		} else {
 			arg.executable = await buildDefaultBash();
+		}
+		if (this.#pipefail) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-o", "pipefail");
+		}
+		if (this.#disallowUnset) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-u");
+		}
+		if (this.#exitOnErr) {
+			if (arg.args === undefined) {
+				arg.args = [];
+			}
+			arg.args.unshift("-e");
 		}
 		if (std.triple.os(arg.host) === "linux" && this.#defaultMount) {
 			let linuxMount = await buildLinuxRootMount();
@@ -758,6 +844,7 @@ export const testDollarBootstrap = tg.command(async () => {
 		echo $NAME >> $OUTPUT
 		echo $TOOL >> $OUTPUT`
 		.includeUtils(false)
+		.pipefail(false)
 		.env({ NAME: "ben" })
 		.env({ TOOL: "tangram" })
 		.env({ SHELL: "/bin/sh" })
@@ -773,6 +860,7 @@ export const testDollarBootstrap = tg.command(async () => {
 export const testEnvClear = tg.command(async () => {
 	const output = await $`/usr/bin/env > $OUTPUT`
 		.includeUtils(false)
+		.pipefail(false)
 		.env({ FOO: "foo!" })
 		.env({ BAR: "bar!" })
 		.env(tg.Mutation.set({ BAZ: "baz!", SHELL: "/bin/sh" }))
