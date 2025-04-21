@@ -133,6 +133,7 @@ export namespace env {
 	};
 
 	/** Merge a list of `env.ArgObject` values into a single `env.EnvObject`, normalizing all mutations to a single mutation per key. */
+	// FIXME - merge mutation?
 	export const mergeArgObjects = async (
 		...argObjects: Array<tg.MaybeMutation<env.ArgObject>>
 	): Promise<env.EnvObject> => {
@@ -660,7 +661,6 @@ export namespace env {
 		return undefined;
 	};
 
-	// NOTE - the return type could be any `std.env.Arg` but in practice it is always `tg.Directory`.
 	/** Produce the requested `std.env.Arg` from a `Dependency` specification. */
 	export const envArgFromDependency = async <T extends std.args.PackageArg>(
 		build: string,
@@ -668,13 +668,26 @@ export namespace env {
 		host: string,
 		sdk: std.sdk.Arg,
 		dependency: Dependency<T>,
-	): Promise<tg.Directory> => {
+	): Promise<undefined | tg.Directory> => {
 		const { buildCmd, arg, subdirs, setHostToBuild, inheritEnv, inheritSdk } =
 			dependencyObjectFromDependency(dependency);
 
 		const host_ = setHostToBuild ? build : host;
 
-		let buildArg = { ...arg, build, host: host_ } as T;
+		let arg_ = arg;
+		if (typeof arg_ === "boolean") {
+			if (arg === true) {
+				arg_ = {
+					build,
+					host: host_,
+					sdk: {},
+				} as std.args.ResolvedPackageArg<T>;
+			} else {
+				return undefined;
+			}
+		}
+
+		let buildArg = { ...arg_, build, host: host_ } as T;
 
 		if (inheritEnv) {
 			buildArg = { ...buildArg, env };
@@ -700,7 +713,7 @@ export namespace env {
 
 	/** Object defining the options for producing and post-processing a directory to be used as a build dependency. */
 	export type DependencyObject<T extends std.args.PackageArg> = {
-		arg?: std.args.ResolvedPackageArg<T> | undefined;
+		arg?: std.args.ResolvedPackageArg<T> | boolean | undefined;
 		buildCmd: std.args.BuildCommand<T>;
 		subdirs?: Array<string>;
 		setHostToBuild?: boolean;
@@ -711,7 +724,7 @@ export namespace env {
 	/** Produce a `DependencyObject` with all the defaults applied. */
 	export const dependency = <T extends std.args.PackageArg>(
 		buildCmd: std.args.BuildCommand<T>,
-		arg?: std.args.ResolvedPackageArg<T>,
+		arg?: std.args.ResolvedPackageArg<T> | boolean,
 	): DependencyObject<T> => {
 		return {
 			buildCmd,
@@ -722,7 +735,7 @@ export namespace env {
 	/** Produce a `DependencyObject` for a buildtime dependency. */
 	export const buildDependency = <T extends std.args.PackageArg>(
 		buildCmd: std.args.BuildCommand<T>,
-		arg?: std.args.ResolvedPackageArg<T>,
+		arg?: std.args.ResolvedPackageArg<T> | boolean,
 	): DependencyObject<T> => {
 		return {
 			subdirs: ["bin"],
@@ -737,7 +750,7 @@ export namespace env {
 	/** Produce a `DependencyObject` fro a runtime dependency. */
 	export const runtimeDependency = <T extends std.args.PackageArg>(
 		buildCmd: std.args.BuildCommand<T>,
-		arg?: std.args.ResolvedPackageArg<T>,
+		arg?: std.args.ResolvedPackageArg<T> | boolean,
 	): DependencyObject<T> => {
 		return {
 			subdirs: ["include", "lib"],

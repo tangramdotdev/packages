@@ -35,12 +35,19 @@ export type ResolvedPackageArg<T extends PackageArg> = Omit<
 };
 
 export type ResolvedDependencyArgs = {
-	[key: string]: ResolvedPackageArg<PackageArg>;
+	[key: string]: ResolvedPackageArg<PackageArg> | boolean;
 };
 
-export type DependencyArgs = { [key: string]: boolean | PackageArg };
+export type DependencyArgs = {
+	[key: string]: OptionalDependencyArg<PackageArg>;
+};
 
-export type DependencyArg<T> = Omit<T, "build" | "host">;
+export type DependencyArg<T extends PackageArg> =
+	| Omit<T, "build" | "host">
+	| true;
+export type OptionalDependencyArg<T extends PackageArg> =
+	| Omit<T, "build" | "host">
+	| boolean;
 
 /** Variadic argument type. */
 export type Args<T extends tg.Value = tg.Value> = Array<
@@ -84,12 +91,6 @@ export const apply = async <T extends PackageArg>(
 			continue;
 		}
 		for (let [key, value] of Object.entries(dependency)) {
-			// Skip if false, omitting the key.
-			if (value === false) {
-				delete resolvedDependencies[key];
-				continue;
-			}
-
 			// Convert true to empty object
 			if (value === true) {
 				if (!(key in resolvedDependencies)) {
@@ -103,29 +104,50 @@ export const apply = async <T extends PackageArg>(
 				}
 			}
 
-			// Ensure we no longer have a boolean.
-			tg.assert(typeof value !== "boolean");
-
 			const existing = resolvedDependencies[key];
-
-			resolvedDependencies[key] = {
-				...existing,
-				build: value.build ?? existing?.build ?? build,
-				dependencies:
-					(value.dependencies
-						? (
-								await apply({
-									dependencies: {
-										...existing?.dependencies,
-										...value.dependencies,
-									},
-								})
-							).dependencies
-						: existing?.dependencies) ?? {},
-				env: await std.env.arg(existing?.env, value.env),
-				host: value.host ?? existing?.host ?? host,
-				sdk: await std.sdk.arg(existing?.sdk, value.sdk),
-			};
+			if (typeof existing === "boolean") {
+				if (typeof value === "boolean") {
+					resolvedDependencies[key] = value;
+				} else {
+					resolvedDependencies[key] = {
+						build,
+						dependencies:
+							(value.dependencies
+								? (
+										await apply({
+											dependencies: value.dependencies as DependencyArgs,
+										})
+									).dependencies
+								: {}) ?? {},
+						env: await std.env.arg(value.env as std.env.Arg),
+						host,
+						sdk: await std.sdk.arg(value.sdk as std.sdk.Arg),
+					};
+				}
+			} else {
+				if (typeof value === "boolean") {
+					resolvedDependencies[key] = value;
+				} else {
+					resolvedDependencies[key] = {
+						...existing,
+						build: existing?.build ?? build,
+						dependencies:
+							(value.dependencies
+								? (
+										await apply({
+											dependencies: {
+												...existing?.dependencies,
+												...(value.dependencies as DependencyArgs),
+											},
+										})
+									).dependencies
+								: existing?.dependencies) ?? {},
+						env: await std.env.arg(existing?.env, value.env as std.env.Arg),
+						host: existing?.host ?? host,
+						sdk: await std.sdk.arg(existing?.sdk, value.sdk as std.sdk.Arg),
+					};
+				}
+			}
 		}
 	}
 

@@ -51,10 +51,10 @@ export type Arg = {
 
 	/** Args for dependencies. */
 	dependencies?: {
-		bzip2?: std.args.DependencyArg<bzip2.Arg>;
+		bzip2?: std.args.OptionalDependencyArg<bzip2.Arg>;
 		libffi?: std.args.DependencyArg<libffi.Arg>;
 		libxcrypt?: std.args.DependencyArg<libxcrypt.Arg>;
-		mpdecimal?: std.args.DependencyArg<mpdecimal.Arg>;
+		mpdecimal?: std.args.OptionalDependencyArg<mpdecimal.Arg>;
 		ncurses?: std.args.DependencyArg<ncurses.Arg>;
 		openssl?: std.args.DependencyArg<openssl.Arg>;
 		readline?: std.args.DependencyArg<readline.Arg>;
@@ -100,6 +100,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
+	console.log("dependencyArgs", dependencyArgs);
 
 	const os = std.triple.os(host);
 
@@ -184,7 +185,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		mpdecimalForHost,
 		opensslForHost,
 		zlibForHost,
-	].map((dir) => dir.get("lib").then(tg.Directory.expect));
+	]
+		.filter((a) => a !== undefined)
+		.map((dir) => dir.get("lib").then(tg.Directory.expect));
 
 	const pythonInterpreter = await std.wrap(
 		tg.symlink(tg`${output}/bin/python${versionString()}`),
