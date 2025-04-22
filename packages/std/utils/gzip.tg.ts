@@ -1,5 +1,5 @@
 import * as std from "../tangram.ts";
-import { buildUtil, prerequisites } from "../utils.tg.ts";
+import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "gzip",
@@ -44,7 +44,7 @@ export const build = tg.command(async (arg?: Arg) => {
 
 	const env = std.env.arg(env_, prerequisites(build));
 
-	const output = buildUtil({
+	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },

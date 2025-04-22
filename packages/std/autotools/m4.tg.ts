@@ -1,4 +1,4 @@
-import * as std from "../../tangram.ts";
+import * as std from "../tangram.ts";
 
 export const metadata = {
 	name: "m4",
@@ -34,9 +34,10 @@ export const build = tg.command(async (arg?: Arg) => {
 
 	const env = std.env.arg(env_);
 
-	const output = std.utils.buildUtil({
+	const output = std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env,
+		fortifySource: 2,
 		phases: { configure },
 		sdk,
 		source: source_ ?? source(),
@@ -47,7 +48,7 @@ export const build = tg.command(async (arg?: Arg) => {
 
 export default build;
 
-import * as bootstrap from "../../bootstrap.tg.ts";
+import * as bootstrap from "../bootstrap.tg.ts";
 
 export const test = tg.command(async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());

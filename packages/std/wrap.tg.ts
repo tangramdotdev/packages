@@ -305,7 +305,7 @@ export namespace wrap {
 		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
 		if (executable instanceof tg.Template || typeof executable === "string") {
 			if (interpreter === undefined) {
-				interpreter = await wrap.defaultShell();
+				interpreter = await wrap.defaultShell({ buildToolchain });
 			}
 			if (identity === undefined) {
 				identity = "interpreter" as const;

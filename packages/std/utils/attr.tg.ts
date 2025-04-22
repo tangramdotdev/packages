@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
-import { buildUtil, prerequisites } from "../utils.tg.ts";
+import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import basenamePatch from "./attr_basename.patch" with { type: "file" };
 
 export const metadata = {
@@ -77,7 +77,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		env.push({ CC: "gcc -static" });
 	}
 
-	return buildUtil({
+	return autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		phases,

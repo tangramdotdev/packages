@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
-import { buildUtil, prerequisites } from "../utils.tg.ts";
+import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import guardedGettextPatch from "./bash-use-guarded-gettext-header.patch" with {
 	type: "file",
 };
@@ -62,7 +62,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		CFLAGS: tg.Mutation.prefix("-Wno-implicit-function-declaration", " "),
 	});
 
-	let output = buildUtil({
+	let output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		phases,

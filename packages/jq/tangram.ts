@@ -51,6 +51,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			developmentTools: true,
 			env,
 			phases,
 			sdk,

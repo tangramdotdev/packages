@@ -40,7 +40,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		],
 	};
 
-	let output = await std.utils.buildUtil({
+	let output = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },

@@ -210,6 +210,7 @@ export const build = tg.command(async (arg: Arg) => {
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
 			env,
+			fortifySource: variant !== "stage2_full",
 			phases,
 			opt: "3",
 			sdk,

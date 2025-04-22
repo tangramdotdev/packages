@@ -96,31 +96,35 @@ export const prerequisites = tg.command(async (hostArg?: string) => {
 	return components;
 });
 
-type BuildUtilArg = std.autotools.Arg & {
+export type BuildUtilArg = std.autotools.Arg & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
 	wrapBashScriptPaths?: Array<string> | undefined;
 };
 
-/** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag. */
-export const buildUtil = tg.command(async (arg: BuildUtilArg) => {
-	const { opt: opt_, wrapBashScriptPaths, ...rest } = arg;
-	const opt = opt_ ?? "s";
+/** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag, and disabling extra tools. */
+export const autotoolsInternal = async (arg: tg.Unresolved<BuildUtilArg>) => {
+	const {
+		extended = false,
+		pkgConfig = false,
+		opt = "s",
+		wrapBashScriptPaths,
+		...rest
+	} = await tg.resolve(arg);
 	let output = await std.autotools.build({
 		...rest,
+		extended,
+		pkgConfig,
 		opt,
 	});
-
-	// Wrap the bash scripts in the output.
-	for (const path of arg.wrapBashScriptPaths ?? []) {
+	for (const path of wrapBashScriptPaths ?? []) {
 		const file = tg.File.expect(await output.get(path));
 		const wrappedFile = changeShebang(file);
 		output = await tg.directory(output, {
 			[path]: wrappedFile,
 		});
 	}
-
 	return output;
-});
+};
 
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
 export const changeShebang = async (scriptFile: tg.File) => {
