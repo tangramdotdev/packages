@@ -76,13 +76,13 @@ export const rust = tg.command(
 
 		// Download and parse the Rust manifest for the selected version.
 		const version = "1.86.0";
-		const manifestFile = await tg.file(
-			await tg.download(
+		const manifestBlob = (await tg
+			.download(
 				`https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
 				"sha256:5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42",
-			),
-		);
-		tg.assert(manifestFile instanceof tg.File);
+			)
+			.then(tg.Blob.expect)) as tg.Blob;
+		const manifestFile = await tg.file(manifestBlob);
 		const manifest = tg.encoding.toml.decode(
 			await manifestFile.text(),
 		) as RustupManifest;

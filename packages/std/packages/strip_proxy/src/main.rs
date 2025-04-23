@@ -149,9 +149,9 @@ async fn run_proxy(
 		tracing::info!(?local_executable_path, "strip succeeded");
 
 		// Check in the result.
-		let stripped_file = tg::Artifact::check_in(
+		let stripped_file = tg::checkin(
 			&tg,
-			tg::artifact::checkin::Arg {
+			tg::checkin::Arg {
 				cache: true,
 				destructive: false,
 				deterministic: true,
@@ -209,17 +209,21 @@ async fn run_proxy(
 			.await
 			.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
-		tg::Artifact::from(new_wrapper)
-			.check_out(
-				&tg,
-				tg::artifact::checkout::Arg {
-					dependencies: false,
-					force: true,
-					path: Some(canonical_target_path),
-					lockfile: true,
-				},
-			)
-			.await?;
+		let artifact = tg::Artifact::from(new_wrapper)
+			.id(&tg)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to get ID"))?;
+		tg::checkout(
+			&tg,
+			tg::checkout::Arg {
+				artifact,
+				dependencies: false,
+				force: true,
+				path: Some(canonical_target_path),
+				lockfile: true,
+			},
+		)
+		.await?;
 		#[cfg(feature = "tracing")]
 		tracing::info!("checked out the new output file");
 	} else {

@@ -393,9 +393,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_path = std::fs::canonicalize(&options.output_path)
 			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
 		tracing::debug!(?output_path, "about to check in output file");
-		tg::Artifact::check_in(
+		tg::checkin(
 			&tg,
-			tg::artifact::checkin::Arg {
+			tg::checkin::Arg {
 				cache: true,
 				destructive: false,
 				deterministic: true,
@@ -497,28 +497,29 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	};
 
 	if let Some(output_file) = output_file {
-		// Remove the existing file.
 		tokio::fs::remove_file(&options.output_path)
 			.await
 			.map_err(|source| tg::error!(!source, %path = &options.output_path.display(), "failed to remove the output file"))?;
-
-		// Check out the new output file.
 		let cwd = std::env::current_dir()
 			.map_err(|source| tg::error!(!source, "failed to get the current directory"))?;
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id(&tg).await?;
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
-		tg::Artifact::from(output_file)
-			.check_out(
-				&tg,
-				tg::artifact::checkout::Arg {
-					dependencies: false,
-					force: true,
-					lockfile: true,
-					path: Some(output_path.clone()),
-				},
-			)
-			.await?;
+		let artifact = tg::Artifact::from(output_file)
+			.id(&tg)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to get artifact ID"))?;
+		tg::checkout(
+			&tg,
+			tg::checkout::Arg {
+				artifact,
+				dependencies: false,
+				force: true,
+				lockfile: true,
+				path: Some(output_path.clone()),
+			},
+		)
+		.await?;
 	}
 
 	Ok(())
@@ -560,9 +561,9 @@ async fn checkin_local_library_path(
 			{
 				tracing::debug!(?name, "Found library candidate.");
 				// Check in the file.
-				let library_candidate_file = tg::Artifact::check_in(
+				let library_candidate_file = tg::checkin(
 					tg,
-					tg::artifact::checkin::Arg {
+					tg::checkin::Arg {
 						cache: true,
 						destructive: false,
 						deterministic: true,
@@ -884,9 +885,9 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 					} else {
 						tracing::trace!("found a path in the current build temp, checking in");
 						// The file is located in our own build directory. Check it in.
-						tg::Artifact::check_in(
+						tg::checkin(
 							tg,
-							tg::artifact::checkin::Arg {
+							tg::checkin::Arg {
 								cache: true,
 								destructive: false,
 								deterministic: true,
@@ -1051,14 +1052,15 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	// Check out all library paths.
 	futures::future::try_join_all(library_paths.iter().map(|referent| async {
 		tracing::debug!(?referent.item, "checking out library path");
-		let directory = tg::Artifact::with_id(referent.item.clone().into());
-		let arg = tg::artifact::checkout::Arg {
+		let artifact = referent.item.clone().into();
+		let arg = tg::checkout::Arg {
+			artifact,
 			dependencies: true,
 			force: false,
 			lockfile: false,
 			path: None,
 		};
-		let output = directory.check_out(tg, arg).await?;
+		let output = tg::checkout(tg, arg).await?;
 		tracing::trace!(?output, "completed checkout");
 		Ok::<_, tg::Error>(())
 	}))

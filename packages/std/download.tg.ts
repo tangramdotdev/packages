@@ -26,7 +26,7 @@ export async function download(arg: Arg): Promise<tg.Artifact> {
 	let lastError: Error | undefined;
 	for (const url of urls) {
 		try {
-			blob = await tg.download(url, checksum);
+			blob = (await tg.download(url, checksum).then(tg.Blob.expect)) as tg.Blob;
 		} catch (e) {
 			lastError = e as Error;
 			continue;
@@ -45,9 +45,9 @@ export default download;
 
 export namespace download {
 	export type fromGitHubArg = GithubSource & {
-		archiveFormat?: tg.Artifact.ArchiveFormat | undefined;
+		archiveFormat?: tg.ArchiveFormat | undefined;
 		checksum: tg.Checksum;
-		compression?: tg.Blob.CompressionFormat | undefined;
+		compression?: tg.CompressionFormat | undefined;
 		owner: string;
 		repo: string;
 		tag: string;
@@ -109,7 +109,7 @@ export namespace download {
 
 	export type FromGnuArg = {
 		checksum: tg.Checksum;
-		compression?: tg.Blob.CompressionFormat | undefined;
+		compression?: tg.CompressionFormat | undefined;
 		name: string;
 		version: string;
 	};
@@ -117,7 +117,7 @@ export namespace download {
 	/** Download a source package hosted in the GNU FTP repository. */
 	export const fromGnu = async (arg: FromGnuArg) => {
 		const { checksum, compression = "gz", name, version } = arg;
-		const archiveFormat = "tar" as tg.Artifact.ArchiveFormat;
+		const archiveFormat = "tar" as tg.ArchiveFormat;
 		const extension = `.${archiveFormat}.${compression}`;
 		const archive = packageArchive({ extension, name, version });
 		const url = gnuUrl(name, archive);
@@ -141,12 +141,12 @@ export namespace download {
 
 		// If extract is set, `tg.Artifact.extract` will handle both compressed and uncompressed blobs.
 		if (extract) {
-			return tg.Artifact.extract(blob);
+			return tg.extract(blob);
 		}
 
 		// If asked to decompress but not extract, decompress the blob.
 		if (decompress) {
-			blob = await tg.Blob.decompress(blob);
+			blob = await tg.decompress(blob);
 		}
 
 		return tg.file(blob);

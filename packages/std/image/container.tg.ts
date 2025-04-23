@@ -429,7 +429,7 @@ export type Layer = {
 
 export const layer = tg.command(
 	async (directory: tg.Directory): Promise<Layer> => {
-		const bundle = tg.Artifact.bundle(directory).then(tg.Directory.expect);
+		const bundle = tg.bundle(directory).then(tg.Directory.expect);
 		console.log("bundle", await (await bundle).id());
 		const tarball = await createTarball(bundle);
 		console.log("layer", await tarball.id());

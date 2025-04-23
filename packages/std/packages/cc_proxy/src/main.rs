@@ -574,9 +574,9 @@ async fn check_in_source_tree(
 
 			// Check if we're remapping a file, and check it in first.
 			if !is_directory {
-				let artifact = tg::Artifact::check_in(
+				let artifact = tg::checkin(
 					tg,
-					tg::artifact::checkin::Arg {
+					tg::checkin::Arg {
 						cache: false,
 						destructive: false,
 						deterministic: true,

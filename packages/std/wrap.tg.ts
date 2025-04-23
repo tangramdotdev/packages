@@ -715,7 +715,11 @@ export namespace wrap {
 					separator?: string | undefined;
 			  }
 			| { kind: "prepend"; values: Array<Manifest.Value> }
-			| { kind: "append"; values: Array<Manifest.Value> };
+			| { kind: "append"; values: Array<Manifest.Value> }
+			| {
+					kind: "merge";
+					value: { kind: "map"; value: { [key: string]: Manifest.Value } };
+			  };
 
 		// Matches tg::value::Data
 		export type Value =
@@ -1758,6 +1762,17 @@ const manifestMutationFromMutation = async (
 			),
 		);
 		return { kind: "append", values };
+	} else if (mutation.inner.kind === "merge") {
+		const value = mutation.inner.value;
+		tg.assert(tg.Value.isMap(value), "expected a map");
+		const manifestValue = await manifestValueFromValue(value);
+		tg.assert(
+			manifestValue !== undefined &&
+				typeof manifestValue === "object" &&
+				!Array.isArray(manifestValue) &&
+				manifestValue.kind === "map",
+		);
+		return { kind: "merge", value: manifestValue };
 	} else {
 		return tg.unreachable();
 	}
@@ -1836,6 +1851,12 @@ const mutationFromManifestMutation = (
 			templateFromManifestTemplate(manifestMutation.template),
 			manifestMutation.separator,
 		);
+	} else if (manifestMutation.kind === "merge") {
+		const value = valueFromManifestValue(manifestMutation.value).then((v) => {
+			tg.assert(tg.Value.isMap(v));
+			return v;
+		});
+		return tg.Mutation.merge(value);
 	} else {
 		return tg.unreachable();
 	}
@@ -2377,7 +2398,7 @@ export const testDependencies = tg.command(async () => {
 
 	// return wrapper;
 
-	const bundle = tg.Artifact.bundle(await tg.directory({ wrapper }));
+	const bundle = tg.bundle(await tg.directory({ wrapper }));
 	return bundle;
 });
 

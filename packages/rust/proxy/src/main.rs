@@ -258,9 +258,9 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	for dependency in &args.dependencies {
 		#[cfg(feature = "tracing")]
 		tracing::info!(?dependency, "checking in dependency");
-		let directory = tg::Artifact::check_in(
+		let directory = tg::checkin(
 			tg,
-			tg::artifact::checkin::Arg {
+			tg::checkin::Arg {
 				cache: true,
 				destructive: false,
 				deterministic: true,
@@ -384,17 +384,21 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
 	// Ensure the result is available with an internal checkout.
-	let path = tg::Artifact::from(output.clone())
-		.check_out(
-			tg,
-			tg::artifact::checkout::Arg {
-				dependencies: false,
-				force: true,
-				path: None,
-				lockfile: false,
-			},
-		)
-		.await?;
+	let artifact = tg::Artifact::from(output.clone())
+		.id(tg)
+		.await
+		.map_err(|source| tg::error!(!source, "failed to get ID"))?;
+	let path = tg::checkout(
+		tg,
+		tg::checkout::Arg {
+			artifact,
+			dependencies: false,
+			force: true,
+			path: None,
+			lockfile: false,
+		},
+	)
+	.await?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?path, "checked out result artifact");
 
@@ -570,9 +574,9 @@ async fn get_checked_in_path(
 	tracing::info!(?path, "no artifact found in symlink data, checking in");
 
 	// Otherwise, check in the path.
-	let artifact = tg::Artifact::check_in(
+	let artifact = tg::checkin(
 		tg,
-		tg::artifact::checkin::Arg {
+		tg::checkin::Arg {
 			cache: true,
 			destructive: false,
 			deterministic: true,
