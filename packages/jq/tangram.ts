@@ -46,11 +46,13 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		args: ["--without-oniguruma", "--disable-maintainer-mode"],
 	};
 
-	const phases = { configure };
+	const prepare = { command: tg.Mutation.suffix("autoreconf -i; exit 1", "\n") };
+	const phases = { configure, prepare };
 
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			buildInTree: true,
 			developmentTools: true,
 			env,
 			phases,

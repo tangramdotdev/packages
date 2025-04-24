@@ -16,8 +16,10 @@ import zlib from "./dependencies/zlib.tg.ts";
 import zstd from "./dependencies/zstd.tg.ts";
 
 import grep from "../utils/grep.tg.ts";
+import sed from "../utils/sed.tg.ts";
 import pkgConfig from "../autotools/pkgconf.tg.ts";
 import gettext from "../autotools/gettext.tg.ts";
+import libtool from "../autotools/libtool.tg.ts";
 import texinfo from "../autotools/texinfo.tg.ts";
 import autoconf from "../autotools/autoconf.tg.ts";
 import help2man from "../autotools/help2man.tg.ts";
@@ -111,10 +113,25 @@ export const buildTools = async (
 		return std.env.arg(...retEnvs);
 	}
 
-	const grepArtifact = grep({
+	const grepArtifact = await grep({
 		host,
 		sdk: false,
 		env: std.env.arg(utils, buildToolchain),
+	});
+	const grepExe = await grepArtifact.get("bin/grep").then(tg.File.expect);
+	const sedArtifact = await sed({
+		host,
+		sdk: false,
+		env: std.env.arg(utils, buildToolchain),
+	});
+	const sedExe = await sedArtifact.get("bin/sed").then(tg.File.expect);
+	const libtoolArtifact = libtool({
+		bashExe,
+		grepExe,
+		sedExe,
+		host,
+		sdk: false,
+		env: utilsEnv,
 	});
 	const texinfoArtifact = texinfo({
 		host,
@@ -147,6 +164,7 @@ export const buildTools = async (
 		perlArtifact,
 	});
 	retEnvs.push(
+		libtoolArtifact,
 		texinfoArtifact,
 		autoconfArtifact,
 		help2manArifact,
