@@ -1,7 +1,5 @@
 import * as std from "std" with { path: "../std" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
-import * as perl from "perl" with { path: "../perl" };
 import * as python from "python" with { path: "../python" };
 import * as readline from "readline" with { path: "../readline" };
 import * as xz from "xz" with { path: "../xz" };
@@ -80,8 +78,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
 		std.env.runtimeDependency(xz.build, dependencyArgs.xz),
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-		std.env.buildDependency(perl.build),
-		std.env.buildDependency(pkgConfig.build),
 	];
 	const env = [
 		...deps.map(processDependency),

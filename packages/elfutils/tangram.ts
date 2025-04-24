@@ -1,6 +1,5 @@
 import * as bzip2 from "bzip2" with { path: "../bzip2" };
 import * as libarchive from "libarchive" with { path: "../libarchive" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as std from "std" with { path: "../std" };
 import * as xz from "xz" with { path: "../xz" };
@@ -32,7 +31,6 @@ type Arg = {
 	dependencies?: {
 		bzip2?: bzip2.Arg;
 		libarchive?: libarchive.Arg;
-		m4?: m4.Arg;
 		openssl?: openssl.Arg;
 		xz?: xz.Arg;
 		zlib?: zlib.Arg;
@@ -50,7 +48,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		dependencies: {
 			bzip2: bzip2Arg = {},
 			libarchive: libarchiveArg = {},
-			m4: m4Arg = {},
 			openssl: opensslArg = {},
 			xz: xzArg = {},
 			zlib: zlibArg = {},
@@ -85,7 +82,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const env = [
 		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
 		libarchive.build({ build, env: env_, host, sdk }, libarchiveArg),
-		m4.build({ build, env: env_, host, sdk }, m4Arg),
 		openssl.build({ build, env: env_, host, sdk }, opensslArg),
 		xz.build({ build, env: env_, host, sdk }, xzArg),
 		zlib.build({ build, env: env_, host, sdk }, zlibArg),

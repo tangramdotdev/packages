@@ -1,6 +1,5 @@
 import * as attr from "attr" with { path: "../attr" };
 import * as bash from "bash" with { path: "../bash" };
-import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -92,7 +91,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		{ build, env: env_, host, sdk },
 		attrArg,
 	);
-	const dependencies = [attrArtifact, perl.build({ build, host: build })];
+	const dependencies = [attrArtifact];
 	const env = std.env.arg(...dependencies, env_);
 
 	return std.autotools.build(

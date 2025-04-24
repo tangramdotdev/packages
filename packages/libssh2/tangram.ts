@@ -1,4 +1,3 @@
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -57,7 +56,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	let dependencies = [
-		pkgConfig.build({ build, host: build }),
 		openssl.build({ build, host }, opensslArg),
 		zlib.build({ build, host }, zlibArg),
 	];

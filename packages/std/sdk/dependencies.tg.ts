@@ -89,15 +89,15 @@ export const buildTools = async (
 	const gettextArtifact = gettext({ host, sdk: false, env: utilsEnv });
 	retEnvs.push(m4Artifact, bisonArtifact, gettextArtifact);
 	utilsEnv = std.env.arg(utilsEnv, gettextArtifact);
-	if (level === "extended") {
-		return std.env.arg(...retEnvs);
-	}
 
 	const flexArtifact = flex({ host, sdk: false, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, flexArtifact);
 
 	const perlArtifact = perl({ host, sdk: false, env: utilsEnv });
 	retEnvs.push(perlArtifact);
+	if (level === "extended") {
+		return std.env.arg(...retEnvs);
+	}
 	utilsEnv = std.env.arg(utilsEnv, perlArtifact);
 
 	const libxcryptArtifact = libxcrypt({

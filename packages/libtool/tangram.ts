@@ -55,12 +55,10 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-	console.log("RAW", await output.id());
 	// Add a symlink to the m4 macros.
 	output = await tg.directory(output, {
 		[`share/libtool/m4`]: tg.symlink("../aclocal")
 	});
-	console.log("SYMLINK", await output.id());
 
 	const bashScripts = ["libtool", "libtoolize"];
 	for (const script of bashScripts) {

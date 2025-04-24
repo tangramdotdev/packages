@@ -1,6 +1,4 @@
-import * as bison from "bison" with { path: "../bison" };
 import * as libseccomp from "libseccomp" with { path: "../libseccomp" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
@@ -33,9 +31,7 @@ type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bison?: std.args.DependencyArg<bison.Arg>;
 		libseccomp?: std.args.DependencyArg<libseccomp.Arg>;
-		m4?: std.args.DependencyArg<m4.Arg>;
 		zlib?: std.args.DependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
@@ -59,8 +55,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 	};
 	const dependencies = [
-		std.env.buildDependency(bison.build, dependencyArgs.bison),
-		std.env.buildDependency(m4.build, dependencyArgs.m4),
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	];
 	if (std.triple.os(host) === "linux") {

@@ -1,5 +1,4 @@
 import * as curl from "curl" with { path: "../curl" };
-import * as gettext from "gettext" with { path: "../gettext" };
 import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as std from "std" with { path: "../std" };
@@ -33,7 +32,6 @@ type Arg = {
 	build?: string;
 	dependencies?: {
 		curl?: curl.Arg;
-		gettext?: gettext.Arg;
 		libiconv?: libiconv.Arg;
 		openssl?: openssl.Arg;
 		zlib?: zlib.Arg;
@@ -50,7 +48,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		build,
 		dependencies: {
 			curl: curlArg = {},
-			gettext: gettextArg = {},
 			libiconv: libiconvArg = {},
 			openssl: opensslArg = {},
 			zlib: zlibArg = {},
@@ -75,7 +72,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	let dependencies = [
 		curl.build({ build, env: env_, host, sdk }, curlArg),
-		gettext.build({ build, env: env_, host, sdk }, gettextArg),
 		openssl.build({ build, env: env_, host, sdk }, opensslArg),
 		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];

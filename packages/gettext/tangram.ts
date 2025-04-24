@@ -1,10 +1,7 @@
 import * as acl from "acl" with { path: "../acl" };
 import * as attr from "attr" with { path: "../attr" };
-import * as bison from "bison" with { path: "../bison" };
 import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as perl from "perl" with { path: "../perl" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 import * as xz from "xz" with { path: "../xz" };
 
@@ -93,10 +90,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const os = std.triple.os(host);
 
 	const dependencies: Array<std.env.Dependency<any>> = [
-		std.env.buildDependency(bison.build),
-		std.env.buildDependency(perl.build),
 		std.env.buildDependency(xz.build),
-		std.env.buildDependency(pkgConfig.build),
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	];
 	if (os === "linux") {

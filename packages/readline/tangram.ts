@@ -1,5 +1,4 @@
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConf from "pkgconf" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -44,7 +43,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const dependencies = [
-		std.env.buildDependency(pkgConf.build),
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	];
 

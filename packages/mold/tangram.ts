@@ -1,6 +1,5 @@
 import * as std from "std" with { path: "../std" };
 import * as cmake from "cmake" with { path: "../cmake" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as zstd from "zstd" with { path: "../zstd" };
 
 export const metadata = {
@@ -57,7 +56,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 
 	const deps = [
-		pkgConfig.build({ build, host: build }),
 		zstd.build({ build, host }),
 	];
 	const env = std.env.arg(...deps, env_);

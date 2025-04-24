@@ -1,6 +1,4 @@
-import * as bison from "bison" with { path: "../bison" };
 import * as libffi from "libffi" with { path: "../libffi" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -63,10 +61,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-	const dependencies = [
-		std.env.buildDependency(m4.build),
-		std.env.buildDependency(bison.build),
-	];
+	const dependencies = [];
 	if (dependencyArgs.libffi !== undefined) {
 		dependencies.push(
 			std.env.runtimeDependency(libffi.build, dependencyArgs.libffi),

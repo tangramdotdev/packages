@@ -1,12 +1,8 @@
-import * as bison from "bison" with { path: "../bison" };
 import * as flex from "flex" with { path: "../flex" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as icu from "icu" with { path: "../icu" };
 import * as lz4 from "lz4" with { path: "../lz4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
-import * as perl from "perl" with { path: "../perl" };
-import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -96,18 +92,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
 	);
 
-	const pkgConfigArtifact = await processDependency(
-		std.env.buildDependency(pkgConf.build),
-	);
-	const bisonArtifact = await processDependency(
-		std.env.buildDependency(bison.build),
-	);
 	const flexArtifact = await processDependency(
 		std.env.buildDependency(flex.build),
-	);
-	const m4Artifact = await processDependency(std.env.buildDependency(m4.build));
-	const perlArtifact = await processDependency(
-		std.env.buildDependency(perl.build),
 	);
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [
@@ -115,11 +101,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		lz4Artifact,
 		ncursesArtifact,
 		opensslArtifact,
-		bisonArtifact,
 		flexArtifact,
-		m4Artifact,
-		perlArtifact,
-		pkgConfigArtifact,
 		readlineArtifact,
 		zlibArtifact,
 		zstdArtifact,

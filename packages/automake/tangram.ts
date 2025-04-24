@@ -1,9 +1,6 @@
 import * as autoconf from "autoconf" with { path: "../autoconf" };
-import * as bison from "bison" with { path: "../bison" };
 import * as help2man from "help2man" with { path: "../help2man" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as perl from "perl" with { path: "../perl" };
-import * as pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
@@ -35,11 +32,8 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		autoconf?: autoconf.Arg;
-		bison?: bison.Arg;
 		help2man?: help2man.Arg;
-		m4?: m4.Arg;
 		perl?: perl.Arg;
-		pkgconfig?: pkgConfig.Arg;
 		zlib?: zlib.Arg;
 	};
 	env?: std.env.Arg;
@@ -54,11 +48,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		build,
 		dependencies: {
 			autoconf: autoconfArg = {},
-			bison: bisonArg = {},
 			help2man: help2manArg = {},
-			m4: m4Arg = {},
 			perl: perlArg = {},
-			pkgconfig: pkgconfigArg = {},
 			zlib: zlibArg = {},
 		} = {},
 		env: env_,
@@ -86,10 +77,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	);
 	const dependencies = [
 		autoconfArtifact,
-		bison.build({ build, env: env_, host, sdk }, bisonArg),
 		help2man.build({ build, env: env_, host, sdk }, help2manArg),
-		m4.build({ build, env: env_, host, sdk }, m4Arg),
-		pkgConfig.build({ build, host: build }, pkgconfigArg),
 		perlArtifact,
 		zlib.build({ build, env: env_, host, sdk }, zlibArg),
 	];

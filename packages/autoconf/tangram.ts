@@ -1,6 +1,4 @@
-import * as bison from "bison" with { path: "../bison" };
 import grep from "grep" with { path: "../gnugrep" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
@@ -41,8 +39,6 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bison?: std.args.DependencyArg<bison.Arg>;
-		m4?: std.args.DependencyArg<m4.Arg>;
 		perl?: std.args.DependencyArg<perl.Arg>;
 		zlib?: std.args.DependencyArg<zlib.Arg>;
 	};
@@ -72,8 +68,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		std.env.buildDependency(perl.build, dependencyArgs.perl),
 	);
 	const dependencies = [
-		std.env.buildDependency(bison.build, dependencyArgs.bison),
-		std.env.buildDependency(m4.build, dependencyArgs.m4),
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	].map(envArgFromDependency);
 	const env = std.env.arg(...dependencies, perlArtifact, env_);

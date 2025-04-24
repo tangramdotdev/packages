@@ -57,7 +57,7 @@ export const build = tg.command(async (arg: Arg) => {
 
 	// Add a symlink to the m4 macros.
 	output = await tg.directory(output, {
-		[`share/libtool/m4`]: tg.symlink("../aclocal")
+		[`share/libtool/m4`]: tg.symlink("../aclocal"),
 	});
 
 	const bashScripts = ["libtool", "libtoolize"];

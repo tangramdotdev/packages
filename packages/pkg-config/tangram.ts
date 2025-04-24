@@ -1,5 +1,3 @@
-import * as bison from "bison" with { path: "../bison" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
@@ -51,17 +49,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	// Set up default build dependencies.
-	const buildDependencies = [];
-	const m4ForBuild = m4.build({ build, host: build }).then((d) => {
-		return { M4: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(m4ForBuild);
-	const bisonForBuild = bison.build({ build, host: build }).then((d) => {
-		return { BISON: std.directory.keepSubdirectories(d, "bin") };
-	});
-	buildDependencies.push(bisonForBuild);
-
 	// Set up host dependencies.
 	const zlibForHost = await zlib
 		.build({ build, host, sdk }, zlibArg)
@@ -69,21 +56,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	// Resolve env.
 	let env = await std.env.arg(
-		...buildDependencies,
 		zlibForHost,
 		{
 			CFLAGS: tg.Mutation.prefix("-Wno-int-conversion", " "),
 		},
 		env_,
 	);
-
-	// Add final build dependencies to environment.
-	const resolvedBuildDependencies = [];
-	const finalM4 = await std.env.getArtifactByKey({ env, key: "M4" });
-	resolvedBuildDependencies.push(finalM4);
-	const finalBison = await std.env.getArtifactByKey({ env, key: "BISON" });
-	resolvedBuildDependencies.push(finalBison);
-	env = await std.env.arg(env, ...resolvedBuildDependencies);
 
 	// Set up phases.
 	const configure = {

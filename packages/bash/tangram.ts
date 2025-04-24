@@ -1,7 +1,5 @@
-import * as gettext from "gettext" with { path: "../gettext" };
 import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -110,8 +108,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 
 	const dependencies = [
-		std.env.buildDependency(pkgConfig.build),
-		std.env.buildDependency(gettext.build), // TODO optional.
 		std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	];

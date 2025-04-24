@@ -1,5 +1,3 @@
-import * as perl from "perl" with { path: "../perl" };
-import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -35,10 +33,6 @@ export const source = tg.command(() => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies?: {
-		perl?: std.args.DependencyArg<perl.Arg>;
-		pkgConf?: std.args.DependencyArg<pkgConf.Arg>;
-	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -49,7 +43,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -61,16 +54,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure };
 
-	const dependencies = [
-		std.env.buildDependency(perl.build, dependencyArgs.perl),
-		std.env.buildDependency(pkgConf.build, dependencyArgs.pkgConf),
-	];
-	const env = std.env.arg(
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	);
+	const env = std.env.arg(env_);
 
 	return std.autotools.build(
 		{

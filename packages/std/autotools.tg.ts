@@ -23,7 +23,7 @@ export type Arg = {
 	/** Should we run the check phase? Default: false */
 	doCheck?: boolean;
 
-	/** Should the build environment include `m4`, `bison`, and `gettext`? Default: true. */
+	/** Should the build environment include `m4`, `bison`, `perl`, and `gettext`? Default: true. */
 	extended?: boolean;
 
 	/** Should we add the extra set of harderning CFLAGS? Default: true. */
@@ -171,16 +171,20 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	// // C/C++ flags.
 	if (opt) {
-		envs.push({ CFLAGS: tg.Mutation.suffix(`-O${opt}`, " ") });
+		const optFlag = tg.Mutation.suffix(`-O${opt}`, " ");
+		envs.push({ CFLAGS: optFlag, CXXFLAGS: optFlag });
 	}
 	if (pipe) {
-		envs.push({ CFLAGS: tg.Mutation.suffix("-pipe", " ") });
+		const pipeFlag = tg.Mutation.suffix("-pipe", " ");
+		envs.push({ CFLAGS: pipeFlag, CXXFLAGS: pipeFlag });
 	}
 	if (march !== undefined) {
-		envs.push({ CFLAGS: tg.Mutation.suffix(`-march=${march}`, " ") });
+		const marchFlag = tg.Mutation.suffix(`-march=${march}`, " ");
+		envs.push({ CFLAGS: marchFlag, CXXFLAGS: marchFlag });
 	}
 	if (mtune !== undefined) {
-		envs.push({ CFLAGS: tg.Mutation.suffix(`-mtune=${mtune}`, " ") });
+		const mtuneFlag = tg.Mutation.suffix(`-mtune=${mtune}`, " ");
+		envs.push({ CFLAGS: mtuneFlag, CXXFLAGS: mtuneFlag });
 	}
 	let fortifySource =
 		typeof fortifySource_ === "number"
@@ -207,7 +211,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		if (os === "linux") {
 			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
 		}
-		envs.push({ CFLAGS: tg.Mutation.suffix(extraCFlags, " ") });
+		const extraFlags = tg.Mutation.suffix(extraCFlags, " ");
+		envs.push({ CFLAGS: extraFlags, CXXFLAGS: extraFlags });
 	}
 
 	const environment = std.triple.environment(host);

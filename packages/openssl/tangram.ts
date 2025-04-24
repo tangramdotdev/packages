@@ -1,4 +1,3 @@
-import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
@@ -30,9 +29,6 @@ export const source = tg.command(async () => {
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies?: {
-		perl?: perl.Arg;
-	};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -43,7 +39,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { perl: perlArg = {} } = {},
 		env: env_,
 		host,
 		sdk,
@@ -71,11 +66,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure, install };
 
-	const env = [perl.build({ build, host: build }, perlArg), env_];
+	const env = [env_];
 
 	if (build !== host) {
 		// To ensure the cross-compile prefix picks up the correct cross compilers.
-		env.push({
+		env.unshift({
 			CC: "cc",
 			CXX: "c++",
 		});

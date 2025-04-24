@@ -1,4 +1,3 @@
-import * as m4 from "m4" with { path: "../m4" };
 import * as std from "std" with { path: "../std" };
 
 export const metadata = {
@@ -46,18 +45,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = resolved;
 
-	const dependencies = [std.env.buildDependency(m4.build)].map((dep) =>
-		std.env.envArgFromDependency(build, env_, host, sdk, dep),
-	);
-
-	// Resolve environment.
-	const env = await std.env.arg(...dependencies, env_);
+	const env = std.env.arg(env_);
 
 	// Set up phases.
 	const configure = {
 		args: [
 			"--disable-dependency-tracking",
-			"--disable-nls",
 			"--disable-rpath",
 			"--enable-relocatable",
 		],

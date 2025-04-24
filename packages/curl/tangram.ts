@@ -1,7 +1,5 @@
 import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as openssl from "openssl" with { path: "../openssl" };
-import * as perl from "perl" with { path: "../perl" };
-import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
 import * as std from "std" with { path: "../std" };
@@ -74,8 +72,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const deps = [
-		std.env.buildDependency(perl.build),
-		std.env.buildDependency(pkgConf.build),
 		std.env.runtimeDependency(libpsl.build, dependencyArgs.libpsl),
 		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),

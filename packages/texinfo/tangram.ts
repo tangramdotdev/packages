@@ -1,6 +1,4 @@
 import * as bash from "bash" with { path: "../bash" };
-import * as bison from "bison" with { path: "../bison" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
@@ -42,8 +40,6 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		bison?: bison.Arg;
-		m4?: m4.Arg;
 		ncurses?: ncurses.Arg;
 		perl?: perl.Arg;
 		zlib?: zlib.Arg;
@@ -59,8 +55,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		autotools = {},
 		build,
 		dependencies: {
-			bison: bisonArg = {},
-			m4: m4Arg = {},
 			ncurses: ncursesArg = {},
 			perl: perlArg = {},
 			zlib: zlibArg = {},
@@ -76,8 +70,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		perlArg,
 	);
 	const dependencies = [
-		bison.build({ build, host: build }, bisonArg),
-		m4.build({ build, host: build }, m4Arg),
 		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
 		perlArtifact,
 		zlib.build({ build, env: env_, host, sdk }, zlibArg),

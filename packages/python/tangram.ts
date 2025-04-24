@@ -1,15 +1,12 @@
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
-import * as bison from "bison" with { path: "../bison" };
 import * as bzip2 from "bzip2" with { path: "../bzip2" };
 import * as libffi from "libffi" with { path: "../libffi" };
 import * as libxcrypt from "libxcrypt" with { path: "../libxcrypt" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as mpdecimal from "mpdecimal" with { path: "../mpdecimal" };
 import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
-import * as pkgConf from "pkgconf" with { path: "../pkgconf" };
 import * as readline from "readline" with { path: "../readline" };
 import * as sqlite from "sqlite" with { path: "../sqlite" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -112,9 +109,6 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
 	const dependencies = [
-		std.env.buildDependency(bison.build),
-		std.env.buildDependency(m4.build),
-		std.env.buildDependency(pkgConf.build),
 		std.env.runtimeDependency(bzip2.build, dependencyArgs.bzip2),
 		std.env.runtimeDependency(libxcrypt.build, dependencyArgs.libxcrypt),
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),

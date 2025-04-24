@@ -1,6 +1,4 @@
 import * as autoconf from "autoconf" with { path: "../autoconf" };
-import * as bison from "bison" with { path: "../bison" };
-import * as m4 from "m4" with { path: "../m4" };
 import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
 import * as texinfo from "texinfo" with { path: "../texinfo" };
@@ -52,8 +50,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		build,
 		dependencies: {
 			autoconf: autoconfArg = {},
-			bison: bisonArg = {},
-			m4: m4Arg = {},
 			perl: perlArg = {},
 			texinfo: texinfoArg = {},
 			zlib: zlibArg = {},
@@ -71,8 +67,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	});
 	const dependencies = [
 		autoconf.build({ build, env: env_, host, sdk }, autoconfArg),
-		bison.build({ build, host: build }, bisonArg),
-		m4.build({ build, host: build }, m4Arg),
 		perlArtifact,
 		texinfo.build({ build, host: build }, texinfoArg),
 		zlib.build({ build, env: env_, host, sdk }, zlibArg),
