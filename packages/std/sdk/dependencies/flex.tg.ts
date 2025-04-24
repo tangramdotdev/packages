@@ -40,7 +40,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking", "--disable-nls", "--disable-rpath"],
 	};
 
-	return std.utils.buildUtil({
+	return std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },

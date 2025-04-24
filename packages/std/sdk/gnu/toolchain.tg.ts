@@ -54,6 +54,7 @@ export const toolchain = tg.command(async (arg: ToolchainArg) => {
 	const nativeBuildTools = await dependencies.buildTools({
 		host,
 		buildToolchain: proxiedNativeToolchain,
+		level: "python",
 	});
 
 	const { crossGcc } = await crossToolchain({
@@ -86,6 +87,7 @@ export const canadianCross = tg.command(async (arg?: CanadianCrossArg) => {
 	const bootstrapBuildTools = await dependencies.buildTools({
 		host: build,
 		buildToolchain: bootstrapToolchain,
+		level: "python",
 	});
 
 	// Create cross-toolchain from build to host.
@@ -112,6 +114,7 @@ export const canadianCross = tg.command(async (arg?: CanadianCrossArg) => {
 
 	// Create a native toolchain (host to host).
 	const nativeBinutils = await binutils({
+		autotools: { fortifySource: false },
 		env: stage1HostSdk,
 		sdk: false,
 		build: host,

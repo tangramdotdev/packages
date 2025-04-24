@@ -1,4 +1,5 @@
 import * as std from "./tangram.ts";
+import { buildTools, type Level } from "./sdk/dependencies.tg.ts";
 
 export type Arg = {
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
@@ -10,23 +11,29 @@ export type Arg = {
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
 	debug?: boolean;
 
-	/** Should we add the default CFLAGS? Will compile with `-mtune=generic -pipe`. Default: true */
-	defaultCFlags?: boolean;
-
 	/** Should we automatically add configure flags to support cross compilation when host !== target? If false, you must provide the necessary configuration manually. Default: true. */
 	defaultCrossArgs?: boolean;
 
 	/** Should we automatically set environment variables pointing to a cross toolchain when host !== target? If false, you must provide the necessary environment manually. Default: true. */
 	defaultCrossEnv?: boolean;
 
+	/** Should the development environment include `texinfo`, `help2man`, `autoconf` and `automake`? Default: false. */
+	developmentTools?: boolean;
+
 	/** Should we run the check phase? Default: false */
 	doCheck?: boolean;
 
-	/** Should we add the extra set of harderning CFLAGS? Default: true*/
+	/** Should the build environment include `m4`, `bison`, and `gettext`? Default: true. */
+	extended?: boolean;
+
+	/** Should we add the extra set of harderning CFLAGS? Default: true. */
 	hardeningCFlags?: boolean;
 
 	/** Any environment to add to the target. */
 	env?: std.env.Arg;
+
+	/** Should the flags include FORTIFY_SORUCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 3.  */
+	fortifySource?: boolean | number;
 
 	/** Use full RELRO? Will use partial if disabled.  May cause long start-up times in large programs. Default: true. */
 	fullRelro?: boolean;
@@ -48,6 +55,12 @@ export type Arg = {
 
 	/** Should make jobs run in parallel? Default: false until new branch. */
 	parallel?: boolean | number;
+
+	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of tempory files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
+	pipe?: boolean;
+
+	/** Should the build environment include pkg-config? Default: true */
+	pkgConfig?: boolean;
 
 	/** Override the phases. */
 	phases?: std.phases.Arg;
@@ -99,12 +112,14 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		buildInTree = false,
 		checksum,
 		debug = false,
-		defaultCFlags = true,
 		defaultCrossArgs = true,
 		defaultCrossEnv = true,
+		developmentTools = false,
 		doCheck = false,
 		env: userEnv,
+		fortifySource: fortifySource_ = 3,
 		fullRelro = true,
+		extended = true,
 		hardeningCFlags = true,
 		host: host_,
 		march,
@@ -112,7 +127,9 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		network = false,
 		opt = "2",
 		parallel = true,
+		pipe = true,
 		phases,
+		pkgConfig = true,
 		prefixArg = `--prefix=`,
 		prefixPath = `$OUTPUT`,
 		removeLibtoolArchives = true,
@@ -150,81 +167,91 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	}
 
 	// Set up env.
-	let env: std.env.Arg = {};
+	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
 
 	// // C/C++ flags.
-	let cflags = tg.template();
 	if (opt) {
-		const optFlag = `-O${opt}`;
-		cflags = tg`${cflags} ${optFlag}`;
+		envs.push({ CFLAGS: tg.Mutation.suffix(`-O${opt}`, " ") });
 	}
-	if (defaultCFlags) {
-		const mArchFlag = march ? `-march=${march} ` : "";
-		const mTuneFlag = mtune ? `-mtune=${mtune} ` : "";
-		const defaultCFlags = `${mArchFlag}${mTuneFlag}-pipe`;
-		cflags = tg`${cflags} ${defaultCFlags}`;
+	if (pipe) {
+		envs.push({ CFLAGS: tg.Mutation.suffix("-pipe", " ") });
 	}
+	if (march !== undefined) {
+		envs.push({ CFLAGS: tg.Mutation.suffix(`-march=${march}`, " ") });
+	}
+	if (mtune !== undefined) {
+		envs.push({ CFLAGS: tg.Mutation.suffix(`-mtune=${mtune}`, " ") });
+	}
+	let fortifySource =
+		typeof fortifySource_ === "number"
+			? fortifySource_
+			: fortifySource_
+				? 3
+				: undefined;
+	if (fortifySource !== undefined) {
+		if (fortifySource < 0 || fortifySource > 3) {
+			throw new Error(
+				`fortifySource must be between 0 and 3 inclusive, received ${fortifySource.toString()}`,
+			);
+		}
+		envs.push({
+			CPPFLAGS: tg.Mutation.suffix(
+				`-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=${fortifySource}`,
+				" ",
+			),
+		});
+	}
+
 	if (hardeningCFlags) {
-		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
+		let extraCFlags = `-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
 		if (os === "linux") {
 			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
 		}
-		cflags = tg`${cflags} ${extraCFlags}`;
+		envs.push({ CFLAGS: tg.Mutation.suffix(extraCFlags, " ") });
 	}
 
 	const environment = std.triple.environment(host);
 	if (!environment || environment === "gnu") {
-		const cc1Specs = tg.file(`
-	 *cc1_options:
-	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
-
-	 *cpp_options:
-	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
-	 		`);
-		const ldSpecs = tg.file(`
-	 *self_spec:
-	 + %{!static:%{!shared:%{!r:-pie}}}
-	 		`);
-		const extraCxxFlags = await tg.Mutation.prefix(
-			`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
-			" ",
-		);
-		pushOrSet(env, "CXXFLAGS", extraCxxFlags);
+		envs.push({
+			CXXFLAGS: tg.Mutation.suffix("-Wp,-D_GLIBCXX_ASSERTIONS", " "),
+		});
 	}
-	pushOrSet(env, "CFLAGS", await cflags);
-	pushOrSet(env, "CXXFLAGS", await cflags);
 
 	// LDFLAGS
 	if (stripExecutables === true) {
-		const stripFlag = await tg.Mutation.prefix(
-			os === "darwin" ? `-Wl,-S` : `-s`,
-			" ",
-		);
-		pushOrSet(env, "LDFLAGS", stripFlag);
+		const stripFlag = os === "darwin" ? `-Wl,-S` : `-s`;
+		envs.push({ LDFLAGS: tg.Mutation.suffix(stripFlag, " ") });
 	}
 	if (os === "linux" && hardeningCFlags) {
 		const fullRelroString = fullRelro ? ",-z,now" : "";
-		const extraLdFlags = await tg.Mutation.prefix(
-			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
-			" ",
-		);
-		pushOrSet(env, "LDFLAGS", extraLdFlags);
+		const extraLdFlags = `-Wl,-z,relro${fullRelroString} -Wl,--as-needed`;
+		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
 	}
 
 	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
 		const sdk = await std.sdk(sdkArgs);
-		// Add a set of utils for the host, compiled with the default SDK to improve cache hits.
-		const utils = await std.utils.env({
+		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
+		let level: Level = "base";
+		if (pkgConfig) {
+			level = "pkgconfig";
+		}
+		if (extended) {
+			level = "extended";
+		}
+		if (developmentTools) {
+			level = "devtools";
+		}
+		const buildToolsEnv = buildTools({
 			host,
-			sdk: false,
-			env: std.sdk({ host }),
+			buildToolchain: std.sdk({ host }),
+			level,
 		});
-		env = await std.env.arg(sdk, utils, env);
+		envs.push(sdk, buildToolsEnv);
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	env = await std.env.arg(env, userEnv);
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs =
@@ -328,24 +355,3 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		)
 		.then(tg.Directory.expect);
 });
-
-export const pushOrSet = (
-	obj: { [key: string]: unknown },
-	key: string,
-	value: tg.Value,
-) => {
-	if (obj === undefined) {
-		obj = {};
-		obj[key] = value;
-	} else if (obj[key] === undefined) {
-		obj[key] = value;
-	} else {
-		if (!Array.isArray(obj[key])) {
-			obj[key] = [obj[key]];
-		}
-		tg.assert(obj && key in obj && Array.isArray(obj[key]));
-		const a = obj[key] as Array<tg.Value>;
-		a.push(value);
-		obj[key] = a;
-	}
-};

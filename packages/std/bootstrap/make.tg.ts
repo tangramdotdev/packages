@@ -1,4 +1,5 @@
 import * as std from "../tangram.ts";
+import { autotoolsInternal } from "../utils.tg.ts";
 import { sdk } from "./sdk.tg.ts";
 
 export const metadata = {
@@ -46,8 +47,8 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		install,
 	};
 
-	return std.autotools.build({
-		env: std.env.arg(sdk(host)),
+	const output = await autotoolsInternal({
+		env: std.env.arg(sdk(host), { WATERMARK: "1" }),
 		host,
 		opt: "s",
 		phases,
@@ -55,6 +56,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		sdk: false,
 		source: source(),
 	});
+	return output;
 });
 
 export default build;

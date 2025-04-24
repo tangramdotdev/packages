@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
+import { autotoolsInternal } from "../utils.tg.ts";
 import muslPermissionPatch from "./musl_permission.patch" with { type: "file" };
 
 export const metadata = {
@@ -56,7 +57,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		LIBRARY_PATH: tg.Mutation.unset(),
 	});
 
-	return await std.autotools.build({
+	return await autotoolsInternal({
 		env,
 		host,
 		phases,

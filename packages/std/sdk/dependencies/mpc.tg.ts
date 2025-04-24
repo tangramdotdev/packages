@@ -31,7 +31,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const output = std.utils.buildUtil({
+	const output = std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env,
 		phases: { configure },

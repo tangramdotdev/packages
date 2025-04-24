@@ -106,6 +106,7 @@ export const build = tg.command(async (arg: Arg) => {
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
 		env: std.env.arg(env),
+		fortifySource: false,
 		hardeningCFlags: false,
 		opt: "3",
 		phases,

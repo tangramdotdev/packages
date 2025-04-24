@@ -1,5 +1,5 @@
-import * as bootstrap from "../../bootstrap.tg.ts";
-import * as std from "../../tangram.ts";
+import * as bootstrap from "../bootstrap.tg.ts";
+import * as std from "../tangram.ts";
 import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 
 export const metadata = {
@@ -62,7 +62,7 @@ export const build = tg.command(async (arg?: Arg) => {
 
 	const phases = { configure };
 
-	let perlArtifact = await std.utils.buildUtil({
+	let perlArtifact = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,

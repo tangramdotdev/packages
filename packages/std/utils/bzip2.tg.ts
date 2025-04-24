@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
-import { buildUtil, prerequisites } from "../utils.tg.ts";
+import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
 	type: "file",
 };
@@ -57,7 +57,7 @@ export const build = tg.command(async (arg?: Arg) => {
 
 	const env = std.env.arg(env_, prerequisites(build));
 
-	return await buildUtil({
+	return await autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,

@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
-import { buildUtil, prerequisites } from "../utils.tg.ts";
+import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import { macOsXattrCmds } from "./file_cmds.tg.ts";
 import libiconv from "./libiconv.tg.ts";
@@ -105,7 +105,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		],
 	};
 
-	let output = await buildUtil({
+	let output = await autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		env: std.env.arg(env),
 		phases: { configure },

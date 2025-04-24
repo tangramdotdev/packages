@@ -144,18 +144,19 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 export default build;
 
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
-export const wrapScript = async (script: tg.File, host: string) => {
+export const wrapScript = async (
+	script: tg.File,
+	host: string,
+	env?: tg.Unresolved<std.env.Arg>,
+) => {
 	const scriptMetadata = await std.file.executableMetadata(script);
-	if (
-		scriptMetadata?.format !== "shebang" ||
-		!scriptMetadata.interpreter.includes("sh")
-	) {
+	if (scriptMetadata?.format !== "shebang") {
 		throw new Error("Expected a shebang sh or bash script");
 	}
 	const interpreter = tg.File.expect(
 		await (await build({ host })).get("bin/bash"),
 	);
-	return std.wrap(script, { interpreter, identity: "executable" });
+	return std.wrap(script, { interpreter, identity: "executable", env });
 };
 
 export const run = tg.command(async (...args: Array<tg.Value>) => {

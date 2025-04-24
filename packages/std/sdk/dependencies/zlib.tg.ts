@@ -45,7 +45,7 @@ export const build = tg.command(async (arg?: Arg) => {
 	}
 	const env = std.env.arg(...envs);
 
-	const output = std.utils.buildUtil({
+	const output = std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		defaultCrossArgs: false,
 		env,
