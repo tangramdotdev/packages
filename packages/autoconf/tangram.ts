@@ -1,4 +1,5 @@
 import grep from "grep" with { path: "../gnugrep" };
+import * as m4 from "m4" with { path: "../m4" };
 import * as perl from "perl" with { path: "../perl" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
