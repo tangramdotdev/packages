@@ -6,8 +6,8 @@ export const source = tg.command(async () => {
 	const url = `https://github.com/tpoechtrager/cctools-port/archive/856d7d1bfcc890357bfe79b3f4aa206a0487b416.zip`;
 	const checksum =
 		"sha256:d3a912976e9467c5df3bed4f6e2f44cf62b20a5ecaffa074acd26484e4444f51";
-	let directory = await std
-		.download({ checksum, url })
+	let directory = await std.download
+		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((dir) => dir.get("cctools"))

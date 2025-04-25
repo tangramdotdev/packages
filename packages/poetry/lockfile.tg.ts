@@ -14,7 +14,7 @@ export const requirements = tg.command(async (lockFile: tg.File) => {
 
 		const name = pkg.name;
 		const version = pkg.version;
-		const hashes = pkg.files.map((p) => p.hash);
+		const hashes = pkg.files.map((p) => tg.Checksum.expect(p.hash));
 
 		const existing = packages.get(name);
 		if (existing) {

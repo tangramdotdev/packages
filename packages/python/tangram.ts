@@ -36,8 +36,8 @@ export const source = tg.command(async (): Promise<tg.Directory> => {
 		"sha256:d984bcc57cd67caab26f7def42e523b1c015bbc5dc07836cf4f0b63fa159eb56";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
-	return await std
-		.download({ checksum, base, name, version, extension })
+	return await std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });
@@ -178,7 +178,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		mpdecimalForHost,
 		opensslForHost,
 		zlibForHost,
-	].map((dir) => dir.get("lib").then(tg.Directory.expect));
+	]
+		.filter((v) => v !== undefined)
+		.map((dir) => dir.get("lib").then(tg.Directory.expect));
 
 	const pythonInterpreter = await std.wrap(
 		tg.symlink(tg`${output}/bin/python${versionString()}`),

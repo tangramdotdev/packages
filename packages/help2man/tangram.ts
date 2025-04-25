@@ -32,8 +32,6 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		autoconf?: autoconf.Arg;
-		bison?: bison.Arg;
-		m4?: m4.Arg;
 		perl?: perl.Arg;
 		texinfo?: texinfo.Arg;
 		zlib?: zlib.Arg;

@@ -12,8 +12,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:d984bcc57cd67caab26f7def42e523b1c015bbc5dc07836cf4f0b63fa159eb56";
 	const base = `https://www.python.org/ftp/python/${version}`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

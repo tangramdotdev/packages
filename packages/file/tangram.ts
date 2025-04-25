@@ -21,8 +21,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:fc97f51029bb0e2c9f4e3bffefdaf678f0e039ee872b9de5c002a6d09c784d82";
 	const base = `https://astron.com/pub/${name}`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

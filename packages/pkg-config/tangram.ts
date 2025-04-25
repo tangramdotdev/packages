@@ -18,8 +18,8 @@ export const source = tg.command(async () => {
 	const base = `https://pkgconfig.freedesktop.org/releases`;
 	const checksum =
 		"sha256:6fc69c01688c9458a57eb9a1664c9aba372ccda420a02bf4429fe610e7e7d591";
-	return std
-		.download({ checksum, base, name, version, extension })
+	return std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

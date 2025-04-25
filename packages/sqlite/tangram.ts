@@ -32,8 +32,8 @@ export const source = tg.command(() => {
 
 	const packageName = `${name}-autoconf-${produceVersion(version)}`;
 	const base = `https://www.sqlite.org/2025`;
-	return std
-		.download({ checksum, base, packageName, extension })
+	return std.download
+		.extractArchive({ checksum, base, packageName, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

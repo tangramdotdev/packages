@@ -55,9 +55,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		args: ["-DCMAKE_BUILD_TYPE=Release"],
 	};
 
-	const deps = [
-		zstd.build({ build, host }),
-	];
+	const deps = [zstd.build({ build, host })];
 	const env = std.env.arg(...deps, env_);
 
 	const result = cmake.build(

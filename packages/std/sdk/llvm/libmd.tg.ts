@@ -10,8 +10,8 @@ export const source = tg.command(async () => {
 	const url = `https://libbsd.freedesktop.org/releases/${name}-${version}.tar.xz`;
 	const checksum =
 		"sha256:1bd6aa42275313af3141c7cf2e5b964e8b1fd488025caf2f971f43b00776b332";
-	return await std
-		.download({ checksum, url })
+	return await std.download
+		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

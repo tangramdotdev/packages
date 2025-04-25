@@ -336,8 +336,8 @@ const darwinCrossToolchain = async (arg: DarwinCrossToolchainArg) => {
 
 	const url = `${baseUrl}/${toolchainDescription}.tar.gz`;
 
-	return await std
-		.download({ checksum, url })
+	return await std.download
+		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 };

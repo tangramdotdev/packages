@@ -18,8 +18,8 @@ export const source = tg.command(async () => {
 	const base = `https://distfiles.ariadne.space/pkgconf`;
 	const checksum =
 		"sha256:51203d99ed573fa7344bf07ca626f10c7cc094e0846ac4aa0023bd0c83c25a41";
-	return std
-		.download({ checksum, base, name, version, extension })
+	return std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

@@ -24,8 +24,8 @@ export const source = tg.command(async (): Promise<tg.Directory> => {
 	const extension = ".tar.xz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const base = `https://download.gnome.org/sources/${name}/${majorMinor}`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

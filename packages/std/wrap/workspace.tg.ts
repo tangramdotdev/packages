@@ -76,13 +76,13 @@ export const rust = tg.command(
 
 		// Download and parse the Rust manifest for the selected version.
 		const version = "1.86.0";
-		const manifestBlob = (await tg
-			.download(
-				`https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
+		const manifestBlob = await std.download({
+			url: `https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
+			checksum:
 				"sha256:5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42",
-			)
-			.then(tg.Blob.expect)) as tg.Blob;
-		const manifestFile = await tg.file(manifestBlob);
+		});
+		tg.Blob.assert(manifestBlob);
+		const manifestFile = await tg.file(manifestBlob as tg.Blob);
 		const manifest = tg.encoding.toml.decode(
 			await manifestFile.text(),
 		) as RustupManifest;
@@ -92,7 +92,7 @@ export const rust = tg.command(
 		for (const name of manifest.profiles["minimal"] ?? []) {
 			const pkg = manifest.pkg[name]?.target[host];
 			if (pkg?.available) {
-				const artifact = std.download({
+				const artifact = std.download.extractArchive({
 					checksum: `sha256:${pkg.xz_hash}`,
 					url: pkg.xz_url,
 				});
@@ -355,7 +355,7 @@ export const build = async (arg: BuildArg) => {
 			command: {
 				host: system,
 			},
-			checksum: "any",
+			checksum: "sha256:any",
 			network: true,
 		}),
 	);

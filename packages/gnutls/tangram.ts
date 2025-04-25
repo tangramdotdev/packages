@@ -19,8 +19,8 @@ export const source = tg.command(async () => {
 		"sha256:90e337504031ef7d3077ab1a52ca8bac9b2f72bc454c95365a1cd1e0e81e06e9";
 	const extension = ".tar.xz";
 	const base = `https://www.gnupg.org/ftp/gcrypt/${name}/v3.7`;
-	return std
-		.download({ base, checksum, name, extension, version })
+	return std.download
+		.extractArchive({ base, checksum, name, extension, version })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

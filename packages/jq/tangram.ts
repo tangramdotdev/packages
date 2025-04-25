@@ -17,8 +17,8 @@ export const source = tg.command(async () => {
 		"sha256:478c9ca129fd2e3443fe27314b455e211e0d8c60bc8ff7df703873deeee580c2";
 	const extension = ".tar.gz";
 	const base = `https://github.com/stedolan/${name}/releases/download/${name}-${version}`;
-	return await std
-		.download({ checksum, base, name, version, extension })
+	return await std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });
@@ -61,6 +61,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 });
 
 export default build;
+
+export const env = tg.command(async (...args: Array<tg.Value>) => {
+	const dir = await build.build();
+	return await tg.run({ executable: std.env(dir), args });
+});
 
 export const run = tg.command(async (...args: Array<tg.Value>) => {
 	const dir = await build.build();

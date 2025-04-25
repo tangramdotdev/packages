@@ -60,7 +60,7 @@ const source = async (): Promise<tg.Directory> => {
 	const { url, checksum } = release;
 
 	// Download and return the inner object.
-	const download = await std.download({ url, checksum });
+	const download = await std.download.extractArchive({ url, checksum });
 
 	tg.assert(download instanceof tg.Directory);
 	const node = await std.directory.unwrap(download);
@@ -318,7 +318,7 @@ const downloadPackages = async (
 
 	const all = dls.map(async ([name, data]) => {
 		const checksums = (data.integrity as string).split(" ");
-		const integrity = checksums.find((i) => i.startsWith("sha512"));
+		const integrity = checksums.find((i) => tg.Checksum.is(i));
 		if (!integrity) {
 			throw new Error(
 				`Cannot download ${data.resolved}. Missing sha512 integrity hash.`,

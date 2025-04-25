@@ -36,8 +36,8 @@ export const source = tg.command(async () => {
 	const tag = `llvmorg-${version}`;
 	const extension = ".tar.xz";
 	const url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${repo}-${version}.src${extension}`;
-	return std
-		.download({ checksum, url })
+	return std.download
+		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

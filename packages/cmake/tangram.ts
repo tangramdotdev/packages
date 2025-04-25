@@ -135,9 +135,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	});
 
 	if (os === "linux") {
-		const libraryPaths = deps.map((dir) =>
-			dir.then((dir: tg.Directory) => dir.get("lib").then(tg.Directory.expect)),
-		);
+		const libraryPaths = (await Promise.all(deps))
+			.filter((v) => v !== undefined)
+			.map((dir) => dir.get("lib").then(tg.Directory.expect));
 		const binDir = await result.get("bin").then(tg.Directory.expect);
 		for await (let [name, artifact] of binDir) {
 			const file = tg.File.expect(artifact);

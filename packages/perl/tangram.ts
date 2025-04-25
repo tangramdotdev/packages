@@ -23,8 +23,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:10d4647cfbb543a7f9ae3e5f6851ec49305232ea7621aed24c7cfbb0bef4b70d";
 	const base = `https://www.cpan.org/src/5.0`;
-	return await std
-		.download({ base, checksum, extension, name, version })
+	return await std.download
+		.extractArchive({ base, checksum, extension, name, version })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => std.patch(source, patches));

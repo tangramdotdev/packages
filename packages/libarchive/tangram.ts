@@ -21,8 +21,8 @@ export const source = tg.command(async () => {
 		"sha256:879acd83c3399c7caaee73fe5f7418e06087ab2aaf40af3e99b9e29beb29faee";
 	const extension = ".tar.xz";
 	const base = `https://www.libarchive.org/downloads`;
-	return std
-		.download({ base, checksum, name, version, extension })
+	return std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

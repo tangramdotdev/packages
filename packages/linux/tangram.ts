@@ -15,8 +15,8 @@ export const source = tg.command(async () => {
 		"sha256:0193b1d86dd372ec891bae799f6da20deef16fc199f30080a4ea9de8cef0c619";
 	const extension = ".tar.xz";
 	const base = `https://cdn.kernel.org/pub/linux/kernel/v6.x`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

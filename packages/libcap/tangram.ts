@@ -21,8 +21,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:6405f6089cf4cdd8c271540cd990654d78dd0b1989b2d9bda20f933a75a795a5";
 	const base = `https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2`;
-	let source = await std
-		.download({ checksum, base, name, version, extension })
+	let source = await std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 

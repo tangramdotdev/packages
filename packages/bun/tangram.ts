@@ -33,7 +33,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const checksum = binaryChecksums[std.triple.archAndOs(host)];
 	tg.assert(checksum, `unsupported host ${host}`);
 	const url = `https://github.com/oven-sh/bun/releases/download/${tag}/${file}.zip`;
-	const dload = await std.download({ url, checksum }).then(tg.Directory.expect);
+	const dload = await std.download
+		.extractArchive({ url, checksum })
+		.then(tg.Directory.expect);
 	const bun = await dload.get(`${file}/bun`).then(tg.File.expect);
 	return tg.directory({
 		"bin/bun": std.wrap(bun),

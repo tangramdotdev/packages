@@ -2,7 +2,7 @@ import * as openssl from "openssl" with { path: "../openssl" };
 import * as std from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
 
-export let metadata = {
+export const metadata = {
 	homepage: "https://libssh2.org",
 	license: "BSD-3-Clause",
 	name: "libssh2",
@@ -14,12 +14,12 @@ export let metadata = {
 };
 
 export let source = tg.command(async () => {
-	let { name, version } = metadata;
-	let checksum =
+	const { name, version } = metadata;
+	const checksum =
 		"sha256:9954cb54c4f548198a7cbebad248bdc87dd64bd26185708a294b2b50771e3769";
-	let owner = name;
-	let repo = name;
-	let tag = `${name}-${version}`;
+	const owner = name;
+	const repo = name;
+	const tag = `${name}-${version}`;
 	return std.download.fromGithub({
 		checksum,
 		compression: "xz",

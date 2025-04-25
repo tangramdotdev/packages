@@ -9,8 +9,8 @@ export const source = tg.command(async () => {
 	const url = `https://github.com/tpoechtrager/apple-libtapi/archive/refs/heads/1300.6.5.zip`;
 	const checksum =
 		"sha256:22615934da56e710a63a44b7bda55d619e1c23a3ee2331661592661acf3b8a88";
-	return await std
-		.download({ checksum, url })
+	return await std.download
+		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

@@ -10,7 +10,7 @@ export const metadata = {
 };
 
 // See https://go.dev/dl.
-const RELEASES = {
+const RELEASES: { [key: string]: { checksum: tg.Checksum; url: string } } = {
 	["aarch64-linux"]: {
 		checksum:
 			"sha256:756274ea4b68fa5535eb9fe2559889287d725a8da63c6aae4d5f23778c229f4b",
@@ -46,10 +46,12 @@ export const self = tg.command(
 			`${system} is not supported in the Go toolchain.`,
 		);
 
-		const { checksum, url } = RELEASES[system as keyof typeof RELEASES];
+		const release = RELEASES[system as keyof typeof RELEASES];
+		tg.assert(release !== undefined);
+		const { checksum, url } = release;
 
 		// Download the Go toolchain from `go.dev`.
-		const downloaded = await std.download({ checksum, url });
+		const downloaded = await std.download.extractArchive({ checksum, url });
 
 		tg.assert(downloaded instanceof tg.Directory);
 		const go = await downloaded.get("go");
@@ -75,7 +77,7 @@ export const self = tg.command(
 export default self;
 
 export type Arg = {
-	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
+	/** If the build requires network access, provide a checksum or the string "sha256:any" to accept any result, or `sha256:none` to ensure a failure, displaying the computed value. */
 	checksum?: tg.Checksum;
 
 	/** The source directory. */
@@ -297,7 +299,7 @@ export const vendor = async ({
 			`
 		.env(self())
 		.env({ SSL_CERT_DIR: std.caCertificates() })
-		.checksum("any")
+		.checksum("sha256:any")
 		.network(true)
 		.then(tg.Directory.expect);
 };

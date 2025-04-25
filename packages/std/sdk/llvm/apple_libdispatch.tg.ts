@@ -6,8 +6,8 @@ export const source = tg.command(async () => {
 	const url = `https://github.com/tpoechtrager/apple-libdispatch/archive/ee39300b12a77efd3f2f020e009e42d557adbb29.zip`;
 	const checksum =
 		"sha256:d6ab90b7e8cbf30725be83491bc85ff708daea130bafcac94381b0a2de958b14";
-	return await std
-		.download({ checksum, url })
+	return await std.download
+		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

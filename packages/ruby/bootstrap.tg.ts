@@ -2,8 +2,8 @@ import * as std from "std" with { path: "../std" };
 
 /** Source code for the version of Ruby to bootstrap. Use 2.5.0, the earliest supported. */
 export const source = tg.command(async () => {
-	return await std
-		.download({
+	return await std.download
+		.extractArchive({
 			url: "https://cache.ruby-lang.org/pub/ruby/2.5/ruby-2.5.0.tar.gz",
 			checksum:
 				"sha256:46e6f3630f1888eb653b15fa811d77b5b1df6fd7a3af436b343cfe4f4503f2ab",

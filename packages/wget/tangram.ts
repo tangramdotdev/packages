@@ -128,7 +128,7 @@ export const test = tg.command(async () => {
 		wget -O $OUTPUT/tangram https://www.tangram.dev
 	`
 		.env(build())
-		.checksum("any")
+		.checksum("sha256:any")
 		.then(tg.Directory.expect);
 
 	const exampleContents = await result

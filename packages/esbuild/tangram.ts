@@ -74,7 +74,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		cp esbuild $OUTPUT/bin
 	`
 		.env(env)
-		.checksum("any")
+		.checksum("sha256:any")
 		.network(true)
 		.then(tg.Directory.expect);
 });

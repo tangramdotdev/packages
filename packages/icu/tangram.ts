@@ -34,7 +34,9 @@ export const source = tg.command(async () => {
 	const pkgVersion = version.replace(/\./, "_");
 	const pkgName = `icu4c-${pkgVersion}-src`;
 	const url = `https://github.com/${owner}/${repo}/releases/download/release-${releaseVersion}/${pkgName}.tgz`;
-	const outer = tg.Directory.expect(await std.download({ url, checksum }));
+	const outer = await std.download
+		.extractArchive({ url, checksum })
+		.then(tg.Directory.expect);
 	return std.directory.unwrap(outer);
 });
 

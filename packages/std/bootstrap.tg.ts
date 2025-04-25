@@ -166,7 +166,9 @@ export const remoteComponent = async (componentName: string) => {
 	tg.assert(checksum, `Could not locate checksum for ${componentName}.`);
 
 	// Download and extract the selected tarball.
-	return await std.download({ url, checksum }).then(tg.Directory.expect);
+	return await std.download
+		.extractArchive({ url, checksum })
+		.then(tg.Directory.expect);
 };
 
 /** Enumerate the full set of components for a host. */

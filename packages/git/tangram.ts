@@ -21,8 +21,8 @@ export const source = tg.command(async () => {
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/${name}`;
 	const checksum =
 		"sha256:f3d8f9bb23ae392374e91cd9d395970dabc5b9c5ee72f39884613cd84a6ed310";
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

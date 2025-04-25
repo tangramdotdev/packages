@@ -23,8 +23,8 @@ export const source = tg.command((bundledSources?: boolean) => {
 	const checksum =
 		"sha256:a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9";
 	const base = `https://mirrors.ocf.berkeley.edu/gnu/${name}/${name}-${version}`;
-	let sourceDir = std
-		.download({ checksum, base, name, version, extension })
+	let sourceDir = std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 

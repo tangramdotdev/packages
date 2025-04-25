@@ -288,7 +288,7 @@ const vendoredSources = async (
 		const rustArtifact = self();
 		const sdk = std.sdk();
 		const result = await $`${vendorScript}`
-			.checksum("any")
+			.checksum("sha256:any")
 			.network(true)
 			.env(sdk)
 			.env(rustArtifact)
@@ -350,15 +350,17 @@ export const vendorDependencies = tg.command(async (cargoLock: tg.File) => {
 		.map(async (pkg) => {
 			tg.assert(pkg.source);
 			tg.assert(pkg.checksum);
-			const checksum = `sha256:${pkg.checksum}`;
+			const checksum: tg.Checksum = `sha256:${pkg.checksum}`;
 			const url = `https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`;
-			const artifact = await std.download({
-				checksum,
-				url,
-			});
-			tg.assert(artifact instanceof tg.Directory);
-			const child = await artifact.get(`${pkg.name}-${pkg.version}`);
-			tg.assert(child instanceof tg.Directory);
+			const artifact = await std.download
+				.extractArchive({
+					checksum,
+					url,
+				})
+				.then(tg.Directory.expect);
+			const child = await artifact
+				.get(`${pkg.name}-${pkg.version}`)
+				.then(tg.Directory.expect);
 			return tg.directory({
 				[`${pkg.name}-${pkg.version}`]: vendorPackage(child, checksum),
 			});

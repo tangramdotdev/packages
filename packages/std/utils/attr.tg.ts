@@ -14,8 +14,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
 	const base = `https://download.savannah.gnu.org/releases/${name}`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, basenamePatch));

@@ -19,8 +19,8 @@ export const source = tg.command(async () => {
 		"sha256:56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467";
 	const extension = ".tar.gz";
 	const base = `https://fftw.org/pub/${name}`;
-	return await std
-		.download({ checksum, base, name, version, extension })
+	return await std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

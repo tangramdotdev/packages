@@ -47,10 +47,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			help2man: help2manArg = {},
-			texinfo: texinfoArg = {},
-		} = {},
+		dependencies: { help2man: help2manArg = {}, texinfo: texinfoArg = {} } = {},
 		env: env_,
 		host,
 		sdk,

@@ -16,8 +16,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
 	const extension = ".tar.xz";
-	return std
-		.download({ checksum, base: homepage, name, version, extension })
+	return std.download
+		.extractArchive({ checksum, base: homepage, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

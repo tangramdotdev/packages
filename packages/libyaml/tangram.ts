@@ -17,8 +17,8 @@ export const source = tg.command(async () => {
 		"sha256:c642ae9b75fee120b2d96c712538bd2cf283228d2337df2cf2988e3c02678ef4";
 	const extension = ".tar.gz";
 	const url = `https://github.com/yaml/libyaml/releases/download/${version}/yaml-${version}${extension}`;
-	return await std
-		.download({ url, checksum })
+	return await std.download
+		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

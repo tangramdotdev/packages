@@ -13,8 +13,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
 	const base = `https://musl.libc.org/releases`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, muslPermissionPatch));

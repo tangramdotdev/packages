@@ -44,8 +44,8 @@ export const source = tg.command(async () => {
 	const extension = ".tar.gz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${extension}`;
-	return std
-		.download({ url, checksum })
+	return std.download
+		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });
@@ -217,12 +217,12 @@ export type DownloadGemArg = {
 
 /** Download and extract a .gem file from rubygems.org. */
 export const downloadGem = (arg: DownloadGemArg) => {
-	const gemFile = std.download({
-		url: `https://rubygems.org/downloads/${arg.name}-${arg.version}.gem`,
-		checksum: arg.checksum,
-		decompress: false,
-		extract: false,
-	});
+	const gemFile = std
+		.download({
+			url: `https://rubygems.org/downloads/${arg.name}-${arg.version}.gem`,
+			checksum: arg.checksum,
+		})
+		.then((b) => tg.file(b as tg.Blob));
 
 	return tg.directory({
 		[`${arg.name}-${arg.version}.gem`]: gemFile,
@@ -237,80 +237,81 @@ const libraryVersion = (version: string) => {
 
 /** These are the gems required by the ruby build itself and installed by default. See `https://stdgems.org`. */
 const bundledGems = (): Promise<tg.Directory> => {
-	const args = [
-		{
-			name: "minitest",
-			version: "5.25.4",
-			checksum:
-				"sha256:9cf2cae25ac4dfc90c988ebc3b917f53c054978b673273da1bd20bcb0778f947",
-		},
-		{
-			name: "power_assert",
-			version: "2.0.5",
-			checksum:
-				"sha256:63b511b85bb8ea57336d25156864498644f5bbf028699ceda27949e0125bc323",
-		},
-		{
-			name: "rake",
-			version: "13.2.1",
-			checksum:
-				"sha256:46cb38dae65d7d74b6020a4ac9d48afed8eb8149c040eccf0523bec91907059d",
-		},
-		{
-			name: "test-unit",
-			version: "3.6.7",
-			checksum:
-				"sha256:c342bb9f7334ea84a361b43c20b063f405c0bf3c7dbe3ff38f61a91661d29221",
-		},
-		{
-			name: "rexml",
-			version: "3.4.0",
-			checksum:
-				"sha256:efbea1efba7fa151158e0ee1e643525834da2d8eb4cf744aa68f6480bc9804b2",
-		},
-		{
-			name: "rss",
-			version: "0.3.1",
-			checksum:
-				"sha256:b46234c04551b925180f8bedfc6f6045bf2d9998417feda72f300e7980226737",
-		},
-		{
-			name: "net-ftp",
-			version: "0.3.8",
-			checksum:
-				"sha256:28d63e407a7edb9739c320a4faaec515e43e963815248d06418aba322478874f",
-		},
-		{
-			name: "net-imap",
-			version: "0.5.4",
-			checksum:
-				"sha256:b665d23a4eeea6af725a9bda0e3dbb65f06b7907e7a3986c1bbcc5d09444599d",
-		},
-		{
-			name: "net-pop",
-			version: "0.1.2",
-			checksum:
-				"sha256:848b4e982013c15b2f0382792268763b748cce91c9e91e36b0f27ed26420dff3",
-		},
-		{
-			name: "net-smtp",
-			version: "0.5.0",
-			checksum:
-				"sha256:5fc0415e6ea1cc0b3dfea7270438ec22b278ca8d524986a3ae4e5ae8d087b42a",
-		},
-		{
-			name: "matrix",
-			version: "0.4.2",
-			checksum:
-				"sha256:71083ccbd67a14a43bfa78d3e4dc0f4b503b9cc18e5b4b1d686dc0f9ef7c4cc0",
-		},
-		{
-			name: "prime",
-			version: "0.1.3",
-			checksum:
-				"sha256:baf031c50d6ce923594913befc8ac86a3251bffb9d6a5e8b03687962054e53e3",
-		},
-	];
+	const args: Array<{ name: string; version: string; checksum: tg.Checksum }> =
+		[
+			{
+				name: "minitest",
+				version: "5.25.4",
+				checksum:
+					"sha256:9cf2cae25ac4dfc90c988ebc3b917f53c054978b673273da1bd20bcb0778f947",
+			},
+			{
+				name: "power_assert",
+				version: "2.0.5",
+				checksum:
+					"sha256:63b511b85bb8ea57336d25156864498644f5bbf028699ceda27949e0125bc323",
+			},
+			{
+				name: "rake",
+				version: "13.2.1",
+				checksum:
+					"sha256:46cb38dae65d7d74b6020a4ac9d48afed8eb8149c040eccf0523bec91907059d",
+			},
+			{
+				name: "test-unit",
+				version: "3.6.7",
+				checksum:
+					"sha256:c342bb9f7334ea84a361b43c20b063f405c0bf3c7dbe3ff38f61a91661d29221",
+			},
+			{
+				name: "rexml",
+				version: "3.4.0",
+				checksum:
+					"sha256:efbea1efba7fa151158e0ee1e643525834da2d8eb4cf744aa68f6480bc9804b2",
+			},
+			{
+				name: "rss",
+				version: "0.3.1",
+				checksum:
+					"sha256:b46234c04551b925180f8bedfc6f6045bf2d9998417feda72f300e7980226737",
+			},
+			{
+				name: "net-ftp",
+				version: "0.3.8",
+				checksum:
+					"sha256:28d63e407a7edb9739c320a4faaec515e43e963815248d06418aba322478874f",
+			},
+			{
+				name: "net-imap",
+				version: "0.5.4",
+				checksum:
+					"sha256:b665d23a4eeea6af725a9bda0e3dbb65f06b7907e7a3986c1bbcc5d09444599d",
+			},
+			{
+				name: "net-pop",
+				version: "0.1.2",
+				checksum:
+					"sha256:848b4e982013c15b2f0382792268763b748cce91c9e91e36b0f27ed26420dff3",
+			},
+			{
+				name: "net-smtp",
+				version: "0.5.0",
+				checksum:
+					"sha256:5fc0415e6ea1cc0b3dfea7270438ec22b278ca8d524986a3ae4e5ae8d087b42a",
+			},
+			{
+				name: "matrix",
+				version: "0.4.2",
+				checksum:
+					"sha256:71083ccbd67a14a43bfa78d3e4dc0f4b503b9cc18e5b4b1d686dc0f9ef7c4cc0",
+			},
+			{
+				name: "prime",
+				version: "0.1.3",
+				checksum:
+					"sha256:baf031c50d6ce923594913befc8ac86a3251bffb9d6a5e8b03687962054e53e3",
+			},
+		];
 
 	return tg.directory(...args.map(downloadGem));
 };

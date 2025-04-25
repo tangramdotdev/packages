@@ -49,8 +49,6 @@ export const self = tg.command(async (arg?: ToolchainArg) => {
 		url: `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`,
 		checksum:
 			"sha256:5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42",
-		decompress: false,
-		extract: false,
 	});
 
 	// Parse the manifest.
@@ -85,7 +83,7 @@ export const self = tg.command(async (arg?: ToolchainArg) => {
 	// Download each package, and add each one as a subdirectory. The subdirectory will be named with the package's name.
 	let packagesArtifact = await tg.directory();
 	for (const [name, pkg] of packages) {
-		const artifact = await std.download({
+		const artifact = await std.download.extractArchive({
 			checksum: `sha256:${pkg.xz_hash}`,
 			url: pkg.xz_url,
 		});

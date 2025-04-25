@@ -11,8 +11,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
 	const base = `https://zlib.net/`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

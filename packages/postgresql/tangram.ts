@@ -28,8 +28,8 @@ export const source = tg.command(async () => {
 		"sha256:23369cdaccd45270ac5dcc30fa9da205d5be33fa505e1f17a0418d2caeca477b";
 	const extension = ".tar.bz2";
 	const base = `https://ftp.postgresql.org/pub/source/v${version}`;
-	let output = await std
-		.download({ checksum, base, name, version, extension })
+	let output = await std.download
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 
@@ -149,7 +149,9 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		lz4Artifact,
 		zlibArtifact,
 		zstdArtifact,
-	].map((dir) => dir.get("lib").then(tg.Directory.expect));
+	]
+		.filter((v) => v !== undefined)
+		.map((dir) => dir.get("lib").then(tg.Directory.expect));
 	libraryPaths.push(output.get("lib").then(tg.Directory.expect));
 
 	let binDir = await output.get("bin").then(tg.Directory.expect);

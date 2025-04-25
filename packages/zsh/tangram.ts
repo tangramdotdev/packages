@@ -18,8 +18,8 @@ export const source = tg.command(async () => {
 	const url = `https://sourceforge.net/projects/zsh/files/zsh/5.9/${name}-${version}.tar.xz/download`;
 	const checksum =
 		"sha256:9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5";
-	return await std
-		.download({ url, checksum })
+	return await std.download
+		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

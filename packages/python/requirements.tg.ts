@@ -25,7 +25,7 @@ export const install = tg.command(
 				--disable-pip-version-check \\
 				-r ${requirements}`
 			.env(toolchains)
-			.checksum("any")
+			.checksum("sha256:any")
 			.network(true)
 			.then(tg.Directory.expect);
 
@@ -48,7 +48,7 @@ export const install = tg.command(
 					--no-deps                   \\
 				${name} || true # allow failure, needed to skip unnecessary errors in pip install.`
 				.env(toolchains)
-				.checksum("any")
+				.checksum("sha256:any")
 				.network(true)
 				.then(tg.Directory.expect);
 

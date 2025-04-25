@@ -13,8 +13,8 @@ export const source = tg.command(async () => {
 	const checksum =
 		"sha256:b1d45295d3f71f25a4c9101bd7c8d16cb56348bbef3bbc738da0351e17c73317";
 	const base = `https://github.com/tukaani-project/xz/releases/download/v${version}`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

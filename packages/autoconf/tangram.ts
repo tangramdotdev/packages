@@ -68,6 +68,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const perlArtifact = await envArgFromDependency(
 		std.env.buildDependency(perl.build, dependencyArgs.perl),
 	);
+	tg.assert(perlArtifact !== undefined);
 	const dependencies = [
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	].map(envArgFromDependency);

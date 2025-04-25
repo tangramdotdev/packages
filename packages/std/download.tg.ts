@@ -1,49 +1,50 @@
 export type Arg = download.BuildUrlArg & {
-	/** The expected checksum of the downloaded file. Use "any" to allow network access without verifying the result. */
+	/** The expected checksum of the downloaded file. Use `sha256:any` to allow network access without verifying the result, or `sha256:none` to force a mismatch, displaying the computed checksum. */
 	checksum: tg.Checksum;
-	/** Should the downloaded blob get decompressed?. Default: `true`. */
-	decompress?: boolean;
-	/** Should the downloaded blob get extracted as an archive? Default: `true`. */
-	extract?: boolean;
+	/** The downloaded blob can optionally be decompressed, or decompressed and extracted. Default: "raw". */
+	mode?: "raw" | "decompress" | "extract";
 	/** Optional list of mirror URLs to try if the primary URL fails. */
 	mirrors?: Array<string>;
 };
 
 /** Wrapper around tg.download that can optionally decompress and unpack tarballs. */
-export async function download(arg: Arg): Promise<tg.Artifact> {
-	const {
-		checksum,
-		decompress = true,
-		extract = true,
-		mirrors = [],
-		...rest
-	} = arg;
+export async function download(arg: Arg): Promise<tg.Blob | tg.Artifact> {
+	const { checksum, mode = "raw", mirrors = [], ...rest } = arg;
 	const primaryUrl = download.buildUrl(rest);
 	const urls = [primaryUrl, ...mirrors];
-
-	// Perform the download.
-	let blob: tg.Blob | undefined;
+	let output: tg.Blob | tg.Artifact | undefined;
 	let lastError: Error | undefined;
 	for (const url of urls) {
 		try {
-			blob = (await tg.download(url, checksum).then(tg.Blob.expect)) as tg.Blob;
+			output = await tg.download(url, checksum, { mode });
 		} catch (e) {
 			lastError = e as Error;
 			continue;
 		}
 	}
-	if (blob === undefined) {
+	if (output === undefined) {
 		throw lastError;
 	}
-
-	// Otherwise, unpack the blob.
-	// If either or both is `true`, infer the formats from the URL and fill in the missing values.
-	return await download.unpackBlob({ decompress, extract, blob });
+	return output;
 }
 
 export default download;
 
 export namespace download {
+	type ExtractArchiveArg = download.BuildUrlArg & {
+		/** The expected checksum of the downloaded file. Use "any" to allow network access without verifying the result. */
+		checksum: tg.Checksum;
+		/** Optional list of mirror URLs to try if the primary URL fails. */
+		mirrors?: Array<string>;
+	};
+
+	/** Wrapper for `std.download` that always extracts. */
+	export const extractArchive = async (
+		arg: ExtractArchiveArg,
+	): Promise<tg.Artifact> => {
+		return await download({ ...arg, mode: "extract" }).then(tg.Artifact.expect);
+	};
+
 	export type fromGitHubArg = GithubSource & {
 		archiveFormat?: tg.ArchiveFormat | undefined;
 		checksum: tg.Checksum;
@@ -64,6 +65,7 @@ export namespace download {
 		source: "tag";
 	};
 
+	/** Download and extract an archive from a Github tag or release. */
 	export const fromGithub = async (arg: fromGitHubArg) => {
 		const {
 			archiveFormat = "tar",
@@ -96,14 +98,12 @@ export namespace download {
 		}
 
 		// Download and unpack the archive.
-		const outer = tg.Directory.expect(
-			await download({
+		const outer = await download
+			.extractArchive({
 				checksum,
-				decompress: compression !== undefined,
-				extract: archiveFormat !== undefined,
 				url,
-			}),
-		);
+			})
+			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
 	};
 
@@ -114,7 +114,7 @@ export namespace download {
 		version: string;
 	};
 
-	/** Download a source package hosted in the GNU FTP repository. */
+	/** Download and extract a source package hosted in the GNU FTP repository. */
 	export const fromGnu = async (arg: FromGnuArg) => {
 		const { checksum, compression = "gz", name, version } = arg;
 		const archiveFormat = "tar" as tg.ArchiveFormat;
@@ -122,34 +122,14 @@ export namespace download {
 		const archive = packageArchive({ extension, name, version });
 		const url = gnuUrl(name, archive);
 
-		const outer = tg.Directory.expect(await download({ checksum, url }));
+		const outer = await download
+			.extractArchive({ checksum, url })
+			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
 	};
 
 	export const gnuUrl = (name: string, archive: string) => {
 		return `http://ftpmirror.gnu.org/gnu/${name}/${archive}`;
-	};
-
-	export type UnpackArg = {
-		blob: tg.Blob;
-		decompress?: boolean;
-		extract?: boolean;
-	};
-
-	export const unpackBlob = async (arg: UnpackArg): Promise<tg.Artifact> => {
-		let { blob, decompress, extract } = arg;
-
-		// If extract is set, `tg.Artifact.extract` will handle both compressed and uncompressed blobs.
-		if (extract) {
-			return tg.extract(blob);
-		}
-
-		// If asked to decompress but not extract, decompress the blob.
-		if (decompress) {
-			blob = await tg.decompress(blob);
-		}
-
-		return tg.file(blob);
 	};
 
 	export type BuildUrlArg =
@@ -227,13 +207,15 @@ export const test = tg.command(async () => {
 export const testTgDownload = tg.command(async () => {
 	return await tg.download(
 		"https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
-		"any",
+		"sha256:026f919826c372cab0f2ac09b647fd570153efdb3e0ea5d8c9f05e1bca02f028",
 	);
 });
 
 export const testStdDownload = tg.command(async () => {
 	return await download({
 		url: "https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
-		checksum: "any",
+		checksum:
+			"sha256:026f919826c372cab0f2ac09b647fd570153efdb3e0ea5d8c9f05e1bca02f028",
+		mode: "extract",
 	});
 });

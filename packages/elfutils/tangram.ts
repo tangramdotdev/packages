@@ -19,8 +19,8 @@ export const source = tg.command(async () => {
 		"sha256:df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871";
 	const extension = ".tar.bz2";
 	const base = `https://sourceware.org/elfutils/ftp/${version}`;
-	return await std
-		.download({ base, checksum, name, version, extension })
+	return await std.download
+		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

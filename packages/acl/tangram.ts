@@ -21,8 +21,8 @@ export const source = tg.command(async () => {
 		"sha256:97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd";
 	const base = `https://download.savannah.gnu.org/releases/${name}`;
 	const extension = ".tar.xz";
-	return std
-		.download({ base, checksum, extension, name, version })
+	return std.download
+		.extractArchive({ base, checksum, extension, name, version })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 });

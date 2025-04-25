@@ -202,8 +202,8 @@ export const flagForDependency = async (
 		}
 		const url = `https://crates.io/api/v1/crates/${dep.name}/${dep.version}/download`;
 		// The URL will download a `.crate` file, which is a `tar.gz` archive.
-		source = await std
-			.download({
+		source = await std.download
+			.extractArchive({
 				checksum,
 				url,
 			})
