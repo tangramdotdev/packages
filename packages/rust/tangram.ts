@@ -45,16 +45,16 @@ export const self = tg.command(async (arg?: ToolchainArg) => {
 	}
 
 	// Download the Rust manifest for the selected version.
-	const manifestArtifact = await std.download({
+	const manifestBlob = await std.download({
 		url: `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`,
 		checksum:
 			"sha256:5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42",
 	});
+	const manifestFile = await tg.file(manifestBlob as tg.Blob);
 
 	// Parse the manifest.
-	tg.assert(manifestArtifact instanceof tg.File);
 	const manifest = (await tg.encoding.toml.decode(
-		await manifestArtifact.text(),
+		await manifestFile.text(),
 	)) as RustupManifestV2;
 
 	// Get all the available packages for the selected profile and target.
