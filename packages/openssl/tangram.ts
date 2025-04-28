@@ -6,13 +6,13 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "openssl",
 	repository: "https://github.com/openssl/openssl",
-	version: "3.4.1",
+	version: "3.5.0",
 };
 
 export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:002a2d6b30b58bf4bea46c43bdd96365aaf8daa6c428782aa4feee06da197df3";
+		"sha256:344d0a79f1a9b08029b0744e2cc401a43f9c90acd1044d09a530b4885a8e9fc0";
 	const owner = name;
 	const repo = name;
 	const tag = `${name}-${version}`;
@@ -126,6 +126,7 @@ export const test = tg.command(async () => {
 			echo "Checking if we can link against libssl."
 			cc ${source}/main.c -o $OUTPUT/prog -lssl -lcrypto
 		`
+		.pipefail(false)
 		.env(std.sdk())
 		.env(build())
 		.then(tg.Directory.expect);

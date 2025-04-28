@@ -63,8 +63,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 export default build;
 
 export const env = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: std.env(dir), args });
+	const executable = await buildEnv.build();
+	return await tg.run({ executable, args });
+});
+
+export const buildEnv = tg.command(async () => {
+	return std.env(build());
 });
 
 export const run = tg.command(async (...args: Array<tg.Value>) => {
