@@ -17,6 +17,7 @@ import zstd from "./dependencies/zstd.tg.ts";
 
 import grep from "../utils/grep.tg.ts";
 import sed from "../utils/sed.tg.ts";
+import libiconv from "../utils/libiconv.tg.ts";
 import pkgConfig from "../autotools/pkgconf.tg.ts";
 import gettext from "../autotools/gettext.tg.ts";
 import libtool from "../autotools/libtool.tg.ts";
@@ -52,6 +53,7 @@ export const buildTools = async (
 ) => {
 	const arg = await tg.resolve(unresolvedArg);
 	const { host, level, buildToolchain } = arg;
+	const os = std.triple.os(host);
 
 	// This list collects artifacts to return. It does not include the build toolchain.
 	const retEnvs: tg.Unresolved<Array<std.env.Arg>> = [];
@@ -85,6 +87,16 @@ export const buildTools = async (
 
 	const bisonArtifact = bison({ host, sdk: false, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, bisonArtifact);
+
+	if (os === "darwin") {
+		const libiconvArtifact = libiconv({
+			host,
+			sdk: false,
+			env: std.env.arg(utils, buildToolchain),
+		});
+		retEnvs.push(libiconvArtifact);
+		utilsEnv = std.env.arg(utilsEnv, libiconvArtifact);
+	}
 
 	const gettextArtifact = gettext({ host, sdk: false, env: utilsEnv });
 	retEnvs.push(m4Artifact, bisonArtifact, gettextArtifact);
