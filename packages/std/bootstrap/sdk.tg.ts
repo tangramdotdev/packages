@@ -27,11 +27,7 @@ export namespace sdk {
 		}
 		const bootstrapHost = await bootstrap.toolchainTriple(host);
 		const utils = await prepareBootstrapUtils(bootstrapHost);
-		const shellExe = await utils.get("bin/dash").then(tg.File.expect);
-		let env: std.env.Arg = {
-			CONFIG_SHELL: shellExe,
-			SHELL: shellExe,
-		};
+		let env: std.env.Arg = {};
 		if (os === "darwin") {
 			const sdkroot = await tg.Mutation.setIfUnset(bootstrap.macOsSdk());
 			env = {

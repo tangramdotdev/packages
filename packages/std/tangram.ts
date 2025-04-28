@@ -220,3 +220,10 @@ const validateTestNames = (...testNames: Array<string>) => {
 	}
 	return [...uniqueTests];
 };
+
+export let justShell = async () => {
+	const dash = await bootstrap.shell();
+	console.log("dash", await dash.id());
+	const dashExe = await dash.get("bin/sh");
+	return dashExe;
+}
