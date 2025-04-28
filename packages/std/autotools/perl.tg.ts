@@ -1,23 +1,30 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
+import macosVersionPatch from "./perl_macos_version.patch" with {
+	type: "file",
+};
 
 export const metadata = {
 	name: "perl",
 	version: "5.40.2",
 };
 
-export const source = tg.command(async () => {
+export const source = tg.command(async (os: string) => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
 		"sha256:10d4647cfbb543a7f9ae3e5f6851ec49305232ea7621aed24c7cfbb0bef4b70d";
 	const base = `https://www.cpan.org/src/5.0`;
+	const patches = [noFixDepsPatch];
+	if (os === "darwin") {
+		patches.push(macosVersionPatch);
+	}
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
-		.then((source) => bootstrap.patch(source, noFixDepsPatch));
+		.then((source) => bootstrap.patch(source, ...patches));
 });
 
 export type Arg = {
@@ -37,9 +44,10 @@ export const build = tg.command(async (arg?: Arg) => {
 		source: source_,
 	} = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
+	const os = std.triple.os(host);
 	const build = buildTriple_ ?? host;
 
-	const sourceDir = source_ ?? source();
+	const sourceDir = source_ ?? source(os);
 
 	const configure = {
 		args: [
@@ -53,10 +61,7 @@ export const build = tg.command(async (arg?: Arg) => {
 	};
 
 	// On Linux non-musl hosts, specify that LC_ALL uses name/value pairs.
-	if (
-		std.triple.os(host) === "linux" &&
-		std.triple.environment(host) !== "musl"
-	) {
+	if (os === "linux" && std.triple.environment(host) !== "musl") {
 		configure.args.push("-Accflags=-DPERL_LC_ALL_USES_NAME_VALUE_PAIRS");
 	}
 
