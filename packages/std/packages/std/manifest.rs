@@ -287,11 +287,11 @@ impl Manifest {
 
 		// Create a new blob with the wrapper contents and the manifest, keeping the wrapper in a separate blob.
 		let output_blob = tg::Blob::new(vec![
-			tg::branch::Child {
+			tg::blob::Child {
 				blob: wrapper_contents,
 				length: wrapper_length,
 			},
-			tg::branch::Child {
+			tg::blob::Child {
 				blob: manifest_blob,
 				length: manifest_length,
 			},
