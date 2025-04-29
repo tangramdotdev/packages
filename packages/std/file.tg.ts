@@ -417,10 +417,12 @@ function* parseDynamicSection(
 
 		// For NEEDED and SONAME, resolve the string
 		if (tag === DT_NEEDED || tag === DT_SONAME) {
-			entry.string = readNullTerminatedString(
-				bytes,
-				bigIntToNumber(strTabOffset + val),
-			);
+			try {
+				entry.string = readNullTerminatedString(
+					bytes,
+					bigIntToNumber(strTabOffset + val),
+				);
+			} catch (_) {}
 		}
 
 		yield entry;
@@ -549,7 +551,8 @@ const readNullTerminatedString = (
 	while (end < bytes.length && bytes[end] !== 0) {
 		end++;
 	}
-	return tg.encoding.utf8.decode(bytes.slice(offset, end));
+	const slice = bytes.slice(offset, end);
+	return tg.encoding.utf8.decode(slice);
 };
 
 export const test = tg.command(async () => {
