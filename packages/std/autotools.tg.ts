@@ -50,6 +50,9 @@ export type Arg = {
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
 	network?: boolean;
 
+	/** Should we normalize the prefix written to pkg-config files? Default: true. */
+	normalizePkgConfigPrefix?: boolean;
+
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
 
@@ -125,6 +128,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		march,
 		mtune = "generic",
 		network = false,
+		normalizePkgConfigPrefix = true,
 		opt = "2",
 		parallel = true,
 		pipe = true,
@@ -327,7 +331,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		defaultFixupCommand = tg`${defaultFixupCommand}\nmkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`;
 	}
 
-	if (debug || removeLibtoolArchives) {
+	if (normalizePkgConfigPrefix) {
+		defaultFixupCommand = tg`${defaultFixupCommand}\nfind $OUTPUT -name '*.pc' -type f -exec sed -i 's|^prefix=.*|prefix=$'"{pcfiledir}"'/../..|' {} \\;`;
+	}
+
+	if (debug || removeLibtoolArchives || normalizePkgConfigPrefix) {
 		const defaultFixup = {
 			command: defaultFixupCommand,
 		};
