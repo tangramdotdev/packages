@@ -63,8 +63,6 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const os = std.triple.os(host);
-
 	const sourceDir = source_ ?? source();
 
 	const dependencies = [
@@ -78,11 +76,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	];
 	const env = [...dependencies, env_];
 
+	const prepare = { command: tg.Mutation.prefix("mkdir work && cd work") };
 	const configure = {
 		command: tg`${sourceDir}/source/configure`,
 		args: ["--enable-static"],
 	};
-	const phases = { configure };
+	const phases = { prepare, configure };
 
 	return std.autotools.build(
 		{
