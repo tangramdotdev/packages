@@ -270,7 +270,7 @@ export const testBasicExeProxied = tg.command(async () => {
 		crateName,
 		env: {
 			WATERMARK: "2",
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
+			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
 		},
 		proxy: true,
 		source: tests.get(crateName).then(tg.Directory.expect),
@@ -339,7 +339,7 @@ export const testExeWithCratesIoDependency = tg.command(async () => {
 	const depsExe = await build({
 		crateName,
 		env: {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
+			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
 		},
 		source: tests.get(crateName).then(tg.Directory.expect),
 		rustDependencies: [

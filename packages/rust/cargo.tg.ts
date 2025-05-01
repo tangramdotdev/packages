@@ -443,7 +443,7 @@ export const testUnproxiedWorkspace = tg.command(async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
-			TANGRAM_LINKER_TRACING: "tangram=trace",
+			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 		},
 		pre: "set -x",
 		proxy: false,
@@ -459,7 +459,7 @@ export const testUnproxiedWorkspace = tg.command(async () => {
 	const helloOpenssl = build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		env: std.env.arg(openssl(), pkgConfig(), {
-			TANGRAM_LINKER_TRACING: "tangram=trace",
+			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 		}),
 		proxy: false,
 	});

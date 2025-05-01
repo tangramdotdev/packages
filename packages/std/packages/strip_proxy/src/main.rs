@@ -121,9 +121,11 @@ async fn run_proxy(
 		tracing::info!(?executable_path, "found executable path");
 
 		// Copy the file to a temp directory.
-		let current_dir = std::env::current_dir()
-			.map_err(|source| tg::error!(!source, "failed to determine cwd"))?;
-		let tmpdir = tempfile::TempDir::new_in(&current_dir)
+		#[cfg(target_os = "linux")]
+		let tmpdir = tempfile::TempDir::new_in("/")
+			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
+		#[cfg(target_os = "macos")]
+		let tmpdir = tempfile::TempDir::new()
 			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
 		let tmp_path = tmpdir.path();
 		let local_executable_path = tmp_path.join("executable");

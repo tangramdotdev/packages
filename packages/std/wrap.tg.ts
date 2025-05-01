@@ -2208,7 +2208,7 @@ export const pushOrSet = (
 /** Basic program for testing the wrapper code. */
 export const argAndEnvDump = tg.command(async () => {
 	const sdkEnv = await std.env.arg(bootstrap.sdk(), {
-		TANGRAM_LINKER_TRACING: "tangram=trace",
+		TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 	});
 
 	return tg.File.expect(
@@ -2330,7 +2330,7 @@ export const testContentExecutable = tg.command(async () => {
 	// Check the output matches the expected output.
 	const output = await tg
 		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
-			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+			env: { TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" },
 		})
 		.then((command) => buildBootstrap(command))
 		.then(tg.File.expect);
@@ -2354,7 +2354,7 @@ export const testContentExecutableVariadic = tg.command(async () => {
 	// Check the output matches the expected output.
 	const output = await tg
 		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
-			env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+			env: { TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" },
 		})
 		.then((command) => buildBootstrap(command))
 		.then(tg.File.expect);

@@ -22,7 +22,7 @@ export const source = tg.command((bundledSources?: boolean) => {
 	const extension = ".tar.xz";
 	const checksum =
 		"sha256:a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9";
-	const base = `https://mirrors.ocf.berkeley.edu/gnu/${name}/${name}-${version}`;
+	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
 	let sourceDir = std.download
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
@@ -51,7 +51,7 @@ export type Arg = {
 	host?: string;
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
-	/**  This directory must contain a directory structure with a single toplevel directory named for the target triple, containing include/lib directories contains a libc matching the target triple and a set of Linxu headers. They will be copied into the output. */
+	/**  This directory must contain a directory structure with a single toplevel directory named for the target triple, containing include/lib directories contains a libc matching the target triple and a set of Linux headers. They will be copied into the output. */
 	sysroot: tg.Directory;
 	target?: string;
 	/** This directory must contain a set of binutils for the target. They will be copied into the output. */

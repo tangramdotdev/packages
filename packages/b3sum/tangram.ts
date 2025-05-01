@@ -6,7 +6,7 @@ export const metadata = {
 	license: "CC0-1.0",
 	name: "blake3",
 	repository: "https://github.com/BLAKE3-team/BLAKE3",
-	version: "1.5.5",
+	version: "1.8.2",
 	provides: {
 		binaries: ["b3sum"],
 	},
@@ -15,7 +15,7 @@ export const metadata = {
 export const source = tg.command(async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6feba0750efc1a99a79fb9a495e2628b5cd1603e15f56a06b1d6cb13ac55c618";
+		"sha256:6b51aefe515969785da02e87befafc7fdc7a065cd3458cf1141f29267749e81f";
 	const owner = "BLAKE3-team";
 	const repo = name;
 	return std.download.fromGithub({

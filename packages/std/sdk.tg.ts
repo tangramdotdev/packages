@@ -723,7 +723,7 @@ export namespace sdk {
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
 					{
 						env: std.env.arg(arg.sdkEnv, {
-							TANGRAM_LINKER_TRACING: "tangram=trace",
+							TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 						}),
 						host: std.triple.archAndOs(expectedHost),
 					},
@@ -771,7 +771,7 @@ export namespace sdk {
 				await buildBootstrap(
 					await tg.command(tg`${compiledProgram} > $OUTPUT`, {
 						host: std.triple.archAndOs(expectedHost),
-						env: { TANGRAM_WRAPPER_TRACING: "tangram=trace" },
+						env: { TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" },
 					}),
 				),
 			);

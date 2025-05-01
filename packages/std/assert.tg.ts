@@ -1,5 +1,5 @@
 import * as std from "./tangram.ts";
-import { buildBootstrap } from "./command.tg.ts";
+import { $ } from "./command.tg.ts";
 import {
 	fileOrSymlinkFromManifestTemplate,
 	manifestDependencies,
@@ -251,12 +251,9 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		...testArgs,
 	)} > $OUTPUT 2>&1`;
 
-	const stdout = await tg
-		.command(executable, {
-			env: std.env.arg(arg.env),
-			host: arg.host,
-		})
-		.then((command) => buildBootstrap(command))
+	const stdout = await $`${executable}`
+		.env(arg.env)
+		.host(arg.host)
 		.then(tg.File.expect)
 		.then((file) => file.text());
 	if (testPredicate !== undefined) {
@@ -333,15 +330,12 @@ export const headerCanBeIncluded = tg.command(async (arg: HeaderArg) => {
 	`);
 
 	// Compile the program, ensuring the env properly made the header discoverable.
-	const program = await tg
-		.command(tg`cc -xc "${source}" -o $OUTPUT`, {
-			env: std.env.arg(std.sdk(), arg.directory),
-		})
-		.then((c) => buildBootstrap(c))
+	const program = await $`cc -xc "${source}" -o $OUTPUT`
+		.env(std.env.arg(std.sdk(), arg.directory))
 		.then(tg.File.expect);
 
 	// Run the program.
-	await tg.command(tg`${program}`).then((c) => buildBootstrap(c));
+	await $`${program}`;
 	return true;
 });
 
@@ -481,20 +475,19 @@ export const dlopen = async (arg: DlopenArg) => {
 	// Compile the program.
 	const linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
 	const sdkEnv = std.sdk(arg?.sdk);
-	await tg
-		.command(tg`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`, {
-			env: std.env.arg(
+	await $`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`
+		.env(
+			std.env.arg(
 				sdkEnv,
 				directory,
 				...arg.runtimeDepDirs,
 				{
-					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 				},
 				arg.env,
 			),
-			host: arg.host,
-		})
-		.then((command) => buildBootstrap(command))
+		)
+		.host(arg.host)
 		.then(tg.File.expect);
 
 	return true;
@@ -533,13 +526,10 @@ export const stdoutIncludes = async (
 	file: tg.Unresolved<tg.File>,
 	expected: string,
 ) => {
-	const stdout = await tg
-		.command(tg`${file} > $OUTPUT`, {
-			env: {
-				TANGRAM_WRAPPER_TRACING: "tangram=trace",
-			},
+	const stdout = await $`${file} > $OUTPUT`
+		.env({
+			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 		})
-		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect)
 		.then((f) => f.text());
 	tg.assert(stdout.includes(expected));

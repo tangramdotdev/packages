@@ -56,7 +56,7 @@ export const testHello = tg.command(async () => {
 		pre: "echo WATERMARK 1",
 		proxy: true,
 		env: {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
+			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
 		},
 	});
 	console.log("helloWorld result", await helloWorld.id());
@@ -107,7 +107,7 @@ Cflags: -I\${includedir}
 		source,
 		pre: tg`set -x && echo WATERMARK 10`,
 		env: std.env.arg(pkgconf(), externalLibDir, {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
+			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
 		}),
 		parallelJobs: 1,
 		proxy: true,
@@ -131,7 +131,7 @@ export const testOpenSSL = tg.command(async () => {
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		pre: "echo WATERMARK 10",
 		env: std.env.arg(openssl(), pkgconf(), {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
+			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
 		}),
 		parallelJobs: 1,
 		proxy: true,
@@ -156,8 +156,8 @@ export const testWorkspace = tg.command(async () => {
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		proxy: true,
 		env: {
-			TANGRAM_RUSTC_TRACING: "tangram=trace",
-			TANGRAM_STRIP_PROXY_TRACING: "tangram=trace",
+			TANGRAM_RUSTC_TRACING: "tangram_rust_proxy=trace",
+			TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
 		},
 	});
 	console.log("helloWorkspace result", await helloWorkspace.id());
@@ -174,9 +174,9 @@ export const testWorkspace = tg.command(async () => {
 
 export const test = tg.command(async () => {
 	tg.assert(await testProxyCompiles());
-	// tg.assert(await testHello());
-	// tg.assert(await testPkgconfig());
-	// tg.assert(await testOpenSSL());
-	// tg.assert(await testWorkspace());
+	tg.assert(await testHello());
+	tg.assert(await testPkgconfig());
+	tg.assert(await testOpenSSL());
+	tg.assert(await testWorkspace());
 	return true;
 });

@@ -5,7 +5,7 @@ export const metadata = {
 	license: "MIT",
 	name: "bun",
 	repository: "https://github.com/oven-sh/bun",
-	version: "1.2.8",
+	version: "1.2.4",
 	provides: {
 		binaries: ["bun"],
 	},
@@ -36,7 +36,10 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const dload = await std.download
 		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect);
-	const bun = await dload.get(`${file}/bun`).then(tg.File.expect);
+	const bun = await dload
+		.get(`${file}/bun`)
+		.then(tg.File.expect)
+		.then((f) => tg.file(f, { executable: true }));
 	return tg.directory({
 		"bin/bun": std.wrap(bun),
 		"bin/bunx": tg.symlink("bun"),
@@ -48,13 +51,13 @@ export default self;
 // Taken from https://github.com/oven-sh/bun/releases/download/bun-v${version}/SHASUMS256.txt.asc
 const binaryChecksums: { [key: string]: tg.Checksum } = {
 	["aarch64-linux"]:
-		"sha256:23083f256f2a1d155c456e12e39c51e31dc41b97c63420d9915f43bb86abeab1",
+		"sha256:694a1b39ad3560f3fc7c8e0ac42df277d7ac4f28fe373646104000ddff9ae85c",
 	["x86_64-linux"]:
-		"sha256:42b48b366760b986fe1d6a8b13c5706d26730839a8577790cd2e8f28799e9f31",
+		"sha256:8adcbd74cf1af07dc3607ebee32bfe5a53353b1aef9515963781183d5c401586",
 	["aarch64-darwin"]:
-		"sha256:8a806a40a037329e4fb559457267f6c4ebe8204cbbacdb03f39b349bed5aa355",
+		"sha256:fd4702870bbb911836469a703aee7c1c7dbafc7cd8fc580429ba2dda18bb5aa1",
 	["x86_64-darwin"]:
-		"sha256:0d0fa2220607fd460b9555a57be37a098f4ca79cea4e9936a727e4fc71b364be",
+		"sha256:d2a4ef2cae7f37c16415e7a7668a6e84c15d88b9ce8ffc1fbb44f43f77d30bc9",
 };
 
 export const run = tg.command(async (...args: Array<tg.Value>) => {

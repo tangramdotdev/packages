@@ -1,6 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import ninja from "./ninja.tg.ts";
+import { buildTools } from "./dependencies.tg.ts";
 
 export const metadata = {
 	homepage: "https://cmake.org/",
@@ -13,7 +14,7 @@ export const metadata = {
 export const source = tg.command(() => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:821bdff48a3f683bc4bb3b6f0b5fe7b2d647cf65d52aeb63328c91a6c6df285a";
+		"sha256:a6d2eb1ebeb99130dfe63ef5a340c3fdb11431cce3d7ca148524c125924cea68";
 	const owner = "Kitware";
 	const repo = "CMake";
 	const tag = `v${version}`;
@@ -31,24 +32,18 @@ export type Arg = {
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 /** Build `cmake`. */
 export const cmake = tg.command(async (arg?: Arg) => {
-	const {
-		build: build_,
-		env: env_,
-		host: host_,
-		sdk,
-		source: source_,
-	} = arg ?? {};
+	const { build: build_, env: env_, host: host_, source: source_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 
 	const sourceDir = source_ ?? source();
 
+	const prepare = { command: tg.Mutation.prefix("mkdir work && cd work") };
 	const configure = {
 		command: `./bootstrap`,
 		args: [
@@ -58,6 +53,7 @@ export const cmake = tg.command(async (arg?: Arg) => {
 			`-DBUILD_SHARED_LIBS=OFF`,
 		],
 	};
+	const phases = { prepare, configure };
 
 	const bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
 	const env = std.env.arg(
@@ -75,7 +71,7 @@ export const cmake = tg.command(async (arg?: Arg) => {
 		...(await std.triple.rotate({ build, host })),
 		buildInTree: true,
 		env,
-		phases: { configure },
+		phases,
 		sdk: false,
 		source: sourceDir,
 	});
@@ -92,11 +88,11 @@ export type BuildArg = {
 	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
 	debug?: boolean;
 
-	/** Should we add the default CFLAGS? Will compile with `-mtune=generic -pipe`. Default: true */
-	defaultCFlags?: boolean;
-
 	/** Any environment to add to the target. */
 	env?: std.env.Arg;
+
+	/** Should the flags include FORTIFY_SORUCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 3.  */
+	fortifySource?: boolean | number;
 
 	/** Use full RELRO? Will use partial if disabled.  May cause long start-up times in large programs. Default: true. */
 	fullRelro?: boolean;
@@ -124,6 +120,9 @@ export type BuildArg = {
 
 	/** Override the phases. */
 	phases?: std.phases.Arg;
+
+	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of tempory files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
+	pipe?: boolean;
 
 	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
 	prefixPath?: tg.Template.Arg;
@@ -164,8 +163,8 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	const {
 		buildDir = "build",
 		debug = false,
-		defaultCFlags = true,
 		env: userEnv,
+		fortifySource: fortifySource_ = 3,
 		fullRelro = true,
 		generator = "Ninja",
 		hardeningCFlags = true,
@@ -175,6 +174,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		opt = "2",
 		parallel = true,
 		phases,
+		pipe = true,
 		prefixPath = `$OUTPUT`,
 		sdk: sdkArgs_,
 		source,
@@ -209,95 +209,99 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	}
 
 	// Set up env.
-	let env: std.env.Arg = {};
+	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
 
 	// // C/C++ flags.
-	let cflags = tg``;
 	if (opt) {
-		const optFlag = `-O${opt}`;
-		cflags = tg`${cflags} ${optFlag}`;
+		const optFlag = tg.Mutation.suffix(`-O${opt}`, " ");
+		envs.push({ CFLAGS: optFlag, CXXFLAGS: optFlag });
 	}
-	if (defaultCFlags) {
-		const mArchFlag = march ? `-march=${march} ` : "";
-		const mTuneFlag = mtune ? `-mtune=${mtune} ` : "";
-		const defaultCFlags = `${mArchFlag}${mTuneFlag}-pipe`;
-		cflags = tg`${cflags} ${defaultCFlags}`;
+	if (pipe) {
+		const pipeFlag = tg.Mutation.suffix("-pipe", " ");
+		envs.push({ CFLAGS: pipeFlag, CXXFLAGS: pipeFlag });
 	}
+	if (march !== undefined) {
+		const marchFlag = tg.Mutation.suffix(`-march=${march}`, " ");
+		envs.push({ CFLAGS: marchFlag, CXXFLAGS: marchFlag });
+	}
+	if (mtune !== undefined) {
+		const mtuneFlag = tg.Mutation.suffix(`-mtune=${mtune}`, " ");
+		envs.push({ CFLAGS: mtuneFlag, CXXFLAGS: mtuneFlag });
+	}
+	let fortifySource =
+		typeof fortifySource_ === "number"
+			? fortifySource_
+			: fortifySource_
+				? 3
+				: undefined;
+	if (fortifySource !== undefined) {
+		if (fortifySource < 0 || fortifySource > 3) {
+			throw new Error(
+				`fortifySource must be between 0 and 3 inclusive, received ${fortifySource.toString()}`,
+			);
+		}
+		envs.push({
+			CPPFLAGS: tg.Mutation.suffix(
+				`-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=${fortifySource}`,
+				" ",
+			),
+		});
+	}
+
 	if (hardeningCFlags) {
-		let extraCFlags = `-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
+		let extraCFlags = `-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
 		if (os === "linux") {
 			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
 		}
-		cflags = tg`${cflags} ${extraCFlags}`;
+		const extraFlags = tg.Mutation.suffix(extraCFlags, " ");
+		envs.push({ CFLAGS: extraFlags, CXXFLAGS: extraFlags });
 	}
 
 	const environment = std.triple.environment(host);
 	if (!environment || environment === "gnu") {
-		const cc1Specs = tg.file(`
-	 *cc1_options:
-	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
-
-	 *cpp_options:
-	 + %{!r:%{!fpie:%{!fPIE:%{!fpic:%{!fPIC:%{!fno-pic:-fPIE}}}}}}
-	 		`);
-		const ldSpecs = tg.file(`
-	 *self_spec:
-	 + %{!static:%{!shared:%{!r:-pie}}}
-	 		`);
-		const extraCxxFlags = await tg.Mutation.prefix(
-			`-Wp,-D_GLIBCXX_ASSERTIONS -specs=${cc1Specs} -specs=${ldSpecs}`,
-			" ",
-		);
-		pushOrSet(env, "CXXFLAGS", extraCxxFlags);
+		envs.push({
+			CXXFLAGS: tg.Mutation.suffix("-Wp,-D_GLIBCXX_ASSERTIONS", " "),
+		});
 	}
-	pushOrSet(env, "CFLAGS", await cflags);
-	pushOrSet(env, "CXXFLAGS", await cflags);
 
 	// LDFLAGS
 	if (stripExecutables === true) {
-		const stripFlag = await tg.Mutation.prefix(
-			os === "darwin" ? `-Wl,-S` : `-s`,
-			" ",
-		);
-		pushOrSet(env, "LDFLAGS", stripFlag);
+		const stripFlag = os === "darwin" ? `-Wl,-S` : `-s`;
+		envs.push({ LDFLAGS: tg.Mutation.suffix(stripFlag, " ") });
 	}
 	if (os === "linux" && hardeningCFlags) {
 		const fullRelroString = fullRelro ? ",-z,now" : "";
-		const extraLdFlags = await tg.Mutation.prefix(
-			tg`-Wl,-z,relro${fullRelroString} -Wl,--as-needed`,
-			" ",
-		);
-		pushOrSet(env, "LDFLAGS", extraLdFlags);
+		const extraLdFlags = `-Wl,-z,relro${fullRelroString} -Wl,--as-needed`;
+		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
 	}
 
 	// Add cmake to env.
-	env = await std.env.arg(await cmake({ host }), env);
+	envs.push(cmake({ host }));
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		env = await std.env.arg(await ninja({ host }), env);
+		envs.push(ninja({ host }));
 	}
 
 	if (includeSdk) {
-		const sdk = await std.sdk(sdkArgs);
-		const utils = await std.utils.env({
+		const buildToolsEnv = buildTools({
 			host,
-			sdk: false,
-			env: std.sdk({ host }),
+			buildToolchain: std.sdk({ host }),
+			level: "pkgconfig",
 		});
-		env = await std.env.arg(sdk, utils, env);
+		envs.push(std.sdk(sdkArgs), buildToolsEnv);
 	}
 
 	// If cross compiling, override CC/CXX to point to the correct compiler.
 	if (host !== target) {
-		env = await std.env.arg(env, {
+		envs.push({
 			CC: `${target}-cc`,
 			CXX: `${target}-c++`,
 		});
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	env = await std.env.arg(env, userEnv);
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs = [
@@ -355,27 +359,6 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		)
 		.then(tg.Directory.expect);
 });
-
-export const pushOrSet = (
-	obj: { [key: string]: unknown },
-	key: string,
-	value: tg.Value,
-) => {
-	if (obj === undefined) {
-		obj = {};
-		obj[key] = value;
-	} else if (obj[key] === undefined) {
-		obj[key] = value;
-	} else {
-		if (!Array.isArray(obj[key])) {
-			obj[key] = [obj[key]];
-		}
-		tg.assert(obj && key in obj && Array.isArray(obj[key]));
-		const a = obj[key] as Array<tg.Value>;
-		a.push(value);
-		obj[key] = a;
-	}
-};
 
 export const test = tg.command(async () => {
 	// FIXME

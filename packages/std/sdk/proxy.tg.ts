@@ -408,9 +408,9 @@ int main() {
 				cc -v -xc ${helloSource} -o $OUTPUT`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-					TANGRAM_WRAPPER_TRACING: "tangram=trace",
+					TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 				}),
 			},
 		)
@@ -436,7 +436,9 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 		.command(
 			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`,
 			{
-				env: std.env.arg(sdk, { TANGRAM_LINKER_TRACING: "tangram=trace" }),
+				env: std.env.arg(sdk, {
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				}),
 			},
 		)
 		.then((c) => buildBootstrap(c))
@@ -501,7 +503,7 @@ void printGreeting();
 	const output = await tg
 		.command(script, {
 			env: std.env.arg(bootstrapSdk, {
-				TANGRAM_LINKER_TRACING: "tangram=trace",
+				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 			}),
 		})
 		.then((c) => buildBootstrap(c))
@@ -655,7 +657,7 @@ const char* getGreetingB();
 			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: opt,
 				}),
 			},
@@ -832,7 +834,7 @@ export const testSamePrefix = tg.command(async () => {
 			`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 				}),
 			},
@@ -888,7 +890,7 @@ export const testSamePrefixDirect = tg.command(async () => {
 			`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 				}),
 			},
@@ -939,7 +941,7 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 			`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 				}),
 			},
@@ -955,7 +957,7 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 			`,
 			{
 				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 				}),
 			},
@@ -981,7 +983,7 @@ export const testStrip = tg.command(async () => {
 		mv main $OUTPUT`,
 			{
 				env: std.env.arg(toolchain, {
-					TANGRAM_STRIP_PROXY_TRACING: "tangram=trace",
+					TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
 				}),
 			},
 		)

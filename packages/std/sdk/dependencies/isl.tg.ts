@@ -3,14 +3,14 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	homepage: "https://libisl.sourceforge.io",
 	name: "isl",
-	version: "0.26",
+	version: "0.27",
 };
 
 export const source = tg.command(async () => {
 	const { homepage, name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:a0b5cb06d24f9fa9e77b55fabbe9a3c94a336190345c2555f9915bb38e976504";
+		"sha256:6d8babb59e7b672e8cb7870e874f3f7b813b6e00e6af3f8b04f7579965643d5c";
 	return await std.download
 		.extractArchive({ checksum, base: homepage, name, version, extension })
 		.then(tg.Directory.expect)

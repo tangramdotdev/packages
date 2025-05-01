@@ -747,9 +747,9 @@ checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
-version = "0.15.2"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
+checksum = "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3"
 
 [[package]]
 name = "hex"
@@ -1027,7 +1027,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.2",
+ "hashbrown 0.15.3",
  "serde",
 ]
 
@@ -1680,9 +1680,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.8"
+version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -1786,9 +1786,9 @@ checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 
 [[package]]
 name = "synstructure"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8af7666ab7b6390ab78131fb5b0fce11d6b7a6951602017c35fa82800708971"
+checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1798,7 +1798,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=277e94ab893ad8cba1d5a439decc84415e44f9bb#277e94ab893ad8cba1d5a439decc84415e44f9bb"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2022d7bc36e181a92a734d06fbaded2f639d9792#2022d7bc36e181a92a734d06fbaded2f639d9792"
 dependencies = [
  "async-compression",
  "blake3",
@@ -1846,7 +1846,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=277e94ab893ad8cba1d5a439decc84415e44f9bb#277e94ab893ad8cba1d5a439decc84415e44f9bb"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2022d7bc36e181a92a734d06fbaded2f639d9792#2022d7bc36e181a92a734d06fbaded2f639d9792"
 dependencies = [
  "serde",
 ]
@@ -1854,7 +1854,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=277e94ab893ad8cba1d5a439decc84415e44f9bb#277e94ab893ad8cba1d5a439decc84415e44f9bb"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2022d7bc36e181a92a734d06fbaded2f639d9792#2022d7bc36e181a92a734d06fbaded2f639d9792"
 dependencies = [
  "dashmap",
  "futures",
@@ -1866,7 +1866,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=277e94ab893ad8cba1d5a439decc84415e44f9bb#277e94ab893ad8cba1d5a439decc84415e44f9bb"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2022d7bc36e181a92a734d06fbaded2f639d9792#2022d7bc36e181a92a734d06fbaded2f639d9792"
 dependencies = [
  "async-compression",
  "bytes",
@@ -1908,7 +1908,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=277e94ab893ad8cba1d5a439decc84415e44f9bb#277e94ab893ad8cba1d5a439decc84415e44f9bb"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2022d7bc36e181a92a734d06fbaded2f639d9792#2022d7bc36e181a92a734d06fbaded2f639d9792"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1919,7 +1919,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=277e94ab893ad8cba1d5a439decc84415e44f9bb#277e94ab893ad8cba1d5a439decc84415e44f9bb"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2022d7bc36e181a92a734d06fbaded2f639d9792#2022d7bc36e181a92a734d06fbaded2f639d9792"
 dependencies = [
  "derive_more",
  "winnow",
@@ -2050,7 +2050,7 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "futures-util",
- "hashbrown 0.15.2",
+ "hashbrown 0.15.3",
  "pin-project-lite",
  "slab",
  "tokio",
@@ -2522,9 +2522,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.7.7"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cb8234a863ea0e8cd7284fcdd4f145233eb00fee02bbdd9861aec44e6477bc5"
+checksum = "9e27d6ad3dac991091e4d35de9ba2d2d00647c5d0fc26c5496dee55984ae111b"
 dependencies = [
  "memchr",
 ]

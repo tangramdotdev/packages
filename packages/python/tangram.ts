@@ -148,7 +148,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	const makeArgs = [];
 	if (os === "darwin") {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
-		configureArgs.push("DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH");
+		configureArgs.push(
+			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+		);
 		makeArgs.push(
 			"RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 		);

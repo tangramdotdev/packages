@@ -136,7 +136,7 @@ bun run scripts/package_automation.ts -cbt ripgrep jq
 
 Flags:
 
--b, --build: run tg build on the default target. Implied --publish.
+-b, --build: run tg build on the default target.
 -c, --check: run tg check
 -f, --format: run tg format
 -h, --help: print this message and exit
@@ -190,7 +190,6 @@ class Options {
 			switch (opt) {
 				case "b":
 				case "build": {
-					actions.add("publish");
 					actions.add("build");
 					break;
 				}
@@ -227,8 +226,6 @@ class Options {
 				}
 				case "u":
 				case "upload": {
-					actions.add("publish");
-					actions.add("build");
 					actions.add("upload");
 					break;
 				}
@@ -389,16 +386,21 @@ const processPackage = async (
 	const path = getPackagePath(name);
 	log(`processing ${name}: ${path}`);
 	const tg = `${options.tangramExe}`;
+	const tagResult = await tagPackage(tg, name, path);
+	if (tagResult.kind !== "ok") {
+		return tagResult;
+	}
 
 	const actionMap: Record<Action, () => Promise<Result>> = {
 		format: () => formatAction(tg, path),
 		check: () => checkAction(tg, path),
 		build: () =>
-			buildDefaultTarget(tg, name, options.currentPlatform, processTracker),
-		test: () => buildTestTarget(tg, path, processTracker),
+			buildDefaultTarget(tg, options.currentPlatform, name, processTracker),
+		test: () =>
+			buildTestTarget(tg, options.currentPlatform, name, processTracker),
 		upload: () =>
 			uploadAction(tg, name, options.currentPlatform, processTracker),
-		publish: () => publishAction(tg, name, path),
+		publish: () => publishAction(tg, name),
 	};
 
 	for (const action of sortedActions(options.actions)) {
@@ -439,14 +441,11 @@ const checkAction = async (tangram: string, path: string): Promise<Result> => {
 	return ok();
 };
 
-/** Perform the `publish` action for a package name. If the existing tag is out of date, tag and push the new package. */
-const publishAction = async (
+const tagPackage = async (
 	tangram: string,
 	name: string,
 	path: string,
 ): Promise<Result> => {
-	log("publishing...");
-
 	// Check in the package, store the ID.
 	const packageIdResult = await checkinPackage(tangram, path);
 	if (packageIdResult.kind !== "ok") {
@@ -465,19 +464,24 @@ const publishAction = async (
 		return ok(`${name} unchanged, no action taken.`);
 	}
 
-	log(`tagging ${name}...`);
+	log(`tagging ${name}: ${packageId}...`);
 	const tagResult = await tagItem(tangram, name, path);
 	if (tagResult.kind !== "ok") {
 		return tagResult;
 	}
+	return ok(`tagged ${name}: ${packageId}`);
+};
 
-	// Push the tag.
+/** Perform the `publish` action for a package name. If the existing tag is out of date, tag and push the new package. */
+const publishAction = async (
+	tangram: string,
+	name: string,
+): Promise<Result> => {
 	const pushTagResult = await push(tangram, name);
 	if (pushTagResult.kind !== "ok") {
 		return pushTagResult;
 	}
-
-	return ok(`tagged ${name}: ${packageId}`);
+	return ok(`published ${name}`);
 };
 
 /** Perform the upload action for a path. Will do the default build first. */
@@ -586,92 +590,44 @@ const push = async (tangram: string, arg: string): Promise<Result> => {
 /** Build the default target given a path. Return the build ID. */
 const buildDefaultTarget = async (
 	tangram: string,
-	name: string,
 	platform: string,
+	name: string,
 	processTracker: ProcessTracker,
-): Promise<Result> => {
-	log(`building ${name}`);
-	const tags: Array<string> = [];
-
-	// Build default
-	const defaultResult = await buildNamedExport(tangram, name, processTracker);
-	if (
-		defaultResult.kind === "ok" &&
-		typeof defaultResult.message === "string"
-	) {
-		const tag = `${name}/default/${platform}`;
-		const tagResult = await tagItem(tangram, tag, defaultResult.message);
-		if (tagResult.kind !== "ok") {
-			return tagResult;
-		}
-		tags.push(tag);
-	} else {
-		return defaultResult;
-	}
-
-	// Build #build, ignoring errors.
-	const buildResult = await buildNamedExport(
-		tangram,
-		name,
-		processTracker,
-		"build",
-	);
-	if (buildResult.kind === "ok" && typeof buildResult.message === "string") {
-		const tag = `${name}/build/${platform}`;
-		const tagResult = await tagItem(tangram, tag, buildResult.message);
-		if (tagResult.kind !== "ok") {
-			return tagResult;
-		}
-		tags.push(tag);
-	}
-
-	// Build #self, ignoring errors.
-	const selfResult = await buildNamedExport(
-		tangram,
-		name,
-		processTracker,
-		"self",
-	);
-	if (selfResult.kind === "ok" && typeof selfResult.message === "string") {
-		const tag = `${name}/self/${platform}`;
-		const tagResult = await tagItem(tangram, tag, selfResult.message);
-		if (tagResult.kind !== "ok") {
-			return tagResult;
-		}
-		tags.push(tag);
-	}
-
-	return ok(tags);
-};
+): Promise<Result> => buildNamedExport(tangram, platform, name, processTracker);
 
 /** Build the default target given a path. Return the build ID. */
 const buildTestTarget = async (
 	tangram: string,
+	platform: string,
 	name: string,
 	processTracker: ProcessTracker,
-): Promise<Result> => buildNamedExport(tangram, name, processTracker, "test");
+): Promise<Result> =>
+	buildNamedExport(tangram, platform, name, processTracker, "test");
 
 /** Build the default target given a path. Return the build ID. */
 const buildNamedExport = async (
 	tangram: string,
+	platform: string,
 	name: string,
 	processTracker: ProcessTracker,
 	exportName?: string,
 ): Promise<Result> => {
 	const exportName_ = exportName !== undefined ? `#${exportName}` : "";
-	log(`building ${name}${exportName_}...`);
+	const tag = `${name}/${exportName ?? "default"}/${platform}`;
+	log(`building ${tag}...`);
 	try {
-		const processId = await $`${tangram} build ${name}${exportName_} -d`
-			.text()
-			.then((t) => t.trim());
+		const processId =
+			await $`${tangram} build ${name}${exportName_} --tag=${tag} -d`
+				.text()
+				.then((t) => t.trim());
 		processTracker.add(processId);
-		log(`${name}${exportName_}: ${processId}`);
+		log(`${tag}: ${processId}`);
 		await $`${tangram} process output ${processId}`.quiet();
 		processTracker.remove(processId);
-		log(`finished building ${name}${exportName_}`);
-		return ok(processId);
+		log(`finished building ${tag}`);
+		return ok(tag);
 	} catch (err) {
-		log(`error building ${name}${exportName_}`);
+		log(`error building ${tag}`);
 		const stderr = err.stderr.toString();
 		if (isUnsupportedPlatformError(stderr)) {
 			log(`${name}: unsupported host`);

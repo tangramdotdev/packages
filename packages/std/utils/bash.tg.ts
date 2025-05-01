@@ -59,7 +59,10 @@ export const build = tg.command(async (arg?: Arg) => {
 	env.push(prerequisites(build));
 	env.push(bootstrap.shell(host));
 	env.push({
-		CFLAGS: tg.Mutation.prefix("-Wno-implicit-function-declaration", " "),
+		CFLAGS: tg.Mutation.prefix(
+			"-Wno-implicit-function-declaration -std=gnu17",
+			" ",
+		),
 	});
 
 	let output = autotoolsInternal({
