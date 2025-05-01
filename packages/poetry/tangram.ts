@@ -37,6 +37,7 @@ export const source = () => {
 export type Arg = {
 	build?: string;
 	host?: string;
+	source?: tg.Directory;
 	requirements?: tg.File;
 };
 
@@ -45,11 +46,17 @@ export const self = async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		host,
+		source: source_,
 		requirements: requirements_,
 	} = await std.packages.applyArgs<Arg>(...args);
 	const requirements = requirements_ ?? requirementsTxt;
-	return python.self({ build, host, requirements });
-};
+	return python.build({
+		build,
+		host,
+		source: source_ ?? source(),
+		python: { requirements },
+	});
+});
 
 export default self;
 
