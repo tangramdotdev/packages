@@ -64,6 +64,15 @@ export const run = tg.command(async (...args: Array<tg.Value>) => {
 });
 
 export const test = tg.command(async () => {
-	const spec = { ...std.assert.defaultSpec(metadata), binaries: [{ name: "vsce", testArgs: ["--help"], testPredicate: (stdout: string) => stdout.includes("Usage:")}] };
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		binaries: [
+			{
+				name: "vsce",
+				testArgs: ["--help"],
+				testPredicate: (stdout: string) => stdout.includes("Usage:"),
+			},
+		],
+	};
 	return await std.assert.pkg(build, spec);
 });
