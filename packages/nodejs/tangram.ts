@@ -7,7 +7,7 @@ export const metadata = {
 		"https://github.com/nodejs/node/blob/12fb157f79da8c094a54bc99370994941c28c235/LICENSE",
 	name: "nodejs",
 	repository: "https://github.com/nodejs/node",
-	version: "22.12.0",
+	version: "22.15.0",
 };
 
 export type ToolchainArg = {
@@ -33,22 +33,22 @@ const source = async (): Promise<tg.Directory> => {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
-				"sha256:8cfd5a8b9afae5a2e0bd86b0148ca31d2589c0ea669c2d0b11c132e35d90ed68",
+				"sha256:d68adf72c531f1118bee75b20ffbc5911accfda5e73454a798625464b40a4adf",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
 			checksum:
-				"sha256:22982235e1b71fa8850f82edd09cdae7e3f32df1764a9ec298c72d25ef2c164f",
+				"sha256:dafe2e8f82cb97de1bd10db9e2ec4c07bbf53389b0799b1e095a918951e78fd4",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
-				"sha256:0047be0cfda922eb73876f9ef41de361c36b7654c884d13d9b783b0efd1db9aa",
+				"sha256:6e278a107d50da24b644dd26810a639a5f8ca67b55086e6b693caabcbb759912",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:d68ef0c4c19b3b3b88c0e7408668d0a539607c136a14668e079feed0c6ec8bec",
+				"sha256:7dab3f93551d88f1e63db6b32bae6d4858e16740e9849ebbeac1d43f5055d8f0",
 		},
 	};
 
@@ -119,38 +119,21 @@ export type Arg = {
 	env?: std.env.Arg;
 	host?: string;
 	packageLock?: tg.File;
-	phases?: std.phases.Arg;
-	sdk?: std.sdk.Arg;
 	source: tg.Directory;
 };
 
 export const build = tg.command(async (...args: std.Args<Arg>) => {
-	const mutationArgs = await std.args.createMutations<
-		Arg,
-		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">
-	>(std.flatten(args), {
-		phases: "append",
-		sdk: "append",
-		source: "set",
-	});
 	const {
-		build: buildArg,
+		build,
 		env: env_,
-		host: hostArg,
+		host,
 		packageLock: packageLockArg,
-		phases: phasesArg,
-		sdk: sdkArg,
 		source,
-	} = await std.args.applyMutations(mutationArgs);
+	} = await std.args.apply<Arg>(...args);
 	tg.assert(source, "Must provide a source");
 
-	const host = hostArg ?? (await std.triple.host());
-	const build = buildArg ?? host;
-
-	const node = self({
-		host: build,
-		target: host,
-	});
+	const node = self(std.triple.rotate({ build, host }));
+	const interpreter = node.then((d) => d.get("bin/node")).then(tg.File.expect);
 
 	// Retrieve and parse the package.json, package-lock.json files.
 	const packageJsonFile = tg.File.expect(await source.get("package.json"));
@@ -166,25 +149,18 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	// Install the dependencies and dev dependencies.
 	const [dependencies, devDependencies] = await install(packageLockFile);
-
-	// Wrap any things in the dev dependencies' bin fields.
 	let devBins = tg.directory();
 	for (const [dst, pkg] of Object.entries(packageLock.packages)) {
 		if (pkg.bin && pkg.dev) {
 			for (const [name, path] of Object.entries(pkg.bin)) {
-				// Get the executable as a symlink, since it may refer to other things in adjacent directories.
-				const executable = tg`${devDependencies}/${dst}/${path}`;
-
-				// Wrap the executable using node as the interpreter.
+				const executable = tg.symlink(tg`${devDependencies}/${dst}/${path}`);
 				const wrapped = std.wrap({
-					interpreter: tg`${node}/bin/node`,
-					executable: executable,
+					executable,
+					interpreter,
 					env: {
 						NODE_PATH: tg`${devDependencies}/node_modules`,
 					},
 				});
-
-				// Add the wrapped bin to the devBins directory.
 				devBins = tg.directory(devBins, {
 					[`bin/${name}`]: wrapped,
 				});
@@ -192,27 +168,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	// Get the default build command.
 	let defaultBuildCommand = "";
 	if (packageJson.scripts?.build) {
 		defaultBuildCommand = packageJson.scripts?.build;
 	}
-
-	const prepare = await tg`
-		set -e
-		mkdir -p $OUTPUT
-		cd $OUTPUT
-
-		# Copy the source to the output.
-		cp -R "${source}/." .`;
-
-	const phases: std.phases.PhasesArg = {
-		prepare,
-		build: defaultBuildCommand,
-	};
-
-	const sdk = std.sdk({ host }, sdkArg ?? []);
-	const env = std.env.arg(
+	const sdk = std.sdk({ host });
+	const env = await std.env.arg(
 		sdk,
 		node,
 		devBins,
@@ -220,20 +181,17 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		env_,
 	);
 
-	const additionalPhasesArgs = (phasesArg ?? []).filter(
-		(arg) => arg !== undefined,
-	) as Array<std.phases.Arg>;
+	const built = await $`
+		mkdir -p $OUTPUT
+		cd $OUTPUT
+		cp -R "${source}/." .
+		ln -s "$NODE_PATH" node_modules
+		${defaultBuildCommand}
+		unlink node_modules
+	`
+		.env(env)
+		.then(tg.Directory.expect);
 
-	const built = await std.phases.run(
-		{
-			phases,
-			env,
-			command: { host },
-		},
-		...additionalPhasesArgs,
-	);
-
-	tg.Directory.assert(built);
 	// If the package contained any bin entries we return a bin directory with them wrapped.
 	if (packageJson.bin) {
 		const bin = wrapBin(node, built, packageJson.bin, dependencies);
@@ -311,7 +269,7 @@ export const wrapBin = tg.command(
 /** Given a package-lock.json, return a list of the paths to install and tarballs to use. */
 const downloadPackages = async (
 	packageLock: PackageLockJson,
-): Promise<Array<[string, tg.File, boolean]>> => {
+): Promise<Array<[string, tg.Directory, boolean]>> => {
 	const dls = Object.entries(packageLock.packages).filter(([name, data]) => {
 		return name.length !== 0 && data.resolved && data.integrity;
 	});
@@ -321,15 +279,19 @@ const downloadPackages = async (
 		const integrity = checksums.find((i) => tg.Checksum.is(i));
 		if (!integrity) {
 			throw new Error(
-				`Cannot download ${data.resolved}. Missing sha512 integrity hash.`,
+				`Cannot download ${data.resolved}. Missing integrity hash.`,
 			);
 		}
 
-		const file = await std.download({
-			url: data.resolved as string,
-			checksum: integrity,
-		});
-		return [name, tg.File.expect(file), data.dev] as [string, tg.File, boolean];
+		const dir = await std
+			.download({
+				url: data.resolved as string,
+				checksum: integrity,
+				mode: "extract",
+			})
+			.then(tg.Directory.expect)
+			.then(std.directory.unwrap);
+		return [name, dir, data.dev] as [string, tg.Directory, boolean];
 	});
 
 	return Promise.all(all);
@@ -337,26 +299,16 @@ const downloadPackages = async (
 
 /** Install a list of packages to the paths specified by package-lock.json. */
 const installPackages = async (
-	packages: Array<[string, tg.File, boolean]>,
+	packages: Array<[string, tg.Directory, boolean]>,
 	installDev: boolean,
 ): Promise<tg.Directory> => {
-	// Unpack each package in parallel.
 	const directories = await Promise.all(
-		packages.map(async ([path, tarball, isDev]) => {
+		packages.map(async ([path, dir, isDev]) => {
 			// Skip dev dependencies if installDev is false.
 			if (isDev && !installDev) {
 				return undefined;
 			}
-
-			const installed = await $`
-				echo "Installing ${path}"
-				mkdir -p $OUTPUT
-				tar -xf ${tarball} --strip-components=1 --warning=no-unknown-keyword -C $OUTPUT
-			`
-				.env(std.sdk())
-				.then(tg.Directory.expect);
-
-			return [path, installed] as [string, tg.Directory];
+			return [path, dir];
 		}),
 	);
 
@@ -365,7 +317,7 @@ const installPackages = async (
 	for (const installed of directories) {
 		if (installed) {
 			const [path, directory] = installed;
-			nodeModules = await tg.directory(nodeModules, { [path]: directory });
+			nodeModules = await tg.directory(nodeModules, { [`${path}`]: directory });
 		}
 	}
 
