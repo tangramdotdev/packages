@@ -1,4 +1,5 @@
 import * as std from "std" with { path: "../std" };
+import pkgconf from "pkgconf" with { path: "../pkgconf" };
 import { $ } from "std" with { path: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
@@ -30,6 +31,9 @@ export type Arg = {
 
 	/** Number of parallel jobs to use. */
 	parallelJobs?: number;
+
+	/** Should the build environment include pkg-config? Default: true. */
+	pkgConfig?: boolean;
 
 	/** Additional script to run prior to the build */
 	pre?: tg.Template.Arg;
@@ -75,12 +79,13 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		buildInTree = false,
 		checksum,
 		disableDefaultFeatures = false,
-		env,
+		env: env_,
 		features = [],
 		host: host_,
 		manifestSubdir,
 		network = false,
 		parallelJobs,
+		pkgConfig = true,
 		pre,
 		proxy = false,
 		sdk: sdk_ = {},
@@ -89,28 +94,37 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		useCargoVendor = false,
 		verbose = false,
 	} = await std.args.applyMutations(mutationArgs);
+	tg.assert(source, "Must provide a source directory.");
 
-	const host = rustTriple(host_ ?? (await std.triple.host()));
-	const os = std.triple.os(host);
-	const target = target_ ? rustTriple(target_) : host;
+	const host = host_ ?? (await std.triple.host());
+	const rustHost = rustTriple(host);
+	const os = std.triple.os(rustHost);
+	const target = target_ ? rustTriple(target_) : rustHost;
 
 	// Check if we're cross-compiling.
-	const crossCompiling = target !== host;
+	const crossCompiling = target !== rustHost;
 
 	// Obtain handles to the SDK and Rust artifacts.
 	// NOTE - pulls an SDK assuming the selected target is the intended host. Forces GCC on Linux, as rustc expects libgcc_s.
-	const sdkArgs: Array<std.sdk.Arg> = [{ host, target }, sdk_];
+	const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target }, sdk_];
 	if (
 		os === "linux" &&
 		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
 	) {
 		sdkArgs.push({ toolchain: "gnu" });
 	}
+
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+
 	const sdk = std.sdk(...sdkArgs);
-	const rustArtifact = self({ host, target });
+	envs.push(sdk);
+	const rustArtifact = self({ host: rustHost, target });
+	envs.push(rustArtifact);
+	if (pkgConfig) {
+		envs.push(pkgconf({ host }));
+	}
 
 	// Download the dependencies using the cargo vendor.
-	tg.assert(source, "Must provide a source directory.");
 	const cargoConfig = vendoredSources({
 		manifestSubdir,
 		source,
@@ -164,68 +178,63 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	if (os === "darwin") {
 		compilerName = "clang";
 	}
-	let toolchainEnv = {
+	const toolchainEnv = {
 		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: compilerName,
+		RUST_TARGET: target,
+		CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+		TANGRAM_HOST: std.triple.archAndOs(rustHost),
 	};
+	envs.push(toolchainEnv);
 
 	// If network is enabled, set the certificates.
-	let networkEnv = undefined;
 	if (network) {
 		const certFile = tg`${std.caCertificates()}/cacert.pem`;
-		networkEnv = {
+		const networkEnv = {
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
 		};
+		envs.push(networkEnv);
 	}
 
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
-		toolchainEnv = {
+		const crossEnv = {
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${target}-gcc`,
 			[`AR_${tripleToEnvVar(target)}`]: `${target}-ar`,
 			[`CC_${tripleToEnvVar(target)}`]: `${target}-cc`,
 			[`CXX_${tripleToEnvVar(target)}`]: `${target}-c++`,
 		};
+		envs.push(crossEnv);
 	}
 
-	let proxyEnv = undefined;
 	if (proxy) {
-		proxyEnv = {
+		const proxyEnv = {
 			RUSTC_WRAPPER: tg`${proxy_.proxy()}/bin/tangram_rustc_proxy`,
 		};
+		envs.push(proxyEnv);
 	}
 
-	let jobsEnv = undefined;
 	if (parallelJobs) {
-		jobsEnv = {
+		const jobsEnv = {
 			CARGO_BUILD_JOBS: `${parallelJobs}`,
 		};
+		envs.push(jobsEnv);
 	}
 
-	let verbosityEnv = undefined;
 	if (verbose) {
-		verbosityEnv = {
+		const verbosityEnv = {
 			RUSTFLAGS: tg.Mutation.suffix("-v", " "),
 			CARGO_TERM_VERBOSE: "true",
 		};
+		envs.push(verbosityEnv);
 	}
+
+	const env = std.env.arg(...envs, env_);
 
 	const artifact = await $`${buildScript}`
 		.checksum(checksum)
 		.network(network)
-		.env(sdk)
-		.env(rustArtifact)
-		.env({
-			RUST_TARGET: target,
-			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-			...toolchainEnv,
-		})
-		.env(proxyEnv)
-		.env(networkEnv)
-		.env(jobsEnv)
-		.env(verbosityEnv)
-		.env({ TANGRAM_HOST: std.triple.archAndOs(host) })
-		.env(std.env.arg(env))
+		.env(env)
 		.then(tg.Directory.expect);
 
 	// Store a handle to the release directory containing Tangram bundles.
