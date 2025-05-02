@@ -20,7 +20,7 @@ export const metadata = {
 	name: "Python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.13.2",
+	version: "3.13.3",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -33,7 +33,7 @@ export const versionString = () => {
 export const source = tg.command(async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:d984bcc57cd67caab26f7def42e523b1c015bbc5dc07836cf4f0b63fa159eb56";
+		"sha256:40f868bcbdeb8149a3149580bb9bfd407b3321cd48f0be631af955ac92c0e041";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std.download
@@ -113,6 +113,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		std.env.runtimeDependency(libxcrypt.build, dependencyArgs.libxcrypt),
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
+		std.env.runtimeDependency(sqlite.build, dependencyArgs.sqlite),
 	];
 
 	// Set up additional runtime dependencies that will end up in the wrapper.
@@ -469,7 +470,7 @@ except ImportError as e:
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());
-	tg.assert(pipVersionOutput.includes("24.3"), "failed to run pip3");
+	tg.assert(pipVersionOutput.includes("25.0"), "failed to run pip3");
 
 	const venv = await $`set -x && python -m venv $OUTPUT --copies`
 		.env(self())

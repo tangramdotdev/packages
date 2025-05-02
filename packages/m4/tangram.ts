@@ -31,7 +31,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		env,
+		env: env_,
 		host,
 		sdk,
 		source: source_,
@@ -41,10 +41,16 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
+	const env = std.env.arg(
+		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+		env_,
+	);
+
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
+			fortifySource: 2,
 			phases: { configure },
 			sdk,
 			source: source_ ?? source(),

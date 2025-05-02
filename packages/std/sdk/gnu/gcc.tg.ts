@@ -11,7 +11,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
-	version: "14.2.0",
+	version: "15.1.0",
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
@@ -21,7 +21,7 @@ export const source = tg.command((bundledSources?: boolean) => {
 	// Download and unpack the GCC source.
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9";
+		"sha256:e2b09ec21660f01fecffb715e0120265216943f038d0e48a9868713e54f06cea";
 	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
 	let sourceDir = std.download
 		.extractArchive({ checksum, base, name, version, extension })

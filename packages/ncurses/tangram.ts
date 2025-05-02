@@ -94,6 +94,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	const env = std.env.arg(
 		{
+			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
 			// We rename the shared objects after the build, let the LD proxy ignore missing libraries.
 			TANGRAM_LINKER_ALLOW_MISSING_LIBRARIES: true,
 		},

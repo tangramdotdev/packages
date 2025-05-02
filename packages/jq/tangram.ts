@@ -36,7 +36,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		env,
+		env: env_,
 		host,
 		sdk,
 		source: source_,
@@ -47,6 +47,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 
 	const phases = { configure };
+
+	const env = std.env.arg(
+		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+		env_,
+	);
 
 	return std.autotools.build(
 		{

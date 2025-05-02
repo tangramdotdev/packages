@@ -32,7 +32,10 @@ export const build = tg.command(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const env = std.env.arg(env_);
+	const env = std.env.arg(
+		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+		env_,
+	);
 
 	const output = std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

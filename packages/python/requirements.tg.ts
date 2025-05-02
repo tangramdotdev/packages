@@ -12,6 +12,8 @@ export const install = tg.command(
 
 		// Download the requirements specified in any requirements.txt files.
 		const downloads = await $`
+			mkdir work
+			cd work
 			mkdir tmp
 			export TMPDIR=tmp
 			mkdir -p $OUTPUT
@@ -35,6 +37,8 @@ export const install = tg.command(
 		// For each download, install to a local directory.
 		for await (const [name, file] of downloads) {
 			const installed = await $`
+				mkdir work
+				cd work
 				cp "${file}" "${name}"
 				mkdir tmp
 				export TMPDIR=tmp
@@ -68,7 +72,7 @@ export const install = tg.command(
 				sitePackages,
 			);
 
-			// If there are any bins, copy them to the bin directory. TODO: create symlinks here?
+			// If there are any bins, copy them to the bin directory.
 			if (bin) {
 				installedBins = tg.directory(installedBins, tg.Directory.expect(bin));
 			}

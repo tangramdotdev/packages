@@ -50,6 +50,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		...dependencies.map((dep) =>
 			std.env.envArgFromDependency(build, env_, host, sdk, dep),
 		),
+		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
 		env_,
 	);
 
