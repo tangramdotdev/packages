@@ -9,7 +9,7 @@ export const metadata = {
 	version: "6.12.1",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0193b1d86dd372ec891bae799f6da20deef16fc199f30080a4ea9de8cef0c619";
@@ -19,7 +19,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const kernelHeaders = tg.command(async (...args: std.Args<Arg>) => {
+export const kernelHeaders = async (...args: tg.Args<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
@@ -82,7 +82,7 @@ export const kernelHeaders = tg.command(async (...args: std.Args<Arg>) => {
 	const result = tg.Directory.expect(
 		await std.phases.run(
 			{
-				env: std.env.arg(env),
+				env: std.env.arg(...env),
 				phases: { prepare, build, install },
 				order,
 				command: { host: system },
@@ -92,11 +92,11 @@ export const kernelHeaders = tg.command(async (...args: std.Args<Arg>) => {
 	);
 
 	return result;
-});
+};
 
 export default kernelHeaders;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		return;
@@ -104,7 +104,7 @@ export const test = tg.command(async () => {
 
 	// test host
 	return await testKernelHeaders(host);
-});
+};
 
 export const testKernelHeaders = async (host: string, target?: string) => {
 	const target_ = target ?? host;

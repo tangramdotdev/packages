@@ -18,7 +18,7 @@ export type ToolchainArg = {
 };
 
 /** Construct a complete binutils + libc + gcc toolchain. */
-export const toolchain = tg.command(async (arg: ToolchainArg) => {
+export const toolchain = async (arg: ToolchainArg) => {
 	const { host: host_, target: target_ } = arg;
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const target = std.sdk.canonicalTriple(target_ ?? host);
@@ -68,14 +68,14 @@ export const toolchain = tg.command(async (arg: ToolchainArg) => {
 	});
 
 	return crossGcc;
-});
+};
 
 type CanadianCrossArg = {
 	host?: string;
 	env?: std.env.Arg;
 };
 
-export const canadianCross = tg.command(async (arg?: CanadianCrossArg) => {
+export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const { host: host_, env: env_ } = arg ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 
@@ -137,7 +137,7 @@ export const canadianCross = tg.command(async (arg?: CanadianCrossArg) => {
 	});
 
 	return nativeGcc;
-});
+};
 
 export const buildToHostCrossToolchain = async (
 	arg?: tg.Unresolved<CanadianCrossArg>,
@@ -172,7 +172,7 @@ export type CrossToolchainArg = {
 	variant?: gcc.Variant;
 };
 
-export const crossToolchain = tg.command(async (arg: CrossToolchainArg) => {
+export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 	const {
 		buildToolchain,
 		build: build_,
@@ -181,7 +181,7 @@ export const crossToolchain = tg.command(async (arg: CrossToolchainArg) => {
 		sdk,
 		target: target_,
 		variant = "stage2_full",
-	} = arg ?? {};
+	} = await tg.resolve(arg);
 
 	const host = host_ ?? (await std.triple.host());
 	const buildTriple = build_ ?? host;
@@ -229,7 +229,7 @@ export const crossToolchain = tg.command(async (arg: CrossToolchainArg) => {
 		crossGcc,
 		sysroot,
 	};
-});
+};
 
 export type BuildSysrootArg = {
 	build?: string;
@@ -241,7 +241,7 @@ export type BuildSysrootArg = {
 	targetBinutils?: tg.Directory;
 };
 
-export const buildSysroot = tg.command(async (arg: BuildSysrootArg) => {
+export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 	const {
 		build: build_,
 		buildToolchain,
@@ -249,7 +249,7 @@ export const buildSysroot = tg.command(async (arg: BuildSysrootArg) => {
 		env,
 		host: host_,
 		sdk,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 
 	const host = host_ ?? (await std.triple.host());
 	const buildTriple = build_ ?? host;
@@ -295,7 +295,7 @@ export const buildSysroot = tg.command(async (arg: BuildSysrootArg) => {
 		env: std.env.arg(env, initialGccDir),
 		sdk: false,
 	});
-});
+};
 
 type DarwinCrossToolchainArg = {
 	host: string;

@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:14bfb259fd7d0a1fdce9b66f8ed2dd0b134d15019cb359699646afeee1f18118";
@@ -28,7 +28,7 @@ export const source = tg.command(() => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	cmake?: cmake.BuildArg;
@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		cmake: cmake_ = {},
 		build,
@@ -70,16 +70,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	);
 
 	return result;
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/mold`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

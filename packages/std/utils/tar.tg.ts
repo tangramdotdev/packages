@@ -7,7 +7,7 @@ export const metadata = {
 	version: "1.35",
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:4d62ff37342ec7aed748535323930c7cf94acf71c3591882b26a7ea50f3edc16";
@@ -17,7 +17,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -26,22 +26,20 @@ export type Arg = {
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 
 	const host = host_ ?? (await std.triple.host());
 	const os = std.triple.os(host);
 	const build = build_ ?? host;
 
-	const dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [
-		prerequisites(host),
-	];
+	const dependencies: Array<tg.Unresolved<std.env.Arg>> = [prerequisites(host)];
 	let additionalEnv: tg.Unresolved<std.env.Arg> = {
 		FORCE_UNSAFE_CONFIGURE: true,
 	};
@@ -68,14 +66,14 @@ export const build = tg.command(async (arg?: Arg) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
-});
+};

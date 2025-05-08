@@ -6,12 +6,12 @@ export const metadata = {
 	version: "1.3.1",
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8";
 	return std.download.fromGnu({ checksum, name, version });
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -21,8 +21,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
-	const { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
+export const build = async (arg?: tg.Unresolved<Arg>) => {
+	const {
+		build: build_,
+		env,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ? await tg.resolve(arg) : {};
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -40,14 +46,14 @@ export const build = tg.command(async (arg?: Arg) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk.arg(host);
 	return await build({ host, sdk });
-});
+};

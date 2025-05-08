@@ -363,7 +363,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Create a process.
 	let host = tg::host().to_string();
-	let run_arg = tg::process::run::Arg {
+	let run_arg = tg::run::Arg {
 		args,
 		cached: None,
 		checksum: None,
@@ -381,7 +381,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		stdin: None,
 		user: None,
 	};
-	let build_directory = tg::Process::run(tg, run_arg)
+	let build_directory = tg::run::run(tg, run_arg)
 		.await?
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
@@ -574,10 +574,10 @@ async fn check_in_source_tree(
 
 			// Check if we're remapping a file, and check it in first.
 			if !is_directory {
+				// FIXME - destructive, followed by immediate checkout.
 				let artifact = tg::checkin(
 					tg,
 					tg::checkin::Arg {
-						cache: false,
 						destructive: false,
 						deterministic: true,
 						ignore: false,

@@ -18,7 +18,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const { host } = await std.args.apply<Arg>(...args);
 	std.assert.supportedHost(host, metadata);
 	const checksums = binaryChecksums[host];
@@ -53,7 +53,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return tg.directory({
 		bin: binDir,
 	});
-});
+};
 
 export default build;
 
@@ -84,7 +84,7 @@ const binaryChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	},
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: [
@@ -95,4 +95,4 @@ export const test = tg.command(async () => {
 		],
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

@@ -7,12 +7,12 @@ export const metadata = {
 	version: "6.5",
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6";
 	return std.download.fromGnu({ name, version, checksum });
-});
+};
 
 type Arg = {
 	autotools?: std.autotools.Arg;
@@ -23,15 +23,15 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const ncurses = tg.command(async (arg?: Arg) => {
+export const ncurses = async (arg?: tg.Unresolved<Arg>) => {
 	const {
-		autotools = [],
+		autotools = {},
 		build: build_,
 		env,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	const os = std.triple.os(host);
@@ -87,10 +87,10 @@ export const ncurses = tg.command(async (arg?: Arg) => {
 	});
 
 	return result;
-});
+};
 
 export default ncurses;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	return await ncurses();
-});
+};

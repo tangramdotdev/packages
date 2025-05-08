@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
@@ -38,7 +38,7 @@ export const source = tg.command(async () => {
 	});
 
 	return source;
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -52,7 +52,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -105,11 +105,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const hasUsage = (name: string) => {
 		return {
 			name,
@@ -122,4 +122,4 @@ export const test = tg.command(async () => {
 		binaries: metadata.provides.binaries.map(hasUsage),
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

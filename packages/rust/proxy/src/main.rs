@@ -261,7 +261,6 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		let directory = tg::checkin(
 			tg,
 			tg::checkin::Arg {
-				cache: true,
 				destructive: false,
 				deterministic: true,
 				ignore: false,
@@ -322,7 +321,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Create the process.
 	let host = host().to_string();
-	let run_arg = tg::process::run::Arg {
+	let run_arg = tg::run::Arg {
 		args: command_args,
 		cwd: None,
 		cached: None,
@@ -342,7 +341,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	};
 
 	// Get the process output.
-	let output = tg::Process::run(tg, run_arg).await?;
+	let output = tg::run::run(tg, run_arg).await?;
 	let output = output
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
@@ -577,7 +576,6 @@ async fn get_checked_in_path(
 	let artifact = tg::checkin(
 		tg,
 		tg::checkin::Arg {
-			cache: true,
 			destructive: false,
 			deterministic: true,
 			ignore: false,

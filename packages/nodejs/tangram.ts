@@ -68,12 +68,13 @@ const source = async (): Promise<tg.Directory> => {
 	return node;
 };
 
-export const self = tg.command(async (args?: ToolchainArg) => {
+export const self = async (args?: tg.Unresolved<ToolchainArg>) => {
+	const resolved = await tg.resolve(args);
 	// Download Node
 	const artifact = source();
 
 	// Bundle Node with OpenSSL and ca_certificates.
-	const opensslCnf = args?.opensslCnf ?? tg.file(``);
+	const opensslCnf = resolved?.opensslCnf ?? tg.file(``);
 
 	const wrappedNode = std.wrap(tg.symlink(tg`${artifact}/bin/node`), {
 		env: {
@@ -85,14 +86,9 @@ export const self = tg.command(async (args?: ToolchainArg) => {
 	return tg.directory(artifact, {
 		["bin/node"]: wrappedNode,
 	});
-});
+};
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/node`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const node = self();
 	return await $`
 		set -x
@@ -102,7 +98,7 @@ export const test = tg.command(async () => {
 		echo "Checking if we can run node scripts."
 		node -e 'console.log("Hello, world!!!")'
 	`.env(node);
-});
+};
 
 type PackageJson = {
 	bin?: Record<string, string>;
@@ -122,7 +118,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		build,
 		env: env_,
@@ -203,7 +199,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	else {
 		return built;
 	}
-});
+};
 
 type PackageLockJson = {
 	packages: Record<
@@ -217,54 +213,56 @@ type PackageLockJson = {
 	>;
 };
 
-export const install = tg.command(
-	async (packageLockJson: tg.File): Promise<[tg.Directory, tg.Directory]> => {
-		// Parse the package-lock.json.
-		const packageLock = tg.encoding.json.decode(
-			await packageLockJson.text(),
-		) as PackageLockJson;
+export const install = async (
+	packageLockJson: tg.File,
+): Promise<[tg.Directory, tg.Directory]> => {
+	// Parse the package-lock.json.
+	const packageLock = tg.encoding.json.decode(
+		await packageLockJson.text(),
+	) as PackageLockJson;
 
-		// Install the packages specified by the package-lock.json.
-		const downloads = await downloadPackages(packageLock);
+	// Install the packages specified by the package-lock.json.
+	const downloads = await downloadPackages(packageLock);
 
-		return [
-			await installPackages(downloads, false),
-			await installPackages(downloads, true),
-		];
-	},
-);
+	return [
+		await installPackages(downloads, false),
+		await installPackages(downloads, true),
+	];
+};
 
 /** Wrap any scripts pointed to by the "bin" field in the package.json. */
-export const wrapBin = tg.command(
-	async (
-		node: tg.Directory,
-		arg: tg.Directory,
-		bins: Record<string, string>,
-		dependencies: tg.Directory,
-	) => {
-		// Grab the interpreter.
-		const interpreter = await node.get("bin/node").then(tg.File.expect);
+export const wrapBin = async (
+	nodeArg: tg.Unresolved<tg.Directory>,
+	argArg: tg.Unresolved<tg.Directory>,
+	binsArg: tg.Unresolved<Record<string, string>>,
+	dependenciesArg: tg.Unresolved<tg.Directory>,
+) => {
+	const node = await tg.resolve(nodeArg);
+	const arg = await tg.resolve(argArg);
+	const bins = await tg.resolve(binsArg);
+	const dependencies = await tg.resolve(dependenciesArg);
+	// Grab the interpreter.
+	const interpreter = await node.get("bin/node").then(tg.File.expect);
 
-		// Iterate the list of binaries in the `bin` field of the package.json and wrap.
-		let bin = tg.directory();
-		for (const [name, path] of Object.entries(bins)) {
-			const wrapped = std.wrap({
-				// The executable probably references other files in the same directory, so we wrap it through a symlink.
-				executable: tg.symlink(tg`${arg}/${path}`),
-				interpreter,
-				env: {
-					NODE_PATH: tg.Mutation.suffix(tg`${dependencies}/node_modules`, ":"),
-				},
-			});
+	// Iterate the list of binaries in the `bin` field of the package.json and wrap.
+	let bin = tg.directory();
+	for (const [name, path] of Object.entries(bins)) {
+		const wrapped = std.wrap({
+			// The executable probably references other files in the same directory, so we wrap it through a symlink.
+			executable: tg.symlink(tg`${arg}/${path}`),
+			interpreter,
+			env: {
+				NODE_PATH: tg.Mutation.suffix(tg`${dependencies}/node_modules`, ":"),
+			},
+		});
 
-			bin = tg.directory(bin, {
-				[name]: wrapped,
-			});
-		}
+		bin = tg.directory(bin, {
+			[name]: wrapped,
+		});
+	}
 
-		return tg.directory({ bin });
-	},
-);
+	return tg.directory({ bin });
+};
 
 /** Given a package-lock.json, return a list of the paths to install and tarballs to use. */
 const downloadPackages = async (

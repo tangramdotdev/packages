@@ -11,12 +11,12 @@ export const metadata = {
 	version: "3.10",
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:b4c518adb174e484cb4acea54118f02380c7133771e7e9beb98a0787194ee47c";
 	return std.download.fromGnu({ name, version, checksum });
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -59,18 +59,18 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			phases,
 			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	// FIXME spec
 	const source = tg.directory({
 		["main.c"]: tg.file(`
@@ -86,4 +86,4 @@ export const test = tg.command(async () => {
 		.env(std.sdk())
 		.env(build())
 		.env(gmp.build());
-});
+};

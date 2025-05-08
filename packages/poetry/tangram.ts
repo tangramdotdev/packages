@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:6a0694645ee24ba93cb94254db66e47971344562ddd5578e82bf35e572bc546d";
@@ -32,7 +32,7 @@ export const source = tg.command(() => {
 		version,
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -41,7 +41,7 @@ export type Arg = {
 };
 
 /** Create an environment with poetry installed. */
-export const self = tg.command(async (...args: std.Args<Arg>) => {
+export const self = async (...args: tg.Args<Arg>) => {
 	const {
 		build,
 		host,
@@ -49,7 +49,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	} = await std.args.apply<Arg>(...args);
 	const requirements = requirements_ ?? requirementsTxt;
 	return python.self({ build, host, requirements });
-});
+};
 
 export default self;
 
@@ -70,7 +70,7 @@ export type BuildArgs = {
 };
 
 /** Build a poetry project. */
-export const build = tg.command(async (args: BuildArgs) => {
+export const build = async (args: BuildArgs) => {
 	const host = args.host ?? (await std.triple.host());
 	const build = args.build ?? host;
 	// Construct the basic build environment.
@@ -131,14 +131,9 @@ export const build = tg.command(async (args: BuildArgs) => {
 		poetryArtifact,
 		installed,
 	);
-});
+};
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await self.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/poetry`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);
-});
+};

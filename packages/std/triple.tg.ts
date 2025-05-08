@@ -291,7 +291,7 @@ export const allHosts = [
 	"x86_64-linux",
 ];
 
-export const test = tg.command(() => {
+export const test = () => {
 	const t0 = "aarch64-linux";
 	const c0 = components(t0);
 	tg.assert(c0.arch === "aarch64");
@@ -341,4 +341,4 @@ export const test = tg.command(() => {
 	tg.assert(t5 === "x86_64-unknown-linux-musl");
 
 	return true;
-});
+};

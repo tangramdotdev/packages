@@ -154,7 +154,6 @@ async fn run_proxy(
 		let stripped_file = tg::checkin(
 			&tg,
 			tg::checkin::Arg {
-				cache: true,
 				destructive: false,
 				deterministic: true,
 				ignore: false,

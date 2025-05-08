@@ -12,14 +12,14 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:8cf86e00ad3aaa6d26aca30640e86b0e3e1f395ed99f189b06d4c9f74bc58a4e";
 	return std.download
 		.fromGnu({ name, version, checksum })
 		.then((source) => std.patch(source, patches));
-});
+};
 
 type Arg = {
 	autotools?: std.autotools.Arg;
@@ -30,7 +30,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -49,16 +49,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/patch`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

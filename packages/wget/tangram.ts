@@ -22,12 +22,12 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:fa2dc35bab5184ecbc46a9ef83def2aaaa3f4c9f3c97d4bd19dcb07d4da637de";
 	return std.download.fromGnu({ name, version, checksum });
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -48,7 +48,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -91,7 +91,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			sdk,
 			source: source_ ?? source(),
 		},
@@ -107,16 +107,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		["bin/wget"]: wrappedWget,
 	});
 	return output;
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/wget`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
@@ -145,4 +140,4 @@ export const test = tg.command(async () => {
 	tg.assert(tangramContents.length > 0);
 	tg.assert(tangramContents.startsWith("<!DOCTYPE html>"));
 	return true;
-});
+};

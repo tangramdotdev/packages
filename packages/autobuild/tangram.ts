@@ -36,7 +36,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: Arg) => {
 	const { env: envArg, source } = arg;
 	const sourceId = await source.id();
 	console.log("received source dir", sourceId);
@@ -87,7 +87,7 @@ export const build = tg.command(async (arg: Arg) => {
 			);
 		}
 	}
-});
+};
 
 export default build;
 
@@ -97,7 +97,7 @@ export type EnvArg = {
 	source: tg.Directory;
 };
 
-export const env = tg.command(async (arg: EnvArg) => {
+export const env = async (arg: EnvArg) => {
 	const { build, host, source } = arg;
 	const sourceId = await source.id();
 	console.log("received source dir", sourceId);
@@ -137,7 +137,7 @@ export const env = tg.command(async (arg: EnvArg) => {
 			);
 		}
 	}
-});
+};
 
 export type Kind =
 	| "cc-autotools"
@@ -185,7 +185,7 @@ export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 	throw new Error("failed to detect project kind");
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const allKinds: Array<Kind> = [
 		"cc-autotools",
 		"cmake",
@@ -200,7 +200,7 @@ export const test = tg.command(async () => {
 	await Promise.all(allKinds.map((variant) => testKind(variant)));
 
 	return true;
-});
+};
 
 type TestFnArg = {
 	testFile: (buildOutput: tg.Directory) => Promise<tg.Template>;
@@ -265,7 +265,7 @@ const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
 	};
 };
 
-export const testKind = tg.command(async (kind: Kind) => {
+export const testKind = async (kind: Kind) => {
 	console.log(`testing ${kind}...`);
 	const dirs = await testDirs();
 	const source = dirs[kind];
@@ -291,4 +291,4 @@ export const testKind = tg.command(async (kind: Kind) => {
 	};
 	await testStdout(testParamaters()[kind]);
 	return true;
-});
+};

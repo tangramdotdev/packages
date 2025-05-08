@@ -5,7 +5,7 @@ export const metadata = {
 	version: "1.3.1",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
@@ -15,7 +15,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -25,7 +25,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -54,16 +54,16 @@ export const build = tg.command(async (arg?: Arg) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, libraries: ["z"] });
 	return true;
-});
+};

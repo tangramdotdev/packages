@@ -9,7 +9,7 @@ export const metadata = {
 	version: "2.44",
 };
 
-export const source = tg.command(async (build: string) => {
+export const source = async (build: string) => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:79cb120b39a195ad588cd354aed886249bfab36c808e746b30208d15271cc95c";
@@ -19,7 +19,7 @@ export const source = tg.command(async (build: string) => {
 		compression: "zst",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -32,7 +32,7 @@ export type Arg = {
 };
 
 /** Obtain the GNU binutils. */
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -41,7 +41,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		sdk,
 		source: source_,
 		target: target_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	const target = target_ ?? host;
@@ -85,11 +85,11 @@ export const build = tg.command(async (arg?: Arg) => {
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 
@@ -107,4 +107,4 @@ export const test = tg.command(async () => {
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries, metadata });
 	return true;
-});
+};

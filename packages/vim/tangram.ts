@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const owner = name;
 	const repo = name;
@@ -27,7 +27,7 @@ export const source = tg.command(() => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 type Arg = {
 	autotools?: std.autotools.Arg;
@@ -41,7 +41,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -60,7 +60,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			buildInTree: true,
 			sdk,
 			source: source_ ?? source(),
@@ -69,16 +69,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	);
 
 	return output;
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/vim`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
 	const hasVersion = (name: string) => {
 		return {
@@ -91,4 +86,4 @@ export const test = tg.command(async () => {
 		binaries: metadata.provides.binaries.map(hasVersion),
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

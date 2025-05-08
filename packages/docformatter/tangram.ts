@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:8c4a509f77261c05e093f6268bedd36a2782c0d6ccc01d62d1ddf3a46835aa98";
@@ -28,7 +28,7 @@ export const source = tg.command(() => {
 		tag,
 		version,
 	});
-});
+};
 
 type Arg = {
 	build?: string;
@@ -36,7 +36,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const { build, host, source: source_ } = await std.args.apply<Arg>(...args);
 
 	return poetry.build({
@@ -45,19 +45,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		lockfile: poetryLock,
 		host,
 	});
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({
-		executable: tg.symlink(tg`${dir}/bin/docformatter`),
-		args,
-	});
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

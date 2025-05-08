@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:c44ca41b52b5857895d0118b44075d94c3c4a98b025ed3433652519a1ff967a0";
@@ -28,7 +28,7 @@ export const source = tg.command(async () => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -40,7 +40,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		build: build_,
 		cargo: cargoArg = {},
@@ -70,23 +70,18 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			disableDefaultFeatures,
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			features,
 			sdk,
 			source: source_ ?? source(),
 		},
 		cargoArg,
 	);
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/xh`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

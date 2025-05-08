@@ -1,9 +1,9 @@
 export * as args from "./args.tg.ts";
-export { type Args } from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
+export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
-export { $, build, command, run } from "./command.tg.ts";
+export { command } from "./command.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
 export { download } from "./download.tg.ts";
@@ -11,6 +11,7 @@ export { env } from "./env.tg.ts";
 export * as file from "./file.tg.ts";
 export { patch } from "./patch.tg.ts";
 export * as phases from "./phases.tg.ts";
+export { $, run } from "./run.tg.ts";
 export { sdk } from "./sdk.tg.ts";
 export * as triple from "./triple.tg.ts";
 export * as utils from "./utils.tg.ts";
@@ -18,14 +19,16 @@ export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
+import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
+import * as build from "./build.tg.ts";
 import caCertificates from "./certificates.tg.ts";
-import * as command from "./command.tg.ts";
 import * as download from "./download.tg.ts";
 import * as env from "./env.tg.ts";
 import * as file from "./file.tg.ts";
 import * as image from "./image.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as phases from "./phases.tg.ts";
+import * as run from "./run.tg.ts";
 import * as sdk from "./sdk.tg.ts";
 import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
@@ -38,9 +41,9 @@ export const metadata = {
 };
 
 /** The default export produces the default SDK env for the detected host, asserts its validity, and returns the env. */
-export const default_ = tg.command(() => {
+export const default_ = () => {
 	return sdk.testDefault();
-});
+};
 export default default_;
 
 export const flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
@@ -53,7 +56,7 @@ export const flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
 };
 
 /** Mapping of strings to pass to "test" to the test targets they run. */
-const testActions = (): Record<string, () => Promise<any>> => {
+const testActions = (): Record<string, () => any> => {
 	return {
 		hostSystem: triple.host,
 		triple: triple.test,
@@ -68,7 +71,7 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		hostInjection: injection.test,
 		earlyRust: workspace.rust,
 		workspace: workspace.test,
-		bootstrapSdk: bootstrap.sdk.test,
+		bootstrapSdk: bootstrapSdk.test,
 		bootstrapMake: bootstrap.make.test,
 		bootstrapMusl: bootstrap.musl.build,
 		file: file.test,
@@ -166,10 +169,11 @@ const testActions = (): Record<string, () => Promise<any>> => {
 		imageBasicEnvImageDocker: image.testBasicEnvImageDocker,
 		imageBasicEnvImageOci: image.testBasicEnvImageOci,
 		image: image.test,
-		stdBuild: command.testBuild,
-		dollar: command.testDollar,
-		dollarBootstrap: command.testDollarBootstrap,
-		dollarEnvClear: command.testEnvClear,
+		stdBuild: build.testBuild,
+		stdBuildBootstrap: build.testBuildBootstrap,
+		dollar: run.testDollar,
+		dollarBootstrap: run.testDollarBootstrap,
+		dollarEnvClear: run.testEnvClear,
 	};
 };
 
@@ -186,8 +190,7 @@ const defaultTests = [
 ];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
-
-export const test = tg.command(async (...testNames: Array<string>) => {
+export const test = async (...testNames: Array<string>) => {
 	let tests: Array<string> = flatten(testNames);
 	if (tests.length === 0) {
 		tests = defaultTests;
@@ -198,17 +201,17 @@ export const test = tg.command(async (...testNames: Array<string>) => {
 	let results: Record<string, tg.Value> = {};
 	const actionsTable = testActions();
 	for (const testName of tests) {
-		const promise = actionsTable[testName];
-		if (promise === undefined) {
+		const func = actionsTable[testName];
+		if (func === undefined) {
 			return tg.unreachable(`no such test: ${testName}`);
 		}
-		const result = await promise();
+		const result = await tg.build(func);
 		console.log(await tg`${testName}: ${result}`);
 		results[testName] = result;
 	}
 
 	return results;
-});
+};
 
 /** Returns a deduplicated array of the tests passed in. Throws if any are unrecognized. */
 const validateTestNames = (...testNames: Array<string>) => {

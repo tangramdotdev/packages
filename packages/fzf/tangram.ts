@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command((): Promise<tg.Directory> => {
+export const source = (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:d4e8e25fad2d3f75943b403c40b61326db74b705bf629c279978fdd0ceb1f97c";
@@ -24,7 +24,7 @@ export const source = tg.command((): Promise<tg.Directory> => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		go: goArg = {},
 		build,
@@ -54,11 +54,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		goArg,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const majorMinor = metadata.version.split(".").slice(2).join(".");
 	const spec = {
 		...std.assert.defaultSpec(metadata),
@@ -70,4 +70,4 @@ export const test = tg.command(async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

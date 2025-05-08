@@ -10,7 +10,7 @@ export const metadata = {
 	version: "4.10.0",
 };
 
-export const source = tg.command(async (os: string) => {
+export const source = async (os: string) => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
@@ -26,7 +26,7 @@ export const source = tg.command(async (os: string) => {
 		source = await bootstrap.patch(source, disableLocatePatch);
 	}
 	return source;
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -36,14 +36,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	const os = std.triple.os(build);
@@ -69,12 +69,12 @@ export const build = tg.command(async (arg?: Arg) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
-});
+};

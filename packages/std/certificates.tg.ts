@@ -7,7 +7,7 @@ export type Arg = {
 	source?: tg.File;
 };
 
-export const caCertificates = tg.command((arg?: Arg) => {
+export const caCertificates = (arg?: Arg) => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:50a6277ec69113f00c5fd45f09e8b97a4b3e32daa35d3a95ab30137a55386cef";
@@ -18,6 +18,6 @@ export const caCertificates = tg.command((arg?: Arg) => {
 		"ca-bundle.crt": tg.symlink("./cacert.pem"),
 		"cacert.pem": source,
 	});
-});
+};
 
 export default caCertificates;

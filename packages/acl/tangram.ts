@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd";
@@ -25,7 +25,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ base, checksum, extension, name, version })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -82,11 +82,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const displaysUsage = (name: string) => {
 		return {
 			name,
@@ -99,4 +99,4 @@ export const test = tg.command(async () => {
 		binaries: metadata.provides.binaries.map(displaysUsage),
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f81f5860666b0bc7d84baddefa60d1cb9fa6fceb2398cc3baca6afaa60266675";
@@ -22,7 +22,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	bashExe: tg.File;
@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
 		bashExe,
 		grepExe,
@@ -45,7 +45,7 @@ export const build = tg.command(async (arg: Arg) => {
 		host,
 		sdk,
 		source: source_,
-	} = arg;
+	} = await tg.resolve(arg);
 
 	const env = std.env.arg(env_);
 	let output = await std.utils.autotoolsInternal({
@@ -81,6 +81,6 @@ export const build = tg.command(async (arg: Arg) => {
 	}
 
 	return output;
-});
+};
 
 export default build;

@@ -7,13 +7,13 @@ import cargoToml from "./proxy/Cargo.toml" with { type: "file" };
 import cargoLock from "./proxy/Cargo.lock" with { type: "file" };
 import src from "./proxy/src" with { type: "directory" };
 
-export let source = tg.command(async () => {
+export let source = async () => {
 	return tg.directory({
 		"Cargo.toml": cargoToml,
 		"Cargo.lock": cargoLock,
 		src,
 	});
-});
+};
 
 export type Arg = {
 	buildToolchain: std.env.Arg;
@@ -23,14 +23,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const proxy = tg.command(async (arg?: Arg) => {
+export const proxy = async (arg?: Arg) => {
 	return cargo.build({
 		source: source(),
 		features: ["tracing"],
 		proxy: false,
 		useCargoVendor: true,
 	});
-});
+};
 
 export default proxy;
 
@@ -38,7 +38,7 @@ import pkgconf from "pkgconf" with { path: "../pkgconf" };
 import openssl from "openssl" with { path: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 
-export const testProxyCompiles = tg.command(async () => {
+export const testProxyCompiles = async () => {
 	// Make sure the proxy compiles and runs.
 	const version = await $`tangram_rustc_proxy rustc - --version | tee $OUTPUT`
 		.env(proxy())
@@ -47,9 +47,9 @@ export const testProxyCompiles = tg.command(async () => {
 	const versionText = await version.text();
 	tg.assert(versionText.trim().includes(VERSION));
 	return true;
-});
+};
 
-export const testHello = tg.command(async () => {
+export const testHello = async () => {
 	// Build the basic proxy test.
 	const helloWorld = await cargo.build({
 		source: tests.get("hello-world").then(tg.Directory.expect),
@@ -68,9 +68,9 @@ export const testHello = tg.command(async () => {
 	const helloText = await helloOutput.text();
 	tg.assert(helloText.trim() === "hello, proxy!\n128\nHello, build!");
 	return true;
-});
+};
 
-export const testPkgconfig = tg.command(async () => {
+export const testPkgconfig = async () => {
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -123,9 +123,9 @@ Cflags: -I\${includedir}
 	tg.assert(testText.trim() === "You passed the number: 42");
 
 	return externalLibDir;
-});
+};
 
-export const testOpenSSL = tg.command(async () => {
+export const testOpenSSL = async () => {
 	// Build the openssl proxy test.
 	const helloOpenssl = await cargo.build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
@@ -148,9 +148,9 @@ export const testOpenSSL = tg.command(async () => {
 		opensslText.trim() === "Hello, from a crate that links against libssl!",
 	);
 	return true;
-});
+};
 
-export const testWorkspace = tg.command(async () => {
+export const testWorkspace = async () => {
 	// Build the workspace test.
 	const helloWorkspace = await cargo.build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
@@ -170,13 +170,13 @@ export const testWorkspace = tg.command(async () => {
 	tg.assert(workspaceText.trim() === "Hello from a workspace!");
 
 	return true;
-});
+};
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	tg.assert(await testProxyCompiles());
 	tg.assert(await testHello());
 	tg.assert(await testPkgconfig());
 	tg.assert(await testOpenSSL());
 	tg.assert(await testWorkspace());
 	return true;
-});
+};

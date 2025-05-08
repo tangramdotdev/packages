@@ -9,7 +9,7 @@ export const metadata = {
 	version: "3.5.0",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:344d0a79f1a9b08029b0744e2cc401a43f9c90acd1044d09a530b4885a8e9fc0";
@@ -24,7 +24,7 @@ export const source = tg.command(async () => {
 		tag,
 		version,
 	});
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -82,7 +82,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			buildInTree: true,
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			phases,
 			sdk,
 			source: sourceDir,
@@ -101,16 +101,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		),
 		["share/pkgconfig"]: tg.symlink("../lib/pkgconfig"),
 	});
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/openssl`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	// FIXME spec
 	const source = tg.directory({
 		["main.c"]: tg.file(`
@@ -138,4 +133,4 @@ export const test = tg.command(async () => {
 	tg.assert(text.includes(metadata.version));
 
 	return true;
-});
+};

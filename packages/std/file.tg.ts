@@ -1,5 +1,4 @@
 import * as std from "./tangram.ts";
-import { buildBootstrap } from "./command.tg.ts";
 import * as bootstrap from "./bootstrap.tg.ts";
 
 export type ExecutableMetadata =
@@ -555,7 +554,7 @@ const readNullTerminatedString = (
 	return tg.encoding.utf8.decode(slice);
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	// Set up platform details.
 	const bootstrapSDK = await bootstrap.sdk();
 	const host = await std.triple.host();
@@ -590,21 +589,18 @@ export const test = tg.command(async () => {
 	});
 
 	// Produce a library and executable.
-	const output = await tg
-		.command(
-			tg`
+	const output = await std.build`
 			set -x
 			mkdir -p $OUTPUT
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o $OUTPUT/libgreet.${dylibExt}
 			cc -v -L$OUTPUT -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT/exe
-			`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_PASSTHROUGH: true,
-				}),
-			},
+			`
+		.bootstrap(true)
+		.env(
+			std.env.arg(bootstrapSDK, {
+				TANGRAM_LINKER_PASSTHROUGH: true,
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 
 	// Obtain the output files.
@@ -661,4 +657,4 @@ export const test = tg.command(async () => {
 	}
 
 	return true;
-});
+};

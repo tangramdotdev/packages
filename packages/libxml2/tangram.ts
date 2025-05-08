@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async (): Promise<tg.Directory> => {
+export const source = async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:310df85878b65fa717e5e28e0d9e8f6205fd29d883929303a70a4f2fc4f6f1f2";
@@ -28,7 +28,7 @@ export const source = tg.command(async (): Promise<tg.Directory> => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -45,7 +45,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -94,7 +94,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			phases,
 			sdk,
 			setRuntimeLibraryPath: true,
@@ -102,11 +102,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const outputIncludes = (
 		name: string,
 		includes: string,
@@ -128,4 +128,4 @@ export const test = tg.command(async () => {
 		],
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

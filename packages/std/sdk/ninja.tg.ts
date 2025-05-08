@@ -30,8 +30,13 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const ninja = async (arg?: Arg) => {
-	const { build: build_, host: host_, sdk, source: source_ } = arg ?? {};
+export const ninja = async (arg?: tg.Unresolved<Arg>) => {
+	const {
+		build: build_,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 
@@ -52,8 +57,8 @@ export const ninja = async (arg?: Arg) => {
 
 export default ninja;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	// FIXME
 	// await std.assert.pkg({ buildFn: ninja, binaries: ["ninja"], metadata });
 	return true;
-});
+};

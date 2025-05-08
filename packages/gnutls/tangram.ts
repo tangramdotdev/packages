@@ -13,7 +13,7 @@ export const metadata = {
 	version: "3.7.11",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:90e337504031ef7d3077ab1a52ca8bac9b2f72bc454c95365a1cd1e0e81e06e9";
@@ -23,7 +23,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ base, checksum, name, extension, version })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -39,7 +39,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -82,18 +82,18 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			phases,
 			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	// TODO spec
 	const source = tg.directory({
 		["main.c"]: tg.file(`
@@ -111,4 +111,4 @@ export const test = tg.command(async () => {
 		.env(nettle.build())
 		.env(gmp.build())
 		.env(zlib.build());
-});
+};

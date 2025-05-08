@@ -12,7 +12,8 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const injection = tg.command(async (arg: Arg) => {
+export const injection = async (unresolved: tg.Unresolved<Arg>) => {
+	const arg = await tg.resolve(unresolved);
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const os = std.triple.os(host);
@@ -51,7 +52,7 @@ export const injection = tg.command(async (arg: Arg) => {
 	} else {
 		return tg.unreachable();
 	}
-});
+};
 
 export default injection;
 
@@ -62,7 +63,7 @@ type MacOsInjectionArg = {
 	source: tg.File;
 };
 
-export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
+export const macOsInjection = async (arg: MacOsInjectionArg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const os = std.triple.os(host);
 	if (os !== "darwin") {
@@ -75,7 +76,6 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
 	const env = await std.env.arg(
 		{
-			SHELL: "/bin/sh",
 			SDKROOT: await bootstrap.macOsSdk(),
 		},
 		arg.env,
@@ -103,14 +103,13 @@ export const macOsInjection = tg.command(async (arg: MacOsInjectionArg) => {
 	const system = std.triple.archAndOs(host);
 	const injection =
 		await $`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
-			.includeUtils(false)
-			.pipefail(false)
+			.bootstrap(true)
 			.host(system)
 			.env(arg.buildToolchain)
 			.env(env)
 			.then(tg.File.expect);
 	return injection;
-});
+};
 
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
@@ -161,26 +160,24 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		{
 			// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
 			TANGRAM_LINKER_PASSTHROUGH: true,
-			SHELL: "/bin/sh",
 		},
 		arg.env,
 	);
 	const output =
 		$`${executable} -xc ${arg.source} -o $OUTPUT ${tg.Template.join(" ", ...args)}`
-			.includeUtils(false)
-			.pipefail(false)
+			.bootstrap(true)
 			.env(env)
 			.host(system)
 			.then(tg.File.expect);
 	return output;
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const detectedHost = await std.triple.host();
 	const hostArch = std.triple.arch(detectedHost);
 	tg.assert(hostArch);
 	const buildToolchain = bootstrap.sdk.env();
-	const nativeInjection = await injection({
+	const nativeInjection = await tg.build(injection, {
 		host: detectedHost,
 		buildToolchain,
 	});
@@ -198,9 +195,9 @@ export const test = tg.command(async () => {
 		return tg.unreachable();
 	}
 	return nativeInjection;
-});
+};
 
-export const testCross = tg.command(async () => {
+export const testCross = async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) === "darwin") {
 		console.log("Skipping cross test on darwin");
@@ -212,7 +209,7 @@ export const testCross = tg.command(async () => {
 	const target = `${targetArch}-unknown-linux-gnu`;
 	const buildToolchain = gnu.toolchain({ host: detectedHost, target });
 
-	const nativeInjection = await injection({
+	const nativeInjection = await tg.build(injection, {
 		build: detectedHost,
 		buildToolchain,
 		host: target,
@@ -230,4 +227,4 @@ export const testCross = tg.command(async () => {
 	} else {
 		return tg.unreachable();
 	}
-});
+};

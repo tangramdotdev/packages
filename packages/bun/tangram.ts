@@ -16,7 +16,7 @@ export type Arg = {
 };
 
 /** Download a pre-compiled binary and wrap it. */
-export const self = tg.command(async (...args: std.Args<Arg>) => {
+export const self = async (...args: tg.Args<Arg>) => {
 	const { host: host_ } = await std.args.apply<Arg>(...args);
 	const { name, version } = metadata;
 	const tag = `${name}-v${version}`;
@@ -44,7 +44,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		"bin/bun": std.wrap(bun),
 		"bin/bunx": tg.symlink("bun"),
 	});
-});
+};
 
 export default self;
 
@@ -60,12 +60,7 @@ const binaryChecksums: { [key: string]: tg.Checksum } = {
 		"sha256:d2a4ef2cae7f37c16415e7a7668a6e84c15d88b9ce8ffc1fbb44f43f77d30bc9",
 };
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await self.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/bun`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);
-});
+};

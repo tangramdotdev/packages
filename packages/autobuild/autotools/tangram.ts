@@ -15,7 +15,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: Arg) => {
 	const { env: envArg, ...rest } = arg ?? {};
 	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
 
@@ -26,7 +26,7 @@ export const build = tg.command(async (arg: Arg) => {
 
 	const arg_ = { ...rest, env: env_, source };
 	return std.autotools.build(arg_);
-});
+};
 
 export default build;
 
@@ -52,7 +52,7 @@ export type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = tg.command(async (arg: EnvArg) => {
+export const env = async (arg: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -64,4 +64,4 @@ export const env = tg.command(async (arg: EnvArg) => {
 		perl({ build, host: build }),
 		texinfo({ build, host: build }),
 	);
-});
+};

@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:4dad02a2f9c8c3c8d89434e47337aa654cb0e2aa50e806589132f186bf5c2b66";
@@ -26,7 +26,7 @@ export const source = tg.command(async () => {
 		source: "tag",
 		tag: version,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -40,7 +40,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		build: build_,
 		cargo: cargoArg = {},
@@ -70,21 +70,16 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		cargoArg,
 	);
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/rg`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};
 
-export const cross = tg.command(async () => {
+export const cross = async () => {
 	// TODO - assert the outputs. Make sure the linux-musl ones produce a static binary.
 	return tg.directory({
 		"aarch64-unknown-linux-gnu": build({
@@ -100,4 +95,4 @@ export const cross = tg.command(async () => {
 		"aarch64-apple-darwin": build({ host: "aarch64-apple-darwin" }),
 		"x86_64-apple-darwin": build({ host: "x86_64-apple-darwin" }),
 	});
-});
+};

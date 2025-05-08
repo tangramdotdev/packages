@@ -15,7 +15,7 @@ export const metadata = {
 	version: "3.7.7",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:879acd83c3399c7caaee73fe5f7418e06087ab2aaf40af3e99b9e29beb29faee";
@@ -25,7 +25,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -89,11 +89,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	// FIXME spec
 	const source = tg.directory({
 		["main.c"]: tg.file(`
@@ -113,4 +113,4 @@ export const test = tg.command(async () => {
 		.env(openssl.build())
 		.env(xz.build())
 		.env(zlib.build());
-});
+};

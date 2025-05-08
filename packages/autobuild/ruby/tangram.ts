@@ -9,7 +9,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const plain = tg.command(async (arg: Arg) => {
+export const plain = async (arg: Arg) => {
 	const { env: envArg, source } = arg ?? {};
 
 	const env_ =
@@ -23,7 +23,7 @@ export const plain = tg.command(async (arg: Arg) => {
 		interpreter,
 		env: env_,
 	});
-});
+};
 
 export default plain;
 
@@ -32,9 +32,9 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = tg.command(async (arg: EnvArg) => {
+export const env = async (arg: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(ruby.self({ ...std.triple.rotate({ build, host }) }));
-});
+};

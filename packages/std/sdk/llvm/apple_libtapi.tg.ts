@@ -5,7 +5,7 @@ import { $ } from "../../tangram.ts";
 import cmake from "../cmake.tg.ts";
 import ninja from "../ninja.tg.ts";
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const url = `https://github.com/tpoechtrager/apple-libtapi/archive/refs/heads/1300.6.5.zip`;
 	const checksum =
 		"sha256:22615934da56e710a63a44b7bda55d619e1c23a3ee2331661592661acf3b8a88";
@@ -13,9 +13,9 @@ export const source = tg.command(async () => {
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
-export const build = tg.command(async () => {
+export const build = async () => {
 	const host = await std.triple.host();
 
 	const llvmSdk = std.sdk({ host, toolchain: "llvm" });
@@ -36,6 +36,6 @@ export const build = tg.command(async () => {
 	`
 		.env(env)
 		.then(tg.Directory.expect);
-});
+};
 
 export default build;

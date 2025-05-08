@@ -5,7 +5,7 @@ export const metadata = {
 	version: "1.4.19",
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:63aede5c6d33b6d9b13511cd0be2cac046f2e70fd0a07aa9573a04a82783af96";
@@ -15,7 +15,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -25,8 +25,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
-	const { build, env: env_, host, sdk, source: source_ } = arg ?? {};
+export const build = async (arg?: tg.Unresolved<Arg>) => {
+	const {
+		build,
+		env: env_,
+		host,
+		sdk,
+		source: source_,
+	} = arg ? await tg.resolve(arg) : {};
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -47,16 +53,16 @@ export const build = tg.command(async (arg?: Arg) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries: ["m4"], metadata });
 	return true;
-});
+};

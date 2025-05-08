@@ -37,7 +37,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:3d385e5d22d368b064c817a13ed8e3cc3f71a7705d7ed1bae78013c33aa7c87f";
@@ -48,7 +48,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -67,7 +67,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const self = tg.command(async (...args: std.Args<Arg>) => {
+export const self = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		dependencies: {
@@ -195,14 +195,9 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 		include: tg.symlink(tg`${ruby}/include`),
 		lib: tg.symlink(tg`${ruby}/lib`),
 	});
-});
+};
 
 export default self;
-
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await self.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/ruby`), args });
-});
 
 export type DownloadGemArg = {
 	/** The name of the gem. */
@@ -316,7 +311,7 @@ const bundledGems = (): Promise<tg.Directory> => {
 	return tg.directory(...args.map(downloadGem));
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const hasVersion = (name: string, version: string) => {
 		return {
 			name,
@@ -349,4 +344,4 @@ export const test = tg.command(async () => {
 	tg.assert(output.includes("Hello, tangram!"));
 
 	return true;
-});
+};

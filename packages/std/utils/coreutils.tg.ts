@@ -7,14 +7,13 @@ import libiconv from "./libiconv.tg.ts";
 import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch" with {
 	type: "file",
 };
-import { buildBootstrap } from "../command.tg.ts";
 
 export const metadata = {
 	name: "coreutils",
 	version: "9.6",
 };
 
-export const source = tg.command(async (os: string) => {
+export const source = async (os: string) => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:7a0124327b398fd9eb1a6abde583389821422c744ffa10734b24f557610d3283";
@@ -33,7 +32,7 @@ export const source = tg.command(async (os: string) => {
 	}
 
 	return source;
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -45,7 +44,7 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
@@ -54,12 +53,12 @@ export const build = tg.command(async (arg?: Arg) => {
 		source: source_,
 		staticBuild = false,
 		usePrerequisites = true,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	const os = std.triple.os(host);
 
-	const dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [];
+	const dependencies: Array<tg.Unresolved<std.env.Arg>> = [];
 
 	if (usePrerequisites) {
 		dependencies.push(prerequisites(build));
@@ -107,7 +106,7 @@ export const build = tg.command(async (arg?: Arg) => {
 
 	let output = await autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(env),
+		env: std.env.arg(...env),
 		phases: { configure },
 		opt: staticBuild ? "s" : undefined,
 		sdk,
@@ -124,12 +123,12 @@ export const build = tg.command(async (arg?: Arg) => {
 	}
 
 	return output;
-});
+};
 
 export default build;
 
 /** Obtain just the `env` binary. */
-export const gnuEnv = tg.command(async () => {
+export const gnuEnv = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const os = std.triple.os(host);
 	const sdk = bootstrap.sdk(host);
@@ -143,11 +142,11 @@ export const gnuEnv = tg.command(async () => {
 	});
 	const exe = tg.File.expect(await directory.get("bin/env"));
 	return exe;
-});
+};
 
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
@@ -221,15 +220,13 @@ export const test = tg.command(async () => {
 		os === "darwin"
 			? libiconv({ host, sdk: false, env: sdk })
 			: attr({ host, sdk: false, env: sdk });
-	const output = tg.File.expect(
-		await buildBootstrap(
-			await tg.command(script, {
-				env: std.env.arg(platformSupportLib, coreutils),
-			}),
-		),
-	);
+	const output = await std.build`${script}`
+		.includeUtils(false)
+		.pipefail(false)
+		.env(std.env.arg({ SHELL: "/bin/sh" }, platformSupportLib, coreutils))
+		.then(tg.File.expect);
 
 	const contents = (await output.text()).trim();
 	tg.assert(contents === expected);
 	return coreutils;
-});
+};

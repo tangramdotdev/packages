@@ -28,7 +28,7 @@ export type ToolchainArg = {
 	targets?: Array<string>;
 };
 
-export const self = tg.command(async (arg?: ToolchainArg) => {
+export const self = async (arg?: ToolchainArg) => {
 	// Determine the list of target triples to support other than the inferred host.
 	const detectedHost = await std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);
@@ -146,7 +146,7 @@ export const self = tg.command(async (arg?: ToolchainArg) => {
 	}
 
 	return artifact;
-});
+};
 
 export default self;
 
@@ -157,31 +157,31 @@ type ProxyRustObjcopyArg = {
 	rustInstall: tg.Directory;
 };
 
-export const proxyRustObjcopy = tg.command(
-	async (arg: ProxyRustObjcopyArg): Promise<tg.Directory> => {
-		const { build, buildToolchain, host, rustInstall } = arg;
+export const proxyRustObjcopy = async (
+	arg: ProxyRustObjcopyArg,
+): Promise<tg.Directory> => {
+	const { build, buildToolchain, host, rustInstall } = arg;
 
-		// Get the rust-objcopy executable.
-		// NOTE - `host` is assumed to already be a valid rust triple, produced by the caller.
-		const rustObjcopySubpath = `lib/rustlib/${host}/bin/rust-objcopy`;
-		const rustObjcopyExe = await rustInstall
-			.get(rustObjcopySubpath)
-			.then(tg.File.expect);
+	// Get the rust-objcopy executable.
+	// NOTE - `host` is assumed to already be a valid rust triple, produced by the caller.
+	const rustObjcopySubpath = `lib/rustlib/${host}/bin/rust-objcopy`;
+	const rustObjcopyExe = await rustInstall
+		.get(rustObjcopySubpath)
+		.then(tg.File.expect);
 
-		// Produce the proxy wrapper.
-		const wrappedRustObjcopyExe = await std.stripProxy({
-			buildToolchain,
-			build,
-			host,
-			stripCommand: rustObjcopyExe,
-		});
+	// Produce the proxy wrapper.
+	const wrappedRustObjcopyExe = await std.stripProxy({
+		buildToolchain,
+		build,
+		host,
+		stripCommand: rustObjcopyExe,
+	});
 
-		// Replace the original path with the wrapper.
-		return tg.directory(rustInstall, {
-			[rustObjcopySubpath]: wrappedRustObjcopyExe,
-		});
-	},
-);
+	// Replace the original path with the wrapper.
+	return tg.directory(rustInstall, {
+		[rustObjcopySubpath]: wrappedRustObjcopyExe,
+	});
+};
 
 type RustupManifestV2 = {
 	"manifest-version": "2";
@@ -241,7 +241,7 @@ export const rustTriple = (triple: string): string => {
 	}
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const tests = [];
 
 	tests.push(testHostToolchain());
@@ -253,15 +253,15 @@ export const test = tg.command(async () => {
 	tg.assert(results.every((r) => r));
 
 	return true;
-});
+};
 
-export const testHostToolchain = tg.command(async () => {
+export const testHostToolchain = async () => {
 	const rustArtifact = await self();
 	await $`rustc --version && cargo --version`.env(rustArtifact);
 	return rustArtifact;
-});
+};
 
-export const testCrossToolchain = tg.command(async () => {
+export const testCrossToolchain = async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 
@@ -279,16 +279,16 @@ export const testCrossToolchain = tg.command(async () => {
 
 	await $`rustc --version && cargo --version`.env(crossRust);
 	return crossRust;
-});
+};
 
-export const testCargo = tg.command(async () => {
+export const testCargo = async () => {
 	return await cargo_.test();
-});
+};
 
-export const testCargoProxy = tg.command(async () => {
+export const testCargoProxy = async () => {
 	return await proxy_.test();
-});
+};
 
-export const testNativeBuild = tg.command(async () => {
+export const testNativeBuild = async () => {
 	return await build_.test();
-});
+};

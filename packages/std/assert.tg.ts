@@ -1,5 +1,5 @@
 import * as std from "./tangram.ts";
-import { $ } from "./command.tg.ts";
+import { $ } from "./run.tg.ts";
 import {
 	fileOrSymlinkFromManifestTemplate,
 	manifestDependencies,
@@ -204,12 +204,12 @@ type FileExistsArg = {
 };
 
 /** Assert the provided path exists and refers to a file. */
-export const fileExists = tg.command(async (arg: FileExistsArg) => {
+export const fileExists = async (arg: FileExistsArg) => {
 	const maybeFile = await arg.directory.tryGet(arg.subpath);
 	tg.assert(maybeFile, `Path ${arg.subpath} does not exist.`);
 	tg.File.assert(maybeFile);
 	return true;
-});
+};
 
 type RunnableBinArg = {
 	directory: tg.Directory;
@@ -252,6 +252,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 	)} > $OUTPUT 2>&1`;
 
 	const stdout = await $`${executable}`
+		.bootstrap(true)
 		.env(arg.env)
 		.host(arg.host)
 		.then(tg.File.expect)
@@ -314,7 +315,7 @@ type HeaderArg = {
 };
 
 /** Assert the directory contains a header file with the provided name. */
-export const headerCanBeIncluded = tg.command(async (arg: HeaderArg) => {
+export const headerCanBeIncluded = async (arg: HeaderArg) => {
 	// Ensure the file exists.
 	await fileExists({
 		directory: arg.directory,
@@ -331,13 +332,14 @@ export const headerCanBeIncluded = tg.command(async (arg: HeaderArg) => {
 
 	// Compile the program, ensuring the env properly made the header discoverable.
 	const program = await $`cc -xc "${source}" -o $OUTPUT`
+		.bootstrap(true)
 		.env(std.env.arg(std.sdk(), arg.directory))
 		.then(tg.File.expect);
 
 	// Run the program.
 	await $`${program}`;
 	return true;
-});
+};
 
 type LibraryArg = {
 	directory: tg.Directory;
@@ -348,7 +350,7 @@ type LibraryArg = {
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
-export const linkableLib = tg.command(async (arg: LibraryArg) => {
+export const linkableLib = async (arg: LibraryArg) => {
 	// Set up parameters.
 	let name: string | undefined;
 	let pkgConfigName: string | undefined;
@@ -432,7 +434,7 @@ export const linkableLib = tg.command(async (arg: LibraryArg) => {
 
 	await Promise.all(tests);
 	return true;
-});
+};
 
 type DlopenArg = {
 	directory: tg.Directory;
@@ -476,6 +478,7 @@ export const dlopen = async (arg: DlopenArg) => {
 	const linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
 	const sdkEnv = std.sdk(arg?.sdk);
 	await $`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`
+		.bootstrap(true)
 		.env(
 			std.env.arg(
 				sdkEnv,
@@ -527,6 +530,7 @@ export const stdoutIncludes = async (
 	expected: string,
 ) => {
 	const stdout = await $`${file} > $OUTPUT`
+		.bootstrap(true)
 		.env({
 			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 		})

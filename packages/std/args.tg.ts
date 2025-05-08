@@ -10,9 +10,9 @@ export type PackageArg = { [key: string]: tg.Value } & {
 };
 
 /** A function that accepts a variable amount of package args and produces a directory. This is the standard type for the default exports of most packages. */
-export type BuildCommand<T extends PackageArg> =
-	| ((...args: UnresolvedArgs<T>) => Promise<tg.Directory>)
-	| tg.Command<Args<T>, tg.Directory>;
+export type BuildCommand<T extends PackageArg> = (
+	...args: tg.Args<T>
+) => Promise<tg.Directory>;
 
 /** Evaluate the command with a single arg. */
 export const buildCommandOutput = async <T extends PackageArg>(
@@ -50,38 +50,40 @@ export type OptionalDependencyArg<T extends PackageArg> =
 	| boolean;
 
 /** Variadic argument type. */
-export type Args<T extends tg.Value = tg.Value> = Array<
-	tg.MaybeNestedArray<tg.ValueOrMaybeMutationMap<T>>
->;
-
-/** Variadic argument type. */
 export type UnresolvedArgs<T extends tg.Value = tg.Value> = Array<
 	tg.Unresolved<tg.MaybeNestedArray<tg.ValueOrMaybeMutationMap<T>>>
 >;
 
 /** Produce a single argument object from a variadic list of arguments with mutation handling. */
 export const apply = async <T extends PackageArg>(
-	...args: Args<T>
+	...args: tg.Args<T>
 ): Promise<ResolvedPackageArg<T>> => {
-	const flattened = std.flatten(args);
+	const resolved = await Promise.all(args.map(tg.resolve));
 	type Collect = MakeArrayKeys<T, "dependencies" | "env" | "sdk">;
-	const mutations = await createMutations<
-		T,
-		MakeArrayKeys<T, "dependencies" | "env" | "sdk">
-	>(flattened, {
+	const objects = resolved.map((obj) => {
+		return {
+			...obj,
+			dependencies: [obj.dependencies],
+			env: [obj.env],
+			sdk: [obj.sdk],
+		};
+	});
+	const arg = (await tg.Args.apply(objects, {
 		dependencies: "append",
 		env: "append",
 		sdk: "append",
-	} as tg.Args.Rules<T>);
-	const arg = await applyMutations<Collect>(mutations);
+	})) as Collect;
 
 	// Determine build and host;
 	const build = arg.build ?? (await std.triple.host());
 	const host = arg.host ?? (await std.triple.host());
 
 	// Create env and SDK.
-	const env = await std.env.arg(arg.env);
-	const sdk = await std.sdk.arg(std.triple.rotate({ build, host }), arg.sdk);
+	const env = await std.env.arg(...(arg.env ?? []));
+	const sdk = await std.sdk.arg(
+		std.triple.rotate({ build, host }),
+		...(arg.sdk ?? []),
+	);
 
 	// Process dependency args.
 	const dependencyArgs = arg.dependencies ?? [];
@@ -159,105 +161,6 @@ export const apply = async <T extends PackageArg>(
 		host,
 		sdk,
 	} as ResolvedPackageArg<T>;
-};
-
-export const createMutations = async <
-	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },
-	U extends { [key: string]: tg.Value } = T,
->(
-	args: Array<tg.MaybeMutationMap<T>>,
-	rules?: tg.Args.Rules<T>,
-): Promise<Array<tg.MutationMap<U>>> => {
-	// Process the objects to the intermediate type.
-	return await Promise.all(
-		args.map(async (arg) => {
-			const object: { [key: string]: tg.Mutation } = {};
-			// Go through the keys. If the key is in the mutate rules, apply the mutation.
-			// If it's not, apply a default mutation.
-			for (const [key, value] of Object.entries(arg)) {
-				if (value === undefined) {
-					continue;
-				}
-
-				// If the value is a mutation, set it directly.
-				if (value instanceof tg.Mutation) {
-					object[key] = value;
-					continue;
-				}
-
-				// Otherwise, apply the specified mutation.
-				const mutation = rules !== undefined ? rules[key] : undefined;
-				if (mutation === undefined) {
-					object[key] = await tg.Mutation.set<typeof value>(value);
-				} else if (typeof mutation === "string") {
-					switch (mutation) {
-						case "set":
-							object[key] = await tg.Mutation.set(value);
-							break;
-						case "unset":
-							object[key] = tg.Mutation.unset();
-							break;
-						case "set_if_unset":
-							object[key] = await tg.Mutation.setIfUnset(value);
-							break;
-						case "prepend":
-							object[key] = await tg.Mutation.prepend(value);
-							break;
-						case "append":
-							object[key] = await tg.Mutation.append(value);
-							break;
-						case "prefix":
-							tg.assert(
-								value instanceof tg.Template ||
-									tg.Artifact.is(value) ||
-									typeof value === "string",
-							);
-							object[key] = await tg.Mutation.prefix(value);
-							break;
-						case "suffix":
-							tg.assert(
-								value instanceof tg.Template ||
-									tg.Artifact.is(value) ||
-									typeof value === "string",
-							);
-							object[key] = await tg.Mutation.suffix(value);
-							break;
-						case "merge":
-							object[key] = await tg.Mutation.merge(value);
-							break;
-						default:
-							return tg.unreachable(`Unknown mutation kind: ${mutation}`);
-					}
-				} else {
-					object[key] = await mutation(value);
-				}
-			}
-			return object as tg.MutationMap<U>;
-		}),
-	);
-};
-
-export const applyMutations = async <
-	T extends { [key: string]: tg.Value } = { [key: string]: tg.Value },
->(
-	args: Array<tg.MaybeMutationMap<T>>,
-): Promise<T> => {
-	return await args.reduce(
-		async (map, mutations) => {
-			if (mutations === undefined) {
-				return Promise.resolve({}) as Promise<T>;
-			}
-			for (const [key, mutation] of Object.entries(mutations)) {
-				if (!(mutation instanceof tg.Mutation)) {
-					((await map) as Record<string, tg.Value>)[key] = mutation;
-				} else {
-					await mutation.apply(await map, key);
-				}
-			}
-			return map;
-		},
-		Promise.resolve({}) as Promise<T>,
-	);
 };
 
 export type MakeRequired<T> = {
@@ -440,16 +343,10 @@ export const mergeMutations = async (
 	} else if (a.inner.kind === "append" && b.inner.kind === "set_if_unset") {
 		return [a];
 	} else if (a.inner.kind === "append" && b.inner.kind === "append") {
-		return [
-			await tg.Mutation.append<tg.Value>(a.inner.values.concat(b.inner.values)),
-		];
+		return [await tg.Mutation.append(a.inner.values.concat(b.inner.values))];
 	} else if (a.inner.kind === "append" && b.inner.kind === "prepend") {
 		if (aggressive) {
-			return [
-				await tg.Mutation.append<tg.Value>(
-					b.inner.values.concat(a.inner.values),
-				),
-			];
+			return [await tg.Mutation.append(b.inner.values.concat(a.inner.values))];
 		} else {
 			return [a, b];
 		}
@@ -465,20 +362,12 @@ export const mergeMutations = async (
 		return [a];
 	} else if (a.inner.kind === "prepend" && b.inner.kind === "append") {
 		if (aggressive) {
-			return [
-				await tg.Mutation.prepend<tg.Value>(
-					a.inner.values.concat(b.inner.values),
-				),
-			];
+			return [await tg.Mutation.prepend(a.inner.values.concat(b.inner.values))];
 		} else {
 			return [a, b];
 		}
 	} else if (a.inner.kind === "prepend" && b.inner.kind === "prepend") {
-		return [
-			await tg.Mutation.prepend<tg.Value>(
-				b.inner.values.concat(a.inner.values),
-			),
-		];
+		return [await tg.Mutation.prepend(b.inner.values.concat(a.inner.values))];
 	} else if (a.inner.kind === "prepend" && b.inner.kind === "suffix") {
 		return [a, b];
 	} else if (a.inner.kind === "prepend" && b.inner.kind === "prefix") {

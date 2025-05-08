@@ -8,7 +8,7 @@ export const metadata = {
 	version: "4.4.38",
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const owner = "besser82";
 	const repo = name;
@@ -24,7 +24,7 @@ export const source = tg.command(() => {
 		tag,
 		version,
 	});
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -35,8 +35,15 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
-	const { autotools = {}, build, env, host, sdk, source: source_ } = arg ?? {};
+export const build = async (arg?: tg.Unresolved<Arg>) => {
+	const {
+		autotools = {},
+		build,
+		env,
+		host,
+		sdk,
+		source: source_,
+	} = arg ? await tg.resolve(arg) : {};
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -53,16 +60,16 @@ export const build = tg.command(async (arg?: Arg) => {
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
 import * as bootstrap from "../../bootstrap.tg.ts";
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ metadata, buildFn: build, libraries: ["xcrypt"] });
 	return true;
-});
+};

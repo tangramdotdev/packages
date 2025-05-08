@@ -24,7 +24,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:a6d2eb1ebeb99130dfe63ef5a340c3fdb11431cce3d7ca148524c125924cea68";
@@ -41,7 +41,7 @@ export const source = tg.command(() => {
 			version,
 		})
 		.then((source) => std.patch(source, patches));
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -61,7 +61,7 @@ export type Arg = {
 };
 
 /** Build `cmake`. */
-export const self = tg.command(async (...args: std.Args<Arg>) => {
+export const self = async (...args: tg.Args<Arg>) => {
 	const {
 		build,
 		dependencies: dependencyArgs = {},
@@ -150,7 +150,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	}
 
 	return result;
-});
+};
 
 export default self;
 
@@ -220,24 +220,15 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export const build = tg.command(async (...args: std.Args<BuildArg>) => {
-	const mutationArgs = await std.args.createMutations<
-		BuildArg,
-		std.args.MakeArrayKeys<BuildArg, "env" | "phases" | "sdk">
-	>(std.flatten(args), {
-		env: "append",
-		generator: "set",
-		phases: "append",
-		sdk: (arg) => {
-			if (arg === false) {
-				return tg.Mutation.append(false);
-			} else if (arg === true) {
-				return tg.Mutation.append({});
-			} else {
-				return tg.Mutation.append<boolean | std.sdk.Arg>(arg as std.sdk.Arg);
-			}
-		},
-		source: "set",
+export const build = async (...args: tg.Args<BuildArg>) => {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	const objects = resolved.map((obj) => {
+		return {
+			...obj,
+			env: [obj.env],
+			phases: [obj.phases],
+			sdk: [obj.sdk],
+		};
 	});
 	const {
 		buildDir = "build",
@@ -261,7 +252,12 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await std.args.applyMutations(mutationArgs);
+	} = (await tg.Args.apply(objects, {
+		env: "append",
+		phases: "append",
+		sdk: "append",
+		source: "set",
+	})) as std.args.MakeArrayKeys<BuildArg, "env" | "phases" | "sdk">;
 
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
@@ -367,11 +363,11 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	}
 
 	if (includeSdk) {
-		envs.push(std.sdk(sdkArgs));
+		envs.push(std.sdk(...(sdkArgs ?? [])));
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, userEnv);
+	const env = await std.env.arg(...envs, ...(userEnv ?? []));
 
 	// Define default phases.
 	const configureArgs = [
@@ -389,7 +385,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	};
 
 	const jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
-	const jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
+	const jobsArg = `-j${jobs}`;
 	const defaultBuild = {
 		command: `cmake`,
 		args: [`--build`, buildDir, jobsArg],
@@ -430,18 +426,13 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 			...phaseArgs,
 		)
 		.then(tg.Directory.expect);
-});
+};
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/cmake`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(self, spec);
 
 	await ninja.test();
 
 	return true;
-});
+};

@@ -5,7 +5,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
-	version: "0.24",
+	version: "0.24.1",
 	provides: {
 		binaries: [
 			"autopoint",
@@ -34,17 +34,17 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:e1620d518b26d7d3b16ac570e5018206e8b0d725fb65c02d048397718b5cf318";
+		"sha256:6164ec7aa61653ac9cdfb41d5c2344563b21f707da1562712e48715f1d2052a6";
 	return std.download.fromGnu({
 		name,
 		version,
 		checksum,
 		compression: "xz",
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -54,8 +54,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
-	const { build, env: env_, host: host_, sdk, source: source_ } = arg ?? {};
+export const build = async (arg?: tg.Unresolved<Arg>) => {
+	const {
+		build,
+		env: env_,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const os = std.triple.os(host);
 
@@ -95,6 +101,6 @@ export const build = tg.command(async (arg?: Arg) => {
 		sdk,
 		source: source_ ?? source(),
 	});
-});
+};
 
 export default build;

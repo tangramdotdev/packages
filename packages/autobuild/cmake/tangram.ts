@@ -8,7 +8,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: Arg) => {
 	const { env: envArg, ...rest } = arg ?? {};
 
 	const env_ =
@@ -16,7 +16,7 @@ export const build = tg.command(async (arg: Arg) => {
 	const arg_ = { ...rest, env: env_ };
 
 	return cmake.build(arg_);
-});
+};
 
 export default build;
 
@@ -25,7 +25,7 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = tg.command(async (arg: EnvArg) => {
+export const env = async (arg: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -33,4 +33,4 @@ export const env = tg.command(async (arg: EnvArg) => {
 		cmake.self({ ...std.triple.rotate({ build, host }) }),
 		cmake.ninja.build({ ...std.triple.rotate({ build, host }) }),
 	);
-});
+};

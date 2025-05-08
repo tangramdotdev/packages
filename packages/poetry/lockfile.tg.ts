@@ -1,5 +1,5 @@
 /** Givn a poetry.lock file, generate a valid requirements.txt with hashes. */
-export const requirements = tg.command(async (lockFile: tg.File) => {
+export const requirements = async (lockFile: tg.File) => {
 	// Parse and validate the TOML.
 	console.log(`lockfile: ${await lockFile.id()}`);
 	const lockFileToml = tg.encoding.toml.decode(
@@ -37,7 +37,7 @@ export const requirements = tg.command(async (lockFile: tg.File) => {
 	}
 
 	return tg.file(text);
-});
+};
 
 type LockFile = {
 	package: Array<{

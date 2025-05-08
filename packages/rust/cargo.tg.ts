@@ -57,23 +57,14 @@ export type Arg = {
 	verbose?: boolean;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
-	const mutationArgs = await std.args.createMutations<
-		Arg,
-		std.args.MakeArrayKeys<Arg, "env" | "sdk">
-	>(std.flatten(args), {
-		env: "append",
-		features: "append",
-		sdk: (arg) => {
-			if (arg === false) {
-				return tg.Mutation.append(false);
-			} else if (arg === true) {
-				return tg.Mutation.append({});
-			} else {
-				return tg.Mutation.append<boolean | std.sdk.Arg>(arg as std.sdk.Arg);
-			}
-		},
-		source: "set",
+export const build = async (...args: tg.Args<Arg>) => {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	const objects = resolved.map((obj) => {
+		return {
+			...obj,
+			env: [obj.env],
+			sdk: [obj.sdk],
+		};
 	});
 	const {
 		buildInTree = false,
@@ -93,7 +84,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		target: target_,
 		useCargoVendor = false,
 		verbose = false,
-	} = await std.args.applyMutations(mutationArgs);
+	} = (await tg.Args.apply(objects, {
+		env: "append",
+		features: "append",
+		sdk: "append",
+		source: "set",
+	})) as std.args.MakeArrayKeys<Arg, "env" | "sdk">;
 	tg.assert(source, "Must provide a source directory.");
 
 	const host = host_ ?? (await std.triple.host());
@@ -229,7 +225,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		envs.push(verbosityEnv);
 	}
 
-	const env = std.env.arg(...envs, env_);
+	const env = std.env.arg(...envs, ...(env_ ?? []));
 
 	const artifact = await $`${buildScript}`
 		.checksum(checksum)
@@ -262,7 +258,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return tg.directory({
 		["bin"]: binDir,
 	});
-});
+};
 
 export type VendoredSourcesArg = {
 	rustTarget?: string;
@@ -338,7 +334,10 @@ directory = "${vendoredSources}"`;
 };
 
 // Implementation of `cargo vendor` in tg typescript.
-export const vendorDependencies = tg.command(async (cargoLock: tg.File) => {
+export const vendorDependencies = async (
+	cargoLockArg: tg.Unresolved<tg.File>,
+) => {
+	const cargoLock = await tg.resolve(cargoLockArg);
 	type CargoLock = {
 		package: Array<{
 			name: string;
@@ -376,7 +375,7 @@ export const vendorDependencies = tg.command(async (cargoLock: tg.File) => {
 		});
 
 	return tg.directory(...downloads);
-});
+};
 
 // Given a crate directory downloaded from crates.io and its checksum, strip excess files and generate the .cargo-checksum.json.
 export const vendorPackage = async (
@@ -435,7 +434,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 
 import tests from "./tests" with { type: "directory" };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const tests = [];
 
 	tests.push(testUnproxiedWorkspace());
@@ -444,11 +443,11 @@ export const test = tg.command(async () => {
 	await Promise.all(tests);
 
 	return true;
-});
+};
 
 import pkgConfig from "pkg-config" with { path: "../pkg-config" };
 import openssl from "openssl" with { path: "../openssl" };
-export const testUnproxiedWorkspace = tg.command(async () => {
+export const testUnproxiedWorkspace = async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
@@ -481,10 +480,10 @@ export const testUnproxiedWorkspace = tg.command(async () => {
 		openSslText.trim() === "Hello, from a crate that links against libssl!",
 	);
 	return true;
-});
+};
 
 // Compare the results of cargo vendor and vendorDependencies.
-export const testVendorDependencies = tg.command(async () => {
+export const testVendorDependencies = async () => {
 	const sourceDirectory = await tests
 		.get("hello-openssl")
 		.then(tg.Directory.expect);
@@ -499,4 +498,4 @@ export const testVendorDependencies = tg.command(async () => {
 	console.log("tgVendored", await (await tgVendored).id());
 	console.log("cargoVendored", await cargoVendored);
 	return true;
-});
+};

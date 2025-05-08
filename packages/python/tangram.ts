@@ -30,7 +30,7 @@ export const versionString = () => {
 };
 
 /** Return the source code for the python specified by `metadata`. */
-export const source = tg.command(async (): Promise<tg.Directory> => {
+export const source = async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:40f868bcbdeb8149a3149580bb9bfd407b3321cd48f0be631af955ac92c0e041";
@@ -40,7 +40,7 @@ export const source = tg.command(async (): Promise<tg.Directory> => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	/** Optional autotools configuration. */
@@ -85,7 +85,7 @@ export type Arg = {
 };
 
 /** Build and create a python environment. */
-export const self = tg.command(async (...args: std.Args<Arg>) => {
+export const self = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -217,7 +217,7 @@ export const self = tg.command(async (...args: std.Args<Arg>) => {
 	}
 
 	return python;
-});
+};
 
 export default self;
 
@@ -299,10 +299,8 @@ export type BuildArg = {
 	python?: Arg;
 };
 
-export const build = tg.command(async (...args: std.Args<BuildArg>) => {
-	const mutationArgs = await std.args.createMutations<BuildArg>(
-		std.flatten(args),
-	);
+export const build = async (...args: tg.Args<BuildArg>) => {
+	const resolved = await Promise.all(args.map(tg.resolve));
 	const {
 		build: buildTriple_,
 		env,
@@ -310,7 +308,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 		python: pythonArg,
 		pyprojectToml: pyprojectToml_,
 		source,
-	} = await std.args.applyMutations(mutationArgs);
+	} = await tg.Args.apply(resolved);
 	const host = host_ ?? (await std.triple.host());
 	const buildTriple = buildTriple_ ?? host;
 
@@ -362,7 +360,7 @@ export const build = tg.command(async (...args: std.Args<BuildArg>) => {
 	});
 
 	return output;
-});
+};
 
 type PyProjectToml = {
 	project?: {
@@ -430,12 +428,7 @@ sys.exit(${attribute}())
 	return bin;
 };
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/python3`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const helloOutput =
 		await $`set -x && python -c 'print("Hello, world!")' > $OUTPUT`
 			.env(self())
@@ -478,4 +471,4 @@ except ImportError as e:
 	console.log("venv", await venv.id());
 
 	return true;
-});
+};

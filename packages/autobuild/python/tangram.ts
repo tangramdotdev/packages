@@ -10,7 +10,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: Arg) => {
 	const { env: envArg, source, ...rest } = arg ?? {};
 
 	const env_ =
@@ -26,11 +26,11 @@ export const build = tg.command(async (arg: Arg) => {
 	}
 
 	return python.build(arg_);
-});
+};
 
 export default build;
 
-export const plain = tg.command(async (arg: Arg) => {
+export const plain = async (arg: Arg) => {
 	const { build, env: envArg, host, source } = arg ?? {};
 
 	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
@@ -47,7 +47,7 @@ export const plain = tg.command(async (arg: Arg) => {
 			env_,
 		),
 	});
-});
+};
 
 // export const poetry = tg.target(async (arg: Arg) => {
 // 	const { build, env: envArg, host, source } = arg ?? {};
@@ -57,7 +57,7 @@ export const plain = tg.command(async (arg: Arg) => {
 // 	return poetry.build(arg_);
 // });
 
-export const pyproject = tg.command(async (arg: Arg) => {
+export const pyproject = async (arg: Arg) => {
 	const { env: envArg, source, ...rest } = arg ?? {};
 
 	const env_ =
@@ -66,16 +66,16 @@ export const pyproject = tg.command(async (arg: Arg) => {
 	const pyprojectToml = await source.get("pyproject.toml").then(tg.File.expect);
 	const arg_ = { ...rest, env: env_, pyprojectToml, source };
 	return python.build(arg_);
-});
+};
 
 type EnvArg = {
 	build?: string | undefined;
 	host?: string | undefined;
 };
 
-export const env = tg.command(async (arg: EnvArg) => {
+export const env = async (arg: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(python.self({ ...std.triple.rotate({ build, host }) }));
-});
+};

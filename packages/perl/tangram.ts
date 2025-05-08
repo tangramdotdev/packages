@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 
 	// Download raw source.
@@ -28,7 +28,7 @@ export const source = tg.command(async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => std.patch(source, patches));
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const defaultDependencies = {
 		libffi: true,
 		zlib: true,
@@ -168,14 +168,9 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return tg.directory(perlArtifact, {
 		["bin/perl"]: wrappedPerl,
 	});
-});
+};
 
 export default build;
-
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/perl`), args });
-});
 
 /** Wrap a shebang'd perl script to use this package's bach as the interpreter.. */
 export const wrapScript = async (script: tg.File) => {
@@ -190,7 +185,7 @@ export const wrapScript = async (script: tg.File) => {
 	return std.wrap(script, { interpreter, identity: "executable" });
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
@@ -201,4 +196,4 @@ export const test = tg.command(async () => {
 	tg.assert(output === "hello\n");
 
 	return true;
-});
+};

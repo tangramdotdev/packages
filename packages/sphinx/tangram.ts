@@ -22,7 +22,7 @@ export const metadata = {
 // Generated using pip-tools/pip-compile: https://pypi.org/project/pip-tools
 import requirements from "./requirements.txt" with { type: "file" };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0fcc28999fe8e4fcc49a4ab01e3e987f6fbb3af32995db74e6fc8f8d01dcaaca";
@@ -36,7 +36,7 @@ export const source = tg.command(() => {
 		checksum,
 		source: "tag",
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -45,7 +45,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		build,
 		python: pythonArg = {},
@@ -64,11 +64,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		pythonArg,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

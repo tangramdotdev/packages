@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:fea7b92922117ed04b9c84bb9998026264346768804f66baa40743c5528bed6b";
@@ -26,7 +26,7 @@ export const source = tg.command(async () => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -37,7 +37,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		build,
 		cargo: cargoArgs = {},
@@ -56,19 +56,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		cargoArgs,
 	);
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({
-		executable: tg.symlink(tg`${dir}/bin/hyperfine`),
-		args,
-	});
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

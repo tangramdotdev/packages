@@ -24,7 +24,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
@@ -34,7 +34,7 @@ export const source = tg.command(() => {
 		checksum,
 		compression: "xz",
 	});
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -49,7 +49,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const arg = await std.args.apply<Arg>(...args);
 	const {
 		autotools = {},
@@ -177,41 +177,42 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		["bin"]: binDirectory,
 	});
 	return output;
-});
+};
 
-export const patchAutom4teCfg = tg.command(
-	async (autoconf: tg.Directory, arg?: Arg): Promise<tg.Directory> => {
-		const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
-		tg.assert(autom4teCfg instanceof tg.File);
+export const patchAutom4teCfg = async (
+	autoconf: tg.Directory,
+	arg?: Arg,
+): Promise<tg.Directory> => {
+	const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
+	tg.assert(autom4teCfg instanceof tg.File);
 
-		const lines = (await autom4teCfg.text()).split("\n");
+	const lines = (await autom4teCfg.text()).split("\n");
 
-		let contents = tg``;
-		for (const line of lines) {
-			let newLine: Promise<tg.Template> | string = line;
-			if (line.includes("args: --prepend-include")) {
-				newLine = tg`args: -B '${autoconf}/share/autoconf'`;
-			}
-			contents = tg`${contents}${newLine}\n`;
+	let contents = tg``;
+	for (const line of lines) {
+		let newLine: Promise<tg.Template> | string = line;
+		if (line.includes("args: --prepend-include")) {
+			newLine = tg`args: -B '${autoconf}/share/autoconf'`;
 		}
+		contents = tg`${contents}${newLine}\n`;
+	}
 
-		const patchedAutom4teCfg = await $`
+	const patchedAutom4teCfg = await $`
 			cat <<'EOF' | tee $OUTPUT
 			${contents}
 		`
-			.env(arg?.env)
-			.env(std.sdk(arg?.sdk))
-			.then(tg.File.expect);
+		.env(arg?.env)
+		.env(std.sdk(arg?.sdk))
+		.then(tg.File.expect);
 
-		return tg.directory(autoconf, {
-			["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
-		});
-	},
-);
+	return tg.directory(autoconf, {
+		["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
+	});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

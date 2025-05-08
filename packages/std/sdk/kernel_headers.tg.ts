@@ -9,7 +9,7 @@ export const metadata = {
 	version: "6.12.25",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:c8af780f6f613ca24622116e4c512a764335ab66e75c6643003c16e49a8e3b90";
@@ -20,26 +20,26 @@ export const source = tg.command(async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	phases?: tg.MaybeNestedArray<std.phases.Arg>;
+	phases?: std.phases.Arg;
 	sdk?: std.sdk.Arg | boolean;
 	source?: tg.Directory;
 };
 
-export const kernelHeaders = tg.command(async (arg?: Arg) => {
+export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
-		phases: phasesArg = [],
+		phases: phasesArg = {},
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const buildTriple = build_ ?? host;
 
@@ -103,11 +103,11 @@ export const kernelHeaders = tg.command(async (arg?: Arg) => {
 	);
 
 	return result;
-});
+};
 
 export default kernelHeaders;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const detectedHost = await std.triple.host();
 	const host = await bootstrap.toolchainTriple(detectedHost);
 	if (std.triple.os(host) !== "linux") {
@@ -124,7 +124,7 @@ export const test = tg.command(async () => {
 	await testKernelHeaders(host, target);
 
 	return true;
-});
+};
 
 export const testKernelHeaders = async (host: string, target?: string) => {
 	const target_ = target ?? host;

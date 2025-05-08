@@ -1,7 +1,6 @@
 /** This module provides environments ready to produce Tangram-wrapped executables from C and C++ code. */
 
 import * as bootstrap from "./bootstrap.tg.ts";
-import { buildBootstrap } from "./command.tg.ts";
 import binutils from "./sdk/gnu/binutils.tg.ts";
 import * as gnu from "./sdk/gnu.tg.ts";
 import * as libc from "./sdk/libc.tg.ts";
@@ -20,10 +19,12 @@ export * as llvm from "./sdk/llvm.tg.ts";
 export * as proxy from "./sdk/proxy.tg.ts";
 
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
-export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
+export async function sdk(...args: tg.Args<sdk.Arg>) {
 	let {
 		host,
-		proxy: proxyArg,
+		proxyCompiler,
+		proxyLinker,
+		proxyStrip,
 		targets,
 		toolchain: toolchain_,
 		linker,
@@ -32,7 +33,7 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 	const hostOs = std.triple.os(host);
 
 	// Create an array to collect all constituent envs.
-	const envs: tg.Unresolved<std.Args<std.env.Arg>> = [];
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [];
 
 	// Determine host toolchain.
 	let toolchain: std.env.Arg;
@@ -99,11 +100,17 @@ export async function sdk(...args: std.args.UnresolvedArgs<sdk.Arg>) {
 	}
 
 	// Proxy the host toolchain.
-	proxyArg = { ...proxyArg, toolchain: toolchain, host };
+	let proxyArg: proxy.Arg = {
+		compiler: proxyCompiler,
+		linker: proxyLinker,
+		strip: proxyStrip,
+		toolchain: toolchain,
+		host,
+	};
 	if (linkerExe) {
 		proxyArg = { ...proxyArg, linkerExe };
 	}
-	const hostProxy = await proxy.env(proxyArg as proxy.Arg);
+	const hostProxy = await proxy.env(proxyArg);
 	envs.push(hostProxy);
 	if (linkerDir) {
 		envs.push(linkerDir);
@@ -155,8 +162,12 @@ export namespace sdk {
 		host?: string;
 		/** An alternate linker to use. */
 		linker?: LinkerKind | undefined;
-		/** Which components should get proxied. Use `true` or `false` as a shorthand for enabling or disabling all proxies. If not provided, the default behavior is to proxy the linker but not the compiler. */
-		proxy?: Partial<proxy.Arg> | boolean;
+		/** Use the compiler proxy? Default: false. */
+		proxyCompiler?: boolean;
+		/** Use the linker proxy? Default: true. */
+		proxyLinker?: boolean;
+		/** Use the strip proxy? Default: true. */
+		proxyStrip?: boolean;
 		/** The machine this SDK produces executables for. */
 		target?: string;
 		/** A list of machines this SDK can produce executables for. */
@@ -165,9 +176,9 @@ export namespace sdk {
 		toolchain?: sdk.ToolchainKind;
 	};
 
-	export const arg = async (...args: std.args.UnresolvedArgs<Arg>) => {
+	export const arg = async (...args: tg.Args<Arg>) => {
 		const objectArgs = await Promise.all(
-			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
+			(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else {
@@ -175,32 +186,18 @@ export namespace sdk {
 				}
 			}),
 		);
-		const mutationArgs = await std.args.createMutations<sdk.ArgObject>(
-			objectArgs,
-			{
-				proxy: (arg) => {
-					if (typeof arg === "boolean") {
-						const proxyArg = arg
-							? { compiler: true, linker: true }
-							: { compiler: false, linker: false };
-						return tg.Mutation.set(proxyArg);
-					} else {
-						return tg.Mutation.set(arg as proxy.Arg);
-					}
-				},
-				targets: "append",
-			},
-		);
 		let {
 			host: host_,
 			linker,
-			proxy: proxyArg_,
+			proxyCompiler = false,
+			proxyLinker = true,
+			proxyStrip = true,
 			target,
 			targets: targets_,
 			toolchain: toolchain_,
-		} = await std.args.applyMutations(mutationArgs);
-
-		tg.assert(typeof proxyArg_ === "object" || proxyArg_ === undefined);
+		} = (await tg.Args.apply(objectArgs, {
+			targets: "append",
+		})) as ArgObject;
 
 		// Obtain host and targets.
 		let host = host_ ?? (await std.triple.host());
@@ -215,13 +212,6 @@ export namespace sdk {
 			targets.push(target);
 		}
 
-		// Set the default proxy arguments.
-		const proxyArg = proxyArg_ ?? {
-			compiler: false,
-			linker: true,
-			strip: true,
-		};
-
 		// Set the default toolchain if not provided.
 		if (toolchain_ === undefined) {
 			toolchain_ = hostOs === "darwin" ? "llvm" : "gnu";
@@ -235,7 +225,9 @@ export namespace sdk {
 
 		return {
 			host,
-			proxy: proxyArg,
+			proxyCompiler,
+			proxyLinker,
+			proxyStrip,
 			targets,
 			toolchain: toolchain_,
 			linker,
@@ -618,14 +610,11 @@ export namespace sdk {
 		}
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
-		const output = tg.File.expect(
-			await buildBootstrap(
-				await tg.command(tg`${cmd} -dumpmachine > $OUTPUT`, {
-					env: std.env.arg(env),
-					host: std.triple.archAndOs(detectedHost),
-				}),
-			),
-		);
+		const output = await std.build`${cmd} -dumpmachine > $OUTPUT`
+			.bootstrap(true)
+			.env(std.env.arg(env))
+			.host(std.triple.archAndOs(detectedHost))
+			.then(tg.File.expect);
 		const host = (await output.text()).trim();
 		std.triple.assert(host);
 		return host;
@@ -715,21 +704,17 @@ export namespace sdk {
 		if (lang === "fortran") {
 			langStr = "f95";
 		}
-		const compiledProgram = tg.File.expect(
-			await buildBootstrap(
-				await tg.command(
-					tg`echo "testing ${lang}"
+		const compiledProgram = await std.build`echo "testing ${lang}"
 				set -x
-				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`,
-					{
-						env: std.env.arg(arg.sdkEnv, {
-							TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-						}),
-						host: std.triple.archAndOs(expectedHost),
-					},
-				),
-			),
-		);
+				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`
+			.bootstrap(true)
+			.env(
+				std.env.arg(arg.sdkEnv, {
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				}),
+			)
+			.host(std.triple.archAndOs(expectedHost))
+			.then(tg.File.expect);
 
 		// Assert the resulting program was compiled for the expected target.
 		const expectedArch = std.triple.arch(expectedTarget);
@@ -767,14 +752,11 @@ export namespace sdk {
 
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
-			const testOutput = tg.File.expect(
-				await buildBootstrap(
-					await tg.command(tg`${compiledProgram} > $OUTPUT`, {
-						host: std.triple.archAndOs(expectedHost),
-						env: { TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" },
-					}),
-				),
-			);
+			const testOutput = await std.build`${compiledProgram} > $OUTPUT`
+				.bootstrap(true)
+				.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
+				.host(std.triple.archAndOs(expectedHost))
+				.then(tg.File.expect);
 			const outputText = (await testOutput.text()).trim();
 			tg.assert(outputText === expectedOutput);
 		}
@@ -828,16 +810,7 @@ export namespace sdk {
 					),
 				);
 
-				let proxiedLinker = false;
-				if (arg?.proxy !== undefined) {
-					if (typeof arg.proxy === "boolean") {
-						proxiedLinker = arg.proxy;
-					} else {
-						proxiedLinker = arg.proxy.linker ?? false;
-					}
-				} else {
-					proxiedLinker = true;
-				}
+				let proxiedLinker = arg?.proxyLinker ?? true;
 
 				// The mold and LLD linkers leave comments in the binary. Check for these if applicable.
 				let linkerFlavor = undefined;
@@ -1033,16 +1006,11 @@ export const assertComment = async (
 	toolchain: std.env.Arg,
 	textToMatch: string,
 ) => {
-	const elfComment = tg.File.expect(
-		await buildBootstrap(
-			await tg.command(
-				tg`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`,
-				{
-					env: await std.env.arg(toolchain, bootstrap.utils()),
-				},
-			),
-		),
-	);
+	const elfComment =
+		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`
+			.bootstrap(true)
+			.env(std.env.arg(toolchain, bootstrap.utils()))
+			.then(tg.File.expect);
 	const text = await elfComment.text();
 	tg.assert(text.includes(textToMatch));
 };
@@ -1091,14 +1059,14 @@ type ProxyTestParameters = {
 	testProgram: tg.Unresolved<tg.File>;
 };
 
-export const testDefault = tg.command(async () => {
+export const testDefault = async () => {
 	const env = await sdk();
 	const detectedHost = await std.triple.host();
 	await sdk.assertValid(env, { host: detectedHost });
 	return env;
-});
+};
 
-export const testMold = tg.command(async () => {
+export const testMold = async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1111,9 +1079,9 @@ export const testMold = tg.command(async () => {
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(moldSdk, sdkArg);
 	return moldSdk;
-});
+};
 
-export const testGccLld = tg.command(async () => {
+export const testGccLld = async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1126,9 +1094,9 @@ export const testGccLld = tg.command(async () => {
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(lldSdk, sdkArg);
 	return lldSdk;
-});
+};
 
-export const testMusl = tg.command(async () => {
+export const testMusl = async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
@@ -1138,9 +1106,9 @@ export const testMusl = tg.command(async () => {
 	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
-});
+};
 
-export const testCrossGcc = tg.command(async () => {
+export const testCrossGcc = async () => {
 	const detectedHost = await std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
@@ -1155,15 +1123,15 @@ export const testCrossGcc = tg.command(async () => {
 	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
-});
+};
 
-export const testLLVM = tg.command(async () => {
+export const testLLVM = async () => {
 	const env = await sdk({ toolchain: "llvm" });
 	await sdk.assertValid(env, { toolchain: "llvm" });
 	return env;
-});
+};
 
-export const testLLVMMold = tg.command(async () => {
+export const testLLVMMold = async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
@@ -1181,9 +1149,9 @@ export const testLLVMMold = tg.command(async () => {
 	await sdk.assertValid(moldSdk, sdkArg);
 
 	return moldSdk;
-});
+};
 
-export const testLLVMBfd = tg.command(async () => {
+export const testLLVMBfd = async () => {
 	const detectedHost = await std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`bfd is only available on Linux`);
@@ -1200,9 +1168,9 @@ export const testLLVMBfd = tg.command(async () => {
 	// Ensure that the SDK is valid.
 	await sdk.assertValid(bfdSdk, sdkArg);
 	return bfdSdk;
-});
+};
 
-export const testExplicitGlibcVersion = tg.command(async () => {
+export const testExplicitGlibcVersion = async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`glibc is only available on Linux`);
@@ -1215,9 +1183,9 @@ export const testExplicitGlibcVersion = tg.command(async () => {
 	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
-});
+};
 
-export const testLLVMMusl = tg.command(async () => {
+export const testLLVMMusl = async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
@@ -1227,9 +1195,9 @@ export const testLLVMMusl = tg.command(async () => {
 	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
-});
+};
 
-export const testDarwinToLinux = tg.command(async () => {
+export const testDarwinToLinux = async () => {
 	const targets = [
 		"aarch64-unknown-linux-gnu",
 		"aarch64-unknown-linux-musl",
@@ -1240,9 +1208,9 @@ export const testDarwinToLinux = tg.command(async () => {
 		targets.map(async (target) => await testDarwinToLinuxSingle(target)),
 	);
 	return true;
-});
+};
 
-export const testDarwinToLinuxSingle = tg.command(async (target: string) => {
+export const testDarwinToLinuxSingle = async (target: string) => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		throw new Error(`This test is only valid on Darwin`);
@@ -1252,9 +1220,9 @@ export const testDarwinToLinuxSingle = tg.command(async (target: string) => {
 	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;
-});
+};
 
-export const testLinuxToDarwin = tg.command(async () => {
+export const testLinuxToDarwin = async () => {
 	const host = await std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`This test is only valid on Linux`);
@@ -1265,7 +1233,7 @@ export const testLinuxToDarwin = tg.command(async () => {
 	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return true;
-});
+};
 
 export const testAllNativeProxied = async () => {
 	await Promise.all(
@@ -1294,7 +1262,7 @@ export const allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 	const detectedOs = std.triple.os(detectedHost);
 
 	if (detectedOs === "darwin") {
-		return [{}, { proxy: false }];
+		return [{}, { proxyLinker: false }];
 	}
 
 	const hostGnu = sdk.canonicalTriple(detectedHost);
@@ -1306,33 +1274,33 @@ export const allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
 
 	return [
 		{},
-		{ proxy: false },
+		{ proxyLinker: false },
 		{ host: hostMusl },
-		{ host: hostMusl, proxy: false },
+		{ host: hostMusl, proxyLinker: false },
 		{ host: hostGnu, target: crossGnu },
-		{ host: hostGnu, target: crossGnu, proxy: false },
+		{ host: hostGnu, target: crossGnu, proxyLinker: false },
 		{ host: hostGnu, target: crossMusl },
-		{ host: hostGnu, target: crossMusl, proxy: false },
+		{ host: hostGnu, target: crossMusl, proxyLinker: false },
 		{ host: hostMusl, target: crossMusl },
-		{ host: hostMusl, target: crossMusl, proxy: false },
+		{ host: hostMusl, target: crossMusl, proxyLinker: false },
 		{ host: hostMusl, target: crossGnu },
-		{ host: hostMusl, target: crossGnu, proxy: false },
+		{ host: hostMusl, target: crossGnu, proxyLinker: false },
 		{ host: hostGnu, target: crossGnu, toolchain: "llvm" },
-		{ host: hostGnu, target: crossGnu, toolchain: "llvm", proxy: false },
+		{ host: hostGnu, target: crossGnu, toolchain: "llvm", proxyLinker: false },
 		{ linker: "mold" },
-		{ linker: "mold", proxy: false },
+		{ linker: "mold", proxyLinker: false },
 		{ toolchain: "llvm" },
-		{ toolchain: "llvm", proxy: false },
+		{ toolchain: "llvm", proxyLinker: false },
 		{ toolchain: "llvm", linker: "mold" },
-		{ toolchain: "llvm", linker: "mold", proxy: false },
+		{ toolchain: "llvm", linker: "mold", proxyLinker: false },
 		{ toolchain: "llvm", linker: "bfd" },
-		{ toolchain: "llvm", linker: "bfd", proxy: false },
+		{ toolchain: "llvm", linker: "bfd", proxyLinker: false },
 		{ toolchain: "gnu", linker: "lld" },
-		{ toolchain: "gnu", linker: "lld", proxy: false },
+		{ toolchain: "gnu", linker: "lld", proxyLinker: false },
 		{ host: std.triple.create(detectedHost, { environmentVersion: "2.37" }) },
 		{
 			host: std.triple.create(detectedHost, { environmentVersion: "2.37" }),
-			proxy: false,
+			proxyLinker: false,
 		},
 	];
 };

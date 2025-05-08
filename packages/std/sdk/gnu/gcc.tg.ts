@@ -4,7 +4,6 @@ import { interpreterName } from "../libc.tg.ts";
 import { defaultGlibcVersion } from "../libc/glibc.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
 import * as std from "../../tangram.ts";
-import { buildBootstrap } from "../../command.tg.ts";
 
 export const metadata = {
 	homepage: "https://gcc.gnu.org/",
@@ -15,7 +14,7 @@ export const metadata = {
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
-export const source = tg.command((bundledSources?: boolean) => {
+export const source = (bundledSources?: boolean) => {
 	const { name, version } = metadata;
 
 	// Download and unpack the GCC source.
@@ -38,7 +37,7 @@ export const source = tg.command((bundledSources?: boolean) => {
 		});
 	}
 	return sourceDir;
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -65,7 +64,7 @@ export type Variant =
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -79,7 +78,7 @@ export const build = tg.command(async (arg: Arg) => {
 		target: target_,
 		targetBinutils,
 		variant,
-	} = arg ?? {};
+	} = await tg.resolve(arg);
 
 	// Finalize triples.
 	const host = host_ ?? (await std.triple.host());
@@ -232,7 +231,7 @@ export const build = tg.command(async (arg: Arg) => {
 	}
 
 	return result;
-});
+};
 
 export default build;
 
@@ -294,11 +293,12 @@ async function getGccVersion(
 	const targetTriple = target ?? host;
 	const targetPrefix = host === targetTriple ? `` : `${targetTriple}-`;
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
-	const script = tg`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`;
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
-	const envObject = std.env.arg(bootstrap.utils(), env);
-	const result = tg.File.expect(
-		await buildBootstrap(await tg.command(script, { env: envObject })),
-	);
+	const envObject = std.env.arg(bootstrap.utils(), bootstrap.shell(), env);
+	const result =
+		await std.build`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`
+			.bootstrap(true)
+			.env(envObject)
+			.then(tg.File.expect);
 	return (await result.text()).trim();
 }

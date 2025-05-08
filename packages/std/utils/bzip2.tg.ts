@@ -10,7 +10,7 @@ export const metadata = {
 	version: "1.0.8",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -21,7 +21,7 @@ export const source = tg.command(async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, dylibDetectOsPatch));
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -31,14 +31,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -50,7 +50,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		args: [`PREFIX="$OUTPUT" SHELL="$SHELL"`],
 	};
 	const phases = {
-		configure: tg.Mutation.unset(),
+		configure: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
 		build: buildPhase,
 		install,
 	};
@@ -66,12 +66,16 @@ export const build = tg.command(async (arg?: Arg) => {
 		source: sourceDir,
 		wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],
 	});
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
-	return build({ host, sdk: false, env: sdk });
-});
+	return build({
+		host,
+		sdk: false,
+		env: std.env.arg(sdk, { SHELL: "/bin/sh" }),
+	});
+};

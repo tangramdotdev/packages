@@ -21,23 +21,23 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9599b22ecd1d5787ad7d3b7bf0c59f312b3396d1e281175dd1f8a4014da621ff";
 	let source = await std.download.fromGnu({ name, version, checksum });
 	source = await bootstrap.patch(source, guardedGettextPatch);
 	return source;
-});
+};
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
-		env: env_ = [],
+		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -55,7 +55,7 @@ export const build = tg.command(async (arg?: Arg) => {
 	};
 	const phases = { configure };
 
-	const env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
+	const env: Array<tg.Unresolved<std.env.Arg>> = [];
 	env.push(prerequisites(build));
 	env.push(bootstrap.shell(host));
 	env.push({
@@ -67,7 +67,7 @@ export const build = tg.command(async (arg?: Arg) => {
 
 	let output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(env),
+		env: std.env.arg(...env, env_),
 		phases,
 		sdk,
 		source: source_ ?? source(),
@@ -78,7 +78,7 @@ export const build = tg.command(async (arg?: Arg) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
@@ -96,7 +96,7 @@ const providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 	return false;
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	// FIXME - build assert args properly!
@@ -108,4 +108,4 @@ export const test = tg.command(async () => {
 	// })
 	// return true;
 	return build({ host, sdk: false, env: sdk });
-});
+};

@@ -25,7 +25,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 
 	const checksum =
@@ -37,7 +37,7 @@ export const source = tg.command(async () => {
 		compression: "zst",
 		checksum,
 	});
-});
+};
 
 type Arg = {
 	autotools?: std.autotools.Arg;
@@ -53,7 +53,7 @@ type Arg = {
 	target?: string;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -125,18 +125,18 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		{
 			...rest,
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env: std.env.arg(...env),
 			phases,
 			sdk,
 			source: source_ ?? source(),
 		},
 		autotools,
 	);
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

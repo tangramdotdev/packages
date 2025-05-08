@@ -1,7 +1,7 @@
 import * as std from "std" with { path: "../std" };
 
 /** Source code for the version of Ruby to bootstrap. Use 2.5.0, the earliest supported. */
-export const source = tg.command(async () => {
+export const source = async () => {
 	return await std.download
 		.extractArchive({
 			url: "https://cache.ruby-lang.org/pub/ruby/2.5/ruby-2.5.0.tar.gz",
@@ -10,10 +10,10 @@ export const source = tg.command(async () => {
 		})
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 /** Returns an older version of Ruby that is only used to bootstrap it. */
-export const ruby = tg.command(async (host: string) => {
+export const ruby = async (host: string) => {
 	const build = await std.autotools.build({
 		env: {
 			CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
@@ -45,4 +45,4 @@ export const ruby = tg.command(async (host: string) => {
 			},
 		}),
 	});
-});
+};

@@ -7,7 +7,7 @@ export const metadata = {
 	version: "1.2.5",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -18,7 +18,7 @@ export const source = tg.command(async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, muslPermissionPatch));
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -29,7 +29,8 @@ export type Arg = {
 	libcc?: tg.File;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
 	const {
 		build: build_,
 		env: env_,
@@ -37,7 +38,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		libcc = false,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = resolved ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 
@@ -58,7 +59,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		: [];
 
 	if (libcc) {
-		additionalFlags.push(await tg`LIBCC="${arg?.libcc}"`);
+		additionalFlags.push(await tg`LIBCC="${resolved?.libcc}"`);
 	}
 
 	const configure = {
@@ -82,8 +83,8 @@ export const build = tg.command(async (arg?: Arg) => {
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 	env.push({
-		CPATH: tg.Mutation.unset(),
-		LIBRARY_PATH: tg.Mutation.unset(),
+		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
+		LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
 		TANGRAM_LINKER_PASSTHROUGH: true,
 	});
 
@@ -91,13 +92,13 @@ export const build = tg.command(async (arg?: Arg) => {
 		...(await std.triple.rotate({ build, host })),
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
-		env: std.env.arg(env),
+		env: std.env.arg(...env),
 		phases,
 		prefixPath: "/", // It's going in a sysroot.
 		sdk,
 		source: source_ ?? source(),
 	});
-});
+};
 
 export default build;
 

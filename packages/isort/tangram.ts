@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0f13e665483ca8cfa3d3e1809738ea518f8a66fe5489430273f08368893193e1";
@@ -27,7 +27,7 @@ export const source = tg.command(() => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const { build, host, source: source_ } = await std.args.apply<Arg>(...args);
 	const sourceArtifact = source_ ?? (await source());
 	const lockfile = tg.File.expect(await sourceArtifact.get("poetry.lock"));
@@ -45,16 +45,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		lockfile: lockfile,
 		build,
 	});
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/isort`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

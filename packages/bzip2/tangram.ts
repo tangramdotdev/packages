@@ -18,7 +18,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
@@ -29,7 +29,7 @@ export const source = tg.command(() => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 	return std.patch(source, dylibDetectOsPatch);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -40,7 +40,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -58,7 +58,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		args: [`PREFIX="$OUTPUT" SHELL="$SHELL"`],
 	};
 	const phases = {
-		configure: tg.Mutation.unset(),
+		configure: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
 		build: buildPhase,
 		install,
 	};
@@ -86,16 +86,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	}
 
 	return output;
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/bzip2`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: metadata.provides.binaries.map((name) => {
@@ -106,4 +101,4 @@ export const test = tg.command(async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

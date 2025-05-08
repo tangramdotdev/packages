@@ -27,7 +27,7 @@ export const metadata = {
 	version: "19.1.6",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:e3f79317adaa9196d2cfffe1c869d7c100b7540832bc44fe0d3f44a12861fa34";
@@ -40,7 +40,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type LLVMArg = {
 	build?: string;
@@ -52,7 +52,7 @@ export type LLVMArg = {
 };
 
 /** Produce a complete clang+lld distribution using a 2-stage bootstrapping build. */
-export const toolchain = tg.command(async (arg?: LLVMArg) => {
+export const toolchain = async (arg?: LLVMArg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -160,7 +160,7 @@ export const toolchain = tg.command(async (arg?: LLVMArg) => {
 
 	let llvmArtifact = await cmake.build({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(env),
+		env: std.env.arg(...env),
 		phases,
 		sdk,
 		source: tg`${sourceDir}/llvm`,
@@ -213,15 +213,15 @@ export const toolchain = tg.command(async (arg?: LLVMArg) => {
 	}
 
 	return llvmArtifact;
-});
+};
 
 /** Grab the LLD linker from the toolchain. */
-export const lld = tg.command(async (arg?: LLVMArg) => {
+export const lld = async (arg?: LLVMArg) => {
 	const toolchainDir = await toolchain(arg);
 	tg.assert(toolchainDir instanceof tg.Directory);
 	// Use a template instead of the file directly so the linker proxy invokes the linker by its full name.
 	return tg`${toolchainDir}/bin/ld.lld`;
-});
+};
 
 type LinuxToDarwinArg = {
 	host: string;
@@ -230,7 +230,7 @@ type LinuxToDarwinArg = {
 
 /** Produce a linux to darwin toolchain. */
 import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
-export const linuxToDarwin = tg.command(async (arg?: LinuxToDarwinArg) => {
+export const linuxToDarwin = async (arg?: LinuxToDarwinArg) => {
 	const { host, target: target_ } = arg ?? {
 		host: await std.triple.host(),
 		target: "aarch64-apple-darwin",
@@ -261,9 +261,9 @@ export const linuxToDarwin = tg.command(async (arg?: LinuxToDarwinArg) => {
 
 	// Return the combined environment.
 	return await std.env.arg(clangToolchain, cctoolsForTarget);
-});
+};
 
-export const testLinuxToDarwin = tg.command(async (arg?: LinuxToDarwinArg) => {
+export const testLinuxToDarwin = async (arg?: LinuxToDarwinArg) => {
 	const { target } = arg ?? {
 		host: await std.triple.host(),
 		target: "aarch64-apple-darwin",
@@ -277,7 +277,7 @@ export const testLinuxToDarwin = tg.command(async (arg?: LinuxToDarwinArg) => {
 		.env(combined)
 		.then(tg.File.expect);
 	return f;
-});
+};
 
 export const llvmMajorVersion = () => {
 	return metadata.version.split(".")[0];

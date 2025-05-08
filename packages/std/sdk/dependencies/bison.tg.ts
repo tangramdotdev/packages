@@ -8,7 +8,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2";
@@ -18,7 +18,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -28,8 +28,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
-	const { build, env, host, sdk, source: source_ } = arg ?? {};
+export const build = async (arg?: tg.Unresolved<Arg>) => {
+	const {
+		build,
+		env,
+		host,
+		sdk,
+		source: source_,
+	} = arg ? await tg.resolve(arg) : {};
 
 	const configure = {
 		args: [
@@ -63,15 +69,15 @@ export const build = tg.command(async (arg?: Arg) => {
 	}
 
 	return output;
-});
+};
 
 export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries: ["bison"], metadata });
 	return true;
-});
+};

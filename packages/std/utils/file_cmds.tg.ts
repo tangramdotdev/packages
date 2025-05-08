@@ -6,7 +6,7 @@ export const metadata = {
 	version: "448.0.3",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:d5cf241a751a9d36f43a4cd759d06835f4346c3150c62147a05c7bdec67b057c";
@@ -20,7 +20,7 @@ export const source = tg.command(async () => {
 		repo,
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -31,8 +31,9 @@ export type Arg = {
 };
 
 /** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
-export const macOsXattrCmds = tg.command(async (arg?: Arg) => {
-	const build = arg?.build ?? (await std.triple.host());
+export const macOsXattrCmds = async (arg?: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
+	const build = resolved?.build ?? (await std.triple.host());
 	const os = std.triple.os(build);
 
 	// Assert that the system is macOS.
@@ -48,7 +49,7 @@ export const macOsXattrCmds = tg.command(async (arg?: Arg) => {
 
 	// install
 	result = await compileUtil({
-		...arg,
+		...resolved,
 		destDir: result,
 		fileName: "xinstall.c",
 		utilSource: tg.Directory.expect(await sourceDir.get("install")),
@@ -57,7 +58,7 @@ export const macOsXattrCmds = tg.command(async (arg?: Arg) => {
 
 	// xattr
 	result = await compileUtil({
-		...arg,
+		...resolved,
 		destDir: result,
 		fileName: "xattr.c",
 		utilSource: tg.Directory.expect(await sourceDir.get("xattr")),
@@ -65,7 +66,7 @@ export const macOsXattrCmds = tg.command(async (arg?: Arg) => {
 	});
 
 	return result;
-});
+};
 
 export default macOsXattrCmds;
 

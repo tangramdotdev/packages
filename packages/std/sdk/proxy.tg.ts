@@ -29,7 +29,7 @@ export type Arg = {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export const env = tg.command(async (arg?: Arg): Promise<std.env.Arg> => {
+export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -239,7 +239,7 @@ export const env = tg.command(async (arg?: Arg): Promise<std.env.Arg> => {
 	}
 
 	return std.env.arg(...dirs);
-});
+};
 
 export default env;
 
@@ -314,7 +314,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		>(arg.linker),
 		TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.setIfUnset(hostInjectionLibrary),
 		TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs
-			? tg.Mutation.setIfUnset(arg.interpreterArgs)
+			? tg.Mutation.setIfUnset(tg.Template.join(" ", ...arg.interpreterArgs))
 			: undefined,
 		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
@@ -377,7 +377,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	});
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const tests = [
 		testBasic(),
 		testTransitiveAll(),
@@ -388,10 +388,10 @@ export const test = tg.command(async () => {
 		testStrip(),
 	];
 	return await Promise.all(tests);
-});
+};
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
-export const testBasic = tg.command(async () => {
+export const testBasic = async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const helloSource = await tg.file(`
 #include <stdio.h>
@@ -400,25 +400,23 @@ int main() {
 	return 0;
 }
 	`);
-	const output = await tg
-		.command(
-			tg`
+	const output = await std.build`
 				set -x
 				/usr/bin/env
-				cc -v -xc ${helloSource} -o $OUTPUT`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-					TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
-				}),
-			},
+				cc -v -xc ${helloSource} -o $OUTPUT`
+		.includeUtils(false)
+		.pipefail(false)
+		.env(
+			std.env.arg(bootstrapSDK, {
+				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from a TGLD-wrapped binary!");
 	return output;
-});
+};
 
 type MakeSharedArg = {
 	flags?: Array<tg.Template.Arg>;
@@ -432,20 +430,17 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 	const flags = tg.Template.join(" ", ...flagArgs);
 	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
-	return await tg
-		.command(
-			tg`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`,
-			{
-				env: std.env.arg(sdk, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-				}),
-			},
+	return await std.build`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags}`
+		.bootstrap(true)
+		.env(
+			std.env.arg(sdk, {
+				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 };
 
-export const testSharedLibraryWithDep = tg.command(async () => {
+export const testSharedLibraryWithDep = async () => {
 	const bootstrapSdk = bootstrap.sdk();
 	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
@@ -485,8 +480,8 @@ void printGreeting();
 		["main.c"]: mainSource,
 	});
 
-	const script = tg`
-		set -eux
+	const output = await std.build`
+		set -x
 		mkdir -p $OUTPUT/bin
 		mkdir -p $OUTPUT/lib
 		mkdir -p $OUTPUT/include
@@ -498,23 +493,22 @@ void printGreeting();
 		cp libconstants.${dylibExt} $OUTPUT/lib
 		cp libprinter.${dylibExt} $OUTPUT/lib
 		cp main $OUTPUT/bin
-	`;
-
-	const output = await tg
-		.command(script, {
-			env: std.env.arg(bootstrapSdk, {
+	`
+		.bootstrap(true)
+		.env(
+			std.env.arg(bootstrapSdk, {
 				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 			}),
-		})
-		.then((c) => buildBootstrap(c))
+		)
 		.then(tg.Directory.expect);
+
 	console.log("STRING CONSTANTS A", await output.id());
 	return output;
-});
+};
 
 type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 
-export const testTransitiveAll = tg.command(async () => {
+export const testTransitiveAll = async () => {
 	return await Promise.all([
 		testTransitive(),
 		testTransitiveNone(),
@@ -522,20 +516,14 @@ export const testTransitiveAll = tg.command(async () => {
 		testTransitiveIsolate(),
 		testTransitiveCombine(),
 	]);
-});
-export const testTransitiveNone = tg.command(() => testTransitive("none"));
-export const testTransitiveResolve = tg.command(() =>
-	testTransitive("resolve"),
-);
-export const testTransitiveIsolate = tg.command(() =>
-	testTransitive("isolate"),
-);
-export const testTransitiveCombine = tg.command(() =>
-	testTransitive("combine"),
-);
+};
+export const testTransitiveNone = () => testTransitive("none");
+export const testTransitiveResolve = () => testTransitive("resolve");
+export const testTransitiveIsolate = () => testTransitive("isolate");
+export const testTransitiveCombine = () => testTransitive("combine");
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
-export const testTransitive = tg.command(async (optLevel?: OptLevel) => {
+export const testTransitive = async (optLevel?: OptLevel) => {
 	const opt = optLevel ?? "filter";
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
@@ -652,18 +640,16 @@ const char* getGreetingB();
 	const uselessLibDir = tg.directory({ lib: tg.directory() });
 
 	// Compile the executable.
-	const output = await tg
-		.command(
-			tg`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
+	const output =
+		await std.build`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`
+			.bootstrap(true)
+			.env(
+				std.env.arg(bootstrapSDK, {
 					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: opt,
 				}),
-			},
-		)
-		.then((c) => buildBootstrap(c))
-		.then(tg.File.expect);
+			)
+			.then(tg.File.expect);
 
 	// Assert the library paths of the wrapper are set appropriately.
 	const manifest = await std.wrap.Manifest.read(output);
@@ -787,10 +773,10 @@ const char* getGreetingB();
 	);
 
 	return output;
-});
+};
 
 /** This test checks that the common case of linking against a library in the working directory still works post-install. */
-export const testSamePrefix = tg.command(async () => {
+export const testSamePrefix = async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -820,9 +806,7 @@ export const testSamePrefix = tg.command(async () => {
 		"greet.h": greetHeader,
 	});
 
-	const output = await tg
-		.command(
-			tg`
+	const output = await std.build`
 			set -x
 			env
 			mkdir -p .bins
@@ -831,23 +815,22 @@ export const testSamePrefix = tg.command(async () => {
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
 			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT
-			`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-				}),
-			},
+			`
+		.bootstrap(true)
+		.env(
+			std.env.arg(bootstrapSDK, {
+				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	console.log("wrapped_exe", await output.id());
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
-});
+};
 
 /** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
-export const testSamePrefixDirect = tg.command(async () => {
+export const testSamePrefixDirect = async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -877,9 +860,7 @@ export const testSamePrefixDirect = tg.command(async () => {
 		"greet.h": greetHeader,
 	});
 
-	const output = await tg
-		.command(
-			tg`
+	const output = await std.build`
 			set -x
 			mkdir -p .bins
 			mkdir -p .libs
@@ -887,22 +868,21 @@ export const testSamePrefixDirect = tg.command(async () => {
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
 			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
-			`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-				}),
-			},
+			`
+		.bootstrap(true)
+		.env(
+			std.env.arg(bootstrapSDK, {
+				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
-});
+};
 
 /** This test checks that the less-common case of linking against a library in a different Tangram artifact by name instead of library path still works post-install. */
-export const testDifferentPrefixDirect = tg.command(async () => {
+export const testDifferentPrefixDirect = async () => {
 	const bootstrapSDK = await bootstrap.sdk();
 	const os = std.triple.os(await std.triple.host());
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -932,62 +912,52 @@ export const testDifferentPrefixDirect = tg.command(async () => {
 		"greet.h": greetHeader,
 	});
 
-	const libgreetArtifact = await tg
-		.command(
-			tg`
+	const libgreetArtifact = await std.build`
 			set -x
 			mkdir -p $OUTPUT
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o $OUTPUT/libgreet.${dylibExt}
-			`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-				}),
-			},
+			`
+		.bootstrap(true)
+		.env(
+			std.env.arg(bootstrapSDK, {
+				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.Directory.expect);
 
-	const output = await tg
-		.command(
-			tg`
+	const output = await std.build`
 			set -x
 			cc -v ${libgreetArtifact}/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
-			`,
-			{
-				env: await std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-				}),
-			},
+			`
+		.bootstrap(true)
+		.env(
+			std.env.arg(bootstrapSDK, {
+				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
-});
+};
 
 import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 	type: "file",
 };
-import { buildBootstrap } from "../command.tg.ts";
-export const testStrip = tg.command(async () => {
+export const testStrip = async () => {
 	const toolchain = await bootstrap.sdk();
-	const output = await tg
-		.command(
-			tg`
-		set -eux
+	const output = await std.build`
+		set -x
 		cc -g -o main -xc ${inspectProcessSource}
 		strip main
-		mv main $OUTPUT`,
-			{
-				env: std.env.arg(toolchain, {
-					TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
-				}),
-			},
+		mv main $OUTPUT`
+		.bootstrap(true)
+		.env(
+			std.env.arg(toolchain, {
+				TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
+			}),
 		)
-		.then((c) => buildBootstrap(c))
 		.then(tg.File.expect);
 	return output;
-});
+};

@@ -37,42 +37,40 @@ export type ToolchainArg = {
 	host?: string;
 };
 
-export const self = tg.command(
-	async (arg?: ToolchainArg): Promise<tg.Directory> => {
-		const host = arg?.host ?? (await std.triple.host());
-		const system = std.triple.archAndOs(host);
-		tg.assert(
-			system in RELEASES,
-			`${system} is not supported in the Go toolchain.`,
-		);
+export const self = async (arg?: ToolchainArg): Promise<tg.Directory> => {
+	const host = arg?.host ?? (await std.triple.host());
+	const system = std.triple.archAndOs(host);
+	tg.assert(
+		system in RELEASES,
+		`${system} is not supported in the Go toolchain.`,
+	);
 
-		const release = RELEASES[system as keyof typeof RELEASES];
-		tg.assert(release !== undefined);
-		const { checksum, url } = release;
+	const release = RELEASES[system as keyof typeof RELEASES];
+	tg.assert(release !== undefined);
+	const { checksum, url } = release;
 
-		// Download the Go toolchain from `go.dev`.
-		const downloaded = await std.download.extractArchive({ checksum, url });
+	// Download the Go toolchain from `go.dev`.
+	const downloaded = await std.download.extractArchive({ checksum, url });
 
-		tg.assert(downloaded instanceof tg.Directory);
-		const go = await downloaded.get("go");
-		tg.assert(go instanceof tg.Directory);
+	tg.assert(downloaded instanceof tg.Directory);
+	const go = await downloaded.get("go");
+	tg.assert(go instanceof tg.Directory);
 
-		let artifact = tg.directory();
-		for (const bin of ["bin/go", "bin/gofmt"]) {
-			const file = await go.get(bin);
-			tg.assert(file instanceof tg.File);
-			artifact = tg.directory(artifact, {
-				[bin]: std.wrap(file, {
-					env: {
-						GOROOT: go,
-					},
-				}),
-			});
-		}
+	let artifact = tg.directory();
+	for (const bin of ["bin/go", "bin/gofmt"]) {
+		const file = await go.get(bin);
+		tg.assert(file instanceof tg.File);
+		artifact = tg.directory(artifact, {
+			[bin]: std.wrap(file, {
+				env: {
+					GOROOT: go,
+				},
+			}),
+		});
+	}
 
-		return artifact;
-	},
-);
+	return artifact;
+};
 
 export default self;
 
@@ -132,103 +130,105 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export const build = tg.command(
-	async (...args: std.Args<Arg>): Promise<tg.Directory> => {
-		const mutationArgs = await std.args.createMutations<
-			Arg,
-			std.args.MakeArrayKeys<Arg, "env" | "sdk">
-		>(std.flatten(args), {
-			env: "append",
-			sdk: "append",
-			source: "set",
-		});
-		let {
-			checksum,
-			cgo = true,
-			env: env_,
-			generate,
-			host: host_,
-			install,
-			network = false,
-			sdk: sdkArgs,
+export const build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	const objects = resolved.map((obj) => {
+		return {
+			...obj,
+			env: [obj.env],
+			sdk: [obj.sdk],
+		};
+	});
+	let {
+		checksum,
+		cgo = true,
+		env: env_,
+		generate,
+		host: host_,
+		install,
+		network = false,
+		sdk: sdkArgs,
+		source,
+		target: target_,
+		vendor: vendor_ = true,
+	} = (await tg.Args.apply(objects, {
+		env: "append",
+		sdk: "append",
+		source: "set",
+	})) as std.args.MakeArrayKeys<Arg, "env" | "sdk">;
+	const host = host_ ?? (await std.triple.host());
+	const system = std.triple.archAndOs(host);
+	const target = target_ ?? host;
+	tg.assert(source, "Must provide a source directory.");
+
+	const sdk = std.sdk({ host, target }, ...(sdkArgs ?? []));
+
+	// Check if the build has a vendor dir, then determine whether or not we're going to be vendoring dependencies.
+	const willVendor =
+		vendor_ === true || (vendor_ !== false && (await source.tryGet("vendor")));
+
+	// If we need to, vendor the build's dependencies.
+	let buildArgs = "";
+
+	if (willVendor) {
+		// Vendor the build, and insert the `vendor` dir in the source artifact.
+		const vendorCommand =
+			typeof vendor_ === "object" ? vendor_.command : undefined;
+		const vendorArtifact = await vendor({
+			command: vendorCommand,
 			source,
-			target: target_,
-			vendor: vendor_ = true,
-		} = await std.args.applyMutations(mutationArgs);
-		const host = host_ ?? (await std.triple.host());
-		const system = std.triple.archAndOs(host);
-		const target = target_ ?? host;
-		tg.assert(source, "Must provide a source directory.");
+		});
 
-		const sdk = std.sdk({ host, target }, sdkArgs);
+		source = await tg.directory(source, {
+			["vendor"]: vendorArtifact,
+		});
 
-		// Check if the build has a vendor dir, then determine whether or not we're going to be vendoring dependencies.
-		const willVendor =
-			vendor_ === true ||
-			(vendor_ !== false && (await source.tryGet("vendor")));
+		// We need to pass the `-mod=vendor` to obey the vendored dependencies.
+		buildArgs += "-mod=vendor";
+	}
 
-		// If we need to, vendor the build's dependencies.
-		let buildArgs = "";
+	// Build the vendored source code without internet access.
+	const goArtifact = self({ host });
 
-		if (willVendor) {
-			// Vendor the build, and insert the `vendor` dir in the source artifact.
-			const vendorCommand =
-				typeof vendor_ === "object" ? vendor_.command : undefined;
-			const vendorArtifact = await vendor({
-				command: vendorCommand,
-				source,
-			});
+	const certFile = tg`${std.caCertificates()}/cacert.pem`;
+	const cgoEnabled = cgo ? "1" : "0";
 
-			source = await tg.directory(source, {
-				["vendor"]: vendorArtifact,
-			});
+	// If cgo is enabled on Linux, we need to set linkmode to external to force using the Tangram proxy for every link operation, so that host object files can link to the SDK's libc.
+	// On Darwin, this is not necessary because these symbols are provided by the OS in libSystem.dylib, and causes a codesigning failure.
+	// See https://github.com/golang/go/blob/30c18878730434027dbefd343aad74963a1fdc48/src/cmd/cgo/doc.go#L999-L1023
+	if (cgoEnabled && std.triple.os(system) === "linux") {
+		buildArgs += " -ldflags=-linkmode=external";
+	}
 
-			// We need to pass the `-mod=vendor` to obey the vendored dependencies.
-			buildArgs += "-mod=vendor";
-		}
+	// Come up with the right command to run in the `go generate` phase.
+	let generateCommand = await tg`go generate -v -x`;
+	if (generate === false) {
+		generateCommand =
+			await tg`echo "'go generate' phase disabled by 'generate: false'"`;
+	} else if (typeof generate === "object") {
+		generateCommand = await tg.template(generate.command);
+	}
 
-		// Build the vendored source code without internet access.
-		const goArtifact = self({ host });
+	// Come up with the right command to run in the `go install` phase.
+	let installCommand = await tg`go install -v ${buildArgs}`;
+	if (install) {
+		installCommand = await tg.template(install.command);
+	}
 
-		const certFile = tg`${std.caCertificates()}/cacert.pem`;
-		const cgoEnabled = cgo ? "1" : "0";
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [
+		sdk,
+		goArtifact,
+		{
+			CGO_ENABLED: cgoEnabled,
+			SSL_CERT_FILE: certFile,
+			TANGRAM_HOST: system,
+		},
+		...(env_ ?? []),
+	];
 
-		// If cgo is enabled on Linux, we need to set linkmode to external to force using the Tangram proxy for every link operation, so that host object files can link to the SDK's libc.
-		// On Darwin, this is not necessary because these symbols are provided by the OS in libSystem.dylib, and causes a codesigning failure.
-		// See https://github.com/golang/go/blob/30c18878730434027dbefd343aad74963a1fdc48/src/cmd/cgo/doc.go#L999-L1023
-		if (cgoEnabled && std.triple.os(system) === "linux") {
-			buildArgs += " -ldflags=-linkmode=external";
-		}
+	const env = std.env.arg(...envs);
 
-		// Come up with the right command to run in the `go generate` phase.
-		let generateCommand = await tg`go generate -v -x`;
-		if (generate === false) {
-			generateCommand =
-				await tg`echo "'go generate' phase disabled by 'generate: false'"`;
-		} else if (typeof generate === "object") {
-			generateCommand = await tg.template(generate.command);
-		}
-
-		// Come up with the right command to run in the `go install` phase.
-		let installCommand = await tg`go install -v ${buildArgs}`;
-		if (install) {
-			installCommand = await tg.template(install.command);
-		}
-
-		const envs = [
-			sdk,
-			goArtifact,
-			{
-				CGO_ENABLED: cgoEnabled,
-				SSL_CERT_FILE: certFile,
-				TANGRAM_HOST: system,
-			},
-			env_,
-		];
-
-		const env = std.env.arg(...envs);
-
-		const output = await $`
+	const output = await $`
 				cp -R ${source}/. ./work
 				chmod -R u+w ./work
 				cd ./work
@@ -245,33 +245,32 @@ export const build = tg.command(
 				${generateCommand}
 				${installCommand}
 			`
-			.env(env)
-			.host(host)
-			.checksum(checksum)
-			.network(network)
-			.then(tg.Directory.expect);
+		.env(env)
+		.host(host)
+		.checksum(checksum)
+		.network(network)
+		.then(tg.Directory.expect);
 
-		// Get a list of all dynamically-linked binaries in the output.
-		let binDir = await output.get("bin").then(tg.Directory.expect);
+	// Get a list of all dynamically-linked binaries in the output.
+	let binDir = await output.get("bin").then(tg.Directory.expect);
 
-		// Wrap each executable in the /bin directory.
-		for await (const [name, file] of binDir) {
-			if (!(file instanceof tg.Directory)) {
-				binDir = await tg.directory(binDir, {
-					[name]: std.wrap({
-						executable: file,
-						identity: "wrapper",
-					}),
-				});
-			}
+	// Wrap each executable in the /bin directory.
+	for await (const [name, file] of binDir) {
+		if (!(file instanceof tg.Directory)) {
+			binDir = await tg.directory(binDir, {
+				[name]: std.wrap({
+					executable: file,
+					identity: "wrapper",
+				}),
+			});
 		}
+	}
 
-		// Return the output.
-		return tg.directory(source, {
-			["bin"]: binDir,
-		});
-	},
-);
+	// Return the output.
+	return tg.directory(source, {
+		["bin"]: binDir,
+	});
+};
 
 export type VendorArgs = {
 	source: tg.Directory;
@@ -304,14 +303,9 @@ export const vendor = async ({
 		.then(tg.Directory.expect);
 };
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/go`), args });
-});
-
 //TODO spec, add cgo test.
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const source = tg.directory({
 		["main.go"]: tg.file(`
 			package main
@@ -361,4 +355,4 @@ export const test = tg.command(async () => {
 			`
 		.env(std.sdk())
 		.env(self());
-});
+};

@@ -11,7 +11,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const base = `https://distfiles.ariadne.space/pkgconf`;
@@ -21,7 +21,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -33,7 +33,7 @@ export type Arg = {
 	proxy?: boolean;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -95,19 +95,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		["bin/pkgconf"]: wrappedBin,
 		["bin/pkg-config"]: tg.symlink("pkgconf"),
 	});
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({
-		executable: tg.symlink(tg`${dir}/bin/pkg-config`),
-		args,
-	});
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

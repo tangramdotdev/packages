@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const base = `https://pkgconfig.freedesktop.org/releases`;
@@ -22,7 +22,7 @@ export const source = tg.command(async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
@@ -37,7 +37,7 @@ export type Arg = {
 	proxy?: boolean;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -119,42 +119,32 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return tg.directory(pkgConfigBuild, {
 		["bin/pkg-config"]: wrappedBin,
 	});
-});
+};
 
 export default build;
 
-export const path = tg.command(
-	async (
-		dependencies: Array<tg.Artifact>,
-	): Promise<tg.Template | undefined> => {
-		const standardPaths = [
-			"",
-			"/lib",
-			"/share",
-			"/lib/pkgconfig",
-			"/share/pkgconfig",
-		];
+export const path = async (
+	dependencies: Array<tg.Artifact>,
+): Promise<tg.Template | undefined> => {
+	const standardPaths = [
+		"",
+		"/lib",
+		"/share",
+		"/lib/pkgconfig",
+		"/share/pkgconfig",
+	];
 
-		const allPaths: Array<tg.Template> = [];
-		for (const dependency of dependencies) {
-			for (const path of standardPaths) {
-				allPaths.push(await tg`${dependency}${path}`);
-			}
+	const allPaths: Array<tg.Template> = [];
+	for (const dependency of dependencies) {
+		for (const path of standardPaths) {
+			allPaths.push(await tg`${dependency}${path}`);
 		}
+	}
 
-		return tg.Template.join(":", ...allPaths);
-	},
-);
+	return tg.Template.join(":", ...allPaths);
+};
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({
-		executable: tg.symlink(tg`${dir}/bin/pkg-config`),
-		args,
-	});
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

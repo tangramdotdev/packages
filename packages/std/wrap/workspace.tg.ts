@@ -1,6 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.ts";
+import { $ } from "../tangram.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
 import packages from "../packages" with { type: "directory" };
@@ -14,52 +15,52 @@ type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export const workspace = tg.command(
-	async (arg?: Arg): Promise<tg.Directory> => {
-		const {
-			build: build_,
-			buildToolchain,
-			host: host_,
-			release = true,
-			source: source_,
-		} = arg ?? {};
-		const host = host_ ?? (await std.triple.host());
-		const buildTriple = build_ ?? host;
+export const workspace = async (
+	arg: tg.Unresolved<Arg>,
+): Promise<tg.Directory> => {
+	const {
+		build: build_,
+		buildToolchain,
+		host: host_,
+		release = true,
+		source: source_,
+	} = await tg.resolve(arg);
+	const host = host_ ?? (await std.triple.host());
+	const buildTriple = build_ ?? host;
 
-		// Get the source.
-		const source = source_
-			? source_
-			: await tg.directory({
-					"Cargo.toml": cargoToml,
-					"Cargo.lock": cargoLock,
-					packages: packages,
-				});
+	// Get the source.
+	const source = source_
+		? source_
+		: await tg.directory({
+				"Cargo.toml": cargoToml,
+				"Cargo.lock": cargoLock,
+				packages: packages,
+			});
 
-		return build({
-			...(await std.triple.rotate({ build: buildTriple, host })),
-			buildToolchain,
-			release,
-			source,
-		});
-	},
-);
+	return await tg.build(build, {
+		...(await std.triple.rotate({ build: buildTriple, host })),
+		buildToolchain,
+		release,
+		source,
+	});
+};
 
-export const ccProxy = (arg?: Arg) =>
+export const ccProxy = (arg: tg.Unresolved<Arg>) =>
 	workspace(arg)
 		.then((dir) => dir.get("bin/cc_proxy"))
 		.then(tg.File.expect);
 
-export const ldProxy = (arg?: Arg) =>
+export const ldProxy = (arg: tg.Unresolved<Arg>) =>
 	workspace(arg)
 		.then((dir) => dir.get("bin/ld_proxy"))
 		.then(tg.File.expect);
 
-export const stripProxy = (arg?: Arg) =>
+export const stripProxy = (arg: tg.Unresolved<Arg>) =>
 	workspace(arg)
 		.then((dir) => dir.get("bin/strip_proxy"))
 		.then(tg.File.expect);
 
-export const wrapper = (arg?: Arg) =>
+export const wrapper = (arg: tg.Unresolved<Arg>) =>
 	workspace(arg)
 		.then((dir) => dir.get("bin/wrapper"))
 		.then(tg.File.expect);
@@ -68,74 +69,69 @@ type ToolchainArg = {
 	target?: string;
 };
 
-export const rust = tg.command(
-	async (arg?: ToolchainArg): Promise<tg.Directory> => {
-		const host = standardizeTriple(await std.triple.host());
-		const target = standardizeTriple(arg?.target ?? host);
-		const hostSystem = std.triple.archAndOs(host);
+export const rust = async (
+	arg?: tg.Unresolved<ToolchainArg>,
+): Promise<tg.Directory> => {
+	const resolved = await tg.resolve(arg);
+	const host = standardizeTriple(await std.triple.host());
+	const target = standardizeTriple(resolved?.target ?? host);
+	const hostSystem = std.triple.archAndOs(host);
 
-		// Download and parse the Rust manifest for the selected version.
-		const version = "1.86.0";
-		const manifestBlob = await std.download({
-			url: `https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
-			checksum:
-				"sha256:5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42",
-		});
-		tg.Blob.assert(manifestBlob);
-		const manifestFile = await tg.file(manifestBlob as tg.Blob);
-		const manifest = tg.encoding.toml.decode(
-			await manifestFile.text(),
-		) as RustupManifest;
+	// Download and parse the Rust manifest for the selected version.
+	const version = "1.86.0";
+	const manifestBlob = await std.download({
+		url: `https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
+		checksum:
+			"sha256:5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42",
+	});
+	tg.Blob.assert(manifestBlob);
+	const manifestFile = await tg.file(manifestBlob as tg.Blob);
+	const manifest = tg.encoding.toml.decode(
+		await manifestFile.text(),
+	) as RustupManifest;
 
-		// Install the full minimal profile for the host.
-		let packages = tg.directory();
-		for (const name of manifest.profiles["minimal"] ?? []) {
-			const pkg = manifest.pkg[name]?.target[host];
-			if (pkg?.available) {
-				const artifact = std.download.extractArchive({
-					checksum: `sha256:${pkg.xz_hash}`,
-					url: pkg.xz_url,
-				});
-				packages = tg.directory(packages, {
-					[name]: artifact,
-				});
-			}
+	// Install the full minimal profile for the host.
+	let packages = tg.directory();
+	for (const name of manifest.profiles["minimal"] ?? []) {
+		const pkg = manifest.pkg[name]?.target[host];
+		if (pkg?.available) {
+			const artifact = std.download.extractArchive({
+				checksum: `sha256:${pkg.xz_hash}`,
+				url: pkg.xz_url,
+			});
+			packages = tg.directory(packages, {
+				[name]: artifact,
+			});
 		}
+	}
 
-		// If there is a target specified different from the host, install just the rust-std package for that target.
-		if (host !== target) {
-			const name = "rust-std";
-			const pkg = manifest.pkg[name]?.target[target];
-			if (pkg?.available) {
-				const artifact = std.download({
-					checksum: `sha256:${pkg.xz_hash}`,
-					url: pkg.xz_url,
-				});
-				packages = tg.directory(packages, {
-					[name]: artifact,
-				});
-			}
+	// If there is a target specified different from the host, install just the rust-std package for that target.
+	if (host !== target) {
+		const name = "rust-std";
+		const pkg = manifest.pkg[name]?.target[target];
+		if (pkg?.available) {
+			const artifact = std.download({
+				checksum: `sha256:${pkg.xz_hash}`,
+				url: pkg.xz_url,
+			});
+			packages = tg.directory(packages, {
+				[name]: artifact,
+			});
 		}
+	}
 
-		// Install the packages.
-		const script = tg`
+	// Install the packages.
+	const env = bootstrap.sdk.env(host);
+	return await $`
 		for package in ${packages}/*/* ; do
 			sh $package/install.sh --prefix="$OUTPUT"
 			chmod -R +w "$OUTPUT"
-		done
-	`;
-
-		const env = bootstrap.sdk.env(host);
-
-		return tg.Directory.expect(
-			await std.phases.run({
-				command: { host: hostSystem },
-				phases: { build: script },
-				env,
-			}),
-		);
-	},
-);
+		done`
+		.bootstrap(true)
+		.host(hostSystem)
+		.env(env)
+		.then(tg.Directory.expect);
+};
 
 type RustupManifest = {
 	"manifest-version": "2";
@@ -187,7 +183,8 @@ type BuildArg = {
 	target?: string;
 };
 
-export const build = async (arg: BuildArg) => {
+export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
+	const arg = await tg.resolve(unresolved);
 	const enableTracing = arg.enableTracingFeature ?? true;
 	const release = arg.release ?? true;
 	const source = arg.source;
@@ -245,12 +242,12 @@ export const build = async (arg: BuildArg) => {
 	}
 
 	// Get the Rust toolchain.
-	const rustToolchain = await rust({ target });
+	const rustToolchain = await tg.build(rust, { target });
 
 	// Set up common environemnt.
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
 
-	const env: tg.Unresolved<std.Args<std.env.Arg>> = [
+	const env: Array<tg.Unresolved<std.env.Arg>> = [
 		buildToolchain,
 		hostToolchain ?? {},
 		rustToolchain,
@@ -348,17 +345,18 @@ export const build = async (arg: BuildArg) => {
 	};
 
 	// Build and return.
-	return tg.Directory.expect(
-		await std.phases.run({
-			env: std.env.arg(env),
+	return await std.phases
+		.run({
+			bootstrap: true,
+			env: std.env.arg(...env),
 			phases: { prepare, build, install },
 			command: {
 				host: system,
 			},
 			checksum: "sha256:any",
 			network: true,
-		}),
-	);
+		})
+		.then(tg.Directory.expect);
 };
 
 /* Ensure the passed triples are what we expect, musl on linxu and standard for macOS. */
@@ -391,7 +389,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	return result;
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 
@@ -401,7 +399,7 @@ export const test = tg.command(async () => {
 
 	const buildToolchain = bootstrap.sdk.env(host);
 
-	const nativeWorkspace = await workspace({
+	const nativeWorkspace = await tg.build(workspace, {
 		buildToolchain,
 		host,
 	});
@@ -421,9 +419,9 @@ export const test = tg.command(async () => {
 		return tg.unreachable();
 	}
 	return nativeWorkspace;
-});
+};
 
-export const testCross = tg.command(async () => {
+export const testCross = async () => {
 	// Detect the host triple.
 	const host = await std.triple.host();
 
@@ -438,7 +436,7 @@ export const testCross = tg.command(async () => {
 	});
 	const buildToolchain = gnu.toolchain({ host, target });
 
-	const crossWorkspace = await workspace({
+	const crossWorkspace = await tg.build(workspace, {
 		buildToolchain,
 		build: host,
 		host: target,
@@ -452,4 +450,4 @@ export const testCross = tg.command(async () => {
 	tg.assert(crossMetadata.format === "elf");
 	tg.assert(crossMetadata.arch === targetArch);
 	return true;
-});
+};

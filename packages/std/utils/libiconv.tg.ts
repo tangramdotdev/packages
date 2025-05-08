@@ -6,12 +6,12 @@ export const metadata = {
 	version: "1.18",
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8";
 	return std.download.fromGnu({ name, version, checksum });
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -22,7 +22,7 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
@@ -30,7 +30,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		sdk,
 		source: source_,
 		usePrerequisites = true,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -39,28 +39,28 @@ export const build = tg.command(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const env: tg.Unresolved<std.Args<std.env.Arg>> = [env_];
+	const env: Array<tg.Unresolved<std.env.Arg>> = [];
 	if (usePrerequisites) {
 		env.push(prerequisites(build));
 	}
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(env),
+		env: std.env.arg(...env, env_),
 		phases: { configure },
 		sdk,
 		source: source_ ?? source(),
 	});
 
 	return output;
-});
+};
 
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, sdk: false, env: sdk });
-});
+};

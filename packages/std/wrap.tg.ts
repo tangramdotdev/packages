@@ -1,7 +1,5 @@
 import * as bootstrap from "./bootstrap.tg.ts";
-import { buildBootstrap } from "./command.tg.ts";
 import * as gnu from "./sdk/gnu.tg.ts";
-import { interpreterName } from "./sdk/libc.tg.ts";
 import * as std from "./tangram.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
@@ -14,9 +12,7 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 /** This module provides the `std.wrap()` function, which can be used to bundle an executable with a predefined environment and arguments, either of which may point to other Tangram artifacts.*/
 
 /** Wrap an executable. */
-export async function wrap(
-	...args: std.args.UnresolvedArgs<wrap.Arg>
-): Promise<tg.File> {
+export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
 	const arg = await wrap.arg(...args);
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
@@ -223,9 +219,9 @@ export namespace wrap {
 	};
 
 	/** Process variadic arguments. */
-	export const arg = async (...args: std.args.UnresolvedArgs<wrap.Arg>) => {
+	export const arg = async (...args: tg.Args<wrap.Arg>) => {
 		const objectArgs = await Promise.all(
-			std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
+			(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
@@ -238,20 +234,15 @@ export namespace wrap {
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
-					return arg;
+					return { ...arg, env: [arg.env] } as std.args.MakeArrayKeys<
+						std.wrap.ArgObject,
+						"env"
+					>;
 				} else {
 					return tg.unreachable(`Unsupported argument: ${arg}`);
 				}
 			}),
 		);
-		const mutationArgs = await std.args.createMutations<
-			std.wrap.ArgObject,
-			std.args.MakeArrayKeys<std.wrap.ArgObject, "env">
-		>(objectArgs, {
-			env: "append",
-			libraryPaths: "append",
-			args: "append",
-		});
 		let {
 			args: args_,
 			buildToolchain,
@@ -263,7 +254,11 @@ export namespace wrap {
 			merge: merge_ = true,
 			libraryPaths,
 			libraryPathStrategy,
-		} = await std.args.applyMutations(mutationArgs);
+		} = (await tg.Args.apply(objectArgs, {
+			env: "append",
+			libraryPaths: "append",
+			args: "append",
+		})) as std.args.MakeArrayKeys<std.wrap.ArgObject, "env">;
 
 		tg.assert(executable !== undefined);
 
@@ -1824,7 +1819,7 @@ const templateFromManifestTemplate = (
 
 const mutationFromManifestMutation = (
 	manifestMutation: wrap.Manifest.Mutation,
-): Promise<tg.Mutation<tg.Template.Arg>> => {
+): Promise<tg.Mutation> => {
 	if (manifestMutation.kind === "unset") {
 		return Promise.resolve(tg.Mutation.unset());
 	} else if (manifestMutation.kind === "set") {
@@ -1971,31 +1966,23 @@ const manifestTemplateFromArg = async (
 	};
 };
 
-// FIXME - this can likely go straight to std.env.EnvObject, not ArgObject.
 const envArgFromMapValue = async (
 	value: wrap.Manifest.Value,
-): Promise<std.env.ArgObject> => {
+): Promise<std.env.EnvObject> => {
 	tg.assert(
 		!(value instanceof Array) &&
 			typeof value === "object" &&
 			value.kind === "map",
 		"Malformed env, expected a map of mutations.",
 	);
-	const ret: std.env.ArgObject = {};
+	const ret: std.env.EnvObject = {};
 	for (const [key, val] of Object.entries(value.value)) {
 		if (val instanceof Array) {
-			ret[key] = await Promise.all(
-				val.map(async (inner) => {
-					const val = await valueFromManifestValue(inner);
-					tg.assert(
-						val instanceof tg.Mutation,
-						"Malformed env, expected a mutation.",
-					);
-					return val;
-				}),
-			);
+			return tg.unreachable();
 		} else if (typeof val === "object" && val.kind === "mutation") {
-			ret[key] = [await mutationFromManifestMutation(val.value)];
+			ret[key] = (await mutationFromManifestMutation(
+				val.value,
+			)) as tg.Mutation<tg.Template.Arg>;
 		} else {
 			throw new Error(
 				"Malformed env, expected a mutation or array of mutations.",
@@ -2206,21 +2193,18 @@ export const pushOrSet = (
 };
 
 /** Basic program for testing the wrapper code. */
-export const argAndEnvDump = tg.command(async () => {
+export const argAndEnvDump = async () => {
 	const sdkEnv = await std.env.arg(bootstrap.sdk(), {
 		TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 	});
 
-	return tg.File.expect(
-		await buildBootstrap(
-			await tg.command(tg`cc -xc ${inspectProcessSource} -o $OUTPUT`, {
-				env: sdkEnv,
-			}),
-		),
-	);
-});
+	return await std.build`cc -xc ${inspectProcessSource} -o $OUTPUT`
+		.bootstrap(true)
+		.env(sdkEnv)
+		.then(tg.File.expect);
+};
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	await Promise.all([
 		testSingleArgObjectNoMutations(),
 		testDependencies(),
@@ -2229,9 +2213,9 @@ export const test = tg.command(async () => {
 		testContentExecutableVariadic(),
 	]);
 	return true;
-});
+};
 
-export const testSingleArgObjectNoMutations = tg.command(async () => {
+export const testSingleArgObjectNoMutations = async () => {
 	const executable = await argAndEnvDump();
 	const executableID = await executable.id();
 	// The program is a wrapper produced by the LD proxy.
@@ -2268,9 +2252,8 @@ export const testSingleArgObjectNoMutations = tg.command(async () => {
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	const output = await tg
-		.command(tg`${wrapper} > $OUTPUT`)
-		.then((command) => buildBootstrap(command))
+	const output = await std.build`${wrapper} > $OUTPUT`
+		.bootstrap(true)
 		.then(tg.File.expect);
 	const text = await output.text();
 	console.log("text", text);
@@ -2314,9 +2297,9 @@ export const testSingleArgObjectNoMutations = tg.command(async () => {
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
 
 	return wrapper;
-});
+};
 
-export const testContentExecutable = tg.command(async () => {
+export const testContentExecutable = async () => {
 	const buildToolchain = bootstrap.sdk();
 	const wrapper = await std.wrap({
 		buildToolchain,
@@ -2328,20 +2311,18 @@ export const testContentExecutable = tg.command(async () => {
 
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
-	const output = await tg
-		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
-			env: { TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" },
-		})
-		.then((command) => buildBootstrap(command))
+	const output = await std.build`set -x; ${wrapper} > $OUTPUT`
+		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
+		.bootstrap(true)
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
 	tg.assert(text.includes("Tangram"));
 
 	return true;
-});
+};
 
-export const testContentExecutableVariadic = tg.command(async () => {
+export const testContentExecutableVariadic = async () => {
 	const buildToolchain = bootstrap.sdk();
 	const wrapper = await std.wrap(
 		`echo "$NAME"`,
@@ -2352,20 +2333,18 @@ export const testContentExecutableVariadic = tg.command(async () => {
 	);
 	console.log("wrapper", await wrapper.id());
 	// Check the output matches the expected output.
-	const output = await tg
-		.command(tg`set -x; ${wrapper} > $OUTPUT`, {
-			env: { TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" },
-		})
-		.then((command) => buildBootstrap(command))
+	const output = await std.build`set -x; ${wrapper} > $OUTPUT`
+		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
+		.bootstrap(true)
 		.then(tg.File.expect);
 	const text = await output.text().then((t) => t.trim());
 	console.log("text", text);
 	tg.assert(text.includes("Tangram"));
 
 	return true;
-});
+};
 
-export const testDependencies = tg.command(async () => {
+export const testDependencies = async () => {
 	const buildToolchain = await bootstrap.sdk.env();
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	const transitiveDependencyId = await transitiveDependency.id();
@@ -2400,11 +2379,11 @@ export const testDependencies = tg.command(async () => {
 
 	const bundle = tg.bundle(await tg.directory({ wrapper }));
 	return bundle;
-});
+};
 
 import libGreetSource from "./wrap/test/greet.c" with { type: "file" };
 import driverSource from "./wrap/test/driver.c" with { type: "file" };
-export const testDylibPath = tg.command(async () => {
+export const testDylibPath = async () => {
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -2447,4 +2426,4 @@ export const testDylibPath = tg.command(async () => {
 	});
 	console.log("libraryPathWrapper", await libraryPathWrapper.id());
 	return libraryPathWrapper;
-});
+};

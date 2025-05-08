@@ -1,7 +1,6 @@
 import * as std from "../tangram.ts";
 import * as bootstrap from "../bootstrap.tg.ts";
 import zstd from "../sdk/dependencies/zstd.tg.ts";
-import { buildBootstrap } from "../command.tg.ts";
 
 /*
 	notes:
@@ -50,175 +49,154 @@ type RootFsArg = {
 	cmd?: Array<string>;
 };
 
-export const image = tg.command(
-	async (...args: std.Args<Arg>): Promise<tg.File> => {
-		type CombinedArgObject = {
-			buildToolchain?: std.env.Arg;
-			cmdString?: Array<string>;
-			format?: ImageFormat;
-			entrypointArtifact?: std.wrap.Arg;
-			entrypointString?: Array<string>;
-			layerCompression?: "gzip" | "zstd";
-			rootDir?: tg.Directory;
-			system?: string;
-		};
-		const objectArgs = await Promise.all(
-			std.flatten(args).map(async (arg) => {
-				if (arg === undefined) {
-					return {};
-				} else if (typeof arg === "string" || arg instanceof tg.Template) {
-					// It's a script. Wrap it, use it as the entrypoint.
-					return { entrypointArtifact: arg };
-				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
-					let file;
-					if (arg instanceof tg.Symlink) {
-						file = arg.resolve();
-						tg.assert(file, `Could not resolve symlink ${arg.id()} to a file.`);
-					} else {
-						file = arg;
-					}
-					tg.File.assert(file);
-					// Is the file executable? If so, wrap it, use it as the entrypoint.
-					const executableMetadata = await std.file.executableMetadata(file);
-					if (executableMetadata) {
-						return {
-							entrypointArtifact: file,
-						};
-					} else {
-						const id = arg.id();
-						throw new Error(
-							`Non-executable file passed to std.container: ${id}.`,
-						);
-					}
-				} else if (arg instanceof tg.Directory) {
-					// Add it to the root.
-					return {
-						rootDir: arg,
-					};
-				} else {
-					const object: tg.MaybeMutationMap<CombinedArgObject> = {};
-					if ("buildToolchain" in arg && arg.buildToolchain !== undefined) {
-						object.buildToolchain = arg.buildToolchain;
-					}
-					if ("executable" in arg && arg.executable !== undefined) {
-						object.entrypointArtifact = arg.executable;
-					}
-					if ("format" in arg) {
-						object.format = arg.format;
-					}
-					if ("layerCompression" in arg) {
-						object.layerCompression = arg.layerCompression;
-					}
-					if ("rootFileSystem" in arg && arg.rootFileSystem !== undefined) {
-						object.rootDir = arg.rootFileSystem;
-					}
-					if ("cmd" in arg) {
-						object.cmdString = arg.cmd;
-					}
-					if ("entrypoint" in arg) {
-						object.entrypointString = arg.entrypoint;
-					}
-					if (arg.system) {
-						object.system = arg.system;
-					}
-					return object;
-				}
-			}),
-		);
+export const image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
+	type CombinedArgObject = {
+		buildToolchain?: std.env.Arg;
+		cmdString?: Array<string>;
+		format?: ImageFormat;
+		entrypointArtifact?: std.wrap.Arg;
+		entrypointString?: Array<string>;
+		layerCompression?: "gzip" | "zstd";
+		rootDir?: tg.Directory;
+		system?: string;
+	};
+	const resolved = await Promise.all(args.map(tg.resolve));
+	type Collect = std.args.MakeArrayKeys<
+		CombinedArgObject,
+		"entrypointArtifact" | "rootDir"
+	>;
+	const objectArgs = await Promise.all(
+		resolved.map(async (arg) => {
+			// FIXME
+			return tg.unimplemented();
+			// 	if (arg === undefined) {
+			// 		return {};
+			// 	} else if (typeof arg === "string" || arg instanceof tg.Template) {
+			// 		// It's a script. Wrap it, use it as the entrypoint.
+			// 		return { entrypointArtifact: [arg] } as Collect;
+			// 	} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
+			// 		let file;
+			// 		if (arg instanceof tg.Symlink) {
+			// 			file = arg.resolve();
+			// 			tg.assert(file, `Could not resolve symlink ${arg.id()} to a file.`);
+			// 		} else {
+			// 			file = arg;
+			// 		}
+			// 		tg.File.assert(file);
+			// 		// Is the file executable? If so, wrap it, use it as the entrypoint.
+			// 		const executableMetadata = await std.file.executableMetadata(file);
+			// 		if (executableMetadata) {
+			// 			return {
+			// 				entrypointArtifact: file,
+			// 			};
+			// 		} else {
+			// 			const id = arg.id();
+			// 			throw new Error(
+			// 				`Non-executable file passed to std.container: ${id}.`,
+			// 			);
+			// 		}
+			// 	} else if (arg instanceof tg.Directory) {
+			// 		// Add it to the root.
+			// 		return {
+			// 			rootDir: [arg],
+			// 		} as Collect;
+			// 	} else {
+			// 		let ret = {} as tg.MaybeMutationMap<Collect>;
+			// 		// return {
+			// 		// 	...arg,
+			// 		// 	entrypointArtifact: [arg.entrypointArtifact],
+			// 		// 	rootDir: [arg.rootDir],
+			// 		// };
+			// 		return ret;
+			// }
+		}),
+	);
 
-		const mutationArgs = await std.args.createMutations<
-			CombinedArgObject,
-			std.args.MakeArrayKeys<
-				CombinedArgObject,
-				"entrypointArtifact" | "rootDir"
-			>
-		>(objectArgs, {
-			buildToolchain: "set",
-			cmdString: "set",
-			format: "set",
-			entrypointArtifact: "append",
-			entrypointString: "append",
-			layerCompression: "set",
-			rootDir: "append",
-			system: "set",
-		});
-		let {
+	let {
+		buildToolchain,
+		cmdString = [],
+		format = "docker",
+		entrypointArtifact: entrypointArtifact_,
+		entrypointString,
+		layerCompression = "zstd",
+		rootDir: rootDirs,
+		system: system_,
+	} = (await tg.Args.apply(objectArgs, {
+		buildToolchain: "set",
+		cmdString: "set",
+		format: "set",
+		entrypointArtifact: "append",
+		entrypointString: "append",
+		layerCompression: "set",
+		rootDir: "append",
+		system: "set",
+	})) as Collect;
+
+	// Fill in defaults.
+	const system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
+
+	// Combine all root dirs.
+	const rootDir =
+		rootDirs !== undefined ? await tg.directory(...rootDirs) : undefined;
+
+	// Wrap entrypoint artifact.
+	let entrypointArtifact: tg.File | undefined = undefined;
+	if (entrypointArtifact_ !== undefined) {
+		const entrypointArtifactArgs = entrypointArtifact_.filter(
+			(arg) => arg !== undefined,
+		) as Array<std.wrap.Arg>;
+		entrypointArtifact = await std.wrap(
+			{ buildToolchain },
+			...entrypointArtifactArgs,
+		);
+	}
+
+	// Verify that the arguments supplied are correct.
+	tg.assert(
+		rootDir || entrypointArtifact,
+		"Cannot create a container image without either a root filesystem or entrypoint.",
+	);
+
+	// Create the layers for the image.
+	const layers: Array<Layer> = [];
+	if (rootDir) {
+		layers.push(await layer(rootDir));
+	}
+	if (entrypointArtifact) {
+		layers.push(
+			await layer(await tg.directory({ entrypoint: entrypointArtifact })),
+		);
+		if (!entrypointString) {
+			entrypointString = ["/entrypoint"];
+		}
+	}
+
+	// Create the image configuration.
+	const config: ImageConfigV1 = {
+		...platform(system),
+		rootfs: {
+			type: "layers",
+			diff_ids: layers.map((l) => l.diffId),
+		},
+		config: {
+			Entrypoint: entrypointString ?? [],
+			Cmd: cmdString,
+		},
+	};
+
+	if (format === "docker") {
+		return dockerImageFromLayers(config, ...layers);
+	} else if (format === "oci") {
+		return ociImageFromLayers(
 			buildToolchain,
-			cmdString = [],
-			format = "docker",
-			entrypointArtifact: entrypointArtifact_,
-			entrypointString,
-			layerCompression = "zstd",
-			rootDir: rootDirs,
-			system: system_,
-		} = await std.args.applyMutations(mutationArgs);
-
-		// Fill in defaults.
-		const system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
-
-		// Combine all root dirs.
-		const rootDir =
-			rootDirs !== undefined ? await tg.directory(...rootDirs) : undefined;
-
-		// Wrap entrypoint artifact.
-		let entrypointArtifact: tg.File | undefined = undefined;
-		if (entrypointArtifact_ !== undefined) {
-			const entrypointArtifactArgs = entrypointArtifact_.filter(
-				(arg) => arg !== undefined,
-			) as Array<std.wrap.Arg>;
-			entrypointArtifact = await std.wrap(
-				{ buildToolchain },
-				...entrypointArtifactArgs,
-			);
-		}
-
-		// Verify that the arguments supplied are correct.
-		tg.assert(
-			rootDir || entrypointArtifact,
-			"Cannot create a container image without either a root filesystem or entrypoint.",
+			config,
+			layerCompression,
+			...layers,
 		);
-
-		// Create the layers for the image.
-		const layers: Array<Layer> = [];
-		if (rootDir) {
-			layers.push(await layer(rootDir));
-		}
-		if (entrypointArtifact) {
-			layers.push(
-				await layer(await tg.directory({ entrypoint: entrypointArtifact })),
-			);
-			if (!entrypointString) {
-				entrypointString = ["/entrypoint"];
-			}
-		}
-
-		// Create the image configuration.
-		const config: ImageConfigV1 = {
-			...platform(system),
-			rootfs: {
-				type: "layers",
-				diff_ids: layers.map((l) => l.diffId),
-			},
-			config: {
-				Entrypoint: entrypointString ?? [],
-				Cmd: cmdString,
-			},
-		};
-
-		if (format === "docker") {
-			return dockerImageFromLayers(config, ...layers);
-		} else if (format === "oci") {
-			return ociImageFromLayers(
-				buildToolchain,
-				config,
-				layerCompression,
-				...layers,
-			);
-		} else {
-			throw new Error(`Unsupported image format: ${format}`);
-		}
-	},
-);
+	} else {
+		throw new Error(`Unsupported image format: ${format}`);
+	}
+};
 
 export const dockerImageFromLayers = async (
 	config: ImageConfigV1,
@@ -341,18 +319,17 @@ export const ociImageFromLayers = async (
 		additionalEnv.push(
 			zstd({
 				sdk: false,
-				env: await std.env.arg(additionalEnv),
+				env: await std.env.arg(...additionalEnv),
 			}),
 		);
 	}
 	const layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
-			const file = await tg
-				.command(tg`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`, {
-					env: std.env.arg(additionalEnv),
-				})
-				.then((command) => buildBootstrap(command))
-				.then(tg.File.expect);
+			const file =
+				await std.build`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`
+					.bootstrap(true)
+					.env(std.env.arg(...additionalEnv))
+					.then(tg.File.expect);
 			const descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,
 				platform,
@@ -427,23 +404,22 @@ export type Layer = {
 	diffId: string;
 };
 
-export const layer = tg.command(
-	async (directory: tg.Directory): Promise<Layer> => {
-		const bundle = tg.bundle(directory).then(tg.Directory.expect);
-		console.log("bundle", await (await bundle).id());
-		const tarball = await createTarball(bundle);
-		console.log("layer", await tarball.id());
-		const bytes = await tarball.bytes();
-		const diffId = await tg.checksum(bytes, "sha256");
-		return { tarball, diffId };
-	},
-);
+export const layer = async (directory: tg.Directory): Promise<Layer> => {
+	const bundle = tg.bundle(directory).then(tg.Directory.expect);
+	console.log("bundle", await (await bundle).id());
+	const tarball = await createTarball(bundle);
+	console.log("layer", await tarball.id());
+	const bytes = await tarball.bytes();
+	const diffId = await tg.checksum(bytes, "sha256");
+	return { tarball, diffId };
+};
 
-export const createTarball = tg.command(
-	async (directory: tg.Directory): Promise<tg.File> => {
-		return await tg.archive(directory, "tar").then(tg.file);
-	},
-);
+export const createTarball = async (
+	directory: tg.Unresolved<tg.Directory>,
+): Promise<tg.File> => {
+	const resolved = await tg.resolve(directory);
+	return await tg.archive(resolved, "tar").then(tg.file);
+};
 
 export type Platform = {
 	architecture: string;

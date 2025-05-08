@@ -10,7 +10,7 @@ export const metadata = {
 	version: "5.40.2",
 };
 
-export const source = tg.command(async (os: string) => {
+export const source = async (os: string) => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -25,7 +25,7 @@ export const source = tg.command(async (os: string) => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, ...patches));
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -35,14 +35,14 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: buildTriple_,
 		env,
 		host: host_,
 		sdk,
 		source: source_,
-	} = arg ?? {};
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const os = std.triple.os(host);
 	const build = buildTriple_ ?? host;
@@ -131,14 +131,14 @@ export const build = tg.command(async (arg?: Arg) => {
 	return tg.directory(perlArtifact, {
 		["bin/perl"]: wrappedPerl,
 	});
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries: ["perl"], metadata });
 	return true;
-});
+};

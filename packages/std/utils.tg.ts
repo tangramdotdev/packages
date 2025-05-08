@@ -39,8 +39,13 @@ export type Arg = {
 };
 
 /** A basic set of GNU system utilites. */
-export const env = tg.command(async (arg?: Arg) => {
-	const { build, env: env_, host: host_, sdk } = arg ?? {};
+export const env = async (arg?: tg.Unresolved<Arg>) => {
+	const {
+		build,
+		env: env_,
+		host: host_,
+		sdk,
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 
 	const shellArtifact = await bash.build({ build, env: env_, host, sdk });
@@ -70,15 +75,15 @@ export const env = tg.command(async (arg?: Arg) => {
 			xz({ build, env, host, sdk }),
 		]),
 	);
-	return await std.env.arg(utils);
-});
+	return await std.env.arg(...utils);
+};
 
 export default env;
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
-export const prerequisites = tg.command(async (hostArg?: string) => {
-	const host = hostArg ?? (await std.triple.host());
-	const components: std.Args<std.env.Arg> = [await bootstrap.utils(host)];
+export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
+	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
+	const components: Array<tg.Unresolved<std.env.Arg>> = [bootstrap.utils(host)];
 
 	// Add GNU make.
 	const makeArtifact = await bootstrap.make.build({ host });
@@ -93,8 +98,8 @@ export const prerequisites = tg.command(async (hostArg?: string) => {
 	});
 	components.push(coreutilsArtifact);
 
-	return components;
-});
+	return std.env.arg(...components);
+};
 
 export type BuildUtilArg = std.autotools.Arg & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
@@ -166,14 +171,14 @@ export const assertProvides = async (env: std.env.Arg) => {
 	return true;
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = bootstrap.toolchainTriple(await std.triple.host());
 	const utilsEnv = await env({ host, sdk: false, env: bootstrap.sdk() });
 	await assertProvides(utilsEnv);
 	return utilsEnv;
-});
+};
 
-export const testPrerequisites = tg.command(async () => {
+export const testPrerequisites = async () => {
 	const host = bootstrap.toolchainTriple(await std.triple.host());
 	return await prerequisites(host);
-});
+};

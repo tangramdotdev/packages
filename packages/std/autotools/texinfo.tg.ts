@@ -20,7 +20,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0329d7788fbef113fa82cb80889ca197a344ce0df7646fe000974c5d714363a6";
@@ -30,7 +30,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -41,8 +41,15 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
-	const { build, env: env_, host, perlArtifact, sdk, source: source_ } = arg;
+export const build = async (arg: tg.Unresolved<Arg>) => {
+	const {
+		build,
+		env: env_,
+		host,
+		perlArtifact,
+		sdk,
+		source: source_,
+	} = await tg.resolve(arg);
 	const env = std.env.arg(env_);
 
 	const shellScripts = [
@@ -90,6 +97,6 @@ export const build = tg.command(async (arg: Arg) => {
 			tg`${output}/share/texinfo/texindex.awk`,
 		),
 	});
-});
+};
 
 export default build;

@@ -12,7 +12,7 @@ export const metadata = {
 	version: "2.7.6",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd";
@@ -26,7 +26,7 @@ export const source = tg.command(async () => {
 	// See https://savannah.gnu.org/bugs/index.php?62958
 	source = await bootstrap.patch(source, rlimitFix);
 	return source;
-});
+};
 
 export type Arg = {
 	build?: string | undefined;
@@ -36,7 +36,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg?: Arg) => {
+export const build = async (arg?: Arg) => {
 	const {
 		build: build_,
 		env: env_,
@@ -51,7 +51,7 @@ export const build = tg.command(async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const dependencies: tg.Unresolved<std.Args<std.env.Arg>> = [
+	const dependencies: Array<tg.Unresolved<std.env.Arg>> = [
 		prerequisites(build),
 	];
 	if (std.triple.os(host) === "linux") {
@@ -77,11 +77,11 @@ export const build = tg.command(async (arg?: Arg) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	const system = std.triple.archAndOs(host);
@@ -175,4 +175,4 @@ export const test = tg.command(async () => {
 	tg.assert(contents === expected);
 
 	return patchArtifact;
-});
+};

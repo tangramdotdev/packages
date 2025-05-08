@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:07fbf5f5e2a03ed5d424166fad8a2a05ed8d74c7a5ff46b17690f1de286278f3";
@@ -28,7 +28,7 @@ export const source = tg.command(() => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	env?: std.env.Arg;
@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		env,
 		host,
@@ -54,16 +54,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		},
 		nodejs,
 	);
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/vsce`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: [
@@ -75,4 +70,4 @@ export const test = tg.command(async () => {
 		],
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

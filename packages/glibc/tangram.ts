@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:a5a26b22f545d6b7d7b3dd828e11e428f24f4fac43c934fb071b6a7d0828e901";
@@ -27,7 +27,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 type Arg = {
 	autotools?: std.autotools.Arg;
@@ -39,7 +39,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -118,7 +118,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	});
 
 	return result;
-});
+};
 
 export default build;
 
@@ -160,7 +160,7 @@ export const interpreterName = (triple: string) => {
 	return `ld-linux-${soArch}.so.${soVersion}`;
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

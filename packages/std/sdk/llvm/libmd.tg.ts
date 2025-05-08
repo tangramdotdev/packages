@@ -5,7 +5,7 @@ export const metadata = {
 	version: "1.1.0",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const url = `https://libbsd.freedesktop.org/releases/${name}-${version}.tar.xz`;
 	const checksum =
@@ -14,12 +14,11 @@ export const source = tg.command(async () => {
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-});
+};
 
-export const build = tg.command(async () =>
+export const build = async () =>
 	std.autotools.build({
 		source: source(),
-	}),
-);
+	});
 
 export default build;

@@ -93,23 +93,15 @@ export type Arg = {
 	target?: string;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
-	const mutationArgs = await std.args.createMutations<
-		Arg,
-		std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">
-	>(std.flatten(args), {
-		env: "append",
-		phases: "append",
-		sdk: (arg) => {
-			if (arg === false) {
-				return tg.Mutation.append(false);
-			} else if (arg === true) {
-				return tg.Mutation.append({});
-			} else {
-				return tg.Mutation.append<boolean | std.sdk.Arg>(arg as std.sdk.Arg);
-			}
-		},
-		source: "set",
+export const build = async (...args: tg.Args<Arg>) => {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	const objects = resolved.map((obj) => {
+		return {
+			...obj,
+			env: [obj.env],
+			phases: [obj.phases],
+			sdk: [obj.sdk],
+		};
 	});
 	const {
 		buildInTree = false,
@@ -142,7 +134,12 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await std.args.applyMutations(mutationArgs);
+	} = (await tg.Args.apply(objects, {
+		env: "append",
+		phases: "append",
+		sdk: "append",
+		source: "set",
+	})) as std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">;
 
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
@@ -239,7 +236,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 
 	if (includeSdk) {
 		// Set up the SDK, add it to the environment.
-		const sdk = await std.sdk(sdkArgs);
+		const sdk = await tg.build(std.sdk, ...(sdkArgs ?? []));
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
 		let level: Level = "base";
 		if (pkgConfig) {
@@ -251,16 +248,16 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		if (developmentTools) {
 			level = "devtools";
 		}
-		const buildToolsEnv = buildTools({
+		const buildToolsEnv = await tg.build(buildTools, {
 			host,
-			buildToolchain: std.sdk({ host }),
+			buildToolchain: await std.sdk({ host }),
 			level,
 		});
 		envs.push(sdk, buildToolsEnv);
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, userEnv);
+	const env = await std.env.arg(...envs, ...(userEnv ?? []));
 
 	// Define default phases.
 	const configureArgs =
@@ -280,7 +277,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 
 	const jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
-	const jobsArg = tg.Mutation.prefix(`-j${jobs}`, " ");
+	const jobsArg = `-j${jobs}`;
 	const defaultBuild = {
 		command: `make`,
 		args: [jobsArg],
@@ -357,6 +354,7 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	return await std.phases
 		.run(
 			{
+				bootstrap: true,
 				debug,
 				phases: defaultPhases,
 				env,
@@ -367,4 +365,4 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 			...phaseArgs,
 		)
 		.then(tg.Directory.expect);
-});
+};

@@ -20,7 +20,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
@@ -30,7 +30,7 @@ export const source = tg.command(() => {
 		checksum,
 		compression: "xz",
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -43,7 +43,8 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
 	const {
 		build,
 		env: env_,
@@ -53,7 +54,7 @@ export const build = tg.command(async (arg: Arg) => {
 		perlArtifact,
 		sdk,
 		source: source_,
-	} = arg;
+	} = resolved;
 
 	const env = std.env.arg(env_);
 
@@ -65,7 +66,7 @@ export const build = tg.command(async (arg: Arg) => {
 	});
 
 	// Patch the autom4te.cfg file.
-	autoconf = await patchAutom4teCfg(autoconf, arg);
+	autoconf = await patchAutom4teCfg(autoconf, resolved);
 
 	const shellSripts = ["autoconf"];
 
@@ -157,35 +158,36 @@ export const build = tg.command(async (arg: Arg) => {
 		["bin"]: binDirectory,
 	});
 	return output;
-});
+};
 
-export const patchAutom4teCfg = tg.command(
-	async (autoconf: tg.Directory, arg: Arg): Promise<tg.Directory> => {
-		const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
-		tg.assert(autom4teCfg instanceof tg.File);
+export const patchAutom4teCfg = async (
+	autoconf: tg.Directory,
+	arg: Arg,
+): Promise<tg.Directory> => {
+	const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
+	tg.assert(autom4teCfg instanceof tg.File);
 
-		const lines = (await autom4teCfg.text()).split("\n");
+	const lines = (await autom4teCfg.text()).split("\n");
 
-		let contents = tg``;
-		for (const line of lines) {
-			let newLine: Promise<tg.Template> | string = line;
-			if (line.includes("args: --prepend-include")) {
-				newLine = tg`args: -B '${autoconf}/share/autoconf'`;
-			}
-			contents = tg`${contents}${newLine}\n`;
+	let contents = tg``;
+	for (const line of lines) {
+		let newLine: Promise<tg.Template> | string = line;
+		if (line.includes("args: --prepend-include")) {
+			newLine = tg`args: -B '${autoconf}/share/autoconf'`;
 		}
+		contents = tg`${contents}${newLine}\n`;
+	}
 
-		const patchedAutom4teCfg = await $`
+	const patchedAutom4teCfg = await $`
 			cat <<'EOF' | tee $OUTPUT
 			${contents}
 		`
-			.env(arg.env)
-			.then(tg.File.expect);
+		.env(arg.env)
+		.then(tg.File.expect);
 
-		return tg.directory(autoconf, {
-			["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
-		});
-	},
-);
+	return tg.directory(autoconf, {
+		["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
+	});
+};
 
 export default build;

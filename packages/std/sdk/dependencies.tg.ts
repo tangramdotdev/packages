@@ -51,8 +51,7 @@ export type Level = "base" | "pkgconfig" | "extended" | "python" | "devtools";
 export const buildTools = async (
 	unresolvedArg: tg.Unresolved<BuildToolsArg>,
 ) => {
-	const arg = await tg.resolve(unresolvedArg);
-	const { host, level, buildToolchain } = arg;
+	const { host, level, buildToolchain } = await tg.resolve(unresolvedArg);
 	const os = std.triple.os(host);
 
 	// This list collects artifacts to return. It does not include the build toolchain.

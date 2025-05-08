@@ -12,7 +12,7 @@ export const metadata = {
 	version: "0.25.2",
 };
 
-export const source = tg.command(async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:01a6c0a5949e5c2d53e19be52aec152b3186f8bbcf98df6996a20a972a78c330";
@@ -26,7 +26,7 @@ export const source = tg.command(async () => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	dependencies?: {
@@ -38,7 +38,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		dependencies: { go: goArg = {}, nodejs: nodejsArg = {} } = {},
 		env: env_,
@@ -77,16 +77,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		.checksum("sha256:any")
 		.network(true)
 		.then(tg.Directory.expect);
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/esbuild`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

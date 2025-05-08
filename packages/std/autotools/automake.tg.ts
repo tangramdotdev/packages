@@ -11,7 +11,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:8920c1fc411e13b90bf704ef9db6f29d540e76d232cb3b2c9f4dc4cc599bd990";
@@ -21,7 +21,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -33,7 +33,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
 		build,
 		env: env_,
@@ -42,7 +42,7 @@ export const build = tg.command(async (arg: Arg) => {
 		perlArtifact,
 		sdk,
 		source: source_,
-	} = arg;
+	} = await tg.resolve(arg);
 
 	const perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
@@ -108,6 +108,6 @@ export const build = tg.command(async (arg: Arg) => {
 	return tg.directory({
 		["bin"]: binDirectory,
 	});
-});
+};
 
 export default build;

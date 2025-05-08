@@ -10,7 +10,7 @@ export const metadata = {
 	name: "glibc",
 };
 
-export const source = tg.command((version?: GlibcVersion) => {
+export const source = (version?: GlibcVersion) => {
 	const { name } = metadata;
 	const version_ = version ?? defaultGlibcVersion;
 
@@ -23,7 +23,7 @@ export const source = tg.command((version?: GlibcVersion) => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -34,7 +34,7 @@ export type Arg = {
 	linuxHeaders: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
+export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
@@ -42,7 +42,7 @@ export const build = tg.command(async (arg: Arg) => {
 		linuxHeaders,
 		sdk,
 		source: source_,
-	} = arg;
+	} = await tg.resolve(arg);
 	const incomingHost = host_ ?? (await std.triple.host());
 	const { host, version } = splitVersionFromHost(incomingHost);
 	const build = build_ ?? host;
@@ -92,8 +92,8 @@ export const build = tg.command(async (arg: Arg) => {
 	const env: tg.Unresolved<Array<std.env.Arg>> = [env_];
 
 	env.push({
-		CPATH: tg.Mutation.unset(),
-		LIBRARY_PATH: tg.Mutation.unset(),
+		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
+		LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
 		TANGRAM_LINKER_PASSTHROUGH: true,
 		CFLAGS: tg.Mutation.suffix(
 			`-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection`,
@@ -105,7 +105,7 @@ export const build = tg.command(async (arg: Arg) => {
 		...(await std.triple.rotate({ build, host })),
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
-		env: std.env.arg(env),
+		env: std.env.arg(...env),
 		fortifySource: false,
 		hardeningCFlags: false,
 		opt: "3",
@@ -128,7 +128,7 @@ export const build = tg.command(async (arg: Arg) => {
 	});
 
 	return result;
-});
+};
 
 export default build;
 

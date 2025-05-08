@@ -10,7 +10,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const cargo = tg.command(async (arg: Arg) => {
+export const cargo = async (arg: Arg) => {
 	const { env: envArg, ...rest } = arg ?? {};
 
 	const env_ =
@@ -18,25 +18,25 @@ export const cargo = tg.command(async (arg: Arg) => {
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.cargo.build(arg_);
-});
+};
 
 export default cargo;
 
-export const plain = tg.command(async (arg: Arg) => {
+export const plain = async (arg: Arg) => {
 	const { env: envArg, ...rest } = arg ?? {};
 
 	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.build.build(arg_);
-});
+};
 
 type EnvArg = {
 	build?: string | undefined;
 	host?: string | undefined;
 };
 
-export const env = tg.command(async (arg?: EnvArg) => {
+export const env = async (arg?: EnvArg) => {
 	const { build: build_, host: host_ } = arg ?? {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -45,4 +45,4 @@ export const env = tg.command(async (arg?: EnvArg) => {
 		cmake({ ...std.triple.rotate({ build, host }) }),
 		openssl({ build, host }),
 	);
-});
+};

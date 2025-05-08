@@ -3,8 +3,31 @@ import * as std from "./tangram.ts";
 import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
-export async function env(...args: std.args.UnresolvedArgs<env.Arg>) {
-	return await env.inner(...args);
+export async function env(...args: tg.Args<env.Arg>) {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	// Check if the user requested to omit the standard utils.
+	const utils = resolved.reduce((acc, arg) => {
+		if (isUtilsToggle(arg)) {
+			if (arg.utils === false) {
+				return false;
+			}
+		}
+		return acc;
+	}, true);
+	const objectArgs = resolved.filter((arg) => !isUtilsToggle(arg));
+
+	// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
+	let buildToolchain: undefined | tg.Unresolved<std.env.Arg> = undefined;
+	if (utils) {
+		objectArgs.push(await std.utils.env({ sdk: false, env: std.sdk() }));
+	} else {
+		buildToolchain = await bootstrap.sdk();
+	}
+
+	return std.wrap(gnuEnv(), {
+		buildToolchain,
+		env: std.env.arg(...objectArgs),
+	});
 }
 
 export namespace env {
@@ -14,12 +37,9 @@ export namespace env {
 		| UtilsToggle
 		| tg.MaybeMutation<ArgObject>;
 
-	/** An object containing values or potentially nested mutations. */
+	/** An object containing values or mutations, accepting booleans. */
 	export type ArgObject = tg.MaybeMutationMap<
-		Record<
-			string,
-			tg.MaybeNestedArray<tg.MaybeMutation<tg.Template.Arg | boolean>>
-		>
+		Record<string, tg.Template.Arg | boolean>
 	>;
 
 	/** An object containing values or mutations for a set of environment variables, ready to pass to `tg.target`. */
@@ -28,49 +48,24 @@ export namespace env {
 	/** An object containing only a `utils` boolean field and no other members. */
 	export type UtilsToggle = { utils: boolean } & Record<string, never>;
 
-	export const inner = async (...args: std.args.UnresolvedArgs<Arg>) => {
-		// Check if the user requested to omit the standard utils.
-		const utils = args.reduce((acc, arg) => {
-			if (isUtilsToggle(arg)) {
-				if (arg.utils === false) {
-					return false;
-				}
-			}
-			return acc;
-		}, true);
-		const objectArgs = std.flatten(args.filter((arg) => !isUtilsToggle(arg)));
-
-		// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
-		let buildToolchain: undefined | tg.Unresolved<std.env.Arg> = undefined;
-		if (utils) {
-			objectArgs.push(await std.utils.env({ sdk: false, env: std.sdk() }));
-		} else {
-			buildToolchain = await bootstrap.sdk();
-		}
-
-		return std.wrap(gnuEnv(), {
-			buildToolchain,
-			env: std.env.arg(objectArgs),
-		});
-	};
-
-	/** Produce a single env object from a potentially nested array of env args. */
+	/** Produce a single env object from one or more env args. */
 	export const arg = async (
-		...args: std.args.UnresolvedArgs<Arg>
+		...args: tg.Args<Arg>
 	): Promise<std.env.EnvObject> => {
-		const envObjects = await Promise.all(
-			std
-				.flatten(await Promise.all(args.map(tg.resolve)))
-				.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
-				.map(async (arg) => {
-					if (tg.Artifact.is(arg)) {
-						return await env.envObjectFromArtifact(arg);
-					} else {
-						tg.assert(arg !== undefined);
-						return arg;
-					}
-				}),
-		);
+		const resolved = await Promise.all(args.map(tg.resolve));
+		const envObjects: Array<tg.MaybeMutation<env.ArgObject>> =
+			await Promise.all(
+				resolved
+					.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
+					.map(async (arg) => {
+						if (tg.Artifact.is(arg)) {
+							return await env.envObjectFromArtifact(arg);
+						} else {
+							tg.assert(arg !== undefined);
+							return arg as tg.MaybeMutation<ArgObject>;
+						}
+					}),
+			);
 		return await env.mergeArgObjects(...envObjects);
 	};
 
@@ -189,44 +184,11 @@ export namespace env {
 						}
 					}
 				} else {
-					const newValues = Array.isArray(val) ? val : [val];
-					for (let newVal of std.flatten(newValues)) {
-						// If it's not a mutation, wrap it in a set mutation.
-						if (!(newVal instanceof tg.Mutation)) {
-							newVal = await tg.Mutation.set<tg.Template.Arg>(
-								templateFromArg(newVal),
-							);
-						} else {
-							tg.assert(newVal instanceof tg.Mutation);
-							if (newVal.inner.kind === "set") {
-								tg.assert(std.args.isTemplateArg(newVal.inner.value));
-								newVal = await tg.Mutation.set(
-									templateFromArg(newVal.inner.value),
-								);
-							} else if (newVal.inner.kind === "set_if_unset") {
-								tg.assert(std.args.isTemplateArg(newVal.inner.value));
-								newVal = await tg.Mutation.setIfUnset(
-									templateFromArg(newVal.inner.value),
-								);
-							} else if (newVal.inner.kind === "prefix") {
-								tg.assert(std.args.isTemplateArg(newVal.inner.template));
-								newVal = await tg.Mutation.prefix(
-									templateFromArg(newVal.inner.template),
-									newVal.inner.separator,
-								);
-							} else if (newVal.inner.kind === "suffix") {
-								tg.assert(std.args.isTemplateArg(newVal.inner.template));
-								newVal = await tg.Mutation.suffix(
-									templateFromArg(newVal.inner.template),
-									newVal.inner.separator,
-								);
-							}
-						}
-						// At this point, we know we have a mutation.
-						tg.assert(newVal instanceof tg.Mutation);
-						// Merge it with the current value.
-						current = await env.mergeTemplateMaybeMutations(current, newVal);
-					}
+					// Merge it with the current value.
+					current = await env.mergeTemplateMaybeMutations(
+						current,
+						await tg.Mutation.set(templateFromArg(val)),
+					);
 				}
 
 				// Set the new value.
@@ -244,11 +206,40 @@ export namespace env {
 		return tg.template(val);
 	};
 
+	const templateArgOrBooleanToTemplateMutation = (
+		orig: tg.MaybeMutation<tg.Template.Arg | boolean>,
+	): Promise<tg.MaybeMutation<tg.Template>> => {
+		if (orig instanceof tg.Mutation) {
+			if (orig.inner.kind === "unset") {
+				return Promise.resolve(orig) as Promise<tg.Mutation<tg.Template>>;
+			} else if (orig.inner.kind === "set") {
+				return tg.Mutation.set(templateFromArg(orig.inner.value));
+			} else if (orig.inner.kind === "set_if_unset") {
+				return tg.Mutation.setIfUnset(templateFromArg(orig.inner.value));
+			} else if (orig.inner.kind === "prefix") {
+				return tg.Mutation.prefix(
+					templateFromArg(orig.inner.template),
+					orig.inner.separator,
+				);
+			} else if (orig.inner.kind === "suffix") {
+				return tg.Mutation.suffix(
+					templateFromArg(orig.inner.template),
+					orig.inner.separator,
+				);
+			} else {
+				// Note: prepend/append are always array types.
+				return tg.unreachable();
+			}
+		} else {
+			return templateFromArg(orig);
+		}
+	};
+
 	/** Combine two tg.MaybeMutation<tg.Template.Arg> values into one. */
 	export const mergeTemplateMaybeMutations = async (
-		a: tg.MaybeMutation<tg.Template.Arg>,
-		b: tg.MaybeMutation<tg.Template.Arg>,
-	): Promise<tg.MaybeMutation<tg.Template.Arg>> => {
+		a: tg.MaybeMutation<tg.Template.Arg | boolean>,
+		b: tg.MaybeMutation<tg.Template.Arg | boolean>,
+	): Promise<tg.MaybeMutation<tg.Template>> => {
 		// Reject prepend and append mutations.
 		if (
 			(a instanceof tg.Mutation && a.inner.kind === "prepend") ||
@@ -265,18 +256,18 @@ export namespace env {
 
 		// If either arg is undefined, return the other.
 		if (a === undefined) {
-			return b;
+			return templateArgOrBooleanToTemplateMutation(b);
 		}
 		if (b === undefined) {
-			return a;
+			return templateArgOrBooleanToTemplateMutation(a);
 		}
 
 		// Wrap the values in mutations if they are not already.
 		if (!(a instanceof tg.Mutation)) {
-			a = await tg.Mutation.set<tg.Template.Arg>(a);
+			a = await tg.Mutation.set<tg.Template.Arg>(templateFromArg(a));
 		}
 		if (!(b instanceof tg.Mutation)) {
-			b = await tg.Mutation.set<tg.Template.Arg>(b);
+			b = await tg.Mutation.set<tg.Template.Arg>(templateFromArg(b));
 		}
 
 		// Merge the mutations.
@@ -288,7 +279,7 @@ export namespace env {
 		}
 		const ret = merged.at(0);
 		tg.assert(ret instanceof tg.Mutation);
-		return ret as tg.Mutation<tg.Template.Arg>;
+		return ret as tg.Mutation<tg.Template>;
 	};
 
 	/////// Queries
@@ -482,9 +473,9 @@ export namespace env {
 
 	/** Yield all the environment key/value pairs. */
 	export async function* envVars(
-		...envArg: std.Args<env.Arg>
+		...envArg: tg.Args<env.Arg>
 	): AsyncGenerator<[string, tg.Template | undefined]> {
-		const map = await env.arg(envArg);
+		const map = await env.arg(...envArg);
 		let value: env.EnvObject | undefined;
 		if (map instanceof tg.Mutation) {
 			if (map.inner.kind === "unset") {
@@ -518,10 +509,10 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, throw an error. */
 	export const getShellExecutable = async (
-		...envArgs: std.Args<env.Arg>
+		...envArgs: tg.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink> => {
 		// First, check if "SHELL" is set and points to an executable.
-		const envArg = await arg(envArgs);
+		const envArg = await arg(...envArgs);
 		const shellArtifact = await env.tryGetArtifactByKey({
 			env: envArg,
 			key: "SHELL",
@@ -546,9 +537,9 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, return `undefined`. */
 	export const tryGetShellExecutable = async (
-		...envArgs: std.Args<env.Arg>
+		...envArgs: tg.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink | undefined> => {
-		const envArg = await arg(envArgs);
+		const envArg = await arg(...envArgs);
 		// First, check if "SHELL" is set and points to an executable.
 		const shellArtifact = await tryGetArtifactByKey({
 			env: envArg,
@@ -829,7 +820,7 @@ const isDependencyObject = <T extends std.args.PackageArg>(
 	return true;
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const envFile = await env({ FOO: "bar" });
 	const foundFooVal = await env.tryGetKey({ env: envFile, key: "FOO" });
 	tg.assert(
@@ -845,4 +836,4 @@ export const test = tg.command(async () => {
 	);
 	tg.assert(component === "bar", "expected the string to be 'bar'");
 	return true;
-});
+};

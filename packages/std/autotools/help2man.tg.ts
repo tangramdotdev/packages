@@ -11,7 +11,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:4d7e4fdef2eca6afe07a2682151cea78781e0a4e8f9622142d9f70c083a2fd4f";
@@ -21,7 +21,7 @@ export const source = tg.command(() => {
 		compression: "xz",
 		checksum,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -32,8 +32,15 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (arg: Arg) => {
-	const { build, env: env_, host, perlArtifact, sdk, source: source_ } = arg;
+export const build = async (arg: tg.Unresolved<Arg>) => {
+	const {
+		build,
+		env: env_,
+		host,
+		perlArtifact,
+		sdk,
+		source: source_,
+	} = await tg.resolve(arg);
 
 	const interpreter = tg.symlink({
 		artifact: perlArtifact,
@@ -58,6 +65,6 @@ export const build = tg.command(async (arg: Arg) => {
 	return tg.directory({
 		["bin/help2man"]: wrappedScript,
 	});
-});
+};
 
 export default build;

@@ -396,7 +396,6 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		tg::checkin(
 			&tg,
 			tg::checkin::Arg {
-				cache: true,
 				destructive: false,
 				deterministic: true,
 				ignore: false,
@@ -564,7 +563,6 @@ async fn checkin_local_library_path(
 				let library_candidate_file = tg::checkin(
 					tg,
 					tg::checkin::Arg {
-						cache: true,
 						destructive: false,
 						deterministic: true,
 						ignore: false,
@@ -888,7 +886,6 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 						tg::checkin(
 							tg,
 							tg::checkin::Arg {
-								cache: true,
 								destructive: false,
 								deterministic: true,
 								ignore: false,

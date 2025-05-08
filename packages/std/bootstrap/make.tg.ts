@@ -13,18 +13,18 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(() => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3";
 	return std.download.fromGnu({ name, version, checksum });
-});
+};
 
 export type Arg = {
 	host?: string;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const { host } = await std.args.apply<Arg>(...args);
 
 	const configure = {
@@ -32,23 +32,25 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	};
 	const build = {
 		command: "./build.sh",
-		args: tg.Mutation.unset(),
+		args: tg.Mutation.unset() as tg.Mutation<Array<tg.Template>>,
 	};
 	const install = {
 		pre: "mkdir -p $OUTPUT/bin",
 		body: {
 			command: "cp make $OUTPUT/bin",
-			args: tg.Mutation.unset(),
+			args: tg.Mutation.unset() as tg.Mutation<Array<tg.Template>>,
 		},
 	};
-	const phases = {
+	const phases: std.phases.Arg = {
 		configure,
 		build,
 		install,
 	};
 
+	const env = std.env.arg(sdk(host));
+
 	const output = await autotoolsInternal({
-		env: std.env.arg(sdk(host), { WATERMARK: "1" }),
+		env,
 		host,
 		opt: "s",
 		phases,
@@ -57,14 +59,14 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 		source: source(),
 	});
 	return output;
-});
+};
 
 export default build;
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		bootstrapMode: true,
 	};
 	return await std.assert.pkg(build, spec);
-});
+};

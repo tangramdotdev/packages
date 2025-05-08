@@ -200,22 +200,22 @@ export namespace download {
 	};
 }
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	return await Promise.all([testTgDownload(), testStdDownload()]);
-});
+};
 
-export const testTgDownload = tg.command(async () => {
+export const testTgDownload = async () => {
 	return await tg.download(
 		"https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
-		"sha256:026f919826c372cab0f2ac09b647fd570153efdb3e0ea5d8c9f05e1bca02f028",
+		"sha256:d522cdef681f13a0f66e78a69db00e08b7c00bd2e65b967d52aa39e73b890add",
 	);
-});
+};
 
-export const testStdDownload = tg.command(async () => {
+export const testStdDownload = async () => {
 	return await download({
 		url: "https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
 		checksum:
-			"sha256:026f919826c372cab0f2ac09b647fd570153efdb3e0ea5d8c9f05e1bca02f028",
+			"sha256:d522cdef681f13a0f66e78a69db00e08b7c00bd2e65b967d52aa39e73b890add",
 		mode: "extract",
 	});
-});
+};

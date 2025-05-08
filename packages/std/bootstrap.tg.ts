@@ -1,5 +1,4 @@
 import * as std from "./tangram.ts";
-import { buildBootstrap } from "./command.tg.ts";
 
 export * as make from "./bootstrap/make.tg.ts";
 export * as musl from "./bootstrap/musl.tg.ts";
@@ -129,30 +128,18 @@ export const patch = async (
 		...patches.map((patch) => tg`patch -p1 < ${patch}`),
 	);
 
-	const script = tg`
-		set -eu
+	const shellArtifact = await shell(host);
+	const utilsArtifact = utils(host);
+	const env = std.env.arg(utilsArtifact, shellArtifact);
+
+	const patchedSource = await std.build`
 		cp -R ${source} $OUTPUT
 		chmod -R +w $OUTPUT
 		cd $OUTPUT
 		${patchScript}
-	`;
-
-	const shellArtifact = await shell(host);
-	const shellExecutable = await shellArtifact
-		.get("bin/dash")
-		.then(tg.File.expect);
-	const utilsArtifact = utils(host);
-
-	const patchedSource = await tg
-		.command({
-			executable: shellExecutable,
-			args: ["-c", script],
-			env: {
-				PATH: tg`${utilsArtifact}/bin:${shellArtifact}/bin`,
-			},
-			host,
-		})
-		.then((c) => buildBootstrap(c))
+	`
+		.bootstrap(true)
+		.env(env)
 		.then(tg.Directory.expect);
 
 	return patchedSource;
@@ -206,7 +193,7 @@ export const componentList = async (arg?: Arg) => {
 	return expectedComponents[host];
 };
 
-export const test = tg.command(async () => {
+export const test = async () => {
 	const host = await std.triple.host();
 	// Assert that all expected components exist and provide a non-empty `bin/` subdirectory.
 	const components = await componentList({ host });
@@ -229,7 +216,7 @@ export const test = tg.command(async () => {
 		).every((result) => result),
 	);
 	return true;
-});
+};
 
 const checksums: Record<string, tg.Checksum> = {
 	"macos_sdk_12.1":

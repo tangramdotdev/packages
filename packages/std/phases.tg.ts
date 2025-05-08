@@ -1,4 +1,3 @@
-import { runBootstrap } from "./command.tg.ts";
 import * as std from "./tangram.ts";
 
 /** Helper for constructing multi-phase build targets. */
@@ -6,6 +5,7 @@ import * as std from "./tangram.ts";
 export type Arg = ArgObject | PhasesArg;
 
 export type ArgObject = {
+	bootstrap?: boolean;
 	debug?: boolean;
 	env?: std.env.Arg;
 	order?: Array<string>;
@@ -15,11 +15,15 @@ export type ArgObject = {
 	command?: tg.Command.Arg;
 };
 
-export type PhasesArg = {
-	[key: string]: tg.MaybeNestedArray<PhaseArg>;
+export type Phases = {
+	[key: string]: Phase;
 };
 
-export type PhaseArg = tg.MaybeMutation<CommandArg | PhaseArgObject>;
+export type PhasesArg = {
+	[key: string]: tg.MaybeMutation<PhaseArg>;
+};
+
+export type PhaseArg = CommandArg | tg.MaybeMutationMap<PhaseArgObject>;
 
 export type Phase = {
 	body: Command;
@@ -33,9 +37,10 @@ export type PhaseArgObject = {
 	post?: CommandArg;
 };
 
-type CommandArg = tg.MaybeMutation<
-	undefined | string | tg.Artifact | tg.Template | CommandArgObject
->;
+type CommandArg =
+	| undefined
+	| tg.MaybeMutation<tg.Template.Arg>
+	| tg.MaybeMutationMap<CommandArgObject>;
 
 export type Command = {
 	command: tg.Template;
@@ -43,62 +48,73 @@ export type Command = {
 };
 
 export type CommandArgObject = {
-	command?: tg.MaybeMutation<tg.Template | tg.Artifact | string> | undefined;
-	args?:
-		| tg.MaybeNestedArray<tg.MaybeMutation<tg.Template | tg.Artifact | string>>
-		| undefined;
+	command?: tg.Template.Arg;
+	args?: Array<tg.Template.Arg>;
 };
 
-export const run = tg.command(async (...args: std.Args<Arg>) => {
+export const run = async (...args: tg.Args<Arg>) => {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	type MappedObject = std.args.MakeArrayKeys<
+		ArgObject,
+		"env" | "phases" | "command"
+	>;
 	const objectArgs = await Promise.all(
-		args.map((arg) => {
+		resolved.map((arg) => {
 			if (arg === undefined) {
-				return {};
+				return {} as MappedObject;
 			} else if (isArgObject(arg)) {
-				return arg;
+				const ret: MappedObject = {};
+				if ("bootstrap" in arg) {
+					ret.bootstrap = arg.bootstrap;
+				}
+				if ("debug" in arg) {
+					ret.debug = arg.debug;
+				}
+				if ("env" in arg) {
+					ret.env = [arg.env];
+				}
+				if ("order" in arg) {
+					ret.order = arg.order;
+				}
+				if ("phases" in arg) {
+					ret.phases = [arg.phases];
+				}
+				if ("checksum" in arg) {
+					ret.checksum = arg.checksum;
+				}
+				if ("network" in arg) {
+					ret.network = arg.network;
+				}
+				if ("command" in arg) {
+					ret.command = [arg.command];
+				}
+				return ret;
 			} else {
-				return { phases: arg } as ArgObject;
+				return { phases: [arg] } as MappedObject;
 			}
 		}),
 	);
-	const mutationArgs = await std.args.createMutations<
-		ArgObject,
-		std.args.MakeArrayKeys<ArgObject, "env" | "phases" | "command">
-	>(objectArgs, {
+	const {
+		bootstrap = false,
+		checksum,
+		network = false,
+		debug,
+		env: env_ = [],
+		order: order_,
+		phases: phases_ = [],
+		command: commandArgs,
+	} = (await tg.Args.apply(objectArgs, {
+		bootstrap: "set",
 		debug: "set",
 		env: "append",
 		order: "set",
 		phases: "append",
 		command: "append",
-	});
-	const {
-		checksum,
-		network = false,
-		debug,
-		env: env_,
-		order: order_,
-		phases: phases_,
-		command: commandArgs,
-	} = await std.args.applyMutations(mutationArgs);
+	})) as MappedObject;
 
 	// Merge the phases into a single object.
-	const phases = await (phases_ ?? []).reduce(
-		async (acc, el) => {
-			if (el === undefined) {
-				return acc;
-			}
-			const ret = await acc;
-			for (const [key, value] of Object.entries(el)) {
-				const phase = await mergePhaseArgs(ret[key], value);
-				if (phase === undefined) {
-					delete ret[key];
-				} else {
-					ret[key] = phase;
-				}
-			}
-			return ret;
-		},
-		Promise.resolve({} as Phases),
+	const phases = await mergePhases(
+		...phases_.filter((arg) => arg !== undefined),
 	);
 
 	// Construct the phases in order.
@@ -161,34 +177,20 @@ export const run = tg.command(async (...args: std.Args<Arg>) => {
 		`;
 	}
 
-	// Find the shell to use, if set.
-	const maybeShellExe = await std.env.tryGetShellExecutable(env_);
-
-	// Produce an env object for use with tg.target().
-	const env = await std.env.arg(env_);
-
-	// Produce a target arg with the env and optionally the shell executable.
-	let command;
-	if (maybeShellExe === undefined) {
-		command = await tg.command(script, { env }, ...(commandArgs ?? []));
-	} else {
-		command = await tg.command(
-			{
-				executable: maybeShellExe,
-				args: ["-euc", script],
-				env,
-			},
-			...(commandArgs ?? []),
-		);
+	let builder = std.run`${script}`.env(std.env.arg(...env_));
+	if (commandArgs !== undefined) {
+		builder = builder.args(commandArgs);
 	}
-	if (debug) {
-		console.log("phases.build command", await command.id());
+	if (bootstrap) {
+		builder = builder.bootstrap(bootstrap);
 	}
-	return await runBootstrap(command, { checksum, network });
-});
-
-export type Phases = {
-	[key: string]: Phase;
+	if (checksum) {
+		builder = builder.checksum(checksum);
+	}
+	if (network) {
+		builder = builder.network(network);
+	}
+	return await builder;
 };
 
 export const defaultOrder = () => [
@@ -218,7 +220,15 @@ export const isArgObject = (arg: unknown): arg is ArgObject => {
 		arg !== undefined &&
 		typeof arg === "object" &&
 		arg !== null &&
-		("env" in arg || "order" in arg || "phases" in arg || "target" in arg)
+		("bootstrap" in arg ||
+			"checksum" in arg ||
+			"command" in arg ||
+			"debug" in arg ||
+			"env" in arg ||
+			"network" in arg ||
+			"order" in arg ||
+			"phases" in arg ||
+			"target" in arg)
 	);
 };
 
@@ -241,18 +251,56 @@ export const isPhaseObject = (arg: unknown): arg is Phase => {
 	);
 };
 
+export const mergePhases = async (
+	...args: Array<PhasesArg>
+): Promise<Phases> => {
+	// Aggregate args into single object.
+	const collected: { [key: string]: Array<tg.MaybeMutation<PhaseArg>> } = {};
+	for (const phasesArg of args) {
+		for (const [key, value] of Object.entries(phasesArg)) {
+			if (!(key in collected)) {
+				collected[key] = [];
+			}
+			tg.assert(Array.isArray(collected[key]));
+			collected[key].push(value);
+		}
+	}
+
+	// Merge each set of phases into a single phase.
+	const entries = Object.entries(collected);
+	const ret: Phases = {};
+
+	await Promise.all(
+		entries.map(async ([key, value]) => {
+			const mergedPhase = await mergePhaseArgs(...value);
+			if (mergedPhase !== undefined) {
+				ret[key] = mergedPhase;
+			}
+		}),
+	);
+	return ret;
+};
+
 export const mergePhaseArgs = async (
-	...args: std.args.UnresolvedArgs<PhaseArg>
+	...args: Array<tg.MaybeMutation<PhaseArg>>
 ): Promise<Phase | undefined> => {
+	type MappedObject = std.args.MakeArrayKeys<
+		PhaseArgObject,
+		"body" | "pre" | "post"
+	>;
 	const objectArgs = await Promise.all(
-		std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
+		(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
 			if (arg === undefined) {
-				return {};
+				return {} as MappedObject;
 			} else if (isPhaseArgObject(arg)) {
-				return arg;
+				return {
+					body: [arg.body],
+					pre: [arg.pre],
+					post: [arg.post],
+				} as MappedObject;
 			} else if (arg instanceof tg.Mutation) {
 				if (arg.inner.kind === "unset") {
-					return { body: arg };
+					return { body: [arg] } as MappedObject;
 				} else if (
 					arg.inner.kind === "set" ||
 					arg.inner.kind === "set_if_unset"
@@ -260,13 +308,17 @@ export const mergePhaseArgs = async (
 					tg.assert(isPhaseArg(arg.inner.value));
 					const phaseArg = arg.inner.value;
 					if (phaseArg instanceof tg.Mutation) {
-						return { body: phaseArg };
+						return { body: [phaseArg] } as MappedObject;
 					} else if (isPhaseArgObject(phaseArg)) {
-						return phaseArg;
+						return {
+							body: [phaseArg.body],
+							pre: [phaseArg.pre],
+							post: [phaseArg.post],
+						} as MappedObject;
 					} else if (isCommandArgObject(phaseArg)) {
-						return { body: phaseArg };
+						return { body: [phaseArg] } as MappedObject;
 					} else {
-						return { body: await tg.template(phaseArg) };
+						throw new Error(`Unexpected arg for phase: ${arg}`);
 					}
 				} else {
 					throw new Error(`Unexpected mutation for phase: ${arg}`);
@@ -277,164 +329,89 @@ export const mergePhaseArgs = async (
 				arg instanceof tg.Template ||
 				isCommandArgObject(arg)
 			) {
-				return { body: arg };
+				return { body: [arg] } as MappedObject;
 			} else {
 				throw new Error(`Unexpected phase arg type: ${arg}`);
 			}
 		}),
 	);
-	const mutationArgs = await std.args.createMutations<
-		PhaseArgObject,
-		std.args.MakeArrayKeys<PhaseArgObject, "body" | "pre" | "post">
-	>(objectArgs, {
-		body: "append",
-		pre: "append",
-		post: "append",
-	});
 	const {
 		body: body_,
 		pre: pre_,
 		post: post_,
-	} = await std.args.applyMutations(mutationArgs);
+	} = (await tg.Args.apply(objectArgs, {
+		body: "append",
+		pre: "append",
+		post: "append",
+	})) as MappedObject;
 
 	if (!body_) {
 		return undefined;
 	}
 
 	// Construct output object.
-	const body = await mergeCommandArgs(body_);
+	const body = await mergeCommandArgs(...body_);
 	const ret: Phase = { body };
 	if (pre_) {
-		ret.pre = await mergeCommandArgs(pre_);
+		ret.pre = await mergeCommandArgs(...pre_);
 	}
 	if (post_) {
-		ret.post = await mergeCommandArgs(post_);
+		ret.post = await mergeCommandArgs(...post_);
 	}
 	return ret;
 };
 
 export const mergeCommandArgs = async (
-	...args: std.args.UnresolvedArgs<CommandArg>
+	...args: Array<tg.Unresolved<CommandArg>>
 ): Promise<Command> => {
-	const objectArgs: Array<CommandArgObject> = await Promise.all(
-		std.flatten(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
-			if (arg === undefined) {
-				return {};
-			} else if (
-				arg instanceof tg.Template ||
-				tg.Artifact.is(arg) ||
-				typeof arg === "string"
-			) {
-				return { command: await tg.template(arg) };
-			} else if (arg instanceof tg.Mutation) {
-				// Make sure the mutation is valid.
-				if (arg.inner.kind === "unset") {
-					return {
-						command: tg.Mutation.unset(),
-						args: tg.Mutation.unset(),
-					};
-				} else if (arg.inner.kind === "set") {
-					if (
-						typeof arg.inner.value === "string" ||
-						arg.inner.value instanceof tg.Template ||
-						tg.Artifact.is(arg.inner.value)
+	const resolved = await Promise.all(args.map(tg.resolve));
+	const objectArgs: Array<tg.MaybeMutationMap<CommandArgObject>> =
+		await Promise.all(
+			resolved.map(async (arg) => {
+				if (arg === undefined) {
+					return {};
+				} else if (
+					arg instanceof tg.Template ||
+					tg.Artifact.is(arg) ||
+					typeof arg === "string"
+				) {
+					return { command: await tg.template(arg) };
+				} else if (arg instanceof tg.Mutation) {
+					if (arg.inner.kind === "unset") {
+						return {
+							command: tg.Mutation.unset(),
+							args: tg.Mutation.unset(),
+						} as tg.MaybeMutationMap<CommandArgObject>;
+					} else if (
+						arg.inner.kind === "set" ||
+						arg.inner.kind === "set_if_unset" ||
+						arg.inner.kind === "prefix" ||
+						arg.inner.kind === "suffix"
 					) {
 						return { command: arg };
-					} else if (isCommandArgObject(arg.inner.value)) {
-						const command =
-							arg.inner.value.command instanceof tg.Mutation
-								? arg.inner.value.command
-								: await tg.template(arg.inner.value.command);
-						let args = undefined;
-						if (arg.inner.value.args !== undefined) {
-							args =
-								arg.inner.value.args instanceof tg.Mutation
-									? arg.inner.value.args
-									: await Promise.all(
-											std
-												.flatten(arg.inner.value.args ?? [])
-												.map(maybeMutationToTemplate),
-										);
-						}
-						return { command, args };
 					} else {
-						throw new Error(
-							"Unexpected mutation. Cannot set a command to a non-command value.",
-						);
+						throw new Error("unexpected mutation: ${arg}");
 					}
-				} else if (arg.inner.kind === "set_if_unset") {
-					if (
-						typeof arg.inner.value === "string" ||
-						arg.inner.value instanceof tg.Template ||
-						tg.Artifact.is(arg.inner.value)
-					) {
-						return { command: arg };
-					} else if (isCommandArgObject(arg.inner.value)) {
-						const command =
-							arg.inner.value.command instanceof tg.Mutation
-								? arg.inner.value.command
-								: await tg.Mutation.setIfUnset(
-										await tg.template(arg.inner.value.command),
-									);
-						let args = undefined;
-						if (arg.inner.value.args !== undefined) {
-							args =
-								arg.inner.value.args instanceof tg.Mutation
-									? arg.inner.value.args
-									: await tg.Mutation.setIfUnset(
-											await Promise.all(
-												std
-													.flatten(arg.inner.value.args ?? [])
-													.map(maybeMutationToTemplate),
-											),
-										);
-						}
-						return { command, args };
-					} else {
-						throw new Error(
-							"Unexpected mutation. Cannot set a command to a non-command value.",
-						);
-					}
+				} else if (isCommandArgObject(arg)) {
+					return arg;
 				} else {
-					throw new Error(`Unexpected mutation for command: ${arg}`);
+					return tg.unreachable(`unexpected arg: ${arg}`);
 				}
-			} else if (isCommandArgObject(arg)) {
-				const object: CommandArgObject = {};
-				if ("command" in arg) {
-					const command =
-						arg.command instanceof tg.Mutation
-							? arg.command
-							: await tg.template(arg.command);
-					object["command"] = command;
-				}
-				if ("args" in arg) {
-					const args =
-						arg.args instanceof tg.Mutation
-							? arg.args
-							: await Promise.all(
-									std.flatten(arg.args ?? []).map(maybeMutationToTemplate),
-								);
-					object["args"] = args;
-				}
-				return object;
-			} else {
-				return tg.unreachable(`unexpected arg: ${arg}`);
-			}
-		}),
-	);
-	const mutationArgs = await std.args.createMutations<
-		CommandArgObject,
-		Command
-	>(objectArgs, {
+			}),
+		);
+	const { command: command_, args: args_ } = await tg.Args.apply(objectArgs, {
 		command: "set",
 		args: "append",
 	});
-	const { command, args: args_ } = await std.args.applyMutations(mutationArgs);
+	const command = await tg.template(command_);
 
 	if (args_ === undefined) {
 		return { command };
 	} else {
-		return { command, args: args_ };
+		const args = await Promise.all(
+			args_.map(async (arg) => await tg.template(arg)),
+		);
+		return { command, args };
 	}
 };
 
@@ -521,12 +498,12 @@ export const constructCommandTemplate = (
 	}
 };
 
-export const test = tg.command(async () => {
-	await Promise.all([basic(), order(), override(), mutateEnv()]);
+export const test = async () => {
+	await Promise.all([basic(), order(), override()]);
 	return true;
-});
+};
 
-export const basic = tg.command(async () => {
+export const basic = async () => {
 	const prepare = `echo "preparing" >> $OUTPUT`;
 	const configure = `echo "configuring" >> $OUTPUT`;
 	const build_ = `echo "building" >> $OUTPUT`;
@@ -547,15 +524,15 @@ export const basic = tg.command(async () => {
 		phases,
 	};
 
-	const output = await run(arg).then(tg.File.expect);
+	const output = await run(arg, { bootstrap: true }).then(tg.File.expect);
 	const text = await output.text();
 	const expected =
 		"preparing\nconfiguring\nbuilding\nchecking\ninstalling\nfixing up\n";
 	tg.assert(text === expected);
 	return true;
-});
+};
 
-export const order = tg.command(async () => {
+export const order = async () => {
 	const prepare = `echo "preparing" >> $OUTPUT`;
 	const configure = `echo "configuring" >> $OUTPUT`;
 	const build_ = `echo "building" >> $OUTPUT`;
@@ -578,14 +555,14 @@ export const order = tg.command(async () => {
 		order,
 	};
 
-	const output = await run(arg).then(tg.File.expect);
+	const output = await run(arg, { bootstrap: true }).then(tg.File.expect);
 	const text = await output.text();
 	const expected = "fixing up\npreparing\ninstalling\nbuilding\nconfiguring\n";
 	tg.assert(text === expected);
 	return true;
-});
+};
 
-export const override = tg.command(async () => {
+export const override = async () => {
 	const prepare = `echo "preparing"`;
 	const configure = {
 		command: `echo "configuring"`,
@@ -620,61 +597,19 @@ export const override = tg.command(async () => {
 	// Should remove the args on build and replace the command
 	const buildOverride = {
 		command: `echo "building override"`,
-		args: tg.Mutation.unset(),
+		args: tg.Mutation.unset() as tg.Mutation<Array<tg.Template>>,
 	};
 
 	const overrides = {
 		configure: configureOverride,
 		build: buildOverride,
-		check: tg.Mutation.unset(),
+		check: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
 	};
 
 	const arg2 = {
 		phases: overrides,
 	};
 
-	return run(arg1, arg2);
-});
-
-export const mutateEnv = tg.command(async () => {
-	const a = await std.env.arg({
-		HELLO: tg.mutation({
-			kind: "prefix",
-			template: "hello",
-			separator: " ",
-		}),
-		GOODBYE: [
-			tg.mutation({
-				kind: "prefix",
-				template: "name",
-				separator: " ",
-			}),
-			tg.mutation({
-				kind: "prefix",
-				template: "goodbye",
-				separator: " ",
-			}),
-		],
-	});
-	const b = await std.env.arg({
-		HELLO: [
-			tg.mutation({
-				kind: "suffix",
-				template: "world!!",
-				separator: " ",
-			}),
-			tg.mutation({
-				kind: "suffix",
-				template: "mars",
-				separator: ",",
-			}),
-		],
-		GOODBYE: tg.Mutation.unset(),
-	});
-
-	return run(
-		{ phases: { build: "env > $OUTPUT" } },
-		{ command: { env: a } },
-		{ command: { env: b } },
-	);
-});
+	await run(arg1, arg2, { bootstrap: true });
+	return true;
+};

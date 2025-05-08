@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = tg.command(async (): Promise<tg.Directory> => {
+export const source = async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:e720a6ca29428b803f4ad165371771f5398faba397edf6778837a18599ea13ff";
@@ -26,7 +26,7 @@ export const source = tg.command(async (): Promise<tg.Directory> => {
 		source: "tag",
 		tag,
 	});
-});
+};
 
 export type Arg = {
 	build?: string;
@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = tg.command(async (...args: std.Args<Arg>) => {
+export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		build,
 		cmake: cmakeArg = {},
@@ -69,16 +69,11 @@ export const build = tg.command(async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-});
+};
 
 export default build;
 
-export const run = tg.command(async (...args: Array<tg.Value>) => {
-	const dir = await build.build();
-	return await tg.run({ executable: tg.symlink(tg`${dir}/bin/brotli`), args });
-});
-
-export const test = tg.command(async () => {
+export const test = async () => {
 	// FIXME
 	// const dylibOnly = (name: string) => {
 	// 	return { name, dylib: true, staticlib: false };
@@ -97,4 +92,4 @@ export const test = tg.command(async () => {
 	// return true;
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-});
+};

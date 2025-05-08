@@ -1,52 +1,60 @@
 import * as std from "./tangram.ts";
-import * as bootstrap from "./bootstrap.tg.ts";
+import {
+	buildDefaultBash,
+	defaultCommandArg,
+	defaultTemplateCommandArg,
+	linuxRootMount,
+} from "./command.tg.ts";
 
-export function command<
-	A extends Array<tg.Value> = Array<tg.Value>,
-	R extends tg.Value = tg.Value,
->(...args: tg.Args<tg.Command.Arg>): CommandBuilder;
-export function command<
-	A extends Array<tg.Value> = Array<tg.Value>,
-	R extends tg.Value = tg.Value,
->(
+export function build(...args: tg.Args<tg.Process.BuildArg>): BuildBuilder;
+export function build(
 	strings: TemplateStringsArray,
 	...placeholders: tg.Args<tg.Template.Arg>
-): CommandBuilder<A, R>;
-export function command(...args: any): any {
+): BuildBuilder;
+export function build(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
-		let strings = args[0] as TemplateStringsArray;
-		let placeholders = args.slice(1);
-		let arg = defaultTemplateCommandArg(strings, ...placeholders);
-		return new CommandBuilder(arg);
+		const strings = args[0] as TemplateStringsArray;
+		const placeholders = args.slice(1);
+		const arg = defaultTemplateCommandArg(strings, ...placeholders);
+		return new BuildBuilder(arg);
 	} else {
-		return tg.command(defaultCommandArg(), ...args);
+		return tg.build(defaultCommandArg(), ...args);
 	}
 }
 
-type CommandArgObject = {
+type BuildArgObject = {
 	args?: Array<tg.Value> | undefined;
+	checksum?: tg.Checksum | undefined;
 	cwd?: string | undefined;
 	env?: std.env.Arg | Array<std.env.Arg> | undefined;
 	executable?: tg.Command.ExecutableArg | undefined;
 	host?: string | undefined;
 	mounts?: Array<string | tg.Template | tg.Command.Mount> | undefined;
+	network?: boolean | undefined;
 	stdin?: tg.Blob.Arg | undefined;
 	user?: string | undefined;
 };
 
-export class CommandBuilder<
+export interface BuildBuilder<
 	A extends Array<tg.Value> = Array<tg.Value>,
 	R extends tg.Value = tg.Value,
 > {
-	#args: tg.Args<CommandArgObject>;
-	#defaultMount: boolean;
+	(...args: { [K in keyof A]: tg.Unresolved<A[K]> }): BuildBuilder<[], R>;
+}
+
+export class BuildBuilder<
+	A extends Array<tg.Value> = Array<tg.Value>,
+	R extends tg.Value = tg.Value,
+> {
+	#args: tg.Args<BuildArgObject>;
 	#defaultShellFallback: boolean;
+	#defaultMount: boolean;
 	#disallowUnset: boolean;
 	#exitOnErr: boolean;
 	#includeUtils: boolean;
 	#pipefail: boolean;
 
-	constructor(...args: tg.Args<CommandArgObject>) {
+	constructor(...args: tg.Args<BuildArgObject>) {
 		this.#args = args;
 		this.#defaultMount = true;
 		this.#defaultShellFallback = true;
@@ -68,6 +76,13 @@ export class CommandBuilder<
 		return this;
 	}
 
+	checksum(
+		checksum: tg.Unresolved<tg.MaybeMutation<tg.Checksum | undefined>>,
+	): this {
+		this.#args.push({ checksum });
+		return this;
+	}
+
 	cwd(cwd: tg.Unresolved<tg.MaybeMutation<string | undefined>>): this {
 		this.#args.push({ cwd });
 		return this;
@@ -80,6 +95,11 @@ export class CommandBuilder<
 
 	defaultShellFallback(b: boolean): this {
 		this.#defaultShellFallback = b;
+		return this;
+	}
+
+	disallowUnset(b: boolean): this {
+		this.#disallowUnset = b;
 		return this;
 	}
 
@@ -119,7 +139,17 @@ export class CommandBuilder<
 		return this;
 	}
 
-	async mergeArgs(): Promise<CommandArgObject> {
+	network(network: tg.Unresolved<tg.MaybeMutation<boolean>>): this {
+		this.#args.push({ network });
+		return this;
+	}
+
+	pipefail(b: boolean): this {
+		this.#pipefail = b;
+		return this;
+	}
+
+	async mergeArgs(): Promise<BuildArgObject> {
 		let resolved = await Promise.all(this.#args.map(tg.resolve));
 		let objects = await Promise.all(
 			resolved.map(async (arg) => {
@@ -136,10 +166,28 @@ export class CommandBuilder<
 						host: await tg.process.env("TANGRAM_HOST"),
 					};
 				} else if (arg instanceof tg.Command) {
-					const obj = await arg.object();
-					return { ...obj, env: [obj.env] };
+					let object = await arg.object();
+					let ret: BuildArgObject = {
+						args: object.args,
+						env: [object.env as std.env.EnvObject],
+						executable: object.executable,
+						host: object.host,
+					};
+					if (object.cwd !== undefined) {
+						ret.cwd = object.cwd;
+					}
+					if (object.mounts !== undefined) {
+						ret.mounts = object.mounts;
+					}
+					if (object.stdin !== undefined) {
+						ret.stdin = object.stdin;
+					}
+					if (object.user !== undefined) {
+						ret.user = object.user;
+					}
+					return ret;
 				} else {
-					return { ...arg, env: [arg.env] } as CommandArgObject;
+					return { ...arg, env: [arg.env] } as BuildArgObject;
 				}
 			}),
 		);
@@ -150,9 +198,9 @@ export class CommandBuilder<
 		return arg;
 	}
 
-	async then<TResult1 = tg.Command<A, R>, TResult2 = never>(
+	async then<TResult1 = tg.Value, TResult2 = never>(
 		onfulfilled?:
-			| ((value: tg.Command<A, R>) => TResult1 | PromiseLike<TResult1>)
+			| ((value: tg.Value) => TResult1 | PromiseLike<TResult1>)
 			| undefined
 			| null,
 		onrejected?:
@@ -200,78 +248,37 @@ export class CommandBuilder<
 			arg.args.unshift("-e");
 		}
 		if (std.triple.os(arg.host) === "linux" && this.#defaultMount) {
-			let linuxMount = await tg.build(linuxRootMount, arg.host);
+			const linuxMount = await tg.build(linuxRootMount, arg.host);
 			if (arg.mounts === undefined) {
 				arg.mounts = [linuxMount];
 			} else {
 				arg.mounts.unshift(linuxMount);
 			}
 		}
-		// FIXME - cast?
-		return (
-			tg.Command.new(arg as tg.Command.ArgObject) as Promise<tg.Command<A, R>>
-		).then(onfulfilled, onrejected);
+		return tg
+			.build(arg as tg.Process.BuildArgObject)
+			.then(onfulfilled, onrejected);
 	}
 }
 
-export const defaultTemplateCommandArg = (
-	strings: TemplateStringsArray,
-	...placeholders: tg.Args<tg.Template.Arg>
-): tg.Unresolved<CommandArgObject> => {
-	let template = tg.template(strings, ...placeholders);
-	return { executable: "/bin/sh", args: ["-c", template] };
-};
-
-// FIXME - do I need this at all, or should it just be handled by std.command?
-// FIXME unresolved
-export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
-	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
-	// build the default args.
-	let arg: tg.Command.ArgObject = {};
-	if (std.triple.os(host) === "linux") {
-		let builtMount = await tg.build(linuxRootMount, host);
-		arg.mounts = [builtMount];
-	}
-	const defaultEnv = await tg.build(std.utils.env, { host });
-	arg.env = defaultEnv;
-	return arg;
-};
-
-/** Build the default shell, returning the file directly. */
-// FIXME unresolved
-export const buildDefaultBash = async (hostArg?: tg.Unresolved<string>) => {
-	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
-	// FIXME default mount? handled internally?
-	return await tg
-		.build(std.utils.bash.build, { host })
-		.then((dir) => dir.get("bin/bash"))
-		.then(tg.File.expect);
-};
-
-/** Get the default mount for the platform. */
-// FIXME unresolved
-export const linuxRootMount = async (
-	hostArg: tg.Unresolved<string>,
-): Promise<tg.Command.Mount> => {
-	const host = await tg.resolve(hostArg);
-	// TODO - allow using non-bootstrap components for this? We can build sh and env with post-bootstrap components relatively quickly.
-	const os = std.triple.os(host);
-	tg.assert(
-		os === "linux",
-		"the default root mount is only available for Linux",
+export const testBuild = async () => {
+	const expected = await tg.process.env("TANGRAM_HOST");
+	const output = await std.build`echo $TANGRAM_HOST > $OUTPUT`.then(
+		tg.File.expect,
 	);
-	const shellExe = bootstrap
-		.shell(host)
-		.then((d) => d.get("bin/sh"))
+	const actual = (await output.text()).trim();
+	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
+	return true;
+};
+
+export const testBuildBootstrap = async () => {
+	const expected = await tg.process.env("TANGRAM_HOST");
+	const output = await std.build`echo $TANGRAM_HOST > $OUTPUT`
+		.includeUtils(false)
+		.pipefail(false)
+		.env({ SHELL: "/bin/sh" })
 		.then(tg.File.expect);
-	const envExe = bootstrap
-		.env(host)
-		.then((d) => d.get("bin/env"))
-		.then(tg.File.expect);
-	const root = tg.directory({
-		[`bin/sh`]: shellExe,
-		[`usr/bin/env`]: envExe,
-	});
-	const mountArg = await tg`${root}:/`;
-	return await tg.Command.Mount.parse(mountArg);
+	const actual = (await output.text()).trim();
+	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
+	return true;
 };
