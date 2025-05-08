@@ -37,8 +37,11 @@ export type ToolchainArg = {
 	host?: string;
 };
 
-export const self = async (arg?: ToolchainArg): Promise<tg.Directory> => {
-	const host = arg?.host ?? (await std.triple.host());
+export const self = async (
+	arg?: tg.Unresolved<ToolchainArg>,
+): Promise<tg.Directory> => {
+	const resolved = await tg.resolve(arg);
+	const host = resolved?.host ?? (await std.triple.host());
 	const system = std.triple.archAndOs(host);
 	tg.assert(
 		system in RELEASES,

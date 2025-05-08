@@ -1232,8 +1232,10 @@ fn found_all_libraries<H: BuildHasher + Default>(
 async fn analyze_output_file(
 	path: impl AsRef<std::path::Path>,
 ) -> tg::Result<AnalyzeOutputFileOutput> {
-	let bytes = bytes_from_path(path).await?;
-	analyze_executable(&bytes)
+	let bytes = bytes_from_path(&path).await?;
+	analyze_executable(&bytes).map_err(
+		|source| tg::error!(!source, %path = path.as_ref().display(), "failed to analyze output file"),
+	)
 }
 
 /// The supported flavors of interpreter.
