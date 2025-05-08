@@ -93,6 +93,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 	const result = tg.Directory.expect(
 		await std.phases.run(
 			{
+				bootstrap: true,
 				env,
 				phases: { build, install },
 				order,
