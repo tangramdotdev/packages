@@ -15,16 +15,19 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (arg: Arg) => {
-	const { env: envArg, ...rest } = arg ?? {};
-	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
+export const build = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
+	const env_ = std.env.arg(
+		env({ build: resolved.build, host: resolved.host }),
+		resolved.env,
+	);
 
-	let source = arg.source;
+	let source = resolved.source;
 	if (await needsReconf(source)) {
 		source = await reconfigure(source);
 	}
 
-	const arg_ = { ...rest, env: env_, source };
+	const arg_ = { ...resolved, env: env_, source };
 	return std.autotools.build(arg_);
 };
 
@@ -52,8 +55,9 @@ export type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = async (arg: EnvArg) => {
-	const { build: build_, host: host_ } = arg ?? {};
+export const env = async (arg: tg.Unresolved<EnvArg>) => {
+	const resolved = await tg.resolve(arg);
+	const { build: build_, host: host_ } = resolved;
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(
