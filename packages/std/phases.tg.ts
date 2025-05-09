@@ -20,10 +20,10 @@ export type Phases = {
 };
 
 export type PhasesArg = {
-	[key: string]: tg.MaybeMutation<PhaseArg>;
+	[key: string]: tg.ValueOrMaybeMutationMap<PhaseArg>;
 };
 
-export type PhaseArg = CommandArg | tg.MaybeMutationMap<PhaseArgObject>;
+export type PhaseArg = CommandArg | PhaseArgObject;
 
 export type Phase = {
 	body: Command;
@@ -40,7 +40,7 @@ export type PhaseArgObject = {
 type CommandArg =
 	| undefined
 	| tg.MaybeMutation<tg.Template.Arg>
-	| tg.MaybeMutationMap<CommandArgObject>;
+	| CommandArgObject;
 
 export type Command = {
 	command: tg.Template;
@@ -597,19 +597,15 @@ export const override = async () => {
 	// Should remove the args on build and replace the command
 	const buildOverride = {
 		command: `echo "building override"`,
-		args: tg.Mutation.unset() as tg.Mutation<Array<tg.Template>>,
+		args: tg.Mutation.unset(),
 	};
 
 	const overrides = {
 		configure: configureOverride,
 		build: buildOverride,
-		check: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
+		check: tg.Mutation.unset(),
 	};
 
-	const arg2 = {
-		phases: overrides,
-	};
-
-	await run(arg1, arg2, { bootstrap: true });
+	await run(arg1, overrides, { bootstrap: true });
 	return true;
 };

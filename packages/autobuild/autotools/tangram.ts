@@ -17,10 +17,7 @@ export type Arg = {
 
 export const build = async (arg: tg.Unresolved<Arg>) => {
 	const resolved = await tg.resolve(arg);
-	const env_ = std.env.arg(
-		env({ build: resolved.build, host: resolved.host }),
-		resolved.env,
-	);
+	const env_ = resolved.env ?? env({ build: resolved.build, host: resolved.host });
 
 	let source = resolved.source;
 	if (await needsReconf(source)) {

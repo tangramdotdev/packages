@@ -67,59 +67,59 @@ export const image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 	>;
 	const objectArgs = await Promise.all(
 		resolved.map(async (arg) => {
-			// return tg.unimplemented();
-			if (arg === undefined) {
-				return {};
-			} else if (typeof arg === "string" || arg instanceof tg.Template) {
-				// It's a script. Wrap it, use it as the entrypoint.
-				return { entrypointArtifact: [arg] } as Collect;
-			} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
-				let file;
-				if (arg instanceof tg.Symlink) {
-					file = arg.resolve();
-					tg.assert(file, `Could not resolve symlink ${arg.id()} to a file.`);
-				} else {
-					file = arg;
-				}
-				tg.File.assert(file);
-				// Is the file executable? If so, wrap it, use it as the entrypoint.
-				const executableMetadata = await std.file.executableMetadata(file);
-				if (executableMetadata) {
-					return {
-						entrypointArtifact: file,
-					};
-				} else {
-					const id = arg.id();
-					throw new Error(
-						`Non-executable file passed to std.container: ${id}.`,
-					);
-				}
-			} else if (arg instanceof tg.Directory) {
-				// Add it to the root.
-				return {
-					rootDir: [arg],
-				} as Collect;
-			} else {
-				let ret = {} as tg.MaybeMutationMap<Collect>;
-				// return {
-				// 	...arg,
-				// 	entrypointArtifact: [arg.entrypointArtifact],
-				// 	rootDir: [arg.rootDir],
-				// };
-				if ("buildToolchain" in arg) {
-					ret.buildToolchain = arg.buildToolchain;
-				}
-				if ("cmdString" in arg) {
-					ret.cmdString = arg.cmdString;
-				}
-				if ("format" in arg) {
-					ret.format = arg.format;
-				}
-				if ("entrypointArtifact" in arg) {
-					ret.entrypointArtifact = [arg.entrypointArtifact];
-				}
-				return ret;
-			}
+			return tg.unimplemented();
+			// if (arg === undefined) {
+			// 	return {};
+			// } else if (typeof arg === "string" || arg instanceof tg.Template) {
+			// 	// It's a script. Wrap it, use it as the entrypoint.
+			// 	return { entrypointArtifact: [arg] } as Collect;
+			// } else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
+			// 	let file;
+			// 	if (arg instanceof tg.Symlink) {
+			// 		file = arg.resolve();
+			// 		tg.assert(file, `Could not resolve symlink ${arg.id()} to a file.`);
+			// 	} else {
+			// 		file = arg;
+			// 	}
+			// 	tg.File.assert(file);
+			// 	// Is the file executable? If so, wrap it, use it as the entrypoint.
+			// 	const executableMetadata = await std.file.executableMetadata(file);
+			// 	if (executableMetadata) {
+			// 		return {
+			// 			entrypointArtifact: file,
+			// 		};
+			// 	} else {
+			// 		const id = arg.id();
+			// 		throw new Error(
+			// 			`Non-executable file passed to std.container: ${id}.`,
+			// 		);
+			// 	}
+			// } else if (arg instanceof tg.Directory) {
+			// 	// Add it to the root.
+			// 	return {
+			// 		rootDir: [arg],
+			// 	} as Collect;
+			// } else {
+			// 	let ret = {} as tg.MaybeMutationMap<Collect>;
+			// 	// return {
+			// 	// 	...arg,
+			// 	// 	entrypointArtifact: [arg.entrypointArtifact],
+			// 	// 	rootDir: [arg.rootDir],
+			// 	// };
+			// 	if ("buildToolchain" in arg) {
+			// 		ret.buildToolchain = arg.buildToolchain;
+			// 	}
+			// 	if ("cmdString" in arg) {
+			// 		ret.cmdString = arg.cmdString;
+			// 	}
+			// 	if ("format" in arg) {
+			// 		ret.format = arg.format;
+			// 	}
+			// 	if ("entrypointArtifact" in arg) {
+			// 		ret.entrypointArtifact = [arg.entrypointArtifact];
+			// 	}
+			// 	return ret;
+			// }
 		}),
 	);
 
