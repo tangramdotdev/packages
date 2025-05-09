@@ -250,7 +250,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		}
 		const buildToolsEnv = await tg.build(buildTools, {
 			host,
-			buildToolchain: await std.sdk({ host }),
+			buildToolchain: await tg.build(std.sdk, { host }),
 			level,
 		});
 		envs.push(sdk, buildToolsEnv);
