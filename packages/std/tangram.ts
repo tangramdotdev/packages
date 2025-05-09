@@ -46,15 +46,6 @@ export const default_ = () => {
 };
 export default default_;
 
-export const flatten = <T>(value: tg.MaybeNestedArray<T>): Array<T> => {
-	if (value instanceof Array) {
-		// @ts-ignore
-		return value.flat(Number.POSITIVE_INFINITY);
-	} else {
-		return [value];
-	}
-};
-
 /** Mapping of strings to pass to "test" to the test targets they run. */
 const testActions = (): Record<string, () => any> => {
 	return {
@@ -190,8 +181,7 @@ const defaultTests = [
 ];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
-export const test = async (...testNames: Array<string>) => {
-	let tests: Array<string> = flatten(testNames);
+export const test = async (...tests: Array<string>) => {
 	if (tests.length === 0) {
 		tests = defaultTests;
 	}

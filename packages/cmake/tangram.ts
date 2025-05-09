@@ -281,7 +281,7 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 			sdkArgs.length === 0 ||
 			sdkArgs.every((arg) => arg?.host === undefined)
 		) {
-			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
+			sdkArgs = [{ host, target }, ...sdkArgs ?? []];
 		}
 	}
 
@@ -353,17 +353,17 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 	}
 
 	// Add cmake to env.
-	envs.push(self({ host }));
+	envs.push(await tg.build(self, { host }));
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		envs.push(ninja.build({ host }));
+		envs.push(await tg.build(ninja.build, { host }));
 	} else if (generator === "Unix Makefiles") {
-		envs.push(make.build({ host }));
+		envs.push(await tg.build(make.build, { host }));
 	}
 
 	if (includeSdk) {
-		envs.push(std.sdk(...(sdkArgs ?? [])));
+		envs.push(await tg.build(std.sdk, ...(sdkArgs ?? [])));
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.

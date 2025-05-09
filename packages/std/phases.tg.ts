@@ -177,7 +177,7 @@ export const run = async (...args: tg.Args<Arg>) => {
 		`;
 	}
 
-	let builder = std.run`${script}`.env(std.env.arg(...env_));
+	let builder = std.run`${script}`.env(...env_);
 	if (commandArgs !== undefined) {
 		builder = builder.args(commandArgs);
 	}

@@ -50,7 +50,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 	if (
 		os === "linux" &&
 		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
-			std.flatten(sdk).filter((sdk) => sdk?.toolchain === "llvm").length > 0)
+			sdk.filter((sdk) => sdk?.toolchain === "llvm").length > 0)
 	) {
 		env.push({
 			CFLAGS: tg.Mutation.prefix("-Wl,-undefined-version", " "),

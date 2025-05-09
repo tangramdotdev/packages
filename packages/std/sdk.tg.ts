@@ -612,7 +612,7 @@ export namespace sdk {
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		const output = await std.build`${cmd} -dumpmachine > $OUTPUT`
 			.bootstrap(true)
-			.env(std.env.arg(env))
+			.env(env)
 			.host(std.triple.archAndOs(detectedHost))
 			.then(tg.File.expect);
 		const host = (await output.text()).trim();

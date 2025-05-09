@@ -333,7 +333,7 @@ export const headerCanBeIncluded = async (arg: HeaderArg) => {
 	// Compile the program, ensuring the env properly made the header discoverable.
 	const program = await $`cc -xc "${source}" -o $OUTPUT`
 		.bootstrap(true)
-		.env(std.env.arg(std.sdk(), arg.directory))
+		.env(std.sdk(), arg.directory)
 		.then(tg.File.expect);
 
 	// Run the program.

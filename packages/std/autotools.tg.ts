@@ -163,7 +163,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 			sdkArgs.length === 0 ||
 			sdkArgs.every((arg) => arg?.host === undefined)
 		) {
-			sdkArgs = std.flatten([{ host, target }, sdkArgs]);
+			sdkArgs = [{ host, target }, ...sdkArgs];
 		}
 	}
 

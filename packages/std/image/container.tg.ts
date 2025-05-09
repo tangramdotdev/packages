@@ -328,7 +328,7 @@ export const ociImageFromLayers = async (
 			const file =
 				await std.build`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`
 					.bootstrap(true)
-					.env(std.env.arg(...additionalEnv))
+					.env(...additionalEnv)
 					.then(tg.File.expect);
 			const descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,

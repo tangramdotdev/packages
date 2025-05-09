@@ -49,11 +49,6 @@ export type OptionalDependencyArg<T extends PackageArg> =
 	| Omit<T, "build" | "host">
 	| boolean;
 
-/** Variadic argument type. */
-export type UnresolvedArgs<T extends tg.Value = tg.Value> = Array<
-	tg.Unresolved<tg.MaybeNestedArray<tg.ValueOrMaybeMutationMap<T>>>
->;
-
 /** Produce a single argument object from a variadic list of arguments with mutation handling. */
 export const apply = async <T extends PackageArg>(
 	...args: tg.Args<T>
