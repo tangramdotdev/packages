@@ -576,7 +576,8 @@ async fn checkin_local_library_path(
 				.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
 				// Add an entry to the directory.
-				tracing::info!(?library_candidate_file, "Checked in library candidate.");
+				let id = library_candidate_file.id(tg).await?;
+				tracing::info!(?name, ?id, "Checked in library candidate.");
 				Ok::<_, tg::Error>(Some((name, tg::Artifact::File(library_candidate_file))))
 			} else {
 				Ok(None)
@@ -1172,11 +1173,23 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 
 	// Check for transitive dependencies if we've recurred beyond the initial file.
 	if depth > 0 {
-		let AnalyzeOutputFileOutput {
-			needed_libraries, ..
-		} = analyze_executable(&file.bytes(tg).await?)?;
-		for library in &needed_libraries {
-			all_needed_libraries.entry(library.clone()).or_insert(None);
+		let id = file.id(tg).await?;
+		tracing::debug!(?id, "analyzing transitive dependency");
+		match analyze_executable(&file.bytes(tg).await?) {
+			Ok(AnalyzeOutputFileOutput {
+				needed_libraries, ..
+			}) => {
+				tracing::debug!(?id, ?needed_libraries, "found additional needed libraries");
+				for library in &needed_libraries {
+					if cfg!(target_os = "macos") && library == "libSystem.B.dylib" {
+						continue;
+					}
+					all_needed_libraries.entry(library.clone()).or_insert(None);
+				}
+			},
+			Err(e) => {
+				tracing::debug!(?e, ?id, "failed to analyze file as an object!");
+			},
 		}
 	}
 
@@ -1340,7 +1353,12 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 			goblin::mach::Mach::Binary(mach) => {
 				let is_executable = mach.header.filetype == goblin::mach::header::MH_EXECUTE;
 				let name = mach.name.map(extract_filename);
-				let needed_libraries = mach.libs.iter().map(extract_filename).collect_vec();
+				let needed_libraries = mach
+					.libs
+					.iter()
+					.map(extract_filename)
+					.filter(|file_name| name.as_ref().is_none_or(|n| n != file_name))
+					.collect_vec();
 
 				AnalyzeOutputFileOutput {
 					is_executable,
@@ -1350,21 +1368,24 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				}
 			},
 			goblin::mach::Mach::Fat(mach) => {
-				let (is_executable, name, needed_libraries) = mach
-					.into_iter()
-					.filter_map(std::result::Result::ok)
-					.fold((false, None, vec![]), |acc, arch| match arch {
-						goblin::mach::SingleArch::Archive(_) => (true, None, acc.2),
-						goblin::mach::SingleArch::MachO(mach) => {
-							let acc_executable = acc.0;
-							let mut libs = acc.2;
-							let executable = acc_executable
-								|| (mach.header.filetype == goblin::mach::header::MH_EXECUTE);
-							libs.extend(mach.libs.iter().map(extract_filename));
-							let name = mach.name.map(extract_filename);
-							(executable, name, libs)
+				let (is_executable, name, needed_libraries) =
+					mach.into_iter().filter_map(std::result::Result::ok).fold(
+						(false, None, vec![]),
+						|acc, arch| match arch {
+							goblin::mach::SingleArch::Archive(_) => (true, None, acc.2),
+							goblin::mach::SingleArch::MachO(mach) => {
+								let acc_executable = acc.0;
+								let mut libs = acc.2;
+								let executable = acc_executable
+									|| (mach.header.filetype == goblin::mach::header::MH_EXECUTE);
+								let name = mach.name.map(extract_filename);
+								libs.extend(mach.libs.iter().map(extract_filename).filter(
+									|file_name| name.as_ref().is_none_or(|n| n != file_name),
+								));
+								(executable, name, libs)
+							},
 						},
-					});
+					);
 				AnalyzeOutputFileOutput {
 					is_executable,
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
