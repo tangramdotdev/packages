@@ -1174,22 +1174,13 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	// Check for transitive dependencies if we've recurred beyond the initial file.
 	if depth > 0 {
 		let id = file.id(tg).await?;
-		tracing::debug!(?id, "analyzing transitive dependency");
-		match analyze_executable(&file.bytes(tg).await?) {
-			Ok(AnalyzeOutputFileOutput {
-				needed_libraries, ..
-			}) => {
-				tracing::debug!(?id, ?needed_libraries, "found additional needed libraries");
-				for library in &needed_libraries {
-					if cfg!(target_os = "macos") && library == "libSystem.B.dylib" {
-						continue;
-					}
-					all_needed_libraries.entry(library.clone()).or_insert(None);
-				}
-			},
-			Err(e) => {
-				tracing::debug!(?e, ?id, "failed to analyze file as an object!");
-			},
+		let AnalyzeOutputFileOutput {
+			needed_libraries, ..
+		} = analyze_executable(&file.bytes(tg).await?).map_err(
+			|source| tg::error!(!source, %id, "failed to analyze transitive dependency"),
+		)?;
+		for library in &needed_libraries {
+			all_needed_libraries.entry(library.clone()).or_insert(None);
 		}
 	}
 

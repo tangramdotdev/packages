@@ -75,6 +75,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 			CXX: "c++",
 		});
 	}
+	env.push({ TANGRAM_LINKER_PROXY: "tangram_ld_proxy=trace" });
 
 	const openssl = await std.autotools.build(
 		{
