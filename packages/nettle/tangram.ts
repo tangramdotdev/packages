@@ -1,5 +1,4 @@
 import * as gmp from "gmp" with { path: "../gmp" };
-import m4 from "m4" with { path: "../m4" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 
@@ -22,7 +21,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		gmp?: gmp.Arg;
+		gmp?: std.args.DependencyArg<gmp.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -34,16 +33,21 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { gmp: gmpArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const env = [
-		gmp.build({ build, env: env_, host, sdk }, gmpArg),
-		m4({ build, host: build }),
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [
+		std.env.envArgFromDependency(
+			build,
+			env_,
+			host,
+			sdk,
+			std.env.runtimeDependency(gmp.build, dependencyArgs.gmp),
+		),
 		env_,
 	];
 
@@ -59,7 +63,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env: std.env.arg(...envs),
 			phases,
 			sdk,
 			source: source_ ?? source(),

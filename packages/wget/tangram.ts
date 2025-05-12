@@ -1,11 +1,9 @@
-import gettext from "gettext" with { path: "../gettext" };
 import * as gmp from "gmp" with { path: "../gmp" };
 import * as gnutls from "gnutls" with { path: "../gnutls" };
 import * as libpsl from "libpsl" with { path: "../libpsl" };
 import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as nettle from "nettle" with { path: "../nettle" };
 import * as pcre2 from "pcre2" with { path: "../pcre2" };
-import pkgConfig from "pkgconf" with { path: "../pkgconf" };
 import * as std from "std" with { path: "../std" };
 import { $ } from "std" with { path: "../std" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -15,8 +13,8 @@ export const metadata = {
 	homepage: "https://www.gnu.org/software/wget/",
 	license: "GPL-3.0-or-later",
 	name: "wget",
-	repository: "https://gitlab.com/gnuwget/wget2",
-	version: "1.24.5",
+	repository: "https://www.gnu.org/software/wget/",
+	version: "1.25.0",
 	provides: {
 		binaries: ["wget"],
 	},
@@ -25,7 +23,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:fa2dc35bab5184ecbc46a9ef83def2aaaa3f4c9f3c97d4bd19dcb07d4da637de";
+		"sha256:766e48423e79359ea31e41db9e5c289675947a7fcf2efdcedb726ac9d0da3784";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
@@ -33,14 +31,14 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		gmp?: gmp.Arg;
-		gnutls?: gnutls.Arg;
-		libiconv?: libiconv.Arg;
-		libpsl?: libpsl.Arg;
-		nettle?: nettle.Arg;
-		pcre2?: pcre2.Arg;
-		zlib?: zlib.Arg;
-		zstd?: zstd.Arg;
+		gmp?: std.args.DependencyArg<gmp.Arg>;
+		gnutls?: std.args.DependencyArg<gnutls.Arg>;
+		libiconv?: std.args.DependencyArg<libiconv.Arg>;
+		libpsl?: std.args.DependencyArg<libpsl.Arg>;
+		nettle?: std.args.DependencyArg<nettle.Arg>;
+		pcre2?: std.args.DependencyArg<pcre2.Arg>;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
+		zstd?: std.args.DependencyArg<zstd.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -52,46 +50,35 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			gmp: gmpArg = {},
-			gnutls: gnutlsArg = {},
-			libiconv: libiconvArg = {},
-			libpsl: libpslArg = {},
-			nettle: nettleArg = {},
-			pcre2: pcre2Arg = {},
-			zlib: zlibArg = {},
-			zstd: zstdArg = {},
-		} = {},
+		dependencies: depedencyArgs = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	const env = [
-		gettext({ build, host: build }),
-		gmp.build({ build, env: env_, host, sdk }, gmpArg),
-		gnutls.build({ build, env: env_, host, sdk }, gnutlsArg),
-		nettle.build({ build, env: env_, host, sdk }, nettleArg),
-		libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
-		libpsl.build({ build, env: env_, host, sdk }, libpslArg),
-		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
-		pkgConfig({ build, host: build }),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-		zstd.build({ build, env: env_, host, sdk }, zstdArg),
-		{
-			LDFLAGS: tg.Mutation.suffix(
-				"-lnettle -lhogweed -lpcre2-8 -lgmp -lgnutls -lz",
-				" ",
-			),
-		},
+	const dependencies = [
+		std.env.runtimeDependency(gmp.build, depedencyArgs.gmp),
+		std.env.runtimeDependency(gnutls.build, depedencyArgs.gnutls),
+		std.env.runtimeDependency(nettle.build, depedencyArgs.nettle),
+		std.env.runtimeDependency(libiconv.build, depedencyArgs.libiconv),
+		std.env.runtimeDependency(libpsl.build, depedencyArgs.libpsl),
+		std.env.runtimeDependency(pcre2.build, depedencyArgs.pcre2),
+		std.env.runtimeDependency(zlib.build, depedencyArgs.zlib),
+		std.env.runtimeDependency(zstd.build, depedencyArgs.zstd),
+	];
+
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
 		env_,
 	];
 
 	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env: std.env.arg(...envs),
 			sdk,
 			source: source_ ?? source(),
 		},
@@ -124,6 +111,7 @@ export const test = async () => {
 	`
 		.env(build())
 		.checksum("sha256:any")
+		.network(true)
 		.then(tg.Directory.expect);
 
 	const exampleContents = await result
