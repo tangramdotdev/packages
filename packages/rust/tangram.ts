@@ -28,7 +28,8 @@ export type ToolchainArg = {
 	targets?: Array<string>;
 };
 
-export const self = async (arg?: ToolchainArg) => {
+export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
+	const arg = await tg.resolve(unresolvedArg);
 	// Determine the list of target triples to support other than the inferred host.
 	const detectedHost = await std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);

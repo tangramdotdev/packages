@@ -10,11 +10,13 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const cargo = async (arg: Arg) => {
-	const { env: envArg, ...rest } = arg ?? {};
+export const cargo = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
+	const { env: envArg, ...rest } = resolved;
 
 	const env_ =
-		envArg ?? std.env.arg(env({ build: arg.build, host: arg.host }), envArg);
+		envArg ??
+		std.env.arg(env({ build: resolved.build, host: resolved.host }), envArg);
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.cargo.build(arg_);
@@ -22,10 +24,11 @@ export const cargo = async (arg: Arg) => {
 
 export default cargo;
 
-export const plain = async (arg: Arg) => {
-	const { env: envArg, ...rest } = arg ?? {};
+export const plain = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
+	const { env: envArg, ...rest } = resolved;
 
-	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
+	const env_ = envArg ?? env({ build: resolved.build, host: resolved.host });
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.build.build(arg_);
@@ -36,8 +39,8 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = async (arg?: EnvArg) => {
-	const { build: build_, host: host_ } = arg ?? {};
+export const env = async (arg?: tg.Unresolved<EnvArg>) => {
+	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(

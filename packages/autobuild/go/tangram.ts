@@ -8,10 +8,11 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (arg: Arg) => {
-	const { env: envArg, ...rest } = arg ?? {};
+export const build = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
+	const { env: envArg, ...rest } = resolved;
 
-	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
+	const env_ = envArg ?? env({ build: resolved.build, host: resolved.host });
 	const arg_ = { ...rest, env: env_ };
 	return go.build(arg_);
 };
@@ -23,8 +24,8 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = async (arg: EnvArg) => {
-	const { build: build_, host: host_ } = arg ?? {};
+export const env = async (arg: tg.Unresolved<EnvArg>) => {
+	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(go.self({ ...std.triple.rotate({ build, host }) }));

@@ -15,11 +15,12 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (arg: Arg) => {
-	const { env: envArg, ...rest } = arg ?? {};
-	const env_ = envArg ?? env({ build: arg.build, host: arg.host });
+export const build = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
+	const { env: envArg, ...rest } = resolved ?? {};
+	const env_ = envArg ?? env({ build: resolved.build, host: resolved.host });
 
-	let source = arg.source;
+	let source = resolved.source;
 	if (await needsReconf(source)) {
 		source = await reconfigure(source);
 	}
@@ -30,14 +31,17 @@ export const build = async (arg: Arg) => {
 
 export default build;
 
-export const needsReconf = async (source: tg.Directory): Promise<boolean> => {
+export const needsReconf = async (
+	sourceArg: tg.Unresolved<tg.Directory>,
+): Promise<boolean> => {
+	const source = await tg.resolve(sourceArg);
 	const entries = await source.entries();
 	const hasFile = (name: string) =>
 		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
 	return hasFile("configure.ac") && !hasFile("configure");
 };
 
-export const reconfigure = async (source: tg.Directory) => {
+export const reconfigure = async (source: tg.Unresolved<tg.Directory>) => {
 	return $`cp -R ${source} $OUTPUT
 			chmod -R u+w $OUTPUT
 			cd $OUTPUT
@@ -52,8 +56,8 @@ export type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = async (arg: EnvArg) => {
-	const { build: build_, host: host_ } = arg ?? {};
+export const env = async (arg: tg.Unresolved<EnvArg>) => {
+	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(

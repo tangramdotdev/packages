@@ -9,8 +9,13 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const node = async (arg: Arg) => {
-	const { build: build_, env: envArg, host: host_, source } = arg ?? {};
+export const node = async (arg: tg.Unresolved<Arg>) => {
+	const {
+		build: build_,
+		env: envArg,
+		host: host_,
+		source,
+	} = await tg.resolve(arg);
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -22,12 +27,11 @@ export const node = async (arg: Arg) => {
 
 export default node;
 
-export const plain = async (arg: Arg) => {
-	// FIXME - env!
-	const { source } = arg;
+export const plain = async (arg: tg.Unresolved<Arg>) => {
+	const { env, source } = await tg.resolve(arg);
 	const toolchain = await nodejs.self();
 	const interpreter = await toolchain.get("bin/node").then(tg.File.expect);
-	return wrapScripts({ directory: source, extension: ".js", interpreter });
+	return wrapScripts({ directory: source, env, extension: ".js", interpreter });
 };
 
 type EnvArg = {
@@ -35,8 +39,8 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = async (arg?: EnvArg) => {
-	const { build: build_, host: host_ } = arg ?? {};
+export const env = async (arg?: tg.Unresolved<EnvArg>) => {
+	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	return std.env(nodejs.self({ ...std.triple.rotate({ build, host }) }));

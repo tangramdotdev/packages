@@ -36,7 +36,8 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (arg: Arg) => {
+export const build = async (unresolvedArg: tg.Unresolved<Arg>) => {
+	const arg = await tg.resolve(unresolvedArg);
 	const { env: envArg, source } = arg;
 	const sourceId = await source.id();
 	console.log("received source dir", sourceId);
@@ -97,7 +98,8 @@ export type EnvArg = {
 	source: tg.Directory;
 };
 
-export const env = async (arg: EnvArg) => {
+export const env = async (unresolvedArg: tg.Unresolved<EnvArg>) => {
+	const arg = await tg.resolve(unresolvedArg);
 	const { build, host, source } = arg;
 	const sourceId = await source.id();
 	console.log("received source dir", sourceId);
