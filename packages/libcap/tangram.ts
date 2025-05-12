@@ -44,7 +44,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		attr?: attr.Arg;
+		attr?: std.args.DependencyArg<attr.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -56,7 +56,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { attr: attrArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -65,8 +65,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 
 	std.assert.supportedHost(host, metadata);
 
-	const install = {
-		command: tg.Mutation.set(`
+	const install = `
 		set -x
 		mkdir -p $OUTPUT/bin $OUTPUT/lib/pkgconfig
 		bins="capsh getcap setcap getpcaps"
@@ -81,15 +80,18 @@ export const build = async (...args: tg.Args<Arg>) => {
 		install -m 0755 libcap/libcap.so.${metadata.version} "$OUTPUT/lib"
 		cd $OUTPUT/lib
 		ln -s libcap.so.${metadata.version} libcap.so.2
-		ln -s libcap.so.2 libcap.so
-	`),
-		args: tg.Mutation.unset(),
+		ln -s libcap.so.2 libcap.so`;
+	const phases = {
+		configure: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
+		install,
 	};
-	const phases = { configure: tg.Mutation.unset(), install };
 
-	const attrArtifact = await attr.build(
-		{ build, env: env_, host, sdk },
-		attrArg,
+	const attrArtifact = await std.env.envArgFromDependency(
+		build,
+		env_,
+		host,
+		sdk,
+		std.env.runtimeDependency(attr.build, dependencyArgs.attr),
 	);
 	const dependencies = [attrArtifact];
 	const env = std.env.arg(...dependencies, env_);

@@ -49,10 +49,10 @@ type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		acl?: acl.Arg;
-		attr?: attr.Arg;
-		libcap?: libcap.Arg;
-		libiconv?: libiconv.Arg;
+		acl?: std.args.OptionalDependencyArg<acl.Arg>;
+		attr?: std.args.OptionalDependencyArg<attr.Arg>;
+		libcap?: std.args.OptionalDependencyArg<libcap.Arg>;
+		libiconv?: std.args.DependencyArg<libiconv.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -64,40 +64,41 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: {
-			acl: aclArg = {},
-			attr: attrArg = {},
-			libcap: libcapArg = {},
-			libiconv: libiconvArg = {},
-		} = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
 		source: source_,
 	} = await std.args.apply<Arg>(...args);
 
-	let dependencies: Array<tg.Unresolved<std.env.Arg>> = [];
+	let dependencies = [];
 
 	if (std.triple.os(host) === "linux") {
-		dependencies = dependencies.concat([
-			acl.build({ build, env: env_, host, sdk }, aclArg),
-			attr.build({ build, env: env_, host, sdk }, attrArg),
-			libcap.build({ build, env: env_, host, sdk }, libcapArg),
-		]);
+		dependencies.push(
+			std.env.runtimeDependency(acl.build, dependencyArgs.acl),
+			std.env.runtimeDependency(attr.build, dependencyArgs.attr),
+			std.env.runtimeDependency(libcap.build, dependencyArgs.libcap),
+		);
 	}
 
 	if (std.triple.os(host) === "darwin") {
 		dependencies.push(
-			libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
+			std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
 		);
 	}
 
-	const env = [...dependencies, { FORCE_UNSAFE_CONFIGURE: true }, env_];
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
+		{ FORCE_UNSAFE_CONFIGURE: true },
+		env_,
+	];
 
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env: std.env.arg(...envs),
 			sdk,
 			source: source_ ?? source(),
 		},

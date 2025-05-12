@@ -28,8 +28,8 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		ncurses?: ncurses.Arg;
-		pcre2?: pcre2.Arg;
+		ncurses?: std.args.DependencyArg<ncurses.Arg>;
+		pcre2?: std.args.DependencyArg<pcre2.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -41,7 +41,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { ncurses: ncursesArg = {}, pcre2: pcre2Arg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
@@ -58,11 +58,13 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const phases = { configure };
 
 	const dependencies = [
-		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
-		ncurses.build(ncursesArg),
+		std.env.runtimeDependency(pcre2.build, dependencyArgs.pcre2),
+		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	];
 	const env = std.env.arg(
-		...dependencies,
+		...dependencies.map((dep) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
 		{
 			// Necessary to get the `boolcodes` configure test to pass, preventing a build failure in the termcap module later when it attempts to use a conflicting type.
 			CFLAGS: tg.Mutation.prefix(`-Wno-incompatible-pointer-types`, " "),
@@ -73,7 +75,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env,
 			phases,
 			sdk,
 			source: source_ ?? source(),

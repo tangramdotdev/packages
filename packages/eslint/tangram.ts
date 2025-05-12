@@ -43,14 +43,12 @@ export const build = async (...args: tg.Args<Arg>) => {
 		source: source_,
 		...rest
 	} = await std.args.apply<Arg>(...args);
-	const phases = { build: tg.Mutation.unset() };
 
 	// Build the binaries provided by eslint.
 	return node.build(
 		{
 			...rest,
 			packageLock,
-			phases,
 			source: source_ ?? source(),
 		},
 		nodejs,

@@ -61,7 +61,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env,
 			phases: { configure },
 			sdk,
 			source: source_ ?? source(),

@@ -49,7 +49,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		host,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(args);
+	} = await std.args.apply<Arg>(...args);
 
 	const configure = {
 		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
@@ -72,7 +72,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env,
 			hardeningCFlags: false,
 			phases: { configure },
 			sdk,

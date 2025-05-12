@@ -29,7 +29,7 @@ export type Arg = {
 
 export const build = async (...args: tg.Args<Arg>) => {
 	const {
-		autotools = [],
+		autotools = {},
 		build,
 		env,
 		host,

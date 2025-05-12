@@ -81,12 +81,15 @@ export const build = async (...args: tg.Args<Arg>) => {
 		install,
 	};
 
-	const env = [{ CPATH: tg.Mutation.unset() }, env_];
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [
+		{ CPATH: tg.Mutation.unset() },
+		env_,
+	];
 
 	let result = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			env: std.env.arg(...envs),
 			phases,
 			prefixPath: "/",
 			sdk,

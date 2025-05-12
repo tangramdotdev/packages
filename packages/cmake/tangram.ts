@@ -207,7 +207,7 @@ export type BuildArg = {
 	prefixPath?: tg.Template.Arg;
 
 	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
-	sdk?: boolean | tg.MaybeNestedArray<std.sdk.Arg>;
+	sdk?: boolean | std.sdk.Arg;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source?: tg.Template.Arg;
@@ -281,7 +281,7 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 			sdkArgs.length === 0 ||
 			sdkArgs.every((arg) => arg?.host === undefined)
 		) {
-			sdkArgs = [{ host, target }, ...sdkArgs ?? []];
+			sdkArgs = [{ host, target }, ...(sdkArgs ?? [])];
 		}
 	}
 
