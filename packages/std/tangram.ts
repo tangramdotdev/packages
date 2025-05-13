@@ -25,8 +25,10 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as build from "./build.tg.ts";
 import caCertificates from "./certificates.tg.ts";
+import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as download from "./download.tg.ts";
 import * as env from "./env.tg.ts";
+import { env as stdEnv } from "./env.tg.ts";
 import * as file from "./file.tg.ts";
 import * as image from "./image.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
@@ -43,9 +45,15 @@ export const metadata = {
 	version: "0.0.0",
 };
 
-/** The default export produces the default SDK env for the detected host, asserts its validity, and returns the env. */
-export const default_ = () => {
-	return sdk.testDefault();
+/** The default export produces the default SDK env for the detected host, asserts its validity, and uses it to build the standard set of autotools build dependencies, returning the resulting env. */
+export const default_ = async () => {
+	const buildToolchain = await sdk.testDefault();
+	const buildTools = await tg.build(dependencies.buildTools, {
+		host: await triple.host(),
+		buildToolchain,
+		level: "extended",
+	});
+	return stdEnv(buildToolchain, buildTools);
 };
 export default default_;
 
