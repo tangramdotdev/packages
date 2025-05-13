@@ -57,8 +57,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	const install = {
 		args: [`PREFIX="$OUTPUT" SHELL="$SHELL"`],
 	};
-	const phases = {
-		configure: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
+	const phases: std.phases.Arg = {
+		configure: tg.Mutation.unset(),
 		build: buildPhase,
 		install,
 	};
