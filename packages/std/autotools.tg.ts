@@ -2,6 +2,9 @@ import * as std from "./tangram.ts";
 import { buildTools, type Level } from "./sdk/dependencies.tg.ts";
 
 export type Arg = {
+	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explitily provided via `env`. Default: false. */
+	bootstrap?: boolean;
+
 	/** By default, autotools builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
@@ -77,8 +80,8 @@ export type Arg = {
 	/** Should we remove all Libtool archives from the output directory? The presence of these files can cause downstream builds to depend on absolute paths with may no longer be valid, and can interfere with cross-compilation. Tangram uses other methods for library resolution, rending these files unnecessary, and in some cases detrimental. Default: true. */
 	removeLibtoolArchives?: boolean;
 
-	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
-	sdk?: std.sdk.Arg | boolean;
+	/** Arguments to use for the SDK. */
+	sdk?: std.sdk.Arg;
 
 	/** Should we mirror the contents `LIBRARY_PATH` in `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`? Default: false */
 	setRuntimeLibraryPath?: boolean;
@@ -93,17 +96,10 @@ export type Arg = {
 	target?: string;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
-	const resolved = await Promise.all(args.map(tg.resolve));
-	const objects = resolved.map((obj) => {
-		return {
-			...obj,
-			env: [obj.env],
-			phases: [obj.phases],
-			sdk: [obj.sdk],
-		};
-	});
+export const build = async (...args: std.Args<Arg>) => {
+	type Collect = std.args.MakeArrayKeys<Arg, "phases">;
 	const {
+		bootstrap = false,
 		buildInTree = false,
 		checksum,
 		debug = false,
@@ -124,22 +120,30 @@ export const build = async (...args: tg.Args<Arg>) => {
 		opt = "2",
 		parallel = true,
 		pipe = true,
-		phases,
+		phases: userPhaseArgs = [],
 		pkgConfig = true,
 		prefixArg = `--prefix=`,
 		prefixPath = `$OUTPUT`,
 		removeLibtoolArchives = true,
-		sdk: sdkArgs_,
+		sdk: sdkArg,
 		setRuntimeLibraryPath = false,
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = (await tg.Args.apply(objects, {
-		env: "append",
-		phases: "append",
-		sdk: "append",
-		source: "set",
-	})) as std.args.MakeArrayKeys<Arg, "env" | "phases" | "sdk">;
+	} = await std.args.apply<Arg, Collect>({
+		args,
+		map: async (arg) => {
+			return {
+				...arg,
+				phases: [arg.phases],
+			} as Collect;
+		},
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			phases: "append",
+			sdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
 
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
@@ -148,24 +152,6 @@ export const build = async (...args: tg.Args<Arg>) => {
 	const host = host_ ?? (await std.triple.host());
 	const target = target_ ?? host;
 	const os = std.triple.os(host);
-
-	// Determine SDK configuration.
-	let sdkArgs: Array<std.sdk.ArgObject> | undefined = undefined;
-	// If any SDk arg is `false`, we don't want to include the SDK.
-	const includeSdk = !sdkArgs_?.some((arg) => arg === false);
-	// If we are including the SDK, omit any booleans from the array.
-	if (includeSdk) {
-		sdkArgs =
-			sdkArgs_?.filter(
-				(arg): arg is std.sdk.ArgObject => typeof arg !== "boolean",
-			) ?? [];
-		if (
-			sdkArgs.length === 0 ||
-			sdkArgs.every((arg) => arg?.host === undefined)
-		) {
-			sdkArgs = [{ host, target }, ...sdkArgs];
-		}
-	}
 
 	// Set up env.
 	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
@@ -234,9 +220,9 @@ export const build = async (...args: tg.Args<Arg>) => {
 		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
 	}
 
-	if (includeSdk) {
+	if (!bootstrap) {
 		// Set up the SDK, add it to the environment.
-		const sdk = await tg.build(std.sdk, ...(sdkArgs ?? []));
+		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
 		let level: Level = "base";
 		if (pkgConfig) {
@@ -250,14 +236,14 @@ export const build = async (...args: tg.Args<Arg>) => {
 		}
 		const buildToolsEnv = await tg.build(buildTools, {
 			host,
-			buildToolchain: await std.sdk({ host }),
+			buildToolchain: await tg.build(std.sdk, { host }),
 			level,
 		});
 		envs.push(sdk, buildToolsEnv);
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, ...(userEnv ?? []));
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs =
@@ -348,11 +334,9 @@ export const build = async (...args: tg.Args<Arg>) => {
 	}
 
 	const system = std.triple.archAndOs(host);
-	const phaseArgs = (phases ?? []).filter(
-		(arg): arg is std.phases.Arg => arg !== undefined,
-	);
-	return await std.phases
-		.run(
+	return await tg
+		.build(
+			std.phases.run,
 			{
 				bootstrap: true,
 				debug,
@@ -362,7 +346,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 				checksum,
 				network,
 			},
-			...phaseArgs,
+			...userPhaseArgs,
 		)
 		.then(tg.Directory.expect);
 };

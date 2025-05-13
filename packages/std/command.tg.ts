@@ -4,13 +4,13 @@ import * as bootstrap from "./bootstrap.tg.ts";
 export function command<
 	A extends Array<tg.Value> = Array<tg.Value>,
 	R extends tg.Value = tg.Value,
->(...args: tg.Args<tg.Command.Arg>): CommandBuilder;
+>(...args: std.Args<tg.Command.Arg>): CommandBuilder;
 export function command<
 	A extends Array<tg.Value> = Array<tg.Value>,
 	R extends tg.Value = tg.Value,
 >(
 	strings: TemplateStringsArray,
-	...placeholders: tg.Args<tg.Template.Arg>
+	...placeholders: std.Args<tg.Template.Arg>
 ): CommandBuilder<A, R>;
 export function command(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
@@ -26,7 +26,7 @@ export function command(...args: any): any {
 type CommandArgObject = {
 	args?: Array<tg.Value> | undefined;
 	cwd?: string | undefined;
-	env?: std.env.Arg | Array<std.env.Arg> | undefined;
+	env?: std.env.Arg;
 	executable?: tg.Command.ExecutableArg | undefined;
 	host?: string | undefined;
 	mounts?: Array<string | tg.Template | tg.Command.Mount> | undefined;
@@ -38,7 +38,7 @@ export class CommandBuilder<
 	A extends Array<tg.Value> = Array<tg.Value>,
 	R extends tg.Value = tg.Value,
 > {
-	#args: tg.Args<CommandArgObject>;
+	#args: std.Args<CommandArgObject>;
 	#defaultMount: boolean;
 	#defaultShellFallback: boolean;
 	#disallowUnset: boolean;
@@ -46,7 +46,7 @@ export class CommandBuilder<
 	#includeUtils: boolean;
 	#pipefail: boolean;
 
-	constructor(...args: tg.Args<CommandArgObject>) {
+	constructor(...args: std.Args<CommandArgObject>) {
 		this.#args = args;
 		this.#defaultMount = true;
 		this.#defaultShellFallback = true;
@@ -134,9 +134,9 @@ export class CommandBuilder<
 	}
 
 	async mergeArgs(): Promise<CommandArgObject> {
-		let resolved = await Promise.all(this.#args.map(tg.resolve));
-		let objects = await Promise.all(
-			resolved.map(async (arg) => {
+		let arg = await std.args.apply<CommandArgObject, CommandArgObject>({
+			args: this.#args,
+			map: async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else if (
@@ -147,19 +147,19 @@ export class CommandBuilder<
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
-						host: await tg.process.env("TANGRAM_HOST"),
+						host: (await tg.process.env("TANGRAM_HOST")) as string,
 					};
 				} else if (arg instanceof tg.Command) {
 					const obj = await arg.object();
-					return { ...obj, env: [obj.env] };
+					return { ...obj, env: obj.env as std.env.EnvObject };
 				} else {
-					return { ...arg, env: [arg.env] } as CommandArgObject;
+					return { ...arg, env: arg.env };
 				}
-			}),
-		);
-		let arg = await tg.Args.apply(objects, {
-			args: "append",
-			env: "append",
+			},
+			reduce: {
+				args: "append",
+				env: (a, b) => std.env.arg(a, b),
+			},
 		});
 		return arg;
 	}
@@ -230,14 +230,12 @@ export class CommandBuilder<
 
 export const defaultTemplateCommandArg = (
 	strings: TemplateStringsArray,
-	...placeholders: tg.Args<tg.Template.Arg>
+	...placeholders: std.Args<tg.Template.Arg>
 ): tg.Unresolved<CommandArgObject> => {
 	let template = tg.template(strings, ...placeholders);
 	return { executable: "/bin/sh", args: ["-c", template] };
 };
 
-// FIXME - do I need this at all, or should it just be handled by std.command?
-// FIXME unresolved
 export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
 	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
 	// build the default args.
@@ -252,10 +250,8 @@ export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
 };
 
 /** Build the default shell, returning the file directly. */
-// FIXME unresolved
 export const buildDefaultBash = async (hostArg?: tg.Unresolved<string>) => {
 	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
-	// FIXME default mount? handled internally?
 	return await tg
 		.build(std.utils.bash.build, { host })
 		.then((dir) => dir.get("bin/bash"))

@@ -16,16 +16,18 @@ export const source = () => {
 
 type Arg = {
 	autotools?: std.autotools.Arg;
+	bootstrap?: boolean;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const ncurses = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		autotools = {},
+		bootstrap = false,
 		build: build_,
 		env,
 		host: host_,
@@ -60,6 +62,7 @@ export const ncurses = async (arg?: tg.Unresolved<Arg>) => {
 	let result = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			bootstrap,
 			env,
 			phases,
 			sdk,

@@ -89,7 +89,7 @@ export type Metadata = {
 /** Assert a package contains the specified contents in the conventional locations.  As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
 export const pkg = async <T extends std.args.PackageArg>(
 	/** The function that builds the package directory. */
-	buildCmd: std.args.BuildCommand<T>,
+	buildCmd: std.packages.BuildCommand<T>,
 	/** The spec for the package produced when run with no arguments. */
 	defaultSpec: PackageSpec,
 	/** Additional arguments with their corresponding package specs to test, if any. */
@@ -107,7 +107,10 @@ export const pkg = async <T extends std.args.PackageArg>(
 	const results = await Promise.all(
 		packageArgs.map(async ([packageArg, spec]) => {
 			const host = packageArg.host ?? (await std.triple.host());
-			let directory = await std.args.buildCommandOutput(buildCmd, packageArg);
+			let directory = await std.packages.buildCommandOutput(
+				buildCmd,
+				packageArg,
+			);
 			return await singlePackageArg(directory, host, spec);
 		}),
 	);

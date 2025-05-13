@@ -37,12 +37,12 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		nodejs = {},
 		source: source_,
 		...rest
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	// Build the binaries provided by eslint.
 	return node.build(

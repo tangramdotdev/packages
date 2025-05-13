@@ -1,5 +1,5 @@
 import * as std from "../tangram.ts";
-import * as bootstrap from "../bootstrap.tg.ts";
+import { sdk as bootstrapSdk } from "../bootstrap.tg.ts";
 
 export const metadata = {
 	homepage: "http://pkgconf.org",
@@ -25,16 +25,18 @@ export const source = async () => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	bashExe: tg.File;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap: bootstrap_ = false,
 		bashExe,
 		build,
 		env: env_,
@@ -51,6 +53,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 
 	const output = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		env,
 		phases,
 		sdk,
@@ -86,7 +89,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		args: ["--define-prefix"],
 		executable: pkgconf,
 		interpreter: bashExe,
-		buildToolchain: bootstrap.sdk(),
+		buildToolchain: bootstrapSdk(),
 	});
 
 	return tg.directory(output, {

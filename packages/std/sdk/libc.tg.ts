@@ -4,10 +4,11 @@ import * as glibc from "./libc/glibc.tg.ts";
 import * as musl from "./libc/musl.tg.ts";
 
 export type LibCArg = {
+	bootstrap?: boolean;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	linuxHeaders?: tg.Directory;
 };

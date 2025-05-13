@@ -49,7 +49,7 @@ type RootFsArg = {
 	cmd?: Array<string>;
 };
 
-export const image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
+export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	type CombinedArgObject = {
 		buildToolchain?: std.env.Arg;
 		cmdString?: Array<string>;
@@ -121,16 +121,17 @@ export const image = async (...args: tg.Args<Arg>): Promise<tg.File> => {
 		layerCompression = "zstd",
 		rootDir: rootDirs,
 		system: system_,
-	} = (await tg.Args.apply(objectArgs, {
-		buildToolchain: "set",
-		cmdString: "set",
-		format: "set",
-		entrypointArtifact: "append",
-		entrypointString: "append",
-		layerCompression: "set",
-		rootDir: "append",
-		system: "set",
-	})) as Collect;
+	}: Collect = tg.unimplemented();
+	// } = (await tg.Args.apply(objectArgs, {
+	// 	buildToolchain: "set",
+	// 	cmdString: "set",
+	// 	format: "set",
+	// 	entrypointArtifact: "append",
+	// 	entrypointString: "append",
+	// 	layerCompression: "set",
+	// 	rootDir: "append",
+	// 	system: "set",
+	// })) as Collect;
 
 	// Fill in defaults.
 	const system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
@@ -310,7 +311,7 @@ export const ociImageFromLayers = async (
 	if (buildToolchain === undefined) {
 		additionalEnv.push(
 			bootstrap.sdk(),
-			std.utils.env({ sdk: false, env: bootstrap.sdk() }),
+			std.utils.env({ bootstrap: true, env: bootstrap.sdk() }),
 		);
 	} else {
 		additionalEnv.push(buildToolchain);
@@ -318,7 +319,7 @@ export const ociImageFromLayers = async (
 	if (layerCompression === "zstd") {
 		additionalEnv.push(
 			zstd({
-				sdk: false,
+				bootstrap: true,
 				env: await std.env.arg(...additionalEnv),
 			}),
 		);

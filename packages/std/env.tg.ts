@@ -3,7 +3,7 @@ import * as std from "./tangram.ts";
 import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
-export async function env(...args: tg.Args<env.Arg>) {
+export async function env(...args: std.Args<env.Arg>) {
 	const resolved = await Promise.all(args.map(tg.resolve));
 	// Check if the user requested to omit the standard utils.
 	const utils = resolved.reduce((acc, arg) => {
@@ -19,7 +19,7 @@ export async function env(...args: tg.Args<env.Arg>) {
 	// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
 	let buildToolchain: undefined | tg.Unresolved<std.env.Arg> = undefined;
 	if (utils) {
-		objectArgs.push(await std.utils.env({ sdk: false, env: std.sdk() }));
+		objectArgs.push(await std.utils.env({ bootstrap: true, env: std.sdk() }));
 	} else {
 		buildToolchain = await bootstrap.sdk();
 	}
@@ -50,7 +50,7 @@ export namespace env {
 
 	/** Produce a single env object from one or more env args. */
 	export const arg = async (
-		...args: tg.Args<Arg>
+		...args: std.Args<Arg>
 	): Promise<std.env.EnvObject> => {
 		const resolved = await Promise.all(args.map(tg.resolve));
 		const envObjects: Array<tg.MaybeMutation<env.ArgObject>> =
@@ -473,7 +473,7 @@ export namespace env {
 
 	/** Yield all the environment key/value pairs. */
 	export async function* envVars(
-		...envArg: tg.Args<env.Arg>
+		...envArg: std.Args<env.Arg>
 	): AsyncGenerator<[string, tg.Template | undefined]> {
 		const map = await env.arg(...envArg);
 		let value: env.EnvObject | undefined;
@@ -509,7 +509,7 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, throw an error. */
 	export const getShellExecutable = async (
-		...envArgs: tg.Args<env.Arg>
+		...envArgs: std.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink> => {
 		// First, check if "SHELL" is set and points to an executable.
 		const envArg = await arg(...envArgs);
@@ -537,7 +537,7 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, return `undefined`. */
 	export const tryGetShellExecutable = async (
-		...envArgs: tg.Args<env.Arg>
+		...envArgs: std.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink | undefined> => {
 		const envArg = await arg(...envArgs);
 		// First, check if "SHELL" is set and points to an executable.
@@ -672,7 +672,7 @@ export namespace env {
 					build,
 					host: host_,
 					sdk: {},
-				} as std.args.ResolvedPackageArg<T>;
+				} as std.packages.ResolvedPackageArg<T>;
 			} else {
 				return undefined;
 			}
@@ -688,7 +688,7 @@ export namespace env {
 			buildArg = { ...buildArg, sdk };
 		}
 
-		let output = await std.args.buildCommandOutput(buildCmd, buildArg);
+		let output = await std.packages.buildCommandOutput(buildCmd, buildArg);
 
 		if (subdirs !== undefined) {
 			output = await std.directory.keepSubdirectories(output, ...subdirs);
@@ -699,13 +699,13 @@ export namespace env {
 
 	/** A `Dependency` can simply be a command that builds a directory, or an object describing how to build and post-process that directory. */
 	export type Dependency<T extends std.args.PackageArg> =
-		| std.args.BuildCommand<T>
+		| std.packages.BuildCommand<T>
 		| DependencyObject<T>;
 
 	/** Object defining the options for producing and post-processing a directory to be used as a build dependency. */
 	export type DependencyObject<T extends std.args.PackageArg> = {
-		arg?: std.args.ResolvedPackageArg<T> | boolean | undefined;
-		buildCmd: std.args.BuildCommand<T>;
+		arg?: std.packages.ResolvedPackageArg<T> | boolean | undefined;
+		buildCmd: std.packages.BuildCommand<T>;
 		subdirs?: Array<string>;
 		setHostToBuild?: boolean;
 		inheritEnv?: boolean;
@@ -714,8 +714,8 @@ export namespace env {
 
 	/** Produce a `DependencyObject` with all the defaults applied. */
 	export const dependency = <T extends std.args.PackageArg>(
-		buildCmd: std.args.BuildCommand<T>,
-		arg?: std.args.ResolvedPackageArg<T> | boolean,
+		buildCmd: std.packages.BuildCommand<T>,
+		arg?: std.packages.ResolvedPackageArg<T> | boolean,
 	): DependencyObject<T> => {
 		return {
 			buildCmd,
@@ -725,8 +725,8 @@ export namespace env {
 
 	/** Produce a `DependencyObject` for a buildtime dependency. */
 	export const buildDependency = <T extends std.args.PackageArg>(
-		buildCmd: std.args.BuildCommand<T>,
-		arg?: std.args.ResolvedPackageArg<T> | boolean,
+		buildCmd: std.packages.BuildCommand<T>,
+		arg?: std.packages.ResolvedPackageArg<T> | boolean,
 	): DependencyObject<T> => {
 		return {
 			subdirs: ["bin"],
@@ -740,8 +740,8 @@ export namespace env {
 
 	/** Produce a `DependencyObject` fro a runtime dependency. */
 	export const runtimeDependency = <T extends std.args.PackageArg>(
-		buildCmd: std.args.BuildCommand<T>,
-		arg?: std.args.ResolvedPackageArg<T> | boolean,
+		buildCmd: std.packages.BuildCommand<T>,
+		arg?: std.packages.ResolvedPackageArg<T> | boolean,
 	): DependencyObject<T> => {
 		return {
 			subdirs: ["include", "lib"],
@@ -782,7 +782,7 @@ const dependencyObjectFromDependency = <T extends std.args.PackageArg>(
 		return dependency as env.DependencyObject<T>;
 	} else {
 		// FIXME - avoid this as cast, maybe need an `is` for build command.
-		return { buildCmd: dependency as std.args.BuildCommand<T> };
+		return { buildCmd: dependency as std.packages.BuildCommand<T> };
 	}
 };
 

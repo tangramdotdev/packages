@@ -85,7 +85,7 @@ export type Arg = {
 };
 
 /** Build and create a python environment. */
-export const self = async (...args: tg.Args<Arg>) => {
+export const self = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -96,7 +96,7 @@ export const self = async (...args: tg.Args<Arg>) => {
 		requirements: requirementsArg,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	const os = std.triple.os(host);
 
@@ -299,8 +299,7 @@ export type BuildArg = {
 	python?: Arg;
 };
 
-export const build = async (...args: tg.Args<BuildArg>) => {
-	const resolved = await Promise.all(args.map(tg.resolve));
+export const build = async (...args: std.Args<BuildArg>) => {
 	const {
 		build: buildTriple_,
 		env,
@@ -308,7 +307,11 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 		python: pythonArg,
 		pyprojectToml: pyprojectToml_,
 		source,
-	} = await tg.Args.apply(resolved);
+	} = await std.args.apply<BuildArg, BuildArg>({
+		args,
+		map: async (arg) => arg,
+		reduce: { source: "set" },
+	});
 	const host = host_ ?? (await std.triple.host());
 	const buildTriple = buildTriple_ ?? host;
 

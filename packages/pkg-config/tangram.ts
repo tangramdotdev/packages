@@ -37,7 +37,7 @@ export type Arg = {
 	proxy?: boolean;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -47,7 +47,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		proxy = true,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	// Set up host dependencies.
 	const zlibForHost = await zlib

@@ -19,15 +19,17 @@ export const source = () => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg?: Arg) => {
 	const {
+		bootstrap = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -46,6 +48,7 @@ export const build = async (arg?: Arg) => {
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap,
 		env,
 		phases: { configure },
 		sdk,
@@ -63,5 +66,5 @@ import * as bootstrap from "../bootstrap.tg.ts";
 export const test = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const sdk = await bootstrap.sdk(host);
-	return build({ host, sdk: false, env: sdk });
+	return build({ host, bootstrap: true, env: sdk });
 };

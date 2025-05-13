@@ -39,7 +39,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -48,7 +48,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		linuxHeaders: linuxHeaders_,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 	std.assert.supportedHost(host, metadata);

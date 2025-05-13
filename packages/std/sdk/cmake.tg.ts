@@ -1,7 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import ninja from "./ninja.tg.ts";
-import { buildTools } from "./dependencies.tg.ts";
+import { buildTools, type Level } from "./dependencies.tg.ts";
 
 export const metadata = {
 	homepage: "https://cmake.org/",
@@ -75,10 +75,10 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 
 	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: true,
 		buildInTree: true,
 		env,
 		phases,
-		sdk: false,
 		source: sourceDir,
 	});
 
@@ -88,6 +88,9 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 export default cmake;
 
 export type BuildArg = {
+	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explitily provided via `env`. Default: false. */
+	bootstrap?: boolean;
+
 	/** Path to use for the build directory. Default: "build". */
 	buildDir?: string;
 
@@ -97,6 +100,9 @@ export type BuildArg = {
 	/** Any environment to add to the target. */
 	env?: std.env.Arg;
 
+	/** Should the build environment include `m4`, `bison`, `perl`, and `gettext`? Default: true. */
+	extended?: boolean;
+
 	/** Should the flags include FORTIFY_SORUCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 3.  */
 	fortifySource?: boolean | number;
 
@@ -104,7 +110,7 @@ export type BuildArg = {
 	fullRelro?: boolean;
 
 	/** Which generator to use. Default: "Ninja" */
-	generator: "Ninja" | "Unix Makefiles";
+	generator?: "Ninja" | "Unix Makefiles";
 
 	/** Should we add the extra set of harderning CFLAGS? Default: true*/
 	hardeningCFlags?: boolean;
@@ -127,17 +133,20 @@ export type BuildArg = {
 	/** Override the phases. */
 	phases?: std.phases.Arg;
 
+	/** Should the build environment include pkg-config? Default: true */
+	pkgConfig?: boolean;
+
 	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of tempory files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
 	pipe?: boolean;
 
 	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
 	prefixPath?: tg.Template.Arg;
 
-	/** Arguments to use for the SDK. Set `false` to omit an implicit SDK entirely, useful if you're passing a toolchain in explicitly via the `env` argument. Set `true` to use the default SDK configuration. */
-	sdk?: std.sdk.Arg | boolean;
+	/** Arguments to use for the SDK. */
+	sdk?: std.sdk.Arg;
 
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
-	source: tg.Template.Arg;
+	source?: tg.Template.Arg;
 
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean;
@@ -147,20 +156,14 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export const build = async (...args: tg.Args<BuildArg>) => {
-	const resolved = await Promise.all(args.map(tg.resolve));
-	const objects = resolved.map((obj) => {
-		return {
-			...obj,
-			env: [obj.env],
-			phases: [obj.phases],
-			sdk: [obj.sdk],
-		};
-	});
+export const build = async (...args: std.Args<BuildArg>) => {
+	type Collect = std.args.MakeArrayKeys<BuildArg, "phases">;
 	const {
+		bootstrap = false,
 		buildDir = "build",
 		debug = false,
 		env: userEnv,
+		extended = true,
 		fortifySource: fortifySource_ = 3,
 		fullRelro = true,
 		generator = "Ninja",
@@ -170,19 +173,28 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 		mtune = "generic",
 		opt = "2",
 		parallel = true,
-		phases,
+		phases: userPhaseArgs = [],
+		pkgConfig = true,
 		pipe = true,
 		prefixPath = `$OUTPUT`,
-		sdk: sdkArgs_,
+		sdk: sdkArg,
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = (await tg.Args.apply(objects, {
-		env: "append",
-		phases: "append",
-		sdk: "append",
-		source: "set",
-	})) as std.args.MakeArrayKeys<BuildArg, "env" | "phases" | "sdk">;
+	} = await std.args.apply<BuildArg, Collect>({
+		args,
+		map: async (arg) => {
+			return {
+				...arg,
+				phases: [arg.phases],
+			} as Collect;
+		},
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			phases: "append",
+			sdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
 
 	// Make sure the the arguments provided a source.
 	tg.assert(source !== undefined, `source must be defined`);
@@ -191,24 +203,6 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 	const host = host_ ?? (await std.triple.host());
 	const target = target_ ?? host;
 	const os = std.triple.os(host);
-
-	// Determine SDK configuration.
-	let sdkArgs: Array<std.sdk.ArgObject> | undefined = undefined;
-	// If any SDk arg is `false`, we don't want to include the SDK.
-	const includeSdk = !sdkArgs_?.some((arg) => arg === false);
-	// If we are including the SDK, omit any booleans from the array.
-	if (includeSdk) {
-		sdkArgs =
-			sdkArgs_?.filter(
-				(arg): arg is std.sdk.ArgObject => typeof arg !== "boolean",
-			) ?? [];
-		if (
-			sdkArgs.length === 0 ||
-			sdkArgs.every((arg) => arg?.host === undefined)
-		) {
-			sdkArgs = [{ host, target }, ...sdkArgs];
-		}
-	}
 
 	// Set up env.
 	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
@@ -285,13 +279,23 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 		envs.push(await tg.build(ninja, { host }));
 	}
 
-	if (includeSdk) {
+	if (!bootstrap) {
+		// Set up the SDK, add it to the environment.
+		const sdk = await tg.build(std.sdk, sdkArg);
+		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
+		let level: Level = "base";
+		if (pkgConfig) {
+			level = "pkgconfig";
+		}
+		if (extended) {
+			level = "extended";
+		}
 		const buildToolsEnv = await tg.build(buildTools, {
 			host,
-			buildToolchain: std.sdk({ host }),
-			level: "pkgconfig",
+			buildToolchain: await tg.build(std.sdk, { host }),
+			level,
 		});
-		envs.push(await tg.build(std.sdk, ...(sdkArgs ?? [])), buildToolsEnv);
+		envs.push(sdk, buildToolsEnv);
 	}
 
 	// If cross compiling, override CC/CXX to point to the correct compiler.
@@ -303,7 +307,7 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, ...(userEnv ?? []));
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs = [
@@ -346,18 +350,17 @@ export const build = async (...args: tg.Args<BuildArg>) => {
 	}
 
 	const system = std.triple.archAndOs(host);
-	const phaseArgs = (phases ?? []).filter(
-		(arg): arg is std.phases.Arg => arg !== undefined,
-	);
-	return await std.phases
-		.run(
+	return await tg
+		.build(
+			std.phases.run,
 			{
+				bootstrap: true,
 				debug,
 				phases: defaultPhases,
 				env,
 				command: { env: { TANGRAM_HOST: system }, host: system },
 			},
-			...phaseArgs,
+			...userPhaseArgs,
 		)
 		.then(tg.Directory.expect);
 };

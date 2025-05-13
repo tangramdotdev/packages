@@ -41,12 +41,12 @@ export type Arg = {
 };
 
 /** Create an environment with poetry installed. */
-export const self = async (...args: tg.Args<Arg>) => {
+export const self = async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		host,
 		requirements: requirements_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 	const requirements = requirements_ ?? requirementsTxt;
 	return python.self({ build, host, requirements });
 };

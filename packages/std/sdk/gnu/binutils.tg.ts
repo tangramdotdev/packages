@@ -22,11 +22,12 @@ export const source = async (build: string) => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	autotools?: std.autotools.Arg;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	target?: string;
 };
@@ -35,6 +36,7 @@ export type Arg = {
 export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		autotools = {},
+		bootstrap: bootstrap_ = false,
 		build: build_,
 		env,
 		host: host_,
@@ -75,6 +77,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			bootstrap: bootstrap_,
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
 			env,

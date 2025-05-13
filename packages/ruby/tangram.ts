@@ -67,7 +67,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const self = async (...args: tg.Args<Arg>) => {
+export const self = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		dependencies: {
@@ -83,7 +83,7 @@ export const self = async (...args: tg.Args<Arg>) => {
 		source: source_,
 		build,
 		host,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	// Get the source code.
 	let sourceDir = source_ ?? (await source());

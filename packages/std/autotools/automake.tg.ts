@@ -24,17 +24,19 @@ export const source = () => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
 	autoconfArtifact: tg.Directory;
 	perlArtifact: tg.Directory;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap = false,
 		build,
 		env: env_,
 		host,
@@ -57,6 +59,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 
 	const automake = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap,
 		env,
 		sdk,
 		source: source_ ?? source(),

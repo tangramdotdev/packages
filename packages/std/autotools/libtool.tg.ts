@@ -1,5 +1,5 @@
 import * as std from "../tangram.ts";
-import * as bootstrap from "../bootstrap.tg.ts";
+import { sdk as bootstrapSdk } from "../bootstrap.tg.ts";
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/libtool",
@@ -25,18 +25,20 @@ export const source = () => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	bashExe: tg.File;
 	grepExe: tg.File;
 	sedExe: tg.File;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap = false,
 		bashExe,
 		grepExe,
 		sedExe,
@@ -50,6 +52,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	const env = std.env.arg(env_);
 	let output = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap,
 		env,
 		sdk,
 		source: source_ ?? source(),
@@ -74,7 +77,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 			[`bin/${script}`]: std.wrap({
 				executable: file,
 				interpreter: bashExe,
-				buildToolchain: bootstrap.sdk(),
+				buildToolchain: bootstrapSdk(),
 				env: scriptEnv,
 			}),
 		});

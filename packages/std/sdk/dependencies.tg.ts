@@ -56,7 +56,7 @@ export const buildTools = async (
 
 	// This list collects artifacts to return. It does not include the build toolchain.
 	const retEnvs: tg.Unresolved<Array<std.env.Arg>> = [];
-	const utils = std.utils.env({ host, sdk: false, env: buildToolchain });
+	const utils = std.utils.env({ host, bootstrap: true, env: buildToolchain });
 	retEnvs.push(utils);
 
 	// This env is used to build the remaining dependencies only. It includes the build toolchain.
@@ -71,7 +71,7 @@ export const buildTools = async (
 	const pkgConfigArtifact = pkgConfig({
 		bashExe,
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: utilsEnv,
 	});
 	retEnvs.push(pkgConfigArtifact);
@@ -81,30 +81,30 @@ export const buildTools = async (
 	}
 
 	// Some dependencies depend on previous builds, so they are manually ordered here.
-	const m4Artifact = m4({ host, sdk: false, env: utilsEnv });
+	const m4Artifact = m4({ host, bootstrap: true, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, m4Artifact);
 
-	const bisonArtifact = bison({ host, sdk: false, env: utilsEnv });
+	const bisonArtifact = bison({ host, bootstrap: true, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, bisonArtifact);
 
 	if (os === "darwin") {
 		const libiconvArtifact = libiconv({
 			host,
-			sdk: false,
+			bootstrap: true,
 			env: std.env.arg(utils, buildToolchain),
 		});
 		retEnvs.push(libiconvArtifact);
 		utilsEnv = std.env.arg(utilsEnv, libiconvArtifact);
 	}
 
-	const gettextArtifact = gettext({ host, sdk: false, env: utilsEnv });
+	const gettextArtifact = gettext({ host, bootstrap: true, env: utilsEnv });
 	retEnvs.push(m4Artifact, bisonArtifact, gettextArtifact);
 	utilsEnv = std.env.arg(utilsEnv, gettextArtifact);
 
-	const flexArtifact = flex({ host, sdk: false, env: utilsEnv });
+	const flexArtifact = flex({ host, bootstrap: true, env: utilsEnv });
 	utilsEnv = std.env.arg(utilsEnv, flexArtifact);
 
-	const perlArtifact = perl({ host, sdk: false, env: utilsEnv });
+	const perlArtifact = perl({ host, bootstrap: true, env: utilsEnv });
 	retEnvs.push(perlArtifact);
 	if (level === "extended") {
 		return std.env.arg(...retEnvs);
@@ -113,11 +113,11 @@ export const buildTools = async (
 
 	const libxcryptArtifact = libxcrypt({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: utilsEnv,
 	});
 	utilsEnv = std.env.arg(utilsEnv, libxcryptArtifact);
-	const pythonArtifact = python({ host, sdk: false, env: utilsEnv });
+	const pythonArtifact = python({ host, bootstrap: true, env: utilsEnv });
 	retEnvs.push(pythonArtifact);
 	utilsEnv = std.env.arg(utilsEnv, pythonArtifact);
 	if (level === "python") {
@@ -126,13 +126,13 @@ export const buildTools = async (
 
 	const grepArtifact = await grep({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: std.env.arg(utils, buildToolchain),
 	});
 	const grepExe = await grepArtifact.get("bin/grep").then(tg.File.expect);
 	const sedArtifact = await sed({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: std.env.arg(utils, buildToolchain),
 	});
 	const sedExe = await sedArtifact.get("bin/sed").then(tg.File.expect);
@@ -141,19 +141,19 @@ export const buildTools = async (
 		grepExe,
 		sedExe,
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: utilsEnv,
 	});
 	const texinfoArtifact = texinfo({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: utilsEnv,
 		perlArtifact,
 	});
 	utilsEnv = std.env.arg(utilsEnv, texinfoArtifact);
 	const autoconfArtifact = autoconf({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: utilsEnv,
 		grepArtifact,
 		m4Artifact,
@@ -162,14 +162,14 @@ export const buildTools = async (
 	utilsEnv = std.env.arg(utilsEnv, autoconfArtifact);
 	const help2manArifact = help2man({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: utilsEnv,
 		perlArtifact,
 	});
 	utilsEnv = std.env.arg(utilsEnv, help2manArifact);
 	const automakeArtifact = automake({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: utilsEnv,
 		autoconfArtifact,
 		perlArtifact,
@@ -198,32 +198,32 @@ export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
 
 	const zlibArtifact = zlib({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: buildToolchain,
 	});
 	const zstdArtifact = zstd({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: buildToolchain,
 	});
 	const ret = [zlibArtifact, zstdArtifact];
 
 	if (withGccLibs) {
 		// These libraries depend on m4, but no other library depends on them. Build them here and use a separate env to thread dependencies..
-		const gmpArtifact = gmp({ host, sdk: false, env: buildToolchain });
+		const gmpArtifact = gmp({ host, bootstrap: true, env: buildToolchain });
 		ret.push(gmpArtifact);
 		let gmpEnv = std.env.arg(buildToolchain, gmpArtifact);
 
-		const islArtifact = isl({ host, sdk: false, env: gmpEnv });
+		const islArtifact = isl({ host, bootstrap: true, env: gmpEnv });
 		ret.push(islArtifact);
 
-		const mpfrArtifact = mpfr({ host, sdk: false, env: gmpEnv });
+		const mpfrArtifact = mpfr({ host, bootstrap: true, env: gmpEnv });
 		ret.push(mpfrArtifact);
 		gmpEnv = std.env.arg(gmpEnv, mpfrArtifact);
 
 		const mpcArtifact = mpc({
 			host,
-			sdk: false,
+			bootstrap: true,
 			env: gmpEnv,
 		});
 		ret.push(mpcArtifact);

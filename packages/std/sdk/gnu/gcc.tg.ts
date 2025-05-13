@@ -41,6 +41,7 @@ export const source = (bundledSources?: boolean) => {
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
+	bootstrap?: boolean;
 	build?: string;
 	/** If this is true, add the gmp, mpfr, mpc, and isl source directories to the GCC source and build them all together. If false, these libraries must be available for the host in the env. */
 	bundledSources?: boolean;
@@ -48,7 +49,7 @@ export type Arg = {
 	crossNative?: boolean;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	/**  This directory must contain a directory structure with a single toplevel directory named for the target triple, containing include/lib directories contains a libc matching the target triple and a set of Linux headers. They will be copied into the output. */
 	sysroot: tg.Directory;
@@ -67,6 +68,7 @@ export type Variant =
 export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
 		autotools = {},
+		bootstrap: bootstrap_ = false,
 		build: build_,
 		bundledSources = false,
 		crossNative = false,
@@ -206,6 +208,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	let result = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			bootstrap: bootstrap_,
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
 			env,

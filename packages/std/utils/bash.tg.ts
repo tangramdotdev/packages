@@ -14,10 +14,11 @@ export const metadata = {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
@@ -32,6 +33,7 @@ export const source = async () => {
 
 export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -67,6 +69,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 	let output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		env: std.env.arg(...env, env_),
 		phases,
 		sdk,
@@ -107,5 +110,5 @@ export const test = async () => {
 	// 	env: sdk,
 	// })
 	// return true;
-	return build({ host, sdk: false, env: sdk });
+	return build({ host, bootstrap: true, env: sdk });
 };

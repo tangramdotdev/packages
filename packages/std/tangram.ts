@@ -1,15 +1,18 @@
+export { type Args } from "./args.tg.ts";
 export * as args from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
 export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
 export { command } from "./command.tg.ts";
+export * as dependencies from "./sdk/dependencies.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
 export { download } from "./download.tg.ts";
 export { env } from "./env.tg.ts";
 export * as file from "./file.tg.ts";
 export { patch } from "./patch.tg.ts";
+export * as packages from "./packages.tg.ts";
 export * as phases from "./phases.tg.ts";
 export { $, run } from "./run.tg.ts";
 export { sdk } from "./sdk.tg.ts";

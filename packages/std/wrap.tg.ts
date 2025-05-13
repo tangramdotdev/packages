@@ -12,7 +12,7 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 /** This module provides the `std.wrap()` function, which can be used to bundle an executable with a predefined environment and arguments, either of which may point to other Tangram artifacts.*/
 
 /** Wrap an executable. */
-export async function wrap(...args: tg.Args<wrap.Arg>): Promise<tg.File> {
+export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const arg = await wrap.arg(...args);
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
@@ -219,9 +219,21 @@ export namespace wrap {
 	};
 
 	/** Process variadic arguments. */
-	export const arg = async (...args: tg.Args<wrap.Arg>) => {
-		const objectArgs = await Promise.all(
-			(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
+	export const arg = async (...args: std.Args<wrap.Arg>) => {
+		let {
+			args: args_,
+			buildToolchain,
+			env: env_ = {},
+			executable,
+			host,
+			identity,
+			interpreter,
+			merge: merge_ = true,
+			libraryPaths,
+			libraryPathStrategy,
+		} = await std.args.apply<wrap.Arg, wrap.ArgObject>({
+			args,
+			map: async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
@@ -234,31 +246,17 @@ export namespace wrap {
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
-					return { ...arg, env: [arg.env] } as std.args.MakeArrayKeys<
-						std.wrap.ArgObject,
-						"env"
-					>;
+					return { ...arg, env: arg.env };
 				} else {
 					return tg.unreachable(`Unsupported argument: ${arg}`);
 				}
-			}),
-		);
-		let {
-			args: args_,
-			buildToolchain,
-			env: env_ = [],
-			executable,
-			host,
-			identity,
-			interpreter,
-			merge: merge_ = true,
-			libraryPaths,
-			libraryPathStrategy,
-		} = (await tg.Args.apply(objectArgs, {
-			env: "append",
-			libraryPaths: "append",
-			args: "append",
-		})) as std.args.MakeArrayKeys<std.wrap.ArgObject, "env">;
+			},
+			reduce: {
+				env: (a, b) => std.env.arg(a, b),
+				libraryPaths: "append",
+				args: "append",
+			},
+		});
 
 		tg.assert(executable !== undefined);
 
@@ -268,6 +266,8 @@ export namespace wrap {
 
 		// Determine whether to try to merge this wrapper with an existing one. If the user specified `true`, only honor if an existing manifest was found.
 		const merge = merge_ && existingManifest !== undefined;
+
+		const envs: tg.Unresolved<Array<std.env.Arg>> = [];
 
 		// If the executable is a file and the behavior is merge, try to read the manifest from it.
 		if (merge) {
@@ -280,7 +280,7 @@ export namespace wrap {
 				);
 			}
 
-			env_ = [await wrap.envArgFromManifestEnv(existingManifest.env), ...env_];
+			envs.push(await wrap.envArgFromManifestEnv(existingManifest.env));
 			identity = existingManifest.identity;
 			interpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
@@ -295,7 +295,7 @@ export namespace wrap {
 			);
 		}
 
-		const env = await std.env.arg(...env_);
+		const env = await std.env.arg(...envs, env_);
 
 		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
 		if (executable instanceof tg.Template || typeof executable === "string") {
@@ -355,11 +355,11 @@ export namespace wrap {
 		// Provide bash for the detected host system.
 		let buildArg:
 			| undefined
-			| { sdk: boolean; env: tg.Unresolved<std.env.Arg> } = undefined;
+			| { bootstrap: boolean; env: tg.Unresolved<std.env.Arg> } = undefined;
 		if (buildToolchain_) {
-			buildArg = { sdk: false, env: buildToolchain_ };
+			buildArg = { bootstrap: true, env: buildToolchain_ };
 		} else {
-			buildArg = { sdk: false, env: std.sdk() };
+			buildArg = { bootstrap: true, env: std.sdk() };
 		}
 		const shellExecutable = await std.utils.bash
 			.build(buildArg)

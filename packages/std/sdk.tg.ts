@@ -19,7 +19,7 @@ export * as llvm from "./sdk/llvm.tg.ts";
 export * as proxy from "./sdk/proxy.tg.ts";
 
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
-export async function sdk(...args: tg.Args<sdk.Arg>) {
+export async function sdk(...args: std.Args<sdk.Arg>) {
 	let {
 		host,
 		proxyCompiler,
@@ -176,16 +176,7 @@ export namespace sdk {
 		toolchain?: sdk.ToolchainKind;
 	};
 
-	export const arg = async (...args: tg.Args<Arg>) => {
-		const objectArgs = await Promise.all(
-			(await Promise.all(args.map(tg.resolve))).map(async (arg) => {
-				if (arg === undefined) {
-					return {};
-				} else {
-					return arg;
-				}
-			}),
-		);
+	export const arg = async (...args: std.Args<Arg>) => {
 		let {
 			host: host_,
 			linker,
@@ -195,9 +186,19 @@ export namespace sdk {
 			target,
 			targets: targets_,
 			toolchain: toolchain_,
-		} = (await tg.Args.apply(objectArgs, {
-			targets: "append",
-		})) as ArgObject;
+		} = await std.args.apply<sdk.Arg, sdk.ArgObject>({
+			args,
+			map: async (arg) => {
+				if (arg === undefined) {
+					return {};
+				} else {
+					return arg;
+				}
+			},
+			reduce: {
+				targets: "append",
+			},
+		});
 
 		// Obtain host and targets.
 		let host = host_ ?? (await std.triple.host());
@@ -207,6 +208,7 @@ export namespace sdk {
 			throw new Error(`Alternate linkers are only available for Linux hosts.`);
 		}
 
+		// FIXME - this can get done in the reducer.
 		let targets = targets_ ?? [];
 		if (target) {
 			targets.push(target);

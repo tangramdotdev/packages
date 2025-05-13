@@ -38,7 +38,7 @@ type Arg = {
 	target?: string;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build: build_,
@@ -47,7 +47,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		sdk,
 		source: source_,
 		target: target_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const os = std.triple.os(host);
@@ -134,7 +134,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 
 export default build;
 
-export const libgcc = async (...args: tg.Args<Arg>) => {
+export const libgcc = async (...args: std.Args<Arg>) => {
 	// FIXME - write in terms of gcc above, pass phases down.
 	const {
 		autotools = {},
@@ -144,7 +144,7 @@ export const libgcc = async (...args: tg.Args<Arg>) => {
 		sdk,
 		source: source_,
 		target: target_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const os = std.triple.os(host);

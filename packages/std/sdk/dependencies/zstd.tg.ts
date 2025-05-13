@@ -24,15 +24,23 @@ export const source = () => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg?: Arg) => {
-	const { build: build_, env, host: host_, sdk, source: source_ } = arg ?? {};
+	const {
+		bootstrap: bootstrap_ = false,
+		build: build_,
+		env,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ?? {};
 
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
@@ -44,6 +52,7 @@ export const build = async (arg?: Arg) => {
 
 	return await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		buildInTree: true,
 		defaultCrossArgs: false,
 		env,

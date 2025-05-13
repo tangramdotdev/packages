@@ -49,8 +49,8 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
-	const arg = await std.args.apply<Arg>(...args);
+export const build = async (...args: std.Args<Arg>) => {
+	const arg = await std.packages.applyArgs<Arg>(...args);
 	const {
 		autotools = {},
 		build,

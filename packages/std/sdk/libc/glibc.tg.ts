@@ -26,16 +26,18 @@ export const source = (version?: GlibcVersion) => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	linuxHeaders: tg.Directory;
 };
 
 export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -103,6 +105,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 
 	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
 		env: std.env.arg(...env),

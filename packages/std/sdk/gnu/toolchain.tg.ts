@@ -13,7 +13,7 @@ export type ToolchainArg = {
 	build?: string;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	target?: string;
 };
 
@@ -51,7 +51,7 @@ export const toolchain = async (arg: ToolchainArg) => {
 	);
 
 	// Create a new set of build tools against the new native toolchain.
-	const nativeBuildTools = await dependencies.buildTools({
+	const nativeBuildTools = await tg.build(dependencies.buildTools, {
 		host,
 		buildToolchain: proxiedNativeToolchain,
 		level: "python",
@@ -62,7 +62,6 @@ export const toolchain = async (arg: ToolchainArg) => {
 		buildToolchain: proxiedNativeToolchain,
 		env: nativeBuildTools,
 		host,
-		sdk: false,
 		target,
 		variant: "stage2_full",
 	});
@@ -84,7 +83,7 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const bootstrapToolchain = bootstrap.sdk(host);
 
 	// Set up build environment tools.
-	const bootstrapBuildTools = await dependencies.buildTools({
+	const bootstrapBuildTools = await tg.build(dependencies.buildTools, {
 		host: build,
 		buildToolchain: bootstrapToolchain,
 		level: "python",
@@ -115,8 +114,8 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	// Create a native toolchain (host to host).
 	const nativeBinutils = await binutils({
 		autotools: { fortifySource: false },
+		bootstrap: true,
 		env: stage1HostSdk,
-		sdk: false,
 		build: host,
 		host,
 		target,
@@ -124,12 +123,12 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 
 	// Build a fully native GCC toolchain.
 	const nativeGcc = gcc.build({
+		bootstrap: true,
 		build: host,
 		bundledSources: true, // Build gmp/isl/mpfr/mpc inline
 		crossNative: true, // Include workaround for configuring target libraries with an unproxied compiler.
 		env: stage1HostSdk,
 		host,
-		sdk: false,
 		sysroot,
 		target,
 		targetBinutils: nativeBinutils,
@@ -152,7 +151,6 @@ export const buildToHostCrossToolchain = async (
 		build,
 		buildToolchain,
 		env,
-		sdk: false,
 		host: build,
 		target: host,
 		variant: "stage1_limited",
@@ -166,7 +164,7 @@ export type CrossToolchainArg = {
 	/** Additional utilities. */
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	target: string;
 	variant?: gcc.Variant;
@@ -188,17 +186,17 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 	const target = target_ ?? host;
 
 	// Produce the binutils for building the cross-toolchain.
-	const hostLibraries = dependencies.hostLibraries({
+	const hostLibraries = await tg.build(dependencies.hostLibraries, {
 		host,
 		buildToolchain: std.env.arg(buildToolchain, env_),
 	});
 	const buildEnv = std.env.arg(env_, buildToolchain, hostLibraries);
 
 	const targetBinutils = binutils({
+		bootstrap: true,
 		build: buildTriple,
 		env: buildEnv,
 		host,
-		sdk,
 		target,
 	});
 
@@ -215,6 +213,7 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
 	const crossGcc = await gcc.build({
+		bootstrap: true,
 		build: buildTriple,
 		env: buildEnv,
 		host,
@@ -237,7 +236,7 @@ export type BuildSysrootArg = {
 	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	targetBinutils?: tg.Directory;
 };
 
@@ -258,11 +257,19 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 	const buildEnv = std.env.arg(env, buildToolchain);
 	const targetBinutils =
 		targetBinutils_ ??
-		(await binutils({ build: buildTriple, env: buildEnv, host, sdk, target }));
+		(await binutils({
+			bootstrap: true,
+			build: buildTriple,
+			env: buildEnv,
+			host,
+			sdk,
+			target,
+		}));
 
 	// Produce the linux headers.
 	const linuxHeaders = await tg.directory({
 		include: await kernelHeaders({
+			bootstrap: true,
 			build: buildTriple,
 			env: buildEnv,
 			host: target,
@@ -289,11 +296,12 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 
 	// Produce a combined directory containing the correct C library for the host and the Linux headers.
 	return constructSysroot({
+		bootstrap: true,
 		build: buildTriple,
 		host,
 		linuxHeaders,
 		env: std.env.arg(env, initialGccDir),
-		sdk: false,
+		sdk,
 	});
 };
 

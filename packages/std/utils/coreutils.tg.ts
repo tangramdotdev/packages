@@ -10,13 +10,13 @@ import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch"
 
 export const metadata = {
 	name: "coreutils",
-	version: "9.6",
+	version: "9.7",
 };
 
 export const source = async (os: string) => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:7a0124327b398fd9eb1a6abde583389821422c744ffa10734b24f557610d3283";
+		"sha256:e8bb26ad0293f9b5a1fc43fb42ba970e312c66ce92c1b0b16713d7500db251bf";
 	let source = await std.download.fromGnu({
 		name,
 		version,
@@ -35,10 +35,11 @@ export const source = async (os: string) => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	staticBuild?: boolean;
 	usePrerequisites?: boolean;
@@ -46,6 +47,7 @@ export type Arg = {
 
 export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -67,6 +69,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	let attrArtifact;
 	if (os === "linux") {
 		attrArtifact = attr({
+			bootstrap: bootstrap_,
 			build,
 			env: env_,
 			host,
@@ -78,6 +81,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	} else if (os === "darwin") {
 		dependencies.push(
 			libiconv({
+				bootstrap: bootstrap_,
 				build,
 				env: env_,
 				host,
@@ -106,6 +110,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 	let output = await autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		env: std.env.arg(...env),
 		phases: { configure },
 		opt: staticBuild ? "s" : undefined,
@@ -136,7 +141,7 @@ export const gnuEnv = async () => {
 	const directory = await build({
 		host,
 		env,
-		sdk: false,
+		bootstrap: true,
 		staticBuild: os === "linux",
 		usePrerequisites: false,
 	});
@@ -152,7 +157,7 @@ export const test = async () => {
 	const os = std.triple.os(system);
 	const sdk = await bootstrap.sdk(host);
 
-	const coreutils = await build({ host, sdk: false, env: sdk });
+	const coreutils = await build({ host, bootstrap: true, env: sdk });
 
 	let expected;
 	let script;
@@ -218,8 +223,8 @@ export const test = async () => {
 	// Run the script.
 	const platformSupportLib =
 		os === "darwin"
-			? libiconv({ host, sdk: false, env: sdk })
-			: attr({ host, sdk: false, env: sdk });
+			? libiconv({ host, bootstrap: true, env: sdk })
+			: attr({ host, bootstrap: true, env: sdk });
 	const output = await std.build`${script}`
 		.includeUtils(false)
 		.pipefail(false)

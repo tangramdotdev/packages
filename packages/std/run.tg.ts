@@ -7,10 +7,10 @@ import {
 	linuxRootMount,
 } from "./command.tg.ts";
 
-export function run(...args: tg.Args<tg.Process.RunArg>): RunBuilder;
+export function run(...args: std.Args<tg.Process.RunArg>): RunBuilder;
 export function run(
 	strings: TemplateStringsArray,
-	...placeholders: tg.Args<tg.Template.Arg>
+	...placeholders: std.Args<tg.Template.Arg>
 ): RunBuilder;
 export function run(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
@@ -29,7 +29,7 @@ type RunArgObject = {
 	args?: Array<tg.Value> | undefined;
 	checksum?: tg.Checksum | undefined;
 	cwd?: string | undefined;
-	env?: std.env.Arg | Array<std.env.Arg> | undefined;
+	env?: std.env.Arg;
 	executable?: tg.Command.ExecutableArg | undefined;
 	host?: string | undefined;
 	mounts?:
@@ -46,7 +46,7 @@ export class RunBuilder<
 	A extends Array<tg.Value> = Array<tg.Value>,
 	R extends tg.Value = tg.Value,
 > {
-	#args: tg.Args<RunArgObject>;
+	#args: std.Args<RunArgObject>;
 	#defaultShellFallback: boolean;
 	#defaultMount: boolean;
 	#disallowUnset: boolean;
@@ -54,7 +54,7 @@ export class RunBuilder<
 	#includeUtils: boolean;
 	#pipefail: boolean;
 
-	constructor(...args: tg.Args<RunArgObject>) {
+	constructor(...args: std.Args<RunArgObject>) {
 		this.#args = args;
 		this.#defaultMount = true;
 		this.#defaultShellFallback = true;
@@ -159,9 +159,9 @@ export class RunBuilder<
 	}
 
 	async mergeArgs(): Promise<RunArgObject> {
-		let resolved = await Promise.all(this.#args.map(tg.resolve));
-		let objects = await Promise.all(
-			resolved.map(async (arg) => {
+		let arg = await std.args.apply<RunArgObject, RunArgObject>({
+			args: this.#args,
+			map: async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else if (
@@ -172,13 +172,13 @@ export class RunBuilder<
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
-						host: await tg.process.env("TANGRAM_HOST"),
+						host: (await tg.process.env("TANGRAM_HOST")) as string,
 					};
 				} else if (arg instanceof tg.Command) {
 					let object = await arg.object();
 					let ret: RunArgObject = {
 						args: object.args,
-						env: [object.env as std.env.EnvObject],
+						env: object.env as std.env.EnvObject,
 						executable: object.executable,
 						host: object.host,
 					};
@@ -196,13 +196,13 @@ export class RunBuilder<
 					}
 					return ret;
 				} else {
-					return { ...arg, env: [arg.env] } as RunArgObject;
+					return { ...arg, env: arg.env };
 				}
-			}),
-		);
-		let arg = await tg.Args.apply(objects, {
-			args: "append",
-			env: "append",
+			},
+			reduce: {
+				args: "append",
+				env: (a, b) => std.env.arg(a, b),
+			},
 		});
 		return arg;
 	}
@@ -224,13 +224,9 @@ export class RunBuilder<
 			arg.host = tangramHost;
 		}
 		if (this.#includeUtils) {
-			envs.push(await tg.build(std.utils.env, { host: arg.host }));
+			envs.push(std.utils.env({ host: arg.host }));
 		}
-		if (Array.isArray(arg.env)) {
-			envs.push(...arg.env);
-		} else {
-			envs.push(arg.env);
-		}
+		envs.push(arg.env);
 		arg.env = await std.env.arg(...envs);
 		const shellVal = await std.env.tryGetShellExecutable(arg.env);
 		if (shellVal !== undefined) {

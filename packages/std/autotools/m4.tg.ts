@@ -2,13 +2,13 @@ import * as std from "../tangram.ts";
 
 export const metadata = {
 	name: "m4",
-	version: "1.4.19",
+	version: "1.4.20",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:63aede5c6d33b6d9b13511cd0be2cac046f2e70fd0a07aa9573a04a82783af96";
+		"sha256:e236ea3a1ccf5f6c270b1c4bb60726f371fa49459a8eaaebc90b216b328daf2b";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -18,15 +18,17 @@ export const source = () => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap: bootstrap_ = false,
 		build,
 		env: env_,
 		host,
@@ -45,6 +47,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 	const output = std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		env,
 		fortifySource: 2,
 		phases: { configure },

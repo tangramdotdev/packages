@@ -16,8 +16,8 @@ export type Arg = {
 };
 
 /** Download a pre-compiled binary and wrap it. */
-export const self = async (...args: tg.Args<Arg>) => {
-	const { host: host_ } = await std.args.apply<Arg>(...args);
+export const self = async (...args: std.Args<Arg>) => {
+	const { host: host_ } = await std.packages.applyArgs<Arg>(...args);
 	const { name, version } = metadata;
 	const tag = `${name}-v${version}`;
 	const host = host_ ?? (await std.triple.host());

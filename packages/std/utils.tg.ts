@@ -32,15 +32,17 @@ export * as tar from "./utils/tar.tg.ts";
 export * as xz from "./utils/xz.tg.ts";
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 };
 
 /** A basic set of GNU system utilites. */
 export const env = async (arg?: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap = false,
 		build,
 		env: env_,
 		host: host_,
@@ -48,7 +50,13 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
 
-	const shellArtifact = await bash.build({ build, env: env_, host, sdk });
+	const shellArtifact = await bash.build({
+		bootstrap,
+		build,
+		env: env_,
+		host,
+		sdk,
+	});
 	const shellExecutable = await shellArtifact
 		.get(`bin/bash`)
 		.then(tg.File.expect);
@@ -57,22 +65,23 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		SHELL: shellExecutable,
 	};
 	const env = await std.env.arg(env_, shellEnv);
+	const commonArg = { bootstrap, build, env, host, sdk };
 
 	let utils = [shellArtifact, shellEnv];
 	utils = utils.concat(
 		await Promise.all([
-			bzip2({ build, env, host, sdk }),
-			coreutils({ build, env, host, sdk }),
-			diffutils({ build, env, host, sdk }),
-			findutils({ build, env, host, sdk }),
-			gawk({ build, env, host, sdk }),
-			grep({ build, env, host, sdk }),
-			gzip({ build, env, host, sdk }),
-			make({ build, env, host, sdk }),
-			patch({ build, env, host, sdk }),
-			sed({ build, env, host, sdk }),
-			tar({ build, env, host, sdk }),
-			xz({ build, env, host, sdk }),
+			bzip2(commonArg),
+			coreutils(commonArg),
+			diffutils(commonArg),
+			findutils(commonArg),
+			gawk(commonArg),
+			grep(commonArg),
+			gzip(commonArg),
+			make(commonArg),
+			patch(commonArg),
+			sed(commonArg),
+			tar(commonArg),
+			xz(commonArg),
 		]),
 	);
 	return await std.env.arg(...utils);
@@ -91,9 +100,9 @@ export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 
 	// Add patched GNU coreutils.
 	const coreutilsArtifact = await coreutils({
+		bootstrap: true,
 		env: std.env.arg(bootstrap.sdk(), makeArtifact),
 		host,
-		sdk: false,
 		usePrerequisites: false,
 	});
 	components.push(coreutilsArtifact);
@@ -173,7 +182,7 @@ export const assertProvides = async (env: std.env.Arg) => {
 
 export const test = async () => {
 	const host = bootstrap.toolchainTriple(await std.triple.host());
-	const utilsEnv = await env({ host, sdk: false, env: bootstrap.sdk() });
+	const utilsEnv = await env({ host, bootstrap: true, env: bootstrap.sdk() });
 	await assertProvides(utilsEnv);
 	return utilsEnv;
 };

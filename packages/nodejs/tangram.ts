@@ -118,14 +118,14 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		env: env_,
 		host,
 		packageLock: packageLockArg,
 		source,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 	tg.assert(source, "Must provide a source");
 
 	const node = self(std.triple.rotate({ build, host }));

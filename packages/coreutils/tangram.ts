@@ -9,7 +9,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "coreutils",
 	repository: "http://git.savannah.gnu.org/gitweb/?p=coreutils.git",
-	version: "9.6",
+	version: "9.7",
 	provides: {
 		binaries: [
 			"cp",
@@ -34,7 +34,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:7a0124327b398fd9eb1a6abde583389821422c744ffa10734b24f557610d3283";
+		"sha256:e8bb26ad0293f9b5a1fc43fb42ba970e312c66ce92c1b0b16713d7500db251bf";
 	const source = await std.download.fromGnu({
 		name,
 		version,
@@ -60,7 +60,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -69,7 +69,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		host,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	let dependencies = [];
 

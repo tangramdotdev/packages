@@ -24,15 +24,17 @@ export const source = async () => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -49,8 +51,8 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const install = {
 		args: [`PREFIX="$OUTPUT" SHELL="$SHELL"`],
 	};
-	const phases = {
-		configure: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
+	const phases: std.phases.PhasesArg = {
+		configure: tg.Mutation.unset(),
 		build: buildPhase,
 		install,
 	};
@@ -59,6 +61,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 	return await autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		buildInTree: true,
 		env,
 		phases,
@@ -75,7 +78,7 @@ export const test = async () => {
 	const sdk = await bootstrap.sdk(host);
 	return build({
 		host,
-		sdk: false,
+		bootstrap: true,
 		env: std.env.arg(sdk, { SHELL: "/bin/sh" }),
 	});
 };

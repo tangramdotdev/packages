@@ -36,8 +36,8 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
-	const { build, host, source: source_ } = await std.args.apply<Arg>(...args);
+export const build = async (...args: std.Args<Arg>) => {
+	const { build, host, source: source_ } = await std.packages.applyArgs<Arg>(...args);
 
 	return poetry.build({
 		build,

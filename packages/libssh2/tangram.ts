@@ -44,7 +44,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	let {
 		autotools = {},
 		build,
@@ -53,7 +53,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		host,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	let dependencies = [
 		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),

@@ -58,11 +58,11 @@ export const build = async (arg?: Arg) => {
 	});
 
 	return await autotoolsInternal({
+		bootstrap: true,
 		env,
 		host,
 		phases,
 		prefixPath: "/",
-		sdk: false,
 		source: source(),
 	});
 };

@@ -5,7 +5,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "m4",
 	repository: "https://git.savannah.gnu.org/cgit/m4.git",
-	version: "1.4.19",
+	version: "1.4.20",
 	provides: {
 		binaries: ["m4"],
 	},
@@ -14,7 +14,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:3be4a26d825ffdfda52a56fc43246456989a3630093cced3fbddf4771ee58a70";
+		"sha256:e236ea3a1ccf5f6c270b1c4bb60726f371fa49459a8eaaebc90b216b328daf2b";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
@@ -27,7 +27,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -35,7 +35,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		host,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],

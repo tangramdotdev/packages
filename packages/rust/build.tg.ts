@@ -73,7 +73,7 @@ export type RustDependency = {
 	checksum?: tg.Checksum;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		crateName: crateName_,
 		crateType: crateType_,
@@ -90,7 +90,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		source,
 		target: target_,
 		verbose = false,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	const os = std.triple.os(host);
 	const target = target_ ?? host;

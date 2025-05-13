@@ -19,17 +19,17 @@ export const source = async () => {
 };
 
 export type Arg = {
-	autotools?: std.autotools.Arg;
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
-		autotools = {},
+		bootstrap: bootstrap_ = false,
 		build: build_,
 		env,
 		host: host_,
@@ -58,17 +58,15 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	}
 
 	// Build python.
-	const result = std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			setRuntimeLibraryPath: true,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	const result = std.autotools.build({
+		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
+		env,
+		phases,
+		sdk,
+		setRuntimeLibraryPath: true,
+		source: source_ ?? source(),
+	});
 
 	return result;
 };

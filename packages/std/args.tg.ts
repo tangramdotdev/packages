@@ -1,5 +1,9 @@
 import * as std from "./tangram.ts";
 
+export type Args<T extends tg.Value = tg.Value> = Array<
+	tg.Unresolved<tg.ValueOrMaybeMutationMap<T>>
+>;
+
 /** Standard values that packages pass to their dependencies */
 export type PackageArg = { [key: string]: tg.Value } & {
 	build?: string | undefined;
@@ -9,161 +13,104 @@ export type PackageArg = { [key: string]: tg.Value } & {
 	sdk?: std.sdk.Arg | undefined;
 };
 
-/** A function that accepts a variable amount of package args and produces a directory. This is the standard type for the default exports of most packages. */
-export type BuildCommand<T extends PackageArg> = (
-	...args: tg.Args<T>
-) => Promise<tg.Directory>;
+export type DependencyArg<T extends PackageArg> =
+	| Omit<T, "build" | "host">
+	| true;
 
-/** Evaluate the command with a single arg. */
-export const buildCommandOutput = async <T extends PackageArg>(
-	cmd: BuildCommand<T>,
-	arg: T,
-): Promise<tg.Directory> => {
-	return (cmd as (...args: Array<T>) => Promise<tg.Directory>)(arg);
-};
-
-/** After application, the resulting type always has concrete values for build, host, and sdk. */
-export type ResolvedPackageArg<T extends PackageArg> = Omit<
-	T,
-	"build" | "env" | "host" | "sdk" | "dependencies"
-> & {
-	build: string;
-	dependencies?: ResolvedDependencyArgs;
-	env?: std.env.Arg;
-	host: string;
-	sdk: std.sdk.Arg;
-};
-
-export type ResolvedDependencyArgs = {
-	[key: string]: ResolvedPackageArg<PackageArg> | boolean;
-};
+export type OptionalDependencyArg<T extends PackageArg> =
+	| Omit<T, "build" | "host">
+	| boolean;
 
 export type DependencyArgs = {
 	[key: string]: OptionalDependencyArg<PackageArg>;
 };
 
-export type DependencyArg<T extends PackageArg> =
-	| Omit<T, "build" | "host">
-	| true;
-export type OptionalDependencyArg<T extends PackageArg> =
-	| Omit<T, "build" | "host">
-	| boolean;
-
-/** Produce a single argument object from a variadic list of arguments with mutation handling. */
-export const apply = async <T extends PackageArg>(
-	...args: tg.Args<T>
-): Promise<ResolvedPackageArg<T>> => {
-	const resolved = await Promise.all(args.map(tg.resolve));
-	type Collect = MakeArrayKeys<T, "dependencies" | "env" | "sdk">;
-	const objects = resolved.map((obj) => {
-		return {
-			...obj,
-			dependencies: [obj.dependencies],
-			env: [obj.env],
-			sdk: [obj.sdk],
-		};
-	});
-	const arg = (await tg.Args.apply(objects, {
-		dependencies: "append",
-		env: "append",
-		sdk: "append",
-	})) as Collect;
-
-	// Determine build and host;
-	const build = arg.build ?? (await std.triple.host());
-	const host = arg.host ?? (await std.triple.host());
-
-	// Create env and SDK.
-	const env = await std.env.arg(...(arg.env ?? []));
-	const sdk = await std.sdk.arg(
-		std.triple.rotate({ build, host }),
-		...(arg.sdk ?? []),
-	);
-
-	// Process dependency args.
-	const dependencyArgs = arg.dependencies ?? [];
-	const resolvedDependencies: ResolvedDependencyArgs = {};
-	for (const dependency of dependencyArgs) {
-		if (dependency === undefined) {
-			continue;
-		}
-		for (let [key, value] of Object.entries(dependency)) {
-			// Convert true to empty object
-			if (value === true) {
-				if (!(key in resolvedDependencies)) {
-					value = {
-						build,
-						dependencies: {},
-						env: {},
-						host,
-						sdk: {},
-					};
-				}
-			}
-
-			const existing = resolvedDependencies[key];
-			if (typeof existing === "boolean") {
-				if (typeof value === "boolean") {
-					resolvedDependencies[key] = value;
-				} else {
-					resolvedDependencies[key] = {
-						build,
-						dependencies:
-							(value.dependencies
-								? (
-										await apply({
-											dependencies: value.dependencies as DependencyArgs,
-										})
-									).dependencies
-								: {}) ?? {},
-						env: await std.env.arg(value.env as std.env.Arg),
-						host,
-						sdk: await std.sdk.arg(value.sdk as std.sdk.Arg),
-					};
-				}
-			} else {
-				if (typeof value === "boolean") {
-					resolvedDependencies[key] = value;
-				} else {
-					resolvedDependencies[key] = {
-						...existing,
-						build: existing?.build ?? build,
-						dependencies:
-							(value.dependencies
-								? (
-										await apply({
-											dependencies: {
-												...existing?.dependencies,
-												...(value.dependencies as DependencyArgs),
-											},
-										})
-									).dependencies
-								: existing?.dependencies) ?? {},
-						env: await std.env.arg(existing?.env, value.env as std.env.Arg),
-						host: existing?.host ?? host,
-						sdk: await std.sdk.arg(existing?.sdk, value.sdk as std.sdk.Arg),
-					};
-				}
-			}
-		}
-	}
-
-	return {
-		...arg,
-		build,
-		dependencies: resolvedDependencies,
-		env,
-		host,
-		sdk,
-	} as ResolvedPackageArg<T>;
-};
-
-export type MakeRequired<T> = {
-	[K in keyof T]-?: T[K];
+type Input<T extends tg.Value, O extends { [key: string]: tg.Value }> = {
+	args: tg.Args<T>;
+	map: (
+		arg: tg.ValueOrMaybeMutationMap<T>,
+	) => tg.MaybePromise<tg.MaybeMutationMap<O>>;
+	reduce: {
+		[K in keyof O]:
+			| tg.Mutation.Kind
+			| ((a: O[K] | undefined, b: O[K]) => tg.MaybePromise<O[K]>);
+	};
 };
 
 export type MakeArrayKeys<T, K extends keyof T> = {
 	[P in keyof T]: P extends K ? Array<T[P]> : T[P];
+};
+
+export const apply = async <
+	T extends tg.Value,
+	O extends { [key: string]: tg.Value },
+>(
+	input: Input<T, O>,
+): Promise<O> => {
+	let { args, map, reduce } = input;
+	let resolved = (await Promise.all(args.map(tg.resolve))) as Array<
+		tg.ValueOrMaybeMutationMap<T>
+	>;
+	let output: { [key: string]: tg.Value } = {};
+	for (let arg of resolved) {
+		let object = await map(arg);
+		for (let [key, value] of Object.entries(object)) {
+			if (value instanceof tg.Mutation) {
+				await value.apply(output, key);
+			} else if (reduce[key] !== undefined) {
+				if (typeof reduce[key] === "string") {
+					let mutation: tg.Mutation;
+					switch (reduce[key]) {
+						case "set":
+							mutation = await tg.Mutation.set(value);
+							break;
+						case "unset":
+							mutation = tg.Mutation.unset();
+							break;
+						case "set_if_unset":
+							mutation = await tg.Mutation.setIfUnset(value);
+							break;
+						case "prepend":
+							mutation = await tg.Mutation.prepend(value);
+							break;
+						case "append":
+							mutation = await tg.Mutation.append(value);
+							break;
+						case "prefix":
+							tg.assert(
+								value instanceof tg.Template ||
+									tg.Artifact.is(value) ||
+									typeof value === "string",
+							);
+							mutation = await tg.Mutation.prefix(value);
+							break;
+						case "suffix":
+							tg.assert(
+								value instanceof tg.Template ||
+									tg.Artifact.is(value) ||
+									typeof value === "string",
+							);
+							mutation = await tg.Mutation.suffix(value);
+							break;
+						case "merge":
+							mutation = await tg.Mutation.merge(value);
+							break;
+						default:
+							return tg.unreachable(`unknown mutation kind "${reduce[key]}"`);
+					}
+					await mutation.apply(output, key);
+				} else {
+					output[key] = await reduce[key](
+						output[key] as O[typeof key] | undefined,
+						value,
+					);
+				}
+			} else {
+				output[key] = value;
+			}
+		}
+	}
+	return output as O;
 };
 
 /** Determine whether a value is a `tg.Template.Arg`. */

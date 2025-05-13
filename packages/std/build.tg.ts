@@ -6,10 +6,10 @@ import {
 	linuxRootMount,
 } from "./command.tg.ts";
 
-export function build(...args: tg.Args<tg.Process.BuildArg>): BuildBuilder;
+export function build(...args: std.Args<tg.Process.BuildArg>): BuildBuilder;
 export function build(
 	strings: TemplateStringsArray,
-	...placeholders: tg.Args<tg.Template.Arg>
+	...placeholders: std.Args<tg.Template.Arg>
 ): BuildBuilder;
 export function build(...args: any): any {
 	if (Array.isArray(args[0]) && "raw" in args[0]) {
@@ -26,7 +26,7 @@ type BuildArgObject = {
 	args?: Array<tg.Value> | undefined;
 	checksum?: tg.Checksum | undefined;
 	cwd?: string | undefined;
-	env?: std.env.Arg | Array<std.env.Arg> | undefined;
+	env?: std.env.Arg;
 	executable?: tg.Command.ExecutableArg | undefined;
 	host?: string | undefined;
 	mounts?: Array<string | tg.Template | tg.Command.Mount> | undefined;
@@ -46,7 +46,7 @@ export class BuildBuilder<
 	A extends Array<tg.Value> = Array<tg.Value>,
 	R extends tg.Value = tg.Value,
 > {
-	#args: tg.Args<BuildArgObject>;
+	#args: std.Args<BuildArgObject>;
 	#defaultShellFallback: boolean;
 	#defaultMount: boolean;
 	#disallowUnset: boolean;
@@ -54,7 +54,7 @@ export class BuildBuilder<
 	#includeUtils: boolean;
 	#pipefail: boolean;
 
-	constructor(...args: tg.Args<BuildArgObject>) {
+	constructor(...args: std.Args<BuildArgObject>) {
 		this.#args = args;
 		this.#defaultMount = true;
 		this.#defaultShellFallback = true;
@@ -164,9 +164,9 @@ export class BuildBuilder<
 	}
 
 	async mergeArgs(): Promise<BuildArgObject> {
-		let resolved = await Promise.all(this.#args.map(tg.resolve));
-		let objects = await Promise.all(
-			resolved.map(async (arg) => {
+		let arg = await std.args.apply<BuildArgObject, BuildArgObject>({
+			args: this.#args,
+			map: async (arg) => {
 				if (arg === undefined) {
 					return {};
 				} else if (
@@ -177,13 +177,13 @@ export class BuildBuilder<
 					return {
 						args: ["-c", arg],
 						executable: "/bin/sh",
-						host: await tg.process.env("TANGRAM_HOST"),
+						host: (await tg.process.env("TANGRAM_HOST")) as string,
 					};
 				} else if (arg instanceof tg.Command) {
 					let object = await arg.object();
 					let ret: BuildArgObject = {
 						args: object.args,
-						env: [object.env as std.env.EnvObject],
+						env: object.env as std.env.EnvObject,
 						executable: object.executable,
 						host: object.host,
 					};
@@ -201,13 +201,13 @@ export class BuildBuilder<
 					}
 					return ret;
 				} else {
-					return { ...arg, env: [arg.env] } as BuildArgObject;
+					return { ...arg, env: arg.env };
 				}
-			}),
-		);
-		let arg = await tg.Args.apply(objects, {
-			args: "append",
-			env: "append",
+			},
+			reduce: {
+				args: "append",
+				env: (a, b) => std.env.arg(a, b),
+			},
 		});
 		return arg;
 	}

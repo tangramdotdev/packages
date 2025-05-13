@@ -30,7 +30,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const kernelHeaders = async (...args: tg.Args<Arg>) => {
+export const kernelHeaders = async (...args: std.Args<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
@@ -38,7 +38,7 @@ export const kernelHeaders = async (...args: tg.Args<Arg>) => {
 		phases: phasesArg = {},
 		sdk: sdk_,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 	const host = host_ ?? (await std.triple.host());
 	std.assert.supportedHost(host, metadata);
 	const buildTriple = build_ ?? host;

@@ -28,15 +28,17 @@ export const source = async (os: string) => {
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
+		bootstrap: bootstrap_ = false,
 		build: buildTriple_,
 		env,
 		host: host_,
@@ -69,6 +71,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 	let perlArtifact = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		buildInTree: true,
 		env,
 		phases,

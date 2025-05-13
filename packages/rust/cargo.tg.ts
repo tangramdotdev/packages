@@ -42,10 +42,10 @@ export type Arg = {
 	proxy?: boolean;
 
 	/** SDK configuration to use during the build. */
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 
 	/** Source directory. */
-	source?: tg.Directory;
+	source: tg.Directory;
 
 	/** Target triple for the build. */
 	target?: string;
@@ -57,15 +57,7 @@ export type Arg = {
 	verbose?: boolean;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
-	const resolved = await Promise.all(args.map(tg.resolve));
-	const objects = resolved.map((obj) => {
-		return {
-			...obj,
-			env: [obj.env],
-			sdk: [obj.sdk],
-		};
-	});
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		buildInTree = false,
 		checksum,
@@ -84,12 +76,16 @@ export const build = async (...args: tg.Args<Arg>) => {
 		target: target_,
 		useCargoVendor = false,
 		verbose = false,
-	} = (await tg.Args.apply(objects, {
-		env: "append",
-		features: "append",
-		sdk: "append",
-		source: "set",
-	})) as std.args.MakeArrayKeys<Arg, "env" | "sdk">;
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			features: "append",
+			sdk: (a, b) => std.sdk.arg(a, b),
+			source: "set",
+		},
+	});
 	tg.assert(source, "Must provide a source directory.");
 
 	const host = host_ ?? (await std.triple.host());
@@ -112,12 +108,12 @@ export const build = async (...args: tg.Args<Arg>) => {
 
 	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
 
-	const sdk = std.sdk(...sdkArgs);
+	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
-	const rustArtifact = self({ host: rustHost, target });
+	const rustArtifact = await tg.build(self, { host: rustHost, target });
 	envs.push(rustArtifact);
 	if (pkgConfig) {
-		envs.push(pkgconf({ host }));
+		envs.push(await tg.build(pkgconf,{ host }));
 	}
 
 	// Download the dependencies using the cargo vendor.
@@ -225,7 +221,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		envs.push(verbosityEnv);
 	}
 
-	const env = std.env.arg(...envs, ...(env_ ?? []));
+	const env = std.env.arg(...envs, env_);
 
 	const artifact = await $`${buildScript}`
 		.checksum(checksum)

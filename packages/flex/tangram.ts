@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
@@ -52,7 +52,7 @@ export const build = async (...args: tg.Args<Arg>) => {
 		host,
 		sdk,
 		source: source_,
-	} = await std.args.apply<Arg>(...args);
+	} = await std.packages.applyArgs<Arg>(...args);
 
 	const dependencies = [
 		help2man.build({ build, env: env_, host, sdk }, help2manArg),

@@ -133,15 +133,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export const build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
-	const resolved = await Promise.all(args.map(tg.resolve));
-	const objects = resolved.map((obj) => {
-		return {
-			...obj,
-			env: [obj.env],
-			sdk: [obj.sdk],
-		};
-	});
+export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 	let {
 		checksum,
 		cgo = true,
@@ -150,21 +142,25 @@ export const build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 		host: host_,
 		install,
 		network = false,
-		sdk: sdkArgs,
+		sdk: sdkArg,
 		source,
 		target: target_,
 		vendor: vendor_ = true,
-	} = (await tg.Args.apply(objects, {
-		env: "append",
-		sdk: "append",
-		source: "set",
-	})) as std.args.MakeArrayKeys<Arg, "env" | "sdk">;
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a, b),
+			source: "set",
+		},
+	});
 	const host = host_ ?? (await std.triple.host());
 	const system = std.triple.archAndOs(host);
 	const target = target_ ?? host;
 	tg.assert(source, "Must provide a source directory.");
 
-	const sdk = std.sdk({ host, target }, ...(sdkArgs ?? []));
+	const sdk = std.sdk({ host, target }, sdkArg);
 
 	// Check if the build has a vendor dir, then determine whether or not we're going to be vendoring dependencies.
 	const willVendor =
@@ -226,7 +222,7 @@ export const build = async (...args: tg.Args<Arg>): Promise<tg.Directory> => {
 			SSL_CERT_FILE: certFile,
 			TANGRAM_HOST: system,
 		},
-		...(env_ ?? []),
+		env_,
 	];
 
 	const env = std.env.arg(...envs);

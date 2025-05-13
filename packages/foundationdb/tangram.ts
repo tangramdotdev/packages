@@ -18,8 +18,8 @@ export type Arg = {
 	host?: string;
 };
 
-export const build = async (...args: tg.Args<Arg>) => {
-	const { host } = await std.args.apply<Arg>(...args);
+export const build = async (...args: std.Args<Arg>) => {
+	const { host } = await std.packages.applyArgs<Arg>(...args);
 	std.assert.supportedHost(host, metadata);
 	const checksums = binaryChecksums[host];
 	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);

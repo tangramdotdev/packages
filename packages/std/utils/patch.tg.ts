@@ -1,4 +1,8 @@
-import * as bootstrap from "../bootstrap.tg.ts";
+import {
+	patch as bootstrapPatch,
+	sdk as bootstrapSdk,
+	toolchainTriple,
+} from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
@@ -24,20 +28,22 @@ export const source = async () => {
 	});
 	// Apply rlimit fix.
 	// See https://savannah.gnu.org/bugs/index.php?62958
-	source = await bootstrap.patch(source, rlimitFix);
+	source = await bootstrapPatch(source, rlimitFix);
 	return source;
 };
 
 export type Arg = {
+	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
-	sdk?: std.sdk.Arg | boolean;
+	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 };
 
 export const build = async (arg?: Arg) => {
 	const {
+		bootstrap: bootstrap_ = false,
 		build: build_,
 		env: env_,
 		host: host_,
@@ -57,6 +63,7 @@ export const build = async (arg?: Arg) => {
 	if (std.triple.os(host) === "linux") {
 		dependencies.push(
 			attr({
+				bootstrap: bootstrap_,
 				build,
 				env: env_,
 				host,
@@ -70,6 +77,7 @@ export const build = async (arg?: Arg) => {
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
+		bootstrap: bootstrap_,
 		env,
 		phases: { configure },
 		sdk,
@@ -82,11 +90,11 @@ export const build = async (arg?: Arg) => {
 export default build;
 
 export const test = async () => {
-	const host = await bootstrap.toolchainTriple(await std.triple.host());
-	const sdk = await bootstrap.sdk(host);
+	const host = await toolchainTriple(await std.triple.host());
+	const sdk = await bootstrapSdk(host);
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
-	const patchArtifact = await build({ host, sdk: false, env: sdk });
+	const patchArtifact = await build({ host, bootstrap: true, env: sdk });
 
 	// Ensure the installed command preserves xattrs.
 	let expected;
@@ -156,14 +164,14 @@ export const test = async () => {
 	// Run the script.
 	const platformSupportLib =
 		os === "darwin"
-			? libiconv({ host, sdk: false, env: sdk })
-			: attr({ host, sdk: false, env: sdk });
+			? libiconv({ host, bootstrap: true, env: sdk })
+			: attr({ host, bootstrap: true, env: sdk });
 	const output = tg.File.expect(
 		await (
 			await tg.command(script, {
 				env: std.env.arg(
-					coreutils({ host, sdk: false, env: sdk }),
-					diffutils({ host, sdk: false, env: sdk }),
+					coreutils({ host, bootstrap: true, env: sdk }),
+					diffutils({ host, bootstrap: true, env: sdk }),
 					platformSupportLib,
 					patchArtifact,
 				),
