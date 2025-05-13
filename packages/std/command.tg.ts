@@ -183,11 +183,7 @@ export class CommandBuilder<
 		if (this.#includeUtils) {
 			envs.push(await tg.build(std.utils.env, { host: arg.host }));
 		}
-		if (Array.isArray(arg.env)) {
-			envs.push(...arg.env);
-		} else {
-			envs.push(arg.env);
-		}
+		envs.push(arg.env);
 		arg.env = await std.env.arg(...envs);
 		const shellVal = await std.env.tryGetShellExecutable(arg.env);
 		if (shellVal !== undefined) {

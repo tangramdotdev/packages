@@ -224,7 +224,7 @@ export class RunBuilder<
 			arg.host = tangramHost;
 		}
 		if (this.#includeUtils) {
-			envs.push(std.utils.env({ host: arg.host }));
+			envs.push(await tg.build(std.utils.env, { host: arg.host }));
 		}
 		envs.push(arg.env);
 		arg.env = await std.env.arg(...envs);
