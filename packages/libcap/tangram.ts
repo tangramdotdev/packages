@@ -81,8 +81,8 @@ export const build = async (...args: std.Args<Arg>) => {
 		cd $OUTPUT/lib
 		ln -s libcap.so.${metadata.version} libcap.so.2
 		ln -s libcap.so.2 libcap.so`;
-	const phases = {
-		configure: tg.Mutation.unset() as tg.Mutation<std.phases.PhaseArg>,
+	const phases: std.phases.Arg = {
+		configure: tg.Mutation.unset(),
 		install,
 	};
 
