@@ -284,6 +284,7 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 
 	// Produce the initial gcc required to build the standard C library.
 	const initialGccDir = await gcc.build({
+		bootstrap: true,
 		build: buildTriple,
 		env: buildEnv,
 		host: buildTriple,

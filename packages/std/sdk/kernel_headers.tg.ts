@@ -74,7 +74,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 	const order = ["build", "install"];
 
 	const envs: tg.Unresolved<Array<std.env.Arg>> = [env_];
-	if (bootstrap_) {
+	if (!bootstrap_) {
 		// Add the toolchain.
 		const sdkArg =
 			typeof sdk === "boolean"
@@ -86,7 +86,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 		const utils = await tg.build(std.utils.env, {
 			host,
 			bootstrap: true,
-			env: std.sdk({ host }),
+			env: await tg.build(std.sdk, { host }),
 		});
 		envs.push(utils);
 	}
