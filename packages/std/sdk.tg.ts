@@ -41,9 +41,9 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS.`);
 		}
-		toolchain = await gnu.toolchain({ host });
+		toolchain = await tg.build(gnu.toolchain, { host });
 	} else if (toolchain_ === "llvm") {
-		toolchain = await llvm.toolchain({ host });
+		toolchain = await tg.build(llvm.toolchain, { host });
 	} else {
 		toolchain = toolchain_;
 	}
@@ -77,7 +77,7 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 			switch (linker) {
 				case "bfd": {
 					if (flavor === "llvm") {
-						const binutilsDir = await binutils({ host });
+						const binutilsDir = await tg.build(binutils, { host });
 						linkerDir = binutilsDir;
 						linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
 					}
@@ -90,7 +90,7 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 					break;
 				}
 				case "mold": {
-					const moldArtifact = await mold({ host });
+					const moldArtifact = await tg.build(mold, { host });
 					linkerDir = moldArtifact;
 					linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
 					break;
@@ -110,7 +110,7 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 	if (linkerExe) {
 		proxyArg = { ...proxyArg, linkerExe };
 	}
-	const hostProxy = await proxy.env(proxyArg);
+	const hostProxy = await tg.build(proxy.env, proxyArg);
 	envs.push(hostProxy);
 	if (linkerDir) {
 		envs.push(linkerDir);
@@ -128,13 +128,13 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		}
 		let crossToolchain = undefined;
 		if (std.triple.os(host) === "linux" && std.triple.os(target) === "darwin") {
-			crossToolchain = await llvm.linuxToDarwin({ host, target });
+			crossToolchain = await tg.build(llvm.linuxToDarwin, { host, target });
 		} else {
-			crossToolchain = await gnu.toolchain({ host, target });
+			crossToolchain = await tg.build(gnu.toolchain, { host, target });
 		}
 		tg.assert(crossToolchain !== undefined);
 		envs.push(crossToolchain);
-		const proxyEnv = await proxy.env({
+		const proxyEnv = await tg.build(proxy.env, {
 			...proxyArg,
 			toolchain: crossToolchain,
 			build: host,

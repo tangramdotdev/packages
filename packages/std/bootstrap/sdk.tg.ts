@@ -54,7 +54,6 @@ export namespace sdk {
 
 export const test = async () => {
 	const sdkEnv = await sdk();
-	console.log("sdkEnv", sdkEnv);
 	const arg = await sdk.arg();
 	await std.sdk.assertValid(sdkEnv, arg);
 	return sdkEnv;

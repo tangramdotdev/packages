@@ -27,7 +27,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
-			? await gnu.toolchain({ host: detectedBuild, target: host })
+			? await tg.build(gnu.toolchain, { host: detectedBuild, target: host })
 			: await bootstrap.sdk.env(host);
 
 	// Construct the interpreter.

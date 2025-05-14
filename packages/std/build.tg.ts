@@ -163,55 +163,6 @@ export class BuildBuilder<
 		return this;
 	}
 
-	async mergeArgs(): Promise<BuildArgObject> {
-		let arg = await std.args.apply<BuildArgObject, BuildArgObject>({
-			args: this.#args,
-			map: async (arg) => {
-				if (arg === undefined) {
-					return {};
-				} else if (
-					typeof arg === "string" ||
-					tg.Artifact.is(arg) ||
-					arg instanceof tg.Template
-				) {
-					return {
-						args: ["-c", arg],
-						executable: "/bin/sh",
-						host: (await tg.process.env("TANGRAM_HOST")) as string,
-					};
-				} else if (arg instanceof tg.Command) {
-					let object = await arg.object();
-					let ret: BuildArgObject = {
-						args: object.args,
-						env: object.env as std.env.EnvObject,
-						executable: object.executable,
-						host: object.host,
-					};
-					if (object.cwd !== undefined) {
-						ret.cwd = object.cwd;
-					}
-					if (object.mounts !== undefined) {
-						ret.mounts = object.mounts;
-					}
-					if (object.stdin !== undefined) {
-						ret.stdin = object.stdin;
-					}
-					if (object.user !== undefined) {
-						ret.user = object.user;
-					}
-					return ret;
-				} else {
-					return { ...arg, env: arg.env };
-				}
-			},
-			reduce: {
-				args: "append",
-				env: (a, b) => std.env.arg(a, b),
-			},
-		});
-		return arg;
-	}
-
 	async then<TResult1 = tg.Value, TResult2 = never>(
 		onfulfilled?:
 			| ((value: tg.Value) => TResult1 | PromiseLike<TResult1>)
@@ -222,7 +173,7 @@ export class BuildBuilder<
 			| undefined
 			| null,
 	): Promise<TResult1 | TResult2> {
-		let arg = await this.mergeArgs();
+		let arg = await tg.build(mergeArgs, ...this.#args);
 		let envs: Array<tg.Unresolved<std.env.Arg>> = [];
 		let tangramHost = await std.triple.host();
 		if (arg.host === undefined) {
@@ -274,6 +225,56 @@ export class BuildBuilder<
 			.then(onfulfilled, onrejected);
 	}
 }
+
+export const mergeArgs = async (
+	...args: std.Args<BuildArgObject>
+): Promise<BuildArgObject> => {
+	return await std.args.apply<BuildArgObject, BuildArgObject>({
+		args,
+		map: async (arg) => {
+			if (arg === undefined) {
+				return {};
+			} else if (
+				typeof arg === "string" ||
+				tg.Artifact.is(arg) ||
+				arg instanceof tg.Template
+			) {
+				return {
+					args: ["-c", arg],
+					executable: "/bin/sh",
+					host: (await tg.process.env("TANGRAM_HOST")) as string,
+				};
+			} else if (arg instanceof tg.Command) {
+				let object = await arg.object();
+				let ret: BuildArgObject = {
+					args: object.args,
+					env: object.env as std.env.EnvObject,
+					executable: object.executable,
+					host: object.host,
+				};
+				if (object.cwd !== undefined) {
+					ret.cwd = object.cwd;
+				}
+				if (object.mounts !== undefined) {
+					ret.mounts = object.mounts;
+				}
+				if (object.stdin !== undefined) {
+					ret.stdin = object.stdin;
+				}
+				if (object.user !== undefined) {
+					ret.user = object.user;
+				}
+				return ret;
+			} else {
+				return { ...arg, env: arg.env };
+			}
+		},
+		reduce: {
+			args: "append",
+			env: (a, b) => std.env.arg(a, b),
+		},
+	});
+};
 
 export const testBuild = async () => {
 	const expected = await tg.process.env("TANGRAM_HOST");

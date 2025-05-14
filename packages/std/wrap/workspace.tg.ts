@@ -1,7 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.ts";
-import { $ } from "../tangram.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
 import packages from "../packages" with { type: "directory" };
@@ -45,23 +44,27 @@ export const workspace = async (
 	});
 };
 
-export const ccProxy = (arg: tg.Unresolved<Arg>) =>
-	workspace(arg)
+export const ccProxy = async (arg: tg.Unresolved<Arg>) =>
+	await tg
+		.build(workspace, arg)
 		.then((dir) => dir.get("bin/cc_proxy"))
 		.then(tg.File.expect);
 
-export const ldProxy = (arg: tg.Unresolved<Arg>) =>
-	workspace(arg)
+export const ldProxy = async (arg: tg.Unresolved<Arg>) =>
+	await tg
+		.build(workspace, arg)
 		.then((dir) => dir.get("bin/ld_proxy"))
 		.then(tg.File.expect);
 
-export const stripProxy = (arg: tg.Unresolved<Arg>) =>
-	workspace(arg)
+export const stripProxy = async (arg: tg.Unresolved<Arg>) =>
+	await tg
+		.build(workspace, arg)
 		.then((dir) => dir.get("bin/strip_proxy"))
 		.then(tg.File.expect);
 
-export const wrapper = (arg: tg.Unresolved<Arg>) =>
-	workspace(arg)
+export const wrapper = async (arg: tg.Unresolved<Arg>) =>
+	await tg
+		.build(workspace, arg)
 		.then((dir) => dir.get("bin/wrapper"))
 		.then(tg.File.expect);
 
@@ -122,7 +125,7 @@ export const rust = async (
 
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
-	return await $`
+	return await std.build`
 		for package in ${packages}/*/* ; do
 			sh $package/install.sh --prefix="$OUTPUT"
 			chmod -R +w "$OUTPUT"
@@ -221,13 +224,13 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			target_ = host_;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await gnu.toolchain({ host, target });
+			hostToolchain = await tg.build(gnu.toolchain, { host, target });
 			setSysroot = true;
 		}
 	} else {
 		if (isCross) {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await gnu.toolchain({ host, target });
+			hostToolchain = await tg.build(gnu.toolchain, { host, target });
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
 		}
@@ -345,8 +348,8 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	};
 
 	// Build and return.
-	return await std.phases
-		.run({
+	return await tg
+		.build(std.phases.run, {
 			bootstrap: true,
 			env: std.env.arg(...env),
 			phases: { prepare, build, install },

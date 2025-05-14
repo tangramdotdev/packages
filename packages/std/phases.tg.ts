@@ -75,7 +75,7 @@ export const run = async (...args: std.Args<Arg>) => {
 		order: order_,
 		phases = {},
 		command: commandArg,
-	} = await arg(...args);
+	} = await tg.build(arg, ...args);
 
 	// Construct the phases in order.
 	// FIXME: This is a hack to avoid the 0: Bad file descriptor in configure scripts on Linux.`

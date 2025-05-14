@@ -133,37 +133,6 @@ export class CommandBuilder<
 		return this;
 	}
 
-	async mergeArgs(): Promise<CommandArgObject> {
-		let arg = await std.args.apply<CommandArgObject, CommandArgObject>({
-			args: this.#args,
-			map: async (arg) => {
-				if (arg === undefined) {
-					return {};
-				} else if (
-					typeof arg === "string" ||
-					tg.Artifact.is(arg) ||
-					arg instanceof tg.Template
-				) {
-					return {
-						args: ["-c", arg],
-						executable: "/bin/sh",
-						host: (await tg.process.env("TANGRAM_HOST")) as string,
-					};
-				} else if (arg instanceof tg.Command) {
-					const obj = await arg.object();
-					return { ...obj, env: obj.env as std.env.EnvObject };
-				} else {
-					return { ...arg, env: arg.env };
-				}
-			},
-			reduce: {
-				args: "append",
-				env: (a, b) => std.env.arg(a, b),
-			},
-		});
-		return arg;
-	}
-
 	async then<TResult1 = tg.Command<A, R>, TResult2 = never>(
 		onfulfilled?:
 			| ((value: tg.Command<A, R>) => TResult1 | PromiseLike<TResult1>)
@@ -174,7 +143,7 @@ export class CommandBuilder<
 			| undefined
 			| null,
 	): Promise<TResult1 | TResult2> {
-		let arg = await this.mergeArgs();
+		let arg = await tg.build(mergeArgs, ...this.#args);
 		let envs: Array<tg.Unresolved<std.env.Arg>> = [];
 		let tangramHost = await std.triple.host();
 		if (arg.host === undefined) {
@@ -217,12 +186,43 @@ export class CommandBuilder<
 				arg.mounts.unshift(linuxMount);
 			}
 		}
-		// FIXME - cast?
 		return (
 			tg.Command.new(arg as tg.Command.ArgObject) as Promise<tg.Command<A, R>>
 		).then(onfulfilled, onrejected);
 	}
 }
+
+export const mergeArgs = async (
+	...args: std.Args<CommandArgObject>
+): Promise<CommandArgObject> => {
+	return await std.args.apply<CommandArgObject, CommandArgObject>({
+		args,
+		map: async (arg) => {
+			if (arg === undefined) {
+				return {};
+			} else if (
+				typeof arg === "string" ||
+				tg.Artifact.is(arg) ||
+				arg instanceof tg.Template
+			) {
+				return {
+					args: ["-c", arg],
+					executable: "/bin/sh",
+					host: (await tg.process.env("TANGRAM_HOST")) as string,
+				};
+			} else if (arg instanceof tg.Command) {
+				const obj = await arg.object();
+				return { ...obj, env: obj.env as std.env.EnvObject };
+			} else {
+				return { ...arg, env: arg.env };
+			}
+		},
+		reduce: {
+			args: "append",
+			env: (a, b) => std.env.arg(a, b),
+		},
+	});
+};
 
 export const defaultTemplateCommandArg = (
 	strings: TemplateStringsArray,

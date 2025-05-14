@@ -56,7 +56,11 @@ export const buildTools = async (
 
 	// This list collects artifacts to return. It does not include the build toolchain.
 	const retEnvs: tg.Unresolved<Array<std.env.Arg>> = [];
-	const utils = std.utils.env({ host, bootstrap: true, env: buildToolchain });
+	const utils = await tg.build(std.utils.env, {
+		host,
+		bootstrap: true,
+		env: buildToolchain,
+	});
 	retEnvs.push(utils);
 
 	// This env is used to build the remaining dependencies only. It includes the build toolchain.
@@ -68,7 +72,7 @@ export const buildTools = async (
 	const bashExe = await std.env
 		.getArtifactByKey({ env: await utils, key: "SHELL" })
 		.then(tg.File.expect);
-	const pkgConfigArtifact = pkgConfig({
+	const pkgConfigArtifact = await tg.build(pkgConfig, {
 		bashExe,
 		host,
 		bootstrap: true,
@@ -81,14 +85,22 @@ export const buildTools = async (
 	}
 
 	// Some dependencies depend on previous builds, so they are manually ordered here.
-	const m4Artifact = m4({ host, bootstrap: true, env: utilsEnv });
+	const m4Artifact = await tg.build(m4, {
+		host,
+		bootstrap: true,
+		env: utilsEnv,
+	});
 	utilsEnv = std.env.arg(utilsEnv, m4Artifact);
 
-	const bisonArtifact = bison({ host, bootstrap: true, env: utilsEnv });
+	const bisonArtifact = await tg.build(bison, {
+		host,
+		bootstrap: true,
+		env: utilsEnv,
+	});
 	utilsEnv = std.env.arg(utilsEnv, bisonArtifact);
 
 	if (os === "darwin") {
-		const libiconvArtifact = libiconv({
+		const libiconvArtifact = await tg.build(libiconv, {
 			host,
 			bootstrap: true,
 			env: std.env.arg(utils, buildToolchain),
@@ -97,46 +109,62 @@ export const buildTools = async (
 		utilsEnv = std.env.arg(utilsEnv, libiconvArtifact);
 	}
 
-	const gettextArtifact = gettext({ host, bootstrap: true, env: utilsEnv });
+	const gettextArtifact = await tg.build(gettext, {
+		host,
+		bootstrap: true,
+		env: utilsEnv,
+	});
 	retEnvs.push(m4Artifact, bisonArtifact, gettextArtifact);
 	utilsEnv = std.env.arg(utilsEnv, gettextArtifact);
 
-	const flexArtifact = flex({ host, bootstrap: true, env: utilsEnv });
+	const flexArtifact = await tg.build(flex, {
+		host,
+		bootstrap: true,
+		env: utilsEnv,
+	});
 	utilsEnv = std.env.arg(utilsEnv, flexArtifact);
 
-	const perlArtifact = perl({ host, bootstrap: true, env: utilsEnv });
+	const perlArtifact = await tg.build(perl, {
+		host,
+		bootstrap: true,
+		env: utilsEnv,
+	});
 	retEnvs.push(perlArtifact);
 	if (level === "extended") {
 		return std.env.arg(...retEnvs);
 	}
 	utilsEnv = std.env.arg(utilsEnv, perlArtifact);
 
-	const libxcryptArtifact = libxcrypt({
+	const libxcryptArtifact = await tg.build(libxcrypt, {
 		host,
 		bootstrap: true,
 		env: utilsEnv,
 	});
 	utilsEnv = std.env.arg(utilsEnv, libxcryptArtifact);
-	const pythonArtifact = python({ host, bootstrap: true, env: utilsEnv });
+	const pythonArtifact = await tg.build(python, {
+		host,
+		bootstrap: true,
+		env: utilsEnv,
+	});
 	retEnvs.push(pythonArtifact);
 	utilsEnv = std.env.arg(utilsEnv, pythonArtifact);
 	if (level === "python") {
 		return std.env.arg(...retEnvs);
 	}
 
-	const grepArtifact = await grep({
+	const grepArtifact = await await tg.build(grep, {
 		host,
 		bootstrap: true,
 		env: std.env.arg(utils, buildToolchain),
 	});
 	const grepExe = await grepArtifact.get("bin/grep").then(tg.File.expect);
-	const sedArtifact = await sed({
+	const sedArtifact = await tg.build(sed, {
 		host,
 		bootstrap: true,
 		env: std.env.arg(utils, buildToolchain),
 	});
 	const sedExe = await sedArtifact.get("bin/sed").then(tg.File.expect);
-	const libtoolArtifact = libtool({
+	const libtoolArtifact = await tg.build(libtool, {
 		bashExe,
 		grepExe,
 		sedExe,
@@ -144,14 +172,14 @@ export const buildTools = async (
 		bootstrap: true,
 		env: utilsEnv,
 	});
-	const texinfoArtifact = texinfo({
+	const texinfoArtifact = await tg.build(texinfo, {
 		host,
 		bootstrap: true,
 		env: utilsEnv,
 		perlArtifact,
 	});
 	utilsEnv = std.env.arg(utilsEnv, texinfoArtifact);
-	const autoconfArtifact = autoconf({
+	const autoconfArtifact = await tg.build(autoconf, {
 		host,
 		bootstrap: true,
 		env: utilsEnv,
@@ -160,14 +188,14 @@ export const buildTools = async (
 		perlArtifact,
 	});
 	utilsEnv = std.env.arg(utilsEnv, autoconfArtifact);
-	const help2manArifact = help2man({
+	const help2manArifact = await tg.build(help2man, {
 		host,
 		bootstrap: true,
 		env: utilsEnv,
 		perlArtifact,
 	});
 	utilsEnv = std.env.arg(utilsEnv, help2manArifact);
-	const automakeArtifact = automake({
+	const automakeArtifact = await tg.build(automake, {
 		host,
 		bootstrap: true,
 		env: utilsEnv,

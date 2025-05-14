@@ -238,7 +238,7 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
-	return std.env.arg(...dirs);
+	return await std.env.arg(...dirs);
 };
 
 export default env;
@@ -945,6 +945,7 @@ export const testDifferentPrefixDirect = async () => {
 import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 	type: "file",
 };
+
 export const testStrip = async () => {
 	const toolchain = await bootstrap.sdk();
 	const output = await std.build`

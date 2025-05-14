@@ -52,79 +52,8 @@ export namespace env {
 	export const arg = async (
 		...args: std.Args<Arg>
 	): Promise<std.env.EnvObject> => {
-		const resolved = await Promise.all(args.map(tg.resolve));
-		const envObjects: Array<tg.MaybeMutation<env.ArgObject>> =
-			await Promise.all(
-				resolved
-					.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
-					.map(async (arg) => {
-						if (tg.Artifact.is(arg)) {
-							return await env.envObjectFromArtifact(arg);
-						} else {
-							tg.assert(arg !== undefined);
-							return arg as tg.MaybeMutation<ArgObject>;
-						}
-					}),
-			);
+		const envObjects = await envObjectsFromArgs(...args);
 		return await env.mergeArgObjects(...envObjects);
-	};
-
-	/** Produce an env object from an artifact value. */
-	export const envObjectFromArtifact = async (
-		artifact: tg.Artifact,
-	): Promise<env.ArgObject> => {
-		if (artifact instanceof tg.File) {
-			// Attempt to read the manifest from the file.
-			const manifest = await std.wrap.Manifest.read(artifact);
-			if (!manifest) {
-				// If the file was not a wrapper, throw an error.
-				const artifactId = await artifact.id();
-				throw new Error(`Could not read manifest from ${artifactId}`);
-			}
-			// If the file was a wrapper, return its env.
-			return await wrap.envArgFromManifestEnv(manifest.env);
-		} else if (artifact instanceof tg.Directory) {
-			// If the directory contains a file at `.tangram/env`, return the env from that file's manifest.
-			const envFile = await artifact.tryGet(".tangram/env");
-			if (envFile) {
-				tg.File.assert(envFile);
-				return await envObjectFromArtifact(envFile);
-			}
-
-			// Otherwise, return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.
-			const env: env.EnvObject = {};
-			if (await artifact.tryGet("bin")) {
-				env["PATH"] = await tg.Mutation.prefix(tg`${artifact}/bin`, ":");
-			}
-			const includeDir = await artifact.tryGet("include");
-			if (includeDir) {
-				if (
-					includeDir instanceof tg.Directory &&
-					(await includeDir.tryGet("stdio.h"))
-				) {
-					// This is a toolchain system include path. Do nothing - the toolchain will handle it.
-				} else {
-					env["CPATH"] = await tg.Mutation.prefix(tg`${artifact}/include`, ":");
-				}
-			}
-			if (await artifact.tryGet("lib")) {
-				env["LIBRARY_PATH"] = await tg.Mutation.prefix(
-					tg`${artifact}/lib`,
-					":",
-				);
-			}
-			return env;
-		} else if (artifact instanceof tg.Symlink) {
-			// Resolve the symlink and try again.
-			const resolved = await artifact.resolve();
-			if (resolved === undefined) {
-				throw new Error(`Could not resolve symlink ${artifact}`);
-			} else {
-				return await env.envObjectFromArtifact(resolved);
-			}
-		} else {
-			return tg.unreachable("unrecognized artifact type");
-		}
 	};
 
 	/** Merge a list of `env.ArgObject` values into a single `env.EnvObject`, normalizing all mutations to a single mutation per key. */
@@ -774,6 +703,79 @@ function* separateTemplate(
 	}
 	yield chunk;
 }
+
+export const envObjectsFromArgs = async (
+	...args: std.Args<env.Arg>
+): Promise<Array<tg.MaybeMutation<env.ArgObject>>> => {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	return await Promise.all(
+		resolved
+			.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
+			.map(async (arg) => {
+				if (tg.Artifact.is(arg)) {
+					return await envObjectFromArtifact(arg);
+				} else {
+					tg.assert(arg !== undefined);
+					return arg as tg.MaybeMutation<env.ArgObject>;
+				}
+			}),
+	);
+};
+
+/** Produce an env object from an artifact value. */
+export const envObjectFromArtifact = async (
+	artifact: tg.Artifact,
+): Promise<env.ArgObject> => {
+	if (artifact instanceof tg.File) {
+		// Attempt to read the manifest from the file.
+		const manifest = await std.wrap.Manifest.read(artifact);
+		if (!manifest) {
+			// If the file was not a wrapper, throw an error.
+			const artifactId = await artifact.id();
+			throw new Error(`Could not read manifest from ${artifactId}`);
+		}
+		// If the file was a wrapper, return its env.
+		return await wrap.envArgFromManifestEnv(manifest.env);
+	} else if (artifact instanceof tg.Directory) {
+		// If the directory contains a file at `.tangram/env`, return the env from that file's manifest.
+		const envFile = await artifact.tryGet(".tangram/env");
+		if (envFile) {
+			tg.File.assert(envFile);
+			return await envObjectFromArtifact(envFile);
+		}
+
+		// Otherwise, return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.
+		const env: env.EnvObject = {};
+		if (await artifact.tryGet("bin")) {
+			env["PATH"] = await tg.Mutation.prefix(tg`${artifact}/bin`, ":");
+		}
+		const includeDir = await artifact.tryGet("include");
+		if (includeDir) {
+			if (
+				includeDir instanceof tg.Directory &&
+				(await includeDir.tryGet("stdio.h"))
+			) {
+				// This is a toolchain system include path. Do nothing - the toolchain will handle it.
+			} else {
+				env["CPATH"] = await tg.Mutation.prefix(tg`${artifact}/include`, ":");
+			}
+		}
+		if (await artifact.tryGet("lib")) {
+			env["LIBRARY_PATH"] = await tg.Mutation.prefix(tg`${artifact}/lib`, ":");
+		}
+		return env;
+	} else if (artifact instanceof tg.Symlink) {
+		// Resolve the symlink and try again.
+		const resolved = await artifact.resolve();
+		if (resolved === undefined) {
+			throw new Error(`Could not resolve symlink ${artifact}`);
+		} else {
+			return await envObjectFromArtifact(resolved);
+		}
+	} else {
+		return tg.unreachable("unrecognized artifact type");
+	}
+};
 
 const dependencyObjectFromDependency = <T extends std.args.PackageArg>(
 	dependency: env.Dependency<T>,

@@ -97,7 +97,6 @@ export type Arg = {
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	type Collect = std.args.MakeArrayKeys<Arg, "phases">;
 	const {
 		bootstrap = false,
 		buildInTree = false,
@@ -130,23 +129,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await std.args.apply<Arg, Collect>({
-		args,
-		map: async (arg) => {
-			return {
-				...arg,
-				phases: [arg.phases],
-			} as Collect;
-		},
-		reduce: {
-			env: (a, b) => std.env.arg(a, b),
-			phases: "append",
-			sdk: (a, b) => std.sdk.arg(a, b),
-		},
-	});
-
-	// Make sure the the arguments provided a source.
-	tg.assert(source !== undefined, `source must be defined`);
+	} = await tg.build(mergeArgs, ...args);
 
 	// Detect the host system from the environment.
 	const host = host_ ?? (await std.triple.host());
@@ -349,4 +332,25 @@ export const build = async (...args: std.Args<Arg>) => {
 			...userPhaseArgs,
 		)
 		.then(tg.Directory.expect);
+};
+
+// type Collect = std.args.MakeArrayKeys<Arg, "env" | "phases">;
+type Collect = std.args.MakeArrayKeys<Arg, "phases">;
+export const mergeArgs = async (...args: std.Args<Arg>): Promise<Collect> => {
+	const collect = await std.args.apply<Arg, Collect>({
+		args,
+		map: async (arg) => {
+			return {
+				...arg,
+				phases: [arg.phases],
+			} as Collect;
+		},
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			phases: "append",
+			sdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
+	tg.assert(collect.source !== undefined, `source must be defined`);
+	return collect;
 };
