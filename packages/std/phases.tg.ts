@@ -158,7 +158,7 @@ export const arg = async (...args: std.Args<Arg>): Promise<Object> => {
 		args,
 		map: async (arg) => {
 			if (arg === undefined) {
-				return { phases: undefined };
+				return {};
 			} else if (isArgObject(arg)) {
 				const ret: ArgObject = {};
 				if ("bootstrap" in arg) {
