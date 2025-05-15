@@ -5,7 +5,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gzip",
 	repository: "https://git.savannah.gnu.org/git/gzip.git",
-	version: "1.13",
+	version: "1.14",
 	provides: {
 		binaries: ["gzip"],
 	},
@@ -14,7 +14,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:7454eb6935db17c6655576c2e1b0fabefd38b4d0936e0f87f48cd062ce91a057";
+		"sha256:01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6";
 	return std.download.fromGnu({
 		name,
 		version,

@@ -59,7 +59,9 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const env = std.env.arg(env_, ...dependencies, additionalEnv);
+	const env = std.env.arg(env_, ...dependencies, additionalEnv, {
+		utils: false,
+	});
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

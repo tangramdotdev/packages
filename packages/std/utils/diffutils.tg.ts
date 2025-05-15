@@ -3,13 +3,13 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 const metadata = {
 	name: "diffutils",
-	version: "3.10",
+	version: "3.12",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e";
+		"sha256:7c8b7f9fc8609141fdea9cece85249d308624391ff61dedaf528fcb337727dfd";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -44,7 +44,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	const env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build), { utils: false });
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

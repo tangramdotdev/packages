@@ -5,7 +5,7 @@ export const metadata = {
 	license: "GPL-2.0-or-later",
 	name: "grep",
 	repository: "https://git.savannah.gnu.org/cgit/grep.git",
-	version: "3.7",
+	version: "3.12",
 	provides: {
 		binaries: ["grep"],
 	},
@@ -14,7 +14,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c22b0cf2d4f6bbe599c902387e8058990e1eee99aef333a203829e5fd3dbb342";
+		"sha256:badda546dfc4b9d97e992e2c35f3b5c7f20522ffcbe2f01ba1e9cdcbe7644cdc";
 	return std.download.fromGnu({ name, version, checksum });
 };
 

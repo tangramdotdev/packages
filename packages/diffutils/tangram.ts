@@ -5,7 +5,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "diffutils",
 	repository: "https://git.savannah.gnu.org/cgit/diffutils.git",
-	version: "3.8",
+	version: "3.12",
 	provides: {
 		binaries: ["cmp", "diff", "diff3"],
 	},
@@ -14,7 +14,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:a6bdd7d1b31266d11c4f4de6c1b748d4607ab0231af5188fc2533d0ae2438fec";
+		"sha256:7c8b7f9fc8609141fdea9cece85249d308624391ff61dedaf528fcb337727dfd";
 	return std.download.fromGnu({
 		name,
 		version,

@@ -25,7 +25,7 @@ export type Arg = {
 	/** Optional strip command to use. If omitted, will use the strip located with the toolchain. */
 	stripExe?: tg.File | tg.Symlink | tg.Template;
 	/** The build environment to be proxied. */
-	toolchain: std.env.Arg;
+	toolchain: std.env.EnvObject;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
@@ -238,13 +238,13 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
-	return await std.env.arg(...dirs);
+	return await std.env.arg(...dirs, { utils: false });
 };
 
 export default env;
 
 type CcProxyArg = {
-	buildToolchain: std.env.Arg;
+	buildToolchain: std.env.EnvObject;
 	build?: string;
 	host?: string;
 };
@@ -271,7 +271,7 @@ export const ccProxy = async (arg: CcProxyArg) => {
 };
 
 type LdProxyArg = {
-	buildToolchain: std.env.Arg;
+	buildToolchain: std.env.EnvObject;
 	build?: string;
 	interpreter?: tg.File | undefined;
 	interpreterArgs?: Array<tg.Template.Arg>;
@@ -333,7 +333,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 
 type StripProxyArg = {
 	build?: string;
-	buildToolchain: std.env.Arg;
+	buildToolchain: std.env.EnvObject;
 	host?: string;
 	stripCommand: tg.File | tg.Symlink | tg.Template;
 	runtimeLibraryPath?: tg.Directory | undefined;
@@ -373,7 +373,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 
 	return std.wrap(stripProxy, {
 		buildToolchain,
-		env: std.env.arg(...envs),
+		env: std.env.arg(...envs, { utils: false }),
 	});
 };
 
@@ -407,11 +407,15 @@ int main() {
 		.includeUtils(false)
 		.pipefail(false)
 		.env(
-			std.env.arg(bootstrapSDK, {
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-				TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
-			}),
+			std.env.arg(
+				bootstrapSDK,
+				{
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from a TGLD-wrapped binary!");
@@ -433,9 +437,13 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 	return await std.build`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags}`
 		.bootstrap(true)
 		.env(
-			std.env.arg(sdk, {
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-			}),
+			std.env.arg(
+				sdk,
+				{
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.Directory.expect);
 };
@@ -496,9 +504,13 @@ void printGreeting();
 	`
 		.bootstrap(true)
 		.env(
-			std.env.arg(bootstrapSdk, {
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-			}),
+			std.env.arg(
+				bootstrapSdk,
+				{
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.Directory.expect);
 
@@ -644,10 +656,14 @@ const char* getGreetingB();
 		await std.build`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`
 			.bootstrap(true)
 			.env(
-				std.env.arg(bootstrapSDK, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: opt,
-				}),
+				std.env.arg(
+					bootstrapSDK,
+					{
+						TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+						TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: opt,
+					},
+					{ utils: false },
+				),
 			)
 			.then(tg.File.expect);
 
@@ -818,10 +834,14 @@ export const testSamePrefix = async () => {
 			`
 		.bootstrap(true)
 		.env(
-			std.env.arg(bootstrapSDK, {
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-			}),
+			std.env.arg(
+				bootstrapSDK,
+				{
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.File.expect);
 	console.log("wrapped_exe", await output.id());
@@ -871,10 +891,14 @@ export const testSamePrefixDirect = async () => {
 			`
 		.bootstrap(true)
 		.env(
-			std.env.arg(bootstrapSDK, {
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-			}),
+			std.env.arg(
+				bootstrapSDK,
+				{
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
@@ -919,10 +943,14 @@ export const testDifferentPrefixDirect = async () => {
 			`
 		.bootstrap(true)
 		.env(
-			std.env.arg(bootstrapSDK, {
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-			}),
+			std.env.arg(
+				bootstrapSDK,
+				{
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.Directory.expect);
 
@@ -932,10 +960,14 @@ export const testDifferentPrefixDirect = async () => {
 			`
 		.bootstrap(true)
 		.env(
-			std.env.arg(bootstrapSDK, {
-				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-				TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
-			}),
+			std.env.arg(
+				bootstrapSDK,
+				{
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
@@ -955,9 +987,13 @@ export const testStrip = async () => {
 		mv main $OUTPUT`
 		.bootstrap(true)
 		.env(
-			std.env.arg(toolchain, {
-				TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
-			}),
+			std.env.arg(
+				toolchain,
+				{
+					TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
+				},
+				{ utils: false },
+			),
 		)
 		.then(tg.File.expect);
 	return output;

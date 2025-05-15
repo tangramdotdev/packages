@@ -3,13 +3,13 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "gawk",
-	version: "5.3.1",
+	version: "5.3.2",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:694db764812a6236423d4ff40ceb7b6c4c441301b72ad502bb5c27e00cd56f78";
+		"sha256:f8c3486509de705192138b00ef2c00bbbdd0e84c30d5c07d23fc73a9dc4cc9cc";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -44,7 +44,7 @@ export const build = async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	const env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build), { utils: false });
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

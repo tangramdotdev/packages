@@ -89,7 +89,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	let result = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...envs),
+			env: std.env.arg(...envs, { utils: false }),
 			phases,
 			prefixPath: "/",
 			sdk,

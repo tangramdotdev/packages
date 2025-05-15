@@ -4,14 +4,14 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "xz",
-	version: "5.6.3",
+	version: "5.8.1",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:b1d45295d3f71f25a4c9101bd7c8d16cb56348bbef3bbc738da0351e17c73317";
+		"sha256:507825b599356c10dca1cd720c9d0d0c9d5400b9de300af00e4d1ea150795543";
 	const base = `https://github.com/tukaani-project/xz/releases/download/v${version}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
@@ -49,7 +49,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		],
 	};
 
-	const env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build), { utils: false });
 
 	return autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

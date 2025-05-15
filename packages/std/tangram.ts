@@ -52,6 +52,7 @@ export const default_ = async () => {
 		host: await triple.host(),
 		buildToolchain,
 		level: "extended",
+		includeUtils: true,
 	});
 	return stdEnv(buildToolchain, buildTools);
 };

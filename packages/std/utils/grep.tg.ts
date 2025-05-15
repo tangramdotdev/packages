@@ -3,13 +3,13 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "grep",
-	version: "3.11",
+	version: "3.12",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:1db2aedde89d0dea42b16d9528f894c8d15dae4e190b59aecc78f5a951276eab";
+		"sha256:2649b27c0e90e632eadcd757be06c6e9a4f48d941de51e7c0f83ff76408a07b9";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -49,7 +49,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		],
 	};
 
-	const env = std.env.arg(env_, prerequisites(host));
+	const env = std.env.arg(env_, prerequisites(host), { utils: false });
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

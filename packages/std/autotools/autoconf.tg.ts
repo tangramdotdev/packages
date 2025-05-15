@@ -58,7 +58,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		source: source_,
 	} = resolved;
 
-	const env = std.env.arg(env_);
+	const env = std.env.arg(env_, { utils: false });
 
 	let autoconf = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
@@ -99,13 +99,18 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		{
 			interpreter,
 			args: ["-B", await tg`${shareDirectory}/autoconf`],
-			env: std.env.arg(grepArtifact, m4Artifact, {
-				autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
-				AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-				M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-				PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-				AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
-			}),
+			env: std.env.arg(
+				grepArtifact,
+				m4Artifact,
+				{
+					autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
+					AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
+				},
+				{ utils: false },
+			),
 		},
 	);
 

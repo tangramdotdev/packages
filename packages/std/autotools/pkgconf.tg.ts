@@ -44,7 +44,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		sdk,
 		source: source_,
 	} = await tg.resolve(arg);
-	const env = std.env.arg(env_);
+	const env = std.env.arg(env_, { utils: false });
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],

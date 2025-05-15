@@ -111,7 +111,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	let output = await autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: bootstrap_,
-		env: std.env.arg(...env),
+		env: std.env.arg(...env, { utils: false }),
 		phases: { configure },
 		opt: staticBuild ? "s" : undefined,
 		sdk,
@@ -137,7 +137,9 @@ export const gnuEnv = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
 	const os = std.triple.os(host);
 	const sdk = bootstrap.sdk(host);
-	const env = std.env.arg(sdk, bootstrap.make.build({ host }));
+	const env = std.env.arg(sdk, bootstrap.make.build({ host }), {
+		utils: false,
+	});
 	const directory = await build({
 		host,
 		env,
@@ -226,9 +228,12 @@ export const test = async () => {
 			? libiconv({ host, bootstrap: true, env: sdk })
 			: attr({ host, bootstrap: true, env: sdk });
 	const output = await std.build`${script}`
-		.includeUtils(false)
-		.pipefail(false)
-		.env(std.env.arg({ SHELL: "/bin/sh" }, platformSupportLib, coreutils))
+		.bootstrap(true)
+		.env(
+			std.env.arg({ SHELL: "/bin/sh" }, platformSupportLib, coreutils, {
+				utils: false,
+			}),
+		)
 		.then(tg.File.expect);
 
 	const contents = (await output.text()).trim();

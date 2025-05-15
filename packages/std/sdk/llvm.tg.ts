@@ -81,7 +81,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const perlForBuild = dependencies.perl.build({
 		build,
 		host: build,
-		env: std.env.arg(m4ForBuild, bisonForBuild),
+		env: std.env.arg(m4ForBuild, bisonForBuild, { utils: false }),
 	});
 	const pythonForBuild = dependencies.python.build({
 		build,
@@ -103,7 +103,9 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Obtain a sysroot for the requested host.
 
 	const sysroot = await constructSysroot({
-		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild),
+		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild, {
+			utils: false,
+		}),
 		host,
 	})
 		.then((dir) => dir.get(host))
@@ -160,7 +162,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	let llvmArtifact = await cmake.build({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(...env),
+		env: std.env.arg(...env, { utils: false }), // TODO - is this correct? utils or no here?
 		phases,
 		sdk,
 		source: tg`${sourceDir}/llvm`,
@@ -260,7 +262,7 @@ export const linuxToDarwin = async (arg?: LinuxToDarwinArg) => {
 	const cctoolsForTarget = await cctools(std.triple.arch(target));
 
 	// Return the combined environment.
-	return await std.env.arg(clangToolchain, cctoolsForTarget);
+	return await std.env.arg(clangToolchain, cctoolsForTarget, { utils: false });
 };
 
 export const testLinuxToDarwin = async (arg?: LinuxToDarwinArg) => {

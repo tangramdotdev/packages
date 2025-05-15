@@ -238,7 +238,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		debug = false,
 		env: userEnv,
 		extended = true,
-		fortifySource: fortifySource_ = 3,
+		fortifySource: fortifySource_ = 2,
 		fullRelro = true,
 		generator = "Ninja",
 		hardeningCFlags = true,
@@ -371,6 +371,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 			host,
 			buildToolchain: await tg.build(std.sdk, { host }),
 			level,
+			includeUtils: true,
 		});
 		envs.push(sdk, buildToolsEnv);
 	}

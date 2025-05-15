@@ -59,7 +59,7 @@ export const mold = async (arg?: Arg) => {
 		sourceDir = await std.patch(sourceDir, blake3DisableNeonFlag);
 	}
 
-	const env = await std.env.arg(zstd({ build, host }), env_);
+	const env = await std.env.arg(zstd({ build, host }), env_, { utils: false });
 
 	const result = cmake.build({
 		...(await std.triple.rotate({ build, host })),

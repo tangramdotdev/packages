@@ -31,7 +31,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
-		env,
+		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
@@ -52,6 +52,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 	const phases = { configure };
 
+	const env = await std.env.arg(env_, { utils: false });
 	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configure.args.push(`CC="$CC"`);

@@ -55,7 +55,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	const { version } = metadata;
 	let binDirectory = tg.directory({});
 
-	const env = std.env.arg(env_);
+	const env = std.env.arg(env_, { utils: false });
 
 	const automake = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

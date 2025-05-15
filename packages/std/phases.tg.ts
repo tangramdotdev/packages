@@ -192,7 +192,7 @@ export const arg = async (...args: std.Args<Arg>): Promise<Object> => {
 		},
 		reduce: {
 			command: "merge",
-			env: (a, b) => std.env.arg(a, b),
+			env: (a, b) => std.env.arg(a, b, { utils: false }),
 			phases: (a, b) => mergePhases(a, b),
 		},
 	});

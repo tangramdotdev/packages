@@ -96,7 +96,9 @@ export const compileUtil = async (arg: UtilArg) => {
 		await (
 			await tg.command(await tg.template(script), {
 				host: std.triple.archAndOs(build),
-				env: std.env.arg(arg.env ?? {}, bootstrap.sdk.env(host)),
+				env: std.env.arg(arg.env ?? {}, bootstrap.sdk.env(host), {
+					utils: false,
+				}),
 			})
 		).build(),
 	);

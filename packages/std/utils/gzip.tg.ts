@@ -3,13 +3,13 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "gzip",
-	version: "1.13",
+	version: "1.14",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:7454eb6935db17c6655576c2e1b0fabefd38b4d0936e0f87f48cd062ce91a057";
+		"sha256:01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -44,7 +44,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build), { utils: false });
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
