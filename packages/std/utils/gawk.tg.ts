@@ -44,7 +44,7 @@ export const build = async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking", "--disable-rpath"],
 	};
 
-	const env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build), { utils: false });
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

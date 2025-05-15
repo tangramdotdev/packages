@@ -48,7 +48,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		artifact: perlArtifact,
 		subpath: "bin/perl",
 	});
-	const env = std.env.arg(env_);
+	const env = std.env.arg(env_, { utils: false });
 	const artifact = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap,

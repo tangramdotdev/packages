@@ -35,7 +35,7 @@ export namespace sdk {
 				SDKROOT: sdkroot,
 			};
 		}
-		return await std.env.arg(toolchain, utils, env);
+		return await std.env.arg(toolchain, utils, env, { utils: false });
 	};
 
 	/** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */

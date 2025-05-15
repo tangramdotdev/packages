@@ -491,6 +491,7 @@ export const dlopen = async (arg: DlopenArg) => {
 					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 				},
 				arg.env,
+				{ utils: false },
 			),
 		)
 		.host(arg.host)

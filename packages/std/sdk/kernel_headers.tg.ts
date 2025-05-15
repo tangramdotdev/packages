@@ -90,7 +90,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 		});
 		envs.push(utils);
 	}
-	const env = std.env.arg(...envs);
+	const env = std.env.arg(...envs, { utils: false });
 
 	const result = tg.Directory.expect(
 		await tg.build(
@@ -135,6 +135,7 @@ export const testKernelHeaders = async (host: string, target?: string) => {
 	const buildEnv = std.env.arg(
 		bootstrap.sdk(host),
 		bootstrap.make.default({ host }),
+		{ utils: false },
 	);
 	const headers = await kernelHeaders({
 		bootstrap: true,

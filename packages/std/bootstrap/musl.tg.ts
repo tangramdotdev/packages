@@ -52,10 +52,15 @@ export const build = async (arg?: Arg) => {
 		fixup,
 	};
 
-	const env = std.env.arg(bootstrap.sdk(host), bootstrap.make.build({ host }), {
-		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
-		LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
-	});
+	const env = std.env.arg(
+		bootstrap.sdk(host),
+		bootstrap.make.build({ host }),
+		{
+			CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
+			LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
+		},
+		{ utils: false },
+	);
 
 	return await autotoolsInternal({
 		bootstrap: true,

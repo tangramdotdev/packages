@@ -57,7 +57,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		install,
 	};
 
-	const env = std.env.arg(env_, prerequisites(build));
+	const env = std.env.arg(env_, prerequisites(build), { utils: false });
 
 	return await autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
@@ -79,6 +79,6 @@ export const test = async () => {
 	return build({
 		host,
 		bootstrap: true,
-		env: std.env.arg(sdk, { SHELL: "/bin/sh" }),
+		env: std.env.arg(sdk, { SHELL: "/bin/sh" }, { utils: false }),
 	});
 };

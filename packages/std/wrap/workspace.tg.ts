@@ -6,7 +6,7 @@ import cargoLock from "../Cargo.lock" with { type: "file" };
 import packages from "../packages" with { type: "directory" };
 
 type Arg = {
-	buildToolchain: std.env.Arg;
+	buildToolchain: std.env.EnvObject;
 	build?: string;
 	host?: string;
 	release?: boolean;
@@ -178,7 +178,7 @@ type RustupManifest = {
 };
 
 type BuildArg = {
-	buildToolchain?: std.env.Arg;
+	buildToolchain?: std.env.EnvObject;
 	enableTracingFeature?: boolean;
 	host?: string;
 	release?: boolean;
@@ -251,6 +251,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
 
 	const env: Array<tg.Unresolved<std.env.Arg>> = [
+		{ utils: false },
 		buildToolchain,
 		hostToolchain ?? {},
 		rustToolchain,
@@ -437,7 +438,10 @@ export const testCross = async () => {
 		os: "linux",
 		environment: "gnu",
 	});
-	const buildToolchain = gnu.toolchain({ host, target });
+	const buildToolchain = await std.env.arg(
+		await tg.build(gnu.toolchain, { host, target }),
+		{ utils: false },
+	);
 
 	const crossWorkspace = await tg.build(workspace, {
 		buildToolchain,

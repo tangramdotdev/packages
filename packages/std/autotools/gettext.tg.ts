@@ -73,7 +73,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		},
 	];
 
-	const env = std.env.arg(...envs, env_);
+	const env = std.env.arg(...envs, env_, { utils: false });
 
 	const configure = {
 		args: [

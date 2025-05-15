@@ -36,14 +36,18 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 	const envs: tg.Unresolved<Array<std.env.Arg>> = [];
 
 	// Determine host toolchain.
-	let toolchain: std.env.Arg;
+	let toolchain: std.env.EnvObject;
 	if (toolchain_ === "gnu") {
 		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS.`);
 		}
-		toolchain = await tg.build(gnu.toolchain, { host });
+		toolchain = await std.env.arg(await tg.build(gnu.toolchain, { host }), {
+			utils: false,
+		});
 	} else if (toolchain_ === "llvm") {
-		toolchain = await tg.build(llvm.toolchain, { host });
+		toolchain = await std.env.arg(await tg.build(llvm.toolchain, { host }), {
+			utils: false,
+		});
 	} else {
 		toolchain = toolchain_;
 	}
@@ -128,9 +132,15 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		}
 		let crossToolchain = undefined;
 		if (std.triple.os(host) === "linux" && std.triple.os(target) === "darwin") {
-			crossToolchain = await tg.build(llvm.linuxToDarwin, { host, target });
+			crossToolchain = await std.env.arg(
+				await tg.build(llvm.linuxToDarwin, { host, target }),
+				{ utils: false },
+			);
 		} else {
-			crossToolchain = await tg.build(gnu.toolchain, { host, target });
+			crossToolchain = await std.env.arg(
+				await tg.build(gnu.toolchain, { host, target }),
+				{ utils: false },
+			);
 		}
 		tg.assert(crossToolchain !== undefined);
 		envs.push(crossToolchain);
@@ -150,7 +160,7 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 	}
 
 	// Combine all envs.
-	return await std.env.arg(...envs);
+	return await std.env.arg(...envs, { utils: false });
 }
 
 export namespace sdk {
@@ -239,7 +249,7 @@ export namespace sdk {
 	///////// QUERIES
 
 	type ProvidesToolchainArg = {
-		env: std.env.Arg;
+		env: std.env.EnvObject;
 		forcePrefix?: boolean;
 		host?: string | undefined;
 		target?: string | undefined;
@@ -513,7 +523,7 @@ export namespace sdk {
 
 	type ToolchainEnvArg = {
 		/** The environment to ascertain the host from. */
-		env?: std.env.Arg | undefined;
+		env: std.env.EnvObject;
 		/** Should we force the use of a target-triple prefix, regardless of host? Default: false */
 		forcePrefix?: boolean | undefined;
 		/** What machine is the compiler expecting to run on? */
@@ -557,7 +567,7 @@ export namespace sdk {
 	export const determineToolchainHost = async (
 		arg: ToolchainEnvArg,
 	): Promise<string> => {
-		const { env, host: host_, target: target_ } = arg;
+		const { env: env_, host: host_, target: target_ } = arg;
 		let detectedHost = host_ ?? (await std.triple.host());
 		const target = target_ ?? detectedHost;
 		const isCross = detectedHost !== target;
@@ -570,16 +580,19 @@ export namespace sdk {
 		const targetString = isCross ? target : "";
 		const ccEnvVar = isCross ? `CC_${targetString.replace(/-/g, "_")}` : "CC";
 		let cmd = `$${ccEnvVar}`;
-		let foundCC = await std.env.tryGetArtifactByKey({ env, key: ccEnvVar });
+		let foundCC = await std.env.tryGetArtifactByKey({
+			env: env_,
+			key: ccEnvVar,
+		});
 		const targetPrefix = isCross ? `${targetString}-` : "";
 		if (!foundCC) {
-			const clang = await std.env.tryWhich({ env, name: "clang" });
+			const clang = await std.env.tryWhich({ env: env_, name: "clang" });
 			if (clang) {
 				cmd = "clang";
 				foundCC = clang as tg.File | tg.Symlink;
 			} else {
 				const name = `${targetPrefix}cc`;
-				foundCC = await std.env.tryWhich({ env, name });
+				foundCC = await std.env.tryWhich({ env: env_, name });
 				cmd = name;
 			}
 		}
@@ -614,7 +627,7 @@ export namespace sdk {
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
 		const output = await std.build`${cmd} -dumpmachine > $OUTPUT`
 			.bootstrap(true)
-			.env(env)
+			.env(env_)
 			.host(std.triple.archAndOs(detectedHost))
 			.then(tg.File.expect);
 		const host = (await output.text()).trim();
@@ -624,7 +637,7 @@ export namespace sdk {
 
 	/** Retreive the full range of targets an SDK supports. */
 	export const supportedTargets = async (
-		sdk: std.env.Arg,
+		sdk: std.env.EnvObject,
 	): Promise<Array<string>> => {
 		// Collect all available `*cc` binaries.
 		const foundTargets: Set<string> = new Set();
@@ -711,9 +724,13 @@ export namespace sdk {
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`
 			.bootstrap(true)
 			.env(
-				std.env.arg(arg.sdkEnv, {
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-				}),
+				std.env.arg(
+					arg.sdkEnv,
+					{
+						TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					},
+					{ utils: false },
+				),
 			)
 			.host(std.triple.archAndOs(expectedHost))
 			.then(tg.File.expect);
@@ -766,7 +783,7 @@ export namespace sdk {
 	};
 
 	/** Assert the given env provides everything it should for a particuar arg. */
-	export const assertValid = async (env: std.env.Arg, arg: sdk.Arg) => {
+	export const assertValid = async (env: std.env.EnvObject, arg: sdk.Arg) => {
 		const expected = await resolveHostAndTarget(arg);
 
 		// Check that the env provides a host toolchain.
@@ -843,9 +860,13 @@ export namespace sdk {
 						linkerFlavor,
 						parameters: testCParameters,
 						proxiedLinker: false,
-						sdkEnv: await std.env.arg(env, {
-							TANGRAM_LINKER_PASSTHROUGH: true,
-						}),
+						sdkEnv: await std.env.arg(
+							env,
+							{
+								TANGRAM_LINKER_PASSTHROUGH: true,
+							},
+							{ utils: false },
+						),
 						host: expected.host,
 						target,
 					});
@@ -866,9 +887,13 @@ export namespace sdk {
 						linkerFlavor,
 						parameters: testCxxParameters,
 						proxiedLinker: false,
-						sdkEnv: await std.env.arg(env, {
-							TANGRAM_LINKER_PASSTHROUGH: true,
-						}),
+						sdkEnv: await std.env.arg(
+							env,
+							{
+								TANGRAM_LINKER_PASSTHROUGH: true,
+							},
+							{ utils: false },
+						),
 						host: expected.host,
 						target,
 					});
@@ -890,9 +915,13 @@ export namespace sdk {
 							linkerFlavor,
 							parameters: testFortranParameters,
 							proxiedLinker: false,
-							sdkEnv: await std.env.arg(env, {
-								TANGRAM_LINKER_PASSTHROUGH: true,
-							}),
+							sdkEnv: await std.env.arg(
+								env,
+								{
+									TANGRAM_LINKER_PASSTHROUGH: true,
+								},
+								{ utils: false },
+							),
 							host: expected.host,
 							target,
 						});
@@ -932,7 +961,7 @@ export namespace sdk {
 
 	export type LinkerKind = "bfd" | "lld" | "mold" | tg.Symlink | tg.File;
 
-	export type ToolchainKind = "gnu" | "llvm" | std.env.Arg;
+	export type ToolchainKind = "gnu" | "llvm" | std.env.EnvObject;
 }
 
 /** Check whether Tangram supports building a cross compiler from the host to the target. */
@@ -1011,7 +1040,7 @@ export const assertComment = async (
 	const elfComment =
 		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`
 			.bootstrap(true)
-			.env(std.env.arg(toolchain, bootstrap.utils()))
+			.env(std.env.arg(toolchain, bootstrap.utils(), { utils: false }))
 			.then(tg.File.expect);
 	const text = await elfComment.text();
 	tg.assert(text.includes(textToMatch));

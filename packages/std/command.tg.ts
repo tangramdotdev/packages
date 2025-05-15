@@ -143,18 +143,20 @@ export class CommandBuilder<
 			| undefined
 			| null,
 	): Promise<TResult1 | TResult2> {
-		let arg = await tg.build(mergeArgs, ...this.#args);
+		let arg = await mergeArgs(...this.#args);
 		let envs: Array<tg.Unresolved<std.env.Arg>> = [];
 		let tangramHost = await std.triple.host();
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}
-		if (this.#includeUtils) {
-			envs.push(await tg.build(std.utils.env, { host: arg.host }));
+		if (!this.#includeUtils) {
+			envs.push({ utils: false });
 		}
 		envs.push(arg.env);
 		arg.env = await std.env.arg(...envs);
-		const shellVal = await std.env.tryGetShellExecutable(arg.env);
+		const shellVal = await std.env.tryGetShellExecutable(
+			arg.env as std.env.EnvObject,
+		);
 		if (shellVal !== undefined) {
 			arg.executable = shellVal;
 		} else if (this.#defaultShellFallback) {
@@ -219,7 +221,7 @@ export const mergeArgs = async (
 		},
 		reduce: {
 			args: "append",
-			env: (a, b) => std.env.arg(a, b),
+			env: (a, b) => std.env.arg(a, b, { utils: false }),
 		},
 	});
 };

@@ -73,7 +73,7 @@ export const build = async (arg?: Arg) => {
 			}),
 		);
 	}
-	const env = std.env.arg(env_, ...dependencies);
+	const env = std.env.arg(env_, ...dependencies, { utils: false });
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
@@ -174,6 +174,7 @@ export const test = async () => {
 					diffutils({ host, bootstrap: true, env: sdk }),
 					platformSupportLib,
 					patchArtifact,
+					{ utils: false },
 				),
 			})
 		).build(),

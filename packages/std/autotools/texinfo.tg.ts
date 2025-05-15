@@ -52,7 +52,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		sdk,
 		source: source_,
 	} = await tg.resolve(arg);
-	const env = std.env.arg(env_);
+	const env = std.env.arg(env_, { utils: false });
 
 	const shellScripts = [
 		"bin/pdftexi2dvi",
@@ -94,12 +94,16 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		tg`${output}/share/texinfo`,
 	];
 
-	return std.env(binDir, {
-		PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
-		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
-			tg`${output}/share/texinfo/texindex.awk`,
-		),
-	});
+	return std.env.arg(
+		binDir,
+		{
+			PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
+			TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
+				tg`${output}/share/texinfo/texindex.awk`,
+			),
+		},
+		{ utils: false },
+	);
 };
 
 export default build;

@@ -130,7 +130,7 @@ export const patch = async (
 
 	const shellArtifact = await shell(host);
 	const utilsArtifact = utils(host);
-	const env = std.env.arg(utilsArtifact, shellArtifact);
+	const env = std.env.arg(utilsArtifact, shellArtifact, { utils: false });
 
 	const patchedSource = await std.build`
 		cp -R ${source} $OUTPUT
