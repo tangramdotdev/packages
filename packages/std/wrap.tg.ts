@@ -27,10 +27,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
-			? await std.env.arg(
-					await tg.build(gnu.toolchain, { host: detectedBuild, target: host }),
-					{ utils: false },
-				)
+			? await tg.build(gnu.toolchain, { host: detectedBuild, target: host })
 			: await bootstrap.sdk.env(host);
 
 	// Construct the interpreter.
@@ -106,7 +103,7 @@ export namespace wrap {
 		args?: Array<tg.Template.Arg>;
 
 		/** The build toolchain to use to produce components. Will use the default for the system if not provided. */
-		buildToolchain?: std.env.EnvObject | undefined;
+		buildToolchain?: std.env.Arg;
 
 		/** Environment variables to bind to the wrapper. If the executable is wrapped, they will be merged. */
 		env?: std.env.Arg;
@@ -255,7 +252,7 @@ export namespace wrap {
 				}
 			},
 			reduce: {
-				env: (a, b) => std.env.arg(a, b, { utils: false }),
+				env: (a, b) => std.env.arg(a, b),
 				libraryPaths: "append",
 				args: "append",
 			},
@@ -283,7 +280,7 @@ export namespace wrap {
 				);
 			}
 
-			envs.push(await wrap.envObjectFromManifestEnv(existingManifest.env));
+			envs.push(await wrap.envArgFromManifestEnv(existingManifest.env));
 			identity = existingManifest.identity;
 			interpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
@@ -298,7 +295,7 @@ export namespace wrap {
 			);
 		}
 
-		const env = await std.env.arg(...envs, env_, { utils: false });
+		const env = await std.env.arg(...envs, env_);
 
 		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
 		if (executable instanceof tg.Template || typeof executable === "string") {
@@ -331,7 +328,7 @@ export namespace wrap {
 
 	export type DefaultShellArg = {
 		/** The toolchain to use to build constituent components. Default: `std.sdk()`. */
-		buildToolchain?: std.env.EnvObject | undefined;
+		buildToolchain?: std.env.Arg;
 		/** Should scripts treat unset variables as errors? Equivalent to setting `-u`. Default: true. */
 		disallowUnset?: boolean;
 		/** Should scripts exit on errors? Equivalent to setting `-e`. Default: true. */
@@ -358,8 +355,7 @@ export namespace wrap {
 		// Provide bash for the detected host system.
 		let buildArg:
 			| undefined
-			| { bootstrap: boolean; env: tg.Unresolved<std.env.EnvObject> } =
-			undefined;
+			| { bootstrap: boolean; env: tg.Unresolved<std.env.Arg> } = undefined;
 		if (buildToolchain_) {
 			buildArg = { bootstrap: true, env: buildToolchain_ };
 		} else {
@@ -405,15 +401,15 @@ export namespace wrap {
 		return wrap(...wrapArgs);
 	};
 
-	export const envObjectFromManifestEnv = async (
+	export const envArgFromManifestEnv = async (
 		mutation: wrap.Manifest.Mutation | undefined,
-	): Promise<std.env.EnvObject> => {
+	): Promise<std.env.ArgObject> => {
 		const ret: std.env.EnvObject = {};
 		if (mutation?.kind !== "set") {
 			return ret;
 		}
 		tg.assert(mutation.kind === "set", "Malformed env, expected set or unset.");
-		return envObjectFromMapValue(mutation.value);
+		return envArgFromMapValue(mutation.value);
 	};
 
 	export const interpreterFromManifestInterpreter = async (
@@ -558,7 +554,7 @@ export namespace wrap {
 	export const manifestEnvFromEnvObject = async (
 		envObject: std.env.EnvObject,
 	): Promise<wrap.Manifest.Mutation | undefined> => {
-		const value = await manifestValueFromValue(envObject);
+		const value = await std.env.arg(envObject).then(manifestValueFromValue);
 		tg.assert(
 			!Array.isArray(value),
 			`Expected a single value, but got an array: ${value}`,
@@ -909,7 +905,7 @@ const isManifestExecutable = (
 
 /** The subset of `wrap.ArgObject` relevant to producing a `wrap.Manifest.Interpreter`. */
 type ManifestInterpreterArg = {
-	buildToolchain?: std.env.EnvObject | undefined;
+	buildToolchain?: std.env.Arg;
 	interpreter?:
 		| tg.File
 		| tg.Symlink
@@ -1011,7 +1007,7 @@ const manifestInterpreterFromWrapInterpreter = async (
 /** Given an interpreter arg, produce an interpreter object with all fields populated. */
 const interpreterFromArg = async (
 	arg: tg.File | tg.Symlink | tg.Template | wrap.Interpreter,
-	buildToolchainArg?: std.env.EnvObject,
+	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Interpreter> => {
 	// If the arg is an executable, then wrap it and create a normal interpreter.
 	if (
@@ -1063,7 +1059,7 @@ const interpreterFromArg = async (
 				const buildOs = std.triple.os(detectedBuild);
 				const buildToolchain = buildToolchainArg
 					? buildToolchainArg
-					: await std.env.arg(await tg.build(gnu.toolchain, { host }));
+					: gnu.toolchain({ host });
 				const injectionLibrary = await injection.default({
 					buildToolchain,
 					build: buildOs === "darwin" ? detectedBuild : undefined,
@@ -1161,7 +1157,7 @@ const interpreterFromArg = async (
 /** Inspect the executable and produce the corresponding interpreter. */
 const interpreterFromExecutableArg = async (
 	arg: string | tg.Template | tg.File | tg.Symlink,
-	buildToolchainArg?: std.env.EnvObject,
+	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Interpreter | undefined> => {
 	// If the arg is a string or template, there is no interpreter.
 	if (typeof arg === "string" || arg instanceof tg.Template) {
@@ -1213,7 +1209,7 @@ const interpreterFromExecutableArg = async (
 /** Inspect an ELF file and produce the correct interpreter. */
 const interpreterFromElf = async (
 	metadata: std.file.ElfExecutableMetadata,
-	buildToolchainArg?: std.env.EnvObject,
+	buildToolchainArg?: std.env.Arg,
 ): Promise<wrap.Interpreter | undefined> => {
 	// If there is no interpreter, this is a statically-linked executable. Nothing to do.
 	if (metadata.interpreter === undefined) {
@@ -1233,9 +1229,7 @@ const interpreterFromElf = async (
 		? buildToolchainArg
 		: libc === "musl"
 			? bootstrap.sdk.env(host)
-			: await std.env.arg(await tg.build(gnu.toolchain, { host }), {
-					utils: false,
-				});
+			: gnu.toolchain({ host });
 
 	// Obtain injection library.
 	const injectionLib = await injection.default({ buildToolchain, host });
@@ -1243,13 +1237,11 @@ const interpreterFromElf = async (
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {
 		// Handle an ld-linux interpreter.
-		const toolchainEnv = buildToolchainArg
+		const toolchainDir = buildToolchainArg
 			? buildToolchainArg
-			: await std.env.arg(await tg.build(gnu.toolchain, { host }), {
-					utils: false,
-				});
+			: await gnu.toolchain({ host });
 		const { ldso, libDir } = await std.sdk.toolchainComponents({
-			env: toolchainEnv,
+			env: toolchainDir,
 		});
 		tg.assert(
 			ldso,
@@ -1950,7 +1942,7 @@ const valueFromManifestValue = async (
 export async function* manifestEnvVars(
 	manifest: wrap.Manifest,
 ): AsyncGenerator<[string, tg.Template | undefined]> {
-	yield* std.env.envVars(await wrap.envObjectFromManifestEnv(manifest.env));
+	yield* std.env.envVars(await wrap.envArgFromManifestEnv(manifest.env));
 }
 
 const manifestTemplateFromArg = async (
@@ -1974,7 +1966,7 @@ const manifestTemplateFromArg = async (
 	};
 };
 
-const envObjectFromMapValue = async (
+const envArgFromMapValue = async (
 	value: wrap.Manifest.Value,
 ): Promise<std.env.EnvObject> => {
 	tg.assert(
@@ -2202,13 +2194,9 @@ export const pushOrSet = (
 
 /** Basic program for testing the wrapper code. */
 export const argAndEnvDump = async () => {
-	const sdkEnv = await std.env.arg(
-		bootstrap.sdk(),
-		{
-			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-		},
-		{ utils: false },
-	);
+	const sdkEnv = await std.env.arg(bootstrap.sdk(), {
+		TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+	});
 
 	return await std.build`cc -xc ${inspectProcessSource} -o $OUTPUT`
 		.bootstrap(true)
@@ -2404,17 +2392,23 @@ export const testDylibPath = async () => {
 	const bootstrapSdk = bootstrap.sdk.env();
 
 	// Compile the greet library
-	const sharedLibraryDir =
-		await std.build`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`
-			.bootstrap(true)
-			.env(bootstrapSdk)
-			.then(tg.Directory.expect);
+	const sharedLibraryDir = await std
+		.build(
+			await tg.command(
+				tg`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`,
+				{ env: await std.env.arg(bootstrapSdk) },
+			),
+		)
+		.then(tg.Directory.expect);
 	console.log("sharedLibraryDir", await sharedLibraryDir.id());
 
 	// Compile the driver.
-	const driver = await std.build`cc -xc -o $OUTPUT ${driverSource} -ldl`
-		.bootstrap(true)
-		.env(bootstrapSdk)
+	const driver = await std
+		.build(
+			await tg.command(tg`cc -xc -o $OUTPUT ${driverSource} -ldl`, {
+				env: await std.env.arg(bootstrapSdk),
+			}),
+		)
 		.then(tg.File.expect);
 	console.log("unwrapped driver", await driver.id());
 

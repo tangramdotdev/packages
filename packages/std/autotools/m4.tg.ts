@@ -43,7 +43,6 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const env = std.env.arg(
 		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
 		env_,
-		{ utils: false },
 	);
 
 	const output = std.utils.autotoolsInternal({

@@ -82,7 +82,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	return autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: bootstrap_,
-		env: std.env.arg(...env, { utils: false }),
+		env: std.env.arg(...env),
 		phases,
 		opt: staticBuild ? "s" : undefined,
 		sdk,

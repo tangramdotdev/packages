@@ -597,13 +597,9 @@ export const test = async () => {
 			`
 		.bootstrap(true)
 		.env(
-			std.env.arg(
-				bootstrapSDK,
-				{
-					TANGRAM_LINKER_PASSTHROUGH: true,
-				},
-				{ utils: false },
-			),
+			std.env.arg(bootstrapSDK, {
+				TANGRAM_LINKER_PASSTHROUGH: true,
+			}),
 		)
 		.then(tg.Directory.expect);
 

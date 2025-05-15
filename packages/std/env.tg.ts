@@ -4,8 +4,29 @@ import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: std.Args<env.Arg>) {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	// Check if the user requested to omit the standard utils.
+	const utils = resolved.reduce((acc, arg) => {
+		if (isUtilsToggle(arg)) {
+			if (arg.utils === false) {
+				return false;
+			}
+		}
+		return acc;
+	}, true);
+	const objectArgs = resolved.filter((arg) => !isUtilsToggle(arg));
+
+	// If utils is set to true, add the standard utils. If false, pass the bootstrap-only toolchain to std.wrap.
+	let buildToolchain: undefined | tg.Unresolved<std.env.Arg> = undefined;
+	if (utils) {
+		objectArgs.push(await std.utils.env({ bootstrap: true, env: std.sdk() }));
+	} else {
+		buildToolchain = await bootstrap.sdk();
+	}
+
 	return std.wrap(gnuEnv(), {
-		env: std.env.arg(...args),
+		buildToolchain,
+		env: std.env.arg(...objectArgs),
 	});
 }
 
@@ -16,9 +37,9 @@ export namespace env {
 		| UtilsToggle
 		| tg.MaybeMutation<ArgObject>;
 
-	/** An object containing values or mutations, accepting booleans or numbers. */
+	/** An object containing values or mutations, accepting booleans. */
 	export type ArgObject = tg.MaybeMutationMap<
-		Record<string, tg.Template.Arg | boolean | number>
+		Record<string, tg.Template.Arg | boolean>
 	>;
 
 	/** An object containing values or mutations for a set of environment variables, ready to pass to `tg.target`. */
@@ -31,29 +52,12 @@ export namespace env {
 	export const arg = async (
 		...args: std.Args<Arg>
 	): Promise<std.env.EnvObject> => {
-		let includeUtils = true;
-		const resolved = await Promise.all(args.map(tg.resolve));
-		const envObjects = await Promise.all(
-			resolved.map(async (arg) => {
-				if (arg === undefined) {
-					return {};
-				} else if (isUtilsToggle(arg)) {
-					includeUtils = arg.utils;
-					return {};
-				} else if (tg.Artifact.is(arg)) {
-					return await envObjectFromArtifact(arg);
-				} else {
-					return arg as tg.MaybeMutation<env.ArgObject>;
-				}
-			}),
-		);
-		if (includeUtils) {
-			envObjects.unshift(await tg.build(std.utils.env));
-		}
+		const envObjects = await envObjectsFromArgs(...args);
 		return await env.mergeArgObjects(...envObjects);
 	};
 
-	/** Merge a list of `env.ArgObject` values into a single `env.EnvObject`. */
+	/** Merge a list of `env.ArgObject` values into a single `env.EnvObject`, normalizing all mutations to a single mutation per key. */
+	// FIXME - merge mutation?
 	export const mergeArgObjects = async (
 		...argObjects: Array<tg.MaybeMutation<env.ArgObject>>
 	): Promise<env.EnvObject> => {
@@ -64,24 +68,11 @@ export namespace env {
 			// If it's a mutation, verify the kind.
 			if (argObject instanceof tg.Mutation) {
 				if (argObject.inner.kind === "unset") {
-					// If it's an unset mutation, replace the running result and move on.
+					// If it's an unset mutation, replace the running result.
 					result = {};
-					continue;
 				} else if (argObject.inner.kind === "set") {
 					// If it's a set mutation, use the value for the remaining merge logic.
 					value = argObject.inner.value as env.ArgObject;
-				} else if (argObject.inner.kind === "merge") {
-					// If it's a merge mutation, merge the value with the result and move on.
-					const envToMerge: env.EnvObject = {};
-					for (let [key, value] of Object.entries(argObject.inner.value)) {
-						envToMerge[key] =
-							await templateArgOrBooleanToTemplateMutation(value);
-					}
-					result = {
-						...result,
-						...envToMerge,
-					};
-					continue;
 				} else {
 					throw new Error(
 						`Unsupported mutation kind for env.argObject: ${argObject.inner.kind}`,
@@ -137,17 +128,15 @@ export namespace env {
 	};
 
 	/** Convert booleans to the proper string, "1" for true, empty string for false. */
-	const templateFromArg = (val: tg.Template.Arg | boolean | number) => {
+	const templateFromArg = (val: tg.Template.Arg | boolean) => {
 		if (typeof val === "boolean") {
 			return tg.template(val ? "1" : "");
-		} else if (typeof val === "number") {
-			return tg.template(val.toString());
 		}
 		return tg.template(val);
 	};
 
 	const templateArgOrBooleanToTemplateMutation = (
-		orig: tg.MaybeMutation<tg.Template.Arg | boolean | number>,
+		orig: tg.MaybeMutation<tg.Template.Arg | boolean>,
 	): Promise<tg.MaybeMutation<tg.Template>> => {
 		if (orig instanceof tg.Mutation) {
 			if (orig.inner.kind === "unset") {
@@ -177,8 +166,8 @@ export namespace env {
 
 	/** Combine two tg.MaybeMutation<tg.Template.Arg> values into one. */
 	export const mergeTemplateMaybeMutations = async (
-		a: tg.MaybeMutation<tg.Template.Arg | boolean | number>,
-		b: tg.MaybeMutation<tg.Template.Arg | boolean | number>,
+		a: tg.MaybeMutation<tg.Template.Arg | boolean>,
+		b: tg.MaybeMutation<tg.Template.Arg | boolean>,
 	): Promise<tg.MaybeMutation<tg.Template>> => {
 		// Reject prepend and append mutations.
 		if (
@@ -225,7 +214,7 @@ export namespace env {
 	/////// Queries
 
 	type BinsInPathArg = {
-		env: env.EnvObject;
+		env: env.Arg;
 		predicate?: (name: string) => boolean;
 	};
 
@@ -270,7 +259,7 @@ export namespace env {
 	}
 
 	type DirsInVarArg = {
-		env: env.EnvObject;
+		env: env.Arg;
 		key: string;
 		separator?: string;
 	};
@@ -305,7 +294,7 @@ export namespace env {
 	}
 
 	type ArtifactByKeyArg = {
-		env: env.EnvObject;
+		env: env.Arg;
 		key: string;
 	};
 
@@ -382,7 +371,7 @@ export namespace env {
 	};
 
 	type GetKeyArg = {
-		env: env.EnvObject;
+		env: env.Arg;
 		key: string;
 	};
 
@@ -413,9 +402,20 @@ export namespace env {
 
 	/** Yield all the environment key/value pairs. */
 	export async function* envVars(
-		envObject: env.EnvObject,
+		...envArg: std.Args<env.Arg>
 	): AsyncGenerator<[string, tg.Template | undefined]> {
-		for await (const [key, val] of Object.entries(envObject)) {
+		const map = await env.arg(...envArg);
+		let value: env.EnvObject | undefined;
+		if (map instanceof tg.Mutation) {
+			if (map.inner.kind === "unset") {
+				return;
+			} else if (map.inner.kind === "set") {
+				value = map.inner.value as env.EnvObject;
+			}
+		} else {
+			value = map;
+		}
+		for await (const [key, val] of Object.entries(value ?? {})) {
 			if (val instanceof tg.Mutation) {
 				let innerValue;
 				if (val.inner.kind === "set" || val.inner.kind === "set_if_unset") {
@@ -438,11 +438,12 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, throw an error. */
 	export const getShellExecutable = async (
-		envObject: env.EnvObject,
+		...envArgs: std.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink> => {
 		// First, check if "SHELL" is set and points to an executable.
+		const envArg = await arg(...envArgs);
 		const shellArtifact = await env.tryGetArtifactByKey({
-			env: envObject,
+			env: envArg,
 			key: "SHELL",
 		});
 		if (shellArtifact) {
@@ -454,7 +455,7 @@ export namespace env {
 		}
 
 		// If SHELL isn't set, see if `sh` is in path. Return that file if so.
-		const shExecutable = await tryWhich({ env: envObject, name: "sh" });
+		const shExecutable = await tryWhich({ env: envArg, name: "sh" });
 		if (shExecutable) {
 			return shExecutable;
 		}
@@ -465,11 +466,12 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, return `undefined`. */
 	export const tryGetShellExecutable = async (
-		envObject: env.EnvObject,
+		...envArgs: std.Args<env.Arg>
 	): Promise<tg.File | tg.Symlink | undefined> => {
+		const envArg = await arg(...envArgs);
 		// First, check if "SHELL" is set and points to an executable.
 		const shellArtifact = await tryGetArtifactByKey({
-			env: envObject,
+			env: envArg,
 			key: "SHELL",
 		});
 		if (shellArtifact) {
@@ -481,7 +483,7 @@ export namespace env {
 		}
 
 		// If SHELL isn't set, see if `sh` is in path. Return that file if so.
-		const shExecutable = await tryWhich({ env: envObject, name: "sh" });
+		const shExecutable = await tryWhich({ env: envArg, name: "sh" });
 		if (shExecutable) {
 			return shExecutable;
 		}
@@ -491,7 +493,7 @@ export namespace env {
 	};
 
 	type ProvidesArg = {
-		env: env.EnvObject;
+		env: env.Arg;
 		name?: string;
 		names?: Array<string>;
 	};
@@ -539,7 +541,7 @@ export namespace env {
 	};
 
 	type WhichArg = {
-		env: env.EnvObject;
+		env: env.Arg;
 		name: string;
 	};
 
@@ -682,13 +684,7 @@ export namespace env {
 }
 
 const isUtilsToggle = (arg: unknown): arg is env.UtilsToggle => {
-	return (
-		typeof arg === "object" &&
-		arg !== null &&
-		"utils" in arg &&
-		typeof arg.utils === "boolean" &&
-		Object.keys(arg).length === 1
-	);
+	return typeof arg === "object" && arg !== null && "utils" in arg;
 };
 
 function* separateTemplate(
@@ -708,6 +704,24 @@ function* separateTemplate(
 	yield chunk;
 }
 
+export const envObjectsFromArgs = async (
+	...args: std.Args<env.Arg>
+): Promise<Array<tg.MaybeMutation<env.ArgObject>>> => {
+	const resolved = await Promise.all(args.map(tg.resolve));
+	return await Promise.all(
+		resolved
+			.filter((arg) => arg !== undefined && !isUtilsToggle(arg))
+			.map(async (arg) => {
+				if (tg.Artifact.is(arg)) {
+					return await envObjectFromArtifact(arg);
+				} else {
+					tg.assert(arg !== undefined);
+					return arg as tg.MaybeMutation<env.ArgObject>;
+				}
+			}),
+	);
+};
+
 /** Produce an env object from an artifact value. */
 export const envObjectFromArtifact = async (
 	artifact: tg.Artifact,
@@ -721,9 +735,16 @@ export const envObjectFromArtifact = async (
 			throw new Error(`Could not read manifest from ${artifactId}`);
 		}
 		// If the file was a wrapper, return its env.
-		return await wrap.envObjectFromManifestEnv(manifest.env);
+		return await wrap.envArgFromManifestEnv(manifest.env);
 	} else if (artifact instanceof tg.Directory) {
-		// Return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.
+		// If the directory contains a file at `.tangram/env`, return the env from that file's manifest.
+		const envFile = await artifact.tryGet(".tangram/env");
+		if (envFile) {
+			tg.File.assert(envFile);
+			return await envObjectFromArtifact(envFile);
+		}
+
+		// Otherwise, return an env with PATH/CPATH/LIBRARY_PATH according to the contents of the directory.
 		const env: env.EnvObject = {};
 		if (await artifact.tryGet("bin")) {
 			env["PATH"] = await tg.Mutation.prefix(tg`${artifact}/bin`, ":");
@@ -802,8 +823,8 @@ const isDependencyObject = <T extends std.args.PackageArg>(
 };
 
 export const test = async () => {
-	const envObject = await env.arg({ FOO: "bar" }, { utils: false });
-	const foundFooVal = await env.tryGetKey({ env: envObject, key: "FOO" });
+	const envFile = await env({ FOO: "bar" });
+	const foundFooVal = await env.tryGetKey({ env: envFile, key: "FOO" });
 	tg.assert(
 		foundFooVal instanceof tg.Template,
 		"expected FOO to be set to a template",

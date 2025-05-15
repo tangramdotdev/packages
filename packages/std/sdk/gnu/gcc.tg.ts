@@ -254,8 +254,7 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
 	const hostOs = std.triple.os(host);
-	const toolchainEnv = await std.env.arg(toolchainDir, { utils: false });
-	const gccVersion = await getGccVersion(toolchainEnv, host, target);
+	const gccVersion = await getGccVersion(toolchainDir, host, target);
 	const isCross = host !== target;
 	const sysroot =
 		hostOs === "darwin"
@@ -290,7 +289,7 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 };
 
 async function getGccVersion(
-	env: std.env.EnvObject,
+	env: std.env.Arg,
 	host: string,
 	target?: string,
 ): Promise<string> {
@@ -298,9 +297,7 @@ async function getGccVersion(
 	const targetPrefix = host === targetTriple ? `` : `${targetTriple}-`;
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
-	const envObject = std.env.arg(bootstrap.utils(), bootstrap.shell(), env, {
-		utils: false,
-	});
+	const envObject = std.env.arg(bootstrap.utils(), bootstrap.shell(), env);
 	const result =
 		await std.build`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`
 			.bootstrap(true)

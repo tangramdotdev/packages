@@ -71,7 +71,6 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
 		env_,
-		{ utils: false },
 	);
 
 	const result = std.autotools.build({
@@ -165,7 +164,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		debug = false,
 		env: userEnv,
 		extended = true,
-		fortifySource: fortifySource_ = 2,
+		fortifySource: fortifySource_ = 3,
 		fullRelro = true,
 		generator = "Ninja",
 		hardeningCFlags = true,
@@ -191,7 +190,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 			} as Collect;
 		},
 		reduce: {
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			env: (a, b) => std.env.arg(a, b),
 			phases: "append",
 			sdk: (a, b) => std.sdk.arg(a, b),
 		},
@@ -295,7 +294,6 @@ export const build = async (...args: std.Args<BuildArg>) => {
 			host,
 			buildToolchain: await tg.build(std.sdk, { host }),
 			level,
-			includeUtils: true,
 		});
 		envs.push(sdk, buildToolsEnv);
 	}
@@ -309,7 +307,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, userEnv, { utils: false });
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs = [

@@ -49,7 +49,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		source: source_,
 	} = await tg.resolve(arg);
 
-	const env = std.env.arg(env_, { utils: false });
+	const env = std.env.arg(env_);
 	let output = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap,

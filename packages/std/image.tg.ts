@@ -58,7 +58,6 @@ export const testBootstrapEnvImageDocker = async () => {
 	const buildToolchain = await std.env.arg(
 		bootstrap.sdk(),
 		bootstrap.make.build(),
-		{ utils: false },
 	);
 	const imageFile = await image(basicEnv, {
 		buildToolchain,
@@ -72,7 +71,6 @@ export const testBootstrapEnvImageOci = async () => {
 	const buildToolchain = await std.env.arg(
 		bootstrap.sdk(),
 		bootstrap.make.build(),
-		{ utils: false },
 	);
 	const imageFile = await image(basicEnv, {
 		buildToolchain,
@@ -99,7 +97,6 @@ export const testBasicEnvImageDocker = async () => {
 	const buildToolchain = await std.env.arg(
 		bootstrap.sdk(),
 		bootstrap.make.build(),
-		{ utils: false },
 	);
 	const imageFile = await image(basicEnv, {
 		buildToolchain,
@@ -113,7 +110,6 @@ export const testBasicEnvImageOci = async () => {
 	const buildToolchain = await std.env.arg(
 		bootstrap.sdk(),
 		bootstrap.make.build(),
-		{ utils: false },
 	);
 	const imageFile = await image(basicEnv, {
 		buildToolchain,

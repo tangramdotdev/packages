@@ -108,7 +108,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		bootstrap,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
-		env: std.env.arg(...env, { utils: false }),
+		env: std.env.arg(...env),
 		fortifySource: false,
 		hardeningCFlags: false,
 		opt: "3",

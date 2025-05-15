@@ -107,7 +107,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		developmentTools = false,
 		doCheck = false,
 		env: userEnv,
-		fortifySource: fortifySource_ = 2,
+		fortifySource: fortifySource_ = 3,
 		fullRelro = true,
 		extended = true,
 		hardeningCFlags = true,
@@ -221,14 +221,12 @@ export const build = async (...args: std.Args<Arg>) => {
 			host,
 			buildToolchain: await tg.build(std.sdk, { host }),
 			level,
-			includeUtils: true,
 		});
 		envs.push(sdk, buildToolsEnv);
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	// NOTE - utils are handled byt the buildToolsEnv.
-	const env = await std.env.arg(...envs, userEnv, { utils: false });
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs =
@@ -348,7 +346,7 @@ export const mergeArgs = async (...args: std.Args<Arg>): Promise<Collect> => {
 			} as Collect;
 		},
 		reduce: {
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			env: (a, b) => std.env.arg(a, b),
 			phases: "append",
 			sdk: (a, b) => std.sdk.arg(a, b),
 		},

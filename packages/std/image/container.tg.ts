@@ -22,7 +22,7 @@ export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
 export type ArgObject = (ExecutableArg | RootFsArg) & {
 	/** The toolchain to use for any intermediate build processes. */
-	buildToolchain?: std.env.EnvObject;
+	buildToolchain?: std.env.Arg;
 	/** The format for the container image, docker or OCI. Default: docker */
 	format?: ImageFormat;
 	/** The compression type to use for the image layers. Default: "zstd". */
@@ -51,7 +51,7 @@ type RootFsArg = {
 
 export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	type CombinedArgObject = {
-		buildToolchain?: std.env.EnvObject;
+		buildToolchain?: std.env.Arg;
 		cmdString?: Array<string>;
 		format?: ImageFormat;
 		entrypointArtifact?: std.wrap.Arg;
@@ -320,7 +320,7 @@ export const ociImageFromLayers = async (
 		additionalEnv.push(
 			zstd({
 				bootstrap: true,
-				env: await std.env.arg(...additionalEnv, { utils: false }),
+				env: await std.env.arg(...additionalEnv),
 			}),
 		);
 	}

@@ -64,7 +64,7 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		CONFIG_SHELL: shellExecutable,
 		SHELL: shellExecutable,
 	};
-	const env = await std.env.arg(env_, shellEnv, { utils: false });
+	const env = await std.env.arg(env_, shellEnv);
 	const commonArg = { bootstrap, build, env, host, sdk };
 
 	let utils = [shellArtifact, shellEnv];
@@ -84,7 +84,7 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 			xz(commonArg),
 		]),
 	);
-	return await std.env.arg(...utils, { utils: false });
+	return await std.env.arg(...utils);
 };
 
 export default env;
@@ -101,13 +101,13 @@ export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 	// Add patched GNU coreutils.
 	const coreutilsArtifact = await coreutils({
 		bootstrap: true,
-		env: std.env.arg(bootstrap.sdk(), makeArtifact, { utils: false }),
+		env: std.env.arg(bootstrap.sdk(), makeArtifact),
 		host,
 		usePrerequisites: false,
 	});
 	components.push(coreutilsArtifact);
 
-	return std.env.arg(...components, { utils: false });
+	return std.env.arg(...components);
 };
 
 export type BuildUtilArg = std.autotools.Arg & {
@@ -160,7 +160,7 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	return newFile;
 };
 
-export const assertProvides = async (env: std.env.EnvObject) => {
+export const assertProvides = async (env: std.env.Arg) => {
 	const names = [
 		"bash", // bash for linux, zsh for macOS
 		"bzip2",

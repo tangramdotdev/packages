@@ -47,7 +47,7 @@ export const build = async (arg?: Arg) => {
 		install,
 	};
 
-	const env = std.env.arg(sdk(host), { utils: false });
+	const env = std.env.arg(sdk(host));
 
 	const output = await autotoolsInternal({
 		bootstrap: true,

@@ -47,7 +47,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const configureArgs = ["--without-bash-malloc", "--disable-nls"];
 
 	// If the provided env has ncurses in the library path, use it instead of termcap.
-	const envArg = await std.env.arg(env_, { utils: false });
+	const envArg = await std.env.arg(env_);
 	if (await providesNcurses(envArg)) {
 		configureArgs.push("--with-curses");
 	}
@@ -70,7 +70,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	let output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: bootstrap_,
-		env: std.env.arg(...env, env_, { utils: false }),
+		env: std.env.arg(...env, env_),
 		phases,
 		sdk,
 		source: source_ ?? source(),
@@ -85,7 +85,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 export default build;
 
-const providesNcurses = async (env: std.env.EnvObject): Promise<boolean> => {
+const providesNcurses = async (env: std.env.Arg): Promise<boolean> => {
 	for await (const [_, dir] of std.env.dirsInVar({
 		env,
 		key: "LIBRARY_PATH",

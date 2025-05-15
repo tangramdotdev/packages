@@ -1,11 +1,12 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.ts";
+import { $ } from "../tangram.ts";
 import injectionSource from "./injection" with { type: "directory" };
 
 type Arg = {
 	build?: string | undefined;
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source?: tg.Directory;
@@ -56,7 +57,7 @@ export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 export default injection;
 
 type MacOsInjectionArg = {
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -78,7 +79,6 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 			SDKROOT: await bootstrap.macOsSdk(),
 		},
 		arg.env,
-		{ utils: false },
 	);
 
 	// Compile arm64 dylib.
@@ -102,7 +102,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 	// Combine into universal dylib.
 	const system = std.triple.archAndOs(host);
 	const injection =
-		await std.build`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
+		await $`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
 			.bootstrap(true)
 			.host(system)
 			.env(arg.buildToolchain)
@@ -114,7 +114,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
 	build?: string;
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -162,10 +162,9 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
 		arg.env,
-		{ utils: false },
 	);
 	const output =
-		std.build`${executable} -xc ${arg.source} -o $OUTPUT ${tg.Template.join(" ", ...args)}`
+		$`${executable} -xc ${arg.source} -o $OUTPUT ${tg.Template.join(" ", ...args)}`
 			.bootstrap(true)
 			.env(env)
 			.host(system)
@@ -208,10 +207,7 @@ export const testCross = async () => {
 	const hostArch = std.triple.arch(detectedHost);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	const target = `${targetArch}-unknown-linux-gnu`;
-	const buildToolchain = std.env.arg(
-		gnu.toolchain({ host: detectedHost, target }),
-		{ utils: false },
-	);
+	const buildToolchain = gnu.toolchain({ host: detectedHost, target });
 
 	const nativeInjection = await tg.build(injection, {
 		build: detectedHost,

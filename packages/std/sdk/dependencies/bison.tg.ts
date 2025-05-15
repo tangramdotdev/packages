@@ -33,7 +33,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		bootstrap: bootstrap_ = false,
 		build,
-		env: env_,
+		env,
 		host,
 		sdk,
 		source: source_,
@@ -47,8 +47,6 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 			"--enable-relocatable",
 		],
 	};
-
-	const env = await std.env.arg(env_, { utils: false });
 
 	let output = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

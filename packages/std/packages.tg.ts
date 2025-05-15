@@ -45,8 +45,7 @@ export const applyArgs = async <T extends PackageArg>(
 		},
 		reduce: {
 			dependencies: "append",
-			env: (a: std.env.Arg | undefined, b: std.env.Arg) =>
-				std.env.arg(a, b, { utils: false }),
+			env: (a: std.env.Arg | undefined, b: std.env.Arg) => std.env.arg(a, b),
 			sdk: (a: std.sdk.Arg | undefined, b: std.sdk.Arg) => std.sdk.arg(a, b),
 		} as any,
 	});
@@ -94,7 +93,7 @@ export const applyArgs = async <T extends PackageArg>(
 										})
 									).dependencies
 								: {}) ?? {},
-						env: await std.env.arg(value.env as std.env.Arg, { utils: false }),
+						env: await std.env.arg(value.env as std.env.Arg),
 						host,
 						sdk: await std.sdk.arg(value.sdk as std.sdk.Arg),
 					};
@@ -117,9 +116,7 @@ export const applyArgs = async <T extends PackageArg>(
 										})
 									).dependencies
 								: existing?.dependencies) ?? {},
-						env: await std.env.arg(existing?.env, value.env as std.env.Arg, {
-							utils: false,
-						}),
+						env: await std.env.arg(existing?.env, value.env as std.env.Arg),
 						host: existing?.host ?? host,
 						sdk: await std.sdk.arg(existing?.sdk, value.sdk as std.sdk.Arg),
 					};
