@@ -49,7 +49,10 @@ export const build = async (...args: std.Args<Arg>) => {
 	// https://github.com/zlib-ng/zlib-ng/issues/1427
 	if (
 		os === "linux" &&
-		((await std.env.tryWhich({ env: env_, name: "clang" })) !== undefined ||
+		((await std.env.tryWhich({
+			env: std.env.arg(env_, { utils: false }),
+			name: "clang",
+		})) !== undefined ||
 			sdk?.toolchain === "llvm")
 	) {
 		env.push({

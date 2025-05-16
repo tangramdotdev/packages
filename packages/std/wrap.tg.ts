@@ -16,10 +16,12 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const arg = await wrap.arg(...args);
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
+	tg.assert(
+		arg.identity !== undefined,
+		"Could not determine requested identity",
+	);
 
 	const executable = await manifestExecutableFromArg(arg.executable);
-
-	const identity = arg.identity ?? "executable";
 
 	const detectedBuild = await std.triple.host();
 	const host = arg.host ?? (await std.triple.host());
@@ -44,7 +46,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 
 	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
 	if (
-		identity === "executable" &&
+		arg.identity === "executable" &&
 		(executable instanceof tg.File || executable instanceof tg.Symlink)
 	) {
 		const file =
@@ -73,7 +75,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	);
 
 	const manifest: wrap.Manifest = {
-		identity,
+		identity: arg.identity,
 		interpreter: manifestInterpreter,
 		executable,
 		env: manifestEnv,
@@ -121,7 +123,7 @@ export namespace wrap {
 		identity?: Identity;
 
 		/** The interpreter to run the executable with. If not provided, a default is detected. */
-		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter;
+		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter | undefined;
 
 		/** Library paths to include. If the executable is wrapped, they will be merged. */
 		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template>;
@@ -222,18 +224,20 @@ export namespace wrap {
 	};
 
 	/** Process variadic arguments. */
-	export const arg = async (...args: std.Args<wrap.Arg>) => {
+	export const arg = async (
+		...args: std.Args<wrap.Arg>
+	): Promise<wrap.ArgObject> => {
 		let {
-			args: args_,
+			args: args_ = [],
 			buildToolchain,
 			env: env_ = {},
 			executable,
-			host,
+			host: host_,
 			identity,
 			interpreter,
 			merge: merge_ = true,
-			libraryPaths,
-			libraryPathStrategy,
+			libraryPaths = [],
+			libraryPathStrategy = "combine",
 		} = await std.args.apply<wrap.Arg, wrap.ArgObject>({
 			args,
 			map: async (arg) => {
@@ -262,6 +266,8 @@ export namespace wrap {
 		});
 
 		tg.assert(executable !== undefined);
+
+		const host = host_ ?? (await std.triple.host());
 
 		// If the executable arg is a wrapper, obtain its manifest.
 		const existingManifest =
@@ -313,6 +319,10 @@ export namespace wrap {
 					"cannot use the executable identity with content executables, select interpreter or wrapper",
 				);
 			}
+		}
+		// If identity is still undefined, default to executable.
+		if (identity === undefined) {
+			identity = "executable";
 		}
 
 		return {

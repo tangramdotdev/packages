@@ -160,30 +160,10 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	return newFile;
 };
 
-export const assertProvides = async (env: std.env.EnvObject) => {
-	const names = [
-		"bash", // bash for linux, zsh for macOS
-		"bzip2",
-		"ls", // coreutils
-		"diff", // diffutils
-		"find", // findutils
-		"gawk",
-		"grep",
-		"gzip",
-		"make",
-		"patch",
-		"sed",
-		"tar",
-		"xz",
-	];
-	await std.env.assertProvides({ env, names });
-	return true;
-};
-
 export const test = async () => {
 	const host = bootstrap.toolchainTriple(await std.triple.host());
 	const utilsEnv = await env({ host, bootstrap: true, env: bootstrap.sdk() });
-	await assertProvides(utilsEnv);
+	tg.assert(await std.env.providesUtils(utilsEnv));
 	return utilsEnv;
 };
 

@@ -153,7 +153,7 @@ export default self;
 
 type ProxyRustObjcopyArg = {
 	build: string;
-	buildToolchain: std.env.Arg;
+	buildToolchain: std.env.EnvObject;
 	host: string;
 	rustInstall: tg.Directory;
 };

@@ -1,4 +1,3 @@
-import * as bootstrap from "./bootstrap.tg.ts";
 import * as std from "./tangram.ts";
 import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
@@ -47,11 +46,15 @@ export namespace env {
 				}
 			}),
 		);
-		if (includeUtils) {
-			envObjects.unshift(await tg.build(std.utils.env));
+		const originalEnv = await env.mergeArgObjects(...envObjects);
+		if (includeUtils && !env.providesUtils(originalEnv)) {
+			return await env.mergeArgObjects(
+				originalEnv,
+				await tg.build(std.utils.env),
+			);
+		} else {
+			return originalEnv;
 		}
-
-		return await env.mergeArgObjects(...envObjects);
 	};
 
 	/** Merge a list of `env.ArgObject` values into a single `env.EnvObject`. */
@@ -278,9 +281,9 @@ export namespace env {
 
 	/** Yield each directory in a colon-separated template from a specific env var. Returns [parentDir, dir], as often the parent is what you're looking for. */
 	export async function* dirsInVar(
-		arg: DirsInVarArg,
+		arg: tg.Unresolved<DirsInVarArg>,
 	): AsyncGenerator<[tg.Directory, tg.Directory]> {
-		const { env, key, separator = ":" } = arg;
+		const { env, key, separator = ":" } = await tg.resolve(arg);
 		const value = await tryGetKey({ env, key });
 		if (!value) {
 			return;
@@ -312,8 +315,9 @@ export namespace env {
 
 	/** Retrieve the artifact a key's template value refers to. Throws if cannot be found. */
 	export const getArtifactByKey = async (
-		arg: ArtifactByKeyArg,
+		unresolvedArg: ArtifactByKeyArg,
 	): Promise<tg.Artifact> => {
+		const arg = await tg.resolve(unresolvedArg);
 		const template = await tryGetKey(arg);
 		tg.assert(template, `Unable to find key ${arg.key} in this env.`);
 		// There are two options. Either the template points directly to an artifact with a single reference, or it points to a directory with a subpath. Anything else, we reject.
@@ -348,8 +352,9 @@ export namespace env {
 
 	/** Retrieve the artifact a key's template value refers to. Returns undefined if cannot be found. */
 	export const tryGetArtifactByKey = async (
-		arg: ArtifactByKeyArg,
+		unresolvedArg: tg.Unresolved<ArtifactByKeyArg>,
 	): Promise<tg.Artifact | undefined> => {
+		const arg = await tg.resolve(unresolvedArg);
 		const template = await tryGetKey(arg);
 		if (!template) {
 			return undefined;
@@ -388,8 +393,10 @@ export namespace env {
 	};
 
 	/** Retrieve the value of a key. If not present, throw an error. */
-	export const getKey = async (arg: GetKeyArg): Promise<tg.Template> => {
-		const { env, key } = arg;
+	export const getKey = async (
+		arg: tg.Unresolved<GetKeyArg>,
+	): Promise<tg.Template> => {
+		const { env, key } = await tg.resolve(arg);
 		for await (const [foundKey, value] of envVars(env)) {
 			if (foundKey === key) {
 				tg.assert(value, `Found key ${key} but it was undefined.`);
@@ -401,9 +408,9 @@ export namespace env {
 
 	/** Retrieve the value of a key. If not present, return `undefined`. */
 	export async function tryGetKey(
-		arg: GetKeyArg,
+		arg: tg.Unresolved<GetKeyArg>,
 	): Promise<tg.Template | undefined> {
-		const { env, key } = arg;
+		const { env, key } = await tg.resolve(arg);
 		for await (const [foundKey, value] of envVars(env)) {
 			if (foundKey === key) {
 				return value;
@@ -414,8 +421,9 @@ export namespace env {
 
 	/** Yield all the environment key/value pairs. */
 	export async function* envVars(
-		envObject: env.EnvObject,
+		unresolvedEnvObject: tg.Unresolved<env.EnvObject>,
 	): AsyncGenerator<[string, tg.Template | undefined]> {
+		const envObject = await tg.resolve(unresolvedEnvObject);
 		for await (const [key, val] of Object.entries(envObject)) {
 			if (val instanceof tg.Mutation) {
 				let innerValue;
@@ -439,8 +447,9 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, throw an error. */
 	export const getShellExecutable = async (
-		envObject: env.EnvObject,
+		unresolvedEnvObject: tg.Unresolved<env.EnvObject>,
 	): Promise<tg.File | tg.Symlink> => {
+		const envObject = await tg.resolve(unresolvedEnvObject);
 		// First, check if "SHELL" is set and points to an executable.
 		const shellArtifact = await env.tryGetArtifactByKey({
 			env: envObject,
@@ -466,8 +475,9 @@ export namespace env {
 
 	/** Return the value of `SHELL` if present. If not present, return the file providing `sh` in `PATH`. If not present, return `undefined`. */
 	export const tryGetShellExecutable = async (
-		envObject: env.EnvObject,
+		unresolvedEnvObject: env.EnvObject,
 	): Promise<tg.File | tg.Symlink | undefined> => {
+		const envObject = await tg.resolve(unresolvedEnvObject);
 		// First, check if "SHELL" is set and points to an executable.
 		const shellArtifact = await tryGetArtifactByKey({
 			env: envObject,
@@ -491,6 +501,27 @@ export namespace env {
 		return undefined;
 	};
 
+	export const providesUtils = async (
+		env: tg.Unresolved<std.env.EnvObject>,
+	) => {
+		const names = [
+			"bash",
+			"bzip2",
+			"ls", // coreutils
+			"diff", // diffutils
+			"find", // findutils
+			"gawk",
+			"grep",
+			"gzip",
+			"make",
+			"patch",
+			"sed",
+			"tar",
+			"xz",
+		];
+		return await std.env.provides({ env, names });
+	};
+
 	type ProvidesArg = {
 		env: env.EnvObject;
 		name?: string;
@@ -498,7 +529,10 @@ export namespace env {
 	};
 
 	/** Assert the env provides a specific executable in PATH. */
-	export const assertProvides = async (arg: ProvidesArg) => {
+	export const assertProvides = async (
+		unresolvedArg: tg.Unresolved<ProvidesArg>,
+	) => {
+		const arg = await tg.resolve(unresolvedArg);
 		const { name, names: names_ } = arg;
 		const names = names_ ?? [];
 		if (name) {
@@ -519,7 +553,10 @@ export namespace env {
 	};
 
 	/** Check if the env provides a specific executable in PATH. */
-	export const provides = async (arg: ProvidesArg): Promise<boolean> => {
+	export const provides = async (
+		unresolvedArg: tg.Unresolved<ProvidesArg>,
+	): Promise<boolean> => {
+		const arg = await tg.resolve(unresolvedArg);
 		const { name, names: names_ } = arg;
 		const names = names_ ?? [];
 		if (name) {
@@ -545,7 +582,10 @@ export namespace env {
 	};
 
 	/** Return the file for a given executable in an env's PATH. Throws an error if not present. */
-	export const which = async (arg: WhichArg): Promise<tg.File | tg.Symlink> => {
+	export const which = async (
+		unresolvedArg: tg.Unresolved<WhichArg>,
+	): Promise<tg.File | tg.Symlink> => {
+		const arg = await tg.resolve(unresolvedArg);
 		const file = await tryWhich(arg);
 		tg.assert(file, `This env does not provide ${arg.name} in $PATH`);
 		return file;
@@ -553,8 +593,9 @@ export namespace env {
 
 	/** Return the artifact providing a given binary by name. */
 	export const whichArtifact = async (
-		arg: WhichArg,
+		unresolvedArg: tg.Unresolved<WhichArg>,
 	): Promise<tg.Directory | undefined> => {
+		const arg = await tg.resolve(unresolvedArg);
 		for await (const [parentDir, binDir] of env.dirsInVar({
 			env: arg.env,
 			key: "PATH",
@@ -568,8 +609,9 @@ export namespace env {
 
 	/** Return the file for a given executable in an env's PATH. Returns undefined if not present. */
 	export const tryWhich = async (
-		arg: WhichArg,
+		unresolvedArg: tg.Unresolved<WhichArg>,
 	): Promise<tg.File | tg.Symlink | undefined> => {
+		const arg = await tg.resolve(unresolvedArg);
 		for await (const [name, executable] of env.binsInPath(arg)) {
 			if (name === arg.name) {
 				if (executable instanceof tg.Symlink || executable instanceof tg.File) {

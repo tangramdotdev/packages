@@ -35,6 +35,7 @@ import * as injection from "./wrap/injection.tg.ts";
 import * as phases from "./phases.tg.ts";
 import * as run from "./run.tg.ts";
 import * as sdk from "./sdk.tg.ts";
+import { sdk as stdSdk } from "./sdk.tg.ts";
 import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
@@ -47,9 +48,10 @@ export const metadata = {
 
 /** The default export produces the default SDK env for the detected host, asserts its validity, and uses it to build the standard set of autotools build dependencies, returning the resulting env. */
 export const default_ = async () => {
-	const buildToolchain = await sdk.testDefault();
+	const host = await triple.host();
+	const buildToolchain = await tg.build(stdSdk, { host });
 	const buildTools = await tg.build(dependencies.buildTools, {
-		host: await triple.host(),
+		host,
 		buildToolchain,
 		level: "extended",
 		includeUtils: true,
