@@ -1,6 +1,4 @@
-import m4 from "m4" with { path: "../m4" };
 import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
 
 export const metadata = {
 	homepage: "https://gmplib.org",
@@ -37,13 +35,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		env: env_,
+		env,
 		host,
 		sdk,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
-
-	const env = std.env.arg(m4({ build, host: build }), env_);
 
 	return std.autotools.build(
 		{

@@ -14,7 +14,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:e236ea3a1ccf5f6c270b1c4bb60726f371fa49459a8eaaebc90b216b328daf2b";
+		"sha256:6ac4fc31ce440debe63987c2ebbf9d7b6634e67a7c3279257dc7361de8bdb3ef";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
@@ -50,7 +50,6 @@ export const build = async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
-			fortifySource: 2,
 			phases: { configure },
 			sdk,
 			source: source_ ?? source(),
