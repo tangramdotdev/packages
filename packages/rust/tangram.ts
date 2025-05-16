@@ -20,7 +20,7 @@ export const metadata = {
 };
 
 const PROFILE = "minimal" as const;
-export const VERSION = "1.86.0" as const;
+export const VERSION = "1.87.0" as const;
 
 export type ToolchainArg = {
 	host?: string;
@@ -49,7 +49,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	const manifestBlob = await std.download({
 		url: `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`,
 		checksum:
-			"sha256:5ffe190473b7896d1f39e9d0ddfa04bec72000f25897669bb296814e10ceba42",
+			"sha256:2949b5ea91e3f9c45e75ff2fc6cfc7776616c693ab599ed43abc2120b7522415",
 	});
 	const manifestFile = await tg.file(manifestBlob as tg.Blob);
 
