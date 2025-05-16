@@ -76,9 +76,6 @@ export const self = async (...args: std.Args<Arg>) => {
 	const processDependency = (dep: any) =>
 		std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
-	const curlRoot = processDependency(
-		std.env.runtimeDependency(curl.build, dependencyArgs.curl),
-	);
 	const ncursesRoot = processDependency(
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	);
@@ -94,59 +91,66 @@ export const self = async (...args: std.Args<Arg>) => {
 	const zstdRoot = processDependency(
 		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
 	);
+	const deps = [ncursesRoot, libpslRoot, opensslRoot, zlibRoot, zstdRoot];
 
-	let configureArgs = ["--parallel=$(nproc)", "--system-curl", "--"];
+	if (os === "darwin") {
+		deps.push(processDependency(std.env.runtimeDependency(libiconv.build)));
+	}
+
+	let configureArgs = ["--parallel=$(nproc)"];
 	if (os === "linux") {
-		configureArgs = configureArgs.concat([
+		deps.push(
+			processDependency(
+				std.env.runtimeDependency(curl.build, dependencyArgs.curl),
+			),
+		);
+		configureArgs.push(
+			`--system-curl`,
+			"--",
 			`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
 			`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
-		]);
+		);
 	}
-	const prepare = { command: tg.Mutation.prefix("mkdir work && cd work") };
+	const prepare = {
+		command: tg.Mutation.prefix("mkdir work && cd work", "\n"),
+	};
 	const configure = {
 		command: tg`${sourceDir}/bootstrap`,
 		args: configureArgs,
 	};
 	const phases = { prepare, configure };
 
-	const deps = [
-		curlRoot,
-		ncursesRoot,
-		libpslRoot,
-		opensslRoot,
-		zlibRoot,
-		zstdRoot,
-	];
-	if (os === "darwin") {
-		deps.push(processDependency(std.env.runtimeDependency(libiconv.build)));
-	}
-	const env = [...deps, env_];
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [...deps];
 	if (os === "darwin") {
 		// On macOS, the bootstrap script wants to test for `ext/stdio_filebuf.h`, which is not part of the macOS toolchain.
 		// Using the `gcc` and `g++` named symlinks to the AppleClang compiler instead of `clang`/`clang++` prevents this.
-		env.push({
+		envs.push({
 			CC: "gcc",
 			CXX: "g++",
 		});
 	}
 
+	const env = await std.env.arg(...envs, env_);
+
 	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(...env),
+		env,
 		phases,
 		setRuntimeLibraryPath: true,
 		sdk,
 		source: sourceDir,
 	});
 
-	const libraryPaths = (await Promise.all(deps))
-		.filter((v) => v !== undefined)
-		.map((dir) => dir.get("lib").then(tg.Directory.expect));
-	const binDir = await result.get("bin").then(tg.Directory.expect);
-	for await (let [name, artifact] of binDir) {
-		const file = tg.File.expect(artifact);
-		const wrappedFile = await std.wrap(file, { libraryPaths });
-		result = await tg.directory(result, { [`bin/${name}`]: wrappedFile });
+	if (os === "linux") {
+		const libraryPaths = (await Promise.all(deps))
+			.filter((v) => v !== undefined)
+			.map((dir) => dir.get("lib").then(tg.Directory.expect));
+		const binDir = await result.get("bin").then(tg.Directory.expect);
+		for await (let [name, artifact] of binDir) {
+			const file = tg.File.expect(artifact);
+			const wrappedFile = await std.wrap(file, { libraryPaths });
+			result = await tg.directory(result, { [`bin/${name}`]: wrappedFile });
+		}
 	}
 
 	return result;
@@ -280,7 +284,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	const os = std.triple.os(host);
 
 	// Set up env.
-	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
+	let envs: Array<tg.Unresolved<std.env.Arg>> = [];
 
 	// // C/C++ flags.
 	if (opt) {
@@ -347,7 +351,8 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	}
 
 	// Add cmake to env.
-	envs.push(await tg.build(self, { host }));
+	const cmakeArtifact = await tg.build(self, { host });
+	envs.push(cmakeArtifact);
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
