@@ -47,7 +47,7 @@ export namespace env {
 			}),
 		);
 		const originalEnv = await env.mergeArgObjects(...envObjects);
-		if (includeUtils && !env.providesUtils(originalEnv)) {
+		if (includeUtils && !(await env.providesUtils(originalEnv))) {
 			return await env.mergeArgObjects(
 				originalEnv,
 				await tg.build(std.utils.env),
