@@ -1040,7 +1040,11 @@ export const assertComment = async (
 	const elfComment =
 		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`
 			.bootstrap(true)
-			.env(std.env.arg(toolchain, bootstrap.utils(), { utils: false }))
+			.env(
+				std.env.arg(toolchain, bootstrap.utils(), bootstrap.shell(), {
+					utils: false,
+				}),
+			)
 			.then(tg.File.expect);
 	const text = await elfComment.text();
 	tg.assert(text.includes(textToMatch));
