@@ -128,8 +128,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	} = await std.packages.applyArgs<Arg>(...args);
 	tg.assert(source, "Must provide a source");
 
-	const node = self(std.triple.rotate({ build, host }));
-	const interpreter = node.then((d) => d.get("bin/node")).then(tg.File.expect);
+	const node = await tg.build(self, std.triple.rotate({ build, host }));
+	const interpreter = await node.get("bin/node").then(tg.File.expect);
 
 	// Retrieve and parse the package.json, package-lock.json files.
 	const packageJsonFile = tg.File.expect(await source.get("package.json"));
@@ -168,7 +168,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	if (packageJson.scripts?.build) {
 		defaultBuildCommand = packageJson.scripts?.build;
 	}
-	const sdk = std.sdk({ host });
+	const sdk = await tg.build(std.sdk, { host });
 	const env = await std.env.arg(
 		sdk,
 		node,
