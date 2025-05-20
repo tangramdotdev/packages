@@ -143,9 +143,9 @@ type SysrootFixArg = {
 /** Some linker scripts need a small patch to work properly with `ld`'s sysroot replacement, prepending a `=` character to paths that need to resolve relative to the sysroot rather than absolute. This target modifies the script with the given name in the given directory. */
 export const applySysrootFix = async (arg: SysrootFixArg) => {
 	let { directory, filePath } = arg;
-	const linkerScript = tg.File.expect(await arg.directory.get(arg.filePath));
+	const linkerScript = await arg.directory.get(arg.filePath).then(tg.File.expect);
 	const isElfObject =
-		std.file.detectExecutableKind(await linkerScript.bytes()) === "elf";
+		await std.file.detectExecutableKind(linkerScript) === "elf";
 	// If the given path points to an ELF object, don't do anything. Apply the fix if it's a text file.
 	if (!isElfObject) {
 		const scriptContents = await linkerScript.text();
