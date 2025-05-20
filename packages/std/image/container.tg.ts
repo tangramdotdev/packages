@@ -94,7 +94,32 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 					rootDir: arg,
 				};
 			} else {
-				return arg;
+				const object: tg.MaybeMutationMap<CombinedArgObject> = {};
+				if ("buildToolchain" in arg && arg.buildToolchain !== undefined) {
+					object.buildToolchain = arg.buildToolchain;
+				}
+				if ("executable" in arg && arg.executable !== undefined) {
+					object.entrypointArtifact = arg.executable;
+				}
+				if ("format" in arg) {
+					object.format = arg.format;
+				}
+				if ("layerCompression" in arg) {
+					object.layerCompression = arg.layerCompression;
+				}
+				if ("rootFileSystem" in arg && arg.rootFileSystem !== undefined) {
+					object.rootDir = arg.rootFileSystem;
+				}
+				if ("cmd" in arg) {
+					object.cmdString = arg.cmd;
+				}
+				if ("entrypoint" in arg) {
+					object.entrypointString = arg.entrypoint;
+				}
+				if (arg.system) {
+					object.system = arg.system;
+				}
+				return object;
 			}
 		},
 		reduce: {
