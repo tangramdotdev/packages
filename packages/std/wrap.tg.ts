@@ -129,7 +129,7 @@ export namespace wrap {
 		libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template>;
 
 		/** Which library path strategy should we use? The default is "unfilteredIsolate", which separates libraries into individual directories. */
-		libraryPathStrategy?: LibraryPathStrategy;
+		libraryPathStrategy?: LibraryPathStrategy | undefined;
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
@@ -237,7 +237,7 @@ export namespace wrap {
 			interpreter,
 			merge: merge_ = true,
 			libraryPaths = [],
-			libraryPathStrategy = "combine",
+			libraryPathStrategy,
 		} = await std.args.apply<wrap.Arg, wrap.ArgObject>({
 			args,
 			map: async (arg) => {
