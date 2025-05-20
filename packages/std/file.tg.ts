@@ -565,23 +565,19 @@ export const test = async () => {
 	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
 
 	// Define sources.
-	const greetSource = await tg.file(`
-	#include <stdio.h>
-	void greet() {
-		printf("Hello from the shared library!\\n");
-	}
-			`);
-	const greetHeader = await tg.file(`
-	void greet();
-			`);
+	const greetSource = await tg.file`
+		#include <stdio.h>
+		void greet() {
+			printf("Hello from the shared library!\\n");
+		}`;
+	const greetHeader = await tg.file`void greet();`;
 
-	const mainSource = await tg.file(`
-	#include <greet.h>
-	int main() {
-		greet();
-		return 0;
-	}
-		`);
+	const mainSource = await tg.file`
+		#include <greet.h>
+		int main() {
+			greet();
+			return 0;
+		}`;
 	const source = await tg.directory({
 		"main.c": mainSource,
 		"greet.c": greetSource,

@@ -1055,37 +1055,34 @@ export const assertComment = async (
 const testCParameters: ProxyTestParameters = {
 	expectedOutput: "Hello, Tangram!",
 	lang: "c",
-	testProgram: tg.file(`
-	#include <stdio.h>
+	testProgram: tg.file`
+		#include <stdio.h>
 
-	int main() {
-		printf("Hello, Tangram!\\n");
-		return 0;
-	}
-`),
+		int main() {
+			printf("Hello, Tangram!\\n");
+			return 0;
+		}`,
 };
 
 const testCxxParameters: ProxyTestParameters = {
 	expectedOutput: `new Tangram().send("Hello!")`,
 	lang: "c++",
-	testProgram: tg.file(`
-	#include <iostream>
+	testProgram: tg.file`
+		#include <iostream>
 
-	int main() {
-		std::cout << "new Tangram().send(\\"Hello!\\")" << std::endl;
-		return 0;
-	}
-`),
+		int main() {
+			std::cout << "new Tangram().send(\\"Hello!\\")" << std::endl;
+			return 0;
+		}`,
 };
 
 const testFortranParameters: ProxyTestParameters = {
 	expectedOutput: "Hello, Fortran!",
 	lang: "fortran",
-	testProgram: tg.file(`
-	program hello
-		print *, "Hello, Fortran!"
-	end program hello
-	`),
+	testProgram: tg.file`
+		program hello
+			print *, "Hello, Fortran!"
+		end program hello`,
 };
 
 type ProxyTestParameters = {

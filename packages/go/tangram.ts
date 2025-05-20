@@ -306,15 +306,15 @@ export const vendor = async ({
 
 export const test = async () => {
 	const source = tg.directory({
-		["main.go"]: tg.file(`
+		["main.go"]: tg.file`
 			package main
 			import "fmt"
 
 			func main() {
 					fmt.Println("hello world")
 			}
-		`),
-		["subcommand.go"]: tg.file(`
+		`,
+		["subcommand.go"]: tg.file`
 			package main
 			import "os/exec"
 
@@ -331,7 +331,7 @@ export const test = async () => {
 					panic(error)
 				}
 			}
-		`),
+		`,
 	});
 
 	return await $`

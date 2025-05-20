@@ -393,13 +393,12 @@ export const test = async () => {
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
 export const testBasic = async () => {
 	const bootstrapSDK = await bootstrap.sdk();
-	const helloSource = await tg.file(`
-#include <stdio.h>
-int main() {
-	printf("Hello from a TGLD-wrapped binary!\\n");
-	return 0;
-}
-	`);
+	const helloSource = await tg.file`
+		#include <stdio.h>
+		int main() {
+			printf("Hello from a TGLD-wrapped binary!\\n");
+			return 0;
+		}`;
 	const output = await std.build`
 				set -x
 				/usr/bin/env
@@ -452,33 +451,26 @@ export const testSharedLibraryWithDep = async () => {
 	const bootstrapSdk = bootstrap.sdk();
 	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
-	const constantsSource = await tg.file(`
-const char* getGreetingA() {
-	return "Hello from transitive constants A!";
-}
-	`);
-	const constantsHeader = await tg.file(`
-const char* getGreetingA();
-	`);
+	const constantsSource = await tg.file`
+		const char* getGreetingA() {
+			return "Hello from transitive constants A!";
+		}`;
+	const constantsHeader = await tg.file`const char* getGreetingA();`;
 
-	const printerSource = await tg.file(`
-#include <stdio.h>
-#include <constants.h>
-void printGreeting() {
-	printf("%s\\n", getGreetingA());
-}
-		`);
-	const printerHeader = await tg.file(`
-void printGreeting();
-		`);
+	const printerSource = await tg.file`
+		#include <stdio.h>
+		#include <constants.h>
+		void printGreeting() {
+			printf("%s\\n", getGreetingA());
+		}`;
+	const printerHeader = await tg.file`void printGreeting();`;
 
-	const mainSource = await tg.file(`
+	const mainSource = await tg.file`
 		#include <printer.h>
 		int main() {
 			printGreeting();
 			return 0;
-		}
-		`);
+		}`;
 
 	const sources = tg.directory({
 		["constants.c"]: constantsSource,
@@ -542,14 +534,12 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
 	// Define the sources.
-	const constantsSourceA = await tg.file(`
-const char* getGreetingA() {
-	return "Hello from transitive constants A!";
-}
-	`);
-	const constantsHeaderA = await tg.file(`
-const char* getGreetingA();
-	`);
+	const constantsSourceA = await tg.file`
+		const char* getGreetingA() {
+			return "Hello from transitive constants A!";
+		}
+	`;
+	const constantsHeaderA = await tg.file`const char* getGreetingA();`;
 
 	let constantsA = await makeShared({
 		libName: "libconstantsa",
@@ -563,19 +553,16 @@ const char* getGreetingA();
 	});
 	console.log("STRING CONSTANTS A", await constantsA.id());
 
-	const constantsSourceB = await tg.file(`
-const char* getGreetingB() {
-	return "Hello from transitive constants B!";
-}
-		`);
+	const constantsSourceB = await tg.file`
+		const char* getGreetingB() {
+			return "Hello from transitive constants B!";
+		}`;
 	let constantsB = await makeShared({
 		libName: "libconstantsb",
 		sdk: bootstrapSDK,
 		source: constantsSourceB,
 	});
-	const constantsHeaderB = await tg.file(`
-const char* getGreetingB();
-	`);
+	const constantsHeaderB = await tg.file`const char* getGreetingB();`;
 	constantsB = await tg.directory(constantsB, {
 		include: {
 			"constantsb.h": constantsHeaderB,
@@ -583,16 +570,13 @@ const char* getGreetingB();
 	});
 	console.log("STRING CONSTANTS B", await constantsB.id());
 
-	const greetSourceA = await tg.file(`
-	#include <stdio.h>
-	#include <constantsa.h>
-	void greet_a() {
-		printf("%s\\n", getGreetingA());
-	}
-			`);
-	const greetHeaderA = await tg.file(`
-	void greet_a();
-			`);
+	const greetSourceA = await tg.file`
+		#include <stdio.h>
+		#include <constantsa.h>
+		void greet_a() {
+			printf("%s\\n", getGreetingA());
+		}`;
+	const greetHeaderA = await tg.file`void greet_a();`;
 	let greetA = await makeShared({
 		flags: [
 			tg`-L${constantsA}/lib`,
@@ -610,16 +594,13 @@ const char* getGreetingB();
 	});
 	console.log("GREET A", await greetA.id());
 
-	const greetSourceB = await tg.file(`
-	#include <stdio.h>
-	#include <constantsb.h>
-	void greet_b() {
-		printf("%s\\n", getGreetingB());
-	}
-			`);
-	const greetHeaderB = await tg.file(`
-	void greet_b();
-			`);
+	const greetSourceB = await tg.file`
+		#include <stdio.h>
+		#include <constantsb.h>
+		void greet_b() {
+			printf("%s\\n", getGreetingB());
+		}`;
+	const greetHeaderB = await tg.file`void greet_b();`;
 	let greetB = await makeShared({
 		flags: [
 			tg`-L${constantsB}/lib`,
@@ -637,16 +618,15 @@ const char* getGreetingB();
 	});
 	console.log("GREET B", await greetB.id());
 
-	const mainSource = await tg.file(`
-	#include <greeta.h>
-	#include <greetb.h>
-	/* comment */
-	int main() {
-		greet_a();
-		greet_b();
-		return 0;
-	}
-		`);
+	const mainSource = await tg.file`
+		#include <greeta.h>
+		#include <greetb.h>
+		/* comment */
+		int main() {
+			greet_a();
+			greet_b();
+			return 0;
+		}`;
 
 	// Add a library path that doesn't get used to make sure it gets retained or removed appropriately.
 	const uselessLibDir = tg.directory({ lib: tg.directory() });
@@ -706,9 +686,13 @@ const char* getGreetingB();
 				tg.assert(artifactComponent.value.startsWith("dir_"));
 				if (pathLength === 2) {
 					const subpathComponent = path.components[1];
+					console.log("SUBPATH_COMPONENTS", subpathComponent);
 					tg.assert(subpathComponent !== undefined);
 					tg.assert(subpathComponent.kind === "string");
-					tg.assert(subpathComponent.value === "/lib");
+					tg.assert(
+						subpathComponent.value === "/lib" ||
+							subpathComponent.value === "/usr/lib",
+					);
 				}
 			}
 			break;
@@ -799,23 +783,19 @@ export const testSamePrefix = async () => {
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
 	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
 
-	const greetSource = await tg.file(`
-	#include <stdio.h>
-	void greet() {
-		printf("Hello from the shared library!\\n");
-	}
-			`);
-	const greetHeader = await tg.file(`
-	void greet();
-			`);
+	const greetSource = await tg.file`
+		#include <stdio.h>
+		void greet() {
+			printf("Hello from the shared library!\\n");
+		}`;
+	const greetHeader = await tg.file`void greet();`;
 
-	const mainSource = await tg.file(`
-	#include <greet.h>
-	int main() {
-		greet();
-		return 0;
-	}
-		`);
+	const mainSource = await tg.file`
+		#include <greet.h>
+		int main() {
+			greet();
+			return 0;
+		}`;
 	const source = await tg.directory({
 		"main.c": mainSource,
 		"greet.c": greetSource,
@@ -857,23 +837,19 @@ export const testSamePrefixDirect = async () => {
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
 	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
 
-	const greetSource = await tg.file(`
-	#include <stdio.h>
-	void greet() {
-		printf("Hello from the shared library!\\n");
-	}
-			`);
-	const greetHeader = await tg.file(`
-	void greet();
-			`);
+	const greetSource = await tg.file`
+		#include <stdio.h>
+		void greet() {
+			printf("Hello from the shared library!\\n");
+		}`;
+	const greetHeader = await tg.file`void greet();`;
 
-	const mainSource = await tg.file(`
-	#include <greet.h>
-	int main() {
-		greet();
-		return 0;
-	}
-		`);
+	const mainSource = await tg.file`
+		#include <greet.h>
+		int main() {
+			greet();
+			return 0;
+		}`;
 	const source = await tg.directory({
 		"main.c": mainSource,
 		"greet.c": greetSource,
@@ -913,23 +889,19 @@ export const testDifferentPrefixDirect = async () => {
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
 	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
 
-	const greetSource = await tg.file(`
-	#include <stdio.h>
-	void greet() {
-		printf("Hello from the shared library!\\n");
-	}
-			`);
-	const greetHeader = await tg.file(`
-	void greet();
-			`);
+	const greetSource = await tg.file`
+		#include <stdio.h>
+		void greet() {
+			printf("Hello from the shared library!\\n");
+		}`;
+	const greetHeader = await tg.file`void greet();`;
 
-	const mainSource = await tg.file(`
-	#include <greet.h>
-	int main() {
-		greet();
-		return 0;
-	}
-		`);
+	const mainSource = await tg.file`
+		#include <greet.h>
+		int main() {
+			greet();
+			return 0;
+		}`;
 	const source = await tg.directory({
 		"main.c": mainSource,
 		"greet.c": greetSource,

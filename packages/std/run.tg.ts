@@ -268,7 +268,7 @@ export const mergeArgs = async (
 };
 
 export const testDollar = async () => {
-	const f = tg.file("hello there!!!\n");
+	const f = tg.file`hello there!!!\n`;
 	const output = await $`cat ${f} > $OUTPUT
 		echo $NAME >> $OUTPUT
 		echo $TOOL >> $OUTPUT`
@@ -283,7 +283,7 @@ export const testDollar = async () => {
 };
 
 export const testDollarBootstrap = async () => {
-	const f = tg.file("hello there!!!\n");
+	const f = tg.file`hello there!!!\n`;
 	const utils = bootstrap.utils();
 	const output = await $`cat ${f} > $OUTPUT
 		echo $NAME >> $OUTPUT

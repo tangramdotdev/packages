@@ -38,7 +38,7 @@ export const testBasicRootfs = async () => {
 	const shell = bootstrap.shell();
 	const utils = bootstrap.utils();
 	const rootFs = tg.directory(shell, utils, {
-		"hello.txt": tg.file("Hello, world!"),
+		"hello.txt": tg.file`Hello, world!`,
 	});
 	const imageFile = await image(rootFs, {
 		cmd: ["/bin/sh", "-c", "cat /hello.txt"],

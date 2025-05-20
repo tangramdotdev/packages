@@ -113,7 +113,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const rustArtifact = await tg.build(self, { host: rustHost, target });
 	envs.push(rustArtifact);
 	if (pkgConfig) {
-		envs.push(await tg.build(pkgconf,{ host }));
+		envs.push(await tg.build(pkgconf, { host }));
 	}
 
 	// Download the dependencies using the cargo vendor.

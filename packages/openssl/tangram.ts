@@ -108,10 +108,10 @@ export default build;
 export const test = async () => {
 	// FIXME spec
 	const source = tg.directory({
-		["main.c"]: tg.file(`
+		["main.c"]: tg.file`
 			#include <stdio.h>
 			int main () {}
-		`),
+		`,
 	});
 
 	const output = await $`

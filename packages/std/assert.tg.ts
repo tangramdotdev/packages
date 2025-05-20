@@ -326,12 +326,11 @@ export const headerCanBeIncluded = async (arg: HeaderArg) => {
 	});
 
 	// Generate a program that expects to include this header.
-	const source = tg.file(`
+	const source = tg.file`
 		#include <${arg.header}>
 		int main() {
 			return 0;
-		}
-	`);
+		}`;
 
 	// Compile the program, ensuring the env properly made the header discoverable.
 	const program = await $`cc -xc "${source}" -o $OUTPUT`
@@ -469,13 +468,12 @@ export const dlopen = async (arg: DlopenArg) => {
 		.join("\n");
 
 	// Generate the source.
-	const source = tg.file(`
+	const source = tg.file`
 		#include <dlfcn.h>
 		int main() {
 			${testCode}
 			return 0;
-		}
-	`);
+		}`;
 
 	// Compile the program.
 	const linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");

@@ -345,13 +345,12 @@ export const test = async () => {
 	tg.Directory.assert(directory);
 	console.log("toolchain dir", await directory.id());
 
-	const testCSource = tg.file(`
+	const testCSource = tg.file`
 		#include <stdio.h>
 		int main() {
 			printf("Hello, world!\\n");
 			return 0;
-		}
-	`);
+		}`;
 	const cOut = await $`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
 	`
@@ -380,13 +379,13 @@ export const test = async () => {
 		);
 	}
 
-	const testCXXSource = tg.file(`
+	const testCXXSource = tg.file`
 		#include <iostream>
 		int main() {
 			std::cout << "Hello, world!" << std::endl;
 			return 0;
 		}
-	`);
+	`;
 	const cxxOut = await $`
 		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`

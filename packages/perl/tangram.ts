@@ -57,7 +57,10 @@ export const build = async (...args: std.Args<Arg>) => {
 		host,
 		sdk,
 		source: source_,
-	} = await std.packages.applyArgs<Arg>({ dependencies: defaultDependencies }, ...args);
+	} = await std.packages.applyArgs<Arg>(
+		{ dependencies: defaultDependencies },
+		...args,
+	);
 
 	const sourceDir = source_ ?? source();
 

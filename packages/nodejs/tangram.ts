@@ -74,7 +74,7 @@ export const self = async (args?: tg.Unresolved<ToolchainArg>) => {
 	const artifact = source();
 
 	// Bundle Node with OpenSSL and ca_certificates.
-	const opensslCnf = resolved?.opensslCnf ?? tg.file(``);
+	const opensslCnf = resolved?.opensslCnf ?? tg.file``;
 
 	const wrappedNode = std.wrap(tg.symlink(tg`${artifact}/bin/node`), {
 		env: {

@@ -36,7 +36,11 @@ export type Arg = {
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	const { build, host, source: source_ } = await std.packages.applyArgs<Arg>(...args);
+	const {
+		build,
+		host,
+		source: source_,
+	} = await std.packages.applyArgs<Arg>(...args);
 	const sourceArtifact = source_ ?? (await source());
 	const lockfile = tg.File.expect(await sourceArtifact.get("poetry.lock"));
 

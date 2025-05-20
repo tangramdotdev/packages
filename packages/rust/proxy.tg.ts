@@ -88,17 +88,17 @@ export const testPkgconfig = async () => {
 
 	externalLibDir = await tg.directory(externalLibDir, {
 		["lib/pkgconfig/external.pc"]:
-			tg.file(`prefix=/Users/benlovy/.tangram/tmp/06acty0tbnz835v1rxkbgs97fc/output
-exec_prefix=\${prefix}
-libdir=\${exec_prefix}/lib
-includedir=\${prefix}/include
+			tg.file`
+				prefix=/Users/benlovy/.tangram/tmp/06acty0tbnz835v1rxkbgs97fc/output
+				exec_prefix=\${prefix}
+				libdir=\${exec_prefix}/lib
+				includedir=\${prefix}/include
 
-Name: external
-Description: Example shared library
-Version: 1.0.0
-Libs: -L\${libdir} -lexternal
-Cflags: -I\${includedir}
-`),
+				Name: external
+				Description: Example shared library
+				Version: 1.0.0
+				Libs: -L\${libdir} -lexternal
+				Cflags: -I\${includedir}`,
 	});
 	console.log("externalLibDir", await externalLibDir.id());
 
