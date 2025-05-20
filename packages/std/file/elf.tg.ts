@@ -19,6 +19,8 @@ export const elfExecutableMetadata = async (
 	file: tg.File,
 ): Promise<ElfExecutableMetadata> => {
 	const parsed = await parse(file);
+	let isLittleEndian = parsed.header.ei_data === DATA_LE;
+
 	let arch;
 	switch (parsed.header.e_machine) {
 		case 0x3e: {
@@ -33,6 +35,7 @@ export const elfExecutableMetadata = async (
 			throw new Error("Unsupported machine type.");
 		}
 	}
+	
 	let interpreter;
 	for (const programHeader of parsed.programHeaders) {
 		if (programHeader.p_type === 3) {
@@ -45,25 +48,101 @@ export const elfExecutableMetadata = async (
 			);
 		}
 	}
+	
 	let soname;
+	let needed;
 	for (const programHeader of parsed.programHeaders) {
 		if (programHeader.p_type === 2) {
 			const bytes = await file.read({
 				position: Number(programHeader.p_offset),
 				length: Number(programHeader.p_filesz),
 			});
-			interpreter = tg.encoding.utf8.decode(
-				bytes.subarray(0, Number(programHeader.p_filesz) - 1),
-			);
+			const entrySize = arch === "x86_64" || arch === "aarch64" ? 16 : 8;
+			const numEntries = Number(programHeader.p_filesz) / entrySize;
+
+			// Relevant header name constants.
+			const DT_NEEDED = 1;
+			const DT_SONAME = 14;
+
+			// String table constants.
+			const DT_STRTAB = 5;
+			const DT_STRSZ = 10;
+
+			// First pass: Locate the string table.
+			let strTabOffset = 0;
+			let strTabSize = 0;
+			for (let i = 0; i < numEntries; i++) {
+				const entryOffset = i * entrySize;
+				const tagView = new DataView(bytes.buffer, entryOffset, 8);
+				const tag = tagView.getBigUint64(0, isLittleEndian);
+
+				if (Number(tag) === DT_STRTAB) {
+					const valueView = new DataView(bytes.buffer, entryOffset + 8, 8);
+					strTabOffset = Number(valueView.getBigUint64(0, isLittleEndian));
+				} else if (Number(tag) === DT_STRSZ) {
+					const valueView = new DataView(bytes.buffer, entryOffset + 8, 8);
+					strTabSize = Number(valueView.getBigUint64(0, isLittleEndian));
+				}
+			}
+
+			// Read the string table.
+			const strTab = await file.read({
+				position: strTabOffset,
+				length: strTabSize,
+			});
+
+			// Second pass: find needed libraries and soname.
+			for (let i = 0; i < numEntries; i++) {
+				// Find the tag.
+				const entryOffset = i * entrySize;
+				const tagView = new DataView(bytes.buffer, entryOffset, 8);
+				const tag = tagView.getBigUint64(0, isLittleEndian);
+
+				// Check if the tag is one we're looking for.
+				if (Number(tag) === DT_NEEDED || Number(tag) === DT_SONAME) {
+					const valueView = new DataView(bytes.buffer, entryOffset + 8, 8);
+					const stringOffset = Number(
+						valueView.getBigUint64(0, isLittleEndian),
+					);
+
+					// Determine the string size by looking for the null terminator.
+					let stringEnd = stringOffset;
+					while (stringEnd < strTabSize && strTab[stringEnd] !== 0) {
+						stringEnd++;
+					}
+
+					const stringValue = tg.encoding.utf8.decode(
+						strTab.subarray(stringOffset, stringEnd),
+					);
+
+					if (Number(tag) === DT_NEEDED) {
+						if (needed === undefined) {
+							needed = [stringValue];
+						} else {
+							needed.push(stringValue);
+						}
+					} else if (Number(tag) === DT_SONAME) {
+						soname = stringValue;
+					}
+				}
+			}
 		}
 	}
-	return {
-		format: "elf",
+
+	let ret: ElfExecutableMetadata = {
+		format: "elf" as const,
 		arch,
-		interpreter,
-		soname,
-		needed,
 	};
+	if (interpreter !== undefined) {
+		ret["interpreter"] = interpreter;
+	}
+	if (soname !== undefined) {
+		ret["soname"] = soname;
+	}
+	if (needed !== undefined) {
+		ret["needed"] = needed;
+	}
+	return ret;
 };
 
 export type File = {
