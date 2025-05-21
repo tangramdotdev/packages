@@ -50,7 +50,7 @@ export const detectExecutableKind = async (
 			return "mach-o";
 		}
 	}
-	if (magic & 0xff00 === 0x23210000) {
+	if ((magic & 0xff00) === 0x23210000) {
 		return "shebang";
 	}
 	return "unknown";

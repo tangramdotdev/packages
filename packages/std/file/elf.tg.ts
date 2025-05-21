@@ -35,7 +35,7 @@ export const elfExecutableMetadata = async (
 			throw new Error("Unsupported machine type.");
 		}
 	}
-	
+
 	let interpreter;
 	for (const programHeader of parsed.programHeaders) {
 		if (programHeader.p_type === 3) {
@@ -48,7 +48,7 @@ export const elfExecutableMetadata = async (
 			);
 		}
 	}
-	
+
 	let soname;
 	let needed;
 	for (const programHeader of parsed.programHeaders) {

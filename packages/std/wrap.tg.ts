@@ -793,9 +793,8 @@ export namespace wrap {
 			});
 
 			// Deserialize the manifest.
-			const manifest = tg.encoding.json.decode(
-				tg.encoding.utf8.decode(manifestBytes),
-			) as wrap.Manifest;
+			const manifestString = tg.encoding.utf8.decode(manifestBytes);
+			const manifest = tg.encoding.json.decode(manifestString) as wrap.Manifest;
 
 			return manifest;
 		};
