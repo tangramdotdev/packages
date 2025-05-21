@@ -4,13 +4,11 @@ import { ElfExecutableMetadata, elfExecutableMetadata } from "./file/elf.tg.ts";
 import {
 	MachOExecutableMetadata,
 	machoExecutableMetadata,
-	parse,
 } from "./file/macho.tg.ts";
 import {
 	ShebangExecutableMetadata,
 	shebangExecutableMetadata,
 } from "./file/shebang.tg.ts";
-import { startsWithBytes } from "./file/util.tg.ts";
 
 export type {
 	ElfExecutableMetadata,
@@ -22,7 +20,6 @@ export {
 	elfExecutableMetadata,
 	machoExecutableMetadata,
 	shebangExecutableMetadata,
-	parse,
 };
 
 type ExecutableKind = "elf" | "mach-o" | "shebang" | "unknown";
@@ -36,24 +33,27 @@ export const detectExecutableKind = async (
 	file: tg.File,
 ): Promise<ExecutableKind> => {
 	const bytes = await file.read({ length: 4 });
-	if (startsWithBytes(bytes, [0x7f, 0x45, 0x4c, 0x46])) {
-		return "elf";
-	} else if (
-		startsWithBytes(bytes, [0xca, 0xfe, 0xba, 0xbe]) ||
-		startsWithBytes(bytes, [0xbe, 0xba, 0xfe, 0xca]) ||
-		startsWithBytes(bytes, [0xca, 0xfe, 0xba, 0xbf]) ||
-		startsWithBytes(bytes, [0xbf, 0xba, 0xfe, 0xca]) ||
-		startsWithBytes(bytes, [0xfe, 0xed, 0xfa, 0xce]) ||
-		startsWithBytes(bytes, [0xce, 0xfa, 0xed, 0xfe]) ||
-		startsWithBytes(bytes, [0xfe, 0xed, 0xfa, 0xcf]) ||
-		startsWithBytes(bytes, [0xcf, 0xfa, 0xed, 0xfe])
-	) {
-		return "mach-o";
-	} else if (startsWithBytes(bytes, [0x23, 0x21])) {
-		return "shebang";
-	} else {
-		return "unknown";
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const magic = view.getUint32(0, false);
+	switch (magic) {
+		case 0x7f454c46: {
+			return "elf";
+		}
+		case 0xcafebabe:
+		case 0xbebafeca:
+		case 0xcafebabf:
+		case 0xbfbafeca:
+		case 0xfeedface:
+		case 0xcefaedfe:
+		case 0xfeedfacf:
+		case 0xcffaedfe: {
+			return "mach-o";
+		}
 	}
+	if (magic & 0xff00 === 0x23210000) {
+		return "shebang";
+	}
+	return "unknown";
 };
 
 /** Attempt to get executable metadata. Returns undefined if unable. */
