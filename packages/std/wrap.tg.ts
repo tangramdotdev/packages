@@ -751,13 +751,20 @@ export namespace wrap {
 		export const read = async (
 			file: tg.File,
 		): Promise<wrap.Manifest | undefined> => {
-			// Read the file.
-			const fileBytes = await file.bytes();
-			let filePosition = fileBytes.length;
+			// Read the header.
+			const headerLength = MANIFEST_MAGIC_NUMBER.length + 8 + 8;
+			const headerBytes = await file.read({
+				position: `end.-${headerLength}`,
+				length: headerLength,
+			});
+			if (headerBytes.length !== headerLength) {
+				return undefined;
+			}
+			let position = headerBytes.length;
 
 			// Read and verify the magic number.
-			filePosition -= MANIFEST_MAGIC_NUMBER.length;
-			const magicNumberBytes = fileBytes.slice(-MANIFEST_MAGIC_NUMBER.length);
+			position -= MANIFEST_MAGIC_NUMBER.length;
+			const magicNumberBytes = headerBytes.slice(-MANIFEST_MAGIC_NUMBER.length);
 			for (let i = 0; i < MANIFEST_MAGIC_NUMBER.length; i++) {
 				if (magicNumberBytes[i] !== MANIFEST_MAGIC_NUMBER[i]) {
 					return undefined;
@@ -765,31 +772,29 @@ export namespace wrap {
 			}
 
 			// Read and verify the version.
-			filePosition -= MANIFEST_MAGIC_NUMBER.length;
+			position -= 8;
 			const version = Number(
-				new DataView(fileBytes.buffer).getBigUint64(filePosition, true),
+				new DataView(headerBytes.buffer).getBigUint64(position, true),
 			);
 			if (version !== MANIFEST_VERSION) {
 				return undefined;
 			}
 
 			// Read the manifest length.
-			filePosition -= 8;
+			position -= 8;
 			const manifestLength = Number(
-				new DataView(fileBytes.buffer).getBigUint64(filePosition, true),
+				new DataView(headerBytes.buffer).getBigUint64(position, true),
 			);
 
 			// Read the manifest.
-			filePosition -= manifestLength;
-			const manifestBytes = fileBytes.slice(
-				filePosition,
-				filePosition + manifestLength,
-			);
+			const manifestBytes = await file.read({
+				position: `end.-${headerLength + manifestLength}`,
+				length: manifestLength,
+			});
 
 			// Deserialize the manifest.
-			const manifest = tg.encoding.json.decode(
-				tg.encoding.utf8.decode(manifestBytes),
-			) as wrap.Manifest;
+			const manifestString = tg.encoding.utf8.decode(manifestBytes);
+			const manifest = tg.encoding.json.decode(manifestString) as wrap.Manifest;
 
 			return manifest;
 		};
