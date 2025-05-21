@@ -138,6 +138,10 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	// Set up env.
 	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrap) {
+		// Prevent automatically adding the utils to the env.
+		envs.push({ utils: false });
+	}
 
 	// // C/C++ flags.
 	if (opt) {
@@ -207,7 +211,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		// Set up the SDK, add it to the environment.
 		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let level: Level = "base";
+		let level: Level | undefined = undefined;
 		if (pkgConfig) {
 			level = "pkgconfig";
 		}
@@ -217,18 +221,18 @@ export const build = async (...args: std.Args<Arg>) => {
 		if (developmentTools) {
 			level = "devtools";
 		}
-		const buildToolsEnv = await tg.build(buildTools, {
-			host,
-			buildToolchain: await tg.build(std.sdk, { host }),
-			level,
-			includeUtils: true,
-		});
-		envs.push(sdk, buildToolsEnv);
+		if (level !== undefined) {
+			const buildToolsEnv = await tg.build(buildTools, {
+				host,
+				buildToolchain: await tg.build(std.sdk, { host }),
+				level,
+			});
+			envs.push(sdk, buildToolsEnv);
+		}
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	// NOTE - utils are handled byt the buildToolsEnv.
-	const env = await std.env.arg(...envs, userEnv, { utils: false });
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs =
@@ -336,7 +340,6 @@ export const build = async (...args: std.Args<Arg>) => {
 		.then(tg.Directory.expect);
 };
 
-// type Collect = std.args.MakeArrayKeys<Arg, "env" | "phases">;
 type Collect = std.args.MakeArrayKeys<Arg, "phases">;
 export const mergeArgs = async (...args: std.Args<Arg>): Promise<Collect> => {
 	const collect = await std.args.apply<Arg, Collect>({

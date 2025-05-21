@@ -87,7 +87,6 @@ export const testBasicEnv = async () => {
 	const host = bootstrap.toolchainTriple(detectedHost);
 	const utils = await std.utils.env({
 		host,
-		bootstrap: true,
 		env: bootstrap.sdk(),
 	});
 	const basicEnv = await std.env(utils, { NAME: "Tangram" }, { utils: false });

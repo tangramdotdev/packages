@@ -50,7 +50,9 @@ export namespace env {
 		if (includeUtils && !(await env.providesUtils(originalEnv))) {
 			return await env.mergeArgObjects(
 				originalEnv,
-				await tg.build(std.utils.env),
+				await tg.build(std.utils.env, {
+					env: await tg.build(std.sdk),
+				}),
 			);
 		} else {
 			return originalEnv;

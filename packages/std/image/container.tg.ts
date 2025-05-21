@@ -324,7 +324,7 @@ export const ociImageFromLayers = async (
 	if (buildToolchain === undefined) {
 		additionalEnv.push(
 			bootstrap.sdk(),
-			std.utils.env({ bootstrap: true, env: bootstrap.sdk() }),
+			std.utils.env({ env: bootstrap.sdk() }),
 		);
 	} else {
 		additionalEnv.push(buildToolchain);

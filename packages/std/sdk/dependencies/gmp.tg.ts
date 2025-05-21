@@ -40,15 +40,10 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 
-	const configure = {
-		args: ["--disable-dependency-tracking"],
-	};
-
 	const output = await std.utils.autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: bootstrap_,
 		env,
-		phases: { configure },
 		sdk,
 		source: source_ ?? source(),
 	});

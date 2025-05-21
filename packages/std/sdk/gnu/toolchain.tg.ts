@@ -52,17 +52,20 @@ export const toolchain = async (arg: ToolchainArg) => {
 	);
 
 	// Create a new set of build tools against the new native toolchain.
+	const nativeUtils = await tg.build(std.utils.env, {
+		env: proxiedNativeToolchain,
+	});
 	const nativeBuildTools = await tg.build(dependencies.buildTools, {
 		host,
-		buildToolchain: proxiedNativeToolchain,
+		buildToolchain: std.env.arg(proxiedNativeToolchain, nativeUtils),
 		level: "python",
-		includeUtils: true,
 	});
+	const nativeBuildEnv = std.env.arg(nativeUtils, nativeBuildTools);
 
 	const { crossGcc } = await crossToolchain({
 		build: host, // We've produced a native toolchain, so we can use it to build the cross-toolchain.
 		buildToolchain: proxiedNativeToolchain,
-		env: nativeBuildTools,
+		env: nativeBuildEnv,
 		host,
 		target,
 		variant: "stage2_full",
@@ -85,18 +88,26 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const bootstrapToolchain = bootstrap.sdk(host);
 
 	// Set up build environment tools.
+	const bootstrapUtils = await tg.build(std.utils.env, {
+		env: bootstrapToolchain,
+	});
 	const bootstrapBuildTools = await tg.build(dependencies.buildTools, {
 		host: build,
-		buildToolchain: bootstrapToolchain,
+		buildToolchain: std.env.arg(bootstrapToolchain, bootstrapUtils),
 		level: "python",
-		includeUtils: true,
 	});
+	const bootstrapBuildEnv = std.env.arg(
+		bootstrapToolchain,
+		bootstrapUtils,
+		bootstrapBuildTools,
+		env_,
+	);
 
 	// Create cross-toolchain from build to host.
 	const { crossGcc: buildToHostCross, sysroot } =
 		await buildToHostCrossToolchain({
 			host,
-			env: std.env.arg(bootstrapBuildTools, env_, { utils: false }),
+			env: bootstrapBuildEnv,
 		});
 
 	// Proxy the cross toolchain.
@@ -110,9 +121,9 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const stage1HostSdk = std.env.arg(
 		buildToHostCross,
 		crossProxyEnv,
+		bootstrapUtils,
 		bootstrapBuildTools,
 		env_,
-		{ utils: false },
 	);
 
 	// Create a native toolchain (host to host).

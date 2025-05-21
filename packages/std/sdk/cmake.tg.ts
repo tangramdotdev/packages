@@ -284,20 +284,21 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		// Set up the SDK, add it to the environment.
 		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let level: Level = "base";
+		let level: Level | undefined = undefined;
 		if (pkgConfig) {
 			level = "pkgconfig";
 		}
 		if (extended) {
 			level = "extended";
 		}
-		const buildToolsEnv = await tg.build(buildTools, {
-			host,
-			buildToolchain: await tg.build(std.sdk, { host }),
-			level,
-			includeUtils: true,
-		});
-		envs.push(sdk, buildToolsEnv);
+		if (level !== undefined) {
+			const buildToolsEnv = await tg.build(buildTools, {
+				host,
+				buildToolchain: await tg.build(std.sdk, { host }),
+				level,
+			});
+			envs.push(sdk, buildToolsEnv);
+		}
 	}
 
 	// If cross compiling, override CC/CXX to point to the correct compiler.

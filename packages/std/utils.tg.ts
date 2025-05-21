@@ -32,7 +32,6 @@ export * as tar from "./utils/tar.tg.ts";
 export * as xz from "./utils/xz.tg.ts";
 
 export type Arg = {
-	bootstrap?: boolean;
 	build?: string | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
@@ -42,12 +41,12 @@ export type Arg = {
 /** A basic set of GNU system utilites. */
 export const env = async (arg?: tg.Unresolved<Arg>) => {
 	const {
-		bootstrap = false,
 		build,
 		env: env_,
 		host: host_,
 		sdk,
 	} = arg ? await tg.resolve(arg) : {};
+	const bootstrap = true;
 	const host = host_ ?? (await std.triple.host());
 
 	const shellArtifact = await bash.build({
@@ -115,12 +114,11 @@ export type BuildUtilArg = std.autotools.Arg & {
 	wrapBashScriptPaths?: Array<string> | undefined;
 };
 
-/** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and -Os optimization flag, and disabling extra tools. */
+/** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and disabling extra tools. */
 export const autotoolsInternal = async (arg: tg.Unresolved<BuildUtilArg>) => {
 	const {
 		extended = false,
 		pkgConfig = false,
-		opt = "s",
 		wrapBashScriptPaths,
 		...rest
 	} = await tg.resolve(arg);
@@ -128,7 +126,6 @@ export const autotoolsInternal = async (arg: tg.Unresolved<BuildUtilArg>) => {
 		...rest,
 		extended,
 		pkgConfig,
-		opt,
 	});
 	for (const path of wrapBashScriptPaths ?? []) {
 		const file = tg.File.expect(await output.get(path));
@@ -162,7 +159,7 @@ export const changeShebang = async (scriptFile: tg.File) => {
 
 export const test = async () => {
 	const host = bootstrap.toolchainTriple(await std.triple.host());
-	const utilsEnv = await env({ host, bootstrap: true, env: bootstrap.sdk() });
+	const utilsEnv = await env({ host, env: bootstrap.sdk() });
 	tg.assert(await std.env.providesUtils(utilsEnv));
 	return utilsEnv;
 };
