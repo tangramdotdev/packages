@@ -129,7 +129,6 @@ export const self = async (...args: std.Args<Arg>) => {
 	const zlibForHost = await processDependency(
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	);
-	console.log("ZLIB_FOR_HOST", await zlibForHost.id());
 	let hostLibDirs = [
 		libffiForHost,
 		mpdecimalForHost,
@@ -194,7 +193,6 @@ export const self = async (...args: std.Args<Arg>) => {
 			libraryPaths,
 		},
 	);
-	console.log("WRAPPED PYTHON", await pythonInterpreter.id());
 
 	let python = wrapScripts(pythonInterpreter, undefined, output);
 
