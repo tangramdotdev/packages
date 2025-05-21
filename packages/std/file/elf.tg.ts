@@ -12,7 +12,7 @@ export type ElfExecutableMetadata = {
 	soname?: string | undefined;
 
 	/** Required shared libraries. */
-	needed?: Array<string>;
+	needed?: Array<string> | undefined;
 };
 
 export const elfExecutableMetadata = async (
@@ -129,20 +129,13 @@ export const elfExecutableMetadata = async (
 		}
 	}
 
-	let ret: ElfExecutableMetadata = {
-		format: "elf" as const,
+	return {
+		format: "elf",
 		arch,
+		interpreter,
+		needed,
+		soname,
 	};
-	if (interpreter !== undefined) {
-		ret["interpreter"] = interpreter;
-	}
-	if (soname !== undefined) {
-		ret["soname"] = soname;
-	}
-	if (needed !== undefined) {
-		ret["needed"] = needed;
-	}
-	return ret;
 };
 
 export type File = {
