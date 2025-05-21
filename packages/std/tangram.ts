@@ -80,6 +80,8 @@ const testActions = (): Record<string, () => any> => {
 		bootstrapMake: bootstrap.make.test,
 		bootstrapMusl: bootstrap.musl.build,
 		file: file.test,
+		fileBinary: file.testBinary,
+		fileShebang: file.testShebang,
 		wrapArgAndEnvDump: wrap.argAndEnvDump,
 		wrapBasic: wrap.testSingleArgObjectNoMutations,
 		wrapContent: wrap.testContentExecutable,

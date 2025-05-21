@@ -50,7 +50,7 @@ export const detectExecutableKind = async (
 			return "mach-o";
 		}
 	}
-	if ((magic & 0xff00) === 0x23210000) {
+	if ((magic & 0xffff0000) === 0x23210000) {
 		return "shebang";
 	}
 	return "unknown";
@@ -105,6 +105,10 @@ export const executableTriples = async (
 };
 
 export const test = async () => {
+	await Promise.all([testBinary(), testShebang()]);
+};
+
+export const testBinary = async () => {
 	// Set up platform details.
 	const bootstrapSDK = await bootstrap.sdk();
 	const host = await std.triple.host();
@@ -209,4 +213,13 @@ export const test = async () => {
 	}
 
 	return true;
+};
+
+export const testShebang = async () => {
+	const file = await tg.file("#!/bin/sh\n#command\necho 'test'\n", {
+		executable: true,
+	});
+	const metadata = await std.file.executableMetadata(file);
+	tg.assert(metadata.format === "shebang");
+	tg.assert(metadata.interpreter === "/bin/sh");
 };
