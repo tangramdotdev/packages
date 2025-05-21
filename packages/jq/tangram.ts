@@ -48,11 +48,10 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const phases = { configure };
 
-	const env = await std.env.arg(
+	const env = std.env.arg(
 		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
 		env_,
 	);
-	throw new Error("halt");
 
 	return std.autotools.build(
 		{
