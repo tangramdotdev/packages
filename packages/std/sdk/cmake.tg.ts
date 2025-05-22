@@ -207,6 +207,10 @@ export const build = async (...args: std.Args<BuildArg>) => {
 
 	// Set up env.
 	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
+	if (bootstrap) {
+		// Prevent automatically adding the utils to the env.
+		envs.push({ utils: false });
+	}
 
 	// // C/C++ flags.
 	if (opt) {
@@ -310,7 +314,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	}
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
-	const env = await std.env.arg(...envs, userEnv, { utils: false });
+	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.
 	const configureArgs = [
