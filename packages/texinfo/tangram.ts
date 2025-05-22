@@ -65,16 +65,17 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
-	const perlArtifact = await perl.build(
-		{ build, env: env_, host, sdk },
-		perlArg,
-	);
+	const perlArtifact = await perl.build({ build, host }, perlArg);
 	const dependencies = [
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
+		ncurses.build({ build, host }, ncursesArg),
 		perlArtifact,
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
+		zlib.build({ build, host }, zlibArg),
 	];
-	const env = [...dependencies, env_];
+	const env = [
+		...dependencies,
+		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+		env_,
+	];
 
 	const output = await std.autotools.build(
 		{

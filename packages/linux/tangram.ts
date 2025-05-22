@@ -6,17 +6,18 @@ export const metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.12.1",
+	version: "6.12.25",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:0193b1d86dd372ec891bae799f6da20deef16fc199f30080a4ea9de8cef0c619";
+		"sha256:c8af780f6f613ca24622116e4c512a764335ab66e75c6643003c16e49a8e3b90";
 	const extension = ".tar.xz";
-	const base = `https://cdn.kernel.org/pub/linux/kernel/v6.x`;
+	const majorVersion = version.split(".")[0];
+	const base = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x`;
 	return await std.download
-		.extractArchive({ base, checksum, name, version, extension })
+		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 };
@@ -30,31 +31,25 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const kernelHeaders = async (...args: std.Args<Arg>) => {
+export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		phases: phasesArg = {},
-		sdk: sdk_,
+		sdk: sdkArg = {},
 		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	} = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? (await std.triple.host());
-	std.assert.supportedHost(host, metadata);
 	const buildTriple = build_ ?? host;
 
 	const system = std.triple.archAndOs(buildTriple);
-
-	const sdk =
-		typeof sdk_ === "boolean"
-			? await std.sdk({ host: buildTriple, target: host })
-			: std.sdk(sdk_);
 
 	const sourceDir = source_ ?? source();
 
 	tg.assert(
 		std.triple.os(system) === "linux",
-		"The Linux kernel headers can only be built on Linux.",
+		"the Linux kernel headers can only be built on Linux",
 	);
 
 	// NOTE - the kernel build wants the string x86_64 on x86_64 but arm64 on aarch64.
@@ -66,24 +61,28 @@ export const kernelHeaders = async (...args: std.Args<Arg>) => {
 		karch = "arm";
 	}
 
-	const env = [sdk, env_];
-
-	const prepare = tg`cp -r ${sourceDir}/* . && chmod -R +w . && make mrproper`;
 	const build = {
-		body: `make -j"\$(nproc)" ARCH=${karch} headers`,
+		body: tg`make -C ${sourceDir} O="\$PWD" -j"\$(nproc)" ARCH=${karch} headers`,
 		post: "find usr/include -type f ! -name '*.h' -delete",
 	};
 	const install = {
 		pre: "mkdir -p $OUTPUT",
 		body: `cp -r usr/include/. $OUTPUT && mkdir -p $OUTPUT/config && echo ${metadata.version}-default > $OUTPUT/config/kernel.release`,
 	};
-	const order = ["prepare", "build", "install"];
+	const order = ["build", "install"];
+
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [];
+	// Add the toolchain.
+	envs.push(await tg.build(std.sdk, sdkArg));
+
+	const env = std.env.arg(...envs, env_);
 
 	const result = tg.Directory.expect(
-		await std.phases.run(
+		await tg.build(
+			std.phases.run,
 			{
-				env: std.env.arg(...env),
-				phases: { prepare, build, install },
+				env,
+				phases: { build, install },
 				order,
 				command: { host: system },
 			},
