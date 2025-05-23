@@ -1,7 +1,5 @@
 import * as std from "std" with { path: "../std" };
-import bison from "bison" with { path: "../bison" };
 import * as linux from "linux" with { path: "../linux" };
-import perl from "perl" with { path: "../perl" };
 import python from "python" with { path: "../python" };
 import texinfo from "texinfo" with { path: "../texinfo" };
 
@@ -58,6 +56,8 @@ export const build = async (...args: std.Args<Arg>) => {
 		args: [
 			"--disable-nls",
 			"--enable-fortify-source",
+			"--disable-nscd",
+			"--disable-werror",
 			"--enable-kernel=4.14",
 			tg`--with-headers=${linuxHeaders}`,
 			`--build=${build}`,
@@ -68,7 +68,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	};
 
 	const install = {
-		args: [`DESTDIR="$OUTPUT"`],
+		args: [`DESTDIR="$OUTPUT"/${host}`],
 	};
 
 	const phases = {
@@ -76,18 +76,13 @@ export const build = async (...args: std.Args<Arg>) => {
 		install,
 	};
 
-	const deps = [
-		bison({ host: build }),
-		perl({ host: build }),
-		python({ host: build }),
-		texinfo({ host: build }),
-	];
+	const deps = [python({ host: build }), texinfo({ host: build })];
 	const env = std.env.arg(
 		...deps,
 		{
 			CPATH: tg.Mutation.unset(),
 			LIBRARY_PATH: tg.Mutation.unset(),
-			TANGRAM_LINKER_PASSTHROUGH: "1",
+			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
 		env_,
 	);
@@ -96,7 +91,9 @@ export const build = async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
-			opt: "2",
+			fortifySource: false,
+			hardeningCFlags: false,
+			opt: "3",
 			phases,
 			prefixPath: "/",
 			sdk,
@@ -108,13 +105,13 @@ export const build = async (...args: std.Args<Arg>) => {
 	// Fix libc.so.
 	result = await applySysrootFix({
 		directory: result,
-		filePath: `lib/libc.so`,
+		filePath: `${host}/lib/libc.so`,
 	});
 
 	// Fix libm.so.
 	result = await applySysrootFix({
 		directory: result,
-		filePath: `lib/libm.so`,
+		filePath: `${host}/lib/libm.so`,
 	});
 
 	return result;
@@ -127,12 +124,41 @@ type SysrootFixArg = {
 	filePath: string;
 };
 
+export type LibCArg = {
+	build?: string;
+	env?: std.env.Arg;
+	host?: string;
+	sdk?: std.sdk.Arg;
+	source?: tg.Directory;
+	linuxHeaders?: tg.Directory;
+};
+
+/** Construct a sysroot containing the libc and the linux headers. */
+export const sysroot = async (unresolvedArg?: tg.Unresolved<LibCArg>) => {
+	const arg =
+		unresolvedArg !== undefined ? await tg.resolve(unresolvedArg) : {};
+	const host = arg.host ?? (await std.triple.host());
+	const strippedHost = std.triple.stripVersions(host);
+	const linuxHeaders =
+		arg.linuxHeaders ??
+		(await linux.kernelHeaders({ ...arg, host: strippedHost }));
+	const cLibrary = await build({ ...arg, linuxHeaders });
+	const cLibInclude = await cLibrary
+		.get(`${strippedHost}/include`)
+		.then(tg.Directory.expect);
+	return tg.directory(cLibrary, {
+		[`${host}/include`]: tg.directory(cLibInclude, linuxHeaders),
+	});
+};
+
 /** Some linker scripts need a small patch to work properly with `ld`'s sysroot replacement, prepending a `=` character to paths that need to resolve relative to the sysroot rather than absolute. This target modifies the script with the given name in the given directory. */
 export const applySysrootFix = async (arg: SysrootFixArg) => {
 	let { directory, filePath } = arg;
-	const linkerScript = await arg.directory.get(arg.filePath).then(tg.File.expect);
+	const linkerScript = await arg.directory
+		.get(arg.filePath)
+		.then(tg.File.expect);
 	const isElfObject =
-		await std.file.detectExecutableKind(linkerScript) === "elf";
+		(await std.file.detectExecutableKind(linkerScript)) === "elf";
 	// If the given path points to an ELF object, don't do anything. Apply the fix if it's a text file.
 	if (!isElfObject) {
 		const scriptContents = await linkerScript.text();
