@@ -405,6 +405,8 @@ export const generateScripts = (
 	for (const [name, reference] of Object.entries(targets)) {
 		// The syntax for an entrypoint is <import specifier>:<attribute>.
 		const [object, attribute] = reference.split(":");
+		tg.assert(object);
+		tg.assert(attribute);
 
 		// Generate a python script that will run.
 		const script = tg.file`
