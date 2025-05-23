@@ -97,7 +97,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const perlForBuild = dependencies.perl.build({
 		build,
 		host: build,
-		env: std.env.arg(m4ForBuild, bisonForBuild, { utils: false }),
+		env: std.env.arg(m4ForBuild, bisonForBuild),
 	});
 	const pythonForBuild = dependencies.python.build({
 		build,

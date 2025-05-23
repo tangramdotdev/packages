@@ -180,48 +180,12 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 export default toolchain;
 
-/** Build LLD only, without the 2-stage bootstrap. */
+/** Grab the LLD linker from the toolchain. */
 export const lld = async (arg?: LLVMArg) => {
-	const {
-		build: build_,
-		env: env_,
-		host: host_,
-		lto = true,
-		sdk,
-		source: source_,
-	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
-
-	const sourceDir = source_ ?? source();
-
-	// Define build environment.
-	const pythonForBuild = await python();
-	const zlibArtifact = await zlib();
-	const deps = [git(), pythonForBuild, zlibArtifact];
-
-	const env = await std.env.arg(...deps, env_);
-
-	// Define default flags.
-	const configure = {
-		args: [
-			"-DCMAKE_BUILD_TYPE=Release",
-			"-DLLVM_ENABLE_PROJECTS=lld",
-			`-DLLVM_HOST_TRIPLE=${host}`,
-			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			tg`-DZLIB_ROOT=${zlibArtifact}`,
-		],
-	};
-
-	const phases = { configure };
-
-	return await cmake.build({
-		...(await std.triple.rotate({ build, host })),
-		env,
-		phases,
-		sdk,
-		source: tg`${sourceDir}/llvm`,
-	});
+	const toolchainDir = await toolchain(arg);
+	tg.assert(toolchainDir instanceof tg.Directory);
+	// Use a template instead of the file directly so the linker proxy invokes the linker by its full name.
+	return tg`${toolchainDir}/bin/ld.lld`;
 };
 
 export const llvmMajorVersion = () => {
