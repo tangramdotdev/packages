@@ -3,13 +3,13 @@ import * as std from "../tangram.ts";
 
 export const metadata = {
 	name: "file_cmds",
-	version: "448.0.3",
+	version: "457.120.3",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:d5cf241a751a9d36f43a4cd759d06835f4346c3150c62147a05c7bdec67b057c";
+		"sha256:0a3f9b5bbf4dcd3d7a2f76f3fb4f0671eadaa0603341ef6be34796f847c9a5fa";
 	const owner = "apple-oss-distributions";
 	const repo = "file_cmds";
 	const tag = std.download.packageName({ name, version });
@@ -51,6 +51,7 @@ export const macOsXattrCmds = async (arg?: tg.Unresolved<Arg>) => {
 	result = await compileUtil({
 		...resolved,
 		destDir: result,
+		extraArgs: ["-UTARGET_OS_OSX"],
 		fileName: "xinstall.c",
 		utilSource: tg.Directory.expect(await sourceDir.get("install")),
 		utilName: "install",
@@ -72,10 +73,10 @@ export default macOsXattrCmds;
 
 type UtilArg = Arg & {
 	destDir: tg.Directory;
+	extraArgs?: Array<tg.Template.Arg>;
 	fileName: string;
 	utilSource: tg.Directory;
 	utilName: string;
-	script?: tg.Template.Arg;
 };
 
 export const compileUtil = async (arg: UtilArg) => {
@@ -83,25 +84,15 @@ export const compileUtil = async (arg: UtilArg) => {
 	const host = build;
 
 	// Grab args.
-	const { destDir, fileName, utilName, utilSource } = arg;
+	const { destDir, extraArgs = [], fileName, utilName, utilSource } = arg;
 
 	// Compile the util.
-	const script =
-		arg.script ??
-		(await tg`
-			cc -Oz -o $OUTPUT ${utilSource}/${fileName}
-		`);
-
-	const util = tg.File.expect(
-		await (
-			await tg.command(await tg.template(script), {
-				host: std.triple.archAndOs(build),
-				env: std.env.arg(arg.env ?? {}, bootstrap.sdk.env(host), {
-					utils: false,
-				}),
-			})
-		).build(),
-	);
+	const util =
+		await tg.build`cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o $OUTPUT ${utilSource}/${fileName}`
+			.env(
+				std.env.arg(arg.env ?? {}, bootstrap.sdk.env(host), { utils: false }),
+			)
+			.then(tg.File.expect);
 
 	// Combine with destination.
 	return tg.directory(destDir, {

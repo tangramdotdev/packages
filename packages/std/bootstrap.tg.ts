@@ -242,7 +242,7 @@ const checksums: Record<string, tg.Checksum> = {
 	toolchain_aarch64_linux:
 		"sha256:01cf6871a4e8c28fe29572bc807edfacd8d5e44d0ee5455de8acbb53f516ec98",
 	toolchain_universal_darwin:
-		"sha256:49de2d7ba2e008d089c8b2ab8e544a429b861f3d45037bba0f0d27b6ec56386d",
+		"sha256:7dd2bd0203ef673ed420f91d58799f973794fe602129c20fd5eaae39ce05ced2",
 	toolchain_x86_64_linux:
 		"sha256:a3f9ec87394e63f90ec8784e6980727821fe0753b783e86ce298f54145372fad",
 	utils_aarch64_linux:
