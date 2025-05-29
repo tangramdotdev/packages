@@ -1,4 +1,5 @@
 import * as std from "std" with { path: "../std" };
+import patches from "./patches" with { type: "directory" };
 
 export const metadata = {
 	homepage: "https://gmplib.org",
@@ -19,7 +20,8 @@ export const source = async () => {
 	return await std.download
 		.extractArchive({ base, checksum, extension, name, version })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
+		.then(std.directory.unwrap)
+		.then((d) => std.patch(d, patches));
 };
 
 export type Arg = {

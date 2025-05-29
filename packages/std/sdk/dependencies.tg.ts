@@ -212,6 +212,7 @@ export const buildTools = async (
 };
 
 export type HostLibrariesArg = {
+	debug?: boolean;
 	host: string;
 	buildToolchain: std.env.Arg;
 	/** Should we include gmp/isl/mfpr/mpc? Default: true */
@@ -220,7 +221,12 @@ export type HostLibrariesArg = {
 
 /** An env containing libraries built for the given host: gmp, mpfr, isl, mpc, zlib, zstd. Assumes the incoming env contains a toolchain plus the build tools (m4 is required). */
 export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
-	const { host, buildToolchain, withGccLibs = true } = await tg.resolve(arg);
+	const {
+		debug = false,
+		host,
+		buildToolchain,
+		withGccLibs = true,
+	} = await tg.resolve(arg);
 
 	const zlibArtifact = zlib({
 		host,
@@ -236,7 +242,13 @@ export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
 
 	if (withGccLibs) {
 		// These libraries depend on m4, but no other library depends on them. Build them here and use a separate env to thread dependencies..
-		const gmpArtifact = gmp({ host, bootstrap: true, env: buildToolchain });
+		const gmpArtifact = gmp({
+			debug,
+			host,
+			bootstrap: true,
+			env: buildToolchain,
+		});
+		console.log("GMP", await (await gmpArtifact).id());
 		ret.push(gmpArtifact);
 		let gmpEnv = std.env.arg(buildToolchain, gmpArtifact, { utils: false });
 
