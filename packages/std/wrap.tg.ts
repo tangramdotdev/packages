@@ -2259,7 +2259,7 @@ export const testSingleArgObjectNoMutations = async () => {
 	const origExecutableId = await origExecutable.id();
 	console.log("origExecutable", origExecutableId);
 
-	const buildToolchain = await bootstrap.sdk.env();
+	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
 
 	const wrapper = await wrap(executable, {
 		args: ["--arg1", "--arg2"],
@@ -2372,7 +2372,7 @@ export const testContentExecutableVariadic = async () => {
 };
 
 export const testDependencies = async () => {
-	const buildToolchain = await bootstrap.sdk.env();
+	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	const transitiveDependencyId = await transitiveDependency.id();
 	console.log("transitiveReference", transitiveDependencyId);
@@ -2416,7 +2416,7 @@ export const testDylibPath = async () => {
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
 	// Obtain a non-proxied toolchain env from the bootstrap
-	const bootstrapSdk = bootstrap.sdk.env();
+	const bootstrapSdk = bootstrap.sdk.env(host);
 
 	// Compile the greet library
 	const sharedLibraryDir =

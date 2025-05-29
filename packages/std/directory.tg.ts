@@ -145,6 +145,10 @@ export const provides = async (
 	};
 };
 
+export const test = async () => {
+	await testKeepSubdirectories();
+};
+
 export const testKeepSubdirectories = async () => {
 	let orig = await tg.directory({
 		a: tg.directory(),
@@ -166,6 +170,4 @@ export const testKeepSubdirectories = async () => {
 
 	let maybeC = await filtered.tryGet("c");
 	tg.assert(maybeC !== undefined && maybeC instanceof tg.Directory);
-
-	return true;
 };

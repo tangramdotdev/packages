@@ -53,7 +53,7 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 	const configure = {
 		command: `./bootstrap`,
 		args: [
-			`--parallel=$(nproc)`,
+			`--parallel=$(nproc)`, // FIXME - this doesn't work on macOS, no nproc.
 			`--`,
 			`-DCMAKE_USE_OPENSSL=OFF`,
 			`-DBUILD_SHARED_LIBS=OFF`,
@@ -62,17 +62,20 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 	const phases = { prepare, configure };
 
 	const bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
-	const env = std.env.arg(
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [
 		bootstrapSdk,
 		bootstrap.make.build({ host }),
 		{
-			CC: "cc -static",
-			CXX: "c++ -static",
 			TANGRAM_LINKER_PASSTHROUGH: true,
 		},
-		env_,
-		{ utils: false },
-	);
+	];
+	if (std.triple.os(host) === "linux") {
+		envs.push({
+			CC: "cc -static",
+			CXX: "c++ -static",
+		});
+	}
+	const env = std.env.arg(...envs, env_, { utils: false });
 
 	const result = std.autotools.build({
 		...(await std.triple.rotate({ build, host })),

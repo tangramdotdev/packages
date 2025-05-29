@@ -24,13 +24,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "19.1.6",
+	version: "20.1.5",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:e3f79317adaa9196d2cfffe1c869d7c100b7540832bc44fe0d3f44a12861fa34";
+		"sha256:a069565cd1c6aee48ee0f36de300635b5781f355d7b3c96a28062d50d575fa3e";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -49,6 +49,7 @@ export type LLVMArg = {
 	lto?: boolean;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
+	target?: string;
 };
 
 /** Produce a complete clang+lld distribution using a 2-stage bootstrapping build. */
@@ -60,13 +61,28 @@ export const toolchain = async (arg?: LLVMArg) => {
 		lto = true,
 		sdk,
 		source: source_,
+		target: target_,
 	} = arg ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
 	const build = build_ ?? host;
+	const target = target_ ?? host;
 
 	if (std.triple.os(host) === "darwin") {
-		// On macOS, just return the bootstrap toolchain, which provides Apple Clang.
-		return bootstrap.sdk.env(host);
+		const targetOs = await std.triple.os(target);
+		if (targetOs === "darwin") {
+			return await bootstrap.sdk.env(host);
+		} else if (targetOs === "linux") {
+			console.log("darwin to linux!");
+			const targetSysroot = getLinuxSysroot(target);
+			const bootstrapToolchainEnv = await bootstrap.sdk.env(host);
+			return await std.env.arg(
+				bootstrapToolchainEnv,
+				{ SDKROOT: tg.Mutation.unset() },
+				{ utils: false },
+			);
+		} else {
+			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
+		}
 	}
 
 	const sourceDir = source_ ?? source();
@@ -225,6 +241,60 @@ export const lld = async (arg?: LLVMArg) => {
 	return tg`${toolchainDir}/bin/ld.lld`;
 };
 
+/** Build LLD only, without the 2-stage bootstrap. */
+export const buildLld = async (arg?: LLVMArg) => {
+	const {
+		build: build_,
+		env: env_,
+		host: host_,
+		lto = true,
+		sdk,
+		source: source_,
+	} = arg ?? {};
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+
+	const sourceDir = source_ ?? source();
+
+	const buildToolchain = await std.env.arg(bootstrap.sdk(host));
+
+	// Define build environment.
+	const buildTools = await tg.build(dependencies.buildTools, {
+		host: build,
+		buildToolchain,
+		level: "python",
+	});
+	const zlibArtifact = await dependencies.zlib.build({
+		env: buildToolchain,
+		bootstrap: true,
+	});
+	const deps = [buildTools, zlibArtifact];
+
+	const env = await std.env.arg(...deps, buildToolchain, env_);
+
+	// Define default flags.
+	const configure = {
+		args: [
+			"-DCMAKE_BUILD_TYPE=Release",
+			"-DLLVM_ENABLE_PROJECTS=lld",
+			`-DLLVM_HOST_TRIPLE=${host}`,
+			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			tg`-DZLIB_ROOT=${zlibArtifact}`,
+		],
+	};
+
+	const phases = { configure };
+
+	return await cmake.build({
+		...(await std.triple.rotate({ build, host })),
+		bootstrap: true,
+		env,
+		phases,
+		sdk,
+		source: tg`${sourceDir}/llvm`,
+	});
+};
+
 type LinuxToDarwinArg = {
 	host: string;
 	target?: string;
@@ -301,12 +371,28 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
+		// If the target is darwin, set resource dir..
 		// Note - the Apple Clang version provided by the OS is 17, not ${version}.
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/17.0.0`);
+
+		const targetOs = std.triple.os(target);
+		if (targetOs === "darwin") {
+			// If the target is darwin, use the macOS SDK for the SDKROOT.
+			env = {
+				SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
+			};
+		} else if (targetOs === "linux") {
+			console.log("wrap args for darwin to linux!");
+			// If the target is linux, unset any existing SDKROOT and instead use the Linux sysroot.
+			env = {
+				SDKROOT: tg.Mutation.unset(),
+			};
+			const targetSysroot = getLinuxSysroot(target);
+			clangArgs.push(tg`--sysroot=${targetSysroot}`);
+		} else {
+			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
+		}
 		clangxxArgs = [...clangArgs];
-		env = {
-			SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
-		};
 	} else {
 		// If the target is darwin, set sysroot and target flags.
 
@@ -329,6 +415,20 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	}
 
 	return { clangArgs, clangxxArgs, env };
+};
+
+export const getLinuxSysroot = async (
+	target: string,
+): Promise<tg.Directory> => {
+	const targetArchAndOs = std.triple.archAndOs(target);
+	const url = `https://github.com/tangramdotdev/bootstrap/releases/download/v2024.10.03/${targetArchAndOs}-sysroot.tar.zst`;
+	const checksum =
+		targetArchAndOs === "aarch64-linux"
+			? "sha256:36d4a5a5b7e7e742c17a1c42fcb12814a20e365b8d51074f0d0d447ac9a8a0e4"
+			: "sha256:none";
+	return await tg
+		.download(url, checksum, { mode: "extract" })
+		.then(tg.Directory.expect);
 };
 
 export const test = async () => {

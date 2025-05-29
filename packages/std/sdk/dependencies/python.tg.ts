@@ -41,22 +41,35 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const build = build_ ?? host;
 	const os = std.triple.os(build);
 
-	const configure = {
-		args: [
-			"--disable-test-modules",
-			"--with-ensurepip=no",
-			"--without-c-locale-coercion",
-			"--without-readline",
-		],
-	};
+	const configureArgs = [
+		"--disable-test-modules",
+		"--with-ensurepip=no",
+		"--without-c-locale-coercion",
+		"--without-readline",
+	];
+	const makeArgs = [];
 
-	const phases = { configure };
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+	if (os === "darwin") {
+		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
+		configureArgs.push(
+			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+		);
+		makeArgs.push(
+			"RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+		);
+	}
 
-	const env = await std.env.arg(env_, { utils: false });
+	const env = await std.env.arg(...envs, env_, { utils: false });
 	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
-		configure.args.push(`CC="$CC"`);
+		configureArgs.push(`CC="$CC"`);
 	}
+
+	const configure = { args: configureArgs };
+	const buildPhase = { args: makeArgs };
+	const install = { args: makeArgs };
+	const phases = { configure, build: buildPhase, install };
 
 	// Build python.
 	const result = std.autotools.build({

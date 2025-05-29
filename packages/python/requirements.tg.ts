@@ -87,6 +87,7 @@ export const install = async (
 		["bin"]: installedBins,
 		["lib/python3/site-packages"]: installedSitePackages,
 	});
+	console.log("INSTALLED", await installed.id());
 
 	const interpreter = await tg.symlink(
 		tg`${pythonArtifact}/bin/python${versionString()}`,

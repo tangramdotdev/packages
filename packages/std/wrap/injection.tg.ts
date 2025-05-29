@@ -123,19 +123,16 @@ type DylibArg = {
 export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
-	const useTriplePrefix = build !== host;
+	// On macOS builds, the compiler is clang, so no triple prefix.
+	const useTriplePrefix = std.triple.os(build) === "linux" && build !== host;
 
-	let args: Array<tg.Template.Arg> = [
+	let args: Array<tg.Unresolved<tg.Template.Arg>> = [
 		"-shared",
 		"-fPIC",
 		"-ldl",
 		"-O3",
 		"-pipe",
 		"-mtune=generic",
-		"-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3",
-		"-fasynchronous-unwind-tables",
-		"-fno-omit-frame-pointer",
-		"-mno-omit-leaf-frame-pointer",
 	];
 	if (!(std.triple.os(build) === "darwin" && std.triple.os(host) === "linux")) {
 		args.push("-fstack-protector-strong");
@@ -145,9 +142,19 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		args = [...args, ...arg.additionalArgs];
 	}
 	if (std.triple.os(host) === "linux") {
-		args.push("-fstack-clash-protection");
-		if (await std.env.tryWhich({ env: arg.buildToolchain, name: "clang" })) {
-			args.push("-fuse-ld=lld");
+		// On linux build, add these flags.
+		if (std.triple.os(build) === "linux") {
+			args.push("-fstack-clash-protection");
+			if (await std.env.tryWhich({ env: arg.buildToolchain, name: "clang" })) {
+				args.push("-fuse-ld=lld");
+			}
+		}
+		if (std.triple.os(build) === "darwin") {
+			// TODO -this is inefficient, we already have this, but who/what is responsible?
+			const { directory } = await std.sdk.toolchainComponents({
+				env: arg.buildToolchain,
+			});
+			args.push("-v", "--sysroot", tg`${directory}/${host}/sysroot`);
 		}
 	}
 
@@ -177,7 +184,7 @@ export const test = async () => {
 	const detectedHost = await std.triple.host();
 	const hostArch = std.triple.arch(detectedHost);
 	tg.assert(hostArch);
-	const buildToolchain = bootstrap.sdk.env();
+	const buildToolchain = bootstrap.sdk.env(detectedHost);
 	const nativeInjection = await tg.build(injection, {
 		host: detectedHost,
 		buildToolchain,

@@ -257,7 +257,6 @@ export const buildDefaultBash = async (hostArg?: tg.Unresolved<string>) => {
 };
 
 /** Get the default mount for the platform. */
-// FIXME unresolved
 export const linuxRootMount = async (
 	hostArg: tg.Unresolved<string>,
 ): Promise<tg.Command.Mount> => {

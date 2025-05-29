@@ -26,6 +26,7 @@ import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as build from "./build.tg.ts";
 import caCertificates from "./certificates.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
+import * as directory from "./directory.tg.ts";
 import * as download from "./download.tg.ts";
 import * as env from "./env.tg.ts";
 import { env as stdEnv } from "./env.tg.ts";
@@ -35,7 +36,6 @@ import * as injection from "./wrap/injection.tg.ts";
 import * as phases from "./phases.tg.ts";
 import * as run from "./run.tg.ts";
 import * as sdk from "./sdk.tg.ts";
-import { sdk as stdSdk } from "./sdk.tg.ts";
 import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
@@ -85,6 +85,7 @@ const testActions = (): Record<string, () => any> => {
 		file: file.test,
 		fileBinary: file.testBinary,
 		fileShebang: file.testShebang,
+		directory: directory.test,
 		wrapArgAndEnvDump: wrap.argAndEnvDump,
 		wrapBasic: wrap.testSingleArgObjectNoMutations,
 		wrapContent: wrap.testContentExecutable,
@@ -128,12 +129,14 @@ const testActions = (): Record<string, () => any> => {
 		gccSource: sdk.gnu.gcc.source,
 		gnuCanadianCross: sdk.gnu.gnuToolchain.testCanadianCross,
 		gnuCross: sdk.gnu.gnuToolchain.testCross,
+		gnuSysroot: sdk.gnu.gnuToolchain.extractSysroot,
 		gnuCrossMips: sdk.gnu.gnuToolchain.testCrossMips,
 		gnuCrossRpi: sdk.gnu.gnuToolchain.testCrossRpi,
 		llvmGit: sdk.llvm.git.test,
 		llvmNcurses: sdk.llvm.ncurses.test,
 		llvmSource: sdk.llvm.source,
 		llvmToolchain: sdk.llvm.toolchain,
+		llvmBuildLLd: sdk.llvm.buildLld,
 		llvmAppleLibdispatch: sdk.llvm.appleLibdispatch.build,
 		llvmAppleLibtapi: sdk.llvm.appleLibtapi.build,
 		llvmLibBsd: sdk.llvm.libBsd.build,

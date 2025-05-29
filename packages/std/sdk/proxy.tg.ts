@@ -296,6 +296,8 @@ export const ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// The injection library and wrapper are built for the host machine.
+	console.log("injection build", build);
+	console.log("injection host", host);
 	const hostInjectionLibrary = await injection({
 		buildToolchain,
 		build,

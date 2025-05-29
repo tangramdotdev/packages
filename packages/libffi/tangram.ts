@@ -5,7 +5,7 @@ export const metadata = {
 	license: "https://github.com/libffi/libffi/blob/master/LICENSE",
 	name: "libffi",
 	repository: "https://github.com/libffi/libffi",
-	version: "3.4.6",
+	version: "3.4.8",
 	provides: {
 		docs: [
 			"info/libffi.info",
@@ -22,7 +22,7 @@ export const metadata = {
 export const source = async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:b0dea9df23c863a7a50e825440f3ebffabd65df1497108e5d437747843895a4e";
+		"sha256:bc9842a18898bfacb0ed1252c4febcc7e78fa139fd27fdc7a3e30d9d9356119b";
 	const owner = name;
 	const repo = name;
 	const tag = `v${version}`;

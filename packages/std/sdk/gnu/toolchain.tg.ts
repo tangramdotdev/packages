@@ -24,7 +24,7 @@ export const toolchain = async (arg: ToolchainArg) => {
 	const target = std.sdk.canonicalTriple(target_ ?? host);
 
 	if (std.triple.os(host) === "darwin") {
-		return darwinCrossToolchain({ host, target });
+		throw new Error("gcc builds are not supported on Darwin hosts");
 	}
 
 	// Always build a native toolchain.
@@ -324,49 +324,12 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 	});
 };
 
-type DarwinCrossToolchainArg = {
-	host: string;
-	target: string;
-};
-
-const darwinCrossToolchain = async (arg: DarwinCrossToolchainArg) => {
-	const { host, target } = arg;
-	tg.assert(std.triple.os(host) === "darwin");
-
-	const tag = "v13.20.0-1";
-	const baseUrl = `https://github.com/deciduously/homebrew-macos-cross-toolchains/releases/download/${tag}`;
-
-	const checksums: { [key: string]: tg.Checksum } = {
-		["aarch64-unknown-linux-gnu-aarch64-darwin"]:
-			"sha256:d87efab534ca68814d7081fd001fbc2808a6dba09dbeefec38558203d521acae",
-		["aarch64-unknown-linux-gnu-x86_64-darwin"]:
-			"sha256:03aede7b899bdcab7cd3c3b1b2e92bf21723eba35478feb5f6a241980498616f",
-		["aarch64-unknown-linux-musl-x86_64-darwin"]:
-			"sha256:902313390fb624c2301f92143968cf43abfc048f8c748aede0f9b33cab5be26b",
-		["aarch64-unknown-linux-musl-aarch64-darwin"]:
-			"sha256:e293004542f6e6622d638192fd99f572e21ad896e2e567f135b8c533c5d78bf6",
-		["x86_64-unknown-linux-gnu-aarch64-darwin"]:
-			"sha256:78be08eee3c3fba42f1cc99fbd0a39c9c79a415ad24d39cf8eb8fc0627b45c4a",
-		["x86_64-unknown-linux-gnu-x86_64-darwin"]:
-			"sha256:04e141d9968c6cf778442417cfd5769b080567692c14a856eaf90b7ab6aff018",
-		["x86_64-unknown-linux-musl-x86_64-darwin"]:
-			"sha256:1194f4539cf4f48a321842264b04eaf4fbf68c7133d8cc6ff3f5a40e3a8b6f8b",
-		["x86_64-unknown-linux-musl-aarch64-darwin"]:
-			"sha256:2ef10ee4c40aa1a536def1fc5eecec73bcd63d72ff86db258b297c0e477e48cc",
-	};
-
-	const hostArchAndOs = std.triple.archAndOs(host);
-	const canonicalTarget = std.sdk.canonicalTriple(target);
-	const toolchainDescription = `${canonicalTarget}-${hostArchAndOs}`;
-	const checksum = checksums[toolchainDescription];
-	tg.assert(checksum, `unsupported toolchain ${toolchainDescription}`);
-
-	const url = `${baseUrl}/${toolchainDescription}.tar.gz`;
-
-	return await std.download
-		.extractArchive({ checksum, url })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
+export const extractSysroot = async () => {
+	const fullToolchain = await canadianCross();
+	const include = fullToolchain.get("include").then(tg.Directory.expect);
+	const lib = fullToolchain.get("lib").then(tg.Directory.expect);
+	const filtered = await tg.directory({ include, lib });
+	return filtered;
 };
 
 export const testCanadianCross = async () => {
