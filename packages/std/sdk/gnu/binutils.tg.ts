@@ -38,7 +38,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		autotools = {},
 		bootstrap: bootstrap_ = false,
 		build: build_,
-		env,
+		env: env_,
 		host: host_,
 		sdk,
 		source: source_,
@@ -74,12 +74,19 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		install: makeinfoOverride,
 	};
 
-	return std.autotools.build(
+	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+	envs.push({
+		CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
+	});
+	const env = std.env.arg(...envs, env_);
+
+	const output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			bootstrap: bootstrap_,
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
+			fortifySource: host === target,
 			env,
 			opt: "3",
 			phases,
@@ -88,6 +95,8 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		},
 		autotools,
 	);
+
+	return output;
 };
 
 export default build;

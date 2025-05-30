@@ -243,12 +243,10 @@ export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
 	if (withGccLibs) {
 		// These libraries depend on m4, but no other library depends on them. Build them here and use a separate env to thread dependencies..
 		const gmpArtifact = gmp({
-			debug,
 			host,
 			bootstrap: true,
 			env: buildToolchain,
 		});
-		console.log("GMP", await (await gmpArtifact).id());
 		ret.push(gmpArtifact);
 		let gmpEnv = std.env.arg(buildToolchain, gmpArtifact, { utils: false });
 

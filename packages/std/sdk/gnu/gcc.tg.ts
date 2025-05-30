@@ -205,6 +205,8 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	};
 	const phases = { configure };
 
+	const shouldFortify = variant !== "stage2_full" && host === target;
+
 	let result = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
@@ -212,7 +214,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 			defaultCrossArgs: false,
 			defaultCrossEnv: false,
 			env,
-			fortifySource: variant !== "stage2_full",
+			fortifySource: shouldFortify,
 			phases,
 			opt: "3",
 			sdk,
