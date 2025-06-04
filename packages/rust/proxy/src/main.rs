@@ -350,7 +350,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	#[cfg(feature = "tracing")]
 	{
-		let output_id = output.id;
+		let output_id = output.id();
 		tracing::info!(?output_id, "got output");
 	}
 
@@ -383,7 +383,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
 	// Ensure the result is available with an internal checkout.
-	let artifact = tg::Artifact::from(output.clone()).id;
+	let artifact = tg::Artifact::from(output.clone()).id();
 	let path = tg::checkout(
 		tg,
 		tg::checkout::Arg {
