@@ -39,7 +39,7 @@ export type Arg = {
 export const build = async (unresolvedArg: tg.Unresolved<Arg>) => {
 	const arg = await tg.resolve(unresolvedArg);
 	const { env: envArg, source } = arg;
-	const sourceId = await source.id();
+	const sourceId = source.id;
 	console.log("received source dir", sourceId);
 	const kind = await detectKind(source);
 
@@ -101,7 +101,7 @@ export type EnvArg = {
 export const env = async (unresolvedArg: tg.Unresolved<EnvArg>) => {
 	const arg = await tg.resolve(unresolvedArg);
 	const { build, host, source } = arg;
-	const sourceId = await source.id();
+	const sourceId = source.id;
 	console.log("received source dir", sourceId);
 	const kind = await detectKind(source);
 
@@ -273,13 +273,13 @@ export const testKind = async (kind: Kind) => {
 	const source = dirs[kind];
 
 	// Test detection
-	console.log("source", await source.id());
+	console.log("source", source.id);
 	const detectedKind = await detectKind(source);
 	tg.assert(detectedKind == kind, `expected ${kind}, got ${detectedKind}`);
 
 	// Test build
 	const buildOutput = await build({ source }).then(tg.Directory.expect);
-	console.log("buildOutput", await buildOutput.id());
+	console.log("buildOutput", buildOutput.id);
 	const testStdout = async (arg: TestFnArg): Promise<boolean> => {
 		const stdout = await $`${arg.testFile(buildOutput)} > $OUTPUT`
 			.then(tg.File.expect)

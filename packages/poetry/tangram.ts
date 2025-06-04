@@ -78,7 +78,7 @@ export const build = async (args: BuildArgs) => {
 		build,
 		host,
 	});
-	console.log(`poetryArtifact`, await poetryArtifact.id());
+	console.log(`poetryArtifact`, poetryArtifact.id);
 
 	const poetryLock =
 		args.lockfile ??
@@ -87,7 +87,7 @@ export const build = async (args: BuildArgs) => {
 
 	// Parse the lockfile into a requirements.txt. Note: we do not use poetry export, as the lockfile may be missing hashes.
 	const requirements = await lockfile.requirements(poetryLock);
-	console.log("requirements from poetry.lock", await requirements.id());
+	console.log("requirements from poetry.lock", requirements.id);
 
 	// Install the requirements specified by the poetry.lock file.
 	const installedRequirements = python.requirements.install(
@@ -95,14 +95,14 @@ export const build = async (args: BuildArgs) => {
 		requirements,
 	);
 	console.log(
-		`installedRequirements: ${await (await installedRequirements).id()}`,
+		`installedRequirements: ${(await installedRequirements).id}`,
 	);
 
 	// Install the source distribution.
 	const source = tg.directory(args.source, {
 		["poetry.lock"]: args.lockfile,
 	});
-	console.log(`source: ${await (await source).id()}`);
+	console.log(`source: ${(await source).id}`);
 
 	const env = await std.env.arg(poetryArtifact, {
 		PYTHONPATH: tg.Mutation.suffix(

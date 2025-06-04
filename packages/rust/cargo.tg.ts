@@ -491,7 +491,7 @@ export const testVendorDependencies = async () => {
 		source: sourceDirectory,
 		useCargoVendor: true,
 	});
-	console.log("tgVendored", await (await tgVendored).id());
+	console.log("tgVendored", (await tgVendored).id);
 	console.log("cargoVendored", await cargoVendored);
 	return true;
 };

@@ -281,9 +281,7 @@ export namespace wrap {
 		// If the executable is a file and the behavior is merge, try to read the manifest from it.
 		if (merge) {
 			if (existingManifest === undefined) {
-				const dbg = tg.Artifact.is(executable)
-					? await executable.id()
-					: executable;
+				const dbg = tg.Artifact.is(executable) ? executable.id : executable;
 				throw new Error(
 					`Could not locate existing manifest to merge with.  Received ${dbg}.`,
 				);
@@ -600,8 +598,9 @@ export namespace wrap {
 	): Promise<Array<string>> => {
 		const manifest = await wrap.Manifest.read(file);
 		if (!manifest) {
+			await file.store();
 			throw new Error(
-				`Cannot determine needed libraries for ${await file.id()}: not a Tangram wrapper.`,
+				`Cannot determine needed libraries for ${file.id}: not a Tangram wrapper.`,
 			);
 		}
 		tg.assert(
@@ -622,7 +621,7 @@ export namespace wrap {
 		);
 		tg.assert(
 			wrappedExecutableFile instanceof tg.File,
-			`executable must be a file, received ${await wrappedExecutableFile.id()}`,
+			`executable must be a file, received ${wrappedExecutableFile.id}`,
 		);
 		return await getNeededLibraries(wrappedExecutableFile);
 	};
@@ -644,9 +643,7 @@ export namespace wrap {
 	): Promise<tg.Symlink | tg.File | tg.Template> => {
 		const manifest = await wrap.Manifest.read(file);
 		if (!manifest) {
-			throw new Error(
-				`Cannot unwrap ${await file.id()}: not a Tangram wrapper.`,
-			);
+			throw new Error(`Cannot unwrap ${file.id}: not a Tangram wrapper.`);
 		}
 		if (manifest.executable.kind === "content") {
 			return templateFromManifestTemplate(manifest.executable.value);
@@ -845,21 +842,23 @@ export namespace wrap {
 			// Collect the manifest references.
 			const dependencies_ = new Set<tg.Object.Id>();
 			for await (const dependencies of manifestDependencies(manifest)) {
-				dependencies_.add(await dependencies.id());
+				dependencies_.add(dependencies.id);
 			}
 			const fileDependencies = await file.dependencyObjects();
 			await Promise.all(
 				fileDependencies.map(async (reference) => {
-					dependencies_.add(await reference.id());
+					await reference.store();
+					dependencies_.add(reference.id);
 				}),
 			);
 			const dependencies: { [reference: string]: tg.Referent<tg.Object> } = {};
 			for (const dependency of dependencies_) {
-				dependencies[dependency] = { item: tg.Object.withId(dependency) };
+				const item = tg.Object.withId(dependency);
+				dependencies[dependency] = { item };
 			}
 
 			// Create the file.
-			const newFile = tg.file({
+			const newFile = await tg.file({
 				contents,
 				dependencies,
 				executable: true,
@@ -1451,7 +1450,7 @@ const getNeededLibraries = async (
 };
 
 type DirWithSubpath = {
-	dir: tg.Directory.Id;
+	dir: tg.Directory;
 	subpath?: string | undefined;
 };
 
@@ -1462,7 +1461,7 @@ const createLibraryPathSet = async (
 
 	for (let path of libraryPaths) {
 		if (path instanceof tg.Directory) {
-			set.add({ dir: await path.id() });
+			set.add({ dir: path });
 		}
 		if (path instanceof tg.Template) {
 			const maybeResult = await tryTemplateToDirWithSubpath(path);
@@ -1474,7 +1473,7 @@ const createLibraryPathSet = async (
 			const artifact = await path.artifact();
 			if (artifact !== undefined) {
 				tg.Directory.assert(artifact);
-				let ret: DirWithSubpath = { dir: await artifact.id() };
+				let ret: DirWithSubpath = { dir: artifact };
 				const subpath = await path.subpath();
 				if (subpath !== undefined) {
 					ret = { ...ret, subpath };
@@ -1483,7 +1482,8 @@ const createLibraryPathSet = async (
 			}
 		}
 		if (path instanceof tg.File) {
-			throw new Error(`found a file in the library paths:  ${await path.id()}`);
+			await path.store();
+			throw new Error(`found a file in the library paths:  ${path.id}`);
 		}
 	}
 
@@ -1501,7 +1501,7 @@ const tryTemplateToDirWithSubpath = async (
 		const component = components[0];
 		if (component instanceof tg.Directory) {
 			return {
-				dir: await component.id(),
+				dir: component,
 			};
 		} else {
 			return undefined;
@@ -1514,7 +1514,7 @@ const tryTemplateToDirWithSubpath = async (
 		if (typeof first === "string") {
 			if (second instanceof tg.Directory) {
 				return {
-					dir: await second.id(),
+					dir: second,
 				};
 			} else {
 				return undefined;
@@ -1523,7 +1523,7 @@ const tryTemplateToDirWithSubpath = async (
 		if (first instanceof tg.Directory) {
 			if (typeof second === "string") {
 				return {
-					dir: await first.id(),
+					dir: first,
 					subpath: second.slice(1),
 				};
 			} else {
@@ -1543,7 +1543,7 @@ const tryTemplateToDirWithSubpath = async (
 			typeof third === "string"
 		) {
 			return {
-				dir: await second.id(),
+				dir: second,
 				subpath: third.slice(1),
 			};
 		} else {
@@ -1641,9 +1641,8 @@ const resolvePaths = async (
 const getInner = async (
 	dirWithSubpath: DirWithSubpath,
 ): Promise<tg.Directory> => {
-	const dir = dirWithSubpath.dir;
+	const directory = dirWithSubpath.dir;
 	let subpath = dirWithSubpath.subpath;
-	const directory = tg.Directory.withId(dir);
 	if (subpath === undefined) {
 		return directory;
 	}
@@ -1655,10 +1654,10 @@ const getInner = async (
 		if (inner instanceof tg.Directory) {
 			return inner;
 		}
-		const id = await inner.id();
+		const id = inner.id;
 		throw new Error(`expected a directory, got ${id}`);
 	} else {
-		throw new Error(`could not get ${inner} from ${dir}`);
+		throw new Error(`could not get ${inner} from ${directory.id}`);
 	}
 };
 
@@ -1817,7 +1816,7 @@ export const fileOrSymlinkFromManifestTemplate = async (
 	const component = template.components[0];
 	if (!(component instanceof tg.File || component instanceof tg.Symlink)) {
 		const received =
-			component instanceof tg.Directory ? await component.id() : component;
+			component instanceof tg.Directory ? component.id : component;
 		throw new Error(`expected a file or symlink, got ${received}`);
 	}
 	return component;
@@ -1892,11 +1891,14 @@ const manifestValueFromValue = async (
 	} else if (typeof value === "string") {
 		return value;
 	} else if (value instanceof tg.Directory) {
-		return { kind: "directory", value: await value.id() };
+		await value.store();
+		return { kind: "directory", value: value.id };
 	} else if (value instanceof tg.File) {
-		return { kind: "file", value: await value.id() };
+		await value.store();
+		return { kind: "file", value: value.id };
 	} else if (value instanceof tg.Symlink) {
-		return { kind: "symlink", value: await value.id() };
+		await value.store();
+		return { kind: "symlink", value: value.id };
 	} else if (value instanceof tg.Template) {
 		return { kind: "template", value: await manifestTemplateFromArg(value) };
 	} else if (value instanceof tg.Mutation) {
@@ -1980,7 +1982,8 @@ const manifestTemplateFromArg = async (
 			if (typeof component === "string") {
 				return { kind: "string", value: component };
 			} else {
-				return { kind: "artifact", value: await component.id() };
+				await component.store();
+				return { kind: "artifact", value: component.id };
 			}
 		}),
 	);
@@ -2182,18 +2185,6 @@ async function* manifestValueDependencies(
 	}
 }
 
-export const artifactId = (artifact: tg.Artifact): Promise<tg.Artifact.Id> => {
-	if (artifact instanceof tg.Directory) {
-		return artifact.id();
-	} else if (artifact instanceof tg.File) {
-		return artifact.id();
-	} else if (artifact instanceof tg.Symlink) {
-		return artifact.id();
-	} else {
-		return tg.unreachable();
-	}
-};
-
 export const pushOrSet = (
 	obj: { [key: string]: unknown },
 	key: string,
@@ -2244,7 +2235,8 @@ export const test = async () => {
 
 export const testSingleArgObjectNoMutations = async () => {
 	const executable = await argAndEnvDump();
-	const executableID = await executable.id();
+	await executable.store();
+	const executableID = executable.id;
 	// The program is a wrapper produced by the LD proxy.
 	console.log("argAndEnvDump wrapper ID", executableID);
 
@@ -2256,7 +2248,8 @@ export const testSingleArgObjectNoMutations = async () => {
 	const origExecutable = await wrap
 		.executableFromManifestExecutable(origManifestExecutable)
 		.then(tg.File.expect);
-	const origExecutableId = await origExecutable.id();
+	await origExecutable.store();
+	const origExecutableId = origExecutable.id;
 	console.log("origExecutable", origExecutableId);
 
 	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
@@ -2268,7 +2261,8 @@ export const testSingleArgObjectNoMutations = async () => {
 			HELLO: "WORLD",
 		},
 	});
-	const wrapperID = await wrapper.id();
+	await wrapper.store();
+	const wrapperID = wrapper.id;
 	console.log("wrapper id", wrapperID);
 
 	// Check the manifest can be deserialized properly.
@@ -2336,7 +2330,8 @@ export const testContentExecutable = async () => {
 		},
 	});
 
-	console.log("wrapper", await wrapper.id());
+	await wrapper.store();
+	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
 	const output = await std.build`set -x; ${wrapper} > $OUTPUT`
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
@@ -2358,7 +2353,8 @@ export const testContentExecutableVariadic = async () => {
 			buildToolchain,
 		},
 	);
-	console.log("wrapper", await wrapper.id());
+	await wrapper.store();
+	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
 	const output = await std.build`set -x; ${wrapper} > $OUTPUT`
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
@@ -2374,7 +2370,8 @@ export const testContentExecutableVariadic = async () => {
 export const testDependencies = async () => {
 	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
 	const transitiveDependency = await tg.file("I'm a transitive reference");
-	const transitiveDependencyId = await transitiveDependency.id();
+	await transitiveDependency.store();
+	const transitiveDependencyId = transitiveDependency.id;
 	console.log("transitiveReference", transitiveDependencyId);
 	const binDir = await tg.directory({
 		bin: {
@@ -2386,7 +2383,8 @@ export const testDependencies = async () => {
 			}),
 		},
 	});
-	console.log("binDir", await binDir.id());
+	await binDir.store();
+	console.log("binDir", binDir.id);
 
 	const bootstrapShell = await bootstrap.shell();
 	const shellExe = await bootstrapShell.get("bin/sh").then(tg.File.expect);
@@ -2398,7 +2396,8 @@ export const testDependencies = async () => {
 			PATH: tg`${binDir}/bin`,
 		},
 	});
-	console.log("wrapper", await wrapper.id());
+	await wrapper.store();
+	console.log("wrapper", wrapper.id);
 	const wrapperDependencies = await wrapper.dependencies();
 	console.log("wrapperDependencies", wrapperDependencies);
 
@@ -2424,27 +2423,31 @@ export const testDylibPath = async () => {
 			.bootstrap(true)
 			.env(bootstrapSdk)
 			.then(tg.Directory.expect);
-	console.log("sharedLibraryDir", await sharedLibraryDir.id());
+	await sharedLibraryDir.store();
+	console.log("sharedLibraryDir", sharedLibraryDir.id);
 
 	// Compile the driver.
 	const driver = await std.build`cc -xc -o $OUTPUT ${driverSource} -ldl`
 		.bootstrap(true)
 		.env(bootstrapSdk)
 		.then(tg.File.expect);
-	console.log("unwrapped driver", await driver.id());
+	await driver.store();
+	console.log("unwrapped driver", driver.id);
 
 	// Wrap the driver with just the interpreter.
 	const interpreterWrapper = await wrap(driver, {
 		buildToolchain: bootstrapSdk,
 		env: { FOO: "bar" },
 	});
-	console.log("interpreterWrapper", await interpreterWrapper.id());
+	await interpreterWrapper.store();
+	console.log("interpreterWrapper", interpreterWrapper.id);
 
 	// Re-wrap the driver program with the library path.
 	const libraryPathWrapper = await wrap(interpreterWrapper, {
 		buildToolchain: bootstrapSdk,
 		libraryPaths: [tg.symlink(tg`${sharedLibraryDir}/lib`)],
 	});
-	console.log("libraryPathWrapper", await libraryPathWrapper.id());
+	await libraryPathWrapper.store();
+	console.log("libraryPathWrapper", libraryPathWrapper.id);
 	return libraryPathWrapper;
 };

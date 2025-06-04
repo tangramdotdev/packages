@@ -72,7 +72,7 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 				let file;
 				if (arg instanceof tg.Symlink) {
 					file = arg.resolve();
-					tg.assert(file, `Could not resolve symlink ${arg.id()} to a file.`);
+					tg.assert(file, `Could not resolve symlink ${arg.id} to a file.`);
 				} else {
 					file = arg;
 				}
@@ -84,7 +84,8 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 						entrypointArtifact: file,
 					};
 				} else {
-					const id = arg.id();
+					await arg.store();
+					const id = arg.id;
 					throw new Error(
 						`Non-executable file passed to std.container: ${id}.`,
 					);
@@ -419,10 +420,12 @@ export type Layer = {
 };
 
 export const layer = async (directory: tg.Directory): Promise<Layer> => {
-	const bundle = tg.bundle(directory).then(tg.Directory.expect);
-	console.log("bundle", await (await bundle).id());
+	const bundle = await tg.bundle(directory).then(tg.Directory.expect);
+	await bundle.store();
+	console.log("bundle", bundle.id);
 	const tarball = await createTarball(bundle);
-	console.log("layer", await tarball.id());
+	await tarball.store();
+	console.log("layer", tarball.id);
 	const bytes = await tarball.bytes();
 	const diffId = await tg.checksum(bytes, "sha256");
 	return { tarball, diffId };

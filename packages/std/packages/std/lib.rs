@@ -17,19 +17,25 @@ pub fn template_data_to_symlink_data(
 			Ok(tg::symlink::Data::Target { target: s.into() })
 		},
 		[tg::template::component::Data::Artifact(id)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(id)] => {
-			Ok(tg::symlink::Data::Artifact {
-				artifact: id.clone(),
-				subpath: None,
-			})
-		},
-		[tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)]
-		| [tg::template::component::Data::String(_), tg::template::component::Data::Artifact(artifact_id), tg::template::component::Data::String(s)] => {
-			Ok(tg::symlink::Data::Artifact {
-				artifact: artifact_id.clone(),
-				subpath: Some(s.chars().skip(1).collect::<String>().into()),
-			})
-		},
+		| [
+			tg::template::component::Data::String(_),
+			tg::template::component::Data::Artifact(id),
+		] => Ok(tg::symlink::Data::Artifact {
+			artifact: id.clone(),
+			subpath: None,
+		}),
+		[
+			tg::template::component::Data::Artifact(artifact_id),
+			tg::template::component::Data::String(s),
+		]
+		| [
+			tg::template::component::Data::String(_),
+			tg::template::component::Data::Artifact(artifact_id),
+			tg::template::component::Data::String(s),
+		] => Ok(tg::symlink::Data::Artifact {
+			artifact: artifact_id.clone(),
+			subpath: Some(s.chars().skip(1).collect::<String>().into()),
+		}),
 		_ => Err(tg::error!(
 			"expected a template with 1-3 components, got {:?}",
 			components

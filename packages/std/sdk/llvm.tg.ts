@@ -443,7 +443,8 @@ export const test = async () => {
 
 	const directory = await toolchain({ host });
 	tg.Directory.assert(directory);
-	console.log("toolchain dir", await directory.id());
+	await directory.store();
+	console.log("toolchain dir", directory.id);
 
 	const testCSource = tg.file`
 		#include <stdio.h>

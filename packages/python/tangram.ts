@@ -230,11 +230,11 @@ export const wrapScripts = async (
 	const scripts = [];
 	let interpreterId;
 	if (pythonInterpreter instanceof tg.File) {
-		interpreterId = await pythonInterpreter.id();
+		interpreterId = pythonInterpreter.id;
 	} else {
 		const pythonInterpreterTarget = await pythonInterpreter.resolve();
 		if (pythonInterpreterTarget instanceof tg.File) {
-			interpreterId = await pythonInterpreterTarget.id();
+			interpreterId = pythonInterpreterTarget.id;
 		}
 	}
 
@@ -472,7 +472,7 @@ except ImportError as e:
 	const venv = await $`set -x && python -m venv $OUTPUT --copies`
 		.env(self())
 		.then(tg.Directory.expect);
-	console.log("venv", await venv.id());
+	console.log("venv", venv.id);
 
 	return true;
 };

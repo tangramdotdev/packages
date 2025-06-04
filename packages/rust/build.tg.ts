@@ -417,7 +417,7 @@ export const testLinkLibcurl = async () => {
 		setRuntimeLibraryPath: true,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	console.log("exe", await exe.id());
+	console.log("exe", exe.id);
 
 	// Libcurl transitively requires libssl at runtime.
 	const host = await std.triple.host();

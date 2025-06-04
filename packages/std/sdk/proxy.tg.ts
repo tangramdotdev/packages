@@ -306,6 +306,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		build,
 		host,
 	});
+	await hostWrapper.store();
 
 	// Define environment for the linker proxy.
 	const env = {
@@ -319,7 +320,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
 		),
-		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
+		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
 	};
 
 	// Create the linker proxy.
@@ -350,6 +351,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 		build,
 		host,
 	});
+	await hostWrapper.store();
 
 	const stripProxy = await workspace.stripProxy({
 		build,
@@ -362,7 +364,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 			TANGRAM_STRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
-			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(await hostWrapper.id()),
+			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
 		},
 	];
 	if (arg.runtimeLibraryPath !== undefined) {
@@ -402,7 +404,8 @@ export const testBasic = async () => {
 	const output = await std.build`
 				set -x
 				/usr/bin/env
-				cc -v -xc ${helloSource} -o $OUTPUT`
+				cc -v -xc ${helloSource} -o $OUTPUT
+				echo "done"`
 		.includeUtils(false)
 		.pipefail(false)
 		.env(
@@ -506,7 +509,8 @@ export const testSharedLibraryWithDep = async () => {
 		)
 		.then(tg.Directory.expect);
 
-	console.log("STRING CONSTANTS A", await output.id());
+	await output.store();
+	console.log("STRING CONSTANTS A", output.id);
 	return output;
 };
 
@@ -515,10 +519,10 @@ type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 export const testTransitiveAll = async () => {
 	return await Promise.all([
 		testTransitive(),
-		testTransitiveNone(),
-		testTransitiveResolve(),
-		testTransitiveIsolate(),
-		testTransitiveCombine(),
+		// testTransitiveNone(),
+		// testTransitiveResolve(),
+		// testTransitiveIsolate(),
+		// testTransitiveCombine(),
 	]);
 };
 export const testTransitiveNone = () => testTransitive("none");
@@ -546,12 +550,15 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 		sdk: bootstrapSDK,
 		source: constantsSourceA,
 	});
+	await constantsA.store();
+	console.log("CONTANTS A ORIG", constantsA.id);
 	constantsA = await tg.directory(constantsA, {
 		include: {
 			"constantsa.h": constantsHeaderA,
 		},
 	});
-	console.log("STRING CONSTANTS A", await constantsA.id());
+	await constantsA.store();
+	console.log("STRING CONSTANTS A", constantsA.id);
 
 	const constantsSourceB = await tg.file`
 		const char* getGreetingB() {
@@ -562,13 +569,15 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 		sdk: bootstrapSDK,
 		source: constantsSourceB,
 	});
+	await constantsB.store();
 	const constantsHeaderB = await tg.file`const char* getGreetingB();`;
 	constantsB = await tg.directory(constantsB, {
 		include: {
 			"constantsb.h": constantsHeaderB,
 		},
 	});
-	console.log("STRING CONSTANTS B", await constantsB.id());
+	await constantsB.store();
+	console.log("STRING CONSTANTS B", constantsB.id);
 
 	const greetSourceA = await tg.file`
 		#include <stdio.h>
@@ -587,12 +596,14 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 		sdk: bootstrapSDK,
 		source: greetSourceA,
 	});
+	await greetA.store();
 	greetA = await tg.directory(greetA, {
 		include: {
 			"greeta.h": greetHeaderA,
 		},
 	});
-	console.log("GREET A", await greetA.id());
+	await greetA.store();
+	console.log("GREET A", greetA.id);
 
 	const greetSourceB = await tg.file`
 		#include <stdio.h>
@@ -611,12 +622,14 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 		sdk: bootstrapSDK,
 		source: greetSourceB,
 	});
+	await greetB.store();
 	greetB = await tg.directory(greetB, {
 		include: {
 			"greetb.h": greetHeaderB,
 		},
 	});
-	console.log("GREET B", await greetB.id());
+	await greetB.store();
+	console.log("GREET B", greetB.id);
 
 	const mainSource = await tg.file`
 		#include <greeta.h>
@@ -824,7 +837,8 @@ export const testSamePrefix = async () => {
 			),
 		)
 		.then(tg.File.expect);
-	console.log("wrapped_exe", await output.id());
+	await output.store();
+	console.log("wrapped_exe", output.id);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
 };

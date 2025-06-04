@@ -32,7 +32,7 @@ struct Args {
 	remap_targets: Vec<RemapTarget>,
 
 	// The rest of the CLI invocation.
-	cli_args: Vec<String>,
+	cli: Vec<String>,
 }
 
 // Any arguments that need to be remapped to templates.
@@ -75,7 +75,7 @@ impl Environment {
 						tg::error!(source = error, "Failed to parse TANGRAM_CC_ENABLE")
 					})?;
 				},
-				key if BLACKLISTED_ENV_VARS.contains(&key) => continue,
+				key if BLACKLISTED_ENV_VARS.contains(&key) => {},
 				_ => {
 					let value = tangram_std::unrender(&value)?;
 					env.insert(key, value.into());
@@ -89,12 +89,13 @@ impl Environment {
 
 impl Args {
 	// Parse the cli arguments as if this program was gcc to extract the sources, search paths, and rest of the arguments.
-	fn parse() -> tg::Result<Self> {
+	#[allow(clippy::too_many_lines)]
+	fn parse() -> Self {
 		let mut remap_targets = vec![];
 		let mut output = None;
 		let mut cli_args = vec![];
 		let mut stdin = false;
-		let mut iprefix = "".to_owned();
+		let mut iprefix = String::new();
 
 		let mut args = std::env::args().skip(1).peekable();
 		while let Some(arg) = args.next() {
@@ -111,7 +112,7 @@ impl Args {
 						},
 						_ => {
 							if args.peek().is_some() {
-								output = Some(args.next().unwrap())
+								output = Some(args.next().unwrap());
 							}
 						},
 					}
@@ -123,14 +124,14 @@ impl Args {
 							remap_targets.push(RemapTarget {
 								kind: RemapKind::Binary,
 								value: directory.into(),
-							})
+							});
 						},
 						_ => {
 							if args.peek().is_some() {
 								remap_targets.push(RemapTarget {
 									kind: RemapKind::Binary,
 									value: args.next().unwrap(),
-								})
+								});
 							}
 						},
 					}
@@ -142,14 +143,14 @@ impl Args {
 							remap_targets.push(RemapTarget {
 								kind: RemapKind::Include,
 								value: directory.into(),
-							})
+							});
 						},
 						_ => {
 							if args.peek().is_some() {
 								remap_targets.push(RemapTarget {
 									kind: RemapKind::Include,
 									value: args.next().unwrap(),
-								})
+								});
 							}
 						},
 					}
@@ -160,7 +161,7 @@ impl Args {
 						remap_targets.push(RemapTarget {
 							kind: RemapKind::Include,
 							value: args.next().unwrap(),
-						})
+						});
 					}
 				},
 				"-iquote" => {
@@ -168,7 +169,7 @@ impl Args {
 						remap_targets.push(RemapTarget {
 							kind: RemapKind::Quote,
 							value: args.next().unwrap(),
-						})
+						});
 					}
 				},
 				"-isystem" => {
@@ -176,7 +177,7 @@ impl Args {
 						remap_targets.push(RemapTarget {
 							kind: RemapKind::System,
 							value: args.next().unwrap(),
-						})
+						});
 					}
 				},
 				"-imacro" => {
@@ -184,7 +185,7 @@ impl Args {
 						remap_targets.push(RemapTarget {
 							kind: RemapKind::Macro,
 							value: args.next().unwrap(),
-						})
+						});
 					}
 				},
 				"-idirafter" => {
@@ -192,7 +193,7 @@ impl Args {
 						remap_targets.push(RemapTarget {
 							kind: RemapKind::DirAfter,
 							value: args.next().unwrap(),
-						})
+						});
 					}
 				},
 				// Handle prefixes. This is a stateful operation over the command line arguments, where subsequent -iprefix arguments will override any previous -iprefix.
@@ -209,7 +210,7 @@ impl Args {
 						remap_targets.push(RemapTarget {
 							kind: RemapKind::Include,
 							value: path,
-						})
+						});
 					}
 				},
 				// Add the argument to the idirafter search paths after joining with the current prefix.
@@ -220,7 +221,7 @@ impl Args {
 						remap_targets.push(RemapTarget {
 							kind: RemapKind::DirAfter,
 							value: path,
-						})
+						});
 					}
 				},
 				// Extract linker search paths.
@@ -230,14 +231,14 @@ impl Args {
 							remap_targets.push(RemapTarget {
 								kind: RemapKind::Linker,
 								value: directory.into(),
-							})
+							});
 						},
 						_ => {
 							if args.peek().is_some() {
 								remap_targets.push(RemapTarget {
 									kind: RemapKind::Linker,
 									value: args.next().unwrap(),
-								})
+								});
 							}
 						},
 					}
@@ -264,12 +265,12 @@ impl Args {
 			}
 		}
 
-		Ok(Self {
+		Self {
 			stdin,
 			remap_targets,
 			output,
-			cli_args,
-		})
+			cli: cli_args,
+		}
 	}
 }
 
@@ -292,7 +293,7 @@ fn main_inner() -> tg::Result<()> {
 	let environment = Environment::parse()?;
 
 	// Get the command line arguments.
-	let args = Args::parse()?;
+	let args = Args::parse();
 
 	// If this invocation isn't being used to generate output or needs to read from stdin, fallback on the detected C compiler.
 	if !environment.enable || args.output.is_none() || args.stdin {
@@ -315,11 +316,12 @@ fn main_inner() -> tg::Result<()> {
 	Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	let Args {
 		output,
 		remap_targets,
-		cli_args,
+		cli: cli_args,
 		..
 	} = args;
 	let output = output.unwrap();
@@ -357,8 +359,8 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 			RemapKind::Linker => args.push("-L".to_owned().into()),
 			RemapKind::Binary => args.push("-B".to_owned().into()),
 			RemapKind::Source => (),
-		};
-		args.push(value.into())
+		}
+		args.push(value.into());
 	}
 
 	// Create a process.
@@ -427,8 +429,8 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	}
 	let artifact_path = tangram_path
 		.join(".tangram/artifacts")
-		.join(output_file.id(tg).await?.to_string());
-	eprintln!("Copying {artifact_path:#?} to {output:#?}");
+		.join(output_file.id().to_string());
+	eprintln!("Copying {} to {output:#?}", artifact_path.display());
 	std::fs::copy(artifact_path, output)
 		.map_err(|error| tg::error!(source = error, "failed to copy file"))?;
 
@@ -510,20 +512,19 @@ fn insert_into_source_tree(
 	components: &[&std::ffi::OsStr],
 	remap_target: RemapTarget,
 ) {
-	let parent = match subtrees
+	let parent = if let Some(parent) = subtrees
 		.iter_mut()
 		.find(|tree| tree.component.as_os_str() == components[0])
 	{
-		Some(parent) => parent,
-		None => {
-			let parent = SourceTree {
-				component: components[0].to_os_string(),
-				remap_target: None,
-				children: None,
-			};
-			subtrees.push(parent);
-			subtrees.last_mut().unwrap()
-		},
+		parent
+	} else {
+		let parent = SourceTree {
+			component: components[0].to_os_string(),
+			remap_target: None,
+			children: None,
+		};
+		subtrees.push(parent);
+		subtrees.last_mut().unwrap()
 	};
 	let components = &components[1..];
 	if components.is_empty() {
@@ -596,7 +597,7 @@ async fn check_in_source_tree(
 							"failed to add {}, {artifact:?} to directory",
 							subpath.display()
 						)
-					})?
+					})?;
 			}
 		}
 	}

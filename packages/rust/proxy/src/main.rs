@@ -350,7 +350,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	#[cfg(feature = "tracing")]
 	{
-		let output_id = output.id(tg).await?;
+		let output_id = output.id;
 		tracing::info!(?output_id, "got output");
 	}
 
@@ -383,10 +383,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
 	// Ensure the result is available with an internal checkout.
-	let artifact = tg::Artifact::from(output.clone())
-		.id(tg)
-		.await
-		.map_err(|source| tg::error!(!source, "failed to get ID"))?;
+	let artifact = tg::Artifact::from(output.clone()).id;
 	let path = tg::checkout(
 		tg,
 		tg::checkout::Arg {
@@ -548,7 +545,7 @@ async fn get_checked_in_path(
 	}
 
 	// Unrender the string.
-	let symlink_data = template_data_to_symlink_data(unrender(path_str)?.data(tg).await?)?;
+	let symlink_data = template_data_to_symlink_data(unrender(path_str)?.to_data())?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?symlink_data, "unrendered symlink data");
 

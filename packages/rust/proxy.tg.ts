@@ -59,7 +59,7 @@ export const testHello = async () => {
 			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
 		},
 	});
-	console.log("helloWorld result", await helloWorld.id());
+	console.log("helloWorld result", helloWorld.id);
 
 	// Assert it produces the correct output.
 	const helloOutput = await $`hello-world | tee $OUTPUT`
@@ -100,7 +100,7 @@ export const testPkgconfig = async () => {
 				Libs: -L\${libdir} -lexternal
 				Cflags: -I\${includedir}`,
 	});
-	console.log("externalLibDir", await externalLibDir.id());
+	console.log("externalLibDir", externalLibDir.id);
 
 	// compile the rust.
 	const rustOutput = await cargo.build({
@@ -113,7 +113,7 @@ export const testPkgconfig = async () => {
 		proxy: true,
 		verbose: true,
 	});
-	console.log("result", await rustOutput.id());
+	console.log("result", rustOutput.id);
 
 	// Assert it produces the correct output.
 	const testOutput = await $`myapp | tee $OUTPUT`
@@ -137,7 +137,7 @@ export const testOpenSSL = async () => {
 		proxy: true,
 		verbose: true,
 	});
-	console.log("helloOpenssl result", await helloOpenssl.id());
+	console.log("helloOpenssl result", helloOpenssl.id);
 
 	// Assert it produces the correct output.
 	const opensslOutput = await $`hello-openssl | tee $OUTPUT`
@@ -160,7 +160,7 @@ export const testWorkspace = async () => {
 			TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
 		},
 	});
-	console.log("helloWorkspace result", await helloWorkspace.id());
+	console.log("helloWorkspace result", helloWorkspace.id);
 
 	// Assert it produces the correct output.
 	const workspaceOutput = await $`cli | tee $OUTPUT`

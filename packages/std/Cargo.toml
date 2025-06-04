@@ -23,6 +23,7 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 missing_safety_doc = "allow"
 pedantic = { level = "warn", priority = -1 }
+result_large_err = "allow"
 
 [workspace.dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -33,7 +34,7 @@ itertools = "0.14"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "e674d881e7815ef2e4c96dfe10f6097227c2a3bf" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "dd358717933761160f363dbd402848aac1f10ff1" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",

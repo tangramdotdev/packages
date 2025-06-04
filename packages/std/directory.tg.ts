@@ -155,11 +155,13 @@ export const testKeepSubdirectories = async () => {
 		b: tg.directory(),
 		c: tg.directory(),
 	});
-	let origId = await orig.id();
+	await orig.store();
+	let origId = orig.id;
 	console.log("orig", origId);
 
 	let filtered = await keepSubdirectories(orig, "a", "c");
-	let filteredId = await filtered.id();
+	await filtered.store();
+	let filteredId = filtered.id;
 	console.log("filtered", filteredId);
 
 	let maybeA = await filtered.tryGet("a");

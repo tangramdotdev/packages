@@ -281,7 +281,7 @@ impl Manifest {
 		let manifest_length = manifest_blob.length(tg).await?;
 		#[cfg(feature = "tracing")]
 		{
-			let blob_id = manifest_blob.id(tg).await?;
+			let blob_id = manifest_blob.id();
 			tracing::trace!(?blob_id, ?manifest_length, "created manifest blob");
 		}
 
@@ -298,7 +298,7 @@ impl Manifest {
 		]);
 		#[cfg(feature = "tracing")]
 		{
-			let blob_id = output_blob.id(tg).await?;
+			let blob_id = output_blob.id();
 			tracing::trace!(?blob_id, "created wrapper blob");
 		}
 
@@ -320,7 +320,7 @@ impl Manifest {
 
 		#[cfg(feature = "tracing")]
 		{
-			let file_id = output_file.id(tg).await?;
+			let file_id = output_file.id();
 			tracing::trace!(?file_id, "created wrapper file");
 		}
 
@@ -501,7 +501,6 @@ fn dependency_from_object_id(id: &tg::object::Id) -> tg::Referent<tg::Object> {
 	tg::Referent {
 		item: tg::Object::with_id(id.clone()),
 		path: None,
-		subpath: None,
 		tag: None,
 	}
 }

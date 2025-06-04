@@ -163,9 +163,9 @@ export const testBinary = async () => {
 	const libgreetFile = await output
 		.get(`libgreet.${dylibExt}`)
 		.then(tg.File.expect);
-	console.log("libgreet file", await libgreetFile.id());
+	console.log("libgreet file", libgreetFile.id);
 	const exeFile = await output.get("exe").then(tg.File.expect);
-	console.log("exe file", await exeFile.id());
+	console.log("exe file", exeFile.id);
 
 	// Read the metadata.
 	const libgreetMetadata = await executableMetadata(libgreetFile);

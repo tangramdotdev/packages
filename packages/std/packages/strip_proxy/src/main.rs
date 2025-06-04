@@ -96,6 +96,7 @@ fn main_inner() -> tg::Result<()> {
 	Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 async fn run_proxy(
 	strip_program: &std::path::Path,
 	strip_args: &[String],
@@ -165,7 +166,7 @@ async fn run_proxy(
 		.await?
 		.try_unwrap_file()
 		.map_err(|error| tg::error!(source = error, "expected a file"))?;
-		let stripped_file_id = stripped_file.id(&tg).await?;
+		let stripped_file_id = stripped_file.id();
 		#[cfg(feature = "tracing")]
 		tracing::info!(?stripped_file_id, "checked in the stripped executable");
 
@@ -180,8 +181,7 @@ async fn run_proxy(
 		let new_manifest = Manifest {
 			executable: manifest::Executable::Path(
 				tangram_std::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
-					.data(&tg)
-					.await?,
+					.to_data(),
 			),
 			..manifest
 		};
@@ -189,9 +189,10 @@ async fn run_proxy(
 		tracing::info!(?new_manifest, "created new manifest");
 
 		let new_wrapper = new_manifest.write(&tg).await?;
+		new_wrapper.store(&tg).await?;
 		#[cfg(feature = "tracing")]
 		{
-			let new_wrapper_id = new_wrapper.id(&tg).await?;
+			let new_wrapper_id = new_wrapper.id();
 			tracing::info!(?new_wrapper_id, "wrote new wrapper");
 		}
 
@@ -210,10 +211,7 @@ async fn run_proxy(
 			.await
 			.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
-		let artifact = tg::Artifact::from(new_wrapper)
-			.id(&tg)
-			.await
-			.map_err(|source| tg::error!(!source, "failed to get ID"))?;
+		let artifact = tg::Artifact::from(new_wrapper).id();
 		tg::checkout(
 			&tg,
 			tg::checkout::Arg {

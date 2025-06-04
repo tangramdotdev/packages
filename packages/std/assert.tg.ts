@@ -281,11 +281,11 @@ export const assertFileReferences = async (
 	const interpreterPath = interpreter.path;
 	const interpreterArtifact =
 		await fileOrSymlinkFromManifestTemplate(interpreterPath);
-	const interpreterId = await interpreterArtifact.id();
+	const interpreterId = interpreterArtifact.id;
 	tg.assert(interpreterId);
 	let foundManifest = false;
 	for await (const dependency of manifestDependencies(fileManifest)) {
-		const dependencyId = await dependency.id();
+		const dependencyId = dependency.id;
 		if (dependencyId === interpreterId) {
 			foundManifest = true;
 		}
@@ -303,7 +303,7 @@ export const assertFileReferences = async (
 	);
 	let foundFile = false;
 	for (const dependency of fileDependencies) {
-		const referenceId = await dependency.id();
+		const referenceId = dependency.id;
 		if (referenceId === interpreterId) {
 			foundFile = true;
 		}

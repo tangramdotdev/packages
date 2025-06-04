@@ -275,10 +275,12 @@ export const linuxRootMount = async (
 		.env(host)
 		.then((d) => d.get("bin/env"))
 		.then(tg.File.expect);
-	const root = tg.directory({
+	const root = await tg.directory({
 		[`bin/sh`]: shellExe,
 		[`usr/bin/env`]: envExe,
 	});
-	const mountArg = await tg`${root}:/`;
-	return await tg.Command.Mount.parse(mountArg);
+	return {
+		source: root,
+		target: "/",
+	};
 };

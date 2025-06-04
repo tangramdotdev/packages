@@ -762,7 +762,7 @@ export const envObjectFromArtifact = async (
 		const manifest = await std.wrap.Manifest.read(artifact);
 		if (!manifest) {
 			// If the file was not a wrapper, throw an error.
-			const artifactId = await artifact.id();
+			const artifactId = artifact.id;
 			throw new Error(`Could not read manifest from ${artifactId}`);
 		}
 		// If the file was a wrapper, return its env.

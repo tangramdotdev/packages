@@ -44,7 +44,7 @@ export namespace sdk {
 		const shell = await bootstrap.shell(host);
 		const shellFile = await shell.get("bin/dash").then(tg.File.expect);
 		const utils = bootstrap.utils(host);
-		const combined = tg.directory(utils, {
+		const combined = await tg.directory(utils, {
 			"bin/dash": shellFile,
 			"bin/sh": tg.symlink("dash"),
 		});
