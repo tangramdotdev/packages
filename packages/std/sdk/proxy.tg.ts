@@ -382,7 +382,6 @@ export const stripProxy = async (arg: StripProxyArg) => {
 export const test = async () => {
 	const tests = [
 		testBasic(),
-		testTransitiveAll(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
 		testDifferentPrefixDirect(),
@@ -436,7 +435,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 	const flags = tg.Template.join(" ", ...flagArgs);
 	const dylibExt =
 		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
-	return await std.build`mkdir -p $OUTPUT/lib && cc -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags}`
+	return await std.build`set -x && mkdir -p $OUTPUT/lib && cc -v -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`
 		.bootstrap(true)
 		.env(
 			std.env.arg(
@@ -519,10 +518,10 @@ type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 export const testTransitiveAll = async () => {
 	return await Promise.all([
 		testTransitive(),
-		// testTransitiveNone(),
-		// testTransitiveResolve(),
-		// testTransitiveIsolate(),
-		// testTransitiveCombine(),
+		testTransitiveNone(),
+		testTransitiveResolve(),
+		testTransitiveIsolate(),
+		testTransitiveCombine(),
 	]);
 };
 export const testTransitiveNone = () => testTransitive("none");

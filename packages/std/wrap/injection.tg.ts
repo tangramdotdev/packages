@@ -30,7 +30,9 @@ export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 	// Select the correct toolchain and options for the given triple.
 	let additionalArgs: Array<string | tg.Template> = [];
 	if (os === "linux") {
-		additionalArgs = ["-Wl,--no-as-needed", "-s"];
+		if (std.triple.os(build) === "linux") {
+			additionalArgs.push("-Wl,--no-as-needed", "-s");
+		}
 		const injection = dylib({
 			build,
 			buildToolchain,
@@ -150,11 +152,17 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 			}
 		}
 		if (std.triple.os(build) === "darwin") {
-			// TODO -this is inefficient, we already have this, but who/what is responsible?
 			const { directory } = await std.sdk.toolchainComponents({
 				env: arg.buildToolchain,
 			});
-			args.push("-v", "--sysroot", tg`${directory}/${host}/sysroot`);
+			args.push(
+				"-v",
+				"-target",
+				host,
+				"-fuse-ld=lld",
+				"--sysroot",
+				tg`${directory}/${host}/sysroot`,
+			);
 		}
 	}
 

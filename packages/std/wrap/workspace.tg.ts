@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as gnu from "../sdk/gnu.tg.ts";
+import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
@@ -11,6 +12,7 @@ type Arg = {
 	host?: string;
 	release?: boolean;
 	source?: tg.Directory;
+	verbose?: boolean;
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
@@ -23,6 +25,7 @@ export const workspace = async (
 		host: host_,
 		release = true,
 		source: source_,
+		verbose = false,
 	} = await tg.resolve(arg);
 	const host = host_ ?? (await std.triple.host());
 	const buildTriple = build_ ?? host;
@@ -41,6 +44,7 @@ export const workspace = async (
 		buildToolchain,
 		release,
 		source,
+		verbose,
 	});
 };
 
@@ -78,6 +82,7 @@ export const rust = async (
 	const resolved = await tg.resolve(arg);
 	const host = standardizeTriple(await std.triple.host());
 	const target = standardizeTriple(resolved?.target ?? host);
+	console.log(`RUST: host: ${host}, target: ${target}`);
 	const hostSystem = std.triple.archAndOs(host);
 
 	// Download and parse the Rust manifest for the selected version.
@@ -113,7 +118,7 @@ export const rust = async (
 		const name = "rust-std";
 		const pkg = manifest.pkg[name]?.target[target];
 		if (pkg?.available) {
-			const artifact = std.download({
+			const artifact = std.download.extractArchive({
 				checksum: `sha256:${pkg.xz_hash}`,
 				url: pkg.xz_url,
 			});
@@ -184,6 +189,7 @@ type BuildArg = {
 	release?: boolean;
 	source: tg.Directory;
 	target?: string;
+	verbose?: boolean;
 };
 
 export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
@@ -196,14 +202,15 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	let target_ = arg.target ?? host;
 	const target = standardizeTriple(target_);
 	const system = std.triple.archAndOs(host);
-	const os = std.triple.os(system);
+	const hostOs = std.triple.os(system);
+	let verbose = arg.verbose;
 
 	const isCross =
 		std.triple.arch(host_) !== std.triple.arch(target_) ||
 		std.triple.os(host_) !== std.triple.os(target_);
 	let prefix = ``;
 	let suffix = tg``;
-	if (isCross) {
+	if (hostOs === "linux" && isCross) {
 		prefix = `${target}-`;
 	}
 
@@ -217,7 +224,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	let buildToolchain = arg.buildToolchain;
 	let hostToolchain = undefined;
 	let setSysroot = false;
-	if (os === "linux") {
+	if (hostOs === "linux") {
 		if (!isCross) {
 			buildToolchain = await bootstrap.sdk.env(host_);
 			host_ = await bootstrap.toolchainTriple(host_);
@@ -230,7 +237,15 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	} else {
 		if (isCross) {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await tg.build(gnu.toolchain, { host, target });
+			hostToolchain = await tg
+				.build(llvm.toolchain, { host, target })
+				.then(tg.Directory.expect);
+			const { directory: targetDirectory } = await std.sdk.toolchainComponents({
+				env: await std.env.arg(hostToolchain, { utils: false }),
+				host: host_,
+			});
+			suffix = tg.Template
+				.raw` -target ${target} --sysroot ${targetDirectory}/${target}/sysroot`;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
 		}
@@ -264,30 +279,26 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			RUST_TARGET: target,
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 			RUSTFLAGS: `-C target-feature=+crt-static`,
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${prefix}cc`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`${prefix}cc${suffix}`,
 			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
 			[`CC_${tripleToEnvVar(target)}`]: tg`${prefix}cc${suffix}`,
 			[`CXX_${tripleToEnvVar(target)}`]: tg`${prefix}c++${suffix}`,
 		},
 	];
 
-	if (os === "darwin") {
+	if (hostOs === "darwin") {
 		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
-		// On macOS, if cross-compiling, include the default SDK as well.
-		if (isCross) {
-			env.push(std.sdk());
-		}
 	}
 
 	// Set up platform-specific environment.
 	let interpreter = tg``;
 	let rustc = tg``;
 	let cargo = tg``;
-	if (os === "linux") {
+	if (hostOs === "linux") {
 		interpreter = tg`${ldso} --library-path ${libDir}`;
 		rustc = tg`${interpreter} ${rustToolchain}/bin/rustc`;
 		cargo = tg`${interpreter} ${rustToolchain}/bin/cargo`;
-	} else if (os === "darwin") {
+	} else if (hostOs === "darwin") {
 		rustc = tg`${rustToolchain}/bin/rustc`;
 		cargo = tg`${rustToolchain}/bin/cargo`;
 
@@ -298,13 +309,19 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			"MacOSX.sdk": macOsSdk,
 		});
 
-		env.push({
-			SDKROOT: tg`${sdkroot}/MacOSX.sdk`,
-		});
+		if (isCross) {
+			env.push({
+				SDKROOT: tg.Mutation.unset(),
+			});
+		} else {
+			env.push({
+				SDKROOT: tg`${sdkroot}/MacOSX.sdk`,
+			});
+		}
 	}
 
 	// Define phases.
-	const prepare = tg`
+	let prepare = tg`
 		export CARGO_HOME=$PWD/cargo_home
 		mkdir -p $CARGO_HOME
 
@@ -317,6 +334,40 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		chmod +x rustc.sh
 		export RUSTC=$PWD/rustc.sh
 		`;
+	if (hostOs === "darwin" && isCross) {
+		const macOsSdk = bootstrap.macOsSdk();
+
+		// https://github.com/rust-lang/cc-rs/issues/810
+		const sdkroot = tg.directory({
+			"MacOSX.sdk": macOsSdk,
+		});
+		const hostFlag = tg`--sysroot ${sdkroot}/MacOSX.sdk`;
+		const { directory: targetDirectory } = await std.sdk.toolchainComponents({
+			env: await std.env.arg(hostToolchain, { utils: false }),
+			host: host_,
+		});
+		suffix = tg.Template
+			.raw` -target ${target} --sysroot ${directory}/${target}/sysroot`;
+		prepare = tg`
+			${prepare}
+			echo "#!/usr/bin/env sh" > build-cc.sh
+			echo 'set -eu' >> build-cc.sh
+			echo 'exec ${directory}/bin/clang ${hostFlag} "$@"' >> build-cc.sh
+			chmod +x build-cc.sh
+			echo "#!/usr/bin/env sh" > target-cc.sh
+			echo 'set -eu' >> target-cc.sh
+			echo 'exec ${targetDirectory}/bin/clang -target ${target} --sysroot ${targetDirectory}/${target}/sysroot "$@"' >> target-cc.sh
+			chmod +x target-cc.sh
+			echo "#!/usr/bin/env sh" > build-cxx.sh
+			echo 'set -eu' >> build-cxx.sh
+			echo 'exec ${directory}/bin/clang++ ${hostFlag} "$@"' >> build-cxx.sh
+			chmod +x build-cxx.sh
+			export CC=$PWD/build-cc.sh
+			export CXX=$PWD/build-cxx.sh
+			export CARGO_TARGET_${tripleToEnvVar(host, true)}_LINKER=$PWD/build-cc.sh
+			export CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER=$PWD/target-cc.sh
+			`;
+	}
 
 	const args = [
 		tg`--manifest-path ${source}/Cargo.toml`,
@@ -330,6 +381,9 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	}
 	if (enableTracing) {
 		args.push(`--features tracing`);
+	}
+	if (verbose) {
+		args.push("--verbose");
 	}
 
 	const build = {

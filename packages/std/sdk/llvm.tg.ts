@@ -24,13 +24,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.5",
+	version: "20.1.6",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:a069565cd1c6aee48ee0f36de300635b5781f355d7b3c96a28062d50d575fa3e";
+		"sha256:5c70549d524284c184fe9fbff862c3d2d7a61b787570611b5a30e5cc345f145e";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -68,17 +68,25 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const target = target_ ?? host;
 
 	if (std.triple.os(host) === "darwin") {
-		const targetOs = await std.triple.os(target);
+		const targetOs = std.triple.os(target);
 		if (targetOs === "darwin") {
 			return await bootstrap.sdk.env(host);
 		} else if (targetOs === "linux") {
-			console.log("darwin to linux!");
-			const targetSysroot = getLinuxSysroot(target);
-			const bootstrapToolchainEnv = await bootstrap.sdk.env(host);
-			return await std.env.arg(
-				bootstrapToolchainEnv,
-				{ SDKROOT: tg.Mutation.unset() },
-				{ utils: false },
+			const toolchain = bootstrap.toolchain(host);
+			const lld = buildLld({ host });
+			const sysroot = getLinuxSysroot(target);
+			return await tg.directory(
+				toolchain,
+				{
+					[`bin/ld`]: undefined,
+					[`bin/ld64.lld`]: undefined,
+					[`bin/ld-classic`]: undefined,
+				},
+				lld,
+				{ [`bin/ld`]: tg.symlink("./lld") },
+				{
+					[`${target}/sysroot`]: sysroot,
+				},
 			);
 		} else {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
@@ -178,7 +186,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	let llvmArtifact = await cmake.build({
 		...(await std.triple.rotate({ build, host })),
-		env: std.env.arg(...env, { utils: false }), // TODO - is this correct? utils or no here?
+		env: std.env.arg(...env, { utils: false }),
 		phases,
 		sdk,
 		source: tg`${sourceDir}/llvm`,
@@ -203,12 +211,12 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Collect all required library paths.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	const hostLibDir = tg.symlink(tg`${libDir}/${host}`);
-	const ncursesLibDir = ncursesArtifact.then((dir) =>
-		dir.get("lib").then(tg.Directory.expect),
-	);
-	const zlibLibDir = zlibArtifact.then((dir) =>
-		dir.get("lib").then(tg.Directory.expect),
-	);
+	const ncursesLibDir = ncursesArtifact
+		.then((dir) => dir.get("lib"))
+		.then(tg.Directory.expect);
+	const zlibLibDir = zlibArtifact
+		.then((dir) => dir.get("lib"))
+		.then(tg.Directory.expect);
 	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
 
 	// Wrap all ELF binaries in the bin directory.
@@ -285,7 +293,7 @@ export const buildLld = async (arg?: LLVMArg) => {
 
 	const phases = { configure };
 
-	return await cmake.build({
+	let output = await cmake.build({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: true,
 		env,
@@ -293,6 +301,9 @@ export const buildLld = async (arg?: LLVMArg) => {
 		sdk,
 		source: tg`${sourceDir}/llvm`,
 	});
+
+	// Wrap lld with zlib.
+	return output;
 };
 
 type LinuxToDarwinArg = {
@@ -382,7 +393,6 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 				SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 			};
 		} else if (targetOs === "linux") {
-			console.log("wrap args for darwin to linux!");
 			// If the target is linux, unset any existing SDKROOT and instead use the Linux sysroot.
 			env = {
 				SDKROOT: tg.Mutation.unset(),
@@ -420,12 +430,20 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 export const getLinuxSysroot = async (
 	target: string,
 ): Promise<tg.Directory> => {
-	const targetArchAndOs = std.triple.archAndOs(target);
-	const url = `https://github.com/tangramdotdev/bootstrap/releases/download/v2024.10.03/${targetArchAndOs}-sysroot.tar.zst`;
-	const checksum =
-		targetArchAndOs === "aarch64-linux"
-			? "sha256:36d4a5a5b7e7e742c17a1c42fcb12814a20e365b8d51074f0d0d447ac9a8a0e4"
-			: "sha256:none";
+	const url = `https://github.com/tangramdotdev/bootstrap/releases/download/v2024.10.03/${target}-sysroot.tar.zst`;
+
+	const checksums: Record<string, tg.Checksum> = {
+		"aarch64-unknown-linux-gnu":
+			"sha256:36d4a5a5b7e7e742c17a1c42fcb12814a20e365b8d51074f0d0d447ac9a8a0e4",
+		"aarch64-unknown-linux-musl":
+			"sha256:ee1a3b20498ee0f20655215821aceb97a45ac3a0b13bfb811fe8c65a690b823c",
+		"x86_64-unknown-linux-gnu":
+			"sha256:d41a894b08652f614f50ee0e663fe8570e507d63bc293a75e79c52284c83d1fa",
+		"x86_64-unknown-linux-musl":
+			"sha256:63672e1874978c823939b9ecd9050d878abd068f52a6ecf5a5c7d0ed46be0006",
+	};
+	const checksum = checksums[target];
+	tg.assert(checksum);
 	return await tg
 		.download(url, checksum, { mode: "extract" })
 		.then(tg.Directory.expect);

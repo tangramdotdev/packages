@@ -324,12 +324,29 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 	});
 };
 
-export const extractSysroot = async () => {
-	const fullToolchain = await canadianCross();
+export const extractSysroot = async (hostArg?: string) => {
+	const host = hostArg ?? (await std.triple.host());
+	const fullToolchain = await canadianCross({ host });
 	const include = fullToolchain.get("include").then(tg.Directory.expect);
 	const lib = fullToolchain.get("lib").then(tg.Directory.expect);
 	const filtered = await tg.directory({ include, lib });
 	return filtered;
+};
+
+export const extractSysrootGlibc = async () => {
+	const detectedHost = await std.triple.host();
+	const triple = std.triple.normalize(
+		std.triple.create(detectedHost, { environment: "gnu" }),
+	);
+	return await extractSysroot(triple);
+};
+
+export const extractSysrootMusl = async () => {
+	const detectedHost = await std.triple.host();
+	const triple = std.triple.normalize(
+		std.triple.create(detectedHost, { environment: "musl" }),
+	);
+	return await extractSysroot(triple);
 };
 
 export const testCanadianCross = async () => {

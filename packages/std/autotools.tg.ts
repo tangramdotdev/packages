@@ -124,7 +124,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		prefixArg = `--prefix=`,
 		prefixPath = `$OUTPUT`,
 		removeLibtoolArchives = true,
-		sdk: sdkArg,
+		sdk: sdkArg_,
 		setRuntimeLibraryPath = false,
 		source,
 		stripExecutables = true,
@@ -134,7 +134,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	// Detect the host system from the environment.
 	const host = host_ ?? (await std.triple.host());
 	const target = target_ ?? host;
-	const os = std.triple.os(host);
+	const isCross = host !== target;
+	const hostOs = std.triple.os(host);
 
 	// Set up env.
 	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
@@ -182,7 +183,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	if (hardeningCFlags) {
 		let extraCFlags = `-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
-		if (os === "linux") {
+		if (hostOs === "linux") {
 			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
 		}
 		const extraFlags = tg.Mutation.suffix(extraCFlags, " ");
@@ -198,10 +199,10 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	// LDFLAGS
 	if (stripExecutables === true) {
-		const stripFlag = os === "darwin" ? `-Wl,-S` : `-s`;
+		const stripFlag = hostOs === "darwin" ? `-Wl,-S` : `-s`;
 		envs.push({ LDFLAGS: tg.Mutation.suffix(stripFlag, " ") });
 	}
-	if (os === "linux" && hardeningCFlags) {
+	if (hostOs === "linux" && hardeningCFlags) {
 		const fullRelroString = fullRelro ? ",-z,now" : "";
 		const extraLdFlags = `-Wl,-z,relro${fullRelroString} -Wl,--as-needed`;
 		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
@@ -209,6 +210,10 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	if (!bootstrap) {
 		// Set up the SDK, add it to the environment.
+		const sdkArg = await std.sdk.arg({ host, target }, sdkArg_);
+		if (isCross) {
+			console.log("sdkArg", sdkArg);
+		}
 		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
 		let level: Level | undefined = undefined;
@@ -239,7 +244,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		prefixArg !== "none" ? [tg`${prefixArg}${prefixPath}`] : [];
 
 	if (defaultCrossArgs) {
-		if (host !== target) {
+		if (isCross) {
 			configureArgs.push(tg`--build=${host}`);
 			configureArgs.push(tg`--host=${target}`);
 		}
@@ -251,7 +256,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		args: configureArgs,
 	};
 
-	const jobs = parallel ? (os === "darwin" ? "8" : "$(nproc)") : "1";
+	const jobs = parallel ? (hostOs === "darwin" ? "8" : "$(nproc)") : "1";
 	const jobsArg = `-j${jobs}`;
 	const defaultBuild = {
 		command: `make`,

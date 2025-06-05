@@ -52,8 +52,8 @@ export const applyArgs = async <T extends PackageArg>(
 	});
 
 	// Determine build and host;
-	const build = arg.build ?? (await std.triple.host());
 	const host = arg.host ?? (await std.triple.host());
+	const build = arg.build ?? host;
 
 	const env = arg.env;
 	const sdk = arg.sdk;

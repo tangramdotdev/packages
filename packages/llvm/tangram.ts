@@ -14,13 +14,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.5",
+	version: "20.1.6",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:a069565cd1c6aee48ee0f36de300635b5781f355d7b3c96a28062d50d575fa3e";
+		"sha256:5c70549d524284c184fe9fbff862c3d2d7a61b787570611b5a30e5cc345f145e";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -148,9 +148,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Collect all required library paths.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	const hostLibDir = tg.symlink(tg`${libDir}/${host}`);
-	const ncursesLibDir = ncursesArtifact.then((dir) =>
-		dir.get("lib").then(tg.Directory.expect),
-	);
+	const ncursesLibDir = ncursesArtifact.get("lib").then(tg.Directory.expect);
 	const zlibLibDir = zlibArtifact.then((dir) =>
 		dir.get("lib").then(tg.Directory.expect),
 	);

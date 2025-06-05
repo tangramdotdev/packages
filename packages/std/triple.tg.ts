@@ -45,7 +45,7 @@ export const tryArchAndOs = (s: string): string | undefined => {
 	return orig.arch + "-" + orig.os;
 };
 
-/** Retrieve the configured host for the current running target. */
+/** Retrieve the configured host for the current running process. */
 export const host = async (): Promise<string> => {
 	let val = await tg.process.env("TANGRAM_HOST");
 	tg.assert(

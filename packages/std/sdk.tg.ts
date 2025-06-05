@@ -109,10 +109,8 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		linker: proxyLinker,
 		strip: proxyStrip,
 		toolchain: toolchain,
-		// host,
 		build: host,
-		host:
-			flavor === "gnu" ? host : targets[0] !== undefined ? targets[0] : host,
+		host,
 	};
 	if (linkerExe) {
 		proxyArg = { ...proxyArg, linkerExe };
@@ -128,15 +126,23 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		if (host === target) {
 			continue;
 		}
+		console.log(`Adding cross compiler. Host: ${host} | target: ${target}`);
 		if (!validateCrossTarget({ host, target })) {
 			throw new Error(
 				`Cross-compiling from ${host} to ${target} is not supported.`,
 			);
 		}
 		let crossToolchain = undefined;
-		if (std.triple.os(host) === "linux" && std.triple.os(target) === "darwin") {
+		const hostOs = std.triple.os(host);
+		const targetOs = std.triple.os(target);
+		if (hostOs === "linux" && targetOs === "darwin") {
 			crossToolchain = await std.env.arg(
 				await tg.build(llvm.linuxToDarwin, { host, target }),
+				{ utils: false },
+			);
+		} else if (hostOs === "darwin" && targetOs === "linux") {
+			crossToolchain = await std.env.arg(
+				await tg.build(llvm.toolchain, { host, target }),
 				{ utils: false },
 			);
 		} else {
@@ -645,19 +651,19 @@ export namespace sdk {
 			const sysroot = await directory
 				.get(`${target}/sysroot`)
 				.then(tg.Directory.expect);
-			const libDir = tg.Directory.expect(await sysroot.tryGet(`lib`));
+			const libDir = await sysroot.get(`lib`).then(tg.Directory.expect);
 
 			let ldso;
 			if (std.triple.environment(target) === "gnu") {
 				const ldsoPath = libc.interpreterName(target);
-				ldso = tg.File.expect(await sysroot.tryGet(`lib/${ldsoPath}`));
+				ldso = await sysroot.get(`lib/${ldsoPath}`).then(tg.File.expect);
 			} else {
-				ldso = tg.File.expect(await sysroot.tryGet(`usr/lib/libc.so`));
+				ldso = await sysroot.get(`lib/libc.so`).then(tg.File.expect);
 			}
 
 			return { ldso, libDir };
 		} else {
-			const libDir = tg.Directory.expect(await directory.tryGet("lib"));
+			const libDir = await directory.get("lib").then(tg.Directory.expect);
 			return { libDir };
 		}
 	};
@@ -1007,19 +1013,22 @@ export namespace sdk {
 		}
 		await Promise.all(
 			expected.targets.map(async (target) => {
-				// Make sure we found this target in the env.
-				tg.assert(
-					allTargets.some(
-						(t) =>
-							std.triple.arch(t) === std.triple.arch(target) &&
-							std.triple.os(t) === std.triple.os(target),
-					),
-				);
-
-				let proxiedLinker = arg?.proxyLinker ?? true;
 				const flavor = (await std.env.provides({ env, name: "clang" }))
 					? "llvm"
 					: "gnu";
+
+				// Make sure we found this target in the env.
+				if (flavor === "gnu") {
+					tg.assert(
+						allTargets.some(
+							(t) =>
+								std.triple.arch(t) === std.triple.arch(target) &&
+								std.triple.os(t) === std.triple.os(target),
+						),
+					);
+				}
+
+				let proxiedLinker = arg?.proxyLinker ?? true;
 
 				// The mold and LLD linkers leave comments in the binary. Check for these if applicable.
 				let linkerFlavor = undefined;
@@ -1094,7 +1103,11 @@ export namespace sdk {
 				}
 
 				// Test Fortran.
-				if (std.triple.os(target) !== "darwin" && arg?.toolchain !== "llvm") {
+				if (
+					actualHostOs !== "darwin" &&
+					std.triple.os(target) !== "darwin" &&
+					arg?.toolchain !== "llvm"
+				) {
 					await assertCompiler({
 						flavor,
 						linkerFlavor,
@@ -1428,10 +1441,9 @@ export const testLLVMMusl = async () => {
 export const testDarwinToLinux = async () => {
 	const targets = [
 		"aarch64-unknown-linux-gnu",
-		// FIXME the rest!
-		// "aarch64-unknown-linux-musl",
-		// "x86_64-unknown-linux-gnu",
-		// "x86_64-unknown-linux-musl",
+		"aarch64-unknown-linux-musl",
+		"x86_64-unknown-linux-gnu",
+		"x86_64-unknown-linux-musl",
 	];
 	await Promise.all(
 		targets.map(async (target) => await testDarwinToLinuxSingle(target)),
