@@ -402,6 +402,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				locked: false,
 				lockfile: false,
 				path: output_path,
+				updates: vec![],
 			},
 		)
 		.await?
@@ -568,6 +569,7 @@ async fn checkin_local_library_path(
 						locked: true,
 						lockfile: false,
 						path: library_candidate_path,
+						updates: vec![],
 					},
 				)
 				.await?
@@ -885,6 +887,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 								locked: true,
 								lockfile: false,
 								path: library_candidate_path.clone(),
+								updates: vec![],
 							},
 						)
 						.await?

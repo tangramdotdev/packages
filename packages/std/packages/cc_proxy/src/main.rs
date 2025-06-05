@@ -585,6 +585,7 @@ async fn check_in_source_tree(
 						locked: false,
 						lockfile: false,
 						path,
+						updates: vec![],
 					},
 				)
 				.await?;

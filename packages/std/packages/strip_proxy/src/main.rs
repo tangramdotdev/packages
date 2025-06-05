@@ -161,6 +161,7 @@ async fn run_proxy(
 				locked: false,
 				lockfile: false,
 				path: local_executable_path,
+				updates: vec![],
 			},
 		)
 		.await?
