@@ -135,9 +135,6 @@ export const build = async (...args: std.Args<Arg>) => {
 	const host = host_ ?? (await std.triple.host());
 	const target = target_ ?? host;
 	const isCross = host !== target;
-	if (isCross) {
-		console.log(`AUTOTOOLS host ${host} target ${target}`);
-	}
 	const hostOs = std.triple.os(host);
 
 	// Set up env.

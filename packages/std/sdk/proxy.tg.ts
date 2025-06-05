@@ -382,6 +382,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 export const test = async () => {
 	const tests = [
 		testBasic(),
+		testTransitiveAll(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
 		testDifferentPrefixDirect(),
@@ -550,7 +551,6 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 		source: constantsSourceA,
 	});
 	await constantsA.store();
-	console.log("CONTANTS A ORIG", constantsA.id);
 	constantsA = await tg.directory(constantsA, {
 		include: {
 			"constantsa.h": constantsHeaderA,

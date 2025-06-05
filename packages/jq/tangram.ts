@@ -56,6 +56,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			debug: build !== host,
 			env,
 			phases,
 			sdk,
@@ -78,5 +79,5 @@ export const test = async () => {
 };
 
 export const testDarwinToLinux = async () => {
-	return await build({ build: "aarch64-darwin", host: "aarch64-linux-musl" });
+	return await build({ build: "aarch64-darwin", host: "aarch64-linux" });
 };
