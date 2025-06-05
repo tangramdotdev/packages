@@ -639,7 +639,11 @@ async fn create_manifest<H: BuildHasher>(
 			let result = futures::future::try_join_all(library_paths.into_iter().map(
 				|dir_with_subpath| async move {
 					let directory = tg::Directory::with_id(dir_with_subpath.id);
-					let template = tangram_std::template_from_artifact(directory.into());
+					let template = if let Some(subpath) = dir_with_subpath.subpath {
+						tangram_std::template_from_artifact_and_subpath(directory.into(), subpath)
+					} else {
+						tangram_std::template_from_artifact(directory.into())
+					};
 					let data = template.to_data();
 					Ok::<_, tg::Error>(data)
 				},
