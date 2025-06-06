@@ -305,6 +305,10 @@ impl Manifest {
 		// Obtain the dependencies from the manifest to add to the file.
 		// NOTE: We know the wrapper file has no dependencies, so there is no need to merge.
 		let dependencies = self.dependencies();
+		#[cfg(feature = "tracing")]
+		{
+			tracing::trace!(?dependencies, "manifest dependencies");
+		}
 		let dependencies = if dependencies.is_empty() {
 			None
 		} else {

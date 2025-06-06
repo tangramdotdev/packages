@@ -49,14 +49,14 @@ export const build = async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const env = std.env.arg(
-		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " "), TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace" },
 		env_,
 	);
 
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			debug: build !== host,
+			// debug: build !== host,
 			env,
 			phases,
 			sdk,
@@ -79,5 +79,8 @@ export const test = async () => {
 };
 
 export const testDarwinToLinux = async () => {
-	return await build({ build: "aarch64-darwin", host: "aarch64-linux" });
+	return await build({
+		build: "aarch64-darwin",
+		host: "aarch64-unknown-linux-musl",
+	});
 };

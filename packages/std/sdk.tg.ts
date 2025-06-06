@@ -161,7 +161,6 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		});
 		envs.push(proxyEnv);
 		const targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
-		// FIXME - gnu gets these, but clang should just get the target thing.
 		envs.push({
 			[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
 			[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
