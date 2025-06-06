@@ -13,25 +13,25 @@ pub fn template_data_to_symlink_data(
 ) -> tg::Result<tg::symlink::Data> {
 	let components = template.components;
 	match components.as_slice() {
-		[tg::template::component::Data::String(s)] => {
+		[tg::template::data::Component::String(s)] => {
 			Ok(tg::symlink::Data::Target { target: s.into() })
 		},
-		[tg::template::component::Data::Artifact(id)]
+		[tg::template::data::Component::Artifact(id)]
 		| [
-			tg::template::component::Data::String(_),
-			tg::template::component::Data::Artifact(id),
+			tg::template::data::Component::String(_),
+			tg::template::data::Component::Artifact(id),
 		] => Ok(tg::symlink::Data::Artifact {
 			artifact: id.clone(),
 			subpath: None,
 		}),
 		[
-			tg::template::component::Data::Artifact(artifact_id),
-			tg::template::component::Data::String(s),
+			tg::template::data::Component::Artifact(artifact_id),
+			tg::template::data::Component::String(s),
 		]
 		| [
-			tg::template::component::Data::String(_),
-			tg::template::component::Data::Artifact(artifact_id),
-			tg::template::component::Data::String(s),
+			tg::template::data::Component::String(_),
+			tg::template::data::Component::Artifact(artifact_id),
+			tg::template::data::Component::String(s),
 		] => Ok(tg::symlink::Data::Artifact {
 			artifact: artifact_id.clone(),
 			subpath: Some(s.chars().skip(1).collect::<String>().into()),
@@ -89,8 +89,8 @@ pub fn render_template_data(data: &tg::template::Data) -> std::io::Result<String
 	data.components
 		.iter()
 		.map(|component| match component {
-			tg::template::component::Data::String(string) => Ok(string.clone()),
-			tg::template::component::Data::Artifact(artifact_id) => {
+			tg::template::data::Component::String(string) => Ok(string.clone()),
+			tg::template::data::Component::Artifact(artifact_id) => {
 				PathBuf::from(&*CLOSEST_ARTIFACT_PATH)
 					.join(artifact_id.to_string())
 					.into_os_string()

@@ -604,13 +604,13 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::tem
 	let mut components = Vec::with_capacity(3);
 	match symlink {
 		tg::symlink::Data::Target { target } => components.push(
-			tg::template::component::Data::String(target.display().to_string()),
+			tg::template::data::Component::String(target.display().to_string()),
 		),
 		tg::symlink::Data::Artifact { artifact, subpath } => {
-			components.push(tg::template::component::Data::Artifact(artifact.clone()));
+			components.push(tg::template::data::Component::Artifact(artifact.clone()));
 			if let Some(subpath) = subpath {
-				components.push(tg::template::component::Data::String("/".to_owned()));
-				components.push(tg::template::component::Data::String(
+				components.push(tg::template::data::Component::String("/".to_owned()));
+				components.push(tg::template::data::Component::String(
 					subpath.display().to_string(),
 				));
 			}

@@ -461,7 +461,7 @@ pub fn collect_dependencies_from_template_data(
 	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
 ) {
 	for component in &value.components {
-		if let tg::template::component::Data::Artifact(id) = component {
+		if let tg::template::data::Component::Artifact(id) = component {
 			let id = tg::object::Id::from(id.clone());
 			dependencies.insert(
 				tg::Reference::with_object(&id),
