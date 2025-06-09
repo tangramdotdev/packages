@@ -49,7 +49,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	const phases = { configure };
 
 	const env = std.env.arg(
-		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
+			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace" },
 		env_,
 	);
 

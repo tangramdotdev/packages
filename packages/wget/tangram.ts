@@ -72,6 +72,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		...dependencies.map((dep) =>
 			std.env.envArgFromDependency(build, env_, host, sdk, dep),
 		),
+		{ CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " ") },
 		env_,
 	];
 

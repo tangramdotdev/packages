@@ -545,9 +545,9 @@ dependencies = [
 
 [[package]]
 name = "flate2"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ced92e76e966ca2fd84c8f7aa01a4aea65b0eb6648d72f7c8f3e2764a67fece"
+checksum = "4a3d7db9596fecd151c5f638c0ee5d5bd487b6e0ea232e5dc96d5250f6f94b1d"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
@@ -747,9 +747,9 @@ checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
-version = "0.15.3"
+version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3"
+checksum = "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5"
 
 [[package]]
 name = "hex"
@@ -995,7 +995,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.3",
+ "hashbrown 0.15.4",
  "serde",
 ]
 
@@ -1775,7 +1775,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d16e265c4038e9abe4afd660ed79013b39ca4c7c#d16e265c4038e9abe4afd660ed79013b39ca4c7c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=075d3d3005537297ea4f4c7fc7b360a4bbd50d38#075d3d3005537297ea4f4c7fc7b360a4bbd50d38"
 dependencies = [
  "async-compression",
  "blake3",
@@ -1824,7 +1824,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d16e265c4038e9abe4afd660ed79013b39ca4c7c#d16e265c4038e9abe4afd660ed79013b39ca4c7c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=075d3d3005537297ea4f4c7fc7b360a4bbd50d38#075d3d3005537297ea4f4c7fc7b360a4bbd50d38"
 dependencies = [
  "serde",
 ]
@@ -1832,7 +1832,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d16e265c4038e9abe4afd660ed79013b39ca4c7c#d16e265c4038e9abe4afd660ed79013b39ca4c7c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=075d3d3005537297ea4f4c7fc7b360a4bbd50d38#075d3d3005537297ea4f4c7fc7b360a4bbd50d38"
 dependencies = [
  "dashmap",
  "futures",
@@ -1844,7 +1844,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d16e265c4038e9abe4afd660ed79013b39ca4c7c#d16e265c4038e9abe4afd660ed79013b39ca4c7c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=075d3d3005537297ea4f4c7fc7b360a4bbd50d38#075d3d3005537297ea4f4c7fc7b360a4bbd50d38"
 dependencies = [
  "async-compression",
  "bytes",
@@ -1871,7 +1871,7 @@ dependencies = [
 [[package]]
 name = "tangram_itertools"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d16e265c4038e9abe4afd660ed79013b39ca4c7c#d16e265c4038e9abe4afd660ed79013b39ca4c7c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=075d3d3005537297ea4f4c7fc7b360a4bbd50d38#075d3d3005537297ea4f4c7fc7b360a4bbd50d38"
 dependencies = [
  "tangram_either",
 ]
@@ -1894,7 +1894,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d16e265c4038e9abe4afd660ed79013b39ca4c7c#d16e265c4038e9abe4afd660ed79013b39ca4c7c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=075d3d3005537297ea4f4c7fc7b360a4bbd50d38#075d3d3005537297ea4f4c7fc7b360a4bbd50d38"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1905,7 +1905,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d16e265c4038e9abe4afd660ed79013b39ca4c7c#d16e265c4038e9abe4afd660ed79013b39ca4c7c"
+source = "git+https://github.com/tangramdotdev/tangram?rev=075d3d3005537297ea4f4c7fc7b360a4bbd50d38#075d3d3005537297ea4f4c7fc7b360a4bbd50d38"
 dependencies = [
  "derive_more",
  "winnow",
@@ -2036,7 +2036,7 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "futures-util",
- "hashbrown 0.15.3",
+ "hashbrown 0.15.4",
  "pin-project-lite",
  "slab",
  "tokio",
