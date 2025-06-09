@@ -1,4 +1,5 @@
 import * as std from "std" with { path: "../std" };
+import coreutils from "coreutils" with { path: "../coreutils" };
 
 export const metadata = {
 	homepage: "https://www.fftw.org/",
@@ -7,7 +8,6 @@ export const metadata = {
 	repository: "https://github.com/FFTW/fftw3",
 	version: "3.3.10",
 	provides: {
-		// FIXME cat not found for fftw-wisdom-to-conf
 		binaries: ["fftw-wisdom", "fftw-wisdom-to-conf"],
 		libraries: ["fftw3"],
 	},
@@ -58,7 +58,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		configure.args.push("--enable-openmp");
 	}
 
-	return std.autotools.build(
+	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -68,6 +68,18 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+
+	// fftw-wisdom-to-conf expects coreutils like `cat` available in the env.
+	const coreutilsArtifact = coreutils({ host });
+	const unwrapped = await output
+		.get("bin/fftw-wisdom-to-conf")
+		.then(tg.File.expect);
+	const wrapped = await std.wrap(unwrapped, {
+		env: std.env.arg(coreutilsArtifact),
+	});
+	output = await tg.directory(output, { ["bin/fftw-wisdom-to-conf"]: wrapped });
+
+	return output;
 };
 
 export default build;
