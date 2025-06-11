@@ -94,9 +94,7 @@ export const build = async (args: BuildArgs) => {
 		poetryArtifact,
 		requirements,
 	);
-	console.log(
-		`installedRequirements: ${(await installedRequirements).id}`,
-	);
+	console.log(`installedRequirements: ${(await installedRequirements).id}`);
 
 	// Install the source distribution.
 	const source = tg.directory(args.source, {

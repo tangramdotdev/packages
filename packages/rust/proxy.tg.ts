@@ -87,8 +87,7 @@ export const testPkgconfig = async () => {
 		.then(tg.Directory.expect);
 
 	externalLibDir = await tg.directory(externalLibDir, {
-		["lib/pkgconfig/external.pc"]:
-			tg.file`
+		["lib/pkgconfig/external.pc"]: tg.file`
 				prefix=/Users/benlovy/.tangram/tmp/06acty0tbnz835v1rxkbgs97fc/output
 				exec_prefix=\${prefix}
 				libdir=\${exec_prefix}/lib

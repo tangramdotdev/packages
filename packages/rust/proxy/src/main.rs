@@ -333,11 +333,13 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		mounts: None,
 		network: Some(false),
 		parent: None,
+		path: None,
 		remote: None,
 		retry: false,
 		stderr: None,
 		stdout: None,
 		stdin: None,
+		tag: None,
 		user: None,
 	};
 
