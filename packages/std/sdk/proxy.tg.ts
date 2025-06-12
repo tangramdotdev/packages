@@ -394,6 +394,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 export const test = async () => {
 	const tests = [
 		testBasic(),
+		testTransitiveAll(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
 		testDifferentPrefixDirect(),
