@@ -517,7 +517,7 @@ const uploadAction = async (
 	for (const tag of tags) {
 		log(`uploading process ${tag}`);
 		try {
-			await $`${tangram} push --recursive ${tag}`.quiet();
+			await $`${tangram} push ${tag}`.quiet();
 			log(`finished pushing ${tag}`);
 		} catch (err) {
 			log(`error pushing ${tag}`);
