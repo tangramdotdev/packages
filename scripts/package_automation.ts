@@ -493,8 +493,8 @@ const uploadAction = async (
 ): Promise<Result> => {
 	const processTagResult = await buildDefaultTarget(
 		tangram,
-		name,
 		platform,
+		name,
 		processTracker,
 	);
 	if (
@@ -663,7 +663,7 @@ class ProcessTracker {
 		for (const id of this.ids) {
 			log(`cancelling ${id}`);
 			try {
-				await $`${this.tangram_exe} process cancel ${id}`.quiet();
+				await $`${this.tangram_exe} cancel ${id}`.quiet();
 			} catch (err) {
 				log(`Failed to cancel process ${id}: ${err}`);
 			}
