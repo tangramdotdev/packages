@@ -79,7 +79,3 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
-
-export const testDarwinToLinux = async () => {
-	return await build({ build: "aarch64-darwin", host: "aarch64-linux-musl" });
-};

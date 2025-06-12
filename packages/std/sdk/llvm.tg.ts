@@ -398,7 +398,7 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 				SDKROOT: tg.Mutation.unset(),
 			};
 			const targetSysroot = getLinuxSysroot(target);
-			clangArgs.push(tg`--sysroot=${targetSysroot}`);
+			clangArgs.push("-target", target, tg`--sysroot=${targetSysroot}`);
 		} else {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
 		}

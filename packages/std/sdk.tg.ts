@@ -161,11 +161,21 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		});
 		envs.push(proxyEnv);
 		const targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
-		envs.push({
-			[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
-			[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
-			[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-g++`),
-		});
+		if (flavor === "gnu") {
+			envs.push({
+				[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
+				[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
+				[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-g++`),
+			});
+		} else if (flavor === "llvm") {
+			envs.push({
+				[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`llvm-ar`),
+				[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-clang`),
+				[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(
+					`${target}-clang++`,
+				),
+			});
+		}
 	}
 
 	// Combine all envs.

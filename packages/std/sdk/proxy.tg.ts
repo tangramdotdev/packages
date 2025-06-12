@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
+import * as sdk from "../sdk.tg.ts";
 import { injection } from "../wrap/injection.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
@@ -197,14 +198,25 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 					host: build,
 					merge,
 				});
-				binDir = tg.directory({
-					bin: {
-						clang: wrappedCC,
-						"clang++": wrappedCXX,
-						cc: tg.symlink("clang"),
-						"c++": tg.symlink("clang++"),
-					},
-				});
+				if (isCross) {
+					binDir = tg.directory({
+						bin: {
+							[`${host}-clang`]: wrappedCC,
+							[`${host}-clang++`]: wrappedCXX,
+							[`${host}-cc`]: tg.symlink(`${host}-clang`),
+							[`${host}-c++`]: tg.symlink(`${host}-clang++`),
+						},
+					});
+				} else {
+					binDir = tg.directory({
+						bin: {
+							clang: wrappedCC,
+							"clang++": wrappedCXX,
+							cc: tg.symlink("clang"),
+							"c++": tg.symlink("clang++"),
+						},
+					});
+				}
 			}
 		}
 		dirs.push(binDir);
@@ -392,26 +404,26 @@ export const test = async () => {
 };
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
-export const testBasic = async () => {
-	const bootstrapSDK = await bootstrap.sdk();
+export const testBasic = async (target?: string) => {
+	const buildToolchain = target ? std.sdk({ target }) : await bootstrap.sdk();
 	const helloSource = await tg.file`
 		#include <stdio.h>
 		int main() {
 			printf("Hello from a TGLD-wrapped binary!\\n");
 			return 0;
 		}`;
+	const cmd = target ? `cc -target ${target}` : `cc`;
 	const output = await std.build`
 				set -x
 				/usr/bin/env
-				cc -v -xc ${helloSource} -o $OUTPUT
+				${cmd} -v -xc ${helloSource} -o $OUTPUT
 				echo "done"`
-		.includeUtils(false)
-		.pipefail(false)
+		.bootstrap(true)
 		.env(
 			std.env.arg(
-				bootstrapSDK,
+				buildToolchain,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace,tangram_std=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
 					TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 				},
@@ -419,8 +431,21 @@ export const testBasic = async () => {
 			),
 		)
 		.then(tg.File.expect);
-	await std.assert.stdoutIncludes(output, "Hello from a TGLD-wrapped binary!");
-	return output;
+
+	// This file should have two dependencies - the preload and the underlying executable.
+	const wrapperDeps = await output.dependencies();
+	tg.assert(
+		Object.keys(wrapperDeps).length === 2,
+		"expected exactly 2 dependencies",
+	);
+
+	if (target === undefined) {
+		await std.assert.stdoutIncludes(
+			output,
+			"Hello from a TGLD-wrapped binary!",
+		);
+	}
+	return tg.directory({ output });
 };
 
 type MakeSharedArg = {
@@ -428,15 +453,23 @@ type MakeSharedArg = {
 	libName: string;
 	sdk: std.env.Arg;
 	source: tg.File;
+	target?: string | undefined;
 };
 
 const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
-	const { flags: flagArgs = [], libName, sdk, source } = await tg.resolve(arg);
+	const {
+		flags: flagArgs = [],
+		libName,
+		sdk,
+		source,
+		target,
+	} = await tg.resolve(arg);
 	const flags = tg.Template.join(" ", ...flagArgs);
-	const dylibExt =
-		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
-	return await std.build`set -x && mkdir -p $OUTPUT/lib && cc -v -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`
-		.bootstrap(true)
+	const targetTriple = target ?? (await std.triple.host());
+	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
+	const cmd = target ? `cc -target ${target}` : `cc`;
+	return await std.build`set -x && mkdir -p $OUTPUT/lib && ${cmd} -v -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
 				sdk,
@@ -449,10 +482,12 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 		.then(tg.Directory.expect);
 };
 
-export const testSharedLibraryWithDep = async () => {
-	const bootstrapSdk = bootstrap.sdk();
-	const dylibExt =
-		std.triple.os(await std.triple.host()) === "darwin" ? "dylib" : "so";
+export const testSharedLibraryWithDep = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
 	const constantsSource = await tg.file`
 		const char* getGreetingA() {
 			return "Hello from transitive constants A!";
@@ -482,16 +517,18 @@ export const testSharedLibraryWithDep = async () => {
 		["main.c"]: mainSource,
 	});
 
+	const cmd = target ? `cc -target ${target}` : `cc`;
 	const output = await std.build`
 		set -x
 		mkdir -p $OUTPUT/bin
 		mkdir -p $OUTPUT/lib
 		mkdir -p $OUTPUT/include
 		cp ${sources}/*.h $OUTPUT/include
+	
+		${cmd} -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
+		${cmd} -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
+		${cmd} -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
 		
-		cc -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
-		cc -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
-		cc -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
 		cp libconstants.${dylibExt} $OUTPUT/lib
 		cp libprinter.${dylibExt} $OUTPUT/lib
 		cp main $OUTPUT/bin
@@ -499,7 +536,7 @@ export const testSharedLibraryWithDep = async () => {
 		.bootstrap(true)
 		.env(
 			std.env.arg(
-				bootstrapSdk,
+				testSDK,
 				{
 					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 				},
@@ -509,31 +546,71 @@ export const testSharedLibraryWithDep = async () => {
 		.then(tg.Directory.expect);
 
 	await output.store();
-	console.log("STRING CONSTANTS A", output.id);
+	console.log("SHARED LIBRARY WITH DEP OUTPUT", output.id);
 	return output;
 };
 
 type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 
-export const testTransitiveAll = async () => {
+export const testTransitiveAll = async (target?: string) => {
 	return await Promise.all([
-		testTransitive(),
-		testTransitiveNone(),
-		testTransitiveResolve(),
-		testTransitiveIsolate(),
-		testTransitiveCombine(),
+		testTransitive(undefined, target),
+		testTransitiveNone(target),
+		testTransitiveResolve(target),
+		testTransitiveIsolate(target),
+		testTransitiveCombine(target),
 	]);
 };
-export const testTransitiveNone = () => testTransitive("none");
-export const testTransitiveResolve = () => testTransitive("resolve");
-export const testTransitiveIsolate = () => testTransitive("isolate");
-export const testTransitiveCombine = () => testTransitive("combine");
+export const testTransitiveNone = (target?: string) =>
+	testTransitive("none", target);
+export const testTransitiveResolve = (target?: string) =>
+	testTransitive("resolve", target);
+export const testTransitiveIsolate = (target?: string) =>
+	testTransitive("isolate", target);
+export const testTransitiveCombine = (target?: string) =>
+	testTransitive("combine", target);
+
+/** Test cross-compilation scenarios for LD proxy */
+export const testCrossGccLdProxy = async () => {
+	const detectedHost = await std.triple.host();
+	const detectedOs = std.triple.os(detectedHost);
+	if (detectedOs === "darwin") {
+		throw new Error(`Cross-compilation is not supported on Darwin`);
+	}
+	const detectedArch = std.triple.arch(detectedHost);
+	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
+	const crossTarget = sdk.sdk.canonicalTriple(
+		std.triple.create(detectedHost, { arch: crossArch }),
+	);
+	return await testTransitive(undefined, crossTarget);
+};
+
+export const testDarwinToLinuxLdProxy = async () => {
+	const host = await std.triple.host();
+	if (std.triple.os(host) !== "darwin") {
+		throw new Error(`This test is only valid on Darwin`);
+	}
+	const target = "x86_64-unknown-linux-gnu";
+	return await testTransitive(undefined, target);
+};
+
+export const testLinuxToDarwinLdProxy = async () => {
+	const host = await std.triple.host();
+	if (std.triple.os(host) !== "linux") {
+		throw new Error(`This test is only valid on Linux`);
+	}
+	const target = "aarch64-apple-darwin";
+	return await testTransitive(undefined, target);
+};
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
-export const testTransitive = async (optLevel?: OptLevel) => {
+export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 	const opt = optLevel ?? "filter";
-	const bootstrapSDK = await bootstrap.sdk();
-	const os = std.triple.os(await std.triple.host());
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
 	// Define the sources.
@@ -546,8 +623,9 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 
 	let constantsA = await makeShared({
 		libName: "libconstantsa",
-		sdk: bootstrapSDK,
+		sdk: testSDK,
 		source: constantsSourceA,
+		target,
 	});
 	await constantsA.store();
 	console.log("CONTANTS A ORIG", constantsA.id);
@@ -565,8 +643,9 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 		}`;
 	let constantsB = await makeShared({
 		libName: "libconstantsb",
-		sdk: bootstrapSDK,
+		sdk: testSDK,
 		source: constantsSourceB,
+		target,
 	});
 	await constantsB.store();
 	const constantsHeaderB = await tg.file`const char* getGreetingB();`;
@@ -592,8 +671,9 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 			"-lconstantsa",
 		],
 		libName: "libgreeta",
-		sdk: bootstrapSDK,
+		sdk: testSDK,
 		source: greetSourceA,
+		target,
 	});
 	await greetA.store();
 	greetA = await tg.directory(greetA, {
@@ -618,8 +698,9 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 			"-lconstantsb",
 		],
 		libName: "libgreetb",
-		sdk: bootstrapSDK,
+		sdk: testSDK,
 		source: greetSourceB,
+		target,
 	});
 	await greetB.store();
 	greetB = await tg.directory(greetB, {
@@ -646,10 +727,10 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 	// Compile the executable.
 	const output =
 		await std.build`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`
-			.bootstrap(true)
+			.bootstrap(target ? false : true)
 			.env(
 				std.env.arg(
-					bootstrapSDK,
+					testSDK,
 					{
 						TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 						TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: opt,
@@ -788,9 +869,12 @@ export const testTransitive = async (optLevel?: OptLevel) => {
 };
 
 /** This test checks that the common case of linking against a library in the working directory still works post-install. */
-export const testSamePrefix = async () => {
-	const bootstrapSDK = await bootstrap.sdk();
-	const os = std.triple.os(await std.triple.host());
+export const testSamePrefix = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
 	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
@@ -824,10 +908,10 @@ export const testSamePrefix = async () => {
 			cd ../.bins
 			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT
 			`
-		.bootstrap(true)
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
-				bootstrapSDK,
+				testSDK,
 				{
 					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
@@ -843,9 +927,12 @@ export const testSamePrefix = async () => {
 };
 
 /** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
-export const testSamePrefixDirect = async () => {
-	const bootstrapSDK = await bootstrap.sdk();
-	const os = std.triple.os(await std.triple.host());
+export const testSamePrefixDirect = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
 	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
@@ -878,10 +965,10 @@ export const testSamePrefixDirect = async () => {
 			cd ../.bins
 			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
 			`
-		.bootstrap(true)
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
-				bootstrapSDK,
+				testSDK,
 				{
 					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
@@ -895,9 +982,12 @@ export const testSamePrefixDirect = async () => {
 };
 
 /** This test checks that the less-common case of linking against a library in a different Tangram artifact by name instead of library path still works post-install. */
-export const testDifferentPrefixDirect = async () => {
-	const bootstrapSDK = await bootstrap.sdk();
-	const os = std.triple.os(await std.triple.host());
+export const testDifferentPrefixDirect = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const os = std.triple.os(targetTriple);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 	const dylibLinkerFlag = os === "darwin" ? "install_name" : "soname";
 	const versionedDylibExt = os === "darwin" ? `1.${dylibExt}` : `${dylibExt}.1`;
@@ -926,10 +1016,10 @@ export const testDifferentPrefixDirect = async () => {
 			mkdir -p $OUTPUT
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o $OUTPUT/libgreet.${dylibExt}
 			`
-		.bootstrap(true)
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
-				bootstrapSDK,
+				testSDK,
 				{
 					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
@@ -943,10 +1033,10 @@ export const testDifferentPrefixDirect = async () => {
 			set -x
 			cc -v ${libgreetArtifact}/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
 			`
-		.bootstrap(true)
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
-				bootstrapSDK,
+				testSDK,
 				{
 					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
@@ -963,14 +1053,17 @@ import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 	type: "file",
 };
 
-export const testStrip = async () => {
-	const toolchain = await bootstrap.sdk();
+export const testStrip = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const toolchain = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
 	const output = await std.build`
 		set -x
 		cc -g -o main -xc ${inspectProcessSource}
 		strip main
 		mv main $OUTPUT`
-		.bootstrap(true)
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
 				toolchain,
