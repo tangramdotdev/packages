@@ -2445,7 +2445,7 @@ export const testDylibPath = async () => {
 	// Re-wrap the driver program with the library path.
 	const libraryPathWrapper = await wrap(interpreterWrapper, {
 		buildToolchain: bootstrapSdk,
-		libraryPaths: [tg.symlink(tg`${sharedLibraryDir}/lib`)],
+		libraryPaths: [tg`${sharedLibraryDir}/lib`],
 	});
 	await libraryPathWrapper.store();
 	console.log("libraryPathWrapper", libraryPathWrapper.id);

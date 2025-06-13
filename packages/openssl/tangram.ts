@@ -91,14 +91,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 
 	return tg.directory(openssl, {
-		["bin/openssl"]: std.wrap(
-			tg.File.expect(await openssl.get("bin/openssl")),
-			{
-				identity: "wrapper",
-				libraryPaths: [tg.symlink(tg`${openssl}/lib`)],
-				host,
-			},
-		),
+		["bin/openssl"]: std.wrap(openssl.get("bin/openssl").then(tg.File.expect), {
+			identity: "wrapper",
+			libraryPaths: [tg`${openssl}/lib`],
+			host,
+		}),
 		["share/pkgconfig"]: tg.symlink("../lib/pkgconfig"),
 	});
 };

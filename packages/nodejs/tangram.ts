@@ -76,7 +76,10 @@ export const self = async (args?: tg.Unresolved<ToolchainArg>) => {
 	// Bundle Node with OpenSSL and ca_certificates.
 	const opensslCnf = resolved?.opensslCnf ?? tg.file``;
 
-	const wrappedNode = std.wrap(tg.symlink(tg`${artifact}/bin/node`), {
+	const unwrapped = artifact
+		.then((d) => d.get("bin/node"))
+		.then(tg.File.expect);
+	const wrapped = std.wrap(unwrapped, {
 		env: {
 			SSL_CERT_FILE: tg`${std.caCertificates()}/cacert.pem`,
 			OPENSSL_CONF: opensslCnf,
@@ -84,7 +87,7 @@ export const self = async (args?: tg.Unresolved<ToolchainArg>) => {
 	});
 
 	return tg.directory(artifact, {
-		["bin/node"]: wrappedNode,
+		["bin/node"]: wrapped,
 	});
 };
 
@@ -149,7 +152,9 @@ export const build = async (...args: std.Args<Arg>) => {
 	for (const [dst, pkg] of Object.entries(packageLock.packages)) {
 		if (pkg.bin && pkg.dev) {
 			for (const [name, path] of Object.entries(pkg.bin)) {
-				const executable = tg.symlink(tg`${devDependencies}/${dst}/${path}`);
+				const executable = devDependencies
+					.get(`${dst}/${path}`)
+					.then(tg.File.expect);
 				const wrapped = std.wrap({
 					executable,
 					interpreter,
@@ -247,9 +252,9 @@ export const wrapBin = async (
 	// Iterate the list of binaries in the `bin` field of the package.json and wrap.
 	let bin = tg.directory();
 	for (const [name, path] of Object.entries(bins)) {
+		const executable = tg.symlink(tg`${arg}/${path}`);
 		const wrapped = std.wrap({
-			// The executable probably references other files in the same directory, so we wrap it through a symlink.
-			executable: tg.symlink(tg`${arg}/${path}`),
+			executable,
 			interpreter,
 			env: {
 				NODE_PATH: tg.Mutation.suffix(tg`${dependencies}/node_modules`, ":"),

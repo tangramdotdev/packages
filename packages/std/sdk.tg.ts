@@ -126,7 +126,6 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		if (host === target) {
 			continue;
 		}
-		console.log(`Adding cross compiler. Host: ${host} | target: ${target}`);
 		if (!validateCrossTarget({ host, target })) {
 			throw new Error(
 				`Cross-compiling from ${host} to ${target} is not supported.`,

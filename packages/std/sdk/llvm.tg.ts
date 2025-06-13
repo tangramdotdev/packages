@@ -210,7 +210,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	// Collect all required library paths.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
-	const hostLibDir = tg.symlink(tg`${libDir}/${host}`);
+	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
 	const ncursesLibDir = ncursesArtifact
 		.then((dir) => dir.get("lib"))
 		.then(tg.Directory.expect);

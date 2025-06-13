@@ -135,7 +135,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		if (hostArch === "aarch64") {
 			hostArch = "arm64";
 		}
-		hostOs = "darwin24.2.0";
+		hostOs = "darwin24.5.0";
 	}
 	const version = libraryVersion(metadata.version);
 	const libs = [
@@ -162,9 +162,11 @@ export const self = async (...args: std.Args<Arg>) => {
 	});
 
 	// Wrap Ruby itself.
+	const unwrapped = ruby.get("bin/ruby").then(tg.File.expect);
 	const rubyBin = std.wrap({
-		executable: tg.symlink(tg`${ruby}/bin/ruby`),
+		executable: unwrapped,
 		env,
+		identity: "wrapper",
 	});
 
 	// Wrap the other binaries provided by ruby.

@@ -82,7 +82,6 @@ export const rust = async (
 	const resolved = await tg.resolve(arg);
 	const host = standardizeTriple(await std.triple.host());
 	const target = standardizeTriple(resolved?.target ?? host);
-	console.log(`RUST: host: ${host}, target: ${target}`);
 	const hostSystem = std.triple.archAndOs(host);
 
 	// Download and parse the Rust manifest for the selected version.

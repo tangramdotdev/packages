@@ -36,9 +36,10 @@ export const ruby = async (host: string) => {
 			tg`${build}/lib/ruby/2.5.0/${hostArch}-${hostOs}`,
 		])),
 	);
+	const unwrapped = build.get("bin/ruby").then(tg.File.expect);
 	return tg.directory({
 		["bin/ruby"]: std.wrap({
-			executable: tg.symlink(tg`${build}/bin/ruby`),
+			executable: unwrapped,
 			env: {
 				RUBYLIB: tg.Mutation.suffix(rubylib, ":"),
 				GEM_PATH: tg.Mutation.suffix(tg`${build}/lib/ruby/gems/2.5.0`, ":"),

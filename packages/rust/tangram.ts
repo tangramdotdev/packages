@@ -131,7 +131,8 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 
 	for (const executable of executables) {
 		// Add the zlib library path with the default strategy, isolating libz.
-		let wrapped = std.wrap(tg.symlink(tg`${rustInstall}/${executable}`), {
+		const unwrapped = rustInstall.get(executable).then(tg.File.expect);
+		let wrapped = std.wrap(unwrapped, {
 			libraryPaths: [tg`${zlibArtifact}/lib`],
 		});
 
