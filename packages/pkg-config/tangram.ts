@@ -28,7 +28,7 @@ export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
-		zlib?: zlib.Arg;
+		zlib?: std.args.DependencyArg<zlib.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -41,7 +41,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
 		build,
-		dependencies: { zlib: zlibArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		proxy = true,
@@ -49,16 +49,14 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
-	// Set up host dependencies.
-	const zlibForHost = await zlib
-		.build({ build, host, sdk }, zlibArg)
-		.then((d) => std.directory.keepSubdirectories(d, "include", "lib"));
+	const deps = [std.env.runtimeDependency(zlib.build, dependencyArgs.zlib)];
 
-	// Resolve env.
-	let env = await std.env.arg(
-		zlibForHost,
+	const env = await std.env.arg(
+		...deps.map((dep: any) =>
+			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+		),
 		{
-			CFLAGS: tg.Mutation.prefix("-Wno-int-conversion", " "),
+			CFLAGS: tg.Mutation.prefix("-Wno-int-conversion -std=gnu17", " "),
 		},
 		env_,
 	);
