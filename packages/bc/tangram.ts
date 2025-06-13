@@ -60,7 +60,13 @@ export const build = async (...args: std.Args<Arg>) => {
 	// Define environment.
 	const ccCommand =
 		std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
-	const env = std.env.arg({ CC: tg.Mutation.setIfUnset(ccCommand) }, env_);
+	const env = std.env.arg(
+		{
+			CC: tg.Mutation.setIfUnset(ccCommand),
+			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
+		},
+		env_,
+	);
 
 	const output = std.autotools.build(
 		{
