@@ -69,11 +69,6 @@ export const build = async (...args: std.Args<Arg>) => {
 
 export default build;
 
-export const env = async (...args: Array<tg.Value>) => {
-	const executable = await tg.build(std.env, build());
-	return await tg.run({ executable, args });
-};
-
 export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
