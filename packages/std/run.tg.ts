@@ -179,9 +179,12 @@ export class RunBuilder<
 		}
 		envs.push(arg.env);
 		arg.env = await std.env.arg(...envs);
-		const shellVal = await std.env.tryGetShellExecutable(
+		let shellVal = await std.env.tryGetShellExecutable(
 			arg.env as std.env.EnvObject,
 		);
+		if (shellVal instanceof tg.Symlink) {
+			shellVal = await shellVal.resolve().then(tg.File.expect);
+		}
 		if (shellVal !== undefined) {
 			arg.executable = shellVal;
 		} else if (this.#defaultShellFallback) {

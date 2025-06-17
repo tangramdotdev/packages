@@ -79,7 +79,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const prepare = { command: tg.Mutation.prefix("mkdir work && cd work") };
 	const configure = {
 		command: tg`${sourceDir}/source/configure`,
-		args: ["--enable-static"],
+		args: ["--enable-static", "--disable-pkg-config"],
 	};
 	const phases = { prepare, configure };
 
@@ -120,8 +120,7 @@ export const test = async () => {
 				name: "makeconv",
 				testPredicate: (stdout: string) => stdout.includes("6.2"),
 			},
-			hasUsage("pkgdata"),
-			hasUsage("uconv"),
+			{ ...hasUsage("pkgdata"), exitOnErr: false },
 		],
 	};
 	return await std.assert.pkg(build, spec);

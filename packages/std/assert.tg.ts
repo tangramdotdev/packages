@@ -36,6 +36,8 @@ export type Provides = {
 export type BinarySpec =
 	| string
 	| {
+			/** Should we require the command to exit with a 0 exit code? Default: true. */
+			exitOnErr?: boolean;
 			/** The name of the binary. */
 			name: string;
 			/** Arguments to pass. Defaults to `["--version"]`. */
@@ -229,6 +231,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 	let name: string | undefined;
 	let testPredicate;
 	let testArgs = ["--version"];
+	let exitOnErr = true;
 	if (typeof arg.binary === "string") {
 		name = arg.binary;
 	} else {
@@ -240,6 +243,9 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		}
 		if (arg.binary.testPredicate) {
 			testPredicate = arg.binary.testPredicate;
+		}
+		if ("exitOnErr" in arg.binary) {
+			exitOnErr = arg.binary.exitOnErr;
 		}
 	}
 	// Assert the binary exists.
@@ -257,6 +263,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 	const stdout = await $`${executable}`
 		.bootstrap(true)
 		.env(arg.env)
+		.exitOnErr(exitOnErr)
 		.host(arg.host)
 		.then(tg.File.expect)
 		.then((file) => file.text());

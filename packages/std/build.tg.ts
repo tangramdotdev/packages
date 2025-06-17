@@ -287,8 +287,7 @@ export const testBuild = async () => {
 export const testBuildBootstrap = async () => {
 	const expected = await tg.process.env("TANGRAM_HOST");
 	const output = await std.build`echo $TANGRAM_HOST > $OUTPUT`
-		.includeUtils(false)
-		.pipefail(false)
+		.bootstrap(true)
 		.env({ SHELL: "/bin/sh" })
 		.then(tg.File.expect);
 	const actual = (await output.text()).trim();
