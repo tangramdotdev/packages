@@ -129,7 +129,7 @@ Omit package names to run the specified steps for all discovered packages, or pr
 If no flags are provided, all actions will run.
 
 Example: run all steps on all packages
-bun run scripts/package_automation.ts 
+bun run scripts/package_automation.ts
 
 Example: run just the check, build, and test steps on ripgrep and jq
 bun run scripts/package_automation.ts -cbt ripgrep jq
@@ -615,15 +615,16 @@ const buildNamedExport = async (
 	const exportName_ = exportName !== undefined ? `#${exportName}` : "";
 	const tag = `${name}/${exportName ?? "default"}/${platform}`;
 	log(`building ${tag}...`);
+	let processId: string | undefined;
 	try {
-		const processId =
-			await $`${tangram} build ${name}${exportName_} --tag=${tag} -d`
-				.text()
-				.then((t) => t.trim());
-		processTracker.add(processId);
+		processId = await $`${tangram} build ${name}${exportName_} --tag=${tag} -d`
+			.text()
+			.then((t) => t.trim());
+		if (processId !== undefined) {
+			processTracker.add(processId);
+		}
 		log(`${tag}: ${processId}`);
 		await $`${tangram} process output ${processId}`.quiet();
-		processTracker.remove(processId);
 		log(`finished building ${tag}`);
 		return ok(tag);
 	} catch (err) {
@@ -634,6 +635,10 @@ const buildNamedExport = async (
 			return ok("unsupported host");
 		}
 		return result("buildError", stderr);
+	} finally {
+		if (processId !== undefined) {
+			processTracker.remove(processId);
+		}
 	}
 };
 
