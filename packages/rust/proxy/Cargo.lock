@@ -108,9 +108,9 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "autocfg"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
+checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "backtrace"
@@ -1050,15 +1050,15 @@ checksum = "775bf80d5878ab7c2b1080b5351a48b2f737d9f6f8b383574eebcc22be0dfccb"
 
 [[package]]
 name = "libc"
-version = "0.2.173"
+version = "0.2.174"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8cfeafaffdbc32176b64fb251369d52ea9f0a8fbc6f8759edffef7b525d64bb"
+checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
 name = "liblzma"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66352d7a8ac12d4877b6e6ea5a9b7650ee094257dc40889955bea5bc5b08c1d0"
+checksum = "0791ab7e08ccc8e0ce893f6906eb2703ed8739d8e89b57c0714e71bad09024c8"
 dependencies = [
  "liblzma-sys",
 ]
@@ -1807,7 +1807,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b6c1525119484553c96da68c930f24af11489656#b6c1525119484553c96da68c930f24af11489656"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a356fc2932af187b825427d390412bdcc7e36b8c#a356fc2932af187b825427d390412bdcc7e36b8c"
 dependencies = [
  "async-compression",
  "blake3",
@@ -1857,7 +1857,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b6c1525119484553c96da68c930f24af11489656#b6c1525119484553c96da68c930f24af11489656"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a356fc2932af187b825427d390412bdcc7e36b8c#a356fc2932af187b825427d390412bdcc7e36b8c"
 dependencies = [
  "serde",
 ]
@@ -1865,7 +1865,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b6c1525119484553c96da68c930f24af11489656#b6c1525119484553c96da68c930f24af11489656"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a356fc2932af187b825427d390412bdcc7e36b8c#a356fc2932af187b825427d390412bdcc7e36b8c"
 dependencies = [
  "dashmap",
  "futures",
@@ -1877,7 +1877,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b6c1525119484553c96da68c930f24af11489656#b6c1525119484553c96da68c930f24af11489656"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a356fc2932af187b825427d390412bdcc7e36b8c#a356fc2932af187b825427d390412bdcc7e36b8c"
 dependencies = [
  "async-compression",
  "brotli",
@@ -1909,7 +1909,7 @@ dependencies = [
 [[package]]
 name = "tangram_itertools"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b6c1525119484553c96da68c930f24af11489656#b6c1525119484553c96da68c930f24af11489656"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a356fc2932af187b825427d390412bdcc7e36b8c#a356fc2932af187b825427d390412bdcc7e36b8c"
 dependencies = [
  "tangram_either",
 ]
@@ -1932,7 +1932,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b6c1525119484553c96da68c930f24af11489656#b6c1525119484553c96da68c930f24af11489656"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a356fc2932af187b825427d390412bdcc7e36b8c#a356fc2932af187b825427d390412bdcc7e36b8c"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -1943,7 +1943,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b6c1525119484553c96da68c930f24af11489656#b6c1525119484553c96da68c930f24af11489656"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a356fc2932af187b825427d390412bdcc7e36b8c#a356fc2932af187b825427d390412bdcc7e36b8c"
 dependencies = [
  "derive_more",
  "winnow",
@@ -2607,18 +2607,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.25"
+version = "0.8.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1702d9583232ddb9174e01bb7c15a2ab8fb1bc6f227aa1233858c351a3ba0cb"
+checksum = "1039dd0d3c310cf05de012d8a39ff557cb0d23087fd44cad61df08fc31907a2f"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.25"
+version = "0.8.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28a6e20d751156648aa063f3800b706ee209a32c0b4d9f24be3d980b01be55ef"
+checksum = "9ecf5b4cc5364572d7f4c329661bcc82724222973f2cab6f050a4e5c22f75181"
 dependencies = [
  "proc-macro2",
  "quote",
