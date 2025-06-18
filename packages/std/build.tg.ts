@@ -184,9 +184,12 @@ export class BuildBuilder<
 		}
 		envs.push(arg.env);
 		arg.env = await std.env.arg(...envs);
-		const shellVal = await std.env.tryGetShellExecutable(
+		let shellVal = await std.env.tryGetShellExecutable(
 			arg.env as std.env.EnvObject,
 		);
+		if (shellVal instanceof tg.Symlink) {
+			shellVal = await shellVal.resolve().then(tg.File.expect);
+		}
 		if (shellVal !== undefined) {
 			arg.executable = shellVal;
 		} else if (this.#defaultShellFallback) {
@@ -290,6 +293,8 @@ export const testBuildBootstrap = async () => {
 		.bootstrap(true)
 		.env({ SHELL: "/bin/sh" })
 		.then(tg.File.expect);
+	await output.store();
+	console.log("OUTPUT", output.id);
 	const actual = (await output.text()).trim();
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;

@@ -135,7 +135,6 @@ export default build;
 /** Obtain just the `env` binary. */
 export const gnuEnv = async () => {
 	const host = await bootstrap.toolchainTriple(await std.triple.host());
-	const os = std.triple.os(host);
 	const sdk = bootstrap.sdk(host);
 	const env = std.env.arg(sdk, bootstrap.make.build({ host }), {
 		utils: false,
@@ -144,7 +143,6 @@ export const gnuEnv = async () => {
 		host,
 		env,
 		bootstrap: true,
-		staticBuild: os === "linux",
 		usePrerequisites: false,
 	});
 	const exe = tg.File.expect(await directory.get("bin/env"));

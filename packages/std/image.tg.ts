@@ -1,5 +1,6 @@
 import * as container from "./image/container.tg.ts";
 import * as std from "./tangram.ts";
+import { gnuEnv } from "./utils/coreutils.tg.ts";
 
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
@@ -25,10 +26,17 @@ export const test = async () => {
 	return true;
 };
 
+export const bootstrapBuildToolchain = async () => {
+	return await std.env.arg(bootstrap.sdk(), bootstrap.make.build(), {
+		utils: false,
+	});
+};
+
 export const testWrappedEntrypoint = async () => {
 	const shell = tg.File.expect(await (await bootstrap.shell()).get("bin/dash"));
 	const script = `echo "hello, world!"`;
-	const exe = await std.wrap(script, { interpreter: shell });
+	const buildToolchain = await bootstrapBuildToolchain();
+	const exe = await std.wrap(script, { buildToolchain, interpreter: shell });
 	const imageFile = await image(exe);
 	return imageFile;
 };
@@ -49,18 +57,23 @@ export const testBasicRootfs = async () => {
 
 export const testBootstrapEnv = async () => {
 	const utils = await bootstrap.utils();
-	const basicEnv = await std.env(utils, { NAME: "Tangram" }, { utils: false });
-	return basicEnv;
+	const buildToolchain = await bootstrapBuildToolchain();
+	const bootstrapEnvArg = await std.env.arg(
+		utils,
+		{ NAME: "Tangram" },
+		{ utils: false },
+	);
+	const bootstrapEnv = await std.wrap(gnuEnv(), {
+		buildToolchain,
+		env: bootstrapEnvArg,
+	});
+	return bootstrapEnv;
 };
 
 export const testBootstrapEnvImageDocker = async () => {
-	const basicEnv = await testBootstrapEnv();
-	const buildToolchain = await std.env.arg(
-		bootstrap.sdk(),
-		bootstrap.make.build(),
-		{ utils: false },
-	);
-	const imageFile = await image(basicEnv, {
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const imageFile = await image(bootstrapEnv, {
 		buildToolchain,
 		cmd: ["sh"],
 	});
@@ -69,11 +82,7 @@ export const testBootstrapEnvImageDocker = async () => {
 
 export const testBootstrapEnvImageOci = async () => {
 	const basicEnv = await testBootstrapEnv();
-	const buildToolchain = await std.env.arg(
-		bootstrap.sdk(),
-		bootstrap.make.build(),
-		{ utils: false },
-	);
+	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
 		buildToolchain,
 		cmd: ["sh"],
@@ -89,17 +98,22 @@ export const testBasicEnv = async () => {
 		host,
 		env: bootstrap.sdk(),
 	});
-	const basicEnv = await std.env(utils, { NAME: "Tangram" }, { utils: false });
+	const buildToolchain = await bootstrapBuildToolchain();
+	const basicEnvArg = await std.env.arg(
+		utils,
+		{ NAME: "Tangram" },
+		{ utils: false },
+	);
+	const basicEnv = await std.wrap(gnuEnv(), {
+		buildToolchain,
+		env: basicEnvArg,
+	});
 	return basicEnv;
 };
 
 export const testBasicEnvImageDocker = async () => {
 	const basicEnv = await testBasicEnv();
-	const buildToolchain = await std.env.arg(
-		bootstrap.sdk(),
-		bootstrap.make.build(),
-		{ utils: false },
-	);
+	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
 		buildToolchain,
 		cmd: ["bash"],
@@ -109,11 +123,7 @@ export const testBasicEnvImageDocker = async () => {
 
 export const testBasicEnvImageOci = async () => {
 	const basicEnv = await testBasicEnv();
-	const buildToolchain = await std.env.arg(
-		bootstrap.sdk(),
-		bootstrap.make.build(),
-		{ utils: false },
-	);
+	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
 		buildToolchain,
 		cmd: ["bash"],

@@ -433,11 +433,14 @@ export const testBasic = async (target?: string) => {
 		)
 		.then(tg.File.expect);
 
-	// This file should have two dependencies - the preload and the underlying executable.
 	const wrapperDeps = await output.dependencies();
+	const os = std.triple.os(await std.triple.host());
+	// This file should have dependencies for the preload and the underlying executable. On Linux, it should alos have a library path for libc and an interpreter.
+	const expectedLength = os === "darwin" ? 2 : 4;
+	console.log("WRAPPER DEPS", wrapperDeps);
 	tg.assert(
-		Object.keys(wrapperDeps).length === 2,
-		"expected exactly 2 dependencies",
+		Object.keys(wrapperDeps).length === expectedLength,
+		"expected exactly 4 dependencies",
 	);
 
 	if (target === undefined) {
