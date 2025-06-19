@@ -6,7 +6,7 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "ninja",
 	repository: "https://github.com/ninja-build/ninja",
-	version: "1.12.1",
+	version: "1.13.0",
 	provides: {
 		binaries: ["ninja"],
 	},
@@ -15,7 +15,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:821bdff48a3f683bc4bb3b6f0b5fe7b2d647cf65d52aeb63328c91a6c6df285a";
+		"sha256:f08641d00099a9e40d44ec0146f841c472ae58b7e6dd517bee3945cfd923cedf";
 	const owner = "ninja-build";
 	const repo = name;
 	const tag = `v${version}`;

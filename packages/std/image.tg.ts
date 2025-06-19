@@ -34,22 +34,57 @@ export const bootstrapBuildToolchain = async () => {
 
 export const testWrappedEntrypoint = async () => {
 	const shell = tg.File.expect(await (await bootstrap.shell()).get("bin/dash"));
-	const script = `echo "hello, world!"`;
+	const script = `echo "Hello, world!"`;
 	const buildToolchain = await bootstrapBuildToolchain();
 	const exe = await std.wrap(script, { buildToolchain, interpreter: shell });
-	const imageFile = await image(exe);
+	await exe.store();
+	console.log("exe", exe.id);
+	const imageFile = await image(exe, { buildToolchain });
 	return imageFile;
 };
 
 export const testBasicRootfs = async () => {
-	// Test a container with a single file and a shell in it.
 	const shell = bootstrap.shell();
 	const utils = bootstrap.utils();
 	const rootFs = tg.directory(shell, utils, {
 		"hello.txt": tg.file`Hello, world!`,
 	});
 	const imageFile = await image(rootFs, {
+		buildToolchain: await bootstrapBuildToolchain(),
 		cmd: ["/bin/sh", "-c", "cat /hello.txt"],
+	});
+
+	return imageFile;
+};
+
+export const testBasicRootfsWithEnv = async () => {
+	const shell = bootstrap.shell();
+	const utils = bootstrap.utils();
+	const rootFs = tg.directory(shell, utils, {
+		"hello.txt": tg.file`Hello, world!`,
+	});
+	const env = { NAME: "Tangram" };
+	const imageFile = await image(rootFs, {
+		buildToolchain: await bootstrapBuildToolchain(),
+		cmd: ["/bin/sh", "-c", "cat /hello.txt && cat $NAME"],
+		env,
+	});
+
+	return imageFile;
+};
+
+export const testBasicRootfsWithEnvAndEntrypoint = async () => {
+	const shell = bootstrap.shell();
+	const utils = bootstrap.utils();
+	const rootFs = tg.directory(shell, utils, {
+		"hello.txt": tg.file`Hello, world!`,
+	});
+	const env = { NAME: "Tangram" };
+	const imageFile = await image(rootFs, {
+		buildToolchain: await bootstrapBuildToolchain(),
+		cmd: ["-c", "cat /hello.txt && cat $NAME"],
+		env,
+		entrypoint: ["/bin/sh"],
 	});
 
 	return imageFile;
@@ -76,6 +111,16 @@ export const testBootstrapEnvImageDocker = async () => {
 	const imageFile = await image(bootstrapEnv, {
 		buildToolchain,
 		cmd: ["sh"],
+	});
+	return imageFile;
+};
+
+export const testBootstrapEnvImageDockerAlt = async () => {
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const imageFile = await image("sh", {
+		buildToolchain,
+		env: bootstrapEnv,
 	});
 	return imageFile;
 };
