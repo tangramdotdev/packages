@@ -73,3 +73,7 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
+
+export const env = async () => std.env(build());
+
+export const image = async () => std.image("sh", { env: env() });

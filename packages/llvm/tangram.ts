@@ -149,9 +149,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	const hostLibDir = tg.symlink(tg`${libDir}/${host}`);
 	const ncursesLibDir = ncursesArtifact.get("lib").then(tg.Directory.expect);
-	const zlibLibDir = zlibArtifact.then((dir) =>
-		dir.get("lib").then(tg.Directory.expect),
-	);
+	const zlibLibDir = zlibArtifact.get("lib").then(tg.Directory.expect);
 	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
 
 	// Wrap all ELF binaries in the bin directory.
