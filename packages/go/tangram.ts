@@ -195,7 +195,7 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 	// If cgo is enabled on Linux, we need to set linkmode to external to force using the Tangram proxy for every link operation, so that host object files can link to the SDK's libc.
 	// On Darwin, this is not necessary because these symbols are provided by the OS in libSystem.dylib, and causes a codesigning failure.
 	// See https://github.com/golang/go/blob/30c18878730434027dbefd343aad74963a1fdc48/src/cmd/cgo/doc.go#L999-L1023
-	if (cgoEnabled && std.triple.os(system) === "linux") {
+	if (cgo && std.triple.os(system) === "linux") {
 		buildArgs += " -ldflags=-linkmode=external";
 	}
 
@@ -370,7 +370,7 @@ export const testCgo = async () => {
 		go env
 		go mod init main.go
 		go mod tidy
-		go run ${buildFlags} main.go > $OUTPUT`
+		go run --verbose ${buildFlags} main.go > $OUTPUT`
 		.env(std.sdk())
 		.env(self())
 		.then(tg.File.expect)

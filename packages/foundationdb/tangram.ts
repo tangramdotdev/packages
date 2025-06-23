@@ -56,7 +56,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory({
 		bin: binDir,
 		lib: {
-			[libFileName]: libraryFile,
+			["libfdb_c.so"]: libraryFile,
 		},
 	});
 };

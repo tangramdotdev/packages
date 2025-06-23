@@ -200,6 +200,7 @@ export const libclang = async (arg?: LLVMArg) => {
 	const configure = {
 		args: [
 			"-DCMAKE_BUILD_TYPE=Release",
+			"-DCMAKE_SKIP_INSTALL_RPATH=On",
 			"-DLLVM_ENABLE_PROJECTS=clang",
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
