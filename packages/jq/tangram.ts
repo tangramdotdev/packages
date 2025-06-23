@@ -76,4 +76,4 @@ export const test = async () => {
 
 export const env = async () => std.env(build());
 
-export const image = async () => std.image("sh", { env: env() });
+export const image = async () => std.image(env(), { cmd: ["sh"] });

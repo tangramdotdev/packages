@@ -32,7 +32,7 @@ export type Arg = {
 	build?: string;
 	cargo?: cargo.Arg;
 	dependencies?: {
-		pcre2?: pcre2.Arg;
+		pcre2?: std.args.DependencyArg<pcre2.Arg>;
 	};
 	env?: std.env.Arg;
 	host?: string;
@@ -44,7 +44,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const {
 		build: build_,
 		cargo: cargoArg = {},
-		dependencies: { pcre2: pcre2Arg = {}, pkgconfig: pkgconfigArg = {} } = {},
+		dependencies: dependencyArgs = {},
 		env: env_,
 		host: host_,
 		sdk,
@@ -55,7 +55,13 @@ export const build = async (...args: std.Args<Arg>) => {
 	const build = build_ ?? host;
 
 	const env = std.env.arg(
-		pcre2.build({ build, env: env_, host, sdk }, pcre2Arg),
+		std.env.envArgFromDependency(
+			build,
+			env_,
+			host,
+			sdk,
+			std.env.runtimeDependency(pcre2.build, dependencyArgs.pcre2),
+		),
 		env_,
 	);
 
@@ -64,7 +70,6 @@ export const build = async (...args: std.Args<Arg>) => {
 			...(await std.triple.rotate({ build, host })),
 			env,
 			features: ["pcre2"],
-			proxy: true,
 			sdk,
 			source: source_ ?? source(),
 		},

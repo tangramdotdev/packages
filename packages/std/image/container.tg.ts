@@ -1,73 +1,61 @@
 import * as std from "../tangram.ts";
-import * as bootstrap from "../bootstrap.tg.ts";
-import zstd from "../sdk/dependencies/zstd.tg.ts";
-
-/*
-	notes:
-
-	This image format conforms to the OCI spec, and is compatible with container runtimes such as Docker and Podman.
-
-	Entrypoint array of strings, OPTIONAL
-
-	A list of arguments to use as the command to execute when the container starts. These values act as defaults and may be replaced by an entrypoint specified when creating a container.
-
-	Cmd array of strings, OPTIONAL
-
-	Default arguments to the entrypoint of the container. These values act as defaults and may be replaced by any specified when creating a container. If an Entrypoint value is not specified, then the first entry of the Cmd array SHOULD be interpreted as the executable to run.
-
-
-*/
+import { gnuEnv } from "../utils/coreutils.tg.ts";
 
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
-export type ArgObject = (ExecutableArg | RootFsArg) & {
+export type ArgObject = {
+	/** Arguments to use at build time. */
+	args?: Array<string>;
+
 	/** The toolchain to use for any intermediate build processes. */
 	buildToolchain?: std.env.EnvObject;
+
+	/** This is the equivalent of the CMD instruction in a dockerfile. */
+	cmd?: Array<string>;
+
+	/** This is the equivalent of the ENTRYPOINT field in a Dockerfile. If a binary is passed, it will be included at `/entrypoint` and used. If a string array is provided, it will be used instead. */
+	entrypoint?: std.wrap.Arg | Array<string>;
+
+	/** Env to include. If present, the entrypoint will be an env with these values set, and the command must be used to run a specific program. */
+	env?: std.env.Arg;
+
+	/** Ports to expose. */
+	expose?: Array<string>;
+
 	/** The format for the container image, docker or OCI. Default: docker */
 	format?: ImageFormat;
+
+	// TODO labels? Do we need these?
+
 	/** The compression type to use for the image layers. Default: "zstd". */
-	layerCompression: "gzip" | "zstd";
+	layerCompression: LayerCompressionFormat;
+
+	/** Layers to include. */
+	layers?: Array<tg.Directory>;
+
 	/** The image should target a specific system. If not provided, will detect the host. */
 	system?: string;
+
+	/** Set user and group ID */
+	user?: string;
+
+	/** The WORKDIR field in a Dockerfile. Change to this directory to do work. */
+	workdir?: string;
 };
 
 export type ImageFormat = "docker" | "oci";
 
-type ExecutableArg = {
-	executable: std.wrap.Arg;
-
-	rootFileSystem?: tg.Directory | undefined;
-};
-
-type RootFsArg = {
-	rootFileSystem: tg.Directory | undefined;
-
-	/** This is the equivalent of the ENTRYPOINT instruction in  Dockerfile. */
-	entrypoint?: Array<string>;
-
-	/** This is the equivalent of the CMD instruction in a dockerfile. */
-	cmd?: Array<string>;
-};
+export type LayerCompressionFormat = "gz" | "zst";
 
 export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
-	type CombinedArgObject = {
-		buildToolchain?: std.env.EnvObject;
-		cmdString?: Array<string>;
-		format?: ImageFormat;
-		entrypointArtifact?: std.wrap.Arg | undefined;
-		entrypointString?: Array<string>;
-		layerCompression?: "gzip" | "zstd";
-		rootDir?: tg.Directory;
-		system?: string;
-	};
-	const arg = await std.args.apply<Arg, CombinedArgObject>({
+	const arg = await std.args.apply<Arg, ArgObject>({
 		args,
 		map: async (arg) => {
 			if (arg === undefined) {
 				return {};
 			} else if (typeof arg === "string" || arg instanceof tg.Template) {
 				// It's a script. Wrap it, use it as the entrypoint.
-				return { entrypointArtifact: arg };
+				return { entrypoint: arg };
 			} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
 				let file;
 				if (arg instanceof tg.Symlink) {
@@ -81,7 +69,7 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 				const executableMetadata = await std.file.executableMetadata(file);
 				if (executableMetadata) {
 					return {
-						entrypointArtifact: file,
+						entrypoint: file,
 					};
 				} else {
 					await arg.store();
@@ -92,99 +80,139 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 				}
 			} else if (arg instanceof tg.Directory) {
 				return {
-					rootDir: arg,
+					layers: [arg],
 				};
 			} else {
-				const object: tg.MaybeMutationMap<CombinedArgObject> = {};
+				const object: tg.MaybeMutationMap<ArgObject> = {};
+				if ("args" in arg && arg.args !== undefined) {
+					object.args = arg.args;
+				}
 				if ("buildToolchain" in arg && arg.buildToolchain !== undefined) {
 					object.buildToolchain = arg.buildToolchain;
 				}
-				if ("executable" in arg && arg.executable !== undefined) {
-					object.entrypointArtifact = arg.executable;
+				if ("cmd" in arg && arg.cmd !== undefined) {
+					object.cmd = arg.cmd;
 				}
-				if ("format" in arg) {
+				if ("entrypoint" in arg && arg.entrypoint !== undefined) {
+					object.entrypoint = arg.entrypoint;
+				}
+				if ("env" in arg && arg.env !== undefined) {
+					object.env = arg.env;
+				}
+				if ("expose" in arg && arg.expose === undefined) {
+					object.expose = arg.expose;
+				}
+				if ("format" in arg && arg.format !== undefined) {
 					object.format = arg.format;
 				}
-				if ("layerCompression" in arg) {
+				if ("layerCompression" in arg && arg.layerCompression !== undefined) {
 					object.layerCompression = arg.layerCompression;
 				}
-				if ("rootFileSystem" in arg && arg.rootFileSystem !== undefined) {
-					object.rootDir = arg.rootFileSystem;
+				if ("layers" in arg && arg.layers !== undefined) {
+					object.layers = arg.layers;
 				}
-				if ("cmd" in arg) {
-					object.cmdString = arg.cmd;
-				}
-				if ("entrypoint" in arg) {
-					object.entrypointString = arg.entrypoint;
-				}
-				if (arg.system) {
+				if ("system" in arg && arg.system !== undefined) {
 					object.system = arg.system;
+				}
+				if ("user" in arg && arg.user !== undefined) {
+					object.user = arg.user;
+				}
+				if ("workdir" in arg && arg.workdir !== undefined) {
+					object.workdir = arg.workdir;
 				}
 				return object;
 			}
 		},
 		reduce: {
+			args: "append",
 			buildToolchain: "set",
-			cmdString: "set",
+			cmd: "append",
+			entrypoint: "set",
+			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			expose: "append",
 			format: "set",
-			entrypointArtifact: (a, b) => {
-				if (a === undefined) {
-					return b;
-				} else if (b === undefined) {
-					return a;
-				} else {
-					return std.wrap.arg(a, b);
-				}
-			},
-			entrypointString: "append",
-			rootDir: (a, b) => tg.directory(a, b),
+			layerCompression: "set",
+			layers: "append",
 			system: "set",
+			user: "set",
+			workdir: "set",
 		},
 	});
 
-	let {
+	const {
 		buildToolchain,
-		cmdString = [],
+		cmd = [],
+		env: envArg,
 		format = "docker",
-		entrypointArtifact: entrypointArtifact_,
-		entrypointString,
-		layerCompression = "zstd",
-		rootDir: rootDir_,
+		entrypoint: entrypoint_,
+		expose,
+		layerCompression: layerCompression_,
+		layers: layers_ = [],
 		system: system_,
+		user,
+		workdir,
 	} = arg;
+	const env = await std.env.arg(envArg, { utils: false });
 
 	// Fill in defaults.
 	const system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
-	const rootDir = rootDir_ !== undefined ? rootDir_ : undefined;
+	const layerCompression =
+		format === "docker" ? undefined : (layerCompression_ ?? "zst");
 
 	// Wrap entrypoint artifact.
+	// If we have an Array<string>, use that.
 	let entrypointArtifact: tg.File | undefined = undefined;
-	if (entrypointArtifact_ !== undefined) {
-		entrypointArtifact = await std.wrap(
-			{ buildToolchain },
-			entrypointArtifact_,
-		);
+	let entrypointString: Array<string> | undefined = undefined;
+	let envApplied = false;
+	if (entrypoint_ !== undefined) {
+		if (Array.isArray(entrypoint_)) {
+			entrypointString = entrypoint_;
+		} else {
+			// Add the env to the entrypoint.
+			envApplied = true;
+			entrypointArtifact = await std.wrap(entrypoint_, { buildToolchain, env });
+		}
 	}
 
-	// Verify that the arguments supplied are correct.
+	// // Verify that the arguments supplied are correct.
 	tg.assert(
-		rootDir || entrypointArtifact,
+		layers_.length > 0 || entrypointArtifact !== undefined,
 		"Cannot create a container image without either a root filesystem or entrypoint.",
 	);
 
 	// Create the layers for the image.
+	// We will always have a rootfs and an entrypoint, we need to determine appropriate values based on the combined args.
 	const layers: Array<Layer> = [];
-	if (rootDir) {
-		layers.push(await layer(rootDir));
+	for (let layerDir of layers_) {
+		layers.push(await layer(layerDir, layerCompression));
 	}
 	if (entrypointArtifact) {
+		await entrypointArtifact.store();
 		layers.push(
-			await layer(await tg.directory({ entrypoint: entrypointArtifact })),
+			await layer(
+				await tg.directory({ entrypoint: entrypointArtifact }),
+				layerCompression,
+			),
 		);
 		if (!entrypointString) {
 			entrypointString = ["/entrypoint"];
 		}
 	}
+	if (!envApplied) {
+		envApplied = true;
+		let envEntrypoint = await std.wrap(gnuEnv(), { buildToolchain, env });
+		layers.push(
+			await layer(
+				await tg.directory({ entrypoint: envEntrypoint }),
+				layerCompression,
+			),
+		);
+		if (!entrypointString) {
+			entrypointString = ["/entrypoint"];
+		}
+	}
+
+	tg.assert(envApplied);
 
 	// Create the image configuration.
 	const config: ImageConfigV1 = {
@@ -195,19 +223,26 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		},
 		config: {
 			Entrypoint: entrypointString ?? [],
-			Cmd: cmdString,
+			Cmd: cmd,
 		},
 	};
+	if (expose !== undefined) {
+		config.config!.ExposedPorts = Object.fromEntries(
+			expose.map((key) => [key, {}]),
+		);
+	}
+	if (user !== undefined) {
+		config.config!.User = user;
+	}
+	if (workdir !== undefined) {
+		config.config!.WorkingDir = workdir;
+	}
 
 	if (format === "docker") {
 		return dockerImageFromLayers(config, ...layers);
 	} else if (format === "oci") {
-		return ociImageFromLayers(
-			buildToolchain,
-			config,
-			layerCompression,
-			...layers,
-		);
+		tg.assert(layerCompression !== undefined);
+		return ociImageFromLayers(config, layerCompression, ...layers);
 	} else {
 		throw new Error(`Unsupported image format: ${format}`);
 	}
@@ -283,9 +318,8 @@ export const dockerImageFromLayers = async (
 };
 
 export const ociImageFromLayers = async (
-	buildToolchain: std.env.Arg | undefined,
 	config: ImageConfigV1,
-	layerCompression: "gzip" | "zstd",
+	layerCompression: LayerCompressionFormat,
 	...layers: Array<Layer>
 ): Promise<tg.File> => {
 	let blobs = tg.directory();
@@ -316,39 +350,16 @@ export const ociImageFromLayers = async (
 	};
 
 	// Add the layers as blobs.
-	const compressionCmd = layerCompression === "gzip" ? "gzip -nc" : "zstd -c";
 	const mediaType =
-		layerCompression === "gzip"
+		layerCompression === "gz"
 			? MediaTypeV1.imageLayerTarGzip
 			: MediaTypeV1.imageLayerTarZstd;
-	const additionalEnv: tg.Unresolved<Array<std.env.Arg>> = [];
-	if (buildToolchain === undefined) {
-		additionalEnv.push(
-			bootstrap.sdk(),
-			std.utils.env({ env: bootstrap.sdk() }),
-		);
-	} else {
-		additionalEnv.push(buildToolchain);
-	}
-	if (layerCompression === "zstd") {
-		additionalEnv.push(
-			zstd({
-				bootstrap: true,
-				env: await std.env.arg(...additionalEnv, { utils: false }),
-			}),
-		);
-	}
 	const layerDescriptors = await Promise.all(
 		layers.map(async (layer) => {
-			const file =
-				await std.build`${compressionCmd} $(realpath ${layer.tarball}) > $OUTPUT`
-					.bootstrap(true)
-					.env(...additionalEnv)
-					.then(tg.File.expect);
 			const descriptor: ImageDescriptor<typeof mediaType> = {
 				mediaType,
 				platform,
-				...(await addBlob(file)),
+				...(await addBlob(layer.tarball)),
 			};
 			return descriptor;
 		}),
@@ -419,13 +430,14 @@ export type Layer = {
 	diffId: string;
 };
 
-export const layer = async (directory: tg.Directory): Promise<Layer> => {
+export const layer = async (
+	directory: tg.Directory,
+	compressionFormat?: LayerCompressionFormat,
+): Promise<Layer> => {
 	const bundle = await tg.bundle(directory).then(tg.Directory.expect);
 	await bundle.store();
-	console.log("bundle", bundle.id);
-	const tarball = await createTarball(bundle);
+	const tarball = await createTarball(bundle, compressionFormat);
 	await tarball.store();
-	console.log("layer", tarball.id);
 	const bytes = await tarball.bytes();
 	const diffId = await tg.checksum(bytes, "sha256");
 	return { tarball, diffId };
@@ -433,9 +445,10 @@ export const layer = async (directory: tg.Directory): Promise<Layer> => {
 
 export const createTarball = async (
 	directory: tg.Unresolved<tg.Directory>,
+	compressionFormat?: LayerCompressionFormat,
 ): Promise<tg.File> => {
 	const resolved = await tg.resolve(directory);
-	return await tg.archive(resolved, "tar").then(tg.file);
+	return await tg.archive(resolved, "tar", compressionFormat).then(tg.file);
 };
 
 export type Platform = {
