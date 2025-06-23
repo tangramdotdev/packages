@@ -1,14 +1,13 @@
 diff --git a/configure b/configure
-index 71155f4..ac5d231 100755
+index 6ea253f..bf02e4b 100755
 --- a/configure
 +++ b/configure
-@@ -19426,7 +19426,8 @@ fi
+@@ -19307,7 +19307,7 @@ fi
  # Note 1: test -ef might not exist, but it's more reliable than `pwd`.
  # Note 2: /bin/pwd might be better than shell's built-in at getting
  #         a symlink-free name.
 -if ( test "$srcdir" -ef . ) >/dev/null 2>&1 || test "`cd $srcdir && /bin/pwd`" = "`/bin/pwd`"; then
 +if ( test "$srcdir" -ef . ) >/dev/null 2>&1 || test "`cd $srcdir && realpath $(pwd)`" = "`realpath $(pwd)`"; then
-+
    vpath_build=no
  else
    vpath_build=yes
