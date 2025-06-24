@@ -228,22 +228,22 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 	const env = std.env.arg(...envs);
 
 	const output = await $`
-				cp -R ${source}/. ./work
-				chmod -R u+w ./work
-				cd ./work
+		set -x
+		cp -R ${source}/. ./work
+		chmod -R u+w ./work
+		cd ./work
 
-				export TMPDIR=$PWD/tmp
-				mkdir -p $TMPDIR
-				mkdir -p $OUTPUT/bin
+		export TMPDIR=$PWD/gotmp
+		mkdir -p $TMPDIR
+		mkdir -p $OUTPUT/bin
 
-				export GOBIN=$OUTPUT/bin
-				export GOCACHE=$TMPDIR
-				export GOMODCACHE=$TMPDIR
-				export GOTMPDIR=$TMPDIR
+		export GOBIN=$OUTPUT/bin
+		export GOCACHE=$TMPDIR
+		export GOMODCACHE=$TMPDIR
+		export GOTMPDIR=$TMPDIR
 
-				${generateCommand}
-				${installCommand}
-			`
+		${generateCommand}
+		${installCommand}`
 		.env(env)
 		.host(host)
 		.checksum(checksum)
@@ -302,9 +302,85 @@ export const vendor = async ({
 		.then(tg.Directory.expect);
 };
 
-//TODO spec, add cgo test.
-
 export const test = async () => {
+	await Promise.all([testCgo(), testPlain()]);
+};
+
+export const testCgo = async () => {
+	const source = tg.directory({
+		["main.go"]: tg.file(`
+			package main
+
+			/*
+			#include <stdio.h>
+			#include <stdlib.h>
+
+			void hello_from_c() {
+				printf("Hello from C!\\n");
+				fflush(stdout);
+			}
+
+			char* get_message() {
+				return "CGO is working!";
+			}
+			*/
+			import "C"
+			import (
+				"fmt"
+			)
+
+			func main() {
+				fmt.Println("Hello from Go!")
+
+				// Call C function
+				C.hello_from_c()
+
+				// Get string from C and convert to Go string
+				cMessage := C.get_message()
+				goMessage := C.GoString(cMessage)
+				fmt.Println(goMessage)
+			}
+			`),
+	});
+
+	const host = await std.triple.host();
+	const system = std.triple.archAndOs(host);
+	const os = std.triple.os(system);
+
+	// Build flags to handle platform-specific linker requirements
+	let buildFlags = "";
+	if (os === "linux") {
+		buildFlags = "-ldflags=-linkmode=external";
+	}
+	if (os === "darwin") {
+		buildFlags = `-ldflags="-s -w"`;
+	}
+
+	const output = await $`
+		set -ex
+		export TMPDIR=$PWD/gotmp
+		mkdir -p $TMPDIR
+		export GOCACHE=$TMPDIR
+		export GOMODCACHE=$TMPDIR
+		export GOTMPDIR=$TMPDIR
+		export WORK=$PWD/work
+		cp -R ${source}/. $WORK
+		chmod -R u+w $WORK
+		cd $WORK
+		go env
+		go mod init main.go
+		go mod tidy
+		go run ${buildFlags} main.go > $OUTPUT`
+		.env(std.sdk())
+		.env(self())
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(output.includes("Hello from C!"));
+	tg.assert(output.includes("Hello from Go!"));
+	tg.assert(output.includes("CGO is working!"));
+};
+
+export const testPlain = async () => {
 	const source = tg.directory({
 		["main.go"]: tg.file`
 			package main
@@ -334,24 +410,25 @@ export const test = async () => {
 		`,
 	});
 
-	return await $`
-				set -ex
-				export TMPDIR=$PWD/tmp
-				mkdir -p $TMPDIR
-				export GOCACHE=$TMPDIR
-				export GOMODCACHE=$TMPDIR
-				export GOTMPDIR=$TMPDIR
-				mkdir -p $OUTPUT
-				export WORK=$PWD/work
-				cp -R ${source}/. $WORK
-				chmod -R u+w $WORK
-				cd $WORK
-				go env
-				go mod init main.go
-				go mod tidy
-				go run main.go
-				go run ./subcommand.go
-			`
+	const output = await $`
+		set -ex
+		export TMPDIR=$PWD/gotmp
+		mkdir -p $TMPDIR
+		export GOCACHE=$TMPDIR
+		export GOMODCACHE=$TMPDIR
+		export GOTMPDIR=$TMPDIR
+		export WORK=$PWD/work
+		cp -R ${source}/. $WORK
+		chmod -R u+w $WORK
+		cd $WORK
+		go env
+		go mod init main.go
+		go mod tidy
+		go run main.go >> $OUTPUT
+		go run ./subcommand.go >> $OUTPUT`
 		.env(std.sdk())
-		.env(self());
+		.env(self())
+		.then(tg.File.expect)
+		.then((f) => f.text());
+	tg.assert(output.includes("hello world"));
 };
