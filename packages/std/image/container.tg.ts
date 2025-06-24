@@ -36,11 +36,29 @@ export type ArgObject = {
 	/** The image should target a specific system. If not provided, will detect the host. */
 	system?: string;
 
-	/** Set user and group ID */
+	/** Set user and group ID - this user will be set as the default user for the container */
 	user?: string;
+
+	/** Create additional users in the container without setting them as the default user. Each user can be specified as "username", "username:group", "username:group:uid:gid", or a UserSpec object. */
+	users?: Array<string | UserSpec>;
 
 	/** The WORKDIR field in a Dockerfile. Change to this directory to do work. */
 	workdir?: string;
+};
+
+export type UserSpec = {
+	/** Username */
+	name: string;
+	/** Group name (defaults to username) */
+	group?: string;
+	/** User ID (defaults to 1000 for non-root users) */
+	uid?: number;
+	/** Group ID (defaults to uid) */
+	gid?: number;
+	/** Home directory (defaults to /home/username for non-root users) */
+	home?: string;
+	/** Shell (defaults to /bin/sh) */
+	shell?: string;
 };
 
 export type ImageFormat = "docker" | "oci";
@@ -117,6 +135,9 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 				if ("user" in arg && arg.user !== undefined) {
 					object.user = arg.user;
 				}
+				if ("users" in arg && arg.users !== undefined) {
+					object.users = arg.users;
+				}
 				if ("workdir" in arg && arg.workdir !== undefined) {
 					object.workdir = arg.workdir;
 				}
@@ -135,6 +156,7 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 			layers: "append",
 			system: "set",
 			user: "set",
+			users: "append",
 			workdir: "set",
 		},
 	});
@@ -150,6 +172,7 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		layers: layers_ = [],
 		system: system_,
 		user,
+		users,
 		workdir,
 	} = arg;
 	const env = await std.env.arg(envArg, { utils: false });
@@ -210,6 +233,18 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		if (!entrypointString) {
 			entrypointString = ["/entrypoint"];
 		}
+	}
+
+	// Add user layers if users or user is specified
+	if (users !== undefined && users.length > 0) {
+		const userLayer = await createUsersLayer(users);
+		layers.push(await layer(userLayer, layerCompression));
+	}
+
+	// Add user layer if user is specified (for backward compatibility and default user setting)
+	if (user !== undefined) {
+		const userLayer = await createUserLayer(user);
+		layers.push(await layer(userLayer, layerCompression));
 	}
 
 	tg.assert(envApplied);
@@ -511,6 +546,80 @@ export type ImageHistory = {
 	created_by?: string;
 	comment?: string;
 	empty_layer?: boolean;
+};
+
+const createUserLayer = async (username: string): Promise<tg.Directory> => {
+	return createUsersLayer([username]);
+};
+
+const createUsersLayer = async (
+	userSpecs: Array<string | UserSpec>,
+): Promise<tg.Directory> => {
+	const passwdEntries: Array<string> = [];
+	const groupEntries: Array<string> = [];
+	const homeDirs: Record<string, tg.Directory> = {};
+
+	let nextUid = 1000;
+
+	for (const userSpec of userSpecs) {
+		let user: string,
+			group: string,
+			uid: number,
+			gid: number,
+			home: string,
+			shell: string;
+
+		if (typeof userSpec === "string") {
+			// Parse string format: "username", "username:group", "username:group:uid:gid"
+			const parts = userSpec.split(":");
+			tg.assert(parts[0]);
+			user = parts[0];
+			tg.assert(user !== undefined, "Username cannot be empty");
+			group = parts[1] ?? user;
+			uid = parts[2] ? parseInt(parts[2], 10) : user === "root" ? 0 : nextUid++;
+			gid = parts[3] ? parseInt(parts[3], 10) : uid;
+			home = user === "root" ? "/root" : `/home/${user}`;
+			shell = "/bin/sh";
+		} else {
+			// UserSpec object
+			user = userSpec.name;
+			group = userSpec.group ?? user;
+			uid = userSpec.uid ?? (user === "root" ? 0 : nextUid++);
+			gid = userSpec.gid ?? uid;
+			home = userSpec.home ?? (user === "root" ? "/root" : `/home/${user}`);
+			shell = userSpec.shell ?? "/bin/sh";
+		}
+
+		// Create passwd entry
+		passwdEntries.push(`${user}:x:${uid}:${gid}:${user}:${home}:${shell}`);
+
+		// Create group entry
+		groupEntries.push(`${group}:x:${gid}:`);
+
+		// Create home directory (except for root)
+		if (user !== "root") {
+			homeDirs[user] = await tg.directory();
+		}
+	}
+
+	// Create shell wrapper script that calls /entrypoint sh
+	const shellWrapper = tg.file(`#!/entrypoint sh\nexec /entrypoint sh "$@"`, {
+		executable: true,
+	});
+
+	// Create the user layer directory structure
+	const userDir = tg.directory({
+		bin: {
+			sh: shellWrapper,
+		},
+		etc: {
+			passwd: tg.file(passwdEntries.join("\n") + "\n"),
+			group: tg.file(groupEntries.join("\n") + "\n"),
+		},
+		home: homeDirs,
+	});
+
+	return userDir;
 };
 
 export namespace MediaTypeV1 {

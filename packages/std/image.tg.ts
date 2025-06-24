@@ -21,6 +21,9 @@ export const test = async () => {
 		testBasicRootfs(),
 		testBootstrapEnvImageDocker(),
 		testBootstrapEnvImageOci(),
+		testBootstrapEnvImageDockerMultipleUsers(),
+		testBootstrapEnvImageDockerUsersWithDefault(),
+		testBootstrapEnvImageDockerUsersWithSpecs(),
 	];
 	await Promise.all(tests);
 	return true;
@@ -66,7 +69,7 @@ export const testBasicRootfsWithEnv = async () => {
 	const env = { NAME: "Tangram" };
 	const imageFile = await image(rootFs, {
 		buildToolchain: await bootstrapBuildToolchain(),
-		cmd: ["/bin/sh", "-c", "cat /hello.txt && cat $NAME"],
+		cmd: ["/bin/sh", "-c", "cat /hello.txt && echo $NAME"],
 		env,
 	});
 
@@ -121,6 +124,55 @@ export const testBootstrapEnvImageDockerAlt = async () => {
 	const imageFile = await image("sh", {
 		buildToolchain,
 		env: bootstrapEnv,
+	});
+	return imageFile;
+};
+
+export const testBootstrapEnvImageDockerUser = async () => {
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const imageFile = await image(bootstrapEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		user: "ben",
+	});
+	return imageFile;
+};
+
+export const testBootstrapEnvImageDockerMultipleUsers = async () => {
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const imageFile = await image(bootstrapEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		users: ["postgres", "redis:redis:999:999", "app:app:1001:1001"],
+	});
+	return imageFile;
+};
+
+export const testBootstrapEnvImageDockerUsersWithDefault = async () => {
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const imageFile = await image(bootstrapEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		users: ["postgres", "redis:redis", "nginx"],
+		user: "app", // This will be the default user AND create an additional user
+	});
+	return imageFile;
+};
+
+export const testBootstrapEnvImageDockerUsersWithSpecs = async () => {
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const imageFile = await image(bootstrapEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		users: [
+			{ name: "postgres", uid: 999, gid: 999, shell: "/bin/sh" },
+			{ name: "redis", uid: 998, group: "redis", gid: 998 },
+			"nginx:nginx:997:997",
+		],
 	});
 	return imageFile;
 };
