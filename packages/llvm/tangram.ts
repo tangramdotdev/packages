@@ -14,13 +14,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.6",
+	version: "20.1.7",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:5c70549d524284c184fe9fbff862c3d2d7a61b787570611b5a30e5cc345f145e";
+		"sha256:cd8fd55d97ad3e360b1d5aaf98388d1f70dfffb7df36beee478be3b839ff9008";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -175,6 +175,57 @@ export const toolchain = async (arg?: LLVMArg) => {
 };
 
 export default toolchain;
+
+/** Build libclang only. */
+export const libclang = async (arg?: LLVMArg) => {
+	const {
+		build: build_,
+		env: env_,
+		host: host_,
+		sdk,
+		source: source_,
+	} = arg ?? {};
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+
+	const sourceDir = source_ ?? source();
+
+	// Define build environment.
+	const pythonForBuild = await python();
+	const deps = [pythonForBuild];
+
+	const env = await std.env.arg(...deps, env_);
+
+	// Define default flags.
+	const configure = {
+		args: [
+			"-DCMAKE_BUILD_TYPE=Release",
+			"-DLLVM_ENABLE_PROJECTS=clang",
+			`-DLLVM_HOST_TRIPLE=${host}`,
+			"-DLLVM_PARALLEL_LINK_JOBS=1",
+		],
+	};
+	const buildPhase = {
+		pre: "cd /build",
+		body: {
+			command: "ninja",
+			args: tg.Mutation.set(["libclang"]),
+		},
+	};
+	const install = {
+		command: "ninja",
+		args: tg.Mutation.set(["install-libclang"]),
+	};
+	const phases = { configure, build: buildPhase, install };
+
+	return await cmake.build({
+		...(await std.triple.rotate({ build, host })),
+		env,
+		phases,
+		sdk,
+		source: tg`${sourceDir}/llvm`,
+	});
+};
 
 /** Build LLD only, without the 2-stage bootstrap. */
 export const lld = async (arg?: LLVMArg) => {
