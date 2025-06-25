@@ -85,9 +85,23 @@ export const elfExecutableMetadata = async (
 				}
 			}
 
-			// Read the string table.
+			// Convert virtual address to file offset.
+			let strTabFileOffset = 0;
+			for (const ph of parsed.programHeaders) {
+				const vaddr = Number(ph.p_vaddr);
+				const filesz = Number(ph.p_filesz);
+				const offset = Number(ph.p_offset);
+
+				// Check if the string table virtual address falls within this segment
+				if (strTabOffset >= vaddr && strTabOffset < vaddr + filesz) {
+					strTabFileOffset = offset + (strTabOffset - vaddr);
+					break;
+				}
+			}
+
+			// Read the string table using the file offset.
 			const strTab = await file.read({
-				position: strTabOffset,
+				position: strTabFileOffset,
 				length: strTabSize,
 			});
 
@@ -96,10 +110,10 @@ export const elfExecutableMetadata = async (
 				// Find the tag.
 				const entryOffset = i * entrySize;
 				const tagView = new DataView(bytes.buffer, entryOffset, 8);
-				const tag = tagView.getBigUint64(0, isLittleEndian);
+				const tag = Number(tagView.getBigUint64(0, isLittleEndian));
 
 				// Check if the tag is one we're looking for.
-				if (Number(tag) === DT_NEEDED || Number(tag) === DT_SONAME) {
+				if (tag === DT_NEEDED || tag === DT_SONAME) {
 					const valueView = new DataView(bytes.buffer, entryOffset + 8, 8);
 					const stringOffset = Number(
 						valueView.getBigUint64(0, isLittleEndian),
@@ -115,13 +129,13 @@ export const elfExecutableMetadata = async (
 						strTab.subarray(stringOffset, stringEnd),
 					);
 
-					if (Number(tag) === DT_NEEDED) {
+					if (tag === DT_NEEDED) {
 						if (needed === undefined) {
 							needed = [stringValue];
 						} else {
 							needed.push(stringValue);
 						}
-					} else if (Number(tag) === DT_SONAME) {
+					} else if (tag === DT_SONAME) {
 						soname = stringValue;
 					}
 				}

@@ -40,12 +40,10 @@ export const build = async (...args: std.Args<Arg>) => {
 					checksum !== undefined,
 					`could not locate checksum for ${fileName}`,
 				);
-				const blob = (await tg.download(
-					`${base}/${fileName}`,
-					checksum,
-				)) as tg.Blob;
-				const file = tg.file(blob, { executable: true });
-				const wrapper = std.wrap(file, { libraryPaths });
+				const blob = await tg.download(`${base}/${fileName}`, checksum);
+				tg.assert(blob instanceof tg.Blob);
+				const file = await tg.file(blob, { executable: true });
+				const wrapper = await std.wrap(file, { libraryPaths });
 				return [binary, wrapper];
 			}),
 		),
