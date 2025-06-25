@@ -11,6 +11,7 @@ export const metadata = {
 	version: "7.3.63",
 	provides: {
 		binaries: ["fdbbackup", "fdbcli", "fdbdecode", "fdbmonitor", "fdbserver"],
+		libraries: [{ name: "fdb_c", dylib: true, staticlib: false }],
 	},
 };
 
@@ -48,8 +49,15 @@ export const build = async (...args: std.Args<Arg>) => {
 			}),
 		),
 	);
+	const libChecksum = checksums["libfdb_c"];
+	const libFileName = `libfdb_c.${arch}.so`;
+	tg.assert(libChecksum, `could not locate checksum for ${libFileName}`);
+	const libraryFile = tg.download(`${base}/${libFileName}`, libChecksum);
 	return tg.directory({
 		bin: binDir,
+		lib: {
+			[libFileName]: libraryFile,
+		},
 	});
 };
 
@@ -67,6 +75,8 @@ const binaryChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 			"sha256:792c49190ea21a01a1492f5e940b1e6f764f6e73d52ecb77e0be3ce58d89b6f3",
 		fdbmonitor:
 			"sha256:f008eda358d79708d41beda6da3b459871132184acc6a5900149ea269f7b1fc0",
+		libfdb_c:
+			"sha256:701d8c192bb4dcf5e703e6c880cb67421a75e0920d9364f5ccc60fd72b1824a2",
 	},
 	["x86_64-linux"]: {
 		fdbcli:
@@ -79,6 +89,8 @@ const binaryChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 			"sha256:f561eb9bb407fe5a6f1660c848ed51faf174a4322d324208ebec486cb006c2c0",
 		fdbmonitor:
 			"sha256:c31f41275b4c328248aff26f4dd8380f1115c4aa1d067ed4919a56403e554125",
+		libfdb_c:
+			"sha256:96ac2c2890d6e2fcae1bac1c17f6c3eb2a5bae7edd29d78d714d2f733b042267",
 	},
 };
 
