@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "packages/cc_proxy",
+  "packages/codesign_proxy",
   "packages/ld_proxy",
   "packages/strip_proxy",
   "packages/wrapper",
@@ -47,6 +48,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 
 tangram_cc_proxy = { path = "packages/cc_proxy" }
+tangram_codesign_proxy = { path = "packages/codesign_proxy" }
 tangram_ld_proxy = { path = "packages/ld_proxy" }
 tangram_std = { path = "." }
 tangram_strip_proxy = { path = "packages/strip_proxy" }

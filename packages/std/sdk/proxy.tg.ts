@@ -13,6 +13,10 @@ export type Arg = {
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
+	/** Should `codesign` get proxied? Default: true on macOS, false on other platforms. */
+	codesign?: boolean;
+	/** Optional codesign command to use. If omitted, will use the codesign located with the toolchain. */
+	codesignExe?: tg.File | tg.Symlink | tg.Template;
 	/** Should we look for a triple-prefixed toolchain, regardless of host? Default: false */
 	forcePrefix?: boolean;
 	/** Should the linker get proxied? Default: true. */
@@ -35,9 +39,13 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		throw new Error("Cannot proxy an undefined env");
 	}
 
+	const host = arg.host ?? (await std.triple.host());
+	const os = std.triple.os(host);
+
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
+	const proxyCodesign = arg.codesign ?? os === "darwin";
 	const buildToolchain = arg.toolchain;
 
 	if (!proxyCompiler && !proxyLinker) {
@@ -50,11 +58,15 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
+	if (!proxyCodesign && arg.codesignExe !== undefined) {
+		throw new Error(
+			"Received a codesignExe argument, but codesign is not being proxied",
+		);
+	}
+
 	const dirs = [];
 
-	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
-	const os = std.triple.os(host);
 	const forcePrefix = arg.forcePrefix ?? false;
 
 	const {
@@ -243,9 +255,25 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 					? await directory.get("lib").then(tg.Directory.expect)
 					: undefined,
 		});
+
 		dirs.push(
 			tg.directory({
 				"bin/strip": stripProxyArtifact,
+			}),
+		);
+	}
+
+	if (proxyCodesign && os === "darwin") {
+		const codesignProxyArtifact = await codesignProxy({
+			buildToolchain,
+			build,
+			host,
+			codesignCommand: arg.codesignExe ?? (await tg`/usr/bin/codesign`),
+		});
+
+		dirs.push(
+			tg.directory({
+				"bin/codesign": codesignProxyArtifact,
 			}),
 		);
 	}
@@ -391,6 +419,47 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	});
 };
 
+type CodesignProxyArg = {
+	build?: string;
+	buildToolchain: std.env.EnvObject;
+	host?: string;
+	codesignCommand: tg.File | tg.Symlink | tg.Template;
+};
+
+export const codesignProxy = async (arg: CodesignProxyArg) => {
+	const { build: build_, buildToolchain, host: host_, codesignCommand } = arg;
+
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+
+	const hostWrapper = await workspace.wrapper({
+		buildToolchain,
+		build,
+		host,
+	});
+	await hostWrapper.store();
+
+	const codesignProxy = await workspace.codesignProxy({
+		build,
+		buildToolchain,
+		host,
+	});
+
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [
+		{
+			TANGRAM_CODESIGN_COMMAND_PATH: tg.Mutation.setIfUnset<
+				tg.File | tg.Symlink | tg.Template
+			>(codesignCommand),
+			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
+		},
+	];
+
+	return std.wrap(codesignProxy, {
+		buildToolchain,
+		env: std.env.arg(...envs, { utils: false }),
+	});
+};
+
 export const test = async () => {
 	const tests = [
 		testBasic(),
@@ -528,11 +597,11 @@ export const testSharedLibraryWithDep = async (target?: string) => {
 		mkdir -p $OUTPUT/lib
 		mkdir -p $OUTPUT/include
 		cp ${sources}/*.h $OUTPUT/include
-	
+
 		${cmd} -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
 		${cmd} -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
 		${cmd} -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
-		
+
 		cp libconstants.${dylibExt} $OUTPUT/lib
 		cp libprinter.${dylibExt} $OUTPUT/lib
 		cp main $OUTPUT/bin
