@@ -63,6 +63,12 @@ export const stripProxy = async (arg: tg.Unresolved<Arg>) =>
 		.then((dir) => dir.get("bin/tgstrip"))
 		.then(tg.File.expect);
 
+export const codesignProxy = async (arg: tg.Unresolved<Arg>) =>
+	await tg
+		.build(workspace, arg)
+		.then((dir) => dir.get("bin/tgcodesign"))
+		.then(tg.File.expect);
+
 export const wrapper = async (arg: tg.Unresolved<Arg>) =>
 	await tg
 		.build(workspace, arg)
@@ -393,10 +399,12 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 
 	const buildType = release ? "/release" : "/debug";
 
+	// FIXME - codesign proxy on darwin only.
+
 	const install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			for item in tgcc tgld tgstrip wrapper ; do
+			for item in tgcc tgcodesign tgld tgstrip wrapper ; do
 				mv $TARGET/$RUST_TARGET${buildType}/$item $OUTPUT/bin/$item
 			done
 		`,

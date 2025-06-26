@@ -3,6 +3,7 @@ members = [
   "packages/tgcc",
   "packages/tgld",
   "packages/tgstrip",
+  "packages/tgcodesign",
   "packages/wrapper",
 ]
 resolver = "3"
@@ -46,6 +47,15 @@ tokio-stream = { version = "0.1", default-features = false, features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 
+<<<<<<< HEAD
+||||||| parent of bee023d1 (wip)
+tangram_cc_proxy = { path = "packages/cc_proxy" }
+tangram_ld_proxy = { path = "packages/ld_proxy" }
+=======
+tangram_cc_proxy = { path = "packages/cc_proxy" }
+tangram_codesign_proxy = { path = "packages/codesign_proxy" }
+tangram_ld_proxy = { path = "packages/ld_proxy" }
+>>>>>>> bee023d1 (wip)
 tangram_std = { path = "." }
 tgcc = { path = "packages/tgcc" }
 tgld = { path = "packages/tgld" }

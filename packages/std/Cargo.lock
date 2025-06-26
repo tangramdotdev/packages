@@ -1728,6 +1728,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tangram_codesign_proxy"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tangram_client",
+ "tangram_std",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tangram_either"
 version = "0.0.0"
 source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
