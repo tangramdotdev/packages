@@ -72,6 +72,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	const {
 		cc: cc_,
 		cxx: cxx_,
+		// codesign,
 		fortran,
 		directory,
 		flavor,
@@ -245,7 +246,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 			buildToolchain,
 			build,
 			host,
-			codesignCommand: arg.codesignExe ?? (await tg`/usr/bin/codesign`),
+			codesignCommand: arg.codesignExe ?? (await tg`/usr/bin/codesign`), //FIXME nope.
 		});
 
 		dirs.push(
