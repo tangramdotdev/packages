@@ -230,8 +230,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			target_ = host_;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await tg.build(gnu.toolchain, { host, target });
-			setSysroot = true;
+			hostToolchain = await tg.build(gnu.toolchain, { host: host_, target });
 		}
 	} else {
 		if (isCross) {
