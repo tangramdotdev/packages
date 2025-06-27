@@ -117,3 +117,9 @@ export const test = async () => {
 	};
 	return await std.assert.pkg(build, spec);
 };
+
+export const cross = async () =>
+	build({
+		build: "aarch64-linux",
+		host: "x86_64-linux",
+	});

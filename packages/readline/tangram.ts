@@ -46,22 +46,25 @@ export const build = async (...args: std.Args<Arg>) => {
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	];
 
-	const env = await std.env.arg(
+	const envs = [
 		...dependencies.map((dep) =>
 			std.env.envArgFromDependency(build, env_, host, sdk, dep),
 		),
-		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+		{
+			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
+		},
 		env_,
-	);
+	];
+
+	const env = std.env.arg(...envs);
 
 	const configure = {
-		args: [
-			"--with-curses",
-			"--disable-install-examples",
-			"--enable-multibyte",
-			"--with-shared-termcap-library",
-		],
+		args: ["--with-curses", "--disable-install-examples", "--enable-multibyte"],
 	};
+	if (build === host) {
+		// FIXME - how do i use this flag with cross compilation.
+		configure.args.push("--with-shared-termcap-library");
+	}
 	const phases = { configure };
 
 	return std.autotools.build(
@@ -82,3 +85,9 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
+
+export const cross = async () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});

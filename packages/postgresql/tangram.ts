@@ -5,6 +5,7 @@ import * as ncurses from "ncurses" with { path: "../ncurses" };
 import * as openssl from "openssl" with { path: "../openssl" };
 import * as readline from "readline" with { path: "../readline" };
 import * as std from "std" with { path: "../std" };
+import * as tzdb from "tzdb" with { path: "../tzdb" };
 import * as zlib from "zlib" with { path: "../zlib" };
 import * as zstd from "zstd" with { path: "../zstd" };
 
@@ -70,9 +71,9 @@ export const build = async (...args: std.Args<Arg>) => {
 	const processDependency = (dep: any) =>
 		std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
-	const icuArtifact = await processDependency(
-		std.env.runtimeDependency(icu.build, dependencyArgs.icu),
-	);
+	// const icuArtifact = await processDependency(
+	// 	std.env.runtimeDependency(icu.build, dependencyArgs.icu),
+	// );
 	const opensslArtifact = await processDependency(
 		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
 	);
@@ -97,7 +98,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [
-		icuArtifact,
+		// icuArtifact,
 		lz4Artifact,
 		ncursesArtifact,
 		opensslArtifact,
@@ -110,11 +111,24 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-	const configureArgs = ["--disable-rpath", "--with-lz4", "--with-zstd"];
+	const configureArgs = [
+		"--disable-rpath",
+		"--with-lz4",
+		"--with-zstd",
+		"--without-icu",
+	];
 	if (os === "darwin") {
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 		);
+	}
+	if (build !== host) {
+		// FIXME - can't find readline? zlib?
+		configureArgs.push("--without-readline", "--without-zlib");
+
+		// For cross builds, we must provide `zic` for the build machine.
+		const tzdbArtifact = tzdb.build({ build, host: build });
+		env.push(tzdbArtifact);
 	}
 
 	const configure = {
@@ -142,7 +156,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 
 	let libraryPaths = [
-		icuArtifact,
+		// icuArtifact,
 		ncursesArtifact,
 		opensslArtifact,
 		readlineArtifact,
@@ -170,3 +184,9 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
+
+export const cross = async () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
