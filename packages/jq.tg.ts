@@ -46,3 +46,13 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
+
+export const env = async () => std.env(build());
+
+export const image = async () => std.image(env(), { cmd: ["sh"] });
+
+export const cross = async () =>
+	build({
+		build: "x86_64-unknown-linux-gnu",
+		host: "aarch64-unknown-linux-gnu",
+	});
