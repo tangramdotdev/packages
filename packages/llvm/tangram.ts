@@ -14,13 +14,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.7",
+	version: "20.1.8",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:cd8fd55d97ad3e360b1d5aaf98388d1f70dfffb7df36beee478be3b839ff9008";
+		"sha256:6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -200,6 +200,7 @@ export const libclang = async (arg?: LLVMArg) => {
 	const configure = {
 		args: [
 			"-DCMAKE_BUILD_TYPE=Release",
+			"-DCMAKE_SKIP_INSTALL_RPATH=On",
 			"-DLLVM_ENABLE_PROJECTS=clang",
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",

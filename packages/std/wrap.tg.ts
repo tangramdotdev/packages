@@ -13,6 +13,7 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 
 /** Wrap an executable. */
 export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
+	console.log("ARGS", args);
 	const arg = await wrap.arg(...args);
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
@@ -26,6 +27,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const detectedBuild = await std.triple.host();
 	const host = arg.host ?? (await std.triple.host());
 	std.triple.assert(host);
+	console.log("HOST", host);
 	const buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
@@ -267,7 +269,10 @@ export namespace wrap {
 
 		tg.assert(executable !== undefined);
 
+		// Determine the host. If it was not provided, detect the executable host if it's a file?
 		const host = host_ ?? (await std.triple.host());
+
+		console.log("HOST ARG", host, "HOST_", host_);
 
 		// If the executable arg is a wrapper, obtain its manifest.
 		const existingManifest =
@@ -340,6 +345,8 @@ export namespace wrap {
 	export type DefaultShellArg = {
 		/** The toolchain to use to build constituent components. Default: `std.sdk()`. */
 		buildToolchain?: std.env.EnvObject | undefined;
+		/* Build machine. */
+		build?: string;
 		/** Should scripts treat unset variables as errors? Equivalent to setting `-u`. Default: true. */
 		disallowUnset?: boolean;
 		/** Should scripts exit on errors? Equivalent to setting `-e`. Default: true. */
@@ -348,6 +355,8 @@ export namespace wrap {
 		identity?: "interpreter" | "wrapper";
 		/** Whether to incldue the complete `std.utils()` environment. Default: true. */
 		includeUtils?: boolean;
+		/** Host machine */
+		host?: string;
 		/** Should failures inside pipelines cause the whole pipeline to fail? Equivalent to setting `-o pipefail`. Default: true. */
 		pipefail?: boolean;
 	};
@@ -356,22 +365,29 @@ export namespace wrap {
 	export const defaultShell = async (arg?: DefaultShellArg) => {
 		const {
 			buildToolchain: buildToolchain_,
+			build: build_,
 			disallowUnset = true,
 			exitOnErr = true,
 			identity = "wrapper",
 			includeUtils = true,
+			host: host_,
 			pipefail = true,
 		} = arg ?? {};
 
+		const host = host_ ?? (await std.triple.host());
+		const build = build_ ?? host;
+
 		// Provide bash for the detected host system.
-		let buildArg:
-			| undefined
-			| { bootstrap: boolean; env: tg.Unresolved<std.env.EnvObject> } =
-			undefined;
+		let buildArg: {
+			build: string;
+			host: string;
+			bootstrap?: boolean;
+			env?: tg.Unresolved<std.env.EnvObject>;
+		} = { build, host };
 		if (buildToolchain_) {
-			buildArg = { bootstrap: true, env: buildToolchain_ };
+			buildArg = { ...buildArg, bootstrap: true, env: buildToolchain_ };
 		} else {
-			buildArg = { bootstrap: true, env: std.sdk() };
+			buildArg = { ...buildArg, bootstrap: true, env: std.sdk() };
 		}
 		const shellExecutable = await std.utils.bash
 			.build(buildArg)
@@ -2206,21 +2222,40 @@ export const pushOrSet = (
 	}
 };
 
+type BuildAndHostArg = {
+	build?: string;
+	host?: string;
+};
+
 /** Basic program for testing the wrapper code. */
-export const argAndEnvDump = async () => {
+export const argAndEnvDump = async (arg?: BuildAndHostArg) => {
+	const host = arg?.host ?? (await std.triple.host());
+	const build = arg?.build ?? host;
+
+	const isCross = build !== host;
+	const buildToolchain = isCross
+		? gnu.toolchain({ host: build, target: host })
+		: bootstrap.sdk(await bootstrap.toolchainTriple(host));
+
 	const sdkEnv = await std.env.arg(
-		bootstrap.sdk(),
+		buildToolchain,
 		{
 			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 		},
 		{ utils: false },
 	);
-
-	return await std.build`cc -xc ${inspectProcessSource} -o $OUTPUT`
+	const targetPrefix = isCross ? `${host}-` : "";
+	return await std.build`${targetPrefix}cc -xc ${inspectProcessSource} -o $OUTPUT`
 		.bootstrap(true)
 		.env(sdkEnv)
 		.then(tg.File.expect);
 };
+
+export const argAndEnvDumpCross = () =>
+	argAndEnvDump({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
 
 export const test = async () => {
 	await Promise.all([
@@ -2316,6 +2351,56 @@ export const testSingleArgObjectNoMutations = async () => {
 		"Expected second arg to be --arg2",
 	);
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
+
+	return wrapper;
+};
+
+export const testBasicCross = async () => {
+	const build = "aarch64-unknown-linux-gnu";
+	const host = "x86_64-unknown-linux-gnu";
+
+	const executable = await argAndEnvDump({ build, host });
+	await executable.store();
+	const executableID = executable.id;
+	// The program is a wrapper produced by the LD proxy.
+	console.log("argAndEnvDump wrapper ID", executableID);
+
+	// // Get the value of the original executable.
+	// const origManifest = await wrap.Manifest.read(executable);
+	// tg.assert(origManifest); // FIXME - this failed?
+	// const origManifestExecutable = origManifest.executable;
+	// tg.assert(origManifestExecutable.kind === "path");
+	// const origExecutable = await wrap
+	// 	.executableFromManifestExecutable(origManifestExecutable)
+	// 	.then(tg.File.expect);
+	// await origExecutable.store();
+	// const origExecutableId = origExecutable.id;
+	// console.log("origExecutable", origExecutableId);
+
+	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
+
+	// FIXME - the wrapper should detect the host from the executable if not provided.
+	const wrapper = await wrap(executable, {
+		args: ["--arg1", "--arg2"],
+		buildToolchain,
+		env: {
+			HELLO: "WORLD",
+		},
+	});
+	await wrapper.store();
+	const wrapperID = wrapper.id;
+	console.log("wrapper id", wrapperID);
+
+	// Check the manifest can be deserialized properly.
+	const manifest = await wrap.Manifest.read(wrapper);
+	console.log("wrapper manifest", manifest);
+	tg.assert(manifest);
+	tg.assert(manifest.identity === "executable");
+	tg.assert(manifest.interpreter);
+
+	// TODO Check that the wrapper triple matches the executable triple.
+	const wrapperMetadata = await std.file.executableMetadata(wrapper);
+	console.log("wrappeMetadata", wrapperMetadata);
 
 	return wrapper;
 };

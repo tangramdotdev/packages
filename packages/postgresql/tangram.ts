@@ -4,6 +4,7 @@ import * as lz4 from "lz4" with { local: "../lz4" };
 import * as ncurses from "ncurses" with { local: "../ncurses" };
 import * as openssl from "openssl" with { local: "../openssl" };
 import * as readline from "readline" with { local: "../readline" };
+import * as tzdb from "tzdb" with { local: "../tzdb" };
 import * as std from "std" with { local: "../std" };
 import * as zlib from "zlib" with { local: "../zlib" };
 import * as zstd from "zstd" with { local: "../zstd" };
@@ -70,15 +71,17 @@ export const build = async (...args: std.Args<Arg>) => {
 	const processDependency = (dep: any) =>
 		std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
-	const icuArtifact = await processDependency(
-		std.env.runtimeDependency(icu.build, dependencyArgs.icu),
-	);
+	// FIXME cross broken.
+	// const icuArtifact = await processDependency(
+	// 	std.env.runtimeDependency(icu.build, dependencyArgs.icu),
+	// );
 	const opensslArtifact = await processDependency(
 		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
 	);
-	const lz4Artifact = await processDependency(
-		std.env.runtimeDependency(lz4.build, dependencyArgs.lz4),
-	);
+	// FIXME cross broken
+	// const lz4Artifact = await processDependency(
+	// 	std.env.runtimeDependency(lz4.build, dependencyArgs.lz4),
+	// );
 	const ncursesArtifact = await processDependency(
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	);
@@ -88,33 +91,47 @@ export const build = async (...args: std.Args<Arg>) => {
 	const zlibArtifact = await processDependency(
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	);
-	const zstdArtifact = await processDependency(
-		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
-	);
+	// FIXME cross broken
+	// const zstdArtifact = await processDependency(
+	// 	std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
+	// );
 
 	const flexArtifact = await processDependency(
 		std.env.buildDependency(flex.build),
 	);
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [
-		icuArtifact,
-		lz4Artifact,
+		// icuArtifact,
+		// lz4Artifact,
 		ncursesArtifact,
 		opensslArtifact,
 		flexArtifact,
 		readlineArtifact,
 		zlibArtifact,
-		zstdArtifact,
+		// zstdArtifact,
 		env_,
 	];
 
 	const sourceDir = source_ ?? source();
 
-	const configureArgs = ["--disable-rpath", "--with-lz4", "--with-zstd"];
+	const configureArgs = [
+		"--disable-rpath",
+		// "--with-lz4",
+		// "--with-zstd",
+		"--without-icu",
+	];
 	if (os === "darwin") {
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 		);
+	}
+	if (build !== host) {
+		// FIXME - can't find readline? zlib?
+		configureArgs.push("--without-readline", "--without-zlib");
+
+		// For cross builds, we must provide `zic` for the build machine.
+		const tzdbArtifact = tzdb.build({ build, host: build });
+		env.push(tzdbArtifact);
 	}
 
 	const configure = {
@@ -142,13 +159,13 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 
 	let libraryPaths = [
-		icuArtifact,
+		// icuArtifact,
 		ncursesArtifact,
 		opensslArtifact,
 		readlineArtifact,
-		lz4Artifact,
+		// lz4Artifact,
 		zlibArtifact,
-		zstdArtifact,
+		// zstdArtifact,
 	]
 		.filter((v) => v !== undefined)
 		.map((dir) => dir.get("lib").then(tg.Directory.expect));
@@ -157,7 +174,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	let binDir = await output.get("bin").then(tg.Directory.expect);
 	for await (let [name, artifact] of binDir) {
 		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths });
+		let wrappedBin = await std.wrap(file, { host, libraryPaths });
 		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
 	}
 
@@ -170,3 +187,9 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
+
+export const cross = async () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});

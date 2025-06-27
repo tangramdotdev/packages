@@ -55,7 +55,7 @@ export type Arg = {
 export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
-		build,
+		build: build_,
 		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
@@ -67,7 +67,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const dependencies = [
 		std.env.envArgFromDependency(
-			build,
+			build_,
 			env_,
 			host,
 			sdk,
@@ -79,13 +79,20 @@ export const build = async (...args: std.Args<Arg>) => {
 	const prepare = { command: tg.Mutation.prefix("mkdir work && cd work") };
 	const configure = {
 		command: tg`${sourceDir}/source/configure`,
-		args: ["--enable-static", "--disable-pkg-config"],
+		args: [tg`--enable-static`], // FIXME type only used to push later.
 	};
+
+	// If cross-compiling, we first need to provide a native installation for the build machine.
+	if (build_ !== host) {
+		const buildIcu = build({ build: build_, host: build_ });
+		configure.args.push(tg`--with-cross-build=${buildIcu}`);
+	}
+
 	const phases = { prepare, configure };
 
 	return std.autotools.build(
 		{
-			...(await std.triple.rotate({ build, host })),
+			...(await std.triple.rotate({ build: build_, host })),
 			env: std.env.arg(...env),
 			phases,
 			sdk,
@@ -125,3 +132,9 @@ export const test = async () => {
 	};
 	return await std.assert.pkg(build, spec);
 };
+
+export const cross = async () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
