@@ -129,7 +129,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		source,
 		stripExecutables = true,
 		target: target_,
-	} = await tg.build(mergeArgs, ...args);
+	} = await mergeArgs(...args);
 
 	// Detect the host system from the environment.
 	const host = host_ ?? (await std.triple.host());
