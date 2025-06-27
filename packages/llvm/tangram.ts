@@ -14,14 +14,14 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "21.1.8",
-	tag: "llvm/21.1.8",
+	version: "21.1.6",
+	tag: "llvm/21.1.6",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:4633a23617fa31a3ea51242586ea7fb1da7140e426bd62fc164261fe036aa142";
+		"sha256:ae67086eb04bed7ca11ab880349b5f1ab6f50e1b88cda376eaf8a845b935762b";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -205,11 +205,11 @@ export const prebuilt = async (arg?: PrebuiltArg) => {
 
 	const checksums: Record<string, tg.Checksum> = {
 		["aarch64-linux"]:
-			"sha256:b855cc17d935fdd83da82206b7a7cfc680095efd1e9e8182c4a05e761958bef8",
+			"sha256:1d8a9e05007b8b9005c63f90d7646b2b6263451d605cca070418d0a71e669377",
 		["x86_64-linux"]:
-			"sha256:1ead36b3dfcb774b57be530df42bec70ab2d239fbce9889447c7a29a4ddc1ae6",
+			"sha256:8ac1aadfa96b87b8747f7383d06ed9579f9d5c32a1af7af947b0cfe29d88ac87",
 		["aarch64-darwin"]:
-			"sha256:a9a22f450d35f1f73cd61ab6a17c6f27d8f6051d56197395c1eb397f0c9bbec4",
+			"sha256:bdf036e9987b8706471b565f50178a34218909b1858a82c426269da49780b6ba",
 	};
 	const archAndOs = `${arch}-${os}`;
 	const checksum = checksums[archAndOs];
@@ -254,6 +254,7 @@ export const libclang = async (arg?: LLVMArg) => {
 	} = arg ?? {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
+	const os = std.triple.os(host);
 
 	const sourceDir = source_ ?? source();
 
@@ -267,12 +268,20 @@ export const libclang = async (arg?: LLVMArg) => {
 	const configure = {
 		args: [
 			"-DCMAKE_BUILD_TYPE=Release",
-			"-DCMAKE_SKIP_INSTALL_RPATH=On",
 			"-DLLVM_ENABLE_PROJECTS=clang",
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 		],
 	};
+
+	if (os === "linux") {
+		configure.args.push("-DCMAKE_SKIP_INSTALL_RPATH=On");
+	} else if (os === "darwin") {
+		// Explicitly set CMAKE_SYSTEM_NAME to ensure CMake loads the Darwin
+		// platform module and sets CMAKE_SHARED_LIBRARY_RUNTIME_C_FLAG, which
+		// is required for shared libraries using @rpath.
+		configure.args.push("-DCMAKE_SYSTEM_NAME=Darwin");
+	}
 	const buildPhase = {
 		pre: "cd /build",
 		body: "ninja libclang",
