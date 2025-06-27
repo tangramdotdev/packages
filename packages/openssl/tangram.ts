@@ -126,3 +126,9 @@ export const test = async () => {
 
 	return true;
 };
+
+export const cross = async () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
