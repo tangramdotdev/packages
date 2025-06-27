@@ -95,7 +95,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 	const configure = {
 		command: tg`${sourceDir}/source/configure`,
-		args: configureArgs,
+		args: [tg`--enable-static`], // FIXME type only used to push later.
 	};
 
 	let phases: tg.Unresolved<std.phases.Arg> = { prepare, configure };
@@ -109,10 +109,15 @@ export const build = async (...args: std.Args<Arg>) => {
 		};
 	}
 
+	// If cross-compiling, we first need to provide a native installation for the build machine.
+	if (build_ !== host) {
+		const buildIcu = build({ build: build_, host: build_ });
+		configure.args.push(tg`--with-cross-build=${buildIcu}`);
+	}
+
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build: build_, host })),
-			buildInTree: !skipInstall,
 			env: std.env.arg(...env),
 			phases,
 			sdk,
@@ -148,3 +153,9 @@ export const test = async () => {
 	};
 	return await std.assert.pkg(build, spec);
 };
+
+export const cross = async () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
