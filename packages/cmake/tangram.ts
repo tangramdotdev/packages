@@ -111,6 +111,9 @@ export const self = async (...args: std.Args<Arg>) => {
 			`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
 		);
 	}
+	// if (os === "darwin") {
+	// 	configureArgs.push("-DCMAKE=$(pwd)/cmake");
+	// }
 	const prepare = {
 		command: tg.Mutation.prefix("mkdir work && cd work", "\n"),
 	};

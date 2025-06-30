@@ -34,6 +34,7 @@ export * as m4 from "../autotools/m4.tg.ts";
 export * as mpc from "./dependencies/mpc.tg.ts";
 export * as mpfr from "./dependencies/mpfr.tg.ts";
 export * as libxcrypt from "./dependencies/libxcrypt.tg.ts";
+export * as libxml2 from "./dependencies/libxml2.tg.ts";
 export * as perl from "../autotools/perl.tg.ts";
 export * as python from "./dependencies/python.tg.ts";
 export * as zlib from "./dependencies/zlib.tg.ts";

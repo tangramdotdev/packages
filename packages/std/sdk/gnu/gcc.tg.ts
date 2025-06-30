@@ -276,17 +276,9 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 		tg`-B${toolchainDir}/libexec/gcc/${target}/${gccVersion}`,
 	];
 
-	// Fortran gets the same args as the C compiler.
+	// C++ and fortran gets the same args as the C compiler.
 	const fortranArgs = ccArgs;
-
-	// The C++ compiler needs additional include paths.
-	const cxxHeaderRoot =
-		hostOs === "darwin" ? tg`${toolchainDir}/${target}` : sysroot;
-	const cxxArgs = [
-		...ccArgs,
-		tg`-isystem${cxxHeaderRoot}/include/c++/${gccVersion}`,
-		tg`-isystem${cxxHeaderRoot}/include/c++/${gccVersion}/${target}`,
-	];
+	const cxxArgs = ccArgs;
 
 	return { ccArgs, cxxArgs, fortranArgs };
 };

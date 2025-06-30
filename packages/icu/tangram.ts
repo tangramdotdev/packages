@@ -49,17 +49,20 @@ export type Arg = {
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
+	/* Instead of producing an install directory, the output will be the in-tree build directory. Used for cross-compilation. */
+	skipInstall?: boolean;
 	source?: tg.Directory;
 };
 
 export const build = async (...args: std.Args<Arg>) => {
 	const {
 		autotools = {},
-		build,
+		build: build_,
 		dependencies: dependencyArgs = {},
 		env: env_,
 		host,
 		sdk,
+		skipInstall = false,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
@@ -67,7 +70,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const dependencies = [
 		std.env.envArgFromDependency(
-			build,
+			build_,
 			env_,
 			host,
 			sdk,
@@ -77,15 +80,38 @@ export const build = async (...args: std.Args<Arg>) => {
 	const env = [...dependencies, env_];
 
 	const prepare = { command: tg.Mutation.prefix("mkdir work && cd work") };
+	const configureArgs: tg.Unresolved<Array<tg.Template.Arg>> = [
+		"--enable-static",
+	];
+
+	// If cross-compiling, we first need to provide a native installation for the build machine.
+	const isCross = build_ !== host;
+	if (isCross) {
+		const buildIcu = build({ build: build_, host: build_, skipInstall: true });
+		configureArgs.push(tg`--with-cross-build=${buildIcu}`);
+		// FIXME - fix the failing configure check, this is a hack.
+		configureArgs.push("ac_cv_c_bigendian=no");
+	}
 	const configure = {
 		command: tg`${sourceDir}/source/configure`,
-		args: ["--enable-static", "--disable-pkg-config"],
+		args: configureArgs,
 	};
-	const phases = { prepare, configure };
+
+	let phases: tg.Unresolved<std.phases.Arg> = { prepare, configure };
+	if (skipInstall) {
+		phases = {
+			...phases,
+			install: {
+				command: tg.Mutation.set(`cp -R . $OUTPUT`),
+				args: tg.Mutation.unset(),
+			},
+		};
+	}
 
 	return std.autotools.build(
 		{
-			...(await std.triple.rotate({ build, host })),
+			...(await std.triple.rotate({ build: build_, host })),
+			buildInTree: !skipInstall,
 			env: std.env.arg(...env),
 			phases,
 			sdk,
@@ -125,3 +151,16 @@ export const test = async () => {
 	};
 	return await std.assert.pkg(build, spec);
 };
+
+export const llvm = () => build({ sdk: { toolchain: "llvm" } });
+export const crossGcc = () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
+export const crossLlvm = () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+		sdk: { toolchain: "llvm" },
+	});
