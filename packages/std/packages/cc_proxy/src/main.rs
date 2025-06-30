@@ -332,11 +332,11 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
 	let executable = Some(
-		tg::File::with_object(tg::file::Object::Normal {
+		tg::File::with_object(tg::file::Object::Node(tg::file::object::Node {
 			contents,
 			executable: true,
 			dependencies: BTreeMap::new(),
-		})
+		}))
 		.into(),
 	);
 

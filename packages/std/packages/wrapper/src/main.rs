@@ -575,22 +575,22 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 	if let tg::value::Data::Object(id) = value {
 		match id {
 			tg::object::Id::Directory(id) => {
-				return tg::symlink::Data::Normal {
+				return tg::symlink::Data::Node(tg::symlink::data::Node {
 					artifact: Some(id.clone().into()),
 					path: None,
-				};
+				});
 			},
 			tg::object::Id::File(id) => {
-				return tg::symlink::Data::Normal {
+				return tg::symlink::Data::Node(tg::symlink::data::Node {
 					artifact: Some(id.clone().into()),
 					path: None,
-				};
+				});
 			},
 			tg::object::Id::Symlink(id) => {
-				return tg::symlink::Data::Normal {
+				return tg::symlink::Data::Node(tg::symlink::data::Node {
 					artifact: Some(id.clone().into()),
 					path: None,
-				};
+				});
 			},
 			_ => (),
 		}
@@ -603,16 +603,16 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::template::Data> {
 	let mut components = Vec::with_capacity(3);
 	match symlink {
-		tg::symlink::Data::Normal {
+		tg::symlink::Data::Node(tg::symlink::data::Node {
 			artifact: None,
-			path: Some(target),
-		} => components.push(tg::template::data::Component::String(
-			target.display().to_string(),
+			path: Some(path),
+		}) => components.push(tg::template::data::Component::String(
+			path.display().to_string(),
 		)),
-		tg::symlink::Data::Normal {
+		tg::symlink::Data::Node(tg::symlink::data::Node {
 			artifact: Some(artifact),
 			path,
-		} => {
+		}) => {
 			components.push(tg::template::data::Component::Artifact(artifact.clone()));
 			if let Some(path) = path {
 				components.push(tg::template::data::Component::String("/".to_owned()));
@@ -621,16 +621,16 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::tem
 				));
 			}
 		},
-		tg::symlink::Data::Normal {
+		tg::symlink::Data::Node(tg::symlink::data::Node {
 			artifact: None,
 			path: None,
-		} => {
+		}) => {
 			return Err(std::io::Error::new(
 				std::io::ErrorKind::InvalidInput,
 				"symlink has no artifact or path",
 			));
 		},
-		tg::symlink::Data::Graph { graph: _, node: _ } => {
+		tg::symlink::Data::Graph(tg::symlink::data::Graph { graph: _, node: _ }) => {
 			return Err(std::io::Error::new(
 				std::io::ErrorKind::InvalidInput,
 				"cannot produce a template from a symlink pointing into a graph",

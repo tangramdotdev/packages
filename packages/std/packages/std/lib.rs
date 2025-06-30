@@ -13,18 +13,20 @@ pub fn template_data_to_symlink_data(
 ) -> tg::Result<tg::symlink::Data> {
 	let components = template.components;
 	match components.as_slice() {
-		[tg::template::data::Component::String(s)] => Ok(tg::symlink::Data::Normal {
-			artifact: None,
-			path: Some(s.into()),
-		}),
+		[tg::template::data::Component::String(s)] => {
+			Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
+				artifact: None,
+				path: Some(s.into()),
+			}))
+		},
 		[tg::template::data::Component::Artifact(id)]
 		| [
 			tg::template::data::Component::String(_),
 			tg::template::data::Component::Artifact(id),
-		] => Ok(tg::symlink::Data::Normal {
+		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
 			artifact: Some(id.clone()),
 			path: None,
-		}),
+		})),
 		[
 			tg::template::data::Component::Artifact(artifact_id),
 			tg::template::data::Component::String(s),
@@ -33,10 +35,10 @@ pub fn template_data_to_symlink_data(
 			tg::template::data::Component::String(_),
 			tg::template::data::Component::Artifact(artifact_id),
 			tg::template::data::Component::String(s),
-		] => Ok(tg::symlink::Data::Normal {
+		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
 			artifact: Some(artifact_id.clone()),
 			path: Some(s.chars().skip(1).collect::<String>().into()),
-		}),
+		})),
 		_ => Err(tg::error!(
 			"expected a template with 1-3 components, got {:?}",
 			components

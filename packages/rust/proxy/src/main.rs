@@ -208,11 +208,11 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH).await?;
 	let executable = true;
 	let dependencies = BTreeMap::new();
-	let object = tg::file::Object::Normal {
+	let object = tg::file::Object::Node(tg::file::object::Node {
 		contents,
 		dependencies,
 		executable,
-	};
+	});
 	let executable = Some(tg::File::with_object(object).into());
 
 	// Unrender the environment.
@@ -553,7 +553,7 @@ async fn get_checked_in_path(
 	tracing::info!(?symlink_data, "unrendered symlink data");
 
 	// If the symlink data has an artifact, check it out and return it.
-	if let tg::symlink::Data::Normal { artifact, path: _ } = symlink_data {
+	if let tg::symlink::Data::Node(tg::symlink::data::Node { artifact, path: _ }) = symlink_data {
 		#[cfg(feature = "tracing")]
 		tracing::info!(
 			?artifact,
@@ -637,18 +637,20 @@ pub fn template_data_to_symlink_data(
 ) -> tg::Result<tg::symlink::Data> {
 	let components = template.components;
 	match components.as_slice() {
-		[tg::template::data::Component::String(s)] => Ok(tg::symlink::Data::Normal {
-			artifact: None,
-			path: Some(s.into()),
-		}),
+		[tg::template::data::Component::String(s)] => {
+			Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
+				artifact: None,
+				path: Some(s.into()),
+			}))
+		},
 		[tg::template::data::Component::Artifact(id)]
 		| [
 			tg::template::data::Component::String(_),
 			tg::template::data::Component::Artifact(id),
-		] => Ok(tg::symlink::Data::Normal {
+		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
 			artifact: Some(id.clone()),
 			path: None,
-		}),
+		})),
 		[
 			tg::template::data::Component::Artifact(artifact_id),
 			tg::template::data::Component::String(s),
@@ -657,10 +659,10 @@ pub fn template_data_to_symlink_data(
 			tg::template::data::Component::String(_),
 			tg::template::data::Component::Artifact(artifact_id),
 			tg::template::data::Component::String(s),
-		] => Ok(tg::symlink::Data::Normal {
+		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
 			artifact: Some(artifact_id.clone()),
 			path: Some(s.chars().skip(1).collect::<String>().into()),
-		}),
+		})),
 		_ => Err(tg::error!(
 			"expected a template with 1-3 components, got {:?}",
 			components

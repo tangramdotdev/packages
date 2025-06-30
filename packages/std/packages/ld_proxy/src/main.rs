@@ -324,10 +324,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 					tangram_std::unrender(library_path)?.to_data(),
 				)?;
 				let artifact_path = match symlink_data.clone() {
-					tg::symlink::data::Symlink::Normal {
+					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
 						artifact: Some(artifact_id),
 						path,
-					} => {
+					}) => {
 						tracing::debug!(?artifact_id, ?path, "checking for entries");
 						let artifact = tg::Artifact::with_id(artifact_id.clone());
 						if let Ok(directory) = artifact.try_unwrap_directory() {
@@ -358,10 +358,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 							None
 						}
 					},
-					tg::symlink::data::Symlink::Normal {
+					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
 						artifact: None,
 						path: Some(path),
-					} => {
+					}) => {
 						tracing::debug!(
 							"Library path points into working directory: {:?}. Creating directory.",
 							path
@@ -375,10 +375,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 							None
 						}
 					},
-					tg::symlink::data::Symlink::Normal {
+					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
 						artifact: None,
 						path: None,
-					} => None,
+					}) => None,
 					tg::symlink::data::Symlink::Graph { .. } => {
 						tracing::warn!(?symlink_data, "ecountered a graph object");
 						None
