@@ -1474,7 +1474,7 @@ const createLibraryPathSet = async (
 			if (artifact !== undefined) {
 				tg.Directory.assert(artifact);
 				let ret: DirWithSubpath = { dir: artifact };
-				const subpath = await path.subpath();
+				const subpath = await path.path();
 				if (subpath !== undefined) {
 					ret = { ...ret, subpath };
 				}

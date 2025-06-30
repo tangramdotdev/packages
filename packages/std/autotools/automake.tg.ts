@@ -48,7 +48,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 
 	const perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
-		subpath: "bin/perl",
+		path: "bin/perl",
 	});
 	const scripts = ["automake", "aclocal"];
 

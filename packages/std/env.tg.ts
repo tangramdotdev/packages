@@ -255,7 +255,7 @@ export namespace env {
 						const symlinkArtifact = await artifact.artifact();
 						if (symlinkArtifact === undefined) {
 							// If this symlink points above the current directory, we don't have the context to resolve. No match.
-							const symlinkTarget = await artifact.target();
+							const symlinkTarget = await artifact.path();
 							if (
 								symlinkTarget === undefined ||
 								symlinkTarget.startsWith("..")
@@ -265,7 +265,7 @@ export namespace env {
 							// Otherwise, construct a new symlink using this directory as the artifact.
 							artifact = await tg.symlink({
 								artifact: dir,
-								subpath: symlinkTarget,
+								path: symlinkTarget,
 							});
 						}
 					}

@@ -46,7 +46,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 
 	const interpreter = tg.symlink({
 		artifact: perlArtifact,
-		subpath: "bin/perl",
+		path: "bin/perl",
 	});
 	const env = std.env.arg(env_, { utils: false });
 	const artifact = std.autotools.build({
@@ -58,7 +58,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	});
 
 	const wrappedScript = std.wrap(
-		tg.symlink({ artifact, subpath: "bin/help2man" }),
+		tg.symlink({ artifact, path: "bin/help2man" }),
 		{
 			interpreter,
 			buildToolchain: env,

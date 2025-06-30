@@ -101,7 +101,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const interpreter = await tg.symlink({
 		artifact: perlArtifact,
-		subpath: "bin/perl",
+		path: "bin/perl",
 	});
 
 	let binDirectory = tg.directory();
@@ -110,7 +110,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const autom4te = await std.wrap(
 		tg.symlink({
 			artifact: autoconf,
-			subpath: "bin/autom4te",
+			path: "bin/autom4te",
 		}),
 		{
 			interpreter,

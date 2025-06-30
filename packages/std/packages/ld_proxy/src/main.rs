@@ -324,14 +324,14 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 					tangram_std::unrender(library_path)?.to_data(),
 				)?;
 				let artifact_path = match symlink_data.clone() {
-					tg::symlink::data::Symlink::Artifact {
-						artifact: artifact_id,
-						subpath,
+					tg::symlink::data::Symlink::Normal {
+						artifact: Some(artifact_id),
+						path,
 					} => {
-						tracing::debug!(?artifact_id, ?subpath, "checking for entries");
+						tracing::debug!(?artifact_id, ?path, "checking for entries");
 						let artifact = tg::Artifact::with_id(artifact_id.clone());
 						if let Ok(directory) = artifact.try_unwrap_directory() {
-							let entries = if let Some(ref subpath) = subpath {
+							let entries = if let Some(ref subpath) = path {
 								if let Ok(subdirectory) =
 									directory.get(&tg, &subpath).await?.try_unwrap_directory()
 								{
@@ -347,32 +347,38 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 							} else {
 								tracing::debug!(
 									?artifact_id,
-									?subpath,
+									?path,
 									"found a directory with entries"
 								);
 								let dir_with_subpath =
-									dir_with_subpath_from_directory(&tg, &directory, subpath)
-										.await?;
+									dir_with_subpath_from_directory(&tg, &directory, path).await?;
 								Some(dir_with_subpath)
 							}
 						} else {
 							None
 						}
 					},
-					tg::symlink::data::Symlink::Target { target } => {
+					tg::symlink::data::Symlink::Normal {
+						artifact: None,
+						path: Some(path),
+					} => {
 						tracing::debug!(
 							"Library path points into working directory: {:?}. Creating directory.",
-							target
+							path
 						);
-						if let Ok(ref canonicalized_path) = std::fs::canonicalize(&target) {
+						if let Ok(ref canonicalized_path) = std::fs::canonicalize(&path) {
 							checkin_local_library_path(&tg, canonicalized_path).await?
 						} else {
 							tracing::warn!(
-								"Could not canonicalize library path {target:?}. Skipping."
+								"Could not canonicalize library path {path:?}. Skipping."
 							);
 							None
 						}
 					},
+					tg::symlink::data::Symlink::Normal {
+						artifact: None,
+						path: None,
+					} => None,
 					tg::symlink::data::Symlink::Graph { .. } => {
 						tracing::warn!(?symlink_data, "ecountered a graph object");
 						None

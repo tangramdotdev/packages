@@ -553,11 +553,7 @@ async fn get_checked_in_path(
 	tracing::info!(?symlink_data, "unrendered symlink data");
 
 	// If the symlink data has an artifact, check it out and return it.
-	if let tg::symlink::Data::Artifact {
-		artifact,
-		subpath: _,
-	} = symlink_data
-	{
+	if let tg::symlink::Data::Normal { artifact, path: _ } = symlink_data {
 		#[cfg(feature = "tracing")]
 		tracing::info!(
 			?artifact,
@@ -635,22 +631,23 @@ pub fn host() -> &'static str {
 	}
 }
 
-/// Convert a [`tangram_client::template::Data`] to its corresponding [`tangram_client::symlink::Data`] object.
+/// Convert a [`tg::template::Data`] to its corresponding [`tg::symlink::Data`] object.
 pub fn template_data_to_symlink_data(
 	template: tg::template::Data,
 ) -> tg::Result<tg::symlink::Data> {
 	let components = template.components;
 	match components.as_slice() {
-		[tg::template::data::Component::String(s)] => {
-			Ok(tg::symlink::Data::Target { target: s.into() })
-		},
+		[tg::template::data::Component::String(s)] => Ok(tg::symlink::Data::Normal {
+			artifact: None,
+			path: Some(s.into()),
+		}),
 		[tg::template::data::Component::Artifact(id)]
 		| [
 			tg::template::data::Component::String(_),
 			tg::template::data::Component::Artifact(id),
-		] => Ok(tg::symlink::Data::Artifact {
-			artifact: id.clone(),
-			subpath: None,
+		] => Ok(tg::symlink::Data::Normal {
+			artifact: Some(id.clone()),
+			path: None,
 		}),
 		[
 			tg::template::data::Component::Artifact(artifact_id),
@@ -660,9 +657,9 @@ pub fn template_data_to_symlink_data(
 			tg::template::data::Component::String(_),
 			tg::template::data::Component::Artifact(artifact_id),
 			tg::template::data::Component::String(s),
-		] => Ok(tg::symlink::Data::Artifact {
-			artifact: artifact_id.clone(),
-			subpath: Some(s.chars().skip(1).collect::<String>().into()),
+		] => Ok(tg::symlink::Data::Normal {
+			artifact: Some(artifact_id.clone()),
+			path: Some(s.chars().skip(1).collect::<String>().into()),
 		}),
 		_ => Err(tg::error!(
 			"expected a template with 1-3 components, got {:?}",

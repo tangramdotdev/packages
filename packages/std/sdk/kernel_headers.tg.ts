@@ -6,7 +6,7 @@ export const metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.12.25",
+	version: "6.12.35",
 };
 
 export const source = async () => {

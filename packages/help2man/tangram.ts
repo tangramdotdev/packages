@@ -61,7 +61,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const perlArtifact = await perl.build({ build, host: build }, perlArg);
 	const interpreter = tg.symlink({
 		artifact: perlArtifact,
-		subpath: "bin/perl",
+		path: "bin/perl",
 	});
 	const dependencies = [
 		autoconf.build({ build, env: env_, host, sdk }, autoconfArg),
@@ -81,7 +81,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 
 	const wrappedScript = std.wrap(
-		tg.symlink({ artifact, subpath: "bin/help2man" }),
+		tg.symlink({ artifact, path: "bin/help2man" }),
 		{
 			interpreter,
 		},
