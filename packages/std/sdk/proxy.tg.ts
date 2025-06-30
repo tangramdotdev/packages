@@ -339,6 +339,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 	return std.wrap(buildLinkerProxy, {
 		buildToolchain,
 		env,
+		build,
 		host: build,
 		identity: "wrapper",
 	});
