@@ -108,7 +108,7 @@ export const pkg = async <T extends std.args.PackageArg>(
 
 	const results = await Promise.all(
 		packageArgs.map(async ([packageArg, spec]) => {
-			const host = packageArg.host ?? (await std.triple.host());
+			const host = packageArg.host ?? currentHost;
 			let directory = await std.packages.buildCommandOutput(
 				buildCmd,
 				packageArg,

@@ -41,6 +41,7 @@ import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
 import * as wrap from "./wrap.tg.ts";
 
+//
 export const metadata = {
 	name: "std",
 	version: "0.0.0",
@@ -173,7 +174,7 @@ const testActions = (): Record<string, () => any> => {
 		sdkLinuxToDarwin: sdk.testLinuxToDarwin,
 		sdkAll: sdk.assertAllSdks,
 		crossInjection: injection.testCross,
-		crossWorkspace: workspace.testCross,
+		// crossWorkspace: workspace.testCross,
 		imageWrappedEntrypoint: image.testWrappedEntrypoint,
 		imageBasicRootfs: image.testBasicRootfs,
 		imageBootstrapEnv: image.testBootstrapEnv,

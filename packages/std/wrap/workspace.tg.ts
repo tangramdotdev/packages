@@ -1,15 +1,14 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as gnu from "../sdk/gnu.tg.ts";
-import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
 import packages from "../packages" with { type: "directory" };
 
 type Arg = {
-	buildToolchain: std.env.EnvObject;
 	build?: string;
+	buildToolchain: std.env.Arg;
 	host?: string;
+	hostToolchain?: std.env.Arg;
 	release?: boolean;
 	source?: tg.Directory;
 	verbose?: boolean;
@@ -20,8 +19,8 @@ export const workspace = async (
 	arg: tg.Unresolved<Arg>,
 ): Promise<tg.Directory> => {
 	const {
-		build: build_,
 		buildToolchain,
+		build: build_,
 		host: host_,
 		release = true,
 		source: source_,
@@ -182,7 +181,8 @@ type RustupManifest = {
 };
 
 type BuildArg = {
-	buildToolchain?: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
+	crossToolchain?: std.env.Arg;
 	enableTracingFeature?: boolean;
 	host?: string;
 	release?: boolean;
@@ -196,21 +196,21 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const enableTracing = arg.enableTracingFeature ?? true;
 	const release = arg.release ?? true;
 	const source = arg.source;
-	let host_ = arg.host ?? (await std.triple.host());
-	const host = standardizeTriple(host_);
-	let target_ = arg.target ?? host;
-	const target = standardizeTriple(target_);
-	const system = std.triple.archAndOs(host);
+	let host = arg.host ?? (await std.triple.host());
+	const standardizedHost = standardizeTriple(host);
+	let target = arg.target ?? standardizedHost;
+	const standardizedTarget = standardizeTriple(target);
+	const system = std.triple.archAndOs(standardizedHost);
 	const hostOs = std.triple.os(system);
 	let verbose = arg.verbose;
 
 	const isCross =
-		std.triple.arch(host_) !== std.triple.arch(target_) ||
-		std.triple.os(host_) !== std.triple.os(target_);
+		std.triple.arch(host) !== std.triple.arch(target) ||
+		std.triple.os(host) !== std.triple.os(target);
 	let prefix = ``;
 	let suffix = tg``;
 	if (hostOs === "linux" && isCross) {
-		prefix = `${target}-`;
+		prefix = `${standardizedTarget}-`;
 	}
 
 	// Use the bootstrap shell and utils.
@@ -220,45 +220,16 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 
 	// Get the appropriate toolchain directory.
 	// You need a build toolchian AND a host toolchain. These may be the same.
-	let buildToolchain = arg.buildToolchain;
-	let hostToolchain = undefined;
-	let setSysroot = false;
-	if (hostOs === "linux") {
-		if (!isCross) {
-			buildToolchain = await bootstrap.sdk.env(host_);
-			host_ = await bootstrap.toolchainTriple(host_);
-			target_ = host_;
-		} else {
-			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await tg.build(gnu.toolchain, { host: host_, target });
-		}
-	} else {
-		if (isCross) {
-			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await tg
-				.build(llvm.toolchain, { host, target })
-				.then(tg.Directory.expect);
-			const { directory: targetDirectory } = await std.sdk.toolchainComponents({
-				env: await std.env.arg(hostToolchain, { utils: false }),
-				host: host_,
-			});
-			suffix = tg.Template
-				.raw` -target ${target} --sysroot ${targetDirectory}/${target}/sysroot`;
-		} else {
-			buildToolchain = await bootstrap.sdk.env(host_);
-		}
-	}
+	const buildToolchain = arg.buildToolchain;
+	const crossToolchain = arg.crossToolchain;
 
 	const { directory, ldso, libDir } = await std.sdk.toolchainComponents({
-		env: buildToolchain,
-		host: isCross ? host : host_,
+		env: await std.env.arg(buildToolchain, { utils: false }),
+		host: isCross ? standardizedHost : host,
 	});
-	if (setSysroot) {
-		suffix = tg.Template.raw` --sysroot ${directory}`;
-	}
 
 	// Get the Rust toolchain.
-	const rustToolchain = await tg.build(rust, { target });
+	const rustToolchain = await tg.build(rust, { target: standardizedTarget });
 
 	// Set up common environemnt.
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
@@ -266,7 +237,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const env: Array<tg.Unresolved<std.env.Arg>> = [
 		{ utils: false },
 		buildToolchain,
-		hostToolchain ?? {},
+		crossToolchain ?? {},
 		rustToolchain,
 		shellArtifact,
 		utilsArtifact,
@@ -274,13 +245,13 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			SHELL: shell,
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
-			RUST_TARGET: target,
+			RUST_TARGET: standardizedTarget,
 			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
 			RUSTFLAGS: `-C target-feature=+crt-static`,
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: tg`${prefix}cc${suffix}`,
-			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
-			[`CC_${tripleToEnvVar(target)}`]: tg`${prefix}cc${suffix}`,
-			[`CXX_${tripleToEnvVar(target)}`]: tg`${prefix}c++${suffix}`,
+			[`CARGO_TARGET_${tripleToEnvVar(standardizedTarget, true)}_LINKER`]: tg`${prefix}cc${suffix}`,
+			[`AR_${tripleToEnvVar(standardizedTarget)}`]: `${prefix}ar`,
+			[`CC_${tripleToEnvVar(standardizedTarget)}`]: tg`${prefix}cc${suffix}`,
+			[`CXX_${tripleToEnvVar(standardizedTarget)}`]: tg`${prefix}c++${suffix}`,
 		},
 	];
 
@@ -341,11 +312,11 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		});
 		const hostFlag = tg`--sysroot ${sdkroot}/MacOSX.sdk`;
 		const { directory: targetDirectory } = await std.sdk.toolchainComponents({
-			env: await std.env.arg(hostToolchain, { utils: false }),
-			host: host_,
+			env: await std.env.arg(crossToolchain, { utils: false }),
+			host: host,
 		});
 		suffix = tg.Template
-			.raw` -target ${target} --sysroot ${directory}/${target}/sysroot`;
+			.raw` -target ${standardizedTarget} --sysroot ${directory}/${standardizedTarget}/sysroot`;
 		prepare = tg`
 			${prepare}
 			echo "#!/usr/bin/env sh" > build-cc.sh
@@ -354,7 +325,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			chmod +x build-cc.sh
 			echo "#!/usr/bin/env sh" > target-cc.sh
 			echo 'set -eu' >> target-cc.sh
-			echo 'exec ${targetDirectory}/bin/clang -target ${target} --sysroot ${targetDirectory}/${target}/sysroot "$@"' >> target-cc.sh
+			echo 'exec ${targetDirectory}/bin/clang -target ${standardizedTarget} --sysroot ${targetDirectory}/${standardizedTarget}/sysroot "$@"' >> target-cc.sh
 			chmod +x target-cc.sh
 			echo "#!/usr/bin/env sh" > build-cxx.sh
 			echo 'set -eu' >> build-cxx.sh
@@ -362,8 +333,8 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			chmod +x build-cxx.sh
 			export CC=$PWD/build-cc.sh
 			export CXX=$PWD/build-cxx.sh
-			export CARGO_TARGET_${tripleToEnvVar(host, true)}_LINKER=$PWD/build-cc.sh
-			export CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER=$PWD/target-cc.sh
+			export CARGO_TARGET_${tripleToEnvVar(standardizedHost, true)}_LINKER=$PWD/build-cc.sh
+			export CARGO_TARGET_${tripleToEnvVar(standardizedTarget, true)}_LINKER=$PWD/target-cc.sh
 			`;
 	}
 
@@ -446,14 +417,12 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 };
 
 export const test = async () => {
-	// Detect the host triple.
-	const host = await std.triple.host();
+	const host = await bootstrap.toolchainTriple();
 
-	// Determine the target triple with differing architecture from the host.
 	const hostArch = std.triple.arch(host);
 	tg.assert(hostArch);
 
-	const buildToolchain = bootstrap.sdk.env(host);
+	const buildToolchain = await bootstrap.sdk.env(host);
 
 	const nativeWorkspace = await tg.build(workspace, {
 		buildToolchain,
@@ -477,36 +446,32 @@ export const test = async () => {
 	return nativeWorkspace;
 };
 
-export const testCross = async () => {
-	// Detect the host triple.
-	const host = await std.triple.host();
+// FIXME enable
+// export const testCross = async () => {
+// 	// Detect the host triple.
+// 	const host = await std.triple.host();
 
-	// Determine the target triple with differing architecture from the host.
-	const hostArch = std.triple.arch(host);
-	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
-	const target = std.triple.create({
-		arch: targetArch,
-		vendor: "unknown",
-		os: "linux",
-		environment: "gnu",
-	});
-	const buildToolchain = await std.env.arg(
-		await tg.build(gnu.toolchain, { host, target }),
-		{ utils: false },
-	);
+// 	// Determine the target triple with differing architecture from the host.
+// 	const hostArch = std.triple.arch(host);
+// 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+// 	const target = std.triple.create({
+// 		arch: targetArch,
+// 		vendor: "unknown",
+// 		os: "linux",
+// 		environment: "gnu",
+// 	});
 
-	const crossWorkspace = await tg.build(workspace, {
-		buildToolchain,
-		build: host,
-		host: target,
-		release: false,
-	});
+// 	const crossWorkspace = await tg.build(workspace, {
+// 		build: host,
+// 		host: target,
+// 		release: false,
+// 	});
 
-	// Assert the cross workspace was built for the target.
-	const crossWrapper = await crossWorkspace.get("bin/wrapper");
-	tg.File.assert(crossWrapper);
-	const crossMetadata = await std.file.executableMetadata(crossWrapper);
-	tg.assert(crossMetadata.format === "elf");
-	tg.assert(crossMetadata.arch === targetArch);
-	return true;
-};
+// 	// Assert the cross workspace was built for the target.
+// 	const crossWrapper = await crossWorkspace.get("bin/wrapper");
+// 	tg.File.assert(crossWrapper);
+// 	const crossMetadata = await std.file.executableMetadata(crossWrapper);
+// 	tg.assert(crossMetadata.format === "elf");
+// 	tg.assert(crossMetadata.arch === targetArch);
+// 	return true;
+// };

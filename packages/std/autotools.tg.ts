@@ -209,7 +209,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 
 	if (!bootstrap) {
-		// Set up the SDK, add it to the environment.
+		// Set up the host SDK, add it to the environment.
+		// FIXME - the arg here is obliterating the target setting!
 		const sdkArg = await std.sdk.arg({ host, target }, sdkArg_);
 		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.

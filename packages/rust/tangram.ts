@@ -93,8 +93,12 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 		});
 	}
 
-	// Obtain an SDK.  If cross-targets were specified, use a cross-compiling SDK.
-	const sdk = await std.sdk({ host, targets });
+	// Collect SDKS for host and all required targets.
+	const sdks = [std.sdk({ host })];
+	for (let target of targets) {
+		sdks.push(std.sdk({ host, target }));
+	}
+	const env = await std.env.arg(...sdks, { utils: false });
 
 	// Install each package.
 	let rustInstall = await $`
@@ -104,13 +108,13 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 				chmod -R +w "$OUTPUT"
 			done
 		`
-		.env(sdk)
+		.env(env)
 		.then(tg.Directory.expect);
 
 	// Proxy rust-objcopy.
 	rustInstall = await proxyRustObjcopy({
 		build: host,
-		buildToolchain: sdk,
+		buildToolchain: env,
 		host,
 		rustInstall,
 	});
@@ -259,6 +263,7 @@ export const test = async () => {
 
 export const testHostToolchain = async () => {
 	const rustArtifact = await self();
+	console.log("RUST", await rustArtifact.store());
 	await $`rustc --version && cargo --version`.env(rustArtifact);
 	return rustArtifact;
 };

@@ -50,6 +50,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const env = std.env.arg(
 		std.sdk(std.triple.rotate({ build, host })),
 		{
+			CC: "cc",
 			CFLAGS: tg.Mutation.suffix("-O2", " "),
 		},
 		env_,
