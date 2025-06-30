@@ -1,6 +1,9 @@
 import * as std from "./tangram.ts";
 import * as bootstrap from "./bootstrap.tg.ts";
-import { type ElfExecutableMetadata, elfExecutableMetadata } from "./file/elf.tg.ts";
+import {
+	type ElfExecutableMetadata,
+	elfExecutableMetadata,
+} from "./file/elf.tg.ts";
 import {
 	type MachOExecutableMetadata,
 	machoExecutableMetadata,
