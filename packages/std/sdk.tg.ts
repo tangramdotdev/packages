@@ -25,51 +25,32 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		proxyCompiler,
 		proxyLinker,
 		proxyStrip,
-		targets,
+		target,
 		toolchain: toolchain_,
 		linker,
 	} = await sdk.arg(...args);
 	const hostOs = std.triple.os(host);
 
-	// Create an array to collect all constituent envs.
-	const envs: tg.Unresolved<Array<std.env.Arg>> = [];
-
 	// Determine host toolchain.
-	let toolchain: std.env.EnvObject | undefined = undefined;
+	let toolchain: tg.Directory | undefined = undefined;
 	if (toolchain_ === "gnu") {
 		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS`);
 		}
-		toolchain = await std.env.arg(await tg.build(gnu.toolchain, { host }), {
-			utils: false,
-		});
+		toolchain = await tg.build(gnu.toolchain, { host });
 	} else if (toolchain_ === "llvm") {
 		let arg: llvm.LLVMArg = { host };
-		toolchain = await std.env.arg(await tg.build(llvm.toolchain, arg), {
-			utils: false,
-		});
+		// FIXME - this should return a toolchain directory, never an env object.
+		// toolchain = await tg.build(llvm.toolchain, arg);
 	} else {
 		toolchain = toolchain_;
 	}
 	envs.push(toolchain);
 
 	const { flavor } = await std.sdk.toolchainComponents({
-		env: toolchain,
+		env: await std.env.arg(toolchain, { utils: false }),
 		host,
 	});
-
-	// Set CC/CXX.
-	if (flavor === "gnu") {
-		envs.push({
-			CC: tg.Mutation.setIfUnset(`gcc`),
-			CXX: tg.Mutation.setIfUnset(`g++`),
-		});
-	} else if (flavor === "llvm") {
-		envs.push({
-			CC: tg.Mutation.setIfUnset("clang"),
-			CXX: tg.Mutation.setIfUnset("clang++"),
-		});
-	}
 
 	// Swap linker if requested.
 	let linkerDir: tg.Directory | undefined = undefined;
@@ -121,62 +102,6 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 		envs.push(linkerDir);
 	}
 
-	// Add cross compilers if requested.
-	for (const target of targets) {
-		if (host === target) {
-			continue;
-		}
-		if (!validateCrossTarget({ host, target })) {
-			throw new Error(
-				`Cross-compiling from ${host} to ${target} is not supported.`,
-			);
-		}
-		let crossToolchain = undefined;
-		const hostOs = std.triple.os(host);
-		const targetOs = std.triple.os(target);
-		if (hostOs === "linux" && targetOs === "darwin") {
-			crossToolchain = await std.env.arg(
-				await tg.build(llvm.linuxToDarwin, { host, target }),
-				{ utils: false },
-			);
-		} else if (hostOs === "darwin" && targetOs === "linux") {
-			crossToolchain = await std.env.arg(
-				await tg.build(llvm.toolchain, { host, target }),
-				{ utils: false },
-			);
-		} else {
-			crossToolchain = await std.env.arg(
-				await tg.build(gnu.toolchain, { host, target }),
-				{ utils: false },
-			);
-		}
-		tg.assert(crossToolchain !== undefined);
-		envs.push(crossToolchain);
-		const proxyEnv = await tg.build(proxy.env, {
-			...proxyArg,
-			toolchain: crossToolchain,
-			build: host,
-			host: target,
-		});
-		envs.push(proxyEnv);
-		const targetEnvVarName = target.replace(/-/g, "_");
-		if (flavor === "gnu") {
-			envs.push({
-				[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),
-				[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-gcc`),
-				[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-g++`),
-			});
-		} else if (flavor === "llvm") {
-			envs.push({
-				[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`llvm-ar`),
-				[`CC_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-clang`),
-				[`CXX_${targetEnvVarName}`]: tg.Mutation.setIfUnset(
-					`${target}-clang++`,
-				),
-			});
-		}
-	}
-
 	// Combine all envs.
 	return await std.env.arg(...envs, { utils: false });
 }
@@ -198,8 +123,6 @@ export namespace sdk {
 		proxyStrip?: boolean;
 		/** The machine this SDK produces executables for. */
 		target?: string;
-		/** A list of machines this SDK can produce executables for. */
-		targets?: Array<string>;
 		/** Env containing the compiler. If not provided, will default to a native GCC toolchain. */
 		toolchain?: sdk.ToolchainKind;
 	};
@@ -212,7 +135,6 @@ export namespace sdk {
 			proxyLinker = true,
 			proxyStrip = true,
 			target,
-			targets: targets_,
 			toolchain: toolchain_,
 		} = await std.args.apply<sdk.Arg, sdk.ArgObject>({
 			args,
@@ -223,9 +145,7 @@ export namespace sdk {
 					return arg;
 				}
 			},
-			reduce: {
-				targets: "append",
-			},
+			reduce: {},
 		});
 
 		// Obtain host and targets.
@@ -236,10 +156,9 @@ export namespace sdk {
 			throw new Error(`Alternate linkers are only available for Linux hosts.`);
 		}
 
-		// FIXME - this can get done in the reducer.
-		let targets = targets_ ?? [];
-		if (target) {
-			targets.push(target);
+		// If no target is set, the target is the host.
+		if (!target) {
+			target = host;
 		}
 
 		// Set the default toolchain if not provided.
@@ -250,7 +169,7 @@ export namespace sdk {
 		// If we're building our own toolchain, canonicalize the host and targets.
 		if (toolchain_ === "gnu" || toolchain_ === "llvm") {
 			host = sdk.canonicalTriple(host);
-			targets = targets.map(sdk.canonicalTriple);
+			target = sdk.canonicalTriple(target);
 		}
 
 		return {
@@ -258,7 +177,7 @@ export namespace sdk {
 			proxyCompiler,
 			proxyLinker,
 			proxyStrip,
-			targets,
+			target,
 			toolchain: toolchain_,
 			linker,
 		};
@@ -806,18 +725,17 @@ export namespace sdk {
 		if (foundCC instanceof tg.File) {
 			// Inspect the file to see which system it should run on.
 			const metadata = await std.file.executableMetadata(foundCC);
-			if (metadata.format !== "elf" && metadata.format !== "mach-o") {
-				throw new Error(`Unexpected compiler format ${metadata.format}.`);
-			}
 			let detectedArch: string | undefined;
 			if (metadata.format === "elf") {
 				detectedArch = metadata.arch;
 			} else if (metadata.format === "mach-o") {
 				detectedArch = metadata.arches[0] ?? "aarch64";
 			}
-			const os = metadata.format === "elf" ? "linux" : "darwin";
-			const arch = detectedArch ?? "x86_64";
-			detectedHost = `${arch}-${os}`;
+			if (metadata.format !== "shebang") {
+				const os = metadata.format === "elf" ? "linux" : "darwin";
+				const arch = detectedArch ?? "x86_64";
+				detectedHost = `${arch}-${os}`;
+			}
 		}
 
 		// Actually run the compiler on the detected system to ask what host triple it's configured for.
@@ -900,7 +818,7 @@ export namespace sdk {
 			flavor === "gnu" && isCross ? `${expectedTarget}-` : ``;
 
 		// Set up test parameters.
-		const { lang, testProgram, expectedOutput } = arg.parameters;
+		const { lang, testProgram, expectedOutput, title } = arg.parameters;
 		let cmd;
 		if (lang === "c") {
 			cmd = `${targetPrefix}cc`;
@@ -912,7 +830,7 @@ export namespace sdk {
 			throw new Error(`Unexpected language ${lang}.`);
 		}
 		if (flavor === "llvm") {
-			cmd = `${cmd} -target ${expectedTarget}`;
+			cmd = `${cmd} -target ${sdk.canonicalTriple(expectedTarget)}`;
 		}
 		tg.assert(cmd);
 
@@ -921,21 +839,22 @@ export namespace sdk {
 		if (lang === "fortran") {
 			langStr = "f95";
 		}
-		const compiledProgram = await std.build`echo "testing ${lang}"
+		const compiledProgram =
+			await std.build`echo "testing ${title}, proxied linker: ${proxiedLinker.toString()}"
 				set -x
 				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`
-			.bootstrap(true)
-			.env(
-				std.env.arg(
-					arg.sdkEnv,
-					{
-						TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					},
-					{ utils: false },
-				),
-			)
-			.host(std.triple.archAndOs(expectedHost))
-			.then(tg.File.expect);
+				.bootstrap(true)
+				.env(
+					std.env.arg(
+						arg.sdkEnv,
+						{
+							TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+						},
+						{ utils: false },
+					),
+				)
+				.host(std.triple.archAndOs(expectedHost))
+				.then(tg.File.expect);
 
 		// Assert the resulting program was compiled for the expected target.
 		const expectedArch = std.triple.arch(expectedTarget);
@@ -1111,6 +1030,43 @@ export namespace sdk {
 					});
 				}
 
+				// Test C++ atomic header.
+
+				await assertCompiler({
+					flavor,
+
+					linkerFlavor,
+
+					parameters: testCxxAtomicParameters,
+
+					proxiedLinker,
+
+					sdkEnv: env,
+
+					host: expected.host,
+
+					target,
+				});
+
+				if (proxiedLinker) {
+					// Test C++ atomic with linker proxy bypass.
+					await assertCompiler({
+						flavor,
+						linkerFlavor,
+						parameters: testCxxAtomicParameters,
+						proxiedLinker: false,
+						sdkEnv: await std.env.arg(
+							env,
+							{
+								TANGRAM_LINKER_PASSTHROUGH: true,
+							},
+							{ utils: false },
+						),
+						host: expected.host,
+						target,
+					});
+				}
+
 				// Test Fortran.
 				if (
 					actualHostOs !== "darwin" &&
@@ -1179,7 +1135,7 @@ export namespace sdk {
 
 	export type LinkerKind = "bfd" | "lld" | "mold" | tg.Symlink | tg.File;
 
-	export type ToolchainKind = sdk.ToolchainFlavor | std.env.EnvObject;
+	export type ToolchainKind = sdk.ToolchainFlavor | tg.Directory;
 }
 
 /** Check whether Tangram supports building a cross compiler from the host to the target. */
@@ -1280,6 +1236,7 @@ const testCParameters: ProxyTestParameters = {
 			printf("Hello, Tangram!\\n");
 			return 0;
 		}`,
+	title: "c-hello",
 };
 
 const testCxxParameters: ProxyTestParameters = {
@@ -1292,6 +1249,24 @@ const testCxxParameters: ProxyTestParameters = {
 			std::cout << "new Tangram().send(\\"Hello!\\")" << std::endl;
 			return 0;
 		}`,
+	title: "c++-hello",
+};
+
+const testCxxAtomicParameters: ProxyTestParameters = {
+	expectedOutput: "Atomic operations working: 42",
+	lang: "c++",
+	testProgram: tg.file`
+		#include <iostream>
+		#include <atomic>
+
+		int main() {
+			std::atomic<int> value{0};
+			value.store(42);
+			int result = value.load();
+			std::cout << "Atomic operations working: " << result << std::endl;
+			return 0;
+		}`,
+	title: "c++-atomic",
 };
 
 const testFortranParameters: ProxyTestParameters = {
@@ -1301,12 +1276,14 @@ const testFortranParameters: ProxyTestParameters = {
 		program hello
 			print *, "Hello, Fortran!"
 		end program hello`,
+	title: "fortran-hello",
 };
 
 type ProxyTestParameters = {
 	expectedOutput: string;
 	lang: "c" | "c++" | "fortran";
 	testProgram: tg.Unresolved<tg.File>;
+	title: string;
 };
 
 export const testDefault = async () => {
@@ -1442,6 +1419,27 @@ export const testLLVMMusl = async () => {
 	}
 	const muslHost = std.triple.create(host, { environment: "musl" });
 	const sdkArg = { host: muslHost, toolchain: "llvm" as const };
+	const env = await sdk(sdkArg);
+	await sdk.assertValid(env, sdkArg);
+	return env;
+};
+
+export const testCrossLLVM = async () => {
+	const detectedHost = await std.triple.host();
+	const detectedOs = std.triple.os(detectedHost);
+	if (detectedOs === "darwin") {
+		throw new Error(`Cross-compilation is not supported on Darwin`);
+	}
+	const detectedArch = std.triple.arch(detectedHost);
+	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
+	const crossTarget = sdk.canonicalTriple(
+		std.triple.create(detectedHost, { arch: crossArch }),
+	);
+	const sdkArg: sdk.Arg = {
+		host: detectedHost,
+		target: crossTarget,
+		toolchain: "llvm",
+	};
 	const env = await sdk(sdkArg);
 	await sdk.assertValid(env, sdkArg);
 	return env;

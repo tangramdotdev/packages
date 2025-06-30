@@ -83,21 +83,3 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
-
-export const cross = async () => {
-	// TODO - assert the outputs. Make sure the linux-musl ones produce a static binary.
-	return tg.directory({
-		"aarch64-unknown-linux-gnu": build({
-			host: "aarch64-unknown-linux-gnu",
-		}),
-		"aarch64-unknown-linux-musl": build({
-			host: "aarch64-unknown-linux-musl",
-		}),
-		"x86_64-unknown-linux-gnu": build({ host: "x86_64-unknown-linux-gnu" }),
-		"x86_64-unknown-linux-musl": build({
-			host: "x86_64-unknown-linux-musl",
-		}),
-		"aarch64-apple-darwin": build({ host: "aarch64-apple-darwin" }),
-		"x86_64-apple-darwin": build({ host: "x86_64-apple-darwin" }),
-	});
-};

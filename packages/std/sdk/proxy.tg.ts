@@ -25,12 +25,12 @@ export type Arg = {
 	strip?: boolean;
 	/** Optional strip command to use. If omitted, will use the strip located with the toolchain. */
 	stripExe?: tg.File | tg.Symlink | tg.Template;
-	/** The build environment to be proxied. */
-	toolchain: std.env.EnvObject;
+	/** The build toolchain to be proxied. */
+	toolchain: tg.Directory;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export const env = async (arg?: Arg): Promise<std.env.Arg> => {
+export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -41,7 +41,7 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 	const buildToolchain = arg.toolchain;
 
 	if (!proxyCompiler && !proxyLinker) {
-		return;
+		return buildToolchain;
 	}
 
 	if (!proxyLinker && arg.linkerExe !== undefined) {
@@ -67,7 +67,7 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		ldso,
 		strip,
 	} = await std.sdk.toolchainComponents({
-		env: buildToolchain,
+		env: await std.env.arg(buildToolchain, { utils: false }),
 		forcePrefix,
 		host: build,
 		target: host,
@@ -250,7 +250,8 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		);
 	}
 
-	return await std.env.arg(...dirs, { utils: false });
+	// return await std.env.arg(...dirs, { utils: false });
+	return buildToolchain; // FIXME
 };
 
 export default env;
@@ -339,6 +340,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 	return std.wrap(buildLinkerProxy, {
 		buildToolchain,
 		env,
+		build,
 		host: build,
 	});
 };

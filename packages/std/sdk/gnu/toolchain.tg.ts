@@ -52,6 +52,7 @@ export const toolchain = async (arg: ToolchainArg) => {
 	);
 
 	// Create a new set of build tools against the new native toolchain.
+	console.log("HOST", host, "TARGET", target);
 	const nativeUtils = await tg.build(std.utils.env, {
 		env: proxiedNativeToolchain,
 	});
