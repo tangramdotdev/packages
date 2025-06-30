@@ -14,13 +14,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.7",
+	version: "20.1.8",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:cd8fd55d97ad3e360b1d5aaf98388d1f70dfffb7df36beee478be3b839ff9008";
+		"sha256:6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -63,27 +63,37 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const deps = [git(), pythonForBuild, ncursesArtifact, zlibArtifact];
 
 	// Obtain a sysroot for the requested host.
-	// TODO - host
 	const sysroot = await glibc
-		.sysroot()
+		.sysroot({ host })
 		.then((d) => d.get(host))
 		.then(tg.Directory.expect);
 
-	const env = await std.env.arg(...deps, env_);
+	const env = await std.env.arg(
+		...deps,
+		{
+			CFLAGS: tg.Mutation.suffix("-Wno-unused-command-line-argument", " "),
+			TANGRAM_LINKER_IDENTITY: "wrapper",
+		},
+		env_,
+	);
 
 	const ldsoName = glibc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
+	// FIXME - get the gcc version programatically.
+	// const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -L$\{SYSROOT_LIBDIR\}/gcc/$\{HOST_GCC_TRIPLE\}/15.1.0 -B$\{SYSROOT_LIBDIR\}/gcc/$\{HOST_GCC_TRIPLE\}/15.1.0 -B$\{SYSROOT_LIBDIR\} -L\{SYSROOT_LIBDIR\}`;
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:/work/lib:/work/lib/${host}"`;
+	// FIXME are the lib flags at the end necessary?
+	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:/lib:/lib/${host}:/build/lib:/build/lib/${host}" && export SYSROOT_LIBDIR="$(gcc -print-sysroot)/lib" && export HOST_GCC_TRIPLE=""$(gcc -dumpmachine)""`;
 
 	// Define default flags.
 	const configure = {
 		args: [
-			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
+			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS="${stage2ExeLinkerFlags}"`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
+			`-DLLVM_RUNTIME_TARGETS=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
 			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH didn't work for Terminfo_ROOT, but this did.
