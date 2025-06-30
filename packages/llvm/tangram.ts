@@ -63,20 +63,27 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const deps = [git(), pythonForBuild, ncursesArtifact, zlibArtifact];
 
 	// Obtain a sysroot for the requested host.
-	// TODO - host
 	const sysroot = await glibc
-		.sysroot()
+		.sysroot({ host })
 		.then((d) => d.get(host))
 		.then(tg.Directory.expect);
 
-	const env = await std.env.arg(...deps, env_);
+	const env = await std.env.arg(
+		...deps,
+		{
+			CFLAGS: tg.Mutation.suffix("-Wno-unused-command-line-argument", " "),
+			TANGRAM_LINKER_IDENTITY: "wrapper",
+		},
+		env_,
+	);
 
 	const ldsoName = glibc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:/work/lib:/work/lib/${host}"`;
+	// FIXME are the lib flags at the end necessary?
+	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:/lib:/lib/${host}:/build/lib:/build/lib/${host}" && export LDFLAGS="$LDFLAGS -L$(gcc -print-sysroot)/lib"`;
 
 	// Define default flags.
 	const configure = {
@@ -84,6 +91,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
+			`-DLLVM_RUNTIME_TARGETS=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
 			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH didn't work for Terminfo_ROOT, but this did.
