@@ -45,6 +45,10 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const env: Array<tg.Unresolved<std.env.Arg>> = [];
 
+	env.push({
+		WATERMARK: "1",
+	});
+
 	// On Linux with LLVM, we need to add -Wl,-undefined-version to CFLAGS to build the shared library.
 	// https://github.com/zlib-ng/zlib-ng/issues/1427
 	if (
