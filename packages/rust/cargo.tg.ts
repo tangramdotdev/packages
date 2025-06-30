@@ -92,6 +92,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const rustHost = rustTriple(host);
 	const os = std.triple.os(rustHost);
 	const target = target_ ? rustTriple(target_) : rustHost;
+	console.log("RUST HOST", rustHost, "TARGET", target);
 
 	// Check if we're cross-compiling.
 	const crossCompiling = target !== rustHost;
@@ -483,6 +484,21 @@ export const testUnproxiedWorkspace = async () => {
 		openSslText.trim() === "Hello, from a crate that links against libssl!",
 	);
 	return true;
+};
+
+export const testUnproxiedWorkspaceCross = async () => {
+	const helloWorkspace = build({
+		host: "aarch64-unknown-linux-gnu",
+		target: "x86_64-unknown-linux-gnu",
+		source: tests.get("hello-workspace").then(tg.Directory.expect),
+		env: {
+			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+		},
+		pre: "set -x",
+		proxy: false,
+		verbose: true,
+	});
+	return helloWorkspace;
 };
 
 // Compare the results of cargo vendor and vendorDependencies.

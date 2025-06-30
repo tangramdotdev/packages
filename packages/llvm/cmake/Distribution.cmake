@@ -3,7 +3,7 @@
 
 #  Enable LLVM projects and runtimes
 set(LLVM_ENABLE_PROJECTS "clang;clang-tools-extra;lld" CACHE STRING "")
-set(LLVM_ENABLE_RUNTIMES "compiler-rt;libcxx;libcxxabi;libunwind" CACHE STRING "")
+set(LLVM_ENABLE_RUNTIMES "libunwind;libcxx;libcxxabi;compiler-rt" CACHE STRING "")
 
 # Only build the native target in stage1 since it is a throwaway build.
 set(LLVM_TARGETS_TO_BUILD Native CACHE STRING "")
@@ -19,13 +19,25 @@ if (NOT APPLE)
   set(BOOTSTRAP_LLVM_ENABLE_LLD ON CACHE BOOL "")
 endif()
 
-# Configure the stage1 buidl to use all LLVm components.
+# Configure the stage1 build to use all LLVM components.
 set(CLANG_DEFAULT_CXX_STDLIB "libc++" CACHE STRING "")
 set(CLANG_DEFAULT_RTLIB "compiler-rt" CACHE STRING "")
+
+set(COMPILER_RT_USE_LLVM_UNWINDER ON CACHE BOOL "")
+# set(COMPILER_RT_USE_BUILTINS_LIBRARY ON CACHE BOOL "")
+
 set(LIBCXX_USE_COMPILER_RT ON CACHE BOOL "")
 set(LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")
 set(LIBCXXABI_USE_LLVM_UNWINDER ON CACHE BOOL "")
 set(LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
+
+set(LIBUNWIND_ENABLE_RTTI ON CACHE BOOL "")
+set(LIBUNWIND_ENABLE_EXCEPTIONS ON CACHE BOOL "")
+set(LIBUNWIND_ENABLE_SHARED ON CACHE BOOL "")
+set(LIBUNWIND_ENABLE_STATIC ON CACHE BOOL "")
+
+set(LIBCXXABI_ENABLE_EXCEPTIONS ON CACHE BOOL "")
+set(LIBCXX_ENABLE_EXCEPTIONS ON CACHE BOOL "")
 
 # Set up LLVM configuration.
 set(LLVM_ENABLE_EH ON CACHE BOOL "")

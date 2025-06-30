@@ -4,6 +4,7 @@ import * as lz4 from "lz4" with { local: "../lz4" };
 import * as ncurses from "ncurses" with { local: "../ncurses" };
 import * as openssl from "openssl" with { local: "../openssl" };
 import * as readline from "readline" with { local: "../readline" };
+import * as tzdb from "tzdb" with { local: "../tzdb" };
 import * as std from "std" with { local: "../std" };
 import * as zlib from "zlib" with { local: "../zlib" };
 import * as zstd from "zstd" with { local: "../zstd" };
@@ -110,11 +111,23 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-	const configureArgs = ["--disable-rpath", "--with-lz4", "--with-zstd"];
+	const configureArgs = [
+		"--disable-rpath",
+		"--with-lz4",
+		"--with-zstd",
+		"--without-icu",
+	];
 	if (os === "darwin") {
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 		);
+	}
+	if (build !== host) {
+		configureArgs.push("--without-readline", "--without-zlib");
+
+		// For cross builds, we must provide `zic` for the build machine.
+		const tzdbArtifact = tzdb.build({ build, host: build });
+		env.push(tzdbArtifact);
 	}
 
 	const configure = {
@@ -157,7 +170,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	let binDir = await output.get("bin").then(tg.Directory.expect);
 	for await (let [name, artifact] of binDir) {
 		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths });
+		let wrappedBin = await std.wrap(file, { host, libraryPaths });
 		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
 	}
 

@@ -30,7 +30,7 @@ export type Arg = {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export const env = async (arg?: Arg): Promise<std.env.Arg> => {
+export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -39,19 +39,6 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
 	const buildToolchain = arg.toolchain;
-
-	if (!proxyCompiler && !proxyLinker) {
-		return;
-	}
-
-	if (!proxyLinker && arg.linkerExe !== undefined) {
-		throw new Error(
-			"Received a linkerExe argument, but linker is not being proxied",
-		);
-	}
-
-	const dirs = [];
-
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const os = std.triple.os(host);
@@ -72,6 +59,18 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		host: build,
 		target: host,
 	});
+
+	if (!proxyCompiler && !proxyLinker) {
+		return directory;
+	}
+
+	if (!proxyLinker && arg.linkerExe !== undefined) {
+		throw new Error(
+			"Received a linkerExe argument, but linker is not being proxied",
+		);
+	}
+
+	let output = directory;
 
 	let cc: tg.File | tg.Symlink = cc_;
 	let cxx: tg.File | tg.Symlink = cxx_;
@@ -219,17 +218,26 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 				}
 			}
 		}
-		dirs.push(binDir);
+		console.log("BINDIR", await (await binDir).store());
+		const origBinDir = await output.get("bin").then(tg.Directory.expect);
+		console.log("ORIG BINDIR", await origBinDir.store());
+		const combined = await tg.directory(origBinDir, binDir);
+		console.log("COMBINED", await combined.store());
+		output = await tg.directory(output, {
+			bin: tg.directory(origBinDir, binDir),
+		});
+		console.log("OUTPUT", await output.store());
 	}
 
 	if (proxyCompiler) {
-		dirs.push(
-			ccProxy({
-				build,
-				buildToolchain,
-				host,
-			}),
-		);
+		throw new Error("todo");
+		// dirs.push(
+		// 	ccProxy({
+		// 		build,
+		// 		buildToolchain,
+		// 		host,
+		// 	}),
+		// );
 	}
 
 	if (proxyStrip) {
@@ -243,14 +251,10 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 					? await directory.get("lib").then(tg.Directory.expect)
 					: undefined,
 		});
-		dirs.push(
-			tg.directory({
-				"bin/strip": stripProxyArtifact,
-			}),
-		);
+		output = await tg.directory(output, { ["bin/strip"]: stripProxyArtifact });
 	}
 
-	return await std.env.arg(...dirs, { utils: false });
+	return output;
 };
 
 export default env;

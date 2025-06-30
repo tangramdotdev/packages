@@ -50,6 +50,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	return go.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			cgo: false,
 			env,
 			sdk,
 			source: source_ ?? source(),

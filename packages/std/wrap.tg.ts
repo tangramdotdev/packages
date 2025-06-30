@@ -23,17 +23,18 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 
 	const executable = await manifestExecutableFromArg(arg.executable);
 
-	const detectedBuild = await std.triple.host();
 	const host = arg.host ?? (await std.triple.host());
 	std.triple.assert(host);
+	const buildTriple = arg.build ?? host;
+	std.triple.assert(buildTriple);
 	const buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
 			? await std.env.arg(
-					await tg.build(gnu.toolchain, { host: detectedBuild, target: host }),
+					await tg.build(gnu.toolchain, { host: buildTriple, target: host }),
 					{ utils: false },
 				)
-			: await bootstrap.sdk.env(host);
+			: await bootstrap.sdk.env(host); // FIXME - this is only true if build === host.
 
 	// Construct the interpreter.
 	const manifestInterpreter = await manifestInterpreterFromWrapArgObject({
@@ -83,11 +84,11 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	};
 
 	// Get the wrapper executable.
-	const detectedOs = std.triple.os(detectedBuild);
+	const detectedOs = std.triple.os(buildTriple);
 	const build =
 		detectedOs === "linux"
-			? await bootstrap.toolchainTriple(detectedBuild)
-			: detectedBuild;
+			? await bootstrap.toolchainTriple(buildTriple)
+			: buildTriple;
 	const wrapper = await workspace.wrapper({
 		buildToolchain,
 		build,
@@ -106,6 +107,9 @@ export namespace wrap {
 	export type ArgObject = {
 		/** Command line arguments to bind to the wrapper. If the executable is wrapped, they will be merged. */
 		args?: Array<tg.Template.Arg>;
+
+		/** The machine to build the wrapper on. */
+		build?: string;
 
 		/** The build toolchain to use to produce components. Will use the default for the system if not provided. */
 		buildToolchain?: std.env.EnvObject | undefined;
@@ -229,6 +233,7 @@ export namespace wrap {
 	): Promise<wrap.ArgObject> => {
 		let {
 			args: args_ = [],
+			build: build_,
 			buildToolchain,
 			env: env_ = {},
 			executable,
@@ -267,7 +272,9 @@ export namespace wrap {
 
 		tg.assert(executable !== undefined);
 
+		// Determine the host. If it was not provided, detect the executable host if it's a file, and fall back to the detected host.
 		const host = host_ ?? (await std.triple.host());
+		const build = build_ ?? host;
 
 		// If the executable arg is a wrapper, obtain its manifest.
 		const existingManifest =
@@ -307,7 +314,7 @@ export namespace wrap {
 		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
 		if (executable instanceof tg.Template || typeof executable === "string") {
 			if (interpreter === undefined) {
-				interpreter = await wrap.defaultShell({ buildToolchain });
+				interpreter = await wrap.defaultShell({ buildToolchain, build, host });
 			}
 			if (identity === undefined) {
 				identity = "interpreter" as const;
@@ -325,6 +332,7 @@ export namespace wrap {
 
 		return {
 			args: args_,
+			build,
 			buildToolchain,
 			env,
 			executable,
@@ -340,6 +348,8 @@ export namespace wrap {
 	export type DefaultShellArg = {
 		/** The toolchain to use to build constituent components. Default: `std.sdk()`. */
 		buildToolchain?: std.env.EnvObject | undefined;
+		/* Build machine. */
+		build?: string;
 		/** Should scripts treat unset variables as errors? Equivalent to setting `-u`. Default: true. */
 		disallowUnset?: boolean;
 		/** Should scripts exit on errors? Equivalent to setting `-e`. Default: true. */
@@ -348,6 +358,8 @@ export namespace wrap {
 		identity?: "interpreter" | "wrapper";
 		/** Whether to incldue the complete `std.utils()` environment. Default: true. */
 		includeUtils?: boolean;
+		/** Host machine */
+		host?: string;
 		/** Should failures inside pipelines cause the whole pipeline to fail? Equivalent to setting `-o pipefail`. Default: true. */
 		pipefail?: boolean;
 	};
@@ -356,22 +368,29 @@ export namespace wrap {
 	export const defaultShell = async (arg?: DefaultShellArg) => {
 		const {
 			buildToolchain: buildToolchain_,
+			build: build_,
 			disallowUnset = true,
 			exitOnErr = true,
 			identity = "wrapper",
 			includeUtils = true,
+			host: host_,
 			pipefail = true,
 		} = arg ?? {};
 
+		const host = host_ ?? (await std.triple.host());
+		const build = build_ ?? host;
+
 		// Provide bash for the detected host system.
-		let buildArg:
-			| undefined
-			| { bootstrap: boolean; env: tg.Unresolved<std.env.EnvObject> } =
-			undefined;
+		let buildArg: {
+			build: string;
+			host: string;
+			bootstrap?: boolean;
+			env?: tg.Unresolved<std.env.EnvObject>;
+		} = { build, host };
 		if (buildToolchain_) {
-			buildArg = { bootstrap: true, env: buildToolchain_ };
+			buildArg = { ...buildArg, bootstrap: true, env: buildToolchain_ };
 		} else {
-			buildArg = { bootstrap: true, env: std.sdk() };
+			buildArg = { ...buildArg, bootstrap: true, env: std.sdk() };
 		}
 		const shellExecutable = await std.utils.bash
 			.build(buildArg)
@@ -1074,13 +1093,12 @@ const interpreterFromArg = async (
 				const arch = interpreterMetadata.arch;
 				const host = `${arch}-unknown-linux-gnu`;
 				const detectedBuild = await std.triple.host();
-				const buildOs = std.triple.os(detectedBuild);
 				const buildToolchain = buildToolchainArg
 					? buildToolchainArg
 					: await std.env.arg(await tg.build(gnu.toolchain, { host }));
 				const injectionLibrary = await injection.default({
 					buildToolchain,
-					build: buildOs === "darwin" ? detectedBuild : undefined,
+					build: detectedBuild,
 					host,
 				});
 
@@ -1117,6 +1135,7 @@ const interpreterFromArg = async (
 			}
 
 			// If no preload is defined, add the default injection preload.
+			// FIXME build.
 			if (preloads.length === 0) {
 				const arch = interpreterMetadata.arch;
 				const host = `${arch}-linux-musl`;
@@ -1494,7 +1513,7 @@ const createLibraryPathSet = async (
 const tryTemplateToDirWithSubpath = async (
 	t: tg.Template,
 ): Promise<DirWithSubpath | undefined> => {
-	const components = await t.components;
+	const components = t.components;
 	const numComponents = components.length;
 	if (numComponents === 1) {
 		// Make sure the first component is a directory.
@@ -2206,21 +2225,40 @@ export const pushOrSet = (
 	}
 };
 
+type BuildAndHostArg = {
+	build?: string;
+	host?: string;
+};
+
 /** Basic program for testing the wrapper code. */
-export const argAndEnvDump = async () => {
+export const argAndEnvDump = async (arg?: BuildAndHostArg) => {
+	const host = arg?.host ?? (await std.triple.host());
+	const build = arg?.build ?? host;
+
+	const isCross = build !== host;
+	const buildToolchain = isCross
+		? gnu.toolchain({ host: build, target: host })
+		: bootstrap.sdk(await bootstrap.toolchainTriple(host));
+
 	const sdkEnv = await std.env.arg(
-		bootstrap.sdk(),
+		buildToolchain,
 		{
 			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 		},
 		{ utils: false },
 	);
-
-	return await std.build`cc -xc ${inspectProcessSource} -o $OUTPUT`
+	const targetPrefix = isCross ? `${host}-` : "";
+	return await std.build`${targetPrefix}cc -xc ${inspectProcessSource} -o $OUTPUT`
 		.bootstrap(true)
 		.env(sdkEnv)
 		.then(tg.File.expect);
 };
+
+export const argAndEnvDumpCross = () =>
+	argAndEnvDump({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
 
 export const test = async () => {
 	await Promise.all([
@@ -2316,6 +2354,42 @@ export const testSingleArgObjectNoMutations = async () => {
 		"Expected second arg to be --arg2",
 	);
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
+
+	return wrapper;
+};
+
+export const testBasicCross = async () => {
+	const build = "aarch64-unknown-linux-gnu";
+	const host = "x86_64-unknown-linux-gnu";
+
+	const executable = await argAndEnvDump({ build, host });
+	await executable.store();
+	const executableID = executable.id;
+	// The program is a wrapper produced by the LD proxy.
+	console.log("argAndEnvDump wrapper ID", executableID);
+
+	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
+
+	const wrapper = await wrap(executable, {
+		args: ["--arg1", "--arg2"],
+		buildToolchain,
+		env: {
+			HELLO: "WORLD",
+		},
+	});
+	await wrapper.store();
+	const wrapperID = wrapper.id;
+	console.log("wrapper id", wrapperID);
+
+	// Check the manifest can be deserialized properly.
+	const manifest = await wrap.Manifest.read(wrapper);
+	console.log("wrapper manifest", manifest);
+	tg.assert(manifest);
+	tg.assert(manifest.identity === "executable");
+	tg.assert(manifest.interpreter);
+
+	const wrapperMetadata = await std.file.executableMetadata(wrapper);
+	console.log("wrappeMetadata", wrapperMetadata);
 
 	return wrapper;
 };
