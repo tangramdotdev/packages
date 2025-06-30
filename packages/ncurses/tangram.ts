@@ -87,6 +87,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		configure.args.push("--disable-stripping"); // prevent calling xcrun. compiling -with `-Wl,-s` makes this unnecessary anyway.
 	}
 
+	if (build !== host) {
+		// When cross-compiling, we cannot use the just-compiled `tic` executable built for the host to generate the database on the build machine.
+		configure.args.push("--disable-database", "--with-fallbacks");
+	}
+
 	// Patch curses.h to always use the wide-character ABI.
 	const fixup = `sed -e 's/^#if.*XOPEN.*$/#if 1/' -i $OUTPUT/include/ncursesw/curses.h`;
 

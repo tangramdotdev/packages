@@ -467,7 +467,7 @@ except ImportError as e:
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());
-	tg.assert(pipVersionOutput.includes("25.0"), "failed to run pip3");
+	tg.assert(pipVersionOutput.includes("25.1.1"), "failed to run pip3");
 
 	const venv = await $`set -x && python -m venv $OUTPUT --copies`
 		.env(self())

@@ -59,6 +59,14 @@ export const build = async (...args: std.Args<Arg>) => {
 			CFLAGS: tg.Mutation.prefix("-Wl,-undefined-version", " "),
 		});
 	}
+
+	// Zlib doesn't pick up the cross toolchain automatically, set CC.
+	if (os === "linux" && build !== host) {
+		env.push({
+			CC: `${host}-cc`,
+		});
+	}
+
 	env.push(env_);
 
 	return std.autotools.build(
