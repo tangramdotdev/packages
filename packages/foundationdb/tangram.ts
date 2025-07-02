@@ -1,10 +1,10 @@
 import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 import zlib from "zlib" with { path: "../zlib" };
 import xz from "xz" with { path: "../xz" };
 
 export const metadata = {
 	homepage: "https://www.foundationdb.org/",
-	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "Apache-2.0",
 	name: "foundationdb",
 	repository: "https://github.com/apple/foundationdb",
@@ -22,13 +22,6 @@ export type Arg = {
 
 export const build = async (...args: std.Args<Arg>) => {
 	const { build, host } = await std.packages.applyArgs<Arg>(...args);
-	std.assert.supportedHost(host, metadata);
-	const checksums = binaryChecksums[host];
-	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);
-	const arch = std.triple.arch(host);
-	const { repository, version } = metadata;
-	const binaries = metadata.provides.binaries;
-	const base = `${repository}/releases/download/${version}`;
 	const build_ = std.triple.create(std.triple.normalize(build), {
 		environment: "gnu",
 	});
@@ -43,6 +36,28 @@ export const build = async (...args: std.Args<Arg>) => {
 			d.get("lib").then(tg.Directory.expect),
 		),
 	]);
+	const os = std.triple.os(host);
+	if (os === "linux") {
+		return downloadLinuxPrebuilt(host, libraryPaths);
+	} else if (os === "darwin") {
+		return downloadMacosPrebuilt(host, libraryPaths);
+	} else {
+		return tg.unreachable(`unrecognized os ${os}`);
+	}
+};
+
+export default build;
+
+export const downloadLinuxPrebuilt = async (
+	host: string,
+	libraryPaths: Array<tg.Directory>,
+) => {
+	const { repository, version } = metadata;
+	const binaries = metadata.provides.binaries;
+	const checksums = linuxChecksums[host];
+	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);
+	const arch = std.triple.arch(host);
+	const base = `${repository}/releases/download/${version}`;
 	const binDir = Object.fromEntries(
 		await Promise.all(
 			binaries.map(async (binary) => {
@@ -72,9 +87,59 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 };
 
-export default build;
+export const downloadMacosPrebuilt = async (
+	host: string,
+	libraryPaths: Array<tg.Directory>,
+) => {
+	const { repository, version } = metadata;
+	const binaries = metadata.provides.binaries;
+	const arch = std.triple.arch(host) === "aarch64" ? "arm64" : "x86_64";
+	const checksum =
+		arch === "arm64"
+			? "sha256:b7c65742ad6a9ae1eddd347031a8946546ad35d594a4c78e1448dd9094282135"
+			: "sha256:0630fd903646f4c5c777c2341ec3671899e2dcc7eca3b4ad8a53c86eb4e8baa6";
+	const base = `${repository}/releases/download/${version}`;
+	const fileName = `FoundationDB-${version}_${arch}.pkg`;
+	const url = `${base}/${fileName}`;
+	const packageFile = await std.download({ url, checksum }).then((b) => {
+		tg.assert(b instanceof tg.Blob);
+		return tg.file(b);
+	});
 
-const binaryChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
+	return await $`
+		set -x
+		
+		# Create working directory
+		WORK_DIR=$(mktemp -d)
+		mkdir -p $OUTPUT/bin $OUTPUT/lib
+
+		# Extract the package
+		cd $WORK_DIR
+		pkgutil --expand ${packageFile} extracted
+
+		# Extract the payload from the main package
+		cd extracted/foundationdb-clients.pkg
+		cat Payload | gunzip -dc | cpio -i
+
+		# Copy binaries
+		for binary in ${binaries.join(" ")}; do
+			if [ -f "usr/local/bin/$binary" ]; then
+				cp "usr/local/bin/$binary" $OUTPUT/bin/
+				chmod +x "$OUTPUT/bin/$binary"
+			fi
+		done
+
+		# Copy library
+		if [ -f "usr/local/lib/libfdb_c.dylib" ]; then
+			cp "usr/local/lib/libfdb_c.dylib" $OUTPUT/lib/
+		fi
+
+		# Clean up
+		rm -rf $WORK_DIR
+		`.then(tg.Directory.expect);
+};
+
+const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	["aarch64-linux"]: {
 		fdbcli:
 			"sha256:a313bf868b06bc86c658efe81b980a62d59223eb4152d61d787534a4e4090066",
