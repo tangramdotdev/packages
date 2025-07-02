@@ -10,7 +10,7 @@ export const metadata = {
 	license: "https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright",
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
-	version: "2.14.1",
+	version: "2.14.4",
 	provides: {
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],
@@ -20,7 +20,7 @@ export const metadata = {
 export const source = async (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:310df85878b65fa717e5e28e0d9e8f6205fd29d883929303a70a4f2fc4f6f1f2";
+		"sha256:24175ec30a97cfa86bdf9befb7ccf4613f8f4b2713c5103e0dd0bc9c711a2773";
 	const extension = ".tar.xz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const base = `https://download.gnome.org/sources/${name}/${majorMinor}`;
@@ -124,7 +124,7 @@ export const test = async () => {
 		binaries: [
 			"xml2-config",
 			outputIncludes("xmlcatalog", "catalogs cleanup", ["--verbose"]),
-			outputIncludes("xmllint", "21401"),
+			outputIncludes("xmllint", "21404"),
 		],
 	};
 	return await std.assert.pkg(build, spec);

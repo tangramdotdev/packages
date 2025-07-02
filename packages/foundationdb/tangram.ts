@@ -1,10 +1,10 @@
 import * as std from "std" with { path: "../std" };
+import { $ } from "std" with { path: "../std" };
 import zlib from "zlib" with { path: "../zlib" };
 import xz from "xz" with { path: "../xz" };
 
 export const metadata = {
 	homepage: "https://www.foundationdb.org/",
-	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "Apache-2.0",
 	name: "foundationdb",
 	repository: "https://github.com/apple/foundationdb",
@@ -22,27 +22,43 @@ export type Arg = {
 
 export const build = async (...args: std.Args<Arg>) => {
 	const { build, host } = await std.packages.applyArgs<Arg>(...args);
-	std.assert.supportedHost(host, metadata);
-	const checksums = binaryChecksums[host];
-	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);
-	const arch = std.triple.arch(host);
-	const { repository, version } = metadata;
-	const binaries = metadata.provides.binaries;
-	const base = `${repository}/releases/download/${version}`;
 	const build_ = std.triple.create(std.triple.normalize(build), {
 		environment: "gnu",
 	});
 	const host_ = std.triple.create(std.triple.normalize(host), {
 		environment: "gnu",
 	});
-	const libraryPaths = await Promise.all([
-		zlib({ build: build_, host: host_ }).then((d) =>
-			d.get("lib").then(tg.Directory.expect),
-		),
-		xz({ build: build_, host: host_ }).then((d) =>
-			d.get("lib").then(tg.Directory.expect),
-		),
-	]);
+	// const libraryPaths = await Promise.all([
+	// 	zlib({ build: build_, host: host_ }).then((d) =>
+	// 		d.get("lib").then(tg.Directory.expect),
+	// 	),
+	// 	xz({ build: build_, host: host_ }).then((d) =>
+	// 		d.get("lib").then(tg.Directory.expect),
+	// 	),
+	// ]);
+	const libraryPaths = [await tg.directory()];
+	const os = std.triple.os(host);
+	if (os === "linux") {
+		return downloadLinuxPrebuilt(host, libraryPaths);
+	} else if (os === "darwin") {
+		return downloadMacosPrebuilt(host, libraryPaths);
+	} else {
+		return tg.unreachable(`unrecognized os ${os}`);
+	}
+};
+
+export default build;
+
+export const downloadLinuxPrebuilt = async (
+	host: string,
+	libraryPaths: Array<tg.Directory>,
+) => {
+	const { repository, version } = metadata;
+	const binaries = metadata.provides.binaries;
+	const checksums = linuxChecksums[host];
+	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);
+	const arch = std.triple.arch(host);
+	const base = `${repository}/releases/download/${version}`;
 	const binDir = Object.fromEntries(
 		await Promise.all(
 			binaries.map(async (binary) => {
@@ -72,9 +88,96 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 };
 
-export default build;
+export const downloadMacosPrebuilt = async (
+	host: string,
+	libraryPaths: Array<tg.Directory>,
+) => {
+	const { repository, version } = metadata;
+	const binaries = metadata.provides.binaries;
+	const arch = std.triple.arch(host) === "aarch64" ? "arm64" : "x86_64";
+	const checksum =
+		arch === "arm64"
+			? "sha256:b7c65742ad6a9ae1eddd347031a8946546ad35d594a4c78e1448dd9094282135"
+			: "sha256:0630fd903646f4c5c777c2341ec3671899e2dcc7eca3b4ad8a53c86eb4e8baa6";
+	const base = `${repository}/releases/download/${version}`;
+	const fileName = `FoundationDB-${version}_${arch}.pkg`;
+	const url = `${base}/${fileName}`;
+	const packageFile = await std.download({ url, checksum }).then((b) => {
+		tg.assert(b instanceof tg.Blob);
+		return tg.file(b);
+	});
 
-const binaryChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
+	return await $`
+			set -ex
+
+			# Create working directory
+			WORK_DIR=$(mktemp -d)
+			mkdir -p $OUTPUT/bin $OUTPUT/lib
+
+			# Extract the package using xar (pkg files are xar archives)
+			cd $WORK_DIR
+
+			# Try to extract as xar archive first
+			if command -v xar >/dev/null 2>&1; then
+				xar -xf ${packageFile}
+			else
+				# Fallback: try to extract using ar if xar is not available
+				if command -v ar >/dev/null 2>&1; then
+					ar -x ${packageFile}
+				else
+					# Last resort: try as tar archive (some pkg files might be tar-based)
+					tar -xf ${packageFile} 2>/dev/null || {
+						echo "Unable to extract package: no suitable extraction tool found"
+						exit 1
+					}
+				fi
+			fi
+
+			# Find and extract payload files (usually gzipped cpio archives)
+			find . -name "Payload" -o -name "*.pax.gz" -o -name "*.cpio.gz" | while read payload; do
+				if [ -f "$payload" ]; then
+					# Create extraction directory for this payload
+					payload_dir=$(dirname "$payload")/extracted
+					mkdir -p "$payload_dir"
+					cd "$payload_dir"
+
+					# Extract the payload
+					if file "$payload" | grep -q "gzip"; then
+						gunzip -dc "$payload" | cpio -i 2>/dev/null || continue
+					elif file "$payload" | grep -q "cpio"; then
+						cpio -i < "$payload" 2>/dev/null || continue
+					else
+						continue
+					fi
+
+					# Copy binaries if found
+					for binary in ${binaries.join(" ")}; do
+						if [ -f "usr/local/bin/$binary" ]; then
+							cp "usr/local/bin/$binary" $OUTPUT/bin/
+							chmod +x "$OUTPUT/bin/$binary"
+						elif [ -f "usr/bin/$binary" ]; then
+							cp "usr/bin/$binary" $OUTPUT/bin/
+							chmod +x "$OUTPUT/bin/$binary"
+						fi
+					done
+
+					# Copy library if found
+					if [ -f "usr/local/lib/libfdb_c.dylib" ]; then
+						cp "usr/local/lib/libfdb_c.dylib" $OUTPUT/lib/
+					elif [ -f "usr/lib/libfdb_c.dylib" ]; then
+						cp "usr/lib/libfdb_c.dylib" $OUTPUT/lib/
+					fi
+
+					cd "$WORK_DIR"
+				fi
+			done
+
+			# Clean up
+			rm -rf $WORK_DIR
+			`.then(tg.Directory.expect);
+};
+
+const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	["aarch64-linux"]: {
 		fdbcli:
 			"sha256:a313bf868b06bc86c658efe81b980a62d59223eb4152d61d787534a4e4090066",
