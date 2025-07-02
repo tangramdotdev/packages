@@ -12,7 +12,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:529043b15cffa5f36077a4d0af83f3de399807181d607441d734196d889b641f”";
+		"sha256:529043b15cffa5f36077a4d0af83f3de399807181d607441d734196d889b641f";
 	const owner = name;
 	const repo = name;
 	const tag = `${name}-${version}`;
