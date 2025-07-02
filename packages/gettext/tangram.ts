@@ -10,7 +10,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
-	version: "0.24.1",
+	version: "0.25",
 	provides: {
 		binaries: [
 			"autopoint",
@@ -52,7 +52,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6164ec7aa61653ac9cdfb41d5c2344563b21f707da1562712e48715f1d2052a6";
+		"sha256:05240b29f5b0f422e5a4ef8e9b5f76d8fa059cc057693d2723cdb76f36a88ab0";
 	return std.download.fromGnu({
 		name,
 		version,
