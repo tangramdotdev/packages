@@ -190,11 +190,17 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
+		// Set both with and without swapping to underscores, and ensure we unconditionally set the linker.
 		const crossEnv = {
-			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${target}-gcc`,
-			[`AR_${tripleToEnvVar(target)}`]: `${target}-ar`,
-			[`CC_${tripleToEnvVar(target)}`]: `${target}-cc`,
-			[`CXX_${tripleToEnvVar(target)}`]: `${target}-c++`,
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${target}-cc`,
+			[`AR_${tripleToEnvVar(target)}`]: tg.Mutation.setIfUnset(`${target}-ar`),
+			[`AR_${target}`]: tg.Mutation.setIfUnset(`${target}-ar`),
+			[`CC_${tripleToEnvVar(target)}`]: tg.Mutation.setIfUnset(`${target}-cc`),
+			[`CC_${target}`]: tg.Mutation.setIfUnset(`${target}-cc`),
+			[`CXX_${tripleToEnvVar(target)}`]: tg.Mutation.setIfUnset(
+				`${target}-c++`,
+			),
+			[`CXX_${target}`]: tg.Mutation.setIfUnset(`${target}-c++`),
 		};
 		envs.push(crossEnv);
 	}

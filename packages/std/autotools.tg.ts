@@ -211,9 +211,6 @@ export const build = async (...args: std.Args<Arg>) => {
 	if (!bootstrap) {
 		// Set up the SDK, add it to the environment.
 		const sdkArg = await std.sdk.arg({ host, target }, sdkArg_);
-		if (isCross) {
-			console.log("sdkArg", sdkArg);
-		}
 		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
 		let level: Level | undefined = undefined;

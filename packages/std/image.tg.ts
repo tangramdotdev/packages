@@ -105,7 +105,7 @@ export const testBootstrapEnv = async () => {
 		buildToolchain,
 		env: bootstrapEnvArg,
 	});
-	return bootstrapEnv;
+	return tg.directory({ env: bootstrapEnv });
 };
 
 export const testBootstrapEnvImageDocker = async () => {
@@ -225,6 +225,23 @@ export const testBasicEnvImageOci = async () => {
 		buildToolchain,
 		cmd: ["bash"],
 		format: "oci",
+	});
+	return imageFile;
+};
+
+export const testLabelsFeature = async () => {
+	const bootstrapEnv = await testBootstrapEnv();
+	const buildToolchain = await bootstrapBuildToolchain();
+	const labels = {
+		"org.opencontainers.image.title": "Test Image",
+		"org.opencontainers.image.description": "A test image with labels",
+		"org.opencontainers.image.version": "1.0.0",
+		"com.example.custom": "custom-value",
+	};
+	const imageFile = await image(bootstrapEnv, {
+		buildToolchain,
+		cmd: ["sh"],
+		labels,
 	});
 	return imageFile;
 };

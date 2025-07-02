@@ -159,7 +159,7 @@ export async function sdk(...args: std.Args<sdk.Arg>) {
 			host: target,
 		});
 		envs.push(proxyEnv);
-		const targetEnvVarName = target.replace(/-/g, "_").toUpperCase();
+		const targetEnvVarName = target.replace(/-/g, "_");
 		if (flavor === "gnu") {
 			envs.push({
 				[`AR_${targetEnvVarName}`]: tg.Mutation.setIfUnset(`${target}-ar`),

@@ -25,7 +25,8 @@ export type ArgObject = {
 	/** The format for the container image, docker or OCI. Default: docker */
 	format?: ImageFormat;
 
-	// TODO labels? Do we need these?
+	/** Labels to add to the container image metadata. */
+	labels?: Record<string, string>;
 
 	/** The compression type to use for the image layers. Default: "zstd". */
 	layerCompression: LayerCompressionFormat;
@@ -123,6 +124,9 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 				if ("format" in arg && arg.format !== undefined) {
 					object.format = arg.format;
 				}
+				if ("labels" in arg && arg.labels !== undefined) {
+					object.labels = arg.labels;
+				}
 				if ("layerCompression" in arg && arg.layerCompression !== undefined) {
 					object.layerCompression = arg.layerCompression;
 				}
@@ -152,6 +156,7 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 			env: (a, b) => std.env.arg(a, b, { utils: false }),
 			expose: "append",
 			format: "set",
+			labels: "set",
 			layerCompression: "set",
 			layers: "append",
 			system: "set",
@@ -168,6 +173,7 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		format = "docker",
 		entrypoint: entrypoint_,
 		expose,
+		labels,
 		layerCompression: layerCompression_,
 		layers: layers_ = [],
 		system: system_,
@@ -271,6 +277,9 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	}
 	if (workdir !== undefined) {
 		config.config!.WorkingDir = workdir;
+	}
+	if (labels !== undefined) {
+		config.config!.Labels = labels;
 	}
 
 	if (format === "docker") {

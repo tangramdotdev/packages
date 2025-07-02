@@ -16,11 +16,12 @@ export const metadata = {
 };
 
 export type Arg = {
+	build?: string;
 	host?: string;
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	const { host } = await std.packages.applyArgs<Arg>(...args);
+	const { build, host } = await std.packages.applyArgs<Arg>(...args);
 	std.assert.supportedHost(host, metadata);
 	const checksums = binaryChecksums[host];
 	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);
@@ -28,9 +29,19 @@ export const build = async (...args: std.Args<Arg>) => {
 	const { repository, version } = metadata;
 	const binaries = metadata.provides.binaries;
 	const base = `${repository}/releases/download/${version}`;
+	const build_ = std.triple.create(std.triple.normalize(build), {
+		environment: "gnu",
+	});
+	const host_ = std.triple.create(std.triple.normalize(host), {
+		environment: "gnu",
+	});
 	const libraryPaths = await Promise.all([
-		zlib({ host }).then((d) => d.get("lib").then(tg.Directory.expect)),
-		xz({ host }).then((d) => d.get("lib").then(tg.Directory.expect)),
+		zlib({ build: build_, host: host_ }).then((d) =>
+			d.get("lib").then(tg.Directory.expect),
+		),
+		xz({ build: build_, host: host_ }).then((d) =>
+			d.get("lib").then(tg.Directory.expect),
+		),
 	]);
 	const binDir = Object.fromEntries(
 		await Promise.all(
