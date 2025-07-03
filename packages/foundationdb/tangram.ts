@@ -28,14 +28,15 @@ export const build = async (...args: std.Args<Arg>) => {
 	const host_ = std.triple.create(std.triple.normalize(host), {
 		environment: "gnu",
 	});
-	const libraryPaths = await Promise.all([
-		zlib({ build: build_, host: host_ }).then((d) =>
-			d.get("lib").then(tg.Directory.expect),
-		),
-		xz({ build: build_, host: host_ }).then((d) =>
-			d.get("lib").then(tg.Directory.expect),
-		),
-	]);
+	// const libraryPaths = await Promise.all([
+	// 	zlib({ build: build_, host: host_ }).then((d) =>
+	// 		d.get("lib").then(tg.Directory.expect),
+	// 	),
+	// 	xz({ build: build_, host: host_ }).then((d) =>
+	// 		d.get("lib").then(tg.Directory.expect),
+	// 	),
+	// ]);
+	const libraryPaths = [await tg.directory()];
 	const os = std.triple.os(host);
 	if (os === "linux") {
 		return downloadLinuxPrebuilt(host, libraryPaths);
@@ -107,36 +108,73 @@ export const downloadMacosPrebuilt = async (
 	});
 
 	return await $`
-		set -x
-		
-		# Create working directory
-		WORK_DIR=$(mktemp -d)
-		mkdir -p $OUTPUT/bin $OUTPUT/lib
+			set -ex
 
-		# Extract the package
-		cd $WORK_DIR
-		pkgutil --expand ${packageFile} extracted
+			# Create working directory
+			WORK_DIR=$(mktemp -d)
+			mkdir -p $OUTPUT/bin $OUTPUT/lib
 
-		# Extract the payload from the main package
-		cd extracted/foundationdb-clients.pkg
-		cat Payload | gunzip -dc | cpio -i
+			# Extract the package using xar (pkg files are xar archives)
+			cd $WORK_DIR
 
-		# Copy binaries
-		for binary in ${binaries.join(" ")}; do
-			if [ -f "usr/local/bin/$binary" ]; then
-				cp "usr/local/bin/$binary" $OUTPUT/bin/
-				chmod +x "$OUTPUT/bin/$binary"
+			# Try to extract as xar archive first
+			if command -v xar >/dev/null 2>&1; then
+				xar -xf ${packageFile}
+			else
+				# Fallback: try to extract using ar if xar is not available
+				if command -v ar >/dev/null 2>&1; then
+					ar -x ${packageFile}
+				else
+					# Last resort: try as tar archive (some pkg files might be tar-based)
+					tar -xf ${packageFile} 2>/dev/null || {
+						echo "Unable to extract package: no suitable extraction tool found"
+						exit 1
+					}
+				fi
 			fi
-		done
 
-		# Copy library
-		if [ -f "usr/local/lib/libfdb_c.dylib" ]; then
-			cp "usr/local/lib/libfdb_c.dylib" $OUTPUT/lib/
-		fi
+			# Find and extract payload files (usually gzipped cpio archives)
+			find . -name "Payload" -o -name "*.pax.gz" -o -name "*.cpio.gz" | while read payload; do
+				if [ -f "$payload" ]; then
+					# Create extraction directory for this payload
+					payload_dir=$(dirname "$payload")/extracted
+					mkdir -p "$payload_dir"
+					cd "$payload_dir"
 
-		# Clean up
-		rm -rf $WORK_DIR
-		`.then(tg.Directory.expect);
+					# Extract the payload
+					if file "$payload" | grep -q "gzip"; then
+						gunzip -dc "$payload" | cpio -i 2>/dev/null || continue
+					elif file "$payload" | grep -q "cpio"; then
+						cpio -i < "$payload" 2>/dev/null || continue
+					else
+						continue
+					fi
+
+					# Copy binaries if found
+					for binary in ${binaries.join(" ")}; do
+						if [ -f "usr/local/bin/$binary" ]; then
+							cp "usr/local/bin/$binary" $OUTPUT/bin/
+							chmod +x "$OUTPUT/bin/$binary"
+						elif [ -f "usr/bin/$binary" ]; then
+							cp "usr/bin/$binary" $OUTPUT/bin/
+							chmod +x "$OUTPUT/bin/$binary"
+						fi
+					done
+
+					# Copy library if found
+					if [ -f "usr/local/lib/libfdb_c.dylib" ]; then
+						cp "usr/local/lib/libfdb_c.dylib" $OUTPUT/lib/
+					elif [ -f "usr/lib/libfdb_c.dylib" ]; then
+						cp "usr/lib/libfdb_c.dylib" $OUTPUT/lib/
+					fi
+
+					cd "$WORK_DIR"
+				fi
+			done
+
+			# Clean up
+			rm -rf $WORK_DIR
+			`.then(tg.Directory.expect);
 };
 
 const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
