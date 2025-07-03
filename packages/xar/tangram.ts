@@ -85,10 +85,10 @@ export const build = async (...args: std.Args<Arg>) => {
 	const envs = [
 		...deps.map(processDependency),
 		// {
-		// 	LDFLAGS: tg.Mutation.suffix(
-		// 		tg`-L${libxml2.build({ build, host })}/lib`,
-		// 		" ",
-		// 	),
+		// LDFLAGS: tg.Mutation.suffix(
+		// 	tg`-L${libxml2.build({ build, host })}/lib`,
+		// 	" ",
+		// ),
 		// },
 		env_,
 	];

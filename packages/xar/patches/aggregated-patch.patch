@@ -54,10 +54,18 @@ index f926245..c1096b2 100644
  #include <sys/stat.h>
  #include "xar.h"
 diff --git a/lib/filetree.c b/lib/filetree.c
-index f31682a..df7c18f 100644
+index f31682a..6de7bdf 100644
 --- a/lib/filetree.c
 +++ b/lib/filetree.c
-@@ -752,7 +752,8 @@ int xar_file_equals_file(xar_file_t f1, xar_file_t f2)
+@@ -46,6 +46,7 @@
+ #include <libxml/xmlwriter.h>
+ #include <libxml/xmlreader.h>
+ #include <libxml/xmlstring.h>
++#include <libxml/encoding.h>
+ 
+ #ifndef HAVE_ASPRINTF
+ #include "asprintf.h"
+@@ -752,7 +753,8 @@ int xar_file_equals_file(xar_file_t f1, xar_file_t f2)
  	size_t fspath1_size = 0, fspath2_size = 0;
  	size_t ns1_size = 0, ns2_size = 0;
  	const struct __xar_file_t * child1 = NULL, * child2 = NULL;
