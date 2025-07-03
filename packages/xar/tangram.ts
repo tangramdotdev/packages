@@ -1,5 +1,6 @@
 import * as std from "std" with { path: "../std" };
 import * as openssl from "openssl" with { path: "../openssl" };
+import * as libiconv from "libiconv" with { path: "../libiconv" };
 import * as libxml2 from "libxml2" with { path: "../libxml2" };
 import * as xz from "xz" with { path: "../xz" };
 import * as zlib from "zlib" with { path: "../zlib" };
@@ -15,7 +16,7 @@ export const metadata = {
 	},
 };
 
-// NOTE - patches lifted from MacPorts: https://github.com/macports/macports-ports/tree/master/archivers/xar/files
+// NOTE - patches lifted from MacPorts and combined: https://github.com/macports/macports-ports/tree/master/archivers/xar/files
 import patches from "./patches" with { type: "directory" };
 
 export const source = async (): Promise<tg.Directory> => {
@@ -36,7 +37,7 @@ export const source = async (): Promise<tg.Directory> => {
 		.then((d) => d.get(name))
 		.then(tg.Directory.expect);
 
-	return await std.patch(output, patches, { stripCount: 0 });
+	return await std.patch(output, patches);
 
 	// .then((d) => std.patch(d, patches));
 };
@@ -46,6 +47,7 @@ export type Arg = {
 	build?: string;
 	dependencies?: {
 		openssl?: std.args.DependencyArg<openssl.Arg>;
+		libiconv?: std.args.DependencyArg<libiconv.Arg>;
 		libxml2?: std.args.DependencyArg<libxml2.Arg>;
 		xz?: std.args.DependencyArg<xz.Arg>;
 		zlib?: std.args.DependencyArg<zlib.Arg>;
@@ -72,19 +74,19 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const deps = [
 		std.env.buildDependency(libxml2.build, dependencyArgs.libxml2),
+		// std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
+		std.env.runtimeDependency(libxml2.build, dependencyArgs.libxml2),
 		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
 		std.env.runtimeDependency(xz.build, dependencyArgs.xz),
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	];
 
+	// FIXME libxml2 artifact
 	const envs = [
 		...deps.map(processDependency),
 		// {
-		// 	CFLAGS: tg.Mutation.suffix("-U__APPLE__", " "), // force openssl instead of outdated commoncrypto TODO make this apple-only
-		// },
-		// {
-		// 	CFLAGS: tg.Mutation.suffix(
-		// 		"-Wno-int-conversion -Wno-implicit-function-declaration",
+		// 	LDFLAGS: tg.Mutation.suffix(
+		// 		tg`-L${libxml2.build({ build, host })}/lib`,
 		// 		" ",
 		// 	),
 		// },
@@ -92,7 +94,9 @@ export const build = async (...args: std.Args<Arg>) => {
 	];
 	const env = std.env.arg(...envs);
 
-	const configure = { pre: "./autogen.sh" };
+	const configure = {
+		pre: "./autogen.sh",
+	};
 	const phases = { configure };
 
 	return std.autotools.build(
@@ -103,6 +107,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			env,
 			phases,
 			sdk,
+			// setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
 		autotools,
