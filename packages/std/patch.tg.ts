@@ -3,8 +3,20 @@ import { $ } from "./tangram.ts";
 /** Apply one or more patches to a directory. Files and symlinks are assumed to be patchfiles, directories are recursively walked and any patchfiles found are added. */
 export const patch = async (
 	source: tg.Unresolved<tg.Directory>,
-	...patches: Array<tg.Unresolved<tg.Artifact>>
+	...args: Array<tg.Unresolved<tg.Artifact> | { stripCount?: number }>
 ) => {
+	// Separate options from patches
+	const options =
+		args.find(
+			(arg): arg is { stripCount?: number } =>
+				typeof arg === "object" && arg !== null && "stripCount" in arg,
+		) || {};
+	const patches = args.filter(
+		(arg): arg is tg.Unresolved<tg.Artifact> =>
+			!(typeof arg === "object" && arg !== null && "stripCount" in arg),
+	);
+
+	const stripCount = (options.stripCount ?? 1).toString();
 	// Collect all patchfiles.
 	const patchFiles = await Promise.all(
 		patches.flatMap(async (patchArtifact) => {
@@ -25,7 +37,7 @@ export const patch = async (
 
 	// Apply the patches.
 	const allPatchFiles = tg.Template.join(" ", ...patchFiles);
-	return await $`cp -R ${source} $OUTPUT && chmod -R u+w $OUTPUT && cat ${allPatchFiles} | patch -p1 -d $OUTPUT`.then(
+	return await $`cp -R ${source} $OUTPUT && chmod -R u+w $OUTPUT && cat ${allPatchFiles} | patch -p${stripCount} -d $OUTPUT`.then(
 		tg.Directory.expect,
 	);
 };
