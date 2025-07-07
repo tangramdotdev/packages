@@ -325,7 +325,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				)?;
 				let artifact_path = match symlink_data.clone() {
 					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
-						artifact: Some(artifact_id),
+						artifact: Some(tg::graph::data::Edge::Object(artifact_id)),
 						path,
 					}) => {
 						tracing::debug!(?artifact_id, ?path, "checking for entries");
@@ -379,7 +379,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						artifact: None,
 						path: None,
 					}) => None,
-					tg::symlink::data::Symlink::Graph { .. } => {
+					_ => {
 						tracing::warn!(?symlink_data, "ecountered a graph object");
 						None
 					},

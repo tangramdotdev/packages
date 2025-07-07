@@ -286,6 +286,7 @@ const vendoredSources = async (
 			? `${manifestSubdir}/Cargo.toml`
 			: `"Cargo.toml"`;
 		const vendorScript = tg`
+			set -x
 			SOURCE="$(realpath ${source})"
 			export CARGO_HOME=$PWD
 			mkdir -p "$OUTPUT/tg_vendor_dir"

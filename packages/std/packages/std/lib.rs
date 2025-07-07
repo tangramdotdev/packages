@@ -24,7 +24,7 @@ pub fn template_data_to_symlink_data(
 			tg::template::data::Component::String(_),
 			tg::template::data::Component::Artifact(id),
 		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-			artifact: Some(id.clone()),
+			artifact: Some(tg::graph::data::Edge::Object(id.clone())),
 			path: None,
 		})),
 		[
@@ -36,7 +36,7 @@ pub fn template_data_to_symlink_data(
 			tg::template::data::Component::Artifact(artifact_id),
 			tg::template::data::Component::String(s),
 		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-			artifact: Some(artifact_id.clone()),
+			artifact: Some(tg::graph::data::Edge::Object(artifact_id.clone())),
 			path: Some(s.chars().skip(1).collect::<String>().into()),
 		})),
 		_ => Err(tg::error!(
