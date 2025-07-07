@@ -12,7 +12,7 @@ export type ArgObject = {
 	phases?: PhasesArg;
 	checksum?: tg.Checksum | undefined;
 	network?: boolean;
-	command?: tg.Command.ArgObject;
+	command?: tg.Command.Arg.Object;
 };
 
 export type Object = {
@@ -23,7 +23,7 @@ export type Object = {
 	phases: Phases;
 	checksum?: tg.Checksum | undefined;
 	network?: boolean;
-	command?: tg.Command.ArgObject;
+	command?: tg.Command.Arg.Object;
 };
 
 export type Phases = {

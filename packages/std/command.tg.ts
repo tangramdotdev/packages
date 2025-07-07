@@ -27,7 +27,7 @@ type CommandArgObject = {
 	args?: Array<tg.Value> | undefined;
 	cwd?: string | undefined;
 	env?: std.env.Arg;
-	executable?: tg.Command.ExecutableArg | undefined;
+	executable?: tg.Command.Arg.Executable | undefined;
 	host?: string | undefined;
 	mounts?: Array<string | tg.Template | tg.Command.Mount> | undefined;
 	stdin?: tg.Blob.Arg | undefined;
@@ -94,7 +94,7 @@ export class CommandBuilder<
 	}
 
 	executable(
-		executable: tg.Unresolved<tg.MaybeMutation<tg.Command.ExecutableArg>>,
+		executable: tg.Unresolved<tg.MaybeMutation<tg.Command.Executable>>,
 	): this {
 		this.#args.push({ executable });
 		return this;
@@ -192,7 +192,7 @@ export class CommandBuilder<
 			}
 		}
 		return (
-			tg.Command.new(arg as tg.Command.ArgObject) as Promise<tg.Command<A, R>>
+			tg.Command.new(arg as tg.Command.Arg.Object) as Promise<tg.Command<A, R>>
 		).then(onfulfilled, onrejected);
 	}
 }
@@ -240,7 +240,7 @@ export const defaultTemplateCommandArg = (
 export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
 	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
 	// build the default args.
-	let arg: tg.Command.ArgObject = {};
+	let arg: tg.Command.Arg.Object = {};
 	if (std.triple.os(host) === "linux") {
 		let builtMount = await tg.build(linuxRootMount, host);
 		arg.mounts = [builtMount];

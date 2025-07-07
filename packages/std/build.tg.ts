@@ -27,7 +27,7 @@ type BuildArgObject = {
 	checksum?: tg.Checksum | undefined;
 	cwd?: string | undefined;
 	env?: std.env.Arg;
-	executable?: tg.Command.ExecutableArg | undefined;
+	executable?: tg.Command.Arg.Executable | undefined;
 	host?: string | undefined;
 	mounts?: Array<string | tg.Template | tg.Command.Mount> | undefined;
 	network?: boolean | undefined;
@@ -114,7 +114,7 @@ export class BuildBuilder<
 	}
 
 	executable(
-		executable: tg.Unresolved<tg.MaybeMutation<tg.Command.ExecutableArg>>,
+		executable: tg.Unresolved<tg.MaybeMutation<tg.Command.Arg.Executable>>,
 	): this {
 		this.#args.push({ executable });
 		return this;

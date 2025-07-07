@@ -20,7 +20,7 @@ futures = "0.3"
 itertools = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "86dd8a6c5ce3a9cb4ba897defafd8d7271c9f940" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "7c7d84f8868ebf9d1e0bd0682663e32917c9cbd5" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "fs",
