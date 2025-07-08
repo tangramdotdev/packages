@@ -1055,23 +1055,16 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	library_paths: HashSet<DirectoryWithSubpath, H>,
 	needed_libraries: &HashMap<String, Option<DirectoryWithSubpath>, H>,
 ) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
-	// Check out all library paths.
-	futures::future::try_join_all(library_paths.iter().map(|dir_with_subpath| async {
-		tracing::debug!(?dir_with_subpath.id, "checking out library path");
-		let artifact = dir_with_subpath.id.clone().into();
-		tracing::trace!(?artifact, "library path");
-		let arg = tg::checkout::Arg {
-			artifact,
-			dependencies: true,
-			force: false,
-			lockfile: false,
-			path: None,
-		};
-		let output = tg::checkout(tg, arg).await?;
-		tracing::trace!(?output, "completed checkout");
-		Ok::<_, tg::Error>(())
-	}))
-	.await?;
+	// Cache all the library paths.
+	let artifacts = library_paths
+		.iter()
+		.map(|dir_with_subpath| dir_with_subpath.id.clone().into())
+		.collect();
+	let arg = tg::cache::Arg { artifacts };
+	tracing::debug!("caching libraries");
+	tg::cache::cache(tg, arg)
+		.await
+		.map_err(|source| tg::error!(!source, "failed to cache libraries"))?;
 
 	// Warn or error if any required libraries are not included in the set.
 	verify_missing_libraries(tg, disallow_missing, needed_libraries, &library_paths).await?;
