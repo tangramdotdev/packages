@@ -83,7 +83,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		ln -s libcap.so.2 libcap.so`;
 	const phases: std.phases.Arg = {
 		configure: tg.Mutation.unset(),
-		install,
+		install: { command: install, args: tg.Mutation.unset() },
 	};
 
 	const attrArtifact = await std.env.envArgFromDependency(
