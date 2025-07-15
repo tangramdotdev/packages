@@ -16,13 +16,6 @@ const MAX_DEPTH: usize = 16;
 fn main() {
 	if let Err(e) = main_inner() {
 		eprintln!("linker proxy failed: {e}");
-		eprintln!(
-			"{}",
-			e.trace(&tg::error::TraceOptions {
-				internal: true,
-				reverse: false,
-			})
-		);
 		std::process::exit(1);
 	}
 }
@@ -479,8 +472,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						let key = tg::Reference::with_object(&dir_with_subpath.id.clone().into());
 						let value = tg::Referent {
 							item: tg::Directory::with_id(dir_with_subpath.id).into(),
-							path: None,
-							tag: None,
+							options: tg::referent::Options {
+								path: None,
+								tag: None,
+							},
 						};
 						Ok::<_, tg::Error>((key, value))
 					},

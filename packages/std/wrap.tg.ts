@@ -854,7 +854,7 @@ export namespace wrap {
 			const dependencies: { [reference: string]: tg.Referent<tg.Object> } = {};
 			for (const dependency of dependencies_) {
 				const item = tg.Object.withId(dependency);
-				dependencies[dependency] = { item };
+				dependencies[dependency] = { item, options: {} };
 			}
 
 			// Create the file.
@@ -2378,7 +2378,7 @@ export const testDependencies = async () => {
 			foo: tg.file("hi", {
 				executable: true,
 				dependencies: {
-					transitiveDependencyId: { item: transitiveDependency },
+					transitiveDependencyId: { item: transitiveDependency, options: {} },
 				},
 			}),
 		},

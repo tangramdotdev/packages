@@ -10,13 +10,6 @@ fn main() {
 
 	if let Err(e) = main_inner() {
 		eprintln!("strip proxy failed: {e}");
-		eprintln!(
-			"{}",
-			e.trace(&tg::error::TraceOptions {
-				internal: true,
-				reverse: false,
-			})
-		);
 		std::process::exit(1);
 	}
 }

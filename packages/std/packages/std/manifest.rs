@@ -500,8 +500,10 @@ pub fn collect_dependencies_from_mutation_data(
 fn dependency_from_object_id(id: &tg::object::Id) -> tg::Referent<tg::Object> {
 	tg::Referent {
 		item: tg::Object::with_id(id.clone()),
-		path: None,
-		tag: None,
+		options: tg::referent::Options {
+			path: None,
+			tag: None,
+		},
 	}
 }
 
