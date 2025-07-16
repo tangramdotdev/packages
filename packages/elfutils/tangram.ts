@@ -1,9 +1,9 @@
-import * as bzip2 from "bzip2" with { path: "../bzip2" };
-import * as libarchive from "libarchive" with { path: "../libarchive" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as std from "std" with { path: "../std" };
-import * as xz from "xz" with { path: "../xz" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as bzip2 from "bzip2" with { local: "../bzip2" };
+import * as libarchive from "libarchive" with { local: "../libarchive" };
+import * as openssl from "openssl" with { local: "../openssl" };
+import * as std from "std" with { local: "../std" };
+import * as xz from "xz" with { local: "../xz" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/elfutils/",

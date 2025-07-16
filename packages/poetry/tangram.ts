@@ -1,6 +1,6 @@
-import * as python from "python" with { path: "../python" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as python from "python" with { local: "../python" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
 import * as lockfile from "./lockfile.tg.ts";
 import requirementsTxt from "./requirements.txt" with { type: "file" };

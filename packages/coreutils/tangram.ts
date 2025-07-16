@@ -1,8 +1,8 @@
-import * as acl from "acl" with { path: "../acl" };
-import * as attr from "attr" with { path: "../attr" };
-import * as libcap from "libcap" with { path: "../libcap" };
-import * as libiconv from "libiconv" with { path: "../libiconv" };
-import * as std from "std" with { path: "../std" };
+import * as acl from "acl" with { local: "../acl" };
+import * as attr from "attr" with { local: "../attr" };
+import * as libcap from "libcap" with { local: "../libcap" };
+import * as libiconv from "libiconv" with { local: "../libiconv" };
+import * as std from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/coreutils/",

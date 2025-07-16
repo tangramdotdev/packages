@@ -1,14 +1,14 @@
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
-import * as libffi from "libffi" with { path: "../libffi" };
-import * as gmp from "gmp" with { path: "../gmp" };
-import * as libyaml from "libyaml" with { path: "../libyaml" };
-import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as readline from "readline" with { path: "../readline" };
-import * as rust from "rust" with { path: "../rust" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as libffi from "libffi" with { local: "../libffi" };
+import * as gmp from "gmp" with { local: "../gmp" };
+import * as libyaml from "libyaml" with { local: "../libyaml" };
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as openssl from "openssl" with { local: "../openssl" };
+import * as readline from "readline" with { local: "../readline" };
+import * as rust from "rust" with { local: "../rust" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
 

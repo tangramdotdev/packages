@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../std" };
-import python from "python" with { path: "../python" };
+import * as std from "std" with { local: "../std" };
+import python from "python" with { local: "../python" };
 
 export const metadata = {
 	homepage: "https://rockdaboot.github.io/libpsl/",

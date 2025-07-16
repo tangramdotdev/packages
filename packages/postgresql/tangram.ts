@@ -1,12 +1,12 @@
-import * as flex from "flex" with { path: "../flex" };
-import * as icu from "icu" with { path: "../icu" };
-import * as lz4 from "lz4" with { path: "../lz4" };
-import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as readline from "readline" with { path: "../readline" };
-import * as std from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
-import * as zstd from "zstd" with { path: "../zstd" };
+import * as flex from "flex" with { local: "../flex" };
+import * as icu from "icu" with { local: "../icu" };
+import * as lz4 from "lz4" with { local: "../lz4" };
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as openssl from "openssl" with { local: "../openssl" };
+import * as readline from "readline" with { local: "../readline" };
+import * as std from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
+import * as zstd from "zstd" with { local: "../zstd" };
 
 import patches from "./patches" with { type: "directory" };
 

@@ -1,9 +1,9 @@
-import grep from "grep" with { path: "../gnugrep" };
-import * as m4 from "m4" with { path: "../m4" };
-import * as perl from "perl" with { path: "../perl" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import grep from "grep" with { local: "../gnugrep" };
+import * as m4 from "m4" with { local: "../m4" };
+import * as perl from "perl" with { local: "../perl" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/autoconf/",

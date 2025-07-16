@@ -1,12 +1,12 @@
-import * as std from "std" with { path: "../../std" };
-import { $ } from "std" with { path: "../../std" };
+import * as std from "std" with { local: "../../std" };
+import { $ } from "std" with { local: "../../std" };
 
-import autoconf from "autoconf" with { path: "../../autoconf" };
-import automake from "automake" with { path: "../../automake" };
-import gettext from "gettext" with { path: "../../gettext" };
-import help2man from "help2man" with { path: "../../help2man" };
-import perl from "perl" with { path: "../../perl" };
-import texinfo from "texinfo" with { path: "../../texinfo" };
+import autoconf from "autoconf" with { local: "../../autoconf" };
+import automake from "automake" with { local: "../../automake" };
+import gettext from "gettext" with { local: "../../gettext" };
+import help2man from "help2man" with { local: "../../help2man" };
+import perl from "perl" with { local: "../../perl" };
+import texinfo from "texinfo" with { local: "../../texinfo" };
 
 export type Arg = {
 	build?: string;

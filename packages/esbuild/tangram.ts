@@ -1,8 +1,8 @@
-import * as make from "gnumake" with { path: "../gnumake" };
-import * as nodejs from "nodejs" with { path: "../nodejs" };
-import * as go from "go" with { path: "../go" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as make from "gnumake" with { local: "../gnumake" };
+import * as nodejs from "nodejs" with { local: "../nodejs" };
+import * as go from "go" with { local: "../go" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
 export const metadata = {
 	home: "https://esbuild.github.io",

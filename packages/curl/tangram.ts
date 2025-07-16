@@ -1,9 +1,9 @@
-import * as libpsl from "libpsl" with { path: "../libpsl" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as zlib from "zlib" with { path: "../zlib" };
-import * as zstd from "zstd" with { path: "../zstd" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as libpsl from "libpsl" with { local: "../libpsl" };
+import * as openssl from "openssl" with { local: "../openssl" };
+import * as zlib from "zlib" with { local: "../zlib" };
+import * as zstd from "zstd" with { local: "../zstd" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://curl.se/",

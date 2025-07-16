@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../../std" };
-import * as ruby from "ruby" with { path: "../../ruby" };
+import * as std from "std" with { local: "../../std" };
+import * as ruby from "ruby" with { local: "../../ruby" };
 import { wrapScripts } from "../common";
 
 export type Arg = {

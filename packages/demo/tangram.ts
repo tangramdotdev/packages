@@ -1,8 +1,8 @@
-import * as nodejs from "nodejs" with { path: "../nodejs" };
-import * as postgresql from "postgresql" with { path: "../postgresql" };
-import * as ripgrep from "ripgrep" with { path: "../ripgrep" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as nodejs from "nodejs" with { local: "../nodejs" };
+import * as postgresql from "postgresql" with { local: "../postgresql" };
+import * as ripgrep from "ripgrep" with { local: "../ripgrep" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
 export const metadata = {
 	name: "demo",

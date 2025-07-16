@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../std" };
-import coreutils from "coreutils" with { path: "../coreutils" };
+import * as std from "std" with { local: "../std" };
+import coreutils from "coreutils" with { local: "../coreutils" };
 
 export const metadata = {
 	homepage: "https://www.fftw.org/",

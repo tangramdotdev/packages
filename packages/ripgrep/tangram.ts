@@ -1,6 +1,6 @@
-import * as pcre2 from "pcre2" with { path: "../pcre2" };
-import { cargo } from "rust" with { path: "../rust" };
-import * as std from "std" with { path: "../std" };
+import * as pcre2 from "pcre2" with { local: "../pcre2" };
+import { cargo } from "rust" with { local: "../rust" };
+import * as std from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/BurntSushi/ripgrep",

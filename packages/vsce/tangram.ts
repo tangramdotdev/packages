@@ -1,5 +1,5 @@
-import * as node from "nodejs" with { path: "../nodejs" };
-import * as std from "std" with { path: "../std" };
+import * as node from "nodejs" with { local: "../nodejs" };
+import * as std from "std" with { local: "../std" };
 
 import packageLock from "./package-lock.json" with { type: "file" };
 

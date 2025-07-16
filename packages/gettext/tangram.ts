@@ -1,9 +1,9 @@
-import * as acl from "acl" with { path: "../acl" };
-import * as attr from "attr" with { path: "../attr" };
-import * as libiconv from "libiconv" with { path: "../libiconv" };
-import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as std from "std" with { path: "../std" };
-import * as xz from "xz" with { path: "../xz" };
+import * as acl from "acl" with { local: "../acl" };
+import * as attr from "attr" with { local: "../attr" };
+import * as libiconv from "libiconv" with { local: "../libiconv" };
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as std from "std" with { local: "../std" };
+import * as xz from "xz" with { local: "../xz" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/gettext",

@@ -1,4 +1,4 @@
-import * as std from "std" with { path: "../std" };
+import * as std from "std" with { local: "../std" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {

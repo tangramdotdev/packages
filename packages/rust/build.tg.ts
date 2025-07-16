@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 import tests from "./tests" with { type: "directory" };
 import { self, rustTriple } from "./tangram.ts";
 import rustcProxy from "./proxy.tg.ts";
@@ -388,11 +388,11 @@ export const testConditionalCompilation = async () => {
 	return true;
 };
 
-import * as curl from "curl" with { path: "../curl" };
-import * as libpsl from "libpsl" with { path: "../libpsl" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as zlib from "zlib" with { path: "../zlib" };
-import * as zstd from "zstd" with { path: "../zstd" };
+import * as curl from "curl" with { local: "../curl" };
+import * as libpsl from "libpsl" with { local: "../libpsl" };
+import * as openssl from "openssl" with { local: "../openssl" };
+import * as zlib from "zlib" with { local: "../zlib" };
+import * as zstd from "zstd" with { local: "../zstd" };
 export const testLinkLibcurl = async () => {
 	const crateName = "native_exe_libcurl";
 

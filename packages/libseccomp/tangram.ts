@@ -1,5 +1,5 @@
-import * as gperf from "gperf" with { path: "../gperf" };
-import * as std from "std" with { path: "../std" };
+import * as gperf from "gperf" with { local: "../gperf" };
+import * as std from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/seccomp/libseccomp",

@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://openssl.org/",

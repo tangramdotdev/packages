@@ -1,8 +1,8 @@
-import * as bash from "bash" with { path: "../bash" };
-import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as perl from "perl" with { path: "../perl" };
-import * as std from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as bash from "bash" with { local: "../bash" };
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as perl from "perl" with { local: "../perl" };
+import * as std from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/texinfo/",

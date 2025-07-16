@@ -1,6 +1,6 @@
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
-import * as bash from "bash" with { path: "../bash" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
+import * as bash from "bash" with { local: "../bash" };
 
 export const metadata = {
 	homepage: "https://www.iana.org/time-zones",

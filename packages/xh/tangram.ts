@@ -1,7 +1,7 @@
-import pkgConfig from "pkg-config" with { path: "../pkg-config" };
-import openssl from "openssl" with { path: "../openssl" };
-import { cargo } from "rust" with { path: "../rust" };
-import * as std from "std" with { path: "../std" };
+import pkgConfig from "pkg-config" with { local: "../pkg-config" };
+import openssl from "openssl" with { local: "../openssl" };
+import { cargo } from "rust" with { local: "../rust" };
+import * as std from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://github.com/ducaale/xh",

@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as std from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.freedesktop.org/wiki/Software/pkg-config/",

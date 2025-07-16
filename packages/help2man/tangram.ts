@@ -1,8 +1,8 @@
-import * as autoconf from "autoconf" with { path: "../autoconf" };
-import * as perl from "perl" with { path: "../perl" };
-import * as std from "std" with { path: "../std" };
-import * as texinfo from "texinfo" with { path: "../texinfo" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as autoconf from "autoconf" with { local: "../autoconf" };
+import * as perl from "perl" with { local: "../perl" };
+import * as std from "std" with { local: "../std" };
+import * as texinfo from "texinfo" with { local: "../texinfo" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/help2man/",

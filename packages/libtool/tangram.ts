@@ -1,7 +1,7 @@
-import * as std from "std" with { path: "../std" };
-import * as bash from "bash" with { path: "../bash" };
-import * as grep from "gnugrep" with { path: "../gnugrep" };
-import * as sed from "gnused" with { path: "../gnused" };
+import * as std from "std" with { local: "../std" };
+import * as bash from "bash" with { local: "../bash" };
+import * as grep from "gnugrep" with { local: "../gnugrep" };
+import * as sed from "gnused" with { local: "../gnused" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/libtool",

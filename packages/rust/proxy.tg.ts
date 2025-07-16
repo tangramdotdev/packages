@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
 import { cargo, self, VERSION } from "./tangram.ts";
 
@@ -34,8 +34,8 @@ export const proxy = async (arg?: Arg) => {
 
 export default proxy;
 
-import pkgconf from "pkgconf" with { path: "../pkgconf" };
-import openssl from "openssl" with { path: "../openssl" };
+import pkgconf from "pkgconf" with { local: "../pkgconf" };
+import openssl from "openssl" with { local: "../openssl" };
 import tests from "./tests" with { type: "directory" };
 
 export const testProxyCompiles = async () => {

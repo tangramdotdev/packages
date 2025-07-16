@@ -1,6 +1,6 @@
-import * as libseccomp from "libseccomp" with { path: "../libseccomp" };
-import * as std from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as libseccomp from "libseccomp" with { local: "../libseccomp" };
+import * as std from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.darwinsys.com/file/",

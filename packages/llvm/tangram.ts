@@ -1,11 +1,11 @@
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
-import * as cmake from "cmake" with { path: "../cmake" };
-import git from "git" with { path: "../git" };
-import ncurses from "ncurses" with { path: "../ncurses" };
-import python from "python" with { path: "../python" };
-import zlib from "zlib" with { path: "../zlib" };
-import * as glibc from "glibc" with { path: "../glibc" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
+import * as cmake from "cmake" with { local: "../cmake" };
+import git from "git" with { local: "../git" };
+import ncurses from "ncurses" with { local: "../ncurses" };
+import python from "python" with { local: "../python" };
+import zlib from "zlib" with { local: "../zlib" };
+import * as glibc from "glibc" with { local: "../glibc" };
 import cmakeCacheDir from "./cmake" with { type: "directory" };
 
 export const metadata = {

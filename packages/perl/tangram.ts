@@ -1,7 +1,7 @@
-import * as libffi from "libffi" with { path: "../libffi" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as libffi from "libffi" with { local: "../libffi" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {

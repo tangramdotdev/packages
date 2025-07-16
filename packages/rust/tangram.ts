@@ -1,6 +1,6 @@
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
-import zlib from "zlib" with { path: "../zlib" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
+import zlib from "zlib" with { local: "../zlib" };
 
 import * as build_ from "./build.tg.ts";
 export * as build from "./build.tg.ts";

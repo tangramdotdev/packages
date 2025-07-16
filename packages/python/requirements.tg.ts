@@ -1,6 +1,6 @@
-import * as rust from "rust" with { path: "../rust" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
+import * as rust from "rust" with { local: "../rust" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 
 import { versionString, wrapScripts } from "./tangram.ts";
 export type Arg = tg.File;

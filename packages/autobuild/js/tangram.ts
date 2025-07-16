@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../../std" };
-import * as nodejs from "nodejs" with { path: "../../nodejs" };
+import * as std from "std" with { local: "../../std" };
+import * as nodejs from "nodejs" with { local: "../../nodejs" };
 import { wrapScripts } from "../common";
 
 export type Arg = {

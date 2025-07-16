@@ -1,13 +1,13 @@
-import * as gmp from "gmp" with { path: "../gmp" };
-import * as gnutls from "gnutls" with { path: "../gnutls" };
-import * as libpsl from "libpsl" with { path: "../libpsl" };
-import * as libiconv from "libiconv" with { path: "../libiconv" };
-import * as nettle from "nettle" with { path: "../nettle" };
-import * as pcre2 from "pcre2" with { path: "../pcre2" };
-import * as std from "std" with { path: "../std" };
-import { $ } from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
-import * as zstd from "zstd" with { path: "../zstd" };
+import * as gmp from "gmp" with { local: "../gmp" };
+import * as gnutls from "gnutls" with { local: "../gnutls" };
+import * as libpsl from "libpsl" with { local: "../libpsl" };
+import * as libiconv from "libiconv" with { local: "../libiconv" };
+import * as nettle from "nettle" with { local: "../nettle" };
+import * as pcre2 from "pcre2" with { local: "../pcre2" };
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
+import * as zstd from "zstd" with { local: "../zstd" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/wget/",

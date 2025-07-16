@@ -1,6 +1,6 @@
-import * as std from "std" with { path: "../std" };
-import * as coreutils from "coreutils" with { path: "../coreutils" };
-import * as tzdb from "tzdb" with { path: "../tzdb" };
+import * as std from "std" with { local: "../std" };
+import * as coreutils from "coreutils" with { local: "../coreutils" };
+import * as tzdb from "tzdb" with { local: "../tzdb" };
 
 export const metadata = {
 	homepage: "https://www.sudo.ws/",

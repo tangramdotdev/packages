@@ -1,9 +1,9 @@
-import * as std from "std" with { path: "../std" };
-import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as python from "python" with { path: "../python" };
-import * as readline from "readline" with { path: "../readline" };
-import * as xz from "xz" with { path: "../xz" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as std from "std" with { local: "../std" };
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as python from "python" with { local: "../python" };
+import * as readline from "readline" with { local: "../readline" };
+import * as xz from "xz" with { local: "../xz" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://gitlab.gnome.org/GNOME/libxml2/-/wikis/home",

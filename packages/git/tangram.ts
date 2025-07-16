@@ -1,8 +1,8 @@
-import * as curl from "curl" with { path: "../curl" };
-import * as libiconv from "libiconv" with { path: "../libiconv" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as std from "std" with { path: "../std" };
-import * as zlib from "zlib" with { path: "../zlib" };
+import * as curl from "curl" with { local: "../curl" };
+import * as libiconv from "libiconv" with { local: "../libiconv" };
+import * as openssl from "openssl" with { local: "../openssl" };
+import * as std from "std" with { local: "../std" };
+import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://git-scm.com/",

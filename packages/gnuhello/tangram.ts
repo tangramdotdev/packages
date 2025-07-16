@@ -1,6 +1,6 @@
-import gettext from "gettext" with { path: "../gettext" };
-import * as libiconv from "libiconv" with { path: "../libiconv" };
-import * as std from "std" with { path: "../std" };
+import gettext from "gettext" with { local: "../gettext" };
+import * as libiconv from "libiconv" with { local: "../libiconv" };
+import * as std from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/hello/",

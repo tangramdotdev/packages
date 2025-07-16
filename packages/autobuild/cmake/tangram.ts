@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../../std" };
-import * as cmake from "cmake" with { path: "../../cmake" };
+import * as std from "std" with { local: "../../std" };
+import * as cmake from "cmake" with { local: "../../cmake" };
 
 export type Arg = {
 	build?: string;

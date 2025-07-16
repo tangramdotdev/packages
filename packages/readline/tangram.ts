@@ -1,5 +1,5 @@
-import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as std from "std" with { path: "../std" };
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as std from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://tiswww.cwru.edu/php/chet/readline/rltop.html",

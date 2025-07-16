@@ -1,6 +1,6 @@
-import * as std from "std" with { path: "../../std" };
-import * as python from "python" with { path: "../../python" };
-// import * as poetry from "poetry" with { path: "../../poetry" };
+import * as std from "std" with { local: "../../std" };
+import * as python from "python" with { local: "../../python" };
+// import * as poetry from "poetry" with { local: "../../poetry" };
 import { wrapScripts } from "../common";
 
 export type Arg = {

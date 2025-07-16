@@ -1,7 +1,7 @@
-import * as std from "std" with { path: "../../std" };
-import cmake from "cmake" with { path: "../../cmake" };
-import openssl from "openssl" with { path: "../../openssl" };
-import * as rust from "rust" with { path: "../../rust" };
+import * as std from "std" with { local: "../../std" };
+import cmake from "cmake" with { local: "../../cmake" };
+import openssl from "openssl" with { local: "../../openssl" };
+import * as rust from "rust" with { local: "../../rust" };
 
 export type Arg = {
 	build?: string;

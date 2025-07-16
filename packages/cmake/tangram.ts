@@ -1,12 +1,12 @@
-import * as std from "std" with { path: "../std" };
-import * as curl from "curl" with { path: "../curl" };
-import * as libiconv from "libiconv" with { path: "../libiconv" };
-import * as libpsl from "libpsl" with { path: "../libpsl" };
-import * as make from "gnumake" with { path: "../gnumake" };
-import * as ncurses from "ncurses" with { path: "../ncurses" };
-import * as openssl from "openssl" with { path: "../openssl" };
-import * as zlib from "zlib" with { path: "../zlib" };
-import * as zstd from "zstd" with { path: "../zstd" };
+import * as std from "std" with { local: "../std" };
+import * as curl from "curl" with { local: "../curl" };
+import * as libiconv from "libiconv" with { local: "../libiconv" };
+import * as libpsl from "libpsl" with { local: "../libpsl" };
+import * as make from "gnumake" with { local: "../gnumake" };
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as openssl from "openssl" with { local: "../openssl" };
+import * as zlib from "zlib" with { local: "../zlib" };
+import * as zstd from "zstd" with { local: "../zstd" };
 
 import patches from "./patches" with { type: "directory" };
 

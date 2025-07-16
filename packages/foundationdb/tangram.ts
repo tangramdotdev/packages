@@ -1,6 +1,6 @@
-import * as std from "std" with { path: "../std" };
-import zlib from "zlib" with { path: "../zlib" };
-import xz from "xz" with { path: "../xz" };
+import * as std from "std" with { local: "../std" };
+import zlib from "zlib" with { local: "../zlib" };
+import xz from "xz" with { local: "../xz" };
 
 export const metadata = {
 	homepage: "https://www.foundationdb.org/",

@@ -1,6 +1,6 @@
-import * as attr from "attr" with { path: "../attr" };
-import * as bash from "bash" with { path: "../bash" };
-import * as std from "std" with { path: "../std" };
+import * as attr from "attr" with { local: "../attr" };
+import * as bash from "bash" with { local: "../bash" };
+import * as std from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",

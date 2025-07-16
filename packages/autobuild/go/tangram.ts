@@ -1,5 +1,5 @@
-import * as std from "std" with { path: "../../std" };
-import * as go from "go" with { path: "../../go" };
+import * as std from "std" with { local: "../../std" };
+import * as go from "go" with { local: "../../go" };
 
 export type Arg = {
 	build?: string;
