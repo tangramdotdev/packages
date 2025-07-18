@@ -578,7 +578,7 @@ async fn check_in_source_tree(
 						deterministic: true,
 						ignore: false,
 						locked: false,
-						lockfile: false,
+						lock: false,
 						path,
 						updates: vec![],
 					},

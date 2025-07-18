@@ -258,7 +258,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				deterministic: true,
 				ignore: false,
 				locked: true,
-				lockfile: false,
+				lock: false,
 				path: dependency.parse().unwrap(),
 				updates: vec![],
 			},
@@ -387,7 +387,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			dependencies: false,
 			force: true,
 			path: None,
-			lockfile: false,
+			lock: false,
 		},
 	)
 	.await?;
@@ -569,7 +569,7 @@ async fn get_checked_in_path(
 			deterministic: true,
 			ignore: false,
 			locked: false,
-			lockfile: false,
+			lock: false,
 			path: path.to_path_buf(),
 			updates: vec![],
 		},
