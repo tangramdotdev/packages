@@ -52,7 +52,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:05240b29f5b0f422e5a4ef8e9b5f76d8fa059cc057693d2723cdb76f36a88ab0";
+		"sha256:2c8294be238f03fb3fa65b8051057e5b68167f3e21f08008070cf40a7051ba22";
 	return std.download.fromGnu({
 		name,
 		version,
