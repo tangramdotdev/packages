@@ -20,13 +20,16 @@ futures = "0.3"
 itertools = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "671f663f58650c9008d9d1048c3dad0a66a1cb46" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "8e809cd1dff50cf458786bb0c4d4d780ea507a88" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "fs",
 ] }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["json"], optional = true }
+
+[patch.crates-io]
+derive_more = { git = "https://github.com/jeltef/derive_more" }
 
 [profile.release]
 codegen-units = 1

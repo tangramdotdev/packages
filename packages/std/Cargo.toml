@@ -34,7 +34,7 @@ itertools = "0.14"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "671f663f58650c9008d9d1048c3dad0a66a1cb46" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "8e809cd1dff50cf458786bb0c4d4d780ea507a88" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",
@@ -51,6 +51,9 @@ tangram_ld_proxy = { path = "packages/ld_proxy" }
 tangram_std = { path = "." }
 tangram_strip_proxy = { path = "packages/strip_proxy" }
 tangram_wrapper = { path = "packages/wrapper" }
+
+[patch.crates-io]
+derive_more = { git = "https://github.com/jeltef/derive_more" }
 
 [profile.release]
 codegen-units = 1
