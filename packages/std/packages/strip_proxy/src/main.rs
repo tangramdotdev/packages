@@ -152,7 +152,7 @@ async fn run_proxy(
 				deterministic: true,
 				ignore: false,
 				locked: false,
-				lockfile: false,
+				lock: false,
 				path: local_executable_path,
 				updates: vec![],
 			},
@@ -213,7 +213,7 @@ async fn run_proxy(
 				dependencies: false,
 				force: true,
 				path: Some(canonical_target_path),
-				lockfile: true,
+				lock: true,
 			},
 		)
 		.await?;
