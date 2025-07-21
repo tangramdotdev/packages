@@ -387,12 +387,16 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	tracing::debug!(?library_paths, "Library paths");
 
 	// Obtain the file artifact from the output path.
-	let output_file = {
-		// Check in the output file.
+	let (output_file, original_permissions) = {
+		// Store the original file permissions before check in.
 		let output_path = std::fs::canonicalize(&options.output_path)
 			.map_err(|error| tg::error!(source = error, "cannot canonicalize output path"))?;
+		let original_metadata = std::fs::metadata(&output_path)
+			.map_err(|error| tg::error!(source = error, "failed to read file metadata"))?;
+		let original_permissions = original_metadata.permissions();
+
 		tracing::debug!(?output_path, "about to check in output file");
-		tg::checkin(
+		let output_file = tg::checkin(
 			&tg,
 			tg::checkin::Arg {
 				destructive: false,
@@ -406,7 +410,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		)
 		.await?
 		.try_unwrap_file()
-		.map_err(|error| tg::error!(source = error, "expected a file"))?
+		.map_err(|error| tg::error!(source = error, "expected a file"))?;
+
+		(output_file, original_permissions)
 	};
 	let output_file_id = output_file.id();
 	tracing::debug!(?output_file_id, "checked in output file");
@@ -520,6 +526,11 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			},
 		)
 		.await?;
+
+		// Restore the original file permissions after checkout.
+		std::fs::set_permissions(&output_path, original_permissions)
+			.map_err(|source| tg::error!(!source, %path = output_path.display(), "failed to restore file permissions"))?;
+		tracing::debug!(?output_path, "restored original file permissions");
 	}
 
 	Ok(())
