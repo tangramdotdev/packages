@@ -1517,9 +1517,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.13"
+version = "0.5.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d04b7d0ee6b4a0207a0a7adb104d23ecb0b47d6beae7152d0fa34b692b29fd6"
+checksum = "de3a5d9f0aba1dbcec1cc47f0ff94a4b778fe55bca98a6dfa92e4e094e57b1c4"
 dependencies = [
  "bitflags 2.9.1",
 ]
@@ -1931,7 +1931,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7736cddb8d6753c17043e83d6cb9b4caae9e44ba#7736cddb8d6753c17043e83d6cb9b4caae9e44ba"
+source = "git+https://github.com/tangramdotdev/tangram?rev=beafc739e2733419f6e17e6c496b2fc37d2ef96c#beafc739e2733419f6e17e6c496b2fc37d2ef96c"
 dependencies = [
  "async-compression",
  "blake3",
@@ -1981,7 +1981,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7736cddb8d6753c17043e83d6cb9b4caae9e44ba#7736cddb8d6753c17043e83d6cb9b4caae9e44ba"
+source = "git+https://github.com/tangramdotdev/tangram?rev=beafc739e2733419f6e17e6c496b2fc37d2ef96c#beafc739e2733419f6e17e6c496b2fc37d2ef96c"
 dependencies = [
  "serde",
 ]
@@ -1989,7 +1989,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7736cddb8d6753c17043e83d6cb9b4caae9e44ba#7736cddb8d6753c17043e83d6cb9b4caae9e44ba"
+source = "git+https://github.com/tangramdotdev/tangram?rev=beafc739e2733419f6e17e6c496b2fc37d2ef96c#beafc739e2733419f6e17e6c496b2fc37d2ef96c"
 dependencies = [
  "dashmap",
  "futures",
@@ -2001,7 +2001,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7736cddb8d6753c17043e83d6cb9b4caae9e44ba#7736cddb8d6753c17043e83d6cb9b4caae9e44ba"
+source = "git+https://github.com/tangramdotdev/tangram?rev=beafc739e2733419f6e17e6c496b2fc37d2ef96c#beafc739e2733419f6e17e6c496b2fc37d2ef96c"
 dependencies = [
  "async-compression",
  "brotli",
@@ -2033,7 +2033,7 @@ dependencies = [
 [[package]]
 name = "tangram_itertools"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7736cddb8d6753c17043e83d6cb9b4caae9e44ba#7736cddb8d6753c17043e83d6cb9b4caae9e44ba"
+source = "git+https://github.com/tangramdotdev/tangram?rev=beafc739e2733419f6e17e6c496b2fc37d2ef96c#beafc739e2733419f6e17e6c496b2fc37d2ef96c"
 dependencies = [
  "tangram_either",
 ]
@@ -2085,7 +2085,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7736cddb8d6753c17043e83d6cb9b4caae9e44ba#7736cddb8d6753c17043e83d6cb9b4caae9e44ba"
+source = "git+https://github.com/tangramdotdev/tangram?rev=beafc739e2733419f6e17e6c496b2fc37d2ef96c#beafc739e2733419f6e17e6c496b2fc37d2ef96c"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -2096,7 +2096,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=7736cddb8d6753c17043e83d6cb9b4caae9e44ba#7736cddb8d6753c17043e83d6cb9b4caae9e44ba"
+source = "git+https://github.com/tangramdotdev/tangram?rev=beafc739e2733419f6e17e6c496b2fc37d2ef96c#beafc739e2733419f6e17e6c496b2fc37d2ef96c"
 dependencies = [
  "derive_more",
  "winnow",
