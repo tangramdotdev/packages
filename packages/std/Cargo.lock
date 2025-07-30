@@ -1948,7 +1948,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "async-compression",
  "blake3",
@@ -1999,7 +1999,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "serde",
 ]
@@ -2007,7 +2007,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "dashmap",
  "futures",
@@ -2019,7 +2019,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "async-compression",
  "brotli",
@@ -2051,7 +2051,7 @@ dependencies = [
 [[package]]
 name = "tangram_itertools"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "tangram_either",
 ]
@@ -2077,7 +2077,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "byteorder",
  "bytes",
@@ -2091,14 +2091,14 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "heck",
  "itertools",
  "num",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -2130,7 +2130,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "derive_more",
  "once_cell",
@@ -2141,7 +2141,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=e3e32514f7ddb8daf425303f30c4c6bba8d98441#e3e32514f7ddb8daf425303f30c4c6bba8d98441"
+source = "git+https://github.com/tangramdotdev/tangram?rev=a9621e1c78376c36b78528a9aedfe172a04a16d5#a9621e1c78376c36b78528a9aedfe172a04a16d5"
 dependencies = [
  "derive_more",
  "winnow",
