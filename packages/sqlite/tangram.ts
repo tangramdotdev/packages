@@ -8,7 +8,7 @@ export const metadata = {
 	name: "sqlite",
 	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",
 	repository: "https://www.sqlite.org/src/",
-	version: "3.49.1",
+	version: "3.50.3",
 	provides: {
 		binaries: ["sqlite3"],
 		headers: ["sqlite3.h"],
@@ -19,7 +19,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:106642d8ccb36c5f7323b64e4152e9b719f7c0215acf5bfeac3d5e7f97b59254";
+		"sha256:ec5496cdffbc2a4adb59317fd2bf0e582bf0e6acd8f4aae7e97bc723ddba7233";
 	const extension = ".tar.gz";
 
 	const produceVersion = (version: string) => {

@@ -6,7 +6,7 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "nats-server",
 	repository: "https://github.com/nats-io/nats-server",
-	version: "2.11.4",
+	version: "2.11.6",
 	provides: {
 		binaries: ["nats-server"],
 	},
@@ -18,7 +18,7 @@ export const source = () => {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:5b6506cd9636080f9135da612840a2893ed9dd9ac96b84cb810f1d8661c9a163";
+		"sha256:01eab5565268c280b322c8601932edaf41f3a2c688f119ecad90ffa47d55f015";
 	return std.download.fromGithub({
 		checksum,
 		owner,
@@ -50,6 +50,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	return go.build(
 		{
 			...(await std.triple.rotate({ build, host })),
+			cgo: false,
 			env,
 			sdk,
 			source: source_ ?? source(),
@@ -64,3 +65,16 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
+
+export const llvm = () => build({ sdk: { toolchain: "llvm" } });
+export const crossGcc = () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+	});
+export const crossLlvm = () =>
+	build({
+		build: "aarch64-unknown-linux-gnu",
+		host: "x86_64-unknown-linux-gnu",
+		sdk: { toolchain: "llvm" },
+	});

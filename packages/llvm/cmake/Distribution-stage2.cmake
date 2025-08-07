@@ -12,12 +12,12 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -gline-tables-only -DNDEBUG" CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -gline-tables-only -DNDEBUG" CACHE STRING "")
 
-# Mirror the stage1 configuration to use all LLVM components.
+# Configure the build to use all LLVM components.
 set(CLANG_DEFAULT_CXX_STDLIB "libc++" CACHE STRING "")
 set(CLANG_DEFAULT_RTLIB "compiler-rt" CACHE STRING "")
 set(LIBCXX_USE_COMPILER_RT ON CACHE BOOL "")
 set(LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")
-set(LIBCXXABI_USE_LLVM_UNWINDER ON CACHE BOOL "")
+set(LIBCXXABI_USE_LLVM_UNWINDER OFF CACHE BOOL "")
 set(LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
 
 # NOTE - the coresponding CMAKE_EXE_LINKER_FLAGS is set in `llvm.tg.ts`.

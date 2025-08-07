@@ -14,13 +14,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.7",
+	version: "20.1.8",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:cd8fd55d97ad3e360b1d5aaf98388d1f70dfffb7df36beee478be3b839ff9008";
+		"sha256:6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -63,27 +63,37 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const deps = [git(), pythonForBuild, ncursesArtifact, zlibArtifact];
 
 	// Obtain a sysroot for the requested host.
-	// TODO - host
 	const sysroot = await glibc
-		.sysroot()
+		.sysroot({ host })
 		.then((d) => d.get(host))
 		.then(tg.Directory.expect);
 
-	const env = await std.env.arg(...deps, env_);
+	const env = await std.env.arg(
+		...deps,
+		{
+			CFLAGS: tg.Mutation.suffix("-Wno-unused-command-line-argument", " "),
+			TANGRAM_LINKER_IDENTITY: "wrapper",
+		},
+		env_,
+	);
 
 	const ldsoName = glibc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
+	// FIXME - get the gcc version programatically.
+	// const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -L$\{SYSROOT_LIBDIR\}/gcc/$\{HOST_GCC_TRIPLE\}/15.1.0 -B$\{SYSROOT_LIBDIR\}/gcc/$\{HOST_GCC_TRIPLE\}/15.1.0 -B$\{SYSROOT_LIBDIR\} -L\{SYSROOT_LIBDIR\}`;
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:/work/lib:/work/lib/${host}"`;
+	// FIXME are the lib flags at the end necessary?
+	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:/lib:/lib/${host}:/build/lib:/build/lib/${host}" && export SYSROOT_LIBDIR="$(gcc -print-sysroot)/lib" && export HOST_GCC_TRIPLE=""$(gcc -dumpmachine)""`;
 
 	// Define default flags.
 	const configure = {
 		args: [
-			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
+			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS="${stage2ExeLinkerFlags}"`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
+			`-DLLVM_RUNTIME_TARGETS=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
 			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH didn't work for Terminfo_ROOT, but this did.
@@ -176,6 +186,65 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 export default toolchain;
 
+type PrebuiltArg = {
+	host?: string;
+};
+
+export const prebuilt = async (arg?: PrebuiltArg) => {
+	const { host: host_ } = arg ?? {};
+	const { version } = metadata;
+	const host = host_ ?? (await std.triple.host());
+
+	const arch = std.triple.arch(host);
+	const os = std.triple.os(host);
+
+	// The upstream does not provide x86_64-darwin builds.
+	if (arch === "x86_64" && os === "darwin") {
+		throw new Error(
+			"Prebuilt LLVM binaries are not available for x86_64-darwin",
+		);
+	}
+
+	const checksums: Record<string, tg.Checksum> = {
+		["aarch64-linux"]:
+			"sha256:b855cc17d935fdd83da82206b7a7cfc680095efd1e9e8182c4a05e761958bef8",
+		["x86_64-linux"]:
+			"sha256:1ead36b3dfcb774b57be530df42bec70ab2d239fbce9889447c7a29a4ddc1ae6",
+		["aarch64-darwin"]:
+			"sha256:a9a22f450d35f1f73cd61ab6a17c6f27d8f6051d56197395c1eb397f0c9bbec4",
+	};
+	const archAndOs = `${arch}-${os}`;
+	const checksum = checksums[archAndOs];
+	tg.assert(checksum, `unable to locate checksum for ${archAndOs}`);
+
+	const filenameArch = arch === "aarch64" ? "ARM64" : "X64";
+	const filenameOs = os === "darwin" ? "macOS" : "Linux";
+
+	const url = `https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/LLVM-${version}-${filenameOs}-${filenameArch}.tar.xz`;
+
+	let output = await std
+		.download({ url, checksum, mode: "extract" })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
+
+	// On Linux, we have to wrap.
+	const binDir = await output.get("bin").then(tg.Directory.expect);
+	for await (let [name, file] of binDir) {
+		// If the file is an executable with an interpreter, wrap it.
+		if (file instanceof tg.File) {
+			const metadata = await std.file.executableMetadata(file);
+			if (metadata.format === "elf" && metadata.interpreter !== undefined) {
+				const wrapped = await std.wrap(file);
+				output = await tg.directory(output, {
+					[`bin/${name}`]: wrapped,
+				});
+			}
+		}
+	}
+
+	return output;
+};
+
 /** Build libclang only. */
 export const libclang = async (arg?: LLVMArg) => {
 	const {
@@ -200,6 +269,7 @@ export const libclang = async (arg?: LLVMArg) => {
 	const configure = {
 		args: [
 			"-DCMAKE_BUILD_TYPE=Release",
+			"-DCMAKE_SKIP_INSTALL_RPATH=On",
 			"-DLLVM_ENABLE_PROJECTS=clang",
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
