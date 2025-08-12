@@ -340,7 +340,6 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		buildToolchain,
 		env,
 		host: build,
-		identity: "wrapper",
 	});
 };
 

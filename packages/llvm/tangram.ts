@@ -72,7 +72,6 @@ export const toolchain = async (arg?: LLVMArg) => {
 		...deps,
 		{
 			CFLAGS: tg.Mutation.suffix("-Wno-unused-command-line-argument", " "),
-			TANGRAM_LINKER_IDENTITY: "wrapper",
 		},
 		env_,
 	);
@@ -169,9 +168,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 			const { format } = await std.file.executableMetadata(artifact);
 			if (format === "elf") {
 				const unwrapped = binDir.get(name).then(tg.File.expect);
-				// Use the wrapper identity to ensure the wrapper is called when binaries call themselves. Otherwise it won't find all required libraries.
 				const wrapped = std.wrap(unwrapped, {
-					identity: "wrapper",
 					libraryPaths,
 				});
 				llvmArtifact = await tg.directory(llvmArtifact, {

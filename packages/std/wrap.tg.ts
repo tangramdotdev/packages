@@ -16,10 +16,6 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const arg = await wrap.arg(...args);
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
-	tg.assert(
-		arg.identity !== undefined,
-		"Could not determine requested identity",
-	);
 
 	const executable = await manifestExecutableFromArg(arg.executable);
 
@@ -44,29 +40,6 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		libraryPathStrategy: arg.libraryPathStrategy,
 	});
 
-	// Ensure we're not building an identity=executable wrapper for an unwrapped statically-linked executable.
-	if (
-		arg.identity === "executable" &&
-		(executable instanceof tg.File || executable instanceof tg.Symlink)
-	) {
-		const file =
-			executable instanceof tg.Symlink
-				? await executable.resolve()
-				: executable;
-		if (!file || file instanceof tg.Directory) {
-			return tg.unreachable(
-				"Following the executable symlink either failed or returned a directory.",
-			);
-		}
-		tg.File.assert(file);
-		const metadata = await std.file.executableMetadata(file);
-		if (metadata.format === "elf" && metadata.interpreter == undefined) {
-			throw new Error(
-				`Found a statically-linked executable but selected the "executable" identity.  This combination is not supported.  Please select the "wrapper" identity instead.`,
-			);
-		}
-	}
-
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
 		arg.env as std.env.EnvObject,
 	);
@@ -75,7 +48,6 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	);
 
 	const manifest: wrap.Manifest = {
-		identity: arg.identity,
 		interpreter: manifestInterpreter,
 		executable,
 		env: manifestEnv,
@@ -119,9 +91,6 @@ export namespace wrap {
 		/** The host system to produce a wrapper for. */
 		host?: string;
 
-		/** The identity of the executable. The default is "executable". */
-		identity?: Identity;
-
 		/** The interpreter to run the executable with. If not provided, a default is detected. */
 		interpreter?: tg.File | tg.Symlink | tg.Template | Interpreter | undefined;
 
@@ -134,8 +103,6 @@ export namespace wrap {
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
 	};
-
-	export type Identity = "wrapper" | "interpreter" | "executable";
 
 	/** Either a normal interpreter, ld-linux, ld-musl, or dyld. */
 	export type Interpreter =
@@ -216,7 +183,6 @@ export namespace wrap {
 		| "combine";
 
 	export type Manifest = {
-		identity: Identity;
 		interpreter?: Manifest.Interpreter | undefined;
 		executable: Manifest.Executable;
 		env?: Manifest.Mutation | undefined;
@@ -233,7 +199,6 @@ export namespace wrap {
 			env: env_ = {},
 			executable,
 			host: host_,
-			identity,
 			interpreter,
 			merge: merge_ = true,
 			libraryPaths = [],
@@ -248,7 +213,6 @@ export namespace wrap {
 				} else if (typeof arg === "string" || arg instanceof tg.Template) {
 					// This is a "content" executable.
 					return {
-						identity: "wrapper" as const,
 						interpreter: await wrap.defaultShell(),
 						executable: arg,
 					};
@@ -288,7 +252,6 @@ export namespace wrap {
 			}
 
 			envs.push(await wrap.envObjectFromManifestEnv(existingManifest.env));
-			identity = existingManifest.identity;
 			interpreter = await wrap.interpreterFromManifestInterpreter(
 				existingManifest.interpreter,
 			);
@@ -304,23 +267,11 @@ export namespace wrap {
 
 		const env = await std.env.arg(...envs, env_, { utils: false });
 
-		// If the executable is a content executable, make sure there is a normal interpreter for it and sensible identity.
+		// If the executable is a content executable, make sure there is a normal interpreter for it.
 		if (executable instanceof tg.Template || typeof executable === "string") {
 			if (interpreter === undefined) {
 				interpreter = await wrap.defaultShell({ buildToolchain });
 			}
-			if (identity === undefined) {
-				identity = "interpreter" as const;
-			}
-			if (identity === "executable") {
-				throw new Error(
-					"cannot use the executable identity with content executables, select interpreter or wrapper",
-				);
-			}
-		}
-		// If identity is still undefined, default to executable.
-		if (identity === undefined) {
-			identity = "executable";
 		}
 
 		return {
@@ -329,7 +280,6 @@ export namespace wrap {
 			env,
 			executable,
 			host,
-			identity,
 			interpreter,
 			merge,
 			libraryPaths,
@@ -344,8 +294,6 @@ export namespace wrap {
 		disallowUnset?: boolean;
 		/** Should scripts exit on errors? Equivalent to setting `-e`. Default: true. */
 		exitOnErr?: boolean;
-		/** Which identity should we use for the shell? Default: "wrapper". */
-		identity?: "interpreter" | "wrapper";
 		/** Whether to incldue the complete `std.utils()` environment. Default: true. */
 		includeUtils?: boolean;
 		/** Should failures inside pipelines cause the whole pipeline to fail? Equivalent to setting `-o pipefail`. Default: true. */
@@ -358,7 +306,6 @@ export namespace wrap {
 			buildToolchain: buildToolchain_,
 			disallowUnset = true,
 			exitOnErr = true,
-			identity = "wrapper",
 			includeUtils = true,
 			pipefail = true,
 		} = arg ?? {};
@@ -381,7 +328,6 @@ export namespace wrap {
 		const wrapArgs: Array<wrap.Arg> = [
 			{
 				executable: shellExecutable,
-				identity,
 			},
 		];
 		if (buildToolchain_ !== undefined) {
@@ -653,8 +599,6 @@ export namespace wrap {
 	};
 
 	export namespace Manifest {
-		export type Identity = "wrapper" | "interpreter" | "executable";
-
 		export type Interpreter =
 			| NormalInterpreter
 			| LdLinuxInterpreter
@@ -2269,7 +2213,6 @@ export const testSingleArgObjectNoMutations = async () => {
 	const manifest = await wrap.Manifest.read(wrapper);
 	console.log("wrapper manifest", manifest);
 	tg.assert(manifest);
-	tg.assert(manifest.identity === "executable");
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
@@ -2283,8 +2226,8 @@ export const testSingleArgObjectNoMutations = async () => {
 
 	if (os === "linux") {
 		tg.assert(
-			text.includes(`/proc/self/exe: /.tangram/artifacts/${origExecutableId}`),
-			"Expected /proc/self/exe to be set to the artifact ID of the wrapped executable",
+			text.includes(`/proc/self/exe: /.tangram/artifacts/${wrapperID}`),
+			"Expected /proc/self/exe to be set to the artifact ID of the wrapper",
 		);
 		tg.assert(
 			text.includes(`argv[0]: /.tangram/artifacts/${wrapperID}`),

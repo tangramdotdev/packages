@@ -166,7 +166,6 @@ export const self = async (...args: std.Args<Arg>) => {
 	const rubyBin = std.wrap({
 		executable: unwrapped,
 		env,
-		identity: "wrapper",
 	});
 
 	// Wrap the other binaries provided by ruby.

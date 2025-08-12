@@ -96,7 +96,7 @@ export const wrapScript = async (script: tg.File) => {
 		throw new Error("Expected a shebang sh, bash, or zsh script");
 	}
 	const interpreter = tg.File.expect(await (await build()).get("bin/zsh"));
-	return std.wrap(script, { interpreter, identity: "executable" });
+	return std.wrap(script, { interpreter });
 };
 
 export const test = async () => {

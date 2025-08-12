@@ -75,9 +75,6 @@ struct Options {
 	/// If any NEEDED libraries are missing at the end, should we still produce a wrapper?. Will warn if false, error if true. Default: false.
 	disallow_missing: bool,
 
-	/// The identity to use for the resulting wrapper. If not specified, dynamically-linked executables will use the `Executable` identity, and statically-linked executables will use `Wrapper`.
-	identity: Option<tangram_std::manifest::Identity>,
-
 	/// The interpreter used by the output executable.
 	interpreter_path: Option<String>,
 
@@ -121,13 +118,6 @@ fn read_options() -> tg::Result<Options> {
 
 	// Get the allow_missing flag.
 	let mut disallow_missing = std::env::var("TANGRAM_LINKER_DISALLOW_MISSING").is_ok();
-
-	// Get the identity.
-	let mut identity = std::env::var("TANGRAM_LINKER_IDENTITY")
-		.ok()
-		.map(|s| s.parse())
-		.transpose()
-		.map_err(|source| tg::error!(!source, "invalid identity in TANGRAM_LINKER_IDENTITY"))?;
 
 	// Get the interpreter path.
 	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH").ok();
@@ -182,16 +172,6 @@ fn read_options() -> tg::Result<Options> {
 				} else {
 					tracing::warn!("Invalid max depth argument {option}. Using default.");
 				}
-			} else if arg.starts_with("--tg-identity=") {
-				if let Some(current_identity) = identity {
-					tracing::warn!(
-						?current_identity,
-						"The --tg-identity argument is overwriting the identity set by TANGRAM_LINKER_IDENTITY."
-					);
-				}
-				identity = Some(arg.strip_prefix("--tg-identity").unwrap().parse().map_err(
-					|source| tg::error!(!source, "invalid identity in --tg-identity argument"),
-				)?);
 			} else if arg.starts_with("--tg-passthrough") {
 				passthrough = true;
 			} else if arg.starts_with("--tg-disallow-missing") {
@@ -243,7 +223,6 @@ fn read_options() -> tg::Result<Options> {
 		command_path,
 		command_args,
 		disallow_missing,
-		identity,
 		interpreter_path,
 		interpreter_args,
 		injection_path,
@@ -726,44 +705,8 @@ async fn create_manifest<H: BuildHasher>(
 	let env = None;
 	let args = None;
 
-	let identity = match options.identity {
-		// If identity is explicitly set
-		Some(identity) => {
-			match identity {
-				tangram_std::manifest::Identity::Executable
-				| tangram_std::manifest::Identity::Interpreter => {
-					// Both Executable and Interpreter require dynamic linking
-					if let Some(interpreter) = &interpreter {
-						if !interpreter.is_dynamic() {
-							return Err(tg::error!(
-								"cannot set the Interpreter identity for non-dynamically linked executables"
-							));
-						}
-					}
-
-					if matches!(identity, tangram_std::manifest::Identity::Interpreter) {
-						tracing::warn!(
-							"Using the requested Interpreter identity, which may not be what you intended."
-						);
-					}
-
-					identity
-				},
-				tangram_std::manifest::Identity::Wrapper => identity,
-			}
-		},
-		// Default identity based on interpreter type
-		None => match &interpreter {
-			Some(interpreter) if interpreter.is_dynamic() => {
-				tangram_std::manifest::Identity::Executable
-			},
-			_ => tangram_std::manifest::Identity::Wrapper,
-		},
-	};
-
 	// Create the manifest.
 	let manifest = tangram_std::Manifest {
-		identity,
 		interpreter,
 		executable,
 		env,

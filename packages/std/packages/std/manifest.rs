@@ -16,9 +16,6 @@ pub const VERSION: u64 = 0;
 /// The Tangram run entrypoint manifest.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Manifest {
-	/// The identity of the executable.
-	pub identity: Identity,
-
 	/// The interpreter for the executable.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub interpreter: Option<Interpreter>,
@@ -33,40 +30,6 @@ pub struct Manifest {
 	/// The command line arguments to pass to the executable.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub args: Option<Vec<tg::template::Data>>,
-}
-
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Identity {
-	Executable,
-	Interpreter,
-	Wrapper,
-}
-
-impl std::str::FromStr for Identity {
-	type Err = std::io::Error;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.to_ascii_lowercase().as_str() {
-			"executable" => Ok(Identity::Executable),
-			"interpreter" => Ok(Identity::Interpreter),
-			"wrapper" => Ok(Identity::Wrapper),
-			_ => Err(std::io::Error::new(
-				std::io::ErrorKind::InvalidInput,
-				format!("unrecognized identity: ${s}"),
-			)),
-		}
-	}
-}
-
-impl std::fmt::Display for Identity {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Identity::Executable => write!(f, "executable"),
-			Identity::Interpreter => write!(f, "interpreter"),
-			Identity::Wrapper => write!(f, "wrapper"),
-		}
-	}
 }
 
 /// An interpreter is another program that is used to launch the executable.

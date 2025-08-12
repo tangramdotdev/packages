@@ -265,7 +265,6 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 			binDir = await tg.directory(binDir, {
 				[name]: std.wrap({
 					executable: file,
-					identity: "wrapper",
 				}),
 			});
 		}

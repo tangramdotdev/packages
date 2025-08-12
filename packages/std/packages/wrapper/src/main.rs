@@ -68,15 +68,6 @@ fn main_inner() -> std::io::Result<()> {
 		},
 	};
 
-	// Choose the identity path.
-	let identity_path = match &manifest.identity {
-		manifest::Identity::Wrapper => wrapper_path,
-		manifest::Identity::Interpreter => interpreter_path.expect("If the manifest specifies the interpreter as its identity, then the manifest must contain an interpreter."),
-		manifest::Identity::Executable => executable_path.clone(),
-	};
-	#[cfg(feature = "tracing")]
-	tracing::debug!(?identity_path);
-
 	// Create the command.
 	let mut command = if let Some((interpreter_path, interpreter_args)) = interpreter {
 		#[cfg(feature = "tracing")]
@@ -111,7 +102,7 @@ fn main_inner() -> std::io::Result<()> {
 	{
 		// Set `TANGRAM_INJECTION_IDENTITY_PATH`.
 		unsafe {
-			std::env::set_var("TANGRAM_INJECTION_IDENTITY_PATH", identity_path);
+			std::env::set_var("TANGRAM_INJECTION_IDENTITY_PATH", wrapper_path);
 		}
 	}
 
