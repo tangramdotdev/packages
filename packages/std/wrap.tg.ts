@@ -117,6 +117,9 @@ export namespace wrap {
 		/** The interpreter executable. */
 		executable: tg.File | tg.Symlink;
 
+		/** The name of the interpreter in the path. Defaults to `sh` if path is a directory and name is not provided. If path is a file, this should not be set. */
+		name?: tg.Template.Arg | undefined;
+
 		/** Additional arguments to pass to the interpreter. */
 		args?: Array<tg.Template.Arg> | undefined;
 	};
@@ -384,6 +387,10 @@ export namespace wrap {
 					executable: await fileOrSymlinkFromManifestTemplate(
 						manifestInterpreter.path,
 					),
+					name:
+						manifestInterpreter.name === undefined
+							? undefined
+							: await templateFromManifestTemplate(manifestInterpreter.name),
 					args:
 						manifestInterpreter.args === undefined
 							? undefined
@@ -608,6 +615,7 @@ export namespace wrap {
 		export type NormalInterpreter = {
 			kind: "normal";
 			path: Manifest.Template;
+			name?: Manifest.Template | undefined;
 			args?: Array<Manifest.Template> | undefined;
 		};
 
@@ -912,10 +920,15 @@ const manifestInterpreterFromWrapInterpreter = async (
 	const { kind } = interpreter;
 
 	// Process all fields concurrently
-	const [path, libraryPaths, preloads, args] = await Promise.all([
+	const [path, name, libraryPaths, preloads, args] = await Promise.all([
 		// Only process executable if it exists
 		"executable" in interpreter
 			? manifestTemplateFromArg(interpreter.executable)
+			: Promise.resolve(undefined),
+
+		// Only process name if it exists (for normal interpreters)
+		"name" in interpreter && interpreter.name !== undefined
+			? manifestTemplateFromArg(interpreter.name)
 			: Promise.resolve(undefined),
 
 		// Only process libraryPaths if it exists
@@ -940,6 +953,7 @@ const manifestInterpreterFromWrapInterpreter = async (
 			return {
 				kind,
 				path: path!,
+				...(name && { name }),
 				...(args && { args }),
 			};
 		}
@@ -2285,6 +2299,16 @@ export const testContentExecutable = async () => {
 	tg.assert(text.includes("Tangram"));
 
 	return true;
+};
+
+export const equivalentContentExecutable = async () => {
+	const exeA = await std.wrap("echo hello");
+	const exeB = await std.wrap(
+		tg.file("#!/usr/bin/env sh\necho hello", { executable: true }),
+	);
+	const exeAId = await exeA.store();
+	const exeBId = await exeB.store();
+	tg.assert(exeAId === exeBId);
 };
 
 export const testContentExecutableVariadic = async () => {

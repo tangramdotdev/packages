@@ -55,17 +55,20 @@ fn main_inner() -> std::io::Result<()> {
 	let arg0 = &filtered_args[0];
 
 	// Render the interpreter.
-	let interpreter = handle_interpreter(manifest.interpreter.as_ref(), arg0.as_os_str())?;
-	let interpreter_path = interpreter.as_ref().map(|(path, _)| path).cloned();
-	#[cfg(feature = "tracing")]
-	tracing::debug!(?interpreter_path);
+	let is_content_executable = matches!(manifest.executable, manifest::Executable::Content(_));
+	let interpreter = handle_interpreter(
+		manifest.interpreter.as_ref(),
+		arg0.as_os_str(),
+		is_content_executable,
+	)?;
 
 	// Render the executable.
 	let executable_path = match &manifest.executable {
 		manifest::Executable::Path(file) => tangram_std::render_template_data(file)?.into(),
-		manifest::Executable::Content(template) => {
-			content_executable(&tangram_std::render_template_data(template)?)?
-		},
+		manifest::Executable::Content(template) => content_executable(
+			&tangram_std::render_template_data(template)?,
+			manifest.interpreter.as_ref(),
+		)?,
 	};
 
 	// Create the command.
@@ -144,9 +147,36 @@ fn clear_env() {
 }
 
 /// Create a temporary file with the given contents and return the path to the file.
-fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
+fn content_executable(
+	contents: &str,
+	interpreter: Option<&manifest::Interpreter>,
+) -> std::io::Result<PathBuf> {
 	#[cfg(feature = "tracing")]
 	tracing::trace!("producing content executable.");
+
+	// Generate shebang if we have a normal interpreter
+	let final_contents = if let Some(manifest::Interpreter::Normal(interp)) = interpreter {
+		let interpreter_path = tangram_std::render_template_data(&interp.path)?;
+		let interpreter_path = std::path::Path::new(&interpreter_path);
+
+		let shebang = if interpreter_path.is_dir() {
+			// If path is a directory, use /usr/bin/env with the name (defaulting to "sh")
+			let name = if let Some(name_template) = &interp.name {
+				tangram_std::render_template_data(name_template)?
+			} else {
+				"sh".to_string()
+			};
+			format!("#!/usr/bin/env {name}")
+		} else {
+			// If path is a file, render the template directly as the shebang executable
+			format!("#!{}", interpreter_path.display())
+		};
+
+		format!("{shebang}\n{contents}")
+	} else {
+		contents.to_string()
+	};
+
 	let fd = unsafe {
 		// Create a temporary file.
 		let temp_path = c"/tmp/XXXXXX".to_owned();
@@ -167,8 +197,8 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 
 		// Write the contents to the temporary file.
 		let mut written = 0;
-		while written < contents.len() {
-			let slice = &contents[written..];
+		while written < final_contents.len() {
+			let slice = &final_contents[written..];
 			let ret = libc::write(fd, slice.as_ptr().cast(), slice.len());
 			if ret == -1 {
 				#[cfg(feature = "tracing")]
@@ -191,7 +221,36 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 			return Err(std::io::Error::last_os_error());
 		}
 
-		fd
+		// Set execute permissions on the temporary file.
+		let ret = libc::fchmod(fd, 0o700);
+		if ret == -1 {
+			#[cfg(feature = "tracing")]
+			tracing::error!("Failed to set execute permissions on temporary file.");
+			return Err(std::io::Error::last_os_error());
+		}
+
+		// Reopen the unlinked file as read-only to avoid "Text file busy" error
+		let proc_path = format!("/proc/self/fd/{fd}");
+		let proc_path_c = std::ffi::CString::new(proc_path).map_err(|_| {
+			std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid proc path")
+		})?;
+		let readonly_fd = libc::open(proc_path_c.as_ptr(), libc::O_RDONLY);
+		if readonly_fd == -1 {
+			#[cfg(feature = "tracing")]
+			tracing::error!("Failed to reopen file as read-only.");
+			return Err(std::io::Error::last_os_error());
+		}
+
+		// Close the original write file descriptor
+		let ret = libc::close(fd);
+		if ret == -1 {
+			#[cfg(feature = "tracing")]
+			tracing::error!("Failed to close original file descriptor.");
+			let _ = libc::close(readonly_fd);
+			return Err(std::io::Error::last_os_error());
+		}
+
+		readonly_fd
 	};
 
 	// Create a path to the temporary file.
@@ -203,18 +262,24 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 fn handle_interpreter(
 	interpreter: Option<&manifest::Interpreter>,
 	arg0: &OsStr,
+	is_content_executable: bool,
 ) -> Result<Option<(PathBuf, Vec<String>)>, std::io::Error> {
 	let result = match interpreter {
 		// Handle a normal interpreter.
 		Some(manifest::Interpreter::Normal(interpreter)) => {
-			let interpreter_path = tangram_std::render_template_data(&interpreter.path)?;
-			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
-			let interpreter_args = interpreter
-				.args
-				.iter()
-				.map(tangram_std::render_template_data)
-				.collect::<std::io::Result<_>>()?;
-			Some((interpreter_path, interpreter_args))
+			// For content executables, we handle interpretation via shebang, so return None
+			if is_content_executable {
+				None
+			} else {
+				let interpreter_path = tangram_std::render_template_data(&interpreter.path)?;
+				let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
+				let interpreter_args = interpreter
+					.args
+					.iter()
+					.map(tangram_std::render_template_data)
+					.collect::<std::io::Result<_>>()?;
+				Some((interpreter_path, interpreter_args))
+			}
 		},
 
 		// Handle an ld-linux interpreter.

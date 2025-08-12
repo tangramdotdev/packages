@@ -65,8 +65,12 @@ impl Interpreter {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NormalInterpreter {
-	/// The path to the file to exec.
+	/// The path containining the interpreter to exec.
 	pub path: tg::template::Data,
+
+	/// The name of the interpreter in the path. Defaults to `sh` if path is a directory and name is not provided. If path is a file, this should not be set.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub name: Option<tg::template::Data>,
 
 	/// Arguments for the interpreter.
 	pub args: Vec<tg::template::Data>,
