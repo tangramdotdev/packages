@@ -154,30 +154,37 @@ fn content_executable(
 	#[cfg(feature = "tracing")]
 	tracing::trace!("producing content executable.");
 
-	// Generate shebang if we have a normal interpreter
-	let final_contents = if let Some(manifest::Interpreter::Normal(interp)) = interpreter {
-		let interpreter_path = tangram_std::render_template_data(&interp.path)?;
-		let interpreter_path = std::path::Path::new(&interpreter_path);
+	// Generate shebang only on Linux - macOS will invoke interpreter directly
+	let final_contents = if cfg!(target_os = "linux") {
+		// Linux: Add shebang if we have a normal interpreter
+		if let Some(manifest::Interpreter::Normal(interp)) = interpreter {
+			let interpreter_path = tangram_std::render_template_data(&interp.path)?;
+			let interpreter_path = std::path::Path::new(&interpreter_path);
 
-		let shebang = if interpreter_path.is_dir() {
-			// If path is a directory, use /usr/bin/env with the name (defaulting to "sh")
-			let name = if let Some(name_template) = &interp.name {
-				tangram_std::render_template_data(name_template)?
+			let shebang = if interpreter_path.is_dir() {
+				// If path is a directory, use /usr/bin/env with the name (defaulting to "sh")
+				let name = if let Some(name_template) = &interp.name {
+					tangram_std::render_template_data(name_template)?
+				} else {
+					"sh".to_string()
+				};
+				format!("#!/usr/bin/env {name}")
 			} else {
-				"sh".to_string()
+				// If path is a file, render the template directly as the shebang executable
+				format!("#!{}", interpreter_path.display())
 			};
-			format!("#!/usr/bin/env {name}")
-		} else {
-			// If path is a file, render the template directly as the shebang executable
-			format!("#!{}", interpreter_path.display())
-		};
 
-		format!("{shebang}\n{contents}")
+			format!("{shebang}\n{contents}")
+		} else {
+			contents.to_string()
+		}
 	} else {
+		// macOS: Don't add shebang, let caller invoke interpreter directly
 		contents.to_string()
 	};
 
-	let fd = unsafe {
+	// Create unlinked file with script content (works on both platforms)
+	let script_fd = unsafe {
 		// Create a temporary file.
 		let temp_path = c"/tmp/XXXXXX".to_owned();
 		let fd = libc::mkstemp(temp_path.as_ptr().cast_mut());
@@ -192,6 +199,7 @@ fn content_executable(
 		if ret == -1 {
 			#[cfg(feature = "tracing")]
 			tracing::error!(?temp_path, "Failed to unlink temporary file.");
+			let _ = libc::close(fd);
 			return Err(std::io::Error::last_os_error());
 		}
 
@@ -203,6 +211,7 @@ fn content_executable(
 			if ret == -1 {
 				#[cfg(feature = "tracing")]
 				tracing::error!(?temp_path, "Failed to write to temporary file.");
+				let _ = libc::close(fd);
 				return Err(std::io::Error::last_os_error());
 			}
 			#[allow(clippy::cast_sign_loss)]
@@ -218,6 +227,7 @@ fn content_executable(
 				?temp_path,
 				"Failed to seek to the beginning of the temporary file."
 			);
+			let _ = libc::close(fd);
 			return Err(std::io::Error::last_os_error());
 		}
 
@@ -226,36 +236,49 @@ fn content_executable(
 		if ret == -1 {
 			#[cfg(feature = "tracing")]
 			tracing::error!("Failed to set execute permissions on temporary file.");
+			let _ = libc::close(fd);
 			return Err(std::io::Error::last_os_error());
 		}
 
-		// Reopen the unlinked file as read-only to avoid "Text file busy" error
-		let proc_path = format!("/proc/self/fd/{fd}");
-		let proc_path_c = std::ffi::CString::new(proc_path).map_err(|_| {
-			std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid proc path")
-		})?;
-		let readonly_fd = libc::open(proc_path_c.as_ptr(), libc::O_RDONLY);
-		if readonly_fd == -1 {
-			#[cfg(feature = "tracing")]
-			tracing::error!("Failed to reopen file as read-only.");
-			return Err(std::io::Error::last_os_error());
-		}
-
-		// Close the original write file descriptor
-		let ret = libc::close(fd);
-		if ret == -1 {
-			#[cfg(feature = "tracing")]
-			tracing::error!("Failed to close original file descriptor.");
-			let _ = libc::close(readonly_fd);
-			return Err(std::io::Error::last_os_error());
-		}
-
-		readonly_fd
+		fd
 	};
 
-	// Create a path to the temporary file.
-	let path = PathBuf::from(format!("/dev/fd/{fd}"));
-	Ok(path)
+	if cfg!(target_os = "linux") {
+		// Linux: Use unlinked file directly with read-only fd
+		let readonly_fd = unsafe {
+			// Reopen the unlinked file as read-only to avoid "Text file busy" error
+			let fd_path = format!("/proc/self/fd/{script_fd}");
+			let fd_path_c = std::ffi::CString::new(fd_path).map_err(|_| {
+				std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid fd path")
+			})?;
+			let readonly_fd = libc::open(fd_path_c.as_ptr(), libc::O_RDONLY);
+			if readonly_fd == -1 {
+				#[cfg(feature = "tracing")]
+				tracing::error!("Failed to reopen file as read-only.");
+				let _ = libc::close(script_fd);
+				return Err(std::io::Error::last_os_error());
+			}
+
+			// Close the original write file descriptor
+			let ret = libc::close(script_fd);
+			if ret == -1 {
+				#[cfg(feature = "tracing")]
+				tracing::error!("Failed to close original file descriptor.");
+				let _ = libc::close(readonly_fd);
+				return Err(std::io::Error::last_os_error());
+			}
+
+			readonly_fd
+		};
+
+		// Create a path to the temporary file.
+		let path = PathBuf::from(format!("/dev/fd/{readonly_fd}"));
+		Ok(path)
+	} else {
+		// Return unlinked file path - caller will invoke interpreter directly
+		let path = PathBuf::from(format!("/dev/fd/{script_fd}"));
+		Ok(path)
+	}
 }
 
 #[allow(clippy::too_many_lines)]
