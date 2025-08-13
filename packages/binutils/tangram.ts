@@ -6,7 +6,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "binutils",
 	repository: "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git",
-	version: "2.44",
+	version: "2.45",
 	provides: {
 		binaries: [
 			"addr2line",
@@ -29,7 +29,7 @@ export const source = async () => {
 	const { name, version } = metadata;
 
 	const checksum =
-		"sha256:79cb120b39a195ad588cd354aed886249bfab36c808e746b30208d15271cc95c";
+		"sha256:7f288c9a869582d53dc645bf1b9e90cc5123f6862738850472ddbca69def47a3";
 
 	return std.download.fromGnu({
 		name,
