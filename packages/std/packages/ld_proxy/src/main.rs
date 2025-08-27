@@ -458,6 +458,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						let value = tg::Referent {
 							item: tg::Directory::with_id(dir_with_subpath.id).into(),
 							options: tg::referent::Options {
+								id: None,
 								path: None,
 								tag: None,
 							},

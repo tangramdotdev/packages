@@ -464,6 +464,7 @@ fn dependency_from_object_id(id: &tg::object::Id) -> tg::Referent<tg::Object> {
 	tg::Referent {
 		item: tg::Object::with_id(id.clone()),
 		options: tg::referent::Options {
+			id: None,
 			path: None,
 			tag: None,
 		},
