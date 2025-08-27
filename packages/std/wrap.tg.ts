@@ -17,7 +17,14 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
 
-	const executable = await manifestExecutableFromArg(arg.executable);
+	// Check if the executable is already a wrapper and get its manifest
+	const existingManifest = await wrap.existingManifestFromExecutableArg(
+		arg.executable,
+	);
+
+	const executable =
+		existingManifest?.executable ??
+		(await manifestExecutableFromArg(arg.executable));
 
 	const detectedBuild = await std.triple.host();
 	const host = arg.host ?? (await std.triple.host());
@@ -31,15 +38,17 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 				)
 			: await bootstrap.sdk.env(host);
 
-	// Construct the interpreter.
+	// Construct the interpreter. When an explicit interpreter is provided,
+	// we should prioritize it over any interpreter that might be derived from the executable.
 	const manifestInterpreter = await manifestInterpreterFromWrapArgObject({
 		buildToolchain,
 		interpreter: arg.interpreter,
-		executable: arg.executable,
+		executable: arg.interpreter ? undefined : arg.executable,
 		libraryPaths: arg.libraryPaths,
 		libraryPathStrategy: arg.libraryPathStrategy,
 	});
 
+	// Use existing manifest values as defaults if we're wrapping a wrapper
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
 		arg.env as std.env.EnvObject,
 	);
@@ -50,8 +59,16 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const manifest: wrap.Manifest = {
 		interpreter: manifestInterpreter,
 		executable,
-		env: manifestEnv,
-		args: manifestArgs,
+		env:
+			existingManifest?.env &&
+			manifestEnv &&
+			Object.keys(manifestEnv).length === 0
+				? existingManifest.env
+				: manifestEnv,
+		args:
+			manifestArgs.length === 0 && existingManifest?.args
+				? existingManifest.args
+				: manifestArgs,
 	};
 
 	// Get the wrapper executable.
@@ -252,9 +269,14 @@ export namespace wrap {
 			}
 
 			envs.push(await wrap.envObjectFromManifestEnv(existingManifest.env));
-			interpreter = await wrap.interpreterFromManifestInterpreter(
-				existingManifest.interpreter,
-			);
+
+			// Only use the existing interpreter if no explicit interpreter was provided
+			if (interpreter === undefined) {
+				interpreter = await wrap.interpreterFromManifestInterpreter(
+					existingManifest.interpreter,
+				);
+			}
+
 			executable = await wrap.executableFromManifestExecutable(
 				existingManifest.executable,
 			);
@@ -874,7 +896,7 @@ type ManifestInterpreterArg = {
 		| tg.Template
 		| wrap.Interpreter
 		| undefined;
-	executable: string | tg.Template | tg.File | tg.Symlink;
+	executable?: string | tg.Template | tg.File | tg.Symlink | undefined;
 	libraryPaths?: Array<tg.Directory | tg.Symlink | tg.Template> | undefined;
 	libraryPathStrategy?: wrap.LibraryPathStrategy | undefined;
 };
@@ -885,7 +907,9 @@ const manifestInterpreterFromWrapArgObject = async (
 ): Promise<wrap.Manifest.Interpreter | undefined> => {
 	let interpreter = arg.interpreter
 		? await interpreterFromArg(arg.interpreter, arg.buildToolchain)
-		: await interpreterFromExecutableArg(arg.executable, arg.buildToolchain);
+		: arg.executable
+			? await interpreterFromExecutableArg(arg.executable, arg.buildToolchain)
+			: undefined;
 	if (interpreter === undefined) {
 		return undefined;
 	}
@@ -893,12 +917,14 @@ const manifestInterpreterFromWrapArgObject = async (
 	// If this is not a "normal" interpreter run the library path optimization, including any additional paths from the user.
 	if (interpreter.kind !== "normal") {
 		const { executable, libraryPaths, libraryPathStrategy } = arg;
-		interpreter = await optimizeLibraryPaths({
-			executable,
-			interpreter,
-			libraryPaths,
-			libraryPathStrategy,
-		});
+		if (executable) {
+			interpreter = await optimizeLibraryPaths({
+				executable,
+				interpreter,
+				libraryPaths,
+				libraryPathStrategy,
+			});
+		}
 	}
 
 	return manifestInterpreterFromWrapInterpreter(interpreter);
@@ -2173,6 +2199,7 @@ export const test = async () => {
 		testDylibPath(),
 		testContentExecutable(),
 		testContentExecutableVariadic(),
+		testInterpreterSwappingNormal(),
 	]);
 	return true;
 };
@@ -2393,4 +2420,71 @@ export const testDylibPath = async () => {
 	await libraryPathWrapper.store();
 	console.log("libraryPathWrapper", libraryPathWrapper.id);
 	return libraryPathWrapper;
+};
+
+export const testInterpreterSwappingNormal = async () => {
+	const buildToolchain = await bootstrap.sdk(await std.triple.host());
+
+	// Create a simple bash interpreter wrapper for testing
+	const bashExecutable = await std.utils.bash
+		.build({ bootstrap: true, env: buildToolchain })
+		.then((artifact) => artifact.get("bin/bash"))
+		.then(tg.File.expect);
+
+	const firstInterpreter = await wrap(bashExecutable, {
+		buildToolchain,
+		args: ["-c", "echo 'first interpreter'"],
+	});
+
+	const secondInterpreter = await wrap(bashExecutable, {
+		buildToolchain,
+		args: ["-c", "echo 'second interpreter'"],
+	});
+
+	const script = "echo hi";
+
+	// First, create a wrapper with the first interpreter
+	const firstWrapper = await wrap(script, {
+		buildToolchain,
+		interpreter: firstInterpreter,
+	});
+	await firstWrapper.store();
+
+	// Read the manifest to verify the first interpreter
+	const firstManifest = await wrap.Manifest.read(firstWrapper);
+	tg.assert(firstManifest);
+	tg.assert(firstManifest.interpreter);
+	tg.assert(firstManifest.interpreter.kind === "normal");
+
+	// Now wrap the wrapper again with a different interpreter
+	const secondWrapper = await wrap(firstWrapper, {
+		buildToolchain,
+		interpreter: secondInterpreter,
+	});
+	await secondWrapper.store();
+
+	// Read the manifest to verify the interpreter was swapped
+	const secondManifest = await wrap.Manifest.read(secondWrapper);
+	tg.assert(secondManifest);
+	tg.assert(secondManifest.interpreter);
+	tg.assert(secondManifest.interpreter.kind === "normal");
+
+	// The interpreters should be different
+	const firstInterpreterTemplate = firstManifest.interpreter.path;
+	const secondInterpreterTemplate = secondManifest.interpreter.path;
+
+	tg.assert(
+		JSON.stringify(firstInterpreterTemplate) !==
+			JSON.stringify(secondInterpreterTemplate),
+		"Expected interpreter to be swapped to the new value",
+	);
+
+	// The executable should still be the original executable, not the first wrapper
+	tg.assert(
+		JSON.stringify(secondManifest.executable) ===
+			JSON.stringify(firstManifest.executable),
+		"Expected executable to remain the same as the original",
+	);
+
+	return secondWrapper;
 };
