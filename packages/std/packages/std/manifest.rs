@@ -461,14 +461,7 @@ pub fn collect_dependencies_from_mutation_data(
 }
 
 fn dependency_from_object_id(id: &tg::object::Id) -> tg::Referent<tg::Object> {
-	tg::Referent {
-		item: tg::Object::with_id(id.clone()),
-		options: tg::referent::Options {
-			id: None,
-			path: None,
-			tag: None,
-		},
-	}
+	tg::Referent::with_item(tg::Object::with_id(id.clone()))
 }
 
 /// The compiled `tangram_wrapper` file this process should append manifests to.

@@ -455,14 +455,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				futures::future::try_join_all(library_paths.unwrap().into_iter().map(
 					|dir_with_subpath| async {
 						let key = tg::Reference::with_object(&dir_with_subpath.id.clone().into());
-						let value = tg::Referent {
-							item: tg::Directory::with_id(dir_with_subpath.id).into(),
-							options: tg::referent::Options {
-								id: None,
-								path: None,
-								tag: None,
-							},
-						};
+						let item = tg::Directory::with_id(dir_with_subpath.id).into();
+						let value = tg::Referent::with_item(item);
 						Ok::<_, tg::Error>((key, value))
 					},
 				))
