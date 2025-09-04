@@ -75,6 +75,9 @@ struct Options {
 	/// If any NEEDED libraries are missing at the end, should we still produce a wrapper?. Will warn if false, error if true. Default: false.
 	disallow_missing: bool,
 
+	/// If enabled, the wrapper will be embedded into the binary.
+	embed: bool,
+
 	/// The interpreter used by the output executable.
 	interpreter_path: Option<String>,
 
@@ -121,6 +124,9 @@ fn read_options() -> tg::Result<Options> {
 
 	// Get the interpreter path.
 	let interpreter_path = std::env::var("TGLD_INTERPRETER_PATH").ok();
+
+	// Get the wrap binary.
+	let mut embed = std::env::var("TANGRAM_LINKER_EMBED_WRAPPER").is_ok();
 
 	// Get additional interpreter args, if any.
 	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS")
@@ -176,6 +182,8 @@ fn read_options() -> tg::Result<Options> {
 				passthrough = true;
 			} else if arg.starts_with("--tg-disallow-missing") {
 				disallow_missing = true;
+			} else if arg.starts_with("--tg-embed-wrapper") {
+				embed = true;
 			} else {
 				command_args.push(arg.clone());
 			}
@@ -223,6 +231,7 @@ fn read_options() -> tg::Result<Options> {
 		command_path,
 		command_args,
 		disallow_missing,
+		embed,
 		interpreter_path,
 		interpreter_args,
 		injection_path,
@@ -250,11 +259,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		interpreter,
 		name,
 		needed_libraries: initial_needed_libraries,
+		entrypoint,
 	} = analyze_output_file(&options.output_path).await?;
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
 	// If the file is executable but does not need an interpreter, it is static or static-PIE linked. Abort here.
-	if is_executable && matches!(interpreter, InterpreterRequirement::None) {
+	if !options.embed && is_executable && matches!(interpreter, InterpreterRequirement::None) {
 		tracing::info!("No interpreter needed for static executable. Exiting without wrapping.");
 		return Ok(());
 	}
@@ -440,12 +450,22 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_artifact_id = output_file.id().clone().into();
 
 		// Create the manifest.
-		let manifest =
+		let mut manifest =
 			create_manifest(output_artifact_id, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
 
+		// If requested, emebd the wrapper.
+		let new_wrapper = if options.embed {
+			if let Some(entrypoint) = entrypoint {
+				manifest.executable = tangram_std::manifest::Executable::Address(entrypoint);
+			}
+			manifest.embed(&tg, &output_file).await?
+		} else {
+			manifest.write(&tg).await?
+		};
+
 		// Write the manifest to a wrapper.
-		let new_wrapper = manifest.write(&tg).await?;
+
 		let new_wrapper_id = new_wrapper.id();
 		tracing::trace!(?new_wrapper_id);
 
@@ -726,6 +746,8 @@ struct AnalyzeOutputFileOutput {
 	name: Option<String>,
 	/// Does the output file specify libraries required at runtime?
 	needed_libraries: Vec<String>,
+	/// The entrypoint of the executable.
+	entrypoint: Option<u64>,
 }
 
 /// The possible interpreter requirements of an output file.
@@ -1255,6 +1277,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 			interpreter: InterpreterRequirement::None,
 			name: None,
 			needed_libraries: vec![],
+			entrypoint: None,
 		},
 
 		// Handle an ELF file.
@@ -1275,12 +1298,16 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				.map(std::string::ToString::to_string)
 				.collect_vec();
 
+			let entrypoint = (elf.entry != 0).then_some(elf.entry);
+
 			// Check whether or not the object requires an interpreter:
 			// - If the object has an interpreter field.
 			// - If the object is a PIE and has 1 or more NEEDS.
 			let interpreter =
 				if elf.interpreter.is_some() || (is_pie && !needed_libraries.is_empty()) {
-					let interpreter = elf.interpreter.unwrap();
+					let interpreter = elf
+						.interpreter
+						.ok_or_else(|| tg::error!("missing interpreter in ELF"))?;
 					if interpreter.starts_with("/lib") {
 						if interpreter.contains("musl") {
 							InterpreterRequirement::Default(InterpreterFlavor::Musl)
@@ -1300,6 +1327,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				interpreter,
 				name,
 				needed_libraries,
+				entrypoint,
 			}
 		},
 
@@ -1314,12 +1342,13 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 					.map(extract_filename)
 					.filter(|file_name| name.as_ref().is_none_or(|n| n != file_name))
 					.collect_vec();
-
+				let entrypoint = mach.entry;
 				AnalyzeOutputFileOutput {
 					is_executable,
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
 					name,
 					needed_libraries,
+					entrypoint: Some(entrypoint),
 				}
 			},
 			goblin::mach::Mach::Fat(mach) => {
@@ -1346,6 +1375,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
 					name,
 					needed_libraries,
+					entrypoint: None,
 				}
 			},
 		},

@@ -23,10 +23,12 @@ export const source = () => {
 
 export type Arg = {
 	host?: string;
+	embedWrapper?: boolean | undefined;
 };
 
 export const build = async (arg?: Arg) => {
 	const host = arg?.host ?? (await std.triple.host());
+	const embedWrapper = arg?.embedWrapper ?? true;
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
@@ -48,7 +50,14 @@ export const build = async (arg?: Arg) => {
 		install,
 	};
 
-	const env = std.env.arg(sdk(host), { utils: false });
+	let envArgs: Array<tg.Unresolved<std.env.Arg>> = [
+		sdk(host),
+		{ utils: false },
+	];
+	if (embedWrapper) {
+		envArgs.push({ TANGRAM_LINKER_EMBED_WRAPPER: true });
+	}
+	const env = std.env.arg(...envArgs);
 
 	const output = await autotoolsInternal({
 		bootstrap: true,
