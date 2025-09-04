@@ -7,7 +7,6 @@ import cargoLock from "../Cargo.lock" with { type: "file" };
 import packages from "../packages" with { type: "directory" };
 
 type Arg = {
-	buildToolchain: std.env.EnvObject;
 	build?: string;
 	host?: string;
 	release?: boolean;
@@ -21,7 +20,6 @@ export const workspace = async (
 ): Promise<tg.Directory> => {
 	const {
 		build: build_,
-		buildToolchain,
 		host: host_,
 		release = true,
 		source: source_,
@@ -41,7 +39,6 @@ export const workspace = async (
 
 	return await tg.build(build, {
 		...(await std.triple.rotate({ build: buildTriple, host })),
-		buildToolchain,
 		release,
 		source,
 		verbose,
@@ -53,6 +50,12 @@ export const ccProxy = async (arg: tg.Unresolved<Arg>) =>
 		.build(workspace, arg)
 		.then((dir) => dir.get("bin/cc_proxy"))
 		.then(tg.File.expect);
+
+export const convertManifest = async (arg: tg.Unresolved<Arg>) => 
+		await tg
+			.build(workspace, arg)
+			.then((dir) => dir.get("bin/convert_manifest"))
+			.then(tg.File.expect);
 
 export const ldProxy = async (arg: tg.Unresolved<Arg>) =>
 	await tg
@@ -182,7 +185,6 @@ type RustupManifest = {
 };
 
 type BuildArg = {
-	buildToolchain?: std.env.EnvObject;
 	enableTracingFeature?: boolean;
 	host?: string;
 	release?: boolean;
@@ -220,7 +222,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 
 	// Get the appropriate toolchain directory.
 	// You need a build toolchian AND a host toolchain. These may be the same.
-	let buildToolchain = arg.buildToolchain;
+	let buildToolchain = undefined;
 	let hostToolchain = undefined;
 	let setSysroot = false;
 	if (hostOs === "linux") {
@@ -394,7 +396,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			for item in cc_proxy ld_proxy strip_proxy wrapper ; do
+			for item in cc_proxy convert_manifest ld_proxy strip_proxy wrapper ; do
 				mv $TARGET/$RUST_TARGET${buildType}/tangram_$item $OUTPUT/bin/$item
 			done
 		`,
@@ -415,7 +417,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		.then(tg.Directory.expect);
 };
 
-/* Ensure the passed triples are what we expect, musl on linxu and standard for macOS. */
+/* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */
 const standardizeTriple = (triple: string): string => {
 	const components = std.triple.components(triple);
 	const os = components.os;
@@ -453,10 +455,7 @@ export const test = async () => {
 	const hostArch = std.triple.arch(host);
 	tg.assert(hostArch);
 
-	const buildToolchain = bootstrap.sdk.env(host);
-
 	const nativeWorkspace = await tg.build(workspace, {
-		buildToolchain,
 		host,
 	});
 
@@ -490,13 +489,7 @@ export const testCross = async () => {
 		os: "linux",
 		environment: "gnu",
 	});
-	const buildToolchain = await std.env.arg(
-		await tg.build(gnu.toolchain, { host, target }),
-		{ utils: false },
-	);
-
 	const crossWorkspace = await tg.build(workspace, {
-		buildToolchain,
 		build: host,
 		host: target,
 		release: false,

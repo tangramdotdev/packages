@@ -78,7 +78,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 			? await bootstrap.toolchainTriple(detectedBuild)
 			: detectedBuild;
 	const wrapper = await workspace.wrapper({
-		buildToolchain,
+		// buildToolchain,
 		build,
 		host,
 	});

@@ -20,6 +20,7 @@ export * as triple from "./triple.tg.ts";
 export * as utils from "./utils.tg.ts";
 export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
+export * as bootstrap from "./bootstrap.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
@@ -39,6 +40,7 @@ import * as sdk from "./sdk.tg.ts";
 import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
+import * as embedded from "./wrap/embedded.tg.ts";
 import * as wrap from "./wrap.tg.ts";
 
 export const metadata = {
