@@ -917,14 +917,12 @@ const manifestInterpreterFromWrapArgObject = async (
 	// If this is not a "normal" interpreter run the library path optimization, including any additional paths from the user.
 	if (interpreter.kind !== "normal") {
 		const { executable, libraryPaths, libraryPathStrategy } = arg;
-		if (executable) {
-			interpreter = await optimizeLibraryPaths({
-				executable,
-				interpreter,
-				libraryPaths,
-				libraryPathStrategy,
-			});
-		}
+		interpreter = await optimizeLibraryPaths({
+			executable,
+			interpreter,
+			libraryPaths,
+			libraryPathStrategy,
+		});
 	}
 
 	return manifestInterpreterFromWrapInterpreter(interpreter);
@@ -1263,7 +1261,7 @@ const interpreterFromElf = async (
 };
 
 type OptimizeLibraryPathsArg = {
-	executable: string | tg.Template | tg.File | tg.Symlink;
+	executable?: string | tg.Template | tg.File | tg.Symlink | undefined;
 	interpreter:
 		| wrap.DyLdInterpreter
 		| wrap.LdLinuxInterpreter
@@ -1318,17 +1316,21 @@ const optimizeLibraryPaths = async (
 	}
 
 	// Prepare to map needed libraries to their locations.
-	let neededLibraries = await getInitialNeededLibraries(executable);
+	let neededLibraries = executable
+		? await getInitialNeededLibraries(executable)
+		: new Map();
 
 	// Produce a set of the available library paths as directories with optional subpaths.
 	const libraryPathSet = await createLibraryPathSet(paths);
 
 	// Find any transitively needed libraries in the set and record their location.
-	neededLibraries = await findTransitiveNeededLibraries(
-		executable,
-		libraryPathSet,
-		neededLibraries,
-	);
+	neededLibraries = executable
+		? await findTransitiveNeededLibraries(
+				executable,
+				libraryPathSet,
+				neededLibraries,
+			)
+		: new Map();
 
 	// All optimization strategies required filtering first.
 	const filtereredNeededLibraries: Map<string, DirWithSubpath> = new Map();
