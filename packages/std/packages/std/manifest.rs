@@ -5,6 +5,8 @@ use std::{
 	str::FromStr as _,
 	sync::LazyLock,
 };
+use bytes::Bytes;
+use futures::io::Cursor;
 use tangram_client as tg;
 
 /// The magic number used to indicate an executable has a manifest.
@@ -14,42 +16,64 @@ pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
 pub const VERSION: u64 = 0;
 
 /// The Tangram run entrypoint manifest.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	serde::Serialize,
+	serde::Deserialize,
+	tangram_serialize::Serialize,
+	tangram_serialize::Deserialize,
+)]
 pub struct Manifest {
 	/// The interpreter for the executable.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 0, skip_serializing_if = "Option::is_none")]
 	pub interpreter: Option<Interpreter>,
 
 	/// The executable to run.
+	#[tangram_serialize(id = 1)]
 	pub executable: Executable,
 
 	/// The environment variable mutations to apply.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 2, skip_serializing_if = "Option::is_none")]
 	pub env: Option<tg::mutation::Data>,
 
 	/// The command line arguments to pass to the executable.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 3, skip_serializing_if = "Option::is_none")]
 	pub args: Option<Vec<tg::template::Data>>,
 }
 
 /// An interpreter is another program that is used to launch the executable.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	serde::Serialize,
+	serde::Deserialize,
+	tangram_serialize::Serialize,
+	tangram_serialize::Deserialize,
+)]
 #[serde(tag = "kind")]
 pub enum Interpreter {
 	/// A normal interpreter.
 	#[serde(rename = "normal")]
+	#[tangram_serialize(id = 0)]
 	Normal(NormalInterpreter),
 
 	/// An ld-linux interpreter.
 	#[serde(rename = "ld-linux")]
+	#[tangram_serialize(id = 1)]
 	LdLinux(LdLinuxInterpreter),
 
 	/// An ld-musl interpreter.
 	#[serde(rename = "ld-musl")]
+	#[tangram_serialize(id = 2)]
 	LdMusl(LdMuslInterpreter),
 
 	// A dyld interpreter.
 	#[serde(rename = "dyld")]
+	#[tangram_serialize(id = 3)]
 	DyLd(DyLdInterpreter),
 }
 
@@ -63,74 +87,127 @@ impl Interpreter {
 	}
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	serde::Serialize,
+	serde::Deserialize,
+	tangram_serialize::Serialize,
+	tangram_serialize::Deserialize,
+)]
 pub struct NormalInterpreter {
 	/// The path to the file to exec.
+	#[tangram_serialize(id = 0)]
 	pub path: tg::template::Data,
 
 	/// Arguments for the interpreter.
+	#[tangram_serialize(id = 1)]
 	pub args: Vec<tg::template::Data>,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	serde::Serialize,
+	serde::Deserialize,
+	tangram_serialize::Serialize,
+	tangram_serialize::Deserialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct LdLinuxInterpreter {
 	/// The path to ld-linux.so.
+	#[tangram_serialize(id = 0)]
 	pub path: tg::template::Data,
 
 	/// The paths for the `--library-path` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 1, skip_serializing_if = "Option::is_none")]
 	pub library_paths: Option<Vec<tg::template::Data>>,
 
 	/// The paths for the `--preload` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 2, skip_serializing_if = "Option::is_none")]
 	pub preloads: Option<Vec<tg::template::Data>>,
 
 	/// Any additional arguments.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 3, skip_serializing_if = "Option::is_none")]
 	pub args: Option<Vec<tg::template::Data>>,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	serde::Serialize,
+	serde::Deserialize,
+	tangram_serialize::Serialize,
+	tangram_serialize::Deserialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct LdMuslInterpreter {
 	/// The path to ld-linux.so.
+	#[tangram_serialize(id = 0)]
 	pub path: tg::template::Data,
 
 	/// The paths for the `--library-path` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 1, skip_serializing_if = "Option::is_none")]
 	pub library_paths: Option<Vec<tg::template::Data>>,
 
 	/// The paths for the `--preload` argument.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 2, skip_serializing_if = "Option::is_none")]
 	pub preloads: Option<Vec<tg::template::Data>>,
 
 	/// Any additional arguments.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 3, skip_serializing_if = "Option::is_none")]
 	pub args: Option<Vec<tg::template::Data>>,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	serde::Serialize,
+	serde::Deserialize,
+	tangram_serialize::Serialize,
+	tangram_serialize::Deserialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct DyLdInterpreter {
 	/// The paths for the `DYLD_LIBRARY_PATH` environment variable.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 0, skip_serializing_if = "Option::is_none")]
 	pub library_paths: Option<Vec<tg::template::Data>>,
 
 	/// The paths for the `DYLD_INSERT_LIBRARIES` environment variable.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[tangram_serialize(id = 1, skip_serializing_if = "Option::is_none")]
 	pub preloads: Option<Vec<tg::template::Data>>,
 }
 
 /// An executable launched by the entrypoint.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	serde::Serialize,
+	serde::Deserialize,
+	tangram_serialize::Serialize,
+	tangram_serialize::Deserialize,
+)]
 #[serde(rename_all = "camelCase", tag = "kind", content = "value")]
 pub enum Executable {
 	/// A path to an executable file.
+	#[tangram_serialize(id = 0)]
 	Path(tg::template::Data),
 
 	/// A script which will be rendered to a file and interpreted.
+	#[tangram_serialize(id = 1)]
 	Content(tg::template::Data),
+
+	/// A virtual address.
+	#[tangram_serialize(id = 2)]
+	Address(u64),
 }
 
 impl Manifest {
@@ -211,6 +288,63 @@ impl Manifest {
 		let manifest = serde_json::from_slice(&manifest)?;
 
 		Ok(Some(manifest))
+	}
+
+	pub async fn embed(&self, tg: &impl tg::Handle, file: &tg::File) -> tg::Result<tg::File> {
+		#[cfg(feature = "tracing")]
+		tracing::debug!(?self, "Embedding manifest");
+
+		// Get the stub and wrap files.
+		let stub = TANGRAM_STUB
+			.as_ref()
+			.ok_or_else(|| tg::error!("expected a stub"))?;
+		let wrap = TANGRAM_WRAP
+			.as_ref()
+			.ok_or_else(|| tg::error!("expected a wrap binary"))?;
+
+		// Create the manifest file. TODO: asyncify.
+		let contents = tangram_serialize::to_vec(self)
+			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
+		let contents = std::io::Cursor::new(contents);
+		let blob = tg::Blob::with_reader(tg, contents)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to create blob"))?;
+		let manifest = tg::File::with_contents(blob);
+		manifest
+			.store(tg)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to store manifest file"))?;
+
+		let host = std::env::var("TANGRAM_HOST").map_err(|_| tg::error!("expected TANGRAM_HOST to be set"))?;
+
+		// Run the build.
+		let output = tg::build::build(
+			tg,
+			tg::build::Arg {
+				executable: Some(tg::command::Executable::Artifact(
+					tg::command::ArtifactExecutable {
+						artifact: wrap.clone().into(),
+						path: None,
+					},
+				)),
+				args: vec![
+					tg::Template::with_components(vec![file.clone().into()]).into(),
+					tg::Template::with_components(vec![manifest.into()]).into(),
+					tg::Template::with_components(vec![stub.clone().into()]).into(),
+				],
+				host: Some(host),
+				..tg::build::Arg::default()
+			},
+		)
+		.await
+		.map_err(|source| tg::error!(!source, "failed to embed wrapper"))
+		.inspect_err(|error| eprintln!("{error:#?}"))?
+		.try_unwrap_object()
+		.map_err(|_| tg::error!("expected an object"))?
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("expected a file"))?;
+
+		Ok(output)
 	}
 
 	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_ID` environment variable.
@@ -352,6 +486,7 @@ impl Manifest {
 			Executable::Content(template) => {
 				collect_dependencies_from_template_data(template, &mut dependencies);
 			},
+			Executable::Address(_) => (),
 		}
 
 		// Collect the references from the env.
@@ -469,4 +604,18 @@ static TANGRAM_WRAPPER: LazyLock<tg::File> = LazyLock::new(|| {
 	let id_value = std::env::var("TANGRAM_WRAPPER_ID").expect("TANGRAM_WRAPPER_ID not set");
 	let id = tg::file::Id::from_str(&id_value).expect("TANGRAM_WRAPPER_ID is not a valid file ID");
 	tg::File::with_id(id)
+});
+
+static TANGRAM_STUB: LazyLock<Option<tg::File>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_STUB_ID").ok().map(|id| {
+		let id = id.parse().expect("TANGRAM_STUB_ID is not a valid ID");
+		tg::File::with_id(id)
+	})
+});
+
+static TANGRAM_WRAP: LazyLock<Option<tg::File>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_WRAP_ID").ok().map(|id| {
+		let id = id.parse().expect("TANGRAM_WRAP_ID is not a valid ID");
+		tg::File::with_id(id)
+	})
 });

@@ -2,6 +2,7 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import * as sdk from "../sdk.tg.ts";
 import { injection } from "../wrap/injection.tg.ts";
+import * as embedded from "../wrap/embedded.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
 import * as llvmToolchain from "./llvm.tg.ts";
@@ -13,7 +14,8 @@ export type Arg = {
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
-
+	/** Should the ld proxy embed wrappers? Default: false.  */
+	embedWrapper?: boolean;
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
@@ -80,11 +82,13 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	if (proxyLinker) {
 		const isCross = build !== host;
 		const prefix = isCross ? `${host}-` : ``;
+		const embedWrapper = arg.embedWrapper ?? false;
 
 		// Construct the ld proxy.
 		const ldProxyArtifact = await ldProxy({
 			buildToolchain: buildToolchainDir,
 			build,
+			embedWrapper,
 			linker:
 				arg.linkerExe === undefined
 					? os === "linux" && isLlvm
@@ -256,6 +260,7 @@ export const ccProxy = async (arg: CcProxyArg) => {
 type LdProxyArg = {
 	buildToolchain: tg.Directory;
 	build?: string;
+	embedWrapper?: boolean;
 	interpreter?: tg.File | undefined;
 	interpreterArgs?: Array<tg.Template.Arg>;
 	linker: tg.File | tg.Symlink | tg.Template;
@@ -268,6 +273,12 @@ export const ldProxy = async (arg: LdProxyArg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const buildToolchain = arg.buildToolchain;
+	const embedWrapper = arg.embedWrapper ?? false;
+
+	// Get the embedded workspace
+	let embeddedArtifacts = await embedded.workspace(arg);
+	let wrap = await embeddedArtifacts.get("wrap");
+	let stub = await embeddedArtifacts.get("stub.bin");
 
 	// Obtain wrapper components.
 
@@ -302,7 +313,14 @@ export const ldProxy = async (arg: LdProxyArg) => {
 			arg.interpreter ?? "none",
 		),
 		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
+		TANGRAM_STUB_ID: tg.Mutation.setIfUnset(stub.id),
+		TANGRAM_WRAP_ID: tg.Mutation.setIfUnset(wrap.id),
 	};
+
+	let args = [];
+	if (embedWrapper) {
+		args.push("--tg-embed-wrapper")
+	}
 
 	// Create the linker proxy.
 	return std.wrap(buildLinkerProxy, {
@@ -310,6 +328,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		env,
 		build,
 		host: build,
+		args
 	});
 };
 

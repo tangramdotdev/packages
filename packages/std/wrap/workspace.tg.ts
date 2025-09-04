@@ -51,6 +51,12 @@ export const ccProxy = async (arg: tg.Unresolved<Arg>) =>
 		.then((dir) => dir.get("bin/cc_proxy"))
 		.then(tg.File.expect);
 
+export const convertManifest = async (arg: tg.Unresolved<Arg>) => 
+		await tg
+			.build(workspace, arg)
+			.then((dir) => dir.get("bin/convert_manifest"))
+			.then(tg.File.expect);
+
 export const ldProxy = async (arg: tg.Unresolved<Arg>) =>
 	await tg
 		.build(workspace, arg)
@@ -390,7 +396,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			for item in cc_proxy ld_proxy strip_proxy wrapper ; do
+			for item in cc_proxy convert_manifest ld_proxy strip_proxy wrapper ; do
 				mv $TARGET/$RUST_TARGET${buildType}/tangram_$item $OUTPUT/bin/$item
 			done
 		`,
@@ -411,7 +417,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		.then(tg.Directory.expect);
 };
 
-/* Ensure the passed triples are what we expect, musl on linxu and standard for macOS. */
+/* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */
 const standardizeTriple = (triple: string): string => {
 	const components = std.triple.components(triple);
 	const os = components.os;
@@ -483,7 +489,6 @@ export const testCross = async () => {
 		os: "linux",
 		environment: "gnu",
 	});
-
 	const crossWorkspace = await tg.build(workspace, {
 		build: host,
 		host: target,

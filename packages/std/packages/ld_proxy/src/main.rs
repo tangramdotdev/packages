@@ -75,6 +75,9 @@ struct Options {
 	/// If any NEEDED libraries are missing at the end, should we still produce a wrapper?. Will warn if false, error if true. Default: false.
 	disallow_missing: bool,
 
+	/// If enabled, the wrapper will be embedded into the binary.
+	embed: bool,
+
 	/// The interpreter used by the output executable.
 	interpreter_path: Option<String>,
 
@@ -121,6 +124,9 @@ fn read_options() -> tg::Result<Options> {
 
 	// Get the interpreter path.
 	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH").ok();
+
+	// Get the wrap binary.
+	let mut embed = std::env::var("TANGRAM_LINKER_EMBED_WRAPPER").is_ok();
 
 	// Get additional interpreter args, if any.
 	let interpreter_args = std::env::var("TANGRAM_LINKER_INTERPRETER_ARGS")
@@ -176,6 +182,8 @@ fn read_options() -> tg::Result<Options> {
 				passthrough = true;
 			} else if arg.starts_with("--tg-disallow-missing") {
 				disallow_missing = true;
+			} else if arg.starts_with("--tg-embed-wrapper") {
+				embed = true;
 			} else {
 				command_args.push(arg.clone());
 			}
@@ -223,6 +231,7 @@ fn read_options() -> tg::Result<Options> {
 		command_path,
 		command_args,
 		disallow_missing,
+		embed,
 		interpreter_path,
 		interpreter_args,
 		injection_path,
@@ -441,8 +450,15 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			create_manifest(output_artifact_id, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
 
+		// If requested, emebd the wrapper.
+		let new_wrapper = if options.embed {
+			manifest.embed(&tg, &output_file).await?
+		} else {
+			manifest.write(&tg).await?
+		};
+
 		// Write the manifest to a wrapper.
-		let new_wrapper = manifest.write(&tg).await?;
+
 		let new_wrapper_id = new_wrapper.id();
 		tracing::trace!(?new_wrapper_id);
 
