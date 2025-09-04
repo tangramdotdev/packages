@@ -77,7 +77,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	const unwrappedPerl = tg.File.expect(await perlArtifact.get("bin/perl"));
-
+	
 	const wrappedPerl = await std.wrap(unwrappedPerl, {
 		buildToolchain: env,
 		env: {

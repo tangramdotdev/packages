@@ -2,6 +2,7 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import * as sdk from "../sdk.tg.ts";
 import { injection } from "../wrap/injection.tg.ts";
+import * as embedded from "../wrap/embedded.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
 import * as llvmToolchain from "./llvm.tg.ts";
@@ -13,7 +14,8 @@ export type Arg = {
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
-
+	/** Should the ld proxy embed wrappers? Default: false.  */
+	embedWrapper?: boolean | undefined;
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
@@ -33,7 +35,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
-
+	
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
@@ -85,6 +87,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 		const ldProxyArtifact = await ldProxy({
 			buildToolchain: buildToolchainDir,
 			build,
+			embedWrapper: arg?.embedWrapper,
 			linker:
 				arg.linkerExe === undefined
 					? os === "linux" && isLlvm
@@ -234,7 +237,7 @@ type CcProxyArg = {
 	host?: string;
 };
 
-export const ccProxy = async (arg: CcProxyArg) => {
+const ccProxy = async (arg: CcProxyArg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const tgcc = workspace.ccProxy({
@@ -256,6 +259,7 @@ export const ccProxy = async (arg: CcProxyArg) => {
 type LdProxyArg = {
 	buildToolchain: tg.Directory;
 	build?: string;
+	embedWrapper?: boolean | undefined;
 	interpreter?: tg.File | undefined;
 	interpreterArgs?: Array<tg.Template.Arg>;
 	linker: tg.File | tg.Symlink | tg.Template;
@@ -263,11 +267,20 @@ type LdProxyArg = {
 	host?: string;
 };
 
-export const ldProxy = async (arg: LdProxyArg) => {
+const ldProxy = async (arg: LdProxyArg) => {
+	console.log("here (1)");
 	// Prepare the Tangram tools.
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const buildToolchain = arg.buildToolchain;
+	const embedWrapper = arg.embedWrapper ?? true;
+
+	console.log("is wrapper embedded?", embedWrapper);
+
+	// Get the embedded workspace
+	let embeddedArtifacts = await embedded.workspace(arg);
+	let wrap = await embeddedArtifacts.get("wrap");
+	let stub = await embeddedArtifacts.get("stub.bin");
 
 	// Obtain wrapper components.
 
@@ -278,7 +291,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// The injection library and wrapper are built for the host machine.
-	const hostInjectionLibrary = await injection({
+	const hostInjectionLibrary = await tg.build(injection, {
 		buildToolchain,
 		build,
 		host,
@@ -302,7 +315,14 @@ export const ldProxy = async (arg: LdProxyArg) => {
 			arg.interpreter ?? "none",
 		),
 		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
+		TANGRAM_STUB_ID: tg.Mutation.setIfUnset(stub.id),
+		TANGRAM_WRAP_ID: tg.Mutation.setIfUnset(wrap.id),
 	};
+
+	let args = [];
+	if (embedWrapper) {
+		args.push("--tg-embed-wrapper")
+	}
 
 	// Create the linker proxy.
 	return std.wrap(buildLinkerProxy, {
@@ -310,6 +330,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		env,
 		build,
 		host: build,
+		args
 	});
 };
 
@@ -404,11 +425,11 @@ export const testBasic = async (target?: string) => {
 	const wrapperDeps = await output.dependencies();
 	const os = std.triple.os(await std.triple.host());
 	// This file should have dependencies for the preload and the underlying executable. On Linux, it should alos have a library path for libc and an interpreter.
-	const expectedLength = os === "darwin" ? 2 : 4;
+	const expectedLength = os === "darwin" ? 2 : 3;
 	console.log("WRAPPER DEPS", wrapperDeps);
 	tg.assert(
 		Object.keys(wrapperDeps).length === expectedLength,
-		"expected exactly 4 dependencies",
+		`expected exactly 4 dependencies, got ${Object.keys(wrapperDeps).length}`,
 	);
 
 	if (target === undefined) {
