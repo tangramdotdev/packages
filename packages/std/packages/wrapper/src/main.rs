@@ -56,9 +56,11 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Render the interpreter.
 	let interpreter = handle_interpreter(manifest.interpreter.as_ref(), arg0.as_os_str())?;
-	let interpreter_path = interpreter.as_ref().map(|(path, _)| path).cloned();
 	#[cfg(feature = "tracing")]
-	tracing::debug!(?interpreter_path);
+	{
+		let interpreter_path = interpreter.as_ref().map(|(path, _)| path).cloned();
+		tracing::debug!(?interpreter_path);
+	}
 
 	// Render the executable.
 	let executable_path = match &manifest.executable {
@@ -66,6 +68,7 @@ fn main_inner() -> std::io::Result<()> {
 		manifest::Executable::Content(template) => {
 			content_executable(&tangram_std::render_template_data(template)?)?
 		},
+		manifest::Executable::Address(_) => return Err(std::io::Error::other("invalid manifest")),
 	};
 
 	// Create the command.
