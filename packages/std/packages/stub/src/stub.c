@@ -125,15 +125,15 @@ static inline void* prepare_stack (
 	rlimit_t rlim;
 	ABORT_IF(getrlimit(RLIMIT_STACK, &rlim), "failed to get the stack size");
 
-	// Allocate the stack. On x86_64, the stack "grows down" meaning that the address returned by mmap is actually the lowest possible address for the stack. The "top" of the new stack is the address of one page past it. 
+	// Allocate the stack. On x86_64, the stack "grows down" meaning that the address returned by mmap is actually the lowest possible address for the stack. The "top" of the new stack is the address of one page past it.
 	// TODO: we could use MMAP_GROWSDOWN and get growable stacks. Unsure if this is necessary or even workable.
 	// TODO: should we add a guard page for stack overflow?
 	void* bp = mmap(
-		0, 
-		(size_t)rlim.soft, 
-		PROT_READ | PROT_WRITE, 
-		MAP_ANONYMOUS | MAP_PRIVATE, 
-		-1, 
+		0,
+		(size_t)rlim.soft,
+		PROT_READ | PROT_WRITE,
+		MAP_ANONYMOUS | MAP_PRIVATE,
+		-1,
 		0
 	);
 	void* sp = bp + rlim.soft;
@@ -387,8 +387,8 @@ static LoadedInterpreter load_interpreter(
 			if (p == MAP_FAILED) ABORT("mmap failed");
 			mapped += (memsz - filesz);
 		}
-		
-		// If the page is marked writeable, make sure to zero-out any excess between the file end and the end of the segment. 
+
+		// If the page is marked writeable, make sure to zero-out any excess between the file end and the end of the segment.
 		if (prot & PF_W) {
 			uintptr_t offset = misalignment + itr->p_filesz;
 			uintptr_t length = mapped - itr->p_filesz - misalignment;
@@ -670,6 +670,7 @@ void _stub_start (void *sp) {
 	// Set the entrypoint. TODO: use manifest.
 	stack.auxv[nentry].a_un.a_val = (uintptr_t)base_address + footer.entry;
 	DBG("entrypoint: 0x%lx\n", stack.auxv[nentry].a_un.a_val);
+
 	// Fix program headers.
 	Arena preserved_memory;
 	create_arena(&preserved_memory);
