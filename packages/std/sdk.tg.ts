@@ -803,32 +803,39 @@ export namespace sdk {
 			);
 		}
 
-		if (foundCC instanceof tg.File) {
-			// Inspect the file to see which system it should run on.
-			const metadata = await std.file.executableMetadata(foundCC);
-			if (metadata.format !== "elf" && metadata.format !== "mach-o") {
-				throw new Error(`Unexpected compiler format ${metadata.format}.`);
-			}
-			let detectedArch: string | undefined;
-			if (metadata.format === "elf") {
-				detectedArch = metadata.arch;
-			} else if (metadata.format === "mach-o") {
-				detectedArch = metadata.arches[0] ?? "aarch64";
-			}
+		// If the file is a symlink, resolve it.
+		if (foundCC instanceof tg.Symlink) {
+			foundCC = await foundCC.resolve();
+		}
+		tg.assert(foundCC instanceof tg.File);
+
+		// Inspect the file to see which system it should run on.
+		const metadata = await std.file.executableMetadata(foundCC);
+		let detectedArch: string | undefined;
+		if (metadata.format === "elf") {
+			detectedArch = metadata.arch;
+		} else if (metadata.format === "mach-o") {
+			detectedArch = metadata.arches[0] ?? "aarch64";
+		}
+		if (metadata.format !== "shebang") {
 			const os = metadata.format === "elf" ? "linux" : "darwin";
 			const arch = detectedArch ?? "x86_64";
 			detectedHost = `${arch}-${os}`;
 		}
 
-		// Actually run the compiler on the detected system to ask what host triple it's configured for.
-		const output = await std.build`${cmd} -dumpmachine > $OUTPUT`
-			.bootstrap(true)
-			.env(env_)
-			.host(std.triple.archAndOs(detectedHost))
-			.then(tg.File.expect);
-		const host = (await output.text()).trim();
-		std.triple.assert(host);
-		return host;
+		// For cross compilers, use the host detected.  For host compilers, run the compiler on the detected system to ask what host triple it's configured for.
+		if (isCross) {
+			return detectedHost;
+		} else {
+			const output = await std.build`${cmd} -dumpmachine > $OUTPUT`
+				.bootstrap(true)
+				.env(env_)
+				.host(std.triple.archAndOs(detectedHost))
+				.then(tg.File.expect);
+			const host = (await output.text()).trim();
+			std.triple.assert(host);
+			return host;
+		}
 	};
 
 	/** Retreive the full range of targets an SDK supports. */
