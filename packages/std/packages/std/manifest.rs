@@ -5,8 +5,6 @@ use std::{
 	str::FromStr as _,
 	sync::LazyLock,
 };
-use bytes::Bytes;
-use futures::io::Cursor;
 use tangram_client as tg;
 
 /// The magic number used to indicate an executable has a manifest.
