@@ -324,6 +324,7 @@ static LoadedInterpreter load_interpreter(
 
 	// Create one big mapping for the entire interpreter with PROT_NONE permissions. We'll slice it up in a second.
 	void* base_address = mmap(0, ALIGN(maxvaddr, page_sz), 0, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	DBG("mapped %08lx..%08lx", (uintptr_t)base_address, (uintptr_t)base_address + maxvaddr);
 
 	// Compute the bias, the logical base address of the interpeter.
 	void* bias = base_address - minvaddr;
@@ -357,7 +358,7 @@ static LoadedInterpreter load_interpreter(
 
 		// Compute the file size that we will map in.
 		uintptr_t filesz = ALIGN(itr->p_filesz + misalignment, page_sz);
-		uintptr_t memsz  = ALIGN(itr->p_memsz, page_sz);
+		uintptr_t memsz  = ALIGN(itr->p_memsz + misalignment, page_sz);
 
 		// If there's a non-zero number of bytes in the file, mmap it in.
 		size_t mapped = 0;
@@ -376,9 +377,12 @@ static LoadedInterpreter load_interpreter(
 
 		// If we need more memory than was mapped from the file, allocate it.
 		if (memsz > filesz) {
+			uintptr_t start = (uintptr_t)segment_address + filesz;
+			uintptr_t end = start + (memsz - filesz);
+			DBG("mapping extra memory from %08lx .. %08lx", start, end);
 			void* p = mmap(
-				segment_address + filesz,
-				memsz - filesz,
+				(void*)start,
+				(end - start),
 				prot,
 				MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE,
 				-1,
