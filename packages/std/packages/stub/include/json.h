@@ -343,58 +343,49 @@ static int parse_json_string (JsonParser* parser, String* string) {
 	return ERROR_OK;
 }
 
+static bool is_digit (uint8_t tok) {
+	return tok >= 48 && tok <= 57;
+}
+
 static int parse_json_number(JsonParser* parser, double* value) {
 	// Note to future Mike from Sep. 8 2025: we'll never actually need doubles
 	int sign = 1;
 	uint64_t base  = 0;
 	uint64_t pow10 = 1;
+
+	// Parse the sign if it exists.
 	if (*parser->input.ptr == '-') {
 		EAT_CHAR;
 		sign = -1;
 	}
+
+	// Parse the digits.
 	while(parser->input.len) {
 		uint8_t tok = *parser->input.ptr;
-		switch (tok) {
-			// Parse digits.
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9':
-				EAT_CHAR;
-				base *= 10;
-				base += (tok - 48);
-				if (base >= (1ul << 53ul)) {
-					ABORT("overflow");
-				}
-				break;
-
-			// TODO: we don't really care about fractions or exponents.
-			case '.':
-			case 'e':
-			case 'E':
-				ABORT("only integers supported");
-
-			// Skip whitespace and terminal chars.
-			case ' ':
-			case '\n':
-			case '\t':
-			case ',':
-			case ']':
-			case '}':
-				goto label0;
-
-			// Any other character is an error.
-			default:
-				return ERROR_INVALID_CHAR;
+		if (tok >= 48 && tok <= 57) {
+			EAT_CHAR;
+			base *= 10;
+			base += (tok - 48);
+			if (base >= (1ul << 53ul)) {
+				ABORT("overflow");
+			}
+		} else if (tok == '.' || tok == 'E' || tok == 'e') {
+			ABORT("only integers supported");
+		} else if (
+			tok == ' ' 
+			|| tok == '\n' 
+			|| tok == '\r' 
+			|| tok == '\t' 
+			|| tok == ',' 
+			|| tok == ']' 
+			|| tok == '}'
+		) {
+			break;
+		} else {
+			return ERROR_INVALID_CHAR;
 		}
 	}
-label0:
+
 	// Compute the value.
 	*value = (double)sign * (double)base;
 	return ERROR_OK;
@@ -508,8 +499,8 @@ static int print_json_string (String* string) {
 			case '\\':
 				trace("\\\\");
 				break;
-			case '\b':
-				trace("\\b");
+			case '\r':
+				trace("\\r");
 				break;
 			default: 
 				trace("%c", (char)*itr);
@@ -517,4 +508,28 @@ static int print_json_string (String* string) {
 		}
 	}
 	trace("\"");
+}
+
+static JsonValue* json_get (JsonObject* object, const char* k) {
+	while (object) {
+		if (object->value && cstreq(object->key, k)) {
+			print_json_string(&object->key);
+			trace(" == %s?\n", k);
+			return object->value;
+		}
+		object = object->next;
+	}
+	return NULL;
+}
+
+static uint64_t json_array_len (JsonArray* array) {
+	uint64_t len = 0;
+	while(array) {
+		if (!array->value) {
+			break;
+		}
+		array = array->next;
+		len++;
+	}
+	return len;
 }

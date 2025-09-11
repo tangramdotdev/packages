@@ -1,167 +1,126 @@
-// Minimal syscall interface required by the stub.
 #pragma once
-#include <linux/unistd.h>
-#include <stddef.h>
-#include <stdint.h>
-
-
-#define PROT_READ 		0x1
-#define PROT_WRITE 		0x2
-#define PROT_EXEC 		0x4
-#define MAP_PRIVATE  		0x02
-#define MAP_ANONYMOUS 		0x20
-#define MAP_FIXED		0x10
-#define MAP_FIXED_NOREPLACE 	0x100000
-#define MAP_FAILED		(void*)-1
-
-#define RLIMIT_STACK 3
-
-#define O_RDONLY 0
-#define SEEK_SET 0
-#define SEEK_CUR 1
-#define SEEK_END 2
-
-#define STDOUT_FILENO 1
-#define STDERR_FILENO 2
-
-typedef long off_t;
-typedef unsigned long __rlim_t;
-typedef struct {
-	__rlim_t	soft;
-	__rlim_t	hard;
-} rlimit_t;
-
-typedef struct {
-	uint8_t buf[256];
-} stat_t;
-
 __attribute__((naked))
-static long write (int fd, const void *buf, size_t count) {
-	asm volatile(
-		"syscall\n\t"
-		"ret\n\t" 
-		:
-		: "a"(__NR_write), "D"((long)fd), "S"(buf), "d"(count)
-		: "rcx", "r11", "memory"
-	);
-}
-
-__attribute__((naked))
-static int open (const char* path, int mode) {
-	asm volatile(
-		"syscall\n\t"
-		"ret\n\t"
-		:
-		: "a"(__NR_open), "D"(path), "S"(mode)
-		: "rcx", "r11", "memory"
-	);
-}
-
-__attribute__((naked))
-static int close(int fd) {
+static long syscall1 (
+	long nr,
+	long arg1
+) {
+	register long rax asm("rax") = nr;
+	register long rdi asm("rdi") = arg1;
 	asm volatile (
 		"syscall\n\t"
-		"ret"
+		"ret\n\t"
 		: 
-		: "a"(__NR_close), "D"(fd) 
+		: "a"(rax), "D"(rdi)
 		: "rcx", "r11", "memory"
 	);
 }
 
 __attribute__((naked))
-static long lseek (int fd, off_t offset, int whence) {
-	asm volatile("syscall;ret" : : "a"(__NR_lseek), "D"((long)fd), "S"(offset), "d"((long)whence): "rcx", "r11", "memory");
-}
-
-__attribute__((naked))
-static int getrlimit (int resource, rlimit_t* rlim) {
-	asm volatile(
-		"syscall\n\t"
-		"ret\n\t"
-		:
-		: "a"(__NR_getrlimit)
-		: "rcx", "r11", "memory"
-	);
-}
-
-__attribute__((naked))
-static int pread64 (int fd, void* buf, size_t count, off_t offset) {
-	register uint64_t r10 __asm__("r10") = offset;
-	asm volatile(
-		"syscall\n\t"
-		"ret\n\t"
-		:
-		: "a"(__NR_pread64), "D"(fd), "S"(buf), "d"(count), "r"(r10)
-		: "rcx", "r11", "memory"
-	);
-}
-
-__attribute__((naked))
-static void exit (int status)
-{
-	asm volatile("syscall": : "a"(__NR_exit), "D"(status));
-	__builtin_unreachable();
-}
-
-__attribute__((naked))
-static void* mmap(
-	void* 		addr,
-	uint64_t 	length,
-	uint64_t 	prot,
-	uint64_t 	flags,
-	int64_t 	fd,
-	uint64_t 	offset
+static long syscall2 (
+	long nr,
+	long arg1, 
+	long arg2
 ) {
-	register uint64_t r10 __asm__("r10") = flags;
-	register int64_t r8 __asm__("r8") = fd;
-	register uint64_t r9 __asm__("r9") = offset;
-	asm volatile(
-		"syscall\n\t"
-		"ret\n\t"
-		:
-		: "a"(__NR_mmap),
-		  "D"(addr),
-		  "S"(length),
-		  "d"(prot),
-		  "r"(r10),
-		  "r"(r8),
-		  "r"(r9)
-		: "memory"
-	);
-}
-
-__attribute__((naked))
-static int munmap(
-	void*		addr,
-	uint64_t	len
-) {
+	register long rax asm("rax") = nr;
+	register long rdi asm("rdi") = arg1;
+	register long rsi asm("rsi") = arg2;
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		:
-		: "a"(__NR_munmap), "D"(addr), "S"(len)
-		: "memory"
+		: 
+		: "a"(rax), "D"(rdi), "S"(rsi)
+		: "rcx", "r11", "memory"
 	);
 }
 
 __attribute__((naked))
-static char* getcwd(char* buf, size_t size) {
+static long syscall3 (
+	long nr,
+	long arg1, 
+	long arg2,
+	long arg3
+) {
+	register long rax asm("rax") = nr;
+	register long rdi asm("rdi") = arg1;
+	register long rsi asm("rsi") = arg2;
+	register long rdx asm("rdx") = arg3;
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		:
-		: "a"(__NR_getcwd), "D"(buf), "S"(size)
-		: "memory"
+		: 
+		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx)
+		: "rcx", "r11", "memory"
 	);
 }
 
 __attribute__((naked))
-int stat (const char* pathname, stat_t* statbuf) {
-asm volatile (
+static long syscall4 (
+	long nr,
+	long arg1, 
+	long arg2,
+	long arg3,
+	long arg4
+) {
+	register long rax asm("rax") = nr;
+	register long rdi asm("rdi") = arg1;
+	register long rsi asm("rsi") = arg2;
+	register long rdx asm("rdx") = arg3;
+	register long r10 asm("r10") = arg4;
+	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		:
-		: "a"(__NR_stat), "D"(pathname), "S"(statbuf)
-		: "memory"
+		: 
+		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx), "r"(r10)
+		: "rcx", "r11", "memory"
+	);
+}
+
+__attribute__((naked))
+static long syscall5 (
+	long nr,
+	long arg1, 
+	long arg2,
+	long arg3,
+	long arg4, 
+	long arg5
+) {
+	register long rax asm("rax") = nr;
+	register long rdi asm("rdi") = arg1;
+	register long rsi asm("rsi") = arg2;
+	register long rdx asm("rdx") = arg3;
+	register long r10 asm("r10") = arg4;
+	register long r8 asm("r8") = arg5;
+	asm volatile (
+		"syscall\n\t"
+		"ret\n\t"
+		: 
+		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx), "r"(r10), "r"(r8)
+		: "rcx", "r11", "memory"
+	);
+}
+
+__attribute__((naked))
+static long syscall6 (
+	long nr,
+	long arg1, 
+	long arg2,
+	long arg3,
+	long arg4, 
+	long arg5,
+	long arg6
+) {
+	register long rax asm("rax") = nr;
+	register long rdi asm("rdi") = arg1;
+	register long rsi asm("rsi") = arg2;
+	register long rdx asm("rdx") = arg3;
+	register long r10 asm("r10") = arg4;
+	register long r8 asm("r8") = arg5;
+	register long r9 asm("r9") = arg6;
+	asm volatile (
+		"syscall\n\t"
+		"ret\n\t"
+		: 
+		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx), "r"(r10), "r"(r8), "r"(r9)
+		: "rcx", "r11", "memory"
 	);
 }

@@ -60,3 +60,27 @@ static bool streq (String a, String b) {
 	}
 	return true;
 }
+
+static bool cstreq (String s, const char* cstr) {
+	for (int i = 0; i < s.len; i++) {
+		if (s.ptr[i] != cstr[i]) {
+			return false;
+		}
+	}
+	if (cstr[s.len]) {
+		return false;
+	}
+	return true;
+}
+
+static bool starts_with (String a, String prefix) {
+	if (a.len < prefix.len) {
+		return false;
+	}
+	for (size_t n = 0; n < prefix.len; n++) {
+		if (a.ptr[n] != prefix.ptr[n]) {
+			return false;
+		}
+	}
+	return true;
+}
