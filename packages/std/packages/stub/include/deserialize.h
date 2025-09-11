@@ -11,7 +11,6 @@
 
 enum Error {
 	OK,
-	OVERFLOW,
 	UNEXPECTED_EOF,
 	UNKNOWN_KIND,
 	EXPECTED_UNIT,
@@ -115,7 +114,6 @@ typedef struct {
 static const char* deserializer_error (int ret) {
 	switch(ret) {
 		case OK: 		return "ok";
-		case OVERFLOW: 		return "overflow";
 		case UNEXPECTED_EOF: 	return "unexpected eof";
 		case UNKNOWN_KIND: 	return "unknown kind";
 		case EXPECTED_UNIT: 	return "expected unit";
@@ -222,8 +220,7 @@ static inline int deserialize_option (Deserializer* de, Option* value) {
 			return OK;
 		}
 		case 1: {
-			*value = (Value*)alloc(de->arena, sizeof(Value), _Alignof(Value));
-			if (!*value) { return OVERFLOW; }
+			*value = ALLOC(de->arena, Value);
 			return deserialize_value(de, *value);
 		}
 		default: return EXPECTED_OPTION;
@@ -236,9 +233,8 @@ static inline int deserialize_array (Deserializer* de, Array* value) {
 	if (ret) { return ret; }
 	
 	// Allocate space for the array itself.
-	value->data = (Value*)alloc(de->arena, value->len * sizeof(Value), _Alignof(Value));
+	value->data = ALLOC_N(de->arena, value->len, Value);
 	memset(value->data, 0, sizeof(Value) * value->len);
-	if (!value->data) { return OVERFLOW; }
 
 	// Recurse.
 	Value* itr = value->data;
@@ -256,8 +252,7 @@ static inline int deserialize_map (Deserializer* de, Map* value) {
 	if (ret) { return ret; }
 
 	// Allocate space for entries.
-	value->keys = (Value*)alloc(de->arena, 2 * value->len * sizeof(Value), _Alignof(Value));
-	if(!value->keys) { return OVERFLOW; }
+	value->keys = ALLOC_N(de->arena, 2 * value->len, Value);
 	value->vals = value->keys + value->len;
 
 	// Deserialize entries.
@@ -278,8 +273,7 @@ static inline int deserialize_struct (Deserializer* de, Struct* value) {
 	if (ret) { return ret; }
 
 	// Allocate space for fields.
-	value->fields = (Field*)alloc(de->arena, sizeof(Field) * value->len, _Alignof(Field));
-	if (!value->fields) { return OVERFLOW; }
+	value->fields = ALLOC_N(de->arena, value->len, Field);
 
 	// Deserialize fields.
 	Field* itr = value->fields;
@@ -291,8 +285,7 @@ static inline int deserialize_struct (Deserializer* de, Struct* value) {
 		itr->id = de->data[de->cursor++];
 
 		// Allocate space for the value.
-		itr->value = (Value*)alloc(de->arena, sizeof(Value), _Alignof(Value));
-		if (!itr->value) { return OVERFLOW; }
+		itr->value = ALLOC(de->arena, Value);
 
 		// Deserialize the value.
 		ret = deserialize_value(de, itr->value);
@@ -308,8 +301,7 @@ static inline int deserialize_enum (Deserializer* de, Enum* value) {
 	value->id = de->data[de->cursor++];
 
 	// Allocate space for the value.
-	Value* v = (Value*)alloc(de->arena, sizeof(Value), _Alignof(Value));
-	if (!v) { return OVERFLOW; }
+	Value* v = ALLOC(de->arena, Value);
 
 	// Deserialize the value.
 	int ret = deserialize_value(de, v);

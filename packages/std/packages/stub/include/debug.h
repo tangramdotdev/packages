@@ -14,6 +14,7 @@ static void __putc (int ch, void*) {
 
 // printf/snprintf/etc.
 #define NANOPRINTF_IMPLEMENTATION
+#define NANOPRINTF_VISIBILITY_STATIC
 #include "nanoprintf.h"
 #undef NANOPRINTF_IMPLEMENTATION
 

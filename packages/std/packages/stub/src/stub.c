@@ -545,6 +545,8 @@ static int read_and_process_manifest (
 	if (pread64(fd, footer, sizeof(Footer), offset - sizeof(Footer)) != sizeof(Footer)) {
 		ABORT("failed to read footer");
 	}
+
+	// Check the magic number.
 	int matches = footer->magic[0] == 't'
 		&& footer->magic[1] == 'a'
 		&& footer->magic[2] == 'n'
@@ -552,11 +554,9 @@ static int read_and_process_manifest (
 		&& footer->magic[4] == 'r'
 		&& footer->magic[5] == 'a'
 		&& footer->magic[6] == 'm'
-		&& footer->magic[7] == '\0'
-		&& footer->version == 1;
+		&& footer->magic[7] == '\0';
 	if (!matches) {
-		DBG("footer mismatch: offset = %d, footer*= %p\n", offset, &footer->magic[0]);
-		BREAK
+		DBG("invalid magic number: %s", footer->magic);
 		close(fd);
 		return 0;
 	}
@@ -565,6 +565,9 @@ static int read_and_process_manifest (
 	char* data = (char*)alloc(arena, footer->size, 1);
 	size_t count = 0;
 	offset -= (sizeof(Footer) + footer->size);
+	if (footer->version == 0) {
+		offset += 8;
+	}
 	while (count < footer->size) {
 		long amt = pread64(fd, (void*)(data + count), footer->size - count, offset);
 		if (amt < 0) {
@@ -581,7 +584,7 @@ static int read_and_process_manifest (
 	close(fd);
 
 	// Parse the manifest.
-	parse_manifest(data, footer->size, manifest, arena);
+	parse_manifest(arena, manifest, (uint8_t*)data, footer->size);
 
 	return 1;
 }
@@ -664,16 +667,32 @@ void _stub_start (void *sp) {
 	// Compute the base address.
 	void* base_address = (void*)(((uintptr_t)phdr) - (uintptr_t)phdr->p_vaddr);
 
-	// Process the manifest..
+	// Process the manifest.
 	Manifest* manifest = ALLOC(&arena, Manifest);
 	if (!read_and_process_manifest(&arena, &stack, manifest, &footer)) {
-		DBG("manifest failed to parse");
-		manifest = NULL;
+		ABORT("failed to parse manifest");
+	}
+
+	// If "--tangram-print-manifest" was passed to the stub, dump the manifest and exit.
+	String arg = STRING_LITERAL("--tangram-print-manifest");
+	for (int i = 1; i < stack.argc; i++) {
+		if (cstreq(arg, stack.argv[i])) {
+			print_manifest(manifest);
+			exit(0);
+		}
 	}
 
 	// Set the entrypoint. TODO: use manifest.
-	stack.auxv[nentry].a_un.a_val = (uintptr_t)base_address + footer.entry;
-	DBG("entrypoint: 0x%lx\n", stack.auxv[nentry].a_un.a_val);
+	if (manifest->entrypoint) {
+		stack.auxv[nentry].a_un.a_val = (uintptr_t)base_address + manifest->entrypoint;
+	} else if (footer.version == 1) {
+		// TODO: remove this.
+		stack.auxv[nentry].a_un.a_val = (uintptr_t)base_address + footer.entry;
+	} else if (manifest->executable.ptr) {
+		execve(manifest->executable.ptr, stack.argv, stack.envp);
+	} else {
+		ABORT("missing entrypoint");
+	}
 
 	// Fix program headers.
 	Arena preserved_memory;
