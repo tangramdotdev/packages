@@ -139,6 +139,14 @@ static String lookup (
 	return empty;
 }
 
+static String clookup (
+	Table* table,
+	const char* key
+) {
+	String key_ = STRING_LITERAL(key);
+	return lookup(table, key_);
+}
+
 static void clear (
 	Table* table
 ) {

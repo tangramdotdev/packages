@@ -513,8 +513,6 @@ static int print_json_string (String* string) {
 static JsonValue* json_get (JsonObject* object, const char* k) {
 	while (object) {
 		if (object->value && cstreq(object->key, k)) {
-			print_json_string(&object->key);
-			trace(" == %s?\n", k);
 			return object->value;
 		}
 		object = object->next;

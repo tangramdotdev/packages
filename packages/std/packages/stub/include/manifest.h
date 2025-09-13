@@ -17,6 +17,8 @@ typedef struct {
 	String*	preloads;
 	size_t	argc;
 	String* argv;
+	size_t	interp_argc;
+	String*	interp_argv;
 	Table	env;
 } Manifest;
 

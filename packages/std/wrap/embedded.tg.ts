@@ -152,6 +152,9 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			# Compile the stub.
 			$CC_${tripleToEnvVar(target)}			\
 				${source}/stub/src/stub.c			\
+				${source}/stub/src/manifest.c		\
+				${source}/stub/src/manifest/bin.c	\
+				${source}/stub/src/manifest/json.c	\
 				${source}/stub/src/${arch}/start.s	\
 				-I${source}/stub/include			\
 				-Wl,-T${source}/stub/link.ld		\
@@ -164,6 +167,26 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 				-Wl,--oformat=binary				\
 				-DDEBUG=1							\
 				-o $OUTPUT/stub.bin ${releaseArgs} ${verboseArgs}
+			
+			# Compile the executable stub.
+			$CC_${tripleToEnvVar(target)}			\
+				${source}/stub/src/stub.c			\
+				${source}/stub/src/manifest.c		\
+				${source}/stub/src/manifest/bin.c	\
+				${source}/stub/src/manifest/json.c	\
+				${source}/stub/src/${arch}/start.s	\
+				-I${source}/stub/include			\
+				-Wl,-T${source}/stub/link.ld		\
+				-ffreestanding						\
+				-fno-stack-protector				\
+				-fno-asynchronous-unwind-tables		\
+				-fPIC								\
+				-static								\
+				-static-libgcc						\
+				-nostdlib							\
+				-DDEBUG=1							\
+				-g									\
+				-o $OUTPUT/stub.exe ${releaseArgs} ${verboseArgs}
 			
 			# Compile the wrap binary.
 			$CC_${tripleToEnvVar(host)}		\
