@@ -12,10 +12,14 @@
 #define MAP_FIXED		0x10
 #define MAP_FIXED_NOREPLACE 	0x100000
 #define MAP_FAILED		(void*)-1
-
 #define RLIMIT_STACK 3
+#define GRND_NONBLOCK 0x01
 
-#define O_RDONLY 0
+#define O_RDONLY     00
+#define O_WRONLY     01
+#define O_RDWR	     02
+#define O_CREAT	   0100
+
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
@@ -40,8 +44,8 @@ static inline long write (int fd, const void *buf, size_t count) {
 	return syscall3(__NR_write, (long)fd, (long)buf, (long)count);
 }
 
-static inline int open (const char* path, int mode) {
-	return (int)syscall2(__NR_open, (long)path, (long)mode);
+static inline int open (const char* path, int flags, int mode) {
+	return (int)syscall3(__NR_open, (long)path, (long)flags, (long)mode);
 }
 
 static inline int close (int fd) {
@@ -97,6 +101,10 @@ static inline int stat (const char* pathname, stat_t* statbuf) {
 	return (int)syscall2(__NR_stat, (long)pathname, (long)statbuf);
 }
 
-// static inline int execve (const char* pathname, const char** const argv, const char** envp) {
-// 	return (int)syscall3(__NR_execve, (long)pathname, (long)argv, (long)envp);
-// }
+static inline long getrandom (void *buf, size_t buflen, unsigned int flags) {
+	return (long)syscall3(__NR_getrandom, (long)buf, (long)buflen, (long)flags);
+}
+
+static inline int execve (char* pathname, char** const argv, char** envp) {
+	return (int)syscall3(__NR_execve, (long)pathname, (long)argv, (long)envp);
+}

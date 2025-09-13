@@ -1,11 +1,13 @@
 use std::{
 	collections::BTreeMap,
-	io::{Read, Seek},
-	path::Path,
+	io::{Read, Seek, Write},
+	path::{Path, PathBuf},
 	str::FromStr as _,
 	sync::LazyLock,
 };
 use tangram_client as tg;
+
+use crate::CLOSEST_ARTIFACT_PATH;
 
 /// The magic number used to indicate an executable has a manifest.
 pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
@@ -300,49 +302,70 @@ impl Manifest {
 			.as_ref()
 			.ok_or_else(|| tg::error!("expected a wrap binary"))?;
 
-		// Create the manifest file. TODO: asyncify.
-		let contents = tangram_serialize::to_vec(self)
-			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
-		let contents = std::io::Cursor::new(contents);
-		let blob = tg::Blob::with_reader(tg, contents)
-			.await
-			.map_err(|source| tg::error!(!source, "failed to create blob"))?;
-		let manifest = tg::File::with_contents(blob);
-		manifest
-			.store(tg)
-			.await
-			.map_err(|source| tg::error!(!source, "failed to store manifest file"))?;
-
-		let host = std::env::var("TANGRAM_HOST").map_err(|_| tg::error!("expected TANGRAM_HOST to be set"))?;
-
-		// Run the build.
-		let output = tg::build::build(
-			tg,
-			tg::build::Arg {
-				executable: Some(tg::command::Executable::Artifact(
-					tg::command::ArtifactExecutable {
-						artifact: wrap.clone().into(),
-						path: None,
-					},
-				)),
-				args: vec![
-					tg::Template::with_components(vec![file.clone().into()]).into(),
-					tg::Template::with_components(vec![manifest.into()]).into(),
-					tg::Template::with_components(vec![stub.clone().into()]).into(),
-				],
-				host: Some(host),
-				..tg::build::Arg::default()
-			},
-		)
+		tg::cache::cache(tg, tg::cache::Arg {
+			artifacts: vec![file.id().into(), stub.id().into(), wrap.id().into()]
+		})
 		.await
-		.map_err(|source| tg::error!(!source, "failed to embed wrapper"))
-		.inspect_err(|error| eprintln!("{error:#?}"))?
-		.try_unwrap_object()
-		.map_err(|_| tg::error!("expected an object"))?
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("expected a file"))?;
+		.map_err(|source| tg::error!(!source, "failed to cache artifacts"))?;
 
-		Ok(output)
+		// Get their paths on disk.
+		let path: PathBuf = CLOSEST_ARTIFACT_PATH.clone().into();
+		let file = path.join(file.id().to_string());
+		let stub = path.join(stub.id().to_string());
+		let wrap = path.join(wrap.id().to_string());
+		
+		// Create a temp file for the manifest.
+		let mut manifest = tempfile::NamedTempFile::new().map_err(|source| tg::error!(!source, "failed to get temp file"))?;
+		let output = "/tmp/__wrap_output__";
+
+		// Create the manifest file. TODO: asyncify.
+		let contents = serde_json::to_vec(self)
+			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
+		manifest.as_file_mut().write_all(&contents).map_err(|source| tg::error!(!source, "failed to write manifest"))?;
+
+		// Run the command.
+		let success = std::process::Command::new(wrap)
+			.arg(file)
+			.arg(manifest.path())
+			.arg(stub)
+			.arg(output)
+			.stdout(std::process::Stdio::inherit())
+			.stderr(std::process::Stdio::inherit())
+			.output()
+			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?
+			.status
+			.success();
+		if !success {
+			return Err(tg::error!("failed to run the command"));
+		}
+
+		let bytes = std::fs::read(output).map_err(|source| tg::error!(!source, "failed to read the output"))?;
+		let cursor = std::io::Cursor::new(bytes);
+		let blob = tg::Blob::with_reader(tg, cursor).await.map_err(|source| tg::error!(!source, "failed to create blob"))?;
+
+		// Obtain the dependencies from the manifest to add to the file.
+		// NOTE: We know the wrapper file has no dependencies, so there is no need to merge.
+		let dependencies = self.dependencies();
+		let dependencies = if dependencies.is_empty() {
+			None
+		} else {
+			Some(dependencies)
+		};
+
+		// Create a file with the new blob and references.
+		let mut output_file = tg::File::builder(blob).executable(true);
+		if let Some(dependencies) = dependencies {
+			output_file = output_file.dependencies(dependencies);
+		}
+		let output_file = output_file.build();
+
+		#[cfg(feature = "tracing")]
+		{
+			let file_id = output_file.id();
+			tracing::trace!(?file_id, "created wrapper file");
+		}
+
+		Ok(output_file)
 	}
 
 	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_ID` environment variable.

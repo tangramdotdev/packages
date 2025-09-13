@@ -84,3 +84,78 @@ static bool starts_with (String a, String prefix) {
 	}
 	return true;
 }
+
+static bool cstarts_with (String a, const char* prefix) {
+	for (size_t n = 0; n < a.len; n++) {
+		if (!prefix[n]) {
+			return false;
+		}
+		if (a.ptr[n] != prefix[n]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static String join (Arena* arena, String separator, String* strings, size_t nstrings) {
+	size_t len = 0;
+	for (size_t n = 0; n < nstrings; n++) {
+		len += strings[n].len;
+		if (n != (nstrings - 1)) {
+			len += separator.len;
+		}
+	}
+
+	String out = {0};
+	out.ptr = ALLOC_N(arena, len + 1, uint8_t);
+
+	for (size_t n = 0; n < nstrings; n++) {
+		if (strings[n].ptr) {
+			memcpy(out.ptr + out.len, strings[n].ptr, strings[n].len);
+			out.len += strings[n].len;
+			if (separator.ptr && n != (nstrings - 1)) {
+				memcpy(out.ptr + out.len, separator.ptr, separator.len);
+				out.len += separator.len;
+			}
+		}
+	}
+
+	return out;
+}
+
+static void reverse (String* s) {
+	int i = 0;
+	int j = s->len - 1;
+	while (i < j) {
+		char buf = s->ptr[i];
+		s->ptr[i] = s->ptr[j];
+		s->ptr[j] = buf;
+		i++;
+		j--;
+	}
+}
+
+static void double_to_string (Arena* arena, double d, String* s) {
+	s->ptr = ALLOC_N(arena, 64, uint8_t);
+	char sign = d >= 0 ? 0 : '-';
+
+	double mag = d >= 0 ? d : -d;
+	uint64_t whole = (uint64_t)mag;
+	double frac = d - (double)whole;
+	ABORT_IF(frac != 0, "only integer numbers are supported");
+	
+	do {
+		"012345689"[whole % 10];
+		whole /= 10;
+	} while (whole != 0);
+
+	if (sign) {
+		s->ptr[s->len++] = sign;
+	}
+
+	reverse(s);
+}
+
+static String clone_str (Arena* arena, String s) {
+	ABORT("todo");
+}

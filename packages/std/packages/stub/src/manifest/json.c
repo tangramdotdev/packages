@@ -1,18 +1,22 @@
 #include "json.h"
 #include "manifest.h"
 
+
 // Forward decls.
 static void create_interpreter (Cx* cx, JsonValue* interpeter);
 static void create_executable (Cx* cx, JsonValue* executable);
 static void create_env (Cx* cx, JsonValue* env);
 static void create_args (Cx* cx, JsonValue* args);
-static void create_preloads (Cx* cx, JsonValue* value) ;
+static void create_preloads (Cx* cx, JsonValue* value);
+static void create_interp_args (Cx* cx, JsonValue* value);
 static void create_loader_paths (Cx* cx, JsonValue* value); 
 static void apply_env(Cx* cx, JsonObject* map);
 static void apply_mutation_to_key (Cx* cx, String* key, JsonObject* mutation);
 static void apply_value_to_key (Cx* cx, String* key, JsonValue* val);
 static void render_template (Cx* cx, JsonValue* template, String* dst);
+static void render_template_to_temp (Cx* cx, JsonValue* template);
 static String render_value (Cx* cx, JsonValue* value);
+static String render_object (Cx* cx, JsonValue* value);
 
 void create_manifest_from_json (Cx* cx, JsonValue* value) {
 	// Validate.
@@ -42,10 +46,9 @@ static void create_interpreter (Cx* cx, JsonValue* value) {
 	JsonValue* kind = json_get(object, "kind");
 	ABORT_IF(!kind, "expected a kind string");
 	ABORT_IF(kind->kind != JSON_STRING, "expected a string");
-	if (cstreq(kind->value._string, "normal")) {
-		ABORT("todo: normal interpreter");
-	} else if (
-		cstreq(kind->value._string, "ld-musl")
+	if (
+		cstreq(kind->value._string, "normal")
+		|| cstreq(kind->value._string, "ld-musl")
 		|| cstreq(kind->value._string, "ld-musl")
 	) {
 		// ok
@@ -54,14 +57,16 @@ static void create_interpreter (Cx* cx, JsonValue* value) {
 	} else {
 		ABORT("unknown interpreter kind");
 	}
+
 	JsonValue* path = json_get(object, "path");
 	JsonValue* library_paths = json_get(object, "libraryPaths");
 	JsonValue* preloads = json_get(object, "preloads");
-	
+	JsonValue* args = json_get(object, "args");
 	ABORT_IF(!path, "expected an interpreter path");
 	render_template(cx, path, &cx->manifest->interpreter);
 	create_loader_paths(cx, library_paths);
 	create_preloads(cx, preloads);
+	create_interp_args(cx, args);
 }
 
 static void create_loader_paths (Cx* cx, JsonValue* value) {
@@ -108,6 +113,23 @@ static void create_preloads (Cx* cx, JsonValue* value) {
 	}
 }
 
+static void create_interp_args (Cx* cx, JsonValue* value) {
+	if (!value) {
+		return;
+	}
+	ABORT_IF(value->kind != JSON_ARRAY, "expected an array");
+	JsonArray* array = &value->value._array;
+	uint64_t len = json_array_len(array);
+	cx->manifest->interp_argc = len;
+	cx->manifest->interp_argv = ALLOC_N(cx->arena, len, String);
+	for(int n = 0; n < len; n++) {
+		JsonValue* itr = array->value;
+		String* arg = cx->manifest->interp_argv + n;
+		render_template(cx, itr, arg);
+		array = array->next;
+	}
+}
+
 static void create_executable (Cx* cx, JsonValue* value) {
 	ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
 	JsonObject* object = &value->value._object;
@@ -119,7 +141,8 @@ static void create_executable (Cx* cx, JsonValue* value) {
 		value = json_get(object, "value");
 		render_template(cx, value, &cx->manifest->executable);
 	} else if (cstreq(kind->value._string, "content")) {
-		ABORT("todo: content");
+		value = json_get(object, "value");
+		render_template_to_temp(cx, value);
 	} else if (cstreq(kind->value._string, "address")) {
 		value = json_get(object, "value");
 		ABORT_IF(value->kind != JSON_NUMBER, "expected a number");
@@ -144,8 +167,8 @@ static void create_env (Cx* cx, JsonValue* value) {
 		ABORT_IF(!value, "expected a value");
 		ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
 		apply_env(cx, &value->value._object);
-	} else if (cstreq(kind->value._string, "merge")) {
-		ABORT("todo: merge envs");
+	} else {
+		ABORT("unsupported mutation type");
 	}
 }
 
@@ -233,6 +256,83 @@ static void apply_mutation_to_key (Cx* cx, String* key, JsonObject* mutation) {
 			JsonValue* value = json_get(mutation, "value");
 			apply_value_to_key(cx, key, value);
 		}
+	} else if (cstreq(kind->value._string, "prepend")) {
+		JsonValue* values = json_get(mutation, "values");
+		ABORT_IF(values->kind != JSON_ARRAY, "expected an array");
+		JsonArray* array = &values->value._array;
+		size_t len = json_array_len(array);
+		String* ss = ALLOC_N(cx->arena, len + 1, String);
+		ss[0] = lookup(&cx->manifest->env, *key);
+		for (size_t n = 0; n < len; n++) {
+			JsonValue* s = array[n].value;
+			ABORT_IF(s->kind != JSON_STRING, "expected a string");
+			ss[n + 1] = s->value._string;
+		}
+		String s = STRING_LITERAL(":");
+		insert(cx->arena, &cx->manifest->env, *key, join(cx->arena, s, ss, len + 1));
+	} else if (cstreq(kind->value._string, "append")) {
+		String existing = lookup(&cx->manifest->env, *key);
+		JsonValue* values = json_get(mutation, "values");
+		ABORT_IF(values->kind != JSON_ARRAY, "expected an array");
+		JsonArray* array = &values->value._array;
+		size_t len = json_array_len(array);
+		String* ss = ALLOC_N(cx->arena, len + 1, String);
+		
+		for (size_t n = 0; n < len; n++) {
+			JsonValue* s = array[n].value;
+			ABORT_IF(s->kind != JSON_STRING, "expected a string");
+			ss[n] = s->value._string;
+		}
+
+		ss[len] = lookup(&cx->manifest->env, *key);
+		if (ss[len].ptr) {
+			len++;
+		}
+
+		String s = STRING_LITERAL(":");
+		insert(cx->arena, &cx->manifest->env, *key, join(cx->arena, s, ss, len));
+	} else if (cstreq(kind->value._string, "prefix")) {
+		String a = lookup(&cx->manifest->env, *key);
+		JsonValue* template = json_get(mutation, "template");
+		JsonValue* separator = json_get(mutation, "separator");
+
+		// Render the template.
+		ABORT_IF(!template, "expected a template");
+		String b = {0};
+		render_template(cx, template, &b);
+
+		// Get the separator if it exists.
+		String s = {0};
+		if (separator) {
+			ABORT_IF(separator->kind != JSON_STRING, "expected a string");
+			s = separator->value._string;
+		}
+
+		// Update the env.
+		String ss[2] = { b, a };
+		insert(cx->arena, &cx->manifest->env, *key, join(cx->arena, s, ss, 2));
+	} else if (cstreq(kind->value._string, "suffix")) {
+		String a = lookup(&cx->manifest->env, *key);
+		JsonValue* template = json_get(mutation, "template");
+		JsonValue* separator = json_get(mutation, "separator");
+
+		// Render the template.
+		ABORT_IF(!template, "expected a template");
+		String b = {0};
+		render_template(cx, template, &b);
+
+		// Get the separator if it exists.
+		String s = {0};
+		if (separator) {
+			ABORT_IF(separator->kind != JSON_STRING, "expected a string");
+			s = separator->value._string;
+		}
+
+		// Update the env.
+		String ss[2] = { a, b };
+		insert(cx->arena, &cx->manifest->env, *key, join(cx->arena, s, ss, 2));
+	} else if (cstreq(kind->value._string, "suffix")) {
+		ABORT("merge mutations are not supported for environment variables");
 	} else {
 		ABORT("unsupported mutation type");
 	}
@@ -282,6 +382,65 @@ static void render_template (Cx* cx, JsonValue* template, String* rendered) {
 	}
 }
 
+void mktemp (String* string) {
+	ABORT_IF(string->len <= 6, "string too small");
+	size_t offset = string->len - 6;
+	const char LOOKUP[256] = 
+		"0123456789abcdefghijklmnopqrstuzwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01"
+		"23456789abcdefghijklmnopqrstuzwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123"
+		"456789abcdefghijklmnopqrstuzwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+		"6789abcdefghijklmnopqrstuzwxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh";
+	ABORT_IF(getrandom((void*)&string->ptr[offset], 6, GRND_NONBLOCK) != 6, "getrandom() failed");
+	for (; offset < string->len; offset++) {
+		string->ptr[offset] = LOOKUP[(uint8_t)string->ptr[offset]];
+	}
+}
+
+static void render_template_to_temp (Cx* cx, JsonValue* template) {
+	// Create the path.
+	String path = {
+		.ptr = (uint8_t*)alloc(cx->arena, 2048, 1),
+		.len = 0
+	};
+
+	// Get the TEMP directory.
+	String temp = clookup(&cx->manifest->env, "TEMP");
+	if (temp.ptr) {
+		ABORT_IF(temp.len > 2000, "TEMP is too long");
+		memcpy(path.ptr, temp.ptr, temp.len);
+		path.len = temp.len;
+	} else {
+		memcpy(path.ptr, "/tmp", 4);
+		path.len = 4;
+	}
+
+	// Append the template.
+	memcpy(path.ptr + path.len, "/tmp.XXXXXX", 11);
+	path.len += 10;
+	mktemp(&path);
+
+	// Open the file.
+	int fd = open(path.ptr, O_RDWR | O_CREAT, 0664);
+	ABORT_IF(fd < 0, "failed to open %s", path.ptr);
+
+	// TODO: unlink it.
+
+	// Render the template.
+	render_template(cx, template, &cx->manifest->executable);
+
+	// Write the rendered template to the file.
+	String* rendered = &cx->manifest->executable;
+	size_t len = 0;
+	while(len < rendered->len) {
+		long amt = write(fd, (void*)(rendered->ptr + len), rendered->len - len);
+		ABORT_IF(amt < 0, "failed to write to temp file");
+		if (amt == 0) {
+			break;
+		}
+		len += amt;
+	}
+}
+
 static String render_value (Cx* cx, JsonValue* value) {
 	String rendered = {0};
 	switch(value->kind) {
@@ -296,12 +455,24 @@ static String render_value (Cx* cx, JsonValue* value) {
 		}
 
 		// Number
-		case JSON_NUMBER: ABORT("todo: numbers");
+		case JSON_NUMBER: {
+			double_to_string(cx->arena, value->value._number, &rendered);
+			break;
+		}
 
 		// String
 		case JSON_STRING: {
-			rendered.ptr = value->value._string.ptr;
-			rendered.len = value->value._string.len;
+			String s = value->value._string;
+			if (cstarts_with(s, "dir_0")
+				|| cstarts_with(s, "fil_0")
+				|| cstarts_with(s, "sym_0")) {
+				String ss[2] = { cx->artifacts_dir, s };
+				String s = STRING_LITERAL("/");
+				join(cx->arena, s, ss, 2);
+			} else {
+				rendered.ptr = s.ptr;
+				rendered.len = s.len;
+			}
 			break;
 		}
 
@@ -310,10 +481,11 @@ static String render_value (Cx* cx, JsonValue* value) {
 			if (is_template(value)) {
 				render_template(cx, value, &rendered);
 			}
+			ABORT("malformed manifest");
 			break;
 		}
 
-		default: ABORT("malformed env manifest");
+		default: ABORT("malformed manifest");
 	}
 	return rendered;
 }

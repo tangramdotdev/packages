@@ -138,75 +138,59 @@ static inline void* prepare_stack (
 	);
 	void* sp = bp + rlim.soft;
 	memset(bp, 0, rlim.soft);
+	DBG("created stack");
 
 	// Push environment variables. Order doesn't matter.
 	int e = 0;
-	char** envp = NULL;
-	if (manifest)  {
-		envp = alloc(arena, manifest->env.size * sizeof(char*) + 1, _Alignof(char*));
+	char** envp = ALLOC_N(arena, manifest->env.size + 1, char*);
+	DBG("allocated envp");
 
-		// lol, for backwards compatibility.
-		push_str(&sp, "TANGRAM_INJECTION_IDENTITY_PATH=/proc/self/exe");
-		envp[e++] = sp;
+	// Do we need this?
+	push_str(&sp, "TANGRAM_INJECTION_IDENTITY_PATH=/proc/self/exe");
+	envp[e++] = sp;
 
-		// Process envs.
-		for (int i = 0; i < manifest->env.capacity; i++) {
-			Node* node = manifest->env.list + i;
-			while(node) {
-				if (node->key.ptr) {
-					// Allocate the string.
-					size_t len = node->key.len + node->val.len + 2;
-					char* str = (char*)alloc(arena, len, 1);
-					memset(str, 0, len);
+	// Add envs.
+	for (int i = 0; i < manifest->env.capacity; i++) {
+		Node* node = manifest->env.list + i;
+		while(node) {
+			if (node->key.ptr) {
+				// Allocate the string.
+				size_t len = node->key.len + node->val.len + 2;
+				char* str = (char*)alloc(arena, len, 1);
+				memset(str, 0, len);
 
-					// Create the string.
-					memcpy(str, node->key.ptr, node->key.len);
-					str[node->key.len] = '=';
-					memcpy(str + node->key.len + 1, node->val.ptr, node->val.len);
+				// Create the string.
+				memcpy(str, node->key.ptr, node->key.len);
+				str[node->key.len] = '=';
+				memcpy(str + node->key.len + 1, node->val.ptr, node->val.len);
+				DBG("env var: %s", str);
 
-					// Push the string onto the stack.
-					push_str(&sp, str);
+				// Push the string onto the stack.
+				push_str(&sp, str);
 
-					// Save the address in envp.
-					envp[e++] = sp;
-				}
-				node = node->next;
+				// Save the address in envp.
+				envp[e++] = sp;
 			}
-		}
-	} else {
-		envp = ALLOC_N(arena, stack->envc, char*);
-		for (; e < stack->envc; e++) {
-			// Push the string onto the stack.
-			push_str(&sp, stack->envp[e]);
-
-			// Save the address in envp.
-			envp[e] = (char*)sp;
+			node = node->next;
 		}
 	}
 
 	// Push arg vector. Order still does not matter.
 	int a = 0;
-	char** argv = NULL;
-	if (manifest) {
-		argv = alloc(arena, sizeof(char*) * (stack->argc + manifest->argc + 1), _Alignof(char*));
-		for (; a < stack->argc; a++) {
-			push_str(&sp, stack->argv[a]);
-			argv[a] = (char*)sp;
-		}
-		for (; a < manifest->argc + stack->argc; a++) {
-			String* arg = manifest->argv + (a - stack->argc);
-			sp -= (arg->len + 1);
-			memcpy(sp, (void*)arg->ptr, arg->len);
-			((char*)sp)[arg->len] = 0;
-		}
-	} else {
-		argv = ALLOC_N(arena, stack->argc, char*);
-		for (; a < stack->argc; a++) {
-			push_str(&sp, stack->argv[a]);
-			argv[a] = (char*)sp;
-		}
-	}
+	char** argv = ALLOC_N(arena, manifest->argc + 1, char*);
+	
+	// Add argv0
+	push_str(&sp, stack->argv[0]);
+	argv[a++] = sp;
 
+	for (int i = 0; i < manifest->argc; i++) {
+		String arg = manifest->argv[a];
+		sp -= (arg.len + 1);
+		memcpy(sp, (void*)arg.ptr, arg.len);
+		((char*)sp)[arg.len] = 0;
+		argv[a++] = sp;
+	}
+	
 	// Push 16 null bytes.
 	PUSH(sp, 0ul);
 	PUSH(sp, 0ul);
@@ -268,10 +252,10 @@ static LoadedInterpreter load_interpreter(
 	const char* path,
 	uint64_t page_sz
 ) {
-	DBG("path:%s, page_sz:%ld\n", path, page_sz);
+	DBG("loading interpreter with path: %s, page_sz: %ld\n", path, page_sz);
 
 	// Open the interpreter.
-	int fd = open(path, O_RDONLY);
+	int fd = open(path, O_RDONLY, 0);
 	if (fd < 0) ABORT("failed to open interpreter path: %s", path);
 
 	// Read the e_hdr
@@ -502,39 +486,72 @@ static int read_and_process_manifest (
 	Manifest* manifest,
 	Footer*	footer
 ) {
+	// Parse options.
+	bool suppress_env = false;
+	bool suppress_args = false;
+	{
+		String TANGRAM_SUPPRESS_ARGS = STRING_LITERAL("TANGRAM_SUPPRESS_ARGS");
+		String TANGRAM_SUPPRESS_ENV = STRING_LITERAL("TANGRAM_SUPPRESS_ENV");
+		char **itr, **end;
+
+		// Parse args.
+		itr = stack->argv;
+		end = itr + stack->argc;
+		for(; itr != end; itr++) {
+			String s = STRING_LITERAL(*itr);
+			if (cstreq(s, "--tangram-suppress-args")) {
+				suppress_args = true;
+			}
+			if (cstreq(s, "--tangram-suppress-env")) {
+				suppress_env = true;
+			}
+		}
+
+		// Parse envs.
+		itr = stack->envp;
+		end = itr + stack->envc;
+		for(; itr != end; itr++) {
+			String s = STRING_LITERAL(*itr);
+			if (starts_with(s, TANGRAM_SUPPRESS_ARGS)) {
+				suppress_args = true;
+			}
+			if (starts_with(s, TANGRAM_SUPPRESS_ENV)) {
+				suppress_env = true;
+			}
+		}
+	}
+
 	// Initialize envp.
 	create_table(arena, &manifest->env, 4096);
 
 	// Fill the env table.
-	for (int i = 0; i < stack->envc; i++) {
-		char* e = stack->envp[i];
-		size_t len = strlen(stack->envp[i]);
-		size_t midpoint = 0;
-		for(; midpoint < len; midpoint++) {
-			if (stack->envp[i][midpoint] == '=') {
-				break;
+	if (!suppress_env) {
+		for (int i = 0; i < stack->envc; i++) {
+			char* e = stack->envp[i];
+			size_t len = strlen(stack->envp[i]);
+			size_t midpoint = 0;
+			for(; midpoint < len; midpoint++) {
+				if (stack->envp[i][midpoint] == '=') {
+					break;
+				}
 			}
+			if (midpoint == len) {
+				continue;
+			}
+			String key = {
+				.ptr = e,
+				.len = midpoint
+			};
+			String val = {
+				.ptr = (e + midpoint + 1),
+				.len = len - midpoint
+			};
+			insert(arena, &manifest->env, key, val);
 		}
-		if (midpoint == len) {
-			continue;
-		}
-		String key = {
-			.ptr = e,
-			.len = midpoint
-		};
-		String val = {
-			.ptr = (e + midpoint + 1),
-			.len = len - midpoint
-		};
-		insert(arena, &manifest->env, key, val);
 	}
 
-	String ld_debug = STRING_LITERAL("LD_DEBUG");
-	String all = STRING_LITERAL("all");
-	insert(arena, &manifest->env, ld_debug, all);
-
 	// Read the manifest. TODO: use loadable segment?
-	int fd = open("/proc/self/exe", O_RDONLY);
+	int fd = open("/proc/self/exe", O_RDONLY, 0);
 	off_t offset = 0;
 	offset = lseek(fd, 0, SEEK_END);
 	if (offset < 0) {
@@ -556,7 +573,6 @@ static int read_and_process_manifest (
 		&& footer->magic[6] == 'm'
 		&& footer->magic[7] == '\0';
 	if (!matches) {
-		DBG("invalid magic number: %s", footer->magic);
 		close(fd);
 		return 0;
 	}
@@ -586,11 +602,34 @@ static int read_and_process_manifest (
 	// Parse the manifest.
 	parse_manifest(arena, manifest, (uint8_t*)data, footer->size);
 
+	// Append the arg list if necessary.
+	if (!suppress_args) {
+		// Allocate a new arg vector.
+		String* argv = ALLOC_N(arena, stack->argc + manifest->argc, String);
+		size_t argc = 0;
+
+		// Now add the args from the manifest.
+		for (size_t n = 0; n < manifest->argc; n++) {
+			argv[argc++] = manifest->argv[n];
+		}
+
+		// Finally the stack args, not including argv0.
+		for (size_t n = 1; n < stack->argc; n++) {
+			argv[argc].ptr = stack->argv[n];
+			argv[argc].len = strlen(stack->argv[n]);
+			argc++;
+		}
+
+		// Update the manifest.
+		manifest->argv = argv;
+		manifest->argc = argc;
+	}
+
 	return 1;
 }
 
 int read_footer(Footer* footer) {
-	int fd = open("/proc/self/exe", O_RDONLY);
+	int fd = open("/proc/self/exe", O_RDONLY, 0);
 	if (fd < 0) {
 		return 1;
 	}
@@ -603,6 +642,67 @@ int read_footer(Footer* footer) {
 	}
 	close(fd);
 	return 0;
+}
+
+char* cstr (Arena *arena, String s) {
+	char* c = ALLOC_N(arena, s.len + 1, char);
+	memset(c, 0, s.len + 1);
+	memcpy((void*)c, s.ptr, s.len);
+	return c;
+}
+
+void exec (Arena* arena, Manifest* manifest) {
+	// Sanity check.
+	ABORT_IF(!manifest->executable.ptr, "missing executable");
+	
+	// Get the executable path.
+	char* pathname = manifest->interpreter.ptr 
+		? manifest->interpreter.ptr 
+		: manifest->executable.ptr;
+	
+	// Compute argc.
+	size_t argc = manifest->argc + manifest->interp_argc + 2;
+
+	// Create argv, envp
+	char** argv = ALLOC_N(arena, argc + 1, char*);
+	char** envp = ALLOC_N(arena, manifest->env.size + 1, char*);
+
+	// Fill argv.
+	size_t n = 0;
+	if (manifest->interpreter.ptr) {
+		argv[n++] = manifest->interpreter.ptr;
+		for (int i = 0; i < manifest->interp_argc; i++) {
+			argv[n++] = cstr(arena, manifest->interp_argv[i]);
+		}
+	}
+	for (int i = 0; i < manifest->argc; i++) {
+		argv[n++] = cstr(arena, manifest->argv[n]);
+	}
+
+	// Fill envp.
+	size_t e = 0;
+	for (int i = 0; i < manifest->env.capacity; i++) {
+		Node* node = manifest->env.list + i;
+		while(node) {
+			if (node->key.ptr) {
+				// Allocate the string.
+				size_t len = node->key.len + node->val.len + 2;
+				char* str = ALLOC_N(arena, len, char);
+				memset(str, 0, len);
+
+				// Create the string.
+				memcpy(str, node->key.ptr, node->key.len);
+				str[node->key.len] = '=';
+				memcpy(str + node->key.len + 1, node->val.ptr, node->val.len);
+
+				// Save the address in envp.
+				envp[e++] = str;
+			}
+			node = node->next;
+		}
+	}
+	int ec = execve(pathname, argv, envp);
+	ABORT("execve failed: %d", ec);
 }
 
 // Main entrypoint.
@@ -689,9 +789,10 @@ void _stub_start (void *sp) {
 		// TODO: remove this.
 		stack.auxv[nentry].a_un.a_val = (uintptr_t)base_address + footer.entry;
 	} else if (manifest->executable.ptr) {
-		execve(manifest->executable.ptr, stack.argv, stack.envp);
+		// Create the arg vector.
+		exec(&arena, manifest);
 	} else {
-		ABORT("missing entrypoint");
+		ABORT("missing executable or entrypoint");
 	}
 
 	// Fix program headers.
@@ -712,9 +813,10 @@ void _stub_start (void *sp) {
 	void* entrypoint = (void*)stack.auxv[nentry].a_un.a_val;
 
 	// Load the interpreter if required.
-	if (manifest && manifest->interpreter.ptr) {
+	if (manifest->interpreter.ptr) {
 		// Load the interpreter. We use a separate arena to avoid use-after-free issues.
 		LoadedInterpreter loaded = load_interpreter(&arena, manifest->interpreter.ptr, page_sz);
+		DBG("loaded interpreter");
 		if (nbase >= 0) {
 			stack.auxv[nbase].a_un.a_val = loaded.base_address;
 		}
@@ -729,6 +831,7 @@ void _stub_start (void *sp) {
 	}
 
 	// Prepare a new stack.
+	DBG("preparing stack");
 	sp = prepare_stack(&arena, &stack, manifest);
 
 	// Cleanup all the memory we allocatd.

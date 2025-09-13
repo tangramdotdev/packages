@@ -65,20 +65,14 @@ int append (int src, int dst) {
 
 int main(int argc, const char** argv) {
 	// Parse args.
-	if (argc < 4) {
-		fprintf(stderr, "usage is wrap <input> <output> <stub> <manifest>\n");
+	if (argc < 5) {
+		fprintf(stderr, "usage is wrap <input> <manifest> <stub> <output>\n");
 		return 1;
 	}
 	const char* input	= argv[1];
 	const char* manifest	= argv[2];
 	const char* stub	= argv[3];
-
-	// Get OUTPUT.
-	const char* output = getenv("OUTPUT");
-	if (!output) {
-		fprintf(stderr, "missing OUTPUT env var");
-		return 1;
-	}
+	const char* output	= argv[4];
 
 	TRACE("input:%s, manifest:%s, stub:%s, output:%s", input, manifest, stub, output);
 
@@ -92,7 +86,7 @@ int main(int argc, const char** argv) {
 	void*	elf = NULL;
 
 	// Open the output.
-	output_fd = open(output, O_RDWR | O_CREAT);
+	output_fd = open(output, O_RDWR | O_CREAT, 0775);
 	if (output_fd < 0) {
 		EXIT_WITH_ERROR("failed to open output");
 		return 1;
@@ -251,9 +245,9 @@ int main(int argc, const char** argv) {
 cleanup:
 	munmap(elf, output_size);
 	close(input_fd);
-	close(output_fd);
 	close(manifest_fd);
 	close(stub_fd);
+	close(output_fd);
 
 	TRACE("status: %d", status);
 	return status;
