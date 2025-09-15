@@ -113,7 +113,6 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const crossProxyEnv = await proxy.env({
 		toolchain: await std.env.arg(buildToHostCross, { utils: false }),
 		build,
-		forcePrefix: true,
 		host,
 	});
 

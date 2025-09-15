@@ -268,7 +268,6 @@ export namespace sdk {
 
 	type ProvidesToolchainArg = {
 		env: std.env.EnvObject;
-		forcePrefix?: boolean;
 		host?: string | undefined;
 		target?: string | undefined;
 	};
@@ -280,11 +279,11 @@ export namespace sdk {
 		return [cc, cxx, ld];
 	};
 
-	const requiredUtils = ["ar", "nm", "ranlib", "strip"] as const;
+	const requiredUtils = ["ar", "nm", "ranlib", "strip"];
 
 	/** Assert that an env provides an toolchain. */
 	export const assertProvidesToolchain = async (arg: ProvidesToolchainArg) => {
-		const { env, forcePrefix = false, host: host_, target: target_ } = arg;
+		const { env, host: host_, target: target_ } = arg;
 
 		const llvm = await std.env.provides({ env, names: ["clang"] });
 
@@ -292,23 +291,48 @@ export namespace sdk {
 		const target = canonicalTriple(target_ ?? host);
 		const os = std.triple.os(target);
 		const isCross = host !== target;
-		// Provides binutils, cc/c++.
-		let targetPrefix = ``;
-		if (forcePrefix || (isCross && !llvm)) {
-			targetPrefix = `${target}-`;
+
+		// For cross-compilation, require prefixed tools
+		if (isCross && !llvm) {
+			const targetPrefix = `${target}-`;
+			await std.env.assertProvides({
+				env,
+				names: requiredUtils.map((name) => `${targetPrefix}${name}`),
+			});
+			const compilerComponents = requiredCompilerComponents(os, "gnu");
+			await std.env.assertProvides({
+				env,
+				names: compilerComponents.map((name) => `${targetPrefix}${name}`),
+			});
+		} else {
+			// For native or LLVM, try without prefix first, then with prefix
+			const compilerComponents = requiredCompilerComponents(
+				os,
+				llvm ? "llvm" : "gnu",
+			);
+
+			try {
+				await std.env.assertProvides({
+					env,
+					names: requiredUtils,
+				});
+				await std.env.assertProvides({
+					env,
+					names: compilerComponents,
+				});
+			} catch {
+				// If unprefixed fails, try with prefix
+				const targetPrefix = `${target}-`;
+				await std.env.assertProvides({
+					env,
+					names: requiredUtils.map((name) => `${targetPrefix}${name}`),
+				});
+				await std.env.assertProvides({
+					env,
+					names: compilerComponents.map((name) => `${targetPrefix}${name}`),
+				});
+			}
 		}
-		await std.env.assertProvides({
-			env,
-			names: requiredUtils.map((name) => `${targetPrefix}${name}`),
-		});
-		const compilerComponents = requiredCompilerComponents(
-			os,
-			llvm ? "llvm" : "gnu",
-		);
-		await std.env.assertProvides({
-			env,
-			names: compilerComponents.map((name) => `${targetPrefix}${name}`),
-		});
 		return true;
 	};
 
@@ -316,25 +340,37 @@ export namespace sdk {
 	export const providesToolchain = async (
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
-		const { env, forcePrefix, target } = arg;
-		const os = std.triple.os(target ?? (await std.triple.host()));
-		let targetPrefix = ``;
-		if (target) {
-			if (forcePrefix || os !== "darwin") {
-				targetPrefix = `${target}-`;
-			}
-		}
+		const { env, host: host_, target: target_ } = arg;
+		const host = canonicalTriple(host_ ?? (await std.triple.host()));
+		const target = canonicalTriple(target_ ?? host);
+		const os = std.triple.os(target);
+		const isCross = host !== target;
 		const llvm = await std.env.provides({ env, names: ["clang"] });
+
 		const compilerComponents = requiredCompilerComponents(
 			os,
 			llvm ? "llvm" : "gnu",
 		);
-		if (llvm) {
+
+		// For cross-compilation with GNU, require prefixed tools
+		if (isCross && !llvm) {
+			const targetPrefix = `${target}-`;
 			return std.env.provides({
+				env,
+				names: compilerComponents.map((name) => `${targetPrefix}${name}`),
+			});
+		} else {
+			// For native or LLVM, try without prefix first
+			const hasUnprefixed = await std.env.provides({
 				env,
 				names: compilerComponents,
 			});
-		} else {
+			if (hasUnprefixed) {
+				return true;
+			}
+
+			// Try with prefix as fallback
+			const targetPrefix = `${target}-`;
 			return std.env.provides({
 				env,
 				names: compilerComponents.map((name) => `${targetPrefix}${name}`),
@@ -346,12 +382,7 @@ export namespace sdk {
 	export const toolchainComponents = async (
 		arg?: ToolchainEnvArg,
 	): Promise<ToolchainComponents> => {
-		const {
-			env,
-			forcePrefix = false,
-			host: host_,
-			target: targetTriple,
-		} = arg ?? {};
+		const { env, host: host_, target: targetTriple } = arg ?? {};
 
 		if (env === undefined) {
 			throw new Error("No environment provided.");
@@ -360,7 +391,6 @@ export namespace sdk {
 		// Make sure we have a toolchain.
 		await sdk.assertProvidesToolchain({
 			env,
-			forcePrefix,
 			host: host_,
 			target: targetTriple,
 		});
@@ -376,25 +406,20 @@ export namespace sdk {
 		const host__ = host_ ?? detectedHost;
 		const standardizedHost = std.sdk.canonicalTriple(host__);
 		const isCross = isCrossCompilation(standardizedHost, target);
-		let targetPrefix = forcePrefix || isCross ? `${target}-` : ``;
 
-		// Detect compilers and determine flavor
-		const compilerInfo = await detectCompilers(env, os, targetPrefix);
-
-		if (compilerInfo.flavor === "llvm" && !forcePrefix) {
-			targetPrefix = "";
-		}
+		// Detect compilers and determine flavor and prefix
+		const compilerInfo = await detectCompilers(env, os, target, isCross);
 
 		// Get toolchain directory and create symlinks
 		const directory = await getToolchainDirectory(
 			env,
 			compilerInfo,
-			targetPrefix,
+			compilerInfo.targetPrefix,
 		);
 		const { cc, cxx, fortran } = await createCompilerSymlinks(
 			directory,
 			compilerInfo,
-			targetPrefix,
+			compilerInfo.targetPrefix,
 		);
 
 		// Locate linker
@@ -403,7 +428,7 @@ export namespace sdk {
 			env,
 			os,
 			compilerInfo.flavor,
-			targetPrefix,
+			compilerInfo.targetPrefix,
 		);
 
 		// Locate dynamic interpreter and lib directory
@@ -413,12 +438,14 @@ export namespace sdk {
 			os,
 			target,
 			host,
-			forcePrefix,
 			isCross,
 		);
 
 		// Locate strip utility
-		const strip = await std.env.which({ env, name: `${targetPrefix}strip` });
+		const stripName = compilerInfo.targetPrefix
+			? `${compilerInfo.targetPrefix}strip`
+			: "strip";
+		const strip = await std.env.which({ env, name: stripName });
 
 		return {
 			cc,
@@ -440,6 +467,7 @@ export namespace sdk {
 		cxx: tg.File | tg.Symlink;
 		fortran?: tg.File | tg.Symlink | undefined;
 		flavor: sdk.ToolchainFlavor;
+		targetPrefix: string;
 	};
 
 	const isCrossCompilation = (
@@ -457,43 +485,64 @@ export namespace sdk {
 	const detectCompilers = async (
 		env: any,
 		os: string,
-		targetPrefix: string,
+		target: string,
+		isCross: boolean,
 	): Promise<CompilerInfo> => {
 		const preferredFlavor: "gnu" | "llvm" = os === "linux" ? "gnu" : "llvm";
 
-		// Try preferred flavor first
-		const preferredResult = await tryDetectCompilerFlavor(
-			env,
-			preferredFlavor,
-			targetPrefix,
-		);
-		if (preferredResult) {
-			return preferredResult;
+		// For cross-compilation, require prefixed tools
+		if (isCross) {
+			const targetPrefix = `${target}-`;
+			const result = await tryDetectCompilerFlavor(
+				env,
+				preferredFlavor,
+				targetPrefix,
+			);
+			if (!result) {
+				throw new Error(
+					`No suitable cross-compiler found for ${target} (tried ${preferredFlavor} toolchain)`,
+				);
+			}
+			return { ...result, targetPrefix };
 		}
 
-		// Fall back to other flavor
+		// For native compilation, try without prefix first, then with prefix
+		let result = await tryDetectCompilerFlavor(env, preferredFlavor, "");
+		if (result) {
+			return { ...result, targetPrefix: "" };
+		}
+
+		// Try with prefix
+		const targetPrefix = `${target}-`;
+		result = await tryDetectCompilerFlavor(env, preferredFlavor, targetPrefix);
+		if (result) {
+			return { ...result, targetPrefix };
+		}
+
+		// Fall back to other flavor without prefix
 		const fallbackFlavor: "gnu" | "llvm" =
 			preferredFlavor === "gnu" ? "llvm" : "gnu";
-		const fallbackResult = await tryDetectCompilerFlavor(
-			env,
-			fallbackFlavor,
-			targetPrefix,
-		);
-
-		if (!fallbackResult) {
-			throw new Error(
-				`No suitable compiler found (tried both GNU and LLVM toolchains)`,
-			);
+		result = await tryDetectCompilerFlavor(env, fallbackFlavor, "");
+		if (result) {
+			return { ...result, targetPrefix: "" };
 		}
 
-		return fallbackResult;
+		// Try fallback with prefix
+		result = await tryDetectCompilerFlavor(env, fallbackFlavor, targetPrefix);
+		if (result) {
+			return { ...result, targetPrefix };
+		}
+
+		throw new Error(
+			`No suitable compiler found (tried both GNU and LLVM toolchains)`,
+		);
 	};
 
 	const tryDetectCompilerFlavor = async (
 		env: std.env.EnvObject,
 		flavor: "gnu" | "llvm",
 		targetPrefix: string,
-	): Promise<CompilerInfo | undefined> => {
+	): Promise<Omit<CompilerInfo, "targetPrefix"> | undefined> => {
 		if (flavor === "gnu") {
 			return await tryDetectGnuCompilers(env, targetPrefix);
 		} else {
@@ -504,7 +553,7 @@ export namespace sdk {
 	const tryDetectGnuCompilers = async (
 		env: std.env.EnvObject,
 		targetPrefix: string,
-	): Promise<CompilerInfo | undefined> => {
+	): Promise<Omit<CompilerInfo, "targetPrefix"> | undefined> => {
 		const gcc = await std.env.tryWhich({ env, name: `${targetPrefix}gcc` });
 		if (!gcc) {
 			return undefined;
@@ -531,7 +580,7 @@ export namespace sdk {
 	const tryDetectLlvmCompilers = async (
 		env: std.env.EnvObject,
 		targetPrefix: string,
-	): Promise<CompilerInfo | undefined> => {
+	): Promise<Omit<CompilerInfo, "targetPrefix"> | undefined> => {
 		const clang = await std.env.tryWhich({ env, name: "clang" });
 		if (!clang) {
 			return undefined;
@@ -634,20 +683,12 @@ export namespace sdk {
 		os: string,
 		target: string,
 		host: string,
-		forcePrefix: boolean,
 		isCross: boolean,
 	): Promise<{ ldso?: tg.File; libDir: tg.Directory }> => {
 		if (os === "darwin") {
 			return await locateDarwinComponents(directory, target, isCross);
 		} else {
-			return await locateUnixComponents(
-				directory,
-				env,
-				target,
-				host,
-				forcePrefix,
-				isCross,
-			);
+			return await locateUnixComponents(directory, env, target, host, isCross);
 		}
 	};
 
@@ -682,10 +723,9 @@ export namespace sdk {
 		env: std.env.EnvObject,
 		target: string,
 		host: string,
-		forcePrefix: boolean,
 		isCross: boolean,
 	): Promise<{ ldso?: tg.File; libDir: tg.Directory }> => {
-		if (forcePrefix || isCross) {
+		if (isCross) {
 			if (std.triple.os(target) === "darwin") {
 				// Target is darwin, no LDSO needed
 				const libDir = tg.Directory.expect(await directory.tryGet("lib"));
@@ -718,8 +758,6 @@ export namespace sdk {
 	type ToolchainEnvArg = {
 		/** The environment to ascertain the host from. */
 		env: std.env.EnvObject;
-		/** Should we force the use of a target-triple prefix, regardless of host? Default: false */
-		forcePrefix?: boolean | undefined;
 		/** What machine is the compiler expecting to run on? */
 		host?: string | undefined;
 		/** If the environment is a cross-compiler, what target should we use to look for prefixes? */

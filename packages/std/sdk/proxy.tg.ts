@@ -13,8 +13,7 @@ export type Arg = {
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
-	/** Should we look for a triple-prefixed toolchain, regardless of host? Default: false */
-	forcePrefix?: boolean;
+
 	/** Should the linker get proxied? Default: true. */
 	linker?: boolean;
 	/** Optional linker to use. If omitted, the linker provided by the toolchain matching the requested arguments will be used. */
@@ -55,7 +54,6 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const os = std.triple.os(host);
-	const forcePrefix = arg.forcePrefix ?? false;
 
 	const {
 		cc: cc_,
@@ -68,7 +66,6 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		strip,
 	} = await std.sdk.toolchainComponents({
 		env: buildToolchain,
-		forcePrefix,
 		host: build,
 		target: host,
 	});
@@ -527,11 +524,11 @@ export const testSharedLibraryWithDep = async (target?: string) => {
 		mkdir -p $OUTPUT/lib
 		mkdir -p $OUTPUT/include
 		cp ${sources}/*.h $OUTPUT/include
-	
+
 		${cmd} -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
 		${cmd} -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
 		${cmd} -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
-		
+
 		cp libconstants.${dylibExt} $OUTPUT/lib
 		cp libprinter.${dylibExt} $OUTPUT/lib
 		cp main $OUTPUT/bin
