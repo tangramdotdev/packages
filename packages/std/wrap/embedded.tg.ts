@@ -165,7 +165,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 				-mcmodel=small						\
 				-nostdlib							\
 				-Wl,--oformat=binary				\
-				-DDEBUG=1							\
+				-Werror								\
 				-o $OUTPUT/stub.bin ${releaseArgs} ${verboseArgs}
 			
 			# Compile the executable stub.
@@ -177,6 +177,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 				${source}/stub/src/${arch}/start.s	\
 				-I${source}/stub/include			\
 				-Wl,-T${source}/stub/link.ld		\
+				-Werror								\
 				-ffreestanding						\
 				-fno-stack-protector				\
 				-fno-asynchronous-unwind-tables		\
@@ -184,7 +185,6 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 				-static								\
 				-static-libgcc						\
 				-nostdlib							\
-				-DDEBUG=1							\
 				-g									\
 				-o $OUTPUT/stub.exe ${releaseArgs} ${verboseArgs}
 			

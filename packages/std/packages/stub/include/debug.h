@@ -9,7 +9,7 @@
 // Have to provide a putc implementation for nanoprintf. 
 static void __putc (int ch, void*) {
 	uint8_t buf = (uint8_t)ch;
-	write(STDOUT_FILENO, (void*)&buf, 1);
+	write(STDERR_FILENO, (void*)&buf, 1);
 }
 
 // printf/snprintf/etc.

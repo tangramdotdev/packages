@@ -16,6 +16,29 @@
 // Internals.
 #include "footer.h"
 
+// Convert a PT_xxx value to a string.
+static inline const char* p_type_string (uint64_t p_type) {
+	switch (p_type) {
+		case PT_NULL:		return "PT_NULL";
+		case PT_LOAD:		return "PT_LOAD";
+		case PT_DYNAMIC:	return "PT_DYNAMIC";
+		case PT_INTERP:		return "PT_INTERP";
+		case PT_NOTE:		return "PT_NOTE";
+		case PT_SHLIB:		return "PT_SHLIB";
+		case PT_PHDR:		return "PT_PHDR";
+		case PT_TLS:		return "PT_TLS";
+		case PT_NUM:		return "PT_NUM";
+		case PT_GNU_EH_FRAME:	return "PT_GNU_EH_FRAME";
+		case PT_GNU_STACK:	return "PT_GNU_STACK";
+		case PT_GNU_RELRO:	return "PT_GNU_RELRO";
+		case PT_GNU_PROPERTY:	return "PT_GNU_PROPERTY";
+		case PT_SUNWBSS:	return "PT_SUNWBSS";
+		case PT_SUNWSTACK:	return "PT_SUNWSTACK";
+		case PT_HISUNW:		return "PT_HISUNW";
+		default: 		return "UNKNOWN";
+	}
+}
+
 #define ALIGN(m, n) (((m) + (n) - 1) & ~((n) - 1))
 
 #define EXIT_WITH_ERROR(msg)		\
@@ -74,7 +97,10 @@ int main(int argc, const char** argv) {
 	const char* stub	= argv[3];
 	const char* output	= argv[4];
 
-	TRACE("input:%s, manifest:%s, stub:%s, output:%s", input, manifest, stub, output);
+	TRACE("input: %s", input);
+	TRACE("manifest: %s", manifest);
+	TRACE("stub: %s", stub);
+	TRACE("output: %s", output);
 
 	// State.
 	int status	= 0;
@@ -93,7 +119,7 @@ int main(int argc, const char** argv) {
 	}
 
 	// Open the input.
-	input_fd = open(input, O_RDWR);
+	input_fd = open(input, O_RDONLY);
 	if (input_fd < 0) {
 		perror("failed to open input");
 		return 1;
@@ -172,6 +198,7 @@ int main(int argc, const char** argv) {
 	Elf64_Addr vaddr	= 0;
 	char* itr = ((char*)elf + ehdr->e_phoff);
 	char* end = itr + (ehdr->e_phnum * ehdr->e_phentsize);
+	int n = 0;
 	for (; itr != end; itr += ehdr->e_phentsize) {
 		Elf64_Phdr* phdr = (Elf64_Phdr*)itr;
 		Elf64_Addr end_of_segment = phdr->p_vaddr + phdr->p_memsz;
@@ -201,6 +228,7 @@ int main(int argc, const char** argv) {
 		pt_interp->p_type	= PT_LOAD;
 		pt_interp->p_vaddr	= vaddr;
 	} else {
+		TRACE("Missing pt_interp for %s\n", input);
 		EXIT_WITH_ERROR("unimplemented: insert a new PT_LOAD segment and update all offsets");
 	}
 
@@ -210,7 +238,7 @@ int main(int argc, const char** argv) {
 	footer.size	= manifest_size;
 	footer.version	= 1;
 	memcpy(&footer.magic, "tangram", 8);
-	TRACE("version: %d, size: %d, entry: %d", footer.entry, footer.size, footer.version);
+	TRACE("entry: %ld, size: %ld, version: %ld", footer.entry, footer.size, footer.version);
 	
 	// Patch the entrypoint.
 	ehdr->e_entry = vaddr;

@@ -5,24 +5,34 @@
 #include "json.h"
 #include "util.h"
 
+#define ARTIFACTS_DIR "/.tangram/artifacts"
+#define ARTIFACTS_DIR_LEN 19
 static void find_artifacts_dir (Arena* arena, String* path) {
+	stat_t statbuf;
+
+	// First check the root. 
+	if (stat(ARTIFACTS_DIR, &statbuf) == 0) {
+		path->ptr = ARTIFACTS_DIR;
+		path->len = ARTIFACTS_DIR_LEN;
+		return;
+	}
+
 	// Get cwd.
 	path->ptr = alloc(arena, 2048, 1);
-	if(getcwd(path->ptr, 2048 - 19) <= 0) ABORT("getcwd failed");
+	ABORT_IF(getcwd(path->ptr, 2048 - ARTIFACTS_DIR_LEN - 1 <= 0), "failed to get the cwd");
 	path->len = strlen(path->ptr);
-	for(;;) {
-		// Append /.tangram/artifacts to the path.
-		memcpy(path->ptr + path->len, "/.tangram/artifacts", 20);
-		stat_t statbuf;
+
+	// Walk the parent directory tree.
+	do {
+		path->ptr[path->len] = 0;
+		memcpy(path->ptr + path->len, ARTIFACTS_DIR, ARTIFACTS_DIR_LEN + 1);
 		if (stat(path->ptr, &statbuf) == 0) {
-			path->len += 19;
+			path->len += ARTIFACTS_DIR_LEN;
 			break;
 		}
-		path->ptr[path->len] = 0;
-		*path = parent_dir(path);
-		ABORT_IF(path->len == 0, "missing artifacts dir");
-		continue;
-	}
+		*path = parent_dir(*path);
+	} while (path->len > 0);
+	ABORT_IF(!path->ptr, "failed to find artifacts directory");
 }
 
 void parse_manifest (
@@ -30,7 +40,7 @@ void parse_manifest (
 	Manifest* manifest,
 	uint8_t* data,
 	uint64_t len
-) {
+) {	
 	// Sanity check.
 	ABORT_IF(len == 0, "expected a non-zero length");
 

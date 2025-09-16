@@ -16,6 +16,7 @@ export * as packages from "./packages.tg.ts";
 export * as phases from "./phases.tg.ts";
 export { $, run } from "./run.tg.ts";
 export { sdk } from "./sdk.tg.ts";
+export * as sdkModule from "./sdk.tg.ts";
 export * as triple from "./triple.tg.ts";
 export * as utils from "./utils.tg.ts";
 export { wrap } from "./wrap.tg.ts";
