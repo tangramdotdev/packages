@@ -82,9 +82,10 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	if (proxyLinker) {
 		const isCross = build !== host;
 		const prefix = isCross ? `${host}-` : ``;
-		const embedWrapper = arg.embedWrapper ?? false;
+		const embedWrapper = arg.embedWrapper ?? true;
 
 		// Construct the ld proxy.
+		const ldEnv = embedWrapper ? { TANGRAM_LINKER_EMBED_WRAPPER: true } : {};
 		const ldProxyArtifact = await ldProxy({
 			buildToolchain: buildToolchainDir,
 			build,
@@ -228,7 +229,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	binDir = await tg.directory(binDir, replacements);
 
 	// Return the toolchain with the modified bin directory
-	return tg.directory(buildToolchainDir, { bin: binDir });
+	const envDir = tg.directory(buildToolchainDir, { bin: binDir });
 };
 
 export default env;
