@@ -9,7 +9,7 @@ static long syscall1 (
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		: 
+		:
 		: "a"(rax), "D"(rdi)
 		: "rcx", "r11", "memory"
 	);
@@ -18,7 +18,7 @@ static long syscall1 (
 __attribute__((naked))
 static long syscall2 (
 	long nr,
-	long arg1, 
+	long arg1,
 	long arg2
 ) {
 	register long rax asm("rax") = nr;
@@ -27,7 +27,7 @@ static long syscall2 (
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		: 
+		:
 		: "a"(rax), "D"(rdi), "S"(rsi)
 		: "rcx", "r11", "memory"
 	);
@@ -36,7 +36,7 @@ static long syscall2 (
 __attribute__((naked))
 static long syscall3 (
 	long nr,
-	long arg1, 
+	long arg1,
 	long arg2,
 	long arg3
 ) {
@@ -47,7 +47,7 @@ static long syscall3 (
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		: 
+		:
 		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx)
 		: "rcx", "r11", "memory"
 	);
@@ -56,7 +56,7 @@ static long syscall3 (
 __attribute__((naked))
 static long syscall4 (
 	long nr,
-	long arg1, 
+	long arg1,
 	long arg2,
 	long arg3,
 	long arg4
@@ -69,7 +69,7 @@ static long syscall4 (
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		: 
+		:
 		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx), "r"(r10)
 		: "rcx", "r11", "memory"
 	);
@@ -78,10 +78,10 @@ static long syscall4 (
 __attribute__((naked))
 static long syscall5 (
 	long nr,
-	long arg1, 
+	long arg1,
 	long arg2,
 	long arg3,
-	long arg4, 
+	long arg4,
 	long arg5
 ) {
 	register long rax asm("rax") = nr;
@@ -93,7 +93,7 @@ static long syscall5 (
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		: 
+		:
 		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx), "r"(r10), "r"(r8)
 		: "rcx", "r11", "memory"
 	);
@@ -102,10 +102,10 @@ static long syscall5 (
 __attribute__((naked))
 static long syscall6 (
 	long nr,
-	long arg1, 
+	long arg1,
 	long arg2,
 	long arg3,
-	long arg4, 
+	long arg4,
 	long arg5,
 	long arg6
 ) {
@@ -119,7 +119,7 @@ static long syscall6 (
 	asm volatile (
 		"syscall\n\t"
 		"ret\n\t"
-		: 
+		:
 		: "a"(rax), "D"(rdi), "S"(rsi), "d"(rdx), "r"(r10), "r"(r8), "r"(r9)
 		: "rcx", "r11", "memory"
 	);

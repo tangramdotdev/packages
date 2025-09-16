@@ -125,19 +125,18 @@ static inline void* prepare_stack (
 	rlimit_t rlim;
 	ABORT_IF(getrlimit(RLIMIT_STACK, &rlim), "failed to get the stack size");
 
+	size_t stack_size = rlim.soft;
+	
 	// Allocate the stack. On x86_64, the stack "grows down" meaning that the address returned by mmap is actually the lowest possible address for the stack. The "top" of the new stack is the address of one page past it.
-	// TODO: we could use MMAP_GROWSDOWN and get growable stacks. Unsure if this is necessary or even workable.
-	// TODO: should we add a guard page for stack overflow?
 	void* bp = mmap(
 		0,
-		(size_t)rlim.soft,
+		stack_size,
 		PROT_READ | PROT_WRITE,
-		MAP_ANONYMOUS | MAP_PRIVATE,
+		MAP_ANONYMOUS | MAP_PRIVATE | MAP_GROWSDOWN,
 		-1,
 		0
 	);
-	void* sp = bp + rlim.soft;
-	memset(bp, 0, rlim.soft);
+	void* sp = bp + stack_size;
 	DBG("created stack");
 
 	// Push environment variables. Order doesn't matter.
@@ -347,11 +346,12 @@ static LoadedInterpreter load_interpreter(
 		// If there's a non-zero number of bytes in the file, mmap it in.
 		size_t mapped = 0;
 		if (itr->p_filesz) {
+			uint64_t flags = (prot & PROT_WRITE) ? MAP_PRIVATE : MAP_SHARED;
 			segment_address = mmap(
 				segment_address,
 				filesz,
 				prot,
-				MAP_FIXED | MAP_PRIVATE,
+				MAP_FIXED | flags,
 				fd,
 				file_offset
 			);
@@ -578,6 +578,8 @@ static int read_and_process_manifest (
 	}
 
 	// Read the manifest data.
+	DBG("allocating memory for the data: %ld", footer->size);
+
 	char* data = (char*)alloc(arena, footer->size, 1);
 	size_t count = 0;
 	offset -= (sizeof(Footer) + footer->size);
@@ -600,7 +602,9 @@ static int read_and_process_manifest (
 	close(fd);
 
 	// Parse the manifest.
+	DBG("parsing manifest ptr: %lx, len: %ld", (uintptr_t)data, footer->size);
 	parse_manifest(arena, manifest, (uint8_t*)data, footer->size);
+	DBG("parsed manifest.");
 
 	// Append the arg list if necessary.
 	if (!suppress_args) {
@@ -708,12 +712,9 @@ void exec (Arena* arena, Manifest* manifest) {
 // Main entrypoint.
 void _stub_start (void *sp) {
 	// State.
-	Arena arena;
-	Footer footer;
-	Stack stack;
-
-	// Initialize the arena.
-	create_arena(&arena);
+	Arena arena = {0};
+	Footer footer = {0};
+	Stack stack = {0};
 
 	// Set the stack pointer.
 	stack.sp = sp;
@@ -725,6 +726,9 @@ void _stub_start (void *sp) {
 	Elf64_Phdr* phdr    = (Elf64_Phdr*)stack.auxv_glob[AT_PHDR];
 	uint64_t    ph_num  = (uint64_t)stack.auxv_glob[AT_PHNUM];
 	uint64_t    page_sz = (uint64_t)stack.auxv_glob[AT_PAGESZ];
+
+	// Initialize the arena.
+	create_arena(&arena, page_sz);
 
 	// Search for the positions of AT_ENTRY, AT_BASE, AT_PHDR, AT_PHNUM
 	int nentry = -1;
@@ -797,7 +801,7 @@ void _stub_start (void *sp) {
 
 	// Fix program headers.
 	Arena preserved_memory;
-	create_arena(&preserved_memory);
+	create_arena(&preserved_memory, page_sz);
 	ProgramHeaders new_phdrs = create_program_headers(
 		&preserved_memory,
 		manifest,

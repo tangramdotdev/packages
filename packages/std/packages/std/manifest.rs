@@ -340,6 +340,7 @@ impl Manifest {
 		}
 
 		let bytes = std::fs::read(output).map_err(|source| tg::error!(!source, "failed to read the output"))?;
+		std::fs::remove_file(output).map_err(|source| tg::error!(!source, "failed to remove output file"))?;
 		let cursor = std::io::Cursor::new(bytes);
 		let blob = tg::Blob::with_reader(tg, cursor).await.map_err(|source| tg::error!(!source, "failed to create blob"))?;
 

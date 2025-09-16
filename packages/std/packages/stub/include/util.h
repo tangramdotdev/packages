@@ -38,16 +38,43 @@ static size_t strlen (const char* s) {
 
 #define STRING_LITERAL(s) { .ptr = (uint8_t*)s, .len = strlen(s) }
 
-static String parent_dir (const String* path) {
-	String parent;
-	memcpy(&parent, path, sizeof(String));
-	for (; parent.len; parent.len--) {
-		if (parent.ptr[parent.len] == '/') {
+typedef struct PathComponent PathComponent;
+struct PathComponent {
+	int    type; 		
+	String contents;
+};
+
+
+static String parent_dir (String path) {
+	// Edge case: root directory.
+	for(int i = 0; i < 2; i++) {
+		// Hack off slashes.
+		for (; path.len > 1; path.len--) {
+			if (path.ptr[path.len - 1] == '/') {
+				continue;
+			}
 			break;
 		}
+
+		// If this is the first pass, remove the trailing component.
+		if (i == 0) {
+			// Edge case: root directory.
+			if (path.len == 1 && path.ptr[0] == '/') {
+				path.ptr = NULL;
+				path.len = 0;
+				return path;
+			}
+
+			for(; path.len > 0; path.len--) {
+				if (path.ptr[path.len - 1] == '/') {
+					break;
+				}
+			}
+		}
 	}
-	return parent;
+	return path;
 }
+
 
 static bool streq (String a, String b) {
 	if (a.len != b.len) {
@@ -154,8 +181,4 @@ static void double_to_string (Arena* arena, double d, String* s) {
 	}
 
 	reverse(s);
-}
-
-static String clone_str (Arena* arena, String s) {
-	ABORT("todo");
 }
