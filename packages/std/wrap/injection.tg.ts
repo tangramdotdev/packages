@@ -5,7 +5,7 @@ import injectionSource from "./injection" with { type: "directory" };
 
 type Arg = {
 	build?: string | undefined;
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source?: tg.Directory;
@@ -58,7 +58,7 @@ export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 export default injection;
 
 type MacOsInjectionArg = {
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -116,7 +116,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
 	build?: string;
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -144,16 +144,19 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		args = [...args, ...arg.additionalArgs];
 	}
 	if (std.triple.os(host) === "linux") {
+		const toolchainEnv = await std.env.arg(arg.buildToolchain, {
+			utils: false,
+		});
 		// On linux build, add these flags.
 		if (std.triple.os(build) === "linux") {
 			args.push("-fstack-clash-protection");
-			if (await std.env.tryWhich({ env: arg.buildToolchain, name: "clang" })) {
+			if (await std.env.tryWhich({ env: toolchainEnv, name: "clang" })) {
 				args.push("-fuse-ld=lld");
 			}
 		}
 		if (std.triple.os(build) === "darwin") {
 			const { directory } = await std.sdk.toolchainComponents({
-				env: arg.buildToolchain,
+				env: toolchainEnv,
 			});
 			args.push(
 				"-v",
@@ -223,10 +226,7 @@ export const testCross = async () => {
 	const hostArch = std.triple.arch(detectedHost);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	const target = `${targetArch}-unknown-linux-gnu`;
-	const buildToolchain = std.env.arg(
-		gnu.toolchain({ host: detectedHost, target }),
-		{ utils: false },
-	);
+	const buildToolchain = gnu.toolchain({ host: detectedHost, target });
 
 	const nativeInjection = await tg.build(injection, {
 		build: detectedHost,

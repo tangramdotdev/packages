@@ -24,12 +24,12 @@ export type Arg = {
 	strip?: boolean;
 	/** Optional strip command to use. If omitted, will use the strip located with the toolchain. */
 	stripExe?: tg.File | tg.Symlink | tg.Template;
-	/** The build environment to be proxied. */
-	toolchain: std.env.EnvObject;
+	/** The build toolchain to be proxied. */
+	toolchain: tg.Directory;
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export const env = async (arg?: Arg): Promise<std.env.Arg> => {
+export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -37,10 +37,11 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
-	const buildToolchain = arg.toolchain;
+	const buildToolchainDir = arg.toolchain;
+	const buildToolchain = await std.env.arg(buildToolchainDir, { utils: false });
 
-	if (!proxyCompiler && !proxyLinker) {
-		return;
+	if (!proxyCompiler && !proxyLinker && !proxyStrip) {
+		return buildToolchainDir;
 	}
 
 	if (!proxyLinker && arg.linkerExe !== undefined) {
@@ -48,8 +49,6 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 			"Received a linkerExe argument, but linker is not being proxied",
 		);
 	}
-
-	const dirs = [];
 
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
@@ -74,13 +73,17 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 	let cxx: tg.File | tg.Symlink = cxx_;
 	const isLlvm = flavor === "llvm";
 
+	// Start with the existing toolchain bin directory
+	let binDir = tg.Directory.expect(await buildToolchainDir.get("bin"));
+	let replacements: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {};
+
 	if (proxyLinker) {
 		const isCross = build !== host;
 		const prefix = isCross ? `${host}-` : ``;
 
 		// Construct the ld proxy.
 		const ldProxyArtifact = await ldProxy({
-			buildToolchain,
+			buildToolchain: buildToolchainDir,
 			build,
 			linker:
 				arg.linkerExe === undefined
@@ -103,8 +106,6 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 		});
 
 		// Construct wrappers that always pass the ld proxy.
-		let binDir = tg.directory();
-
 		let wrappedCC;
 		let wrappedCXX;
 		let wrappedGFortran;
@@ -117,58 +118,42 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 				});
 				wrappedCC = await std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...(ccArgs ?? [])],
-					buildToolchain,
+					buildToolchain: buildToolchainDir,
 					host: build,
 				});
 				wrappedCXX = await std.wrap(cxx, {
 					args: [tg`-B${ldProxyDir}`, ...(cxxArgs ?? [])],
-					buildToolchain,
+					buildToolchain: buildToolchainDir,
 					host: build,
 				});
 				if (fortran) {
 					wrappedGFortran = await std.wrap(fortran, {
 						args: [tg`-B${ldProxyDir}`, ...(fortranArgs ?? [])],
-						buildToolchain,
+						buildToolchain: buildToolchainDir,
 						host: build,
 					});
 				}
 
 				if (isCross) {
-					binDir = tg.directory({
-						bin: {
-							[`${host}-cc`]: tg.symlink(`${prefix}gcc`),
-							[`${host}-c++`]: tg.symlink(`${prefix}g++`),
-							[`${host}-gcc`]: wrappedCC,
-							[`${host}-g++`]: wrappedCXX,
-						},
-					});
+					replacements[`${host}-cc`] = tg.symlink(`${prefix}gcc`);
+					replacements[`${host}-c++`] = tg.symlink(`${prefix}g++`);
+					replacements[`${host}-gcc`] = wrappedCC;
+					replacements[`${host}-g++`] = wrappedCXX;
 					if (fortran) {
-						binDir = tg.directory(binDir, {
-							bin: {
-								[`${host}-gfortran`]: wrappedGFortran,
-							},
-						});
+						replacements[`${host}-gfortran`] = wrappedGFortran;
 					}
 				} else {
-					binDir = tg.directory({
-						bin: {
-							cc: tg.symlink("gcc"),
-							[`${host}-cc`]: tg.symlink("gcc"),
-							"c++": tg.symlink("g++"),
-							[`${host}-c++`]: tg.symlink("g++"),
-							gcc: wrappedCC,
-							[`${host}-gcc`]: tg.symlink("gcc"),
-							"g++": wrappedCXX,
-							[`${host}-g++`]: tg.symlink("g++"),
-						},
-					});
+					replacements.cc = tg.symlink("gcc");
+					replacements[`${host}-cc`] = tg.symlink("gcc");
+					replacements["c++"] = tg.symlink("g++");
+					replacements[`${host}-c++`] = tg.symlink("g++");
+					replacements.gcc = wrappedCC;
+					replacements[`${host}-gcc`] = tg.symlink("gcc");
+					replacements["g++"] = wrappedCXX;
+					replacements[`${host}-g++`] = tg.symlink("g++");
 					if (fortran) {
-						binDir = tg.directory(binDir, {
-							bin: {
-								gfortran: wrappedGFortran,
-								[`${host}-gfortran`]: tg.symlink("gfortran"),
-							},
-						});
+						replacements.gfortran = wrappedGFortran;
+						replacements[`${host}-gfortran`] = tg.symlink("gfortran");
 					}
 				}
 				break;
@@ -183,56 +168,48 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 				const merge = os === "darwin";
 				wrappedCC = std.wrap(cc, {
 					args: [tg`-B${ldProxyDir}`, ...clangArgs],
-					buildToolchain,
+					buildToolchain: buildToolchainDir,
 					env,
 					host: build,
 					merge,
 				});
 				wrappedCXX = std.wrap(cxx, {
 					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
-					buildToolchain,
+					buildToolchain: buildToolchainDir,
 					env,
 					host: build,
 					merge,
 				});
 				if (isCross) {
-					binDir = tg.directory({
-						bin: {
-							[`${host}-clang`]: wrappedCC,
-							[`${host}-clang++`]: wrappedCXX,
-							[`${host}-cc`]: tg.symlink(`${host}-clang`),
-							[`${host}-c++`]: tg.symlink(`${host}-clang++`),
-						},
-					});
+					replacements[`${host}-clang`] = wrappedCC;
+					replacements[`${host}-clang++`] = wrappedCXX;
+					replacements[`${host}-cc`] = tg.symlink(`${host}-clang`);
+					replacements[`${host}-c++`] = tg.symlink(`${host}-clang++`);
 				} else {
-					binDir = tg.directory({
-						bin: {
-							clang: wrappedCC,
-							"clang++": wrappedCXX,
-							cc: tg.symlink("clang"),
-							"c++": tg.symlink("clang++"),
-						},
-					});
+					replacements.clang = wrappedCC;
+					replacements["clang++"] = wrappedCXX;
+					replacements.cc = tg.symlink("clang");
+					replacements["c++"] = tg.symlink("clang++");
 				}
 			}
 		}
-		dirs.push(binDir);
 	}
 
 	if (proxyCompiler) {
-		dirs.push(
-			ccProxy({
-				build,
-				buildToolchain,
-				host,
-			}),
-		);
+		const ccProxyDir = await ccProxy({
+			build,
+			host,
+		});
+		const ccProxyBinDir = tg.Directory.expect(await ccProxyDir.get("bin"));
+		for await (const [name, artifact] of ccProxyBinDir) {
+			replacements[name] = artifact;
+		}
 	}
 
 	if (proxyStrip) {
 		const stripProxyArtifact = await stripProxy({
-			buildToolchain,
 			build,
+			buildToolchain,
 			host,
 			stripCommand: arg.stripExe ?? strip,
 			runtimeLibraryPath:
@@ -240,20 +217,19 @@ export const env = async (arg?: Arg): Promise<std.env.Arg> => {
 					? await directory.get("lib").then(tg.Directory.expect)
 					: undefined,
 		});
-		dirs.push(
-			tg.directory({
-				"bin/strip": stripProxyArtifact,
-			}),
-		);
+		replacements.strip = stripProxyArtifact;
 	}
 
-	return await std.env.arg(...dirs, { utils: false });
+	// Apply replacements to the bin directory
+	binDir = await tg.directory(binDir, replacements);
+
+	// Return the toolchain with the modified bin directory
+	return tg.directory(buildToolchainDir, { bin: binDir });
 };
 
 export default env;
 
 type CcProxyArg = {
-	buildToolchain: std.env.EnvObject;
 	build?: string;
 	host?: string;
 };
@@ -261,9 +237,7 @@ type CcProxyArg = {
 export const ccProxy = async (arg: CcProxyArg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
-	const buildToolchain = arg.buildToolchain;
 	const tgcc = workspace.ccProxy({
-		buildToolchain,
 		build,
 		host,
 	});
@@ -280,7 +254,7 @@ export const ccProxy = async (arg: CcProxyArg) => {
 };
 
 type LdProxyArg = {
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: tg.Directory;
 	build?: string;
 	interpreter?: tg.File | undefined;
 	interpreterArgs?: Array<tg.Template.Arg>;
@@ -299,7 +273,6 @@ export const ldProxy = async (arg: LdProxyArg) => {
 
 	// The linker proxy is built for the build machine.
 	const buildLinkerProxy = await workspace.ldProxy({
-		buildToolchain,
 		build,
 		host: build,
 	});
@@ -311,7 +284,6 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		host,
 	});
 	const hostWrapper = await workspace.wrapper({
-		buildToolchain,
 		build,
 		host,
 	});
@@ -336,13 +308,14 @@ export const ldProxy = async (arg: LdProxyArg) => {
 	return std.wrap(buildLinkerProxy, {
 		buildToolchain,
 		env,
+		build,
 		host: build,
 	});
 };
 
 type StripProxyArg = {
 	build?: string;
-	buildToolchain: std.env.EnvObject;
+	buildToolchain: std.env.Arg;
 	host?: string;
 	stripCommand: tg.File | tg.Symlink | tg.Template;
 	runtimeLibraryPath?: tg.Directory | undefined;
@@ -355,7 +328,6 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	const build = build_ ?? host;
 
 	const hostWrapper = await workspace.wrapper({
-		buildToolchain,
 		build,
 		host,
 	});
@@ -363,7 +335,6 @@ export const stripProxy = async (arg: StripProxyArg) => {
 
 	const stripProxy = await workspace.stripProxy({
 		build,
-		buildToolchain,
 		host,
 	});
 
@@ -759,8 +730,8 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 	switch (opt) {
 		case "none": {
 			// All the paths are retained.
-			// On Linux, we get the 6 from our libraries plus an additional 4 from the toolchain, none of which are filtered out.
-			const expectedNumLibraryPaths = os === "linux" ? 10 : 6;
+			// On Linux, we get the 6 from our libraries plus an additional set of internal paths from the toolchain, none of which are filtered out.
+			const expectedNumLibraryPaths = os === "linux" ? 15 : 6;
 			tg.assert(numLibraryPaths === expectedNumLibraryPaths);
 			break;
 		}

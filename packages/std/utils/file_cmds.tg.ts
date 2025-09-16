@@ -80,6 +80,7 @@ type UtilArg = Arg & {
 };
 
 export const compileUtil = async (arg: UtilArg) => {
+	tg.assert(arg.env);
 	const build = arg.build ?? (await std.triple.host());
 	const host = build;
 
@@ -87,12 +88,11 @@ export const compileUtil = async (arg: UtilArg) => {
 	const { destDir, extraArgs = [], fileName, utilName, utilSource } = arg;
 
 	// Compile the util.
-	const util =
-		await tg.build`cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o $OUTPUT ${utilSource}/${fileName}`
-			.env(
-				std.env.arg(arg.env ?? {}, bootstrap.sdk.env(host), { utils: false }),
-			)
-			.then(tg.File.expect);
+	const util = await tg.build`
+			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o $OUTPUT ${utilSource}/${fileName}`
+		.env(std.env.arg(arg.env, { utils: false }))
+		.host(host)
+		.then(tg.File.expect);
 
 	// Combine with destination.
 	return tg.directory(destDir, {

@@ -27,15 +27,7 @@ export namespace sdk {
 		}
 		const bootstrapHost = await bootstrap.toolchainTriple(host);
 		const utils = await prepareBootstrapUtils(bootstrapHost);
-		let env: std.env.Arg = {};
-		if (os === "darwin") {
-			const sdkroot = await tg.Mutation.setIfUnset(bootstrap.macOsSdk());
-			env = {
-				...env,
-				SDKROOT: sdkroot,
-			};
-		}
-		return await std.env.arg(toolchain, utils, env, { utils: false });
+		return await tg.directory(toolchain, utils);
 	};
 
 	/** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */

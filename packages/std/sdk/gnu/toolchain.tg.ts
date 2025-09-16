@@ -37,7 +37,7 @@ export const toolchain = async (arg: ToolchainArg) => {
 
 	// If a cross-target was requested, build the components required using the native toolchain.
 	const nativeProxyEnv = await proxy.env({
-		toolchain: await std.env.arg(nativeToolchain, { utils: false }),
+		toolchain: nativeToolchain,
 		build: host,
 		host,
 	});
@@ -111,7 +111,7 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 
 	// Proxy the cross toolchain.
 	const crossProxyEnv = await proxy.env({
-		toolchain: await std.env.arg(buildToHostCross, { utils: false }),
+		toolchain: buildToHostCross,
 		build,
 		host,
 	});

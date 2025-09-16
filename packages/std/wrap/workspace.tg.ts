@@ -6,8 +6,7 @@ import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
 import packages from "../packages" with { type: "directory" };
 
-type Arg = {
-	buildToolchain: std.env.EnvObject;
+export type Arg = {
 	build?: string;
 	host?: string;
 	release?: boolean;
@@ -21,7 +20,6 @@ export const workspace = async (
 ): Promise<tg.Directory> => {
 	const {
 		build: build_,
-		buildToolchain,
 		host: host_,
 		release = true,
 		source: source_,
@@ -41,7 +39,6 @@ export const workspace = async (
 
 	return await tg.build(build, {
 		...(await std.triple.rotate({ build: buildTriple, host })),
-		buildToolchain,
 		release,
 		source,
 		verbose,
@@ -182,7 +179,6 @@ type RustupManifest = {
 };
 
 type BuildArg = {
-	buildToolchain?: std.env.EnvObject;
 	enableTracingFeature?: boolean;
 	host?: string;
 	release?: boolean;
@@ -220,7 +216,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 
 	// Get the appropriate toolchain directory.
 	// You need a build toolchian AND a host toolchain. These may be the same.
-	let buildToolchain = arg.buildToolchain;
+	let buildToolchain = undefined;
 	let hostToolchain = undefined;
 	let setSysroot = false;
 	if (hostOs === "linux") {
@@ -250,7 +246,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	}
 
 	const { directory, ldso, libDir } = await std.sdk.toolchainComponents({
-		env: buildToolchain,
+		env: await std.env.arg(buildToolchain, { utils: false }),
 		host: isCross ? host : host_,
 	});
 	if (setSysroot) {
@@ -447,16 +443,13 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 
 export const test = async () => {
 	// Detect the host triple.
-	const host = await std.triple.host();
+	const host = await bootstrap.toolchainTriple();
 
 	// Determine the target triple with differing architecture from the host.
 	const hostArch = std.triple.arch(host);
 	tg.assert(hostArch);
 
-	const buildToolchain = bootstrap.sdk.env(host);
-
 	const nativeWorkspace = await tg.build(workspace, {
-		buildToolchain,
 		host,
 	});
 
@@ -490,13 +483,8 @@ export const testCross = async () => {
 		os: "linux",
 		environment: "gnu",
 	});
-	const buildToolchain = await std.env.arg(
-		await tg.build(gnu.toolchain, { host, target }),
-		{ utils: false },
-	);
 
 	const crossWorkspace = await tg.build(workspace, {
-		buildToolchain,
 		build: host,
 		host: target,
 		release: false,

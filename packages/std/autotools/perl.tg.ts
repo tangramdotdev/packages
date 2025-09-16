@@ -1,25 +1,19 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
-import macosVersionPatch from "./perl_macos_version.patch" with {
-	type: "file",
-};
 
 export const metadata = {
 	name: "perl",
-	version: "5.40.2",
+	version: "5.42.0",
 };
 
 export const source = async (os: string) => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:10d4647cfbb543a7f9ae3e5f6851ec49305232ea7621aed24c7cfbb0bef4b70d";
+		"sha256:e093ef184d7f9a1b9797e2465296f55510adb6dab8842b0c3ed53329663096dc";
 	const base = `https://www.cpan.org/src/5.0`;
 	const patches = [noFixDepsPatch];
-	if (os === "darwin") {
-		patches.push(macosVersionPatch);
-	}
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
