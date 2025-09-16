@@ -234,9 +234,8 @@ export namespace wrap {
 				} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
 					return { executable: arg };
 				} else if (typeof arg === "string" || arg instanceof tg.Template) {
-					// This is a "content" executable.
+					// This is a "content" executable. The interpreter will be inferred.
 					return {
-						interpreter: await wrap.defaultShell(),
 						executable: arg,
 					};
 				} else if (isArgObject(arg)) {
@@ -293,8 +292,7 @@ export namespace wrap {
 			}
 		}
 		tg.assert(host !== undefined);
-		host = std.sdk.canonicalTriple(host);
-		const build = std.sdk.canonicalTriple(build_ ?? detectedHost);
+		const build = build_ ?? detectedHost;
 
 		// If the executable arg is a wrapper, obtain its manifest.
 		const existingManifest =
