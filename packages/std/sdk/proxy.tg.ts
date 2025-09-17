@@ -229,7 +229,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	binDir = await tg.directory(binDir, replacements);
 
 	// Return the toolchain with the modified bin directory
-	const envDir = tg.directory(buildToolchainDir, { bin: binDir });
+	return tg.directory(buildToolchainDir, { bin: binDir });
 };
 
 export default env;
