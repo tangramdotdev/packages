@@ -1,0 +1,20 @@
+[package]
+name = "tangram_convert_manifest"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+clap = { workspace = true }
+tangram_std = { workspace = true }
+tangram_serialize = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

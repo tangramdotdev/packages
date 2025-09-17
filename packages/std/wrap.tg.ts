@@ -18,9 +18,9 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
 
 	// Check if the executable is already a wrapper and get its manifest
-	const existingManifest = await wrap.existingManifestFromExecutableArg(
+	const [binary, existingManifest] = await wrap.splitManifestFromExecutableArg(
 		arg.executable,
-	);
+	).then((r) => r ? r : [undefined, undefined]);
 
 	const executable =
 		existingManifest?.executable ??
@@ -39,17 +39,36 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 				)
 			: await bootstrap.sdk.env(host);
 
-	// Construct the interpreter. When an explicit interpreter is provided,
-	// we should prioritize it over any interpreter that might be derived from the executable.
-	const manifestInterpreter = await manifestInterpreterFromWrapArgObject({
-		buildToolchain,
-		build: buildTriple,
-		host,
-		interpreter: arg.interpreter,
-		executable: arg.interpreter ? undefined : arg.executable,
-		libraryPaths: arg.libraryPaths,
-		libraryPathStrategy: arg.libraryPathStrategy,
-	});
+	// Construct the interpreter. 
+	// Cases:
+	// - the user provided an interpreter argument.
+	// - the interpreter argument is incomplete, and we need to infer the interpreter.
+	// - there was an interpreter in the original manifest.
+	// - there is no interpreter arg and no original manifest.
+	let manifestInterpreter = undefined;
+	if (arg.interpreter) {
+		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
+			buildToolchain,
+			build: buildTriple,
+			interpreter: arg.interpreter,
+			executable: undefined,
+			libraryPaths: arg.libraryPaths,
+			libraryPathStrategy: arg.libraryPathStrategy
+		});
+	}
+	if (existingManifest?.interpreter) {
+		manifestInterpreter = existingManifest.interpreter;
+	}
+	if (arg.executable && typeof arg.executable !== "number") {
+		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
+			buildToolchain,
+			build: buildTriple,
+			interpreter: undefined,
+			executable: arg.executable,
+			libraryPaths: arg.libraryPaths,
+			libraryPathStrategy: arg.libraryPathStrategy
+		});
+	}
 
 	// Use existing manifest values as defaults if we're wrapping a wrapper
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
@@ -80,7 +99,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		detectedOs === "linux"
 			? await bootstrap.toolchainTriple(buildTriple)
 			: buildTriple;
-	const wrapper = await workspace.wrapper({
+	const wrapper = binary ? binary : await workspace.wrapper({
 		build,
 		host,
 	});
@@ -104,11 +123,14 @@ export namespace wrap {
 		/** The build toolchain to use to produce components. Will use the default for the system if not provided. */
 		buildToolchain?: std.env.Arg | undefined;
 
+		/** Experimental: embed the manifest and wrapper logic into the binary. */
+		embed?: boolean;
+
 		/** Environment variables to bind to the wrapper. If the executable is wrapped, they will be merged. */
 		env?: std.env.Arg;
 
 		/** The executable to wrap. */
-		executable?: string | tg.Template | tg.File | tg.Symlink;
+		executable?: string | tg.Template | tg.File | tg.Symlink | number;
 
 		/** The host system to produce a wrapper for. */
 		host?: string;
@@ -557,9 +579,27 @@ export namespace wrap {
 		}
 	};
 
+
+	/** Utility to split a wrapped binary into its original executable and manifest, if it exists. */
+	export const splitManifestFromExecutableArg = async (
+		executable: undefined | number | string | tg.Template | tg.File | tg.Symlink,
+	): Promise<[tg.File, wrap.Manifest] | undefined> => {
+		let ret = undefined;
+		if (executable instanceof tg.File || executable instanceof tg.Symlink) {
+			const f =
+				executable instanceof tg.Symlink
+					? await executable.resolve()
+					: executable;
+			if (f instanceof tg.File)		 {
+				ret = wrap.Manifest.split(f);
+			}
+		}
+		return ret;
+	};
+
 	/** Utility to retrieve the existing manifest from an exectuable arg, if it's a wrapper. If not, returns `undefined`. */
 	export const existingManifestFromExecutableArg = async (
-		executable: undefined | string | tg.Template | tg.File | tg.Symlink,
+		executable: undefined | number | string | tg.Template | tg.File | tg.Symlink,
 	): Promise<wrap.Manifest | undefined> => {
 		let ret = undefined;
 		if (executable instanceof tg.File || executable instanceof tg.Symlink) {
@@ -579,11 +619,13 @@ export namespace wrap {
 
 	export const executableFromManifestExecutable = async (
 		manifestExecutable: wrap.Manifest.Executable,
-	): Promise<tg.Template | tg.File | tg.Symlink> => {
+	): Promise<number | tg.Template | tg.File | tg.Symlink> => {
 		if (manifestExecutable.kind === "content") {
 			return templateFromManifestTemplate(manifestExecutable.value);
-		} else {
+		} else if (manifestExecutable.kind === "path") {
 			return fileOrSymlinkFromManifestTemplate(manifestExecutable.value);
+		} else {
+			return manifestExecutable.value;
 		}
 	};
 
@@ -637,11 +679,14 @@ export namespace wrap {
 		);
 		const wrappedExecutable = manifest.executable;
 		tg.assert(
-			wrappedExecutable.kind !== "content",
+			wrappedExecutable.kind === "path",
 			"cannot determine needed libraries for a content executable",
 		);
+		if (wrappedExecutable.kind !== "path") {
+			return [];
+		}
 		const wrappedExecutableFile = await fileOrSymlinkFromManifestTemplate(
-			manifest.executable.value,
+			manifest.executable.value as wrap.Manifest.Template,
 		);
 		tg.assert(
 			wrappedExecutableFile instanceof tg.File,
@@ -665,14 +710,19 @@ export namespace wrap {
 	export const unwrap = async (
 		file: tg.File,
 	): Promise<tg.Symlink | tg.File | tg.Template> => {
-		const manifest = await wrap.Manifest.read(file);
-		if (!manifest) {
-			throw new Error(`Cannot unwrap ${file.id}: not a Tangram wrapper.`);
+		const fileAndManifest = await wrap.Manifest.split(file);
+		if (!fileAndManifest) {
+			throw new Error(`Cannot unwrap ${file.id}: not wrapped executable.`);
 		}
+		const [bin, manifest] = fileAndManifest;
 		if (manifest.executable.kind === "content") {
 			return templateFromManifestTemplate(manifest.executable.value);
-		} else {
+		} else if (manifest.executable.kind == "path") {
 			return fileOrSymlinkFromManifestTemplate(manifest.executable.value);
+		} else if (manifest.executable.kind == "address") {
+			return bin;
+		} else {
+			throw new Error("could not extract original executable");
 		}
 	};
 
@@ -712,6 +762,7 @@ export namespace wrap {
 		};
 
 		export type Executable =
+			| { kind: "address"; value: number }
 			| { kind: "path"; value: Manifest.Template }
 			| { kind: "content"; value: Manifest.Template };
 
@@ -766,6 +817,98 @@ export namespace wrap {
 		// The non-serializeable type of a normalized env.
 		export type Env = tg.Mutation<std.env.EnvObject>;
 
+		/** Split a manifest from the end of a file. */
+		export const split = async (
+			file: tg.File
+		): Promise<[tg.File, wrap.Manifest] | undefined> => {
+			// Read the magic number.
+			const magicNumberBytes = await file.read({
+				position: `end.-8`,
+				length: 8
+			});
+			for (let i = 0; i < MANIFEST_MAGIC_NUMBER.length; i++) {
+				if (magicNumberBytes[i] !== MANIFEST_MAGIC_NUMBER[i]) {
+					return undefined;
+				}
+			}
+
+			// Read the version.
+			const versionBytes = await file.read({
+				position: `end.-16`,
+				length: 8
+			});
+			const version = Number(
+				new DataView(versionBytes.buffer).getBigUint64(0, true),
+			);
+
+			if (version === MANIFEST_VERSION_0) {
+				// Read the manifest length.
+				const lengthBytes = await file.read({
+					position: `end.-24`,
+					length: 8
+				});
+				const length = Number(
+					new DataView(lengthBytes.buffer).getBigUint64(0, true),
+				);
+
+				// Read the manifest.
+				const manifestBytes = await file.read({
+					position: `end.-${length + 24}`,
+					length,
+				});
+
+				// Deserialize the manifest.
+				const manifestString = tg.encoding.utf8.decode(manifestBytes);
+				const manifest = tg.encoding.json.decode(manifestString) as wrap.Manifest; 
+
+				// Reconstruct the original file.
+				let bytes = (await file.bytes()).slice(0, await file.length() - (length + 24));
+				let new_file = await tg.file(bytes, { executable: true, dependencies: file.dependencies() });
+
+				return [new_file, manifest];
+			} else if (version === MANIFEST_VERSION_1) {
+				// Read the manifest length.
+				const lengthBytes = await file.read({
+					position: `end.-24`,
+					length: 8
+				});
+				const length = Number(
+					new DataView(lengthBytes.buffer).getBigUint64(0, true),
+				);
+				console.log(`length: ${length}`);
+				
+				// Read the manifest length.
+				const entryBytes = await file.read({
+					position: `end.-32`,
+					length: 8
+				});
+				const entrypoint = Number(
+					new DataView(entryBytes.buffer).getBigUint64(0, true),
+				);
+
+				// Read the manifest.
+				const manifestBytes = await file.read({
+					position: `end.-${length + 32}`,
+					length,
+				});
+
+				// Deserialize the manifest.
+				const manifestString = tg.encoding.utf8.decode(manifestBytes);
+				const manifest = tg.encoding.json.decode(manifestString) as wrap.Manifest;
+				manifest.executable = {
+					kind: "address",
+					value: entrypoint
+				};
+
+				// Create the new file.
+				let bytes = (await file.bytes()).slice(0, await file.length() - (length + 32));
+				let new_file = await tg.file(bytes, { executable: true, dependencies: file.dependencies() });
+				return [new_file, manifest];
+			} else {
+				return undefined;
+			}
+		};
+
 		/** Read a manifest from the end of a file. */
 		export const read = async (
 			file: tg.File,
@@ -795,27 +938,58 @@ export namespace wrap {
 			const version = Number(
 				new DataView(headerBytes.buffer).getBigUint64(position, true),
 			);
-			if (version !== MANIFEST_VERSION) {
-				return undefined;
+			if (version === MANIFEST_VERSION_0) {
+				// Read the manifest length.
+				position -= 8;
+				const manifestLength = Number(
+					new DataView(headerBytes.buffer).getBigUint64(position, true),
+				);
+
+				// Read the manifest.
+				const manifestBytes = await file.read({
+					position: `end.-${headerLength + manifestLength}`,
+					length: manifestLength,
+				});
+
+				// Deserialize the manifest.
+				const manifestString = tg.encoding.utf8.decode(manifestBytes);
+				const manifest = tg.encoding.json.decode(manifestString) as wrap.Manifest;
+				return manifest;
+			} else if (version === MANIFEST_VERSION_1) {
+				// Read the manifest length.
+				const lengthBytes = await file.read({
+					position: `end.-24`,
+					length: 8
+				});
+				const length = Number(
+					new DataView(lengthBytes.buffer).getBigUint64(0, true),
+				);
+				console.log(`length: ${length}`);
+				
+				// Read the manifest length.
+				const entryBytes = await file.read({
+					position: `end.-32`,
+					length: 8
+				});
+				const entrypoint = Number(
+					new DataView(entryBytes.buffer).getBigUint64(0, true),
+				);
+
+				// Read the manifest.
+				const manifestBytes = await file.read({
+					position: `end.-${length + 32}`,
+					length,
+				});
+
+				// Deserialize the manifest.
+				const manifestString = tg.encoding.utf8.decode(manifestBytes);
+				const manifest = tg.encoding.json.decode(manifestString) as wrap.Manifest;
+				manifest.executable = {
+					kind: "address",
+					value: entrypoint
+				};
+				return manifest;
 			}
-
-			// Read the manifest length.
-			position -= 8;
-			const manifestLength = Number(
-				new DataView(headerBytes.buffer).getBigUint64(position, true),
-			);
-
-			// Read the manifest.
-			const manifestBytes = await file.read({
-				position: `end.-${headerLength + manifestLength}`,
-				length: manifestLength,
-			});
-
-			// Deserialize the manifest.
-			const manifestString = tg.encoding.utf8.decode(manifestBytes);
-			const manifest = tg.encoding.json.decode(manifestString) as wrap.Manifest;
-
-			return manifest;
 		};
 
 		/** Write a manifest to a file. */
@@ -849,7 +1023,7 @@ export namespace wrap {
 			// Write the version.
 			new DataView(newBytes.buffer).setBigUint64(
 				newBytesPosition,
-				BigInt(MANIFEST_VERSION),
+				BigInt(MANIFEST_VERSION_0),
 				littleEndian,
 			);
 			newBytesPosition += 8;
@@ -907,12 +1081,18 @@ const MANIFEST_MAGIC_NUMBER: Uint8Array = new Uint8Array([
 	116, 97, 110, 103, 114, 97, 109, 0,
 ]);
 
-const MANIFEST_VERSION = 0;
+const MANIFEST_VERSION_0 = 0;
+const MANIFEST_VERSION_1 = 1;
 
 const manifestExecutableFromArg = async (
-	arg: string | tg.Template | tg.File | tg.Symlink | wrap.Manifest.Executable,
+	arg: number | string | tg.Template | tg.File | tg.Symlink | wrap.Manifest.Executable,
 ): Promise<wrap.Manifest.Executable> => {
-	if (isManifestExecutable(arg)) {
+	if (typeof arg === "number") {
+		return { 
+			kind: "address",
+			value: arg
+		}
+	} else if (isManifestExecutable(arg)) {
 		return arg;
 	} else if (arg instanceof tg.File || arg instanceof tg.Symlink) {
 		const value = await manifestTemplateFromArg(arg);
@@ -2226,6 +2406,9 @@ async function* manifestMutationDependencies(
 async function* manifestExecutableDependencies(
 	executable: wrap.Manifest.Executable,
 ): AsyncGenerator<tg.Object> {
+	if (executable.kind === "address") {
+		return;
+	}
 	yield* manifestTemplateDependencies(executable.value);
 }
 
