@@ -641,33 +641,33 @@ export namespace sdk {
 		host: string,
 		isCross: boolean,
 	): Promise<{ ldso?: tg.File; libDir: tg.Directory }> => {
-		if (isCross) {
-			if (std.triple.os(target) === "darwin") {
-				// Target is darwin, no LDSO needed
-				const libDir = tg.Directory.expect(await directory.tryGet("lib"));
-				return { libDir };
-			} else {
-				const libDir = tg.Directory.expect(
-					await directory.tryGet(`${target}/lib`),
-				);
-				const ldsoPath = libc.interpreterName(target);
-				const ldso = tg.File.expect(await libDir.tryGet(ldsoPath));
-				return { ldso, libDir };
-			}
+		// The Linux-to-Darwin cross toolchain has no LDSO.
+		if (isCross && std.triple.os(target) === "darwin") {
+			const libDir = tg.Directory.expect(await directory.tryGet("lib"));
+			return { libDir };
 		} else {
-			// Search LIBRARY_PATH for dynamic linker
-			const ldsoPath = libc.interpreterName(host);
-			for await (const [_parent, dir] of std.env.dirsInVar({
-				env,
-				key: "LIBRARY_PATH",
-			})) {
-				const foundLdso = await dir.tryGet(ldsoPath);
-				if (foundLdso) {
-					const ldso = tg.File.expect(foundLdso);
-					return { ldso, libDir: dir };
+			// All other toolchains will place their sysroot libdir and ldso in either the toplevel lib or triple-prefixed sysroot lib directory.
+			const ldsoPath = libc.interpreterName(target);
+
+			// Try the toplevel lib directory first
+			let libDir = await directory.tryGet("lib");
+			if (libDir && libDir instanceof tg.Directory) {
+				const ldso = await libDir.tryGet(ldsoPath);
+				if (ldso && ldso instanceof tg.File) {
+					return { ldso, libDir };
 				}
 			}
-			throw new Error("Could not find dynamic linker in LIBRARY_PATH");
+
+			// If not found in toplevel lib, try the target-prefixed directory.
+			libDir = await directory
+				.tryGet(`${target}/lib`)
+				.then(tg.Directory.expect);
+			tg.assert(
+				libDir && libDir instanceof tg.Directory,
+				"failed to locate toolchain sysroot libdir",
+			);
+			const ldso = await libDir.tryGet(ldsoPath).then(tg.File.expect);
+			return { ldso, libDir };
 		}
 	};
 

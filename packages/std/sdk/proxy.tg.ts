@@ -368,7 +368,8 @@ export const test = async () => {
 		testSharedLibraryWithDep(),
 		testStrip(),
 	];
-	return await Promise.all(tests);
+	await Promise.all(tests);
+	return true;
 };
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
