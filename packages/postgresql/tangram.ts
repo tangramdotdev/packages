@@ -15,7 +15,7 @@ export const metadata = {
 	license: "https://www.postgresql.org/about/licence/",
 	name: "postgresql",
 	repository: "https://git.postgresql.org/gitweb/?p=postgresql.git;a=summary",
-	version: "17.5",
+	version: "17.6",
 	provides: {
 		binaries: ["postgres", "psql"],
 		libraries: ["pq"],
@@ -25,7 +25,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8";
+		"sha256:e0630a3600aea27511715563259ec2111cd5f4353a4b040e0be827f94cd7a8b0";
 	const extension = ".tar.bz2";
 	const base = `https://ftp.postgresql.org/pub/source/v${version}`;
 	const output = await std.download
@@ -111,11 +111,6 @@ export const build = async (...args: std.Args<Arg>) => {
 	const sourceDir = source_ ?? source();
 
 	const configureArgs = ["--disable-rpath", "--with-lz4", "--with-zstd"];
-	if (os === "darwin") {
-		configureArgs.push(
-			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
-		);
-	}
 
 	const configure = {
 		args: configureArgs,
@@ -124,15 +119,17 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	if (os === "darwin") {
 		env.push({
-			CC: "gcc",
-			CXX: "g++",
+			LDFLAGS_SL: tg.Mutation.suffix("-Wl,-undefined,dynamic_lookup", " "),
 		});
 	}
+
+	let parallel = os !== "darwin";
 
 	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(...env),
+			parallel,
 			phases,
 			sdk,
 			setRuntimeLibraryPath: true,
