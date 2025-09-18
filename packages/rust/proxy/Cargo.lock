@@ -987,9 +987,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.78"
+version = "0.3.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c0b063578492ceec17683ef2f8c5e89121fbd0b172cbc280635ab7567db2738"
+checksum = "852f13bec5eba4ba9afbeb93fd7c13fe56147f055939ae21c43a29a0ecb2702e"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
@@ -1738,7 +1738,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1787,7 +1787,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -1796,7 +1796,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "dashmap",
  "futures",
@@ -1807,7 +1807,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "bytes",
  "derive_more",
@@ -1832,7 +1832,7 @@ dependencies = [
 [[package]]
 name = "tangram_itertools"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "tangram_either",
 ]
@@ -1855,7 +1855,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "byteorder",
  "bytes",
@@ -1868,7 +1868,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "itertools",
  "num",
@@ -1880,7 +1880,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "derive_more",
  "regex",
@@ -1890,7 +1890,7 @@ dependencies = [
 [[package]]
 name = "tangram_version"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=96aa17d30481db086111300f5c6740f4e95ee4be#96aa17d30481db086111300f5c6740f4e95ee4be"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39#b3c56f4a986afbbc62863aeaa9a7a98ffbec8e39"
 dependencies = [
  "derive_more",
  "winnow",
@@ -2293,9 +2293,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.101"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e14915cadd45b529bb8d1f343c4ed0ac1de926144b746e2710f9cd05df6603b"
+checksum = "ab10a69fbd0a177f5f649ad4d8d3305499c42bab9aef2f7ff592d0ec8f833819"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -2306,9 +2306,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-backend"
-version = "0.2.101"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e28d1ba982ca7923fd01448d5c30c6864d0a14109560296a162f80f305fb93bb"
+checksum = "0bb702423545a6007bbc368fde243ba47ca275e549c8a28617f56f6ba53b1d1c"
 dependencies = [
  "bumpalo",
  "log",
@@ -2320,9 +2320,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.101"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c3d463ae3eff775b0c45df9da45d68837702ac35af998361e2c84e7c5ec1b0d"
+checksum = "fc65f4f411d91494355917b605e1480033152658d71f722a90647f56a70c88a0"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -2330,9 +2330,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.101"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bb4ce89b08211f923caf51d527662b75bdc9c9c7aab40f86dcb9fb85ac552aa"
+checksum = "ffc003a991398a8ee604a401e194b6b3a39677b3173d6e74495eb51b82e99a32"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2343,9 +2343,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.101"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f143854a3b13752c6950862c906306adb27c7e839f7414cec8fea35beab624c1"
+checksum = "293c37f4efa430ca14db3721dfbe48d8c33308096bd44d80ebaa775ab71ba1cf"
 dependencies = [
  "unicode-ident",
 ]
