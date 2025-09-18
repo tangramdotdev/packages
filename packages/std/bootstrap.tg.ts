@@ -2,7 +2,7 @@ import * as std from "./tangram.ts";
 
 export * as make from "./bootstrap/make.tg.ts";
 export * as musl from "./bootstrap/musl.tg.ts";
-export { sdk } from "./bootstrap/sdk.tg.ts";
+export { sdk, sdk2 } from "./bootstrap/sdk.tg.ts";
 
 export type Arg = {
 	/** Specify which component to provide. */

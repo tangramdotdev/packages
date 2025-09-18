@@ -6,6 +6,10 @@ export async function sdk(host?: string) {
 	return std.sdk(sdk.arg(host));
 }
 
+export async function sdk2(host?: string) {
+	return std.sdk(sdk.arg(host), { embedWrapper: false });
+}
+
 export namespace sdk {
 	/** Produce the arg object to create a bootstrap-only SDK. */
 	export const arg = async (hostArg?: string): Promise<std.sdk.Arg> => {

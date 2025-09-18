@@ -31,6 +31,13 @@ typedef struct
 	uintptr_t	auxv_glob[32];	// sorted aux vector, for quick lookup later.
 } Stack;
 
+typedef struct
+{
+	bool enable_tracing;
+	bool suppress_args;
+	bool suppress_env;
+} Options;
+
 // Debugging helper.
 static void print_stack (Stack* stack) {
 	DBG("{\n");
@@ -53,6 +60,46 @@ static void print_stack (Stack* stack) {
 		);
 	}
 	DBG("\t]\n}\n");
+}
+
+static void parse_options(Stack* stack, Options* options) {
+	options->enable_tracing = false;
+	options->suppress_args = false;
+	options->suppress_env = false;
+
+	String TANGRAM_SUPPRESS_ARGS = STRING_LITERAL("TANGRAM_SUPPRESS_ARGS");
+	String TANGRAM_SUPPRESS_ENV = STRING_LITERAL("TANGRAM_SUPPRESS_ENV");
+	String TANGRAM_TRACING = STRING_LITERAL("TANGRAM_TRACING");
+	char **itr, **end;
+
+	// Parse args.
+	itr = stack->argv;
+	end = itr + stack->argc;
+	for(; itr != end; itr++) {
+		String s = STRING_LITERAL(*itr);
+		if (cstreq(s, "--tangram-suppress-args")) {
+			options->suppress_args = true;
+		}
+		if (cstreq(s, "--tangram-suppress-env")) {
+			options->suppress_env = true;
+		}
+	}
+
+	// Parse envs.
+	itr = stack->envp;
+	end = itr + stack->envc;
+	for(; itr != end; itr++) {
+		String s = STRING_LITERAL(*itr);
+		if (starts_with(s, TANGRAM_SUPPRESS_ARGS)) {
+			options->suppress_args = true;
+		}
+		if (starts_with(s, TANGRAM_SUPPRESS_ENV)) {
+			options->suppress_env = true;
+		}
+		if (starts_with(s, TANGRAM_TRACING)) {
+			options->enable_tracing = true;
+		}
+	}
 }
 
 // Scan the bottom of the stack to extract argv, envp, auxv and their counts.
@@ -124,9 +171,8 @@ static inline void* prepare_stack (
 	// Get the default stack size using ulimit. TODO: how does this work w/ cgroups?
 	rlimit_t rlim;
 	ABORT_IF(getrlimit(RLIMIT_STACK, &rlim), "failed to get the stack size");
-
 	size_t stack_size = rlim.soft;
-	
+
 	// Allocate the stack. On x86_64, the stack "grows down" meaning that the address returned by mmap is actually the lowest possible address for the stack. The "top" of the new stack is the address of one page past it.
 	void* bp = mmap(
 		0,
@@ -137,16 +183,10 @@ static inline void* prepare_stack (
 		0
 	);
 	void* sp = bp + stack_size;
-	DBG("created stack");
 
 	// Push environment variables. Order doesn't matter.
 	int e = 0;
 	char** envp = ALLOC_N(arena, manifest->env.size + 1, char*);
-	DBG("allocated envp");
-
-	// Do we need this?
-	push_str(&sp, "TANGRAM_INJECTION_IDENTITY_PATH=/proc/self/exe");
-	envp[e++] = sp;
 
 	// Add envs.
 	for (int i = 0; i < manifest->env.capacity; i++) {
@@ -162,7 +202,6 @@ static inline void* prepare_stack (
 				memcpy(str, node->key.ptr, node->key.len);
 				str[node->key.len] = '=';
 				memcpy(str + node->key.len + 1, node->val.ptr, node->val.len);
-				DBG("env var: %s", str);
 
 				// Push the string onto the stack.
 				push_str(&sp, str);
@@ -177,7 +216,7 @@ static inline void* prepare_stack (
 	// Push arg vector. Order still does not matter.
 	int a = 0;
 	char** argv = ALLOC_N(arena, manifest->argc + 1, char*);
-	
+
 	// Add argv0
 	push_str(&sp, stack->argv[0]);
 	argv[a++] = sp;
@@ -189,7 +228,7 @@ static inline void* prepare_stack (
 		((char*)sp)[arg.len] = 0;
 		argv[a++] = sp;
 	}
-	
+
 	// Push 16 null bytes.
 	PUSH(sp, 0ul);
 	PUSH(sp, 0ul);
@@ -483,49 +522,15 @@ static ProgramHeaders create_program_headers(
 static int read_and_process_manifest (
 	Arena* arena,
 	Stack* stack,
+	Options* options,
 	Manifest* manifest,
 	Footer*	footer
 ) {
-	// Parse options.
-	bool suppress_env = false;
-	bool suppress_args = false;
-	{
-		String TANGRAM_SUPPRESS_ARGS = STRING_LITERAL("TANGRAM_SUPPRESS_ARGS");
-		String TANGRAM_SUPPRESS_ENV = STRING_LITERAL("TANGRAM_SUPPRESS_ENV");
-		char **itr, **end;
-
-		// Parse args.
-		itr = stack->argv;
-		end = itr + stack->argc;
-		for(; itr != end; itr++) {
-			String s = STRING_LITERAL(*itr);
-			if (cstreq(s, "--tangram-suppress-args")) {
-				suppress_args = true;
-			}
-			if (cstreq(s, "--tangram-suppress-env")) {
-				suppress_env = true;
-			}
-		}
-
-		// Parse envs.
-		itr = stack->envp;
-		end = itr + stack->envc;
-		for(; itr != end; itr++) {
-			String s = STRING_LITERAL(*itr);
-			if (starts_with(s, TANGRAM_SUPPRESS_ARGS)) {
-				suppress_args = true;
-			}
-			if (starts_with(s, TANGRAM_SUPPRESS_ENV)) {
-				suppress_env = true;
-			}
-		}
-	}
-
 	// Initialize envp.
 	create_table(arena, &manifest->env, 4096);
 
 	// Fill the env table.
-	if (!suppress_env) {
+	if (!options->suppress_env) {
 		for (int i = 0; i < stack->envc; i++) {
 			char* e = stack->envp[i];
 			size_t len = strlen(stack->envp[i]);
@@ -607,7 +612,7 @@ static int read_and_process_manifest (
 	DBG("parsed manifest.");
 
 	// Append the arg list if necessary.
-	if (!suppress_args) {
+	if (!options->suppress_args) {
 		// Allocate a new arg vector.
 		String* argv = ALLOC_N(arena, stack->argc + manifest->argc, String);
 		size_t argc = 0;
@@ -628,6 +633,17 @@ static int read_and_process_manifest (
 		manifest->argv = argv;
 		manifest->argc = argc;
 	}
+
+	// Get /proc/self/exe.
+	String proc_self_exe;
+	proc_self_exe.ptr = ALLOC_N(arena, 4096, uint8_t);
+	long sz = readlink("/proc/self/exe", proc_self_exe.ptr, 4096);
+	ABORT_IF(sz < 0, "failed to read /proc/self/exe");
+	proc_self_exe.len = sz;
+
+	// Set TANGRAM_INJECTION_IDENTITY_PATH.
+	String k = STRING_LITERAL("TANGRAM_INJECTION_IDENTITY_PATH");
+	insert(arena, &manifest->env, k, proc_self_exe);
 
 	return 1;
 }
@@ -655,33 +671,45 @@ char* cstr (Arena *arena, String s) {
 	return c;
 }
 
-void exec (Arena* arena, Manifest* manifest) {
+void exec (Arena* arena, Manifest* manifest, char* argv0, Options* options) {
 	// Sanity check.
 	ABORT_IF(!manifest->executable.ptr, "missing executable");
+	ABORT_IF(!argv0, "missing argv0");
 	
 	// Get the executable path.
-	char* pathname = manifest->interpreter.ptr 
-		? manifest->interpreter.ptr 
-		: manifest->executable.ptr;
-	
+	char* pathname = manifest->interpreter.ptr
+		? cstr(arena, manifest->interpreter)
+		: cstr(arena, manifest->executable);
+
 	// Compute argc.
-	size_t argc = manifest->argc + manifest->interp_argc + 2;
+	size_t argc = manifest->argc 
+		+ manifest->interp_argc 
+		+ 1  // pathname
+		+ 1  // --argv0
+		+ 1  // argv[0]
+		+ 1  // --
+		+ 1; // executable
 
 	// Create argv, envp
 	char** argv = ALLOC_N(arena, argc + 1, char*);
 	char** envp = ALLOC_N(arena, manifest->env.size + 1, char*);
-
+	
 	// Fill argv.
 	size_t n = 0;
+	argv[n++] = pathname;
 	if (manifest->interpreter.ptr) {
-		argv[n++] = manifest->interpreter.ptr;
 		for (int i = 0; i < manifest->interp_argc; i++) {
 			argv[n++] = cstr(arena, manifest->interp_argv[i]);
 		}
+		argv[n++] = "--argv0";
+		argv[n++] = argv0;
+		argv[n++] = "--";
+		argv[n++] = cstr(arena, manifest->executable);
 	}
 	for (int i = 0; i < manifest->argc; i++) {
-		argv[n++] = cstr(arena, manifest->argv[n]);
+		argv[n++] = cstr(arena, manifest->argv[i]);
 	}
+	argv[n++] = NULL;
 
 	// Fill envp.
 	size_t e = 0;
@@ -705,6 +733,17 @@ void exec (Arena* arena, Manifest* manifest) {
 			node = node->next;
 		}
 	}
+	envp[e++] = NULL;
+	if (options->enable_tracing) {
+		trace("about to exec...\n");
+		trace("pathname = %s\n", pathname);
+		for (int i = 0; i < argc; i++) {
+			trace("argv[%d] = %s\n", i, argv[i]);
+		}
+		for (int i = 0; i < e; i++) {
+			trace("envp[%d] = %s\n", i, envp[i]);
+		}
+	}
 	int ec = execve(pathname, argv, envp);
 	ABORT("execve failed: %d", ec);
 }
@@ -715,6 +754,7 @@ void _stub_start (void *sp) {
 	Arena arena = {0};
 	Footer footer = {0};
 	Stack stack = {0};
+	Options options = {0};
 
 	// Set the stack pointer.
 	stack.sp = sp;
@@ -722,6 +762,11 @@ void _stub_start (void *sp) {
 	// Scan the stack to collect argv/envp/auxiv.
 	scan_stack(&stack);
 
+	// Parse options.
+	parse_options(&stack, &options);
+	if (options.enable_tracing) {
+		print_stack(&stack);
+	}
 	// We need to search the aux vector for the program header table and index of the entry point.
 	Elf64_Phdr* phdr    = (Elf64_Phdr*)stack.auxv_glob[AT_PHDR];
 	uint64_t    ph_num  = (uint64_t)stack.auxv_glob[AT_PHNUM];
@@ -773,7 +818,7 @@ void _stub_start (void *sp) {
 
 	// Process the manifest.
 	Manifest* manifest = ALLOC(&arena, Manifest);
-	if (!read_and_process_manifest(&arena, &stack, manifest, &footer)) {
+	if (!read_and_process_manifest(&arena, &stack, &options, manifest, &footer)) {
 		ABORT("failed to parse manifest");
 	}
 
@@ -781,6 +826,9 @@ void _stub_start (void *sp) {
 	String arg = STRING_LITERAL("--tangram-print-manifest");
 	for (int i = 1; i < stack.argc; i++) {
 		if (cstreq(arg, stack.argv[i])) {
+			if (footer.version == 1) {
+				trace("footer entrypoint: 0x%lx\n", footer.entry);
+			}
 			print_manifest(manifest);
 			exit(0);
 		}
@@ -794,7 +842,7 @@ void _stub_start (void *sp) {
 		stack.auxv[nentry].a_un.a_val = (uintptr_t)base_address + footer.entry;
 	} else if (manifest->executable.ptr) {
 		// Create the arg vector.
-		exec(&arena, manifest);
+		exec(&arena, manifest, stack.argv[0], &options);
 	} else {
 		ABORT("missing executable or entrypoint");
 	}

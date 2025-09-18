@@ -17,8 +17,8 @@ void tangram_injection() {
 	// Set the identity path.
 	char* value = getenv("TANGRAM_INJECTION_IDENTITY_PATH");
 	if (value == NULL) {
-		fprintf(stderr, "Error: TANGRAM_INJECTION_IDENTITY_PATH is not set.\n");
-		exit(1);
+		// fprintf(stderr, "Warning: TANGRAM_INJECTION_IDENTITY_PATH is not set.\n");
+		return;
 	}
 	IDENTITY_PATH = (char*)malloc(strlen(value) + 1);
 	strcpy(IDENTITY_PATH, value);
@@ -27,6 +27,11 @@ void tangram_injection() {
 
 // Return true if `path` is "/proc/self/exe" or "/proc/$current_pid/exe".
 static bool path_is_proc_self_exe(const char* path) {
+	// Temp hack.
+	if (!IDENTITY_PATH) {
+		return false;
+	}
+
 	// Immediately bail on relative paths.
 	if (path[0] != '/') {
 		return false;
@@ -53,7 +58,7 @@ static bool path_is_proc_self_exe(const char* path) {
  *
  * Unlike `readlink`, the program will exit if an error is encountered. Any errors are assumed to be bugs in the implementation of this function.
  */
-ssize_t proc_self_exe_readlink(char* buf, size_t bufsiz) {
+static ssize_t proc_self_exe_readlink(char* buf, size_t bufsiz) {
 	char* path = IDENTITY_PATH;
 	size_t path_length = strlen(path);
 	size_t copy_length = MIN(path_length, bufsiz);
@@ -69,11 +74,14 @@ typedef ssize_t (*_real_readlink_t)(
 	size_t bufsiz
 );
 
-ssize_t _real_readlink(const char* pathname, char* buf, size_t bufsiz) {
+static ssize_t _real_readlink(const char* pathname, char* buf, size_t bufsiz) {
 	return ((_real_readlink_t)dlsym(RTLD_NEXT, "readlink"))(pathname, buf, bufsiz);
 }
 
 ssize_t readlink(const char* pathname, char* buf, size_t bufsiz) {
+	if (!IDENTITY_PATH) {
+
+	}
 	if (path_is_proc_self_exe(pathname)) {
 		return proc_self_exe_readlink(buf, bufsiz);
 	}
@@ -90,7 +98,7 @@ typedef ssize_t (*_real_readlinkat_t)(
 	size_t bufsiz
 );
 
-ssize_t _real_readlinkat(int dirfd, const char* pathname, char* buf, size_t bufsiz) {
+static ssize_t _real_readlinkat(int dirfd, const char* pathname, char* buf, size_t bufsiz) {
 	return ((_real_readlinkat_t)dlsym(RTLD_NEXT, "readlinkat"))(
 		dirfd,
 		pathname,
@@ -126,7 +134,7 @@ typedef ssize_t (*_real_open_t)(
 	mode_t mode
 );
 
-int _real_open(const char* pathname, int flags, mode_t mode) {
+static int _real_open(const char* pathname, int flags, mode_t mode) {
 	return ((_real_open_t)dlsym(RTLD_NEXT, "open"))(pathname, flags, mode);
 }
 
@@ -146,7 +154,7 @@ typedef ssize_t (*_real_open64_t)(
 	mode_t mode
 );
 
-int _real_open64(const char* pathname, int flags, mode_t mode) {
+static int _real_open64(const char* pathname, int flags, mode_t mode) {
 	return ((_real_open64_t)dlsym(RTLD_NEXT, "open64"))(pathname, flags, mode);
 }
 
@@ -167,7 +175,7 @@ typedef ssize_t (*_real_openat_t)(
 	mode_t mode
 );
 
-int _real_openat(int dirfd, const char* pathname, int flags, mode_t mode) {
+static int _real_openat(int dirfd, const char* pathname, int flags, mode_t mode) {
 	return ((_real_openat_t)dlsym(RTLD_NEXT, "openat"))(
 		dirfd,
 		pathname,
@@ -193,7 +201,7 @@ typedef ssize_t (*_real_openat64_t)(
 	mode_t mode
 );
 
-int _real_openat64(int dirfd, const char* pathname, int flags, mode_t mode) {
+static int _real_openat64(int dirfd, const char* pathname, int flags, mode_t mode) {
 	return ((_real_openat64_t)dlsym(RTLD_NEXT, "openat64"))(
 		dirfd,
 		pathname,

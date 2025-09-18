@@ -21,6 +21,7 @@ export * as proxy from "./sdk/proxy.tg.ts";
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
 export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 	let {
+		embedWrapper,
 		host,
 		proxyCompiler,
 		proxyLinker,
@@ -84,6 +85,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 	// Proxy the host toolchain.
 	let proxyArg: proxy.Arg = {
 		compiler: proxyCompiler,
+		embedWrapper,
 		linker: proxyLinker,
 		strip: proxyStrip,
 		toolchain: toolchain,
@@ -101,6 +103,7 @@ export namespace sdk {
 	export type Arg = undefined | ArgObject;
 
 	export type ArgObject = {
+		embedWrapper?: boolean | undefined;
 		/** The machine this SDK will compile on. */
 		host?: string;
 		/** An alternate linker to use. */
@@ -119,6 +122,7 @@ export namespace sdk {
 
 	export const arg = async (...args: std.Args<Arg>) => {
 		let {
+			embedWrapper,
 			host: host_,
 			linker,
 			proxyCompiler = false,
@@ -163,6 +167,7 @@ export namespace sdk {
 		}
 
 		return {
+			embedWrapper,
 			host,
 			proxyCompiler,
 			proxyLinker,

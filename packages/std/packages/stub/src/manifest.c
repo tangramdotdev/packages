@@ -7,6 +7,7 @@
 
 #define ARTIFACTS_DIR "/.tangram/artifacts"
 #define ARTIFACTS_DIR_LEN 19
+#define PATH_MAX 4096
 static void find_artifacts_dir (Arena* arena, String* path) {
 	stat_t statbuf;
 
@@ -18,8 +19,8 @@ static void find_artifacts_dir (Arena* arena, String* path) {
 	}
 
 	// Get cwd.
-	path->ptr = alloc(arena, 2048, 1);
-	ABORT_IF(getcwd(path->ptr, 2048 - ARTIFACTS_DIR_LEN - 1 <= 0), "failed to get the cwd");
+	path->ptr = alloc(arena, PATH_MAX, 1);
+	ABORT_IF(getcwd(path->ptr, PATH_MAX - ARTIFACTS_DIR_LEN) - 1 <= 0, "failed to get the cwd");
 	path->len = strlen(path->ptr);
 
 	// Walk the parent directory tree.
@@ -93,3 +94,4 @@ void parse_manifest (
 	}
 
 }
+#undef PATH_MAX

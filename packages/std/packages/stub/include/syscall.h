@@ -96,8 +96,8 @@ static inline int munmap(void* addr, uint64_t len) {
 	return (int)syscall2(__NR_munmap, (long)addr, (long)len);
 }
 
-static inline char* getcwd(char* buf, size_t size) {
-	return (char*)syscall2(__NR_getcwd, (long)buf, (long)size);
+static inline int getcwd(char* buf, size_t size) {
+	return (int)syscall2(__NR_getcwd, (long)buf, (long)size);
 }
 
 static inline int stat (const char* pathname, stat_t* statbuf) {
@@ -108,6 +108,10 @@ static inline long getrandom (void *buf, size_t buflen, unsigned int flags) {
 	return (long)syscall3(__NR_getrandom, (long)buf, (long)buflen, (long)flags);
 }
 
-static inline int execve (char* pathname, char** const argv, char** envp) {
+static inline int execve (char* pathname, char** argv, char** envp) {
 	return (int)syscall3(__NR_execve, (long)pathname, (long)argv, (long)envp);
+}
+
+static inline long readlink (const char* pathname, char* buf, size_t bufsiz) {
+	return syscall3(__NR_readlink, (long)pathname, (long)buf, (long)bufsiz);
 }
