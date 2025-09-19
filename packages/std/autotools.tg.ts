@@ -209,9 +209,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 
 	if (!bootstrap) {
-		// Set up the SDK, add it to the environment.
-		const sdkArg = await std.sdk.arg({ host, target }, sdkArg_);
-		const sdk = await tg.build(std.sdk, sdkArg);
+		// Set up the host SDK, add it to the environment.
+		const sdk = await tg.build(std.sdk, { host });
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
 		let level: Level | undefined = undefined;
 		if (pkgConfig) {
@@ -226,10 +225,15 @@ export const build = async (...args: std.Args<Arg>) => {
 		if (level !== undefined) {
 			const buildToolsEnv = await tg.build(buildTools, {
 				host,
-				buildToolchain: await tg.build(std.sdk, { host }),
+				buildToolchain: sdk,
 				level,
 			});
 			envs.push(sdk, buildToolsEnv);
+			// Add a cross SDK if necessary.
+			if (host !== target) {
+				const crossSdk = await tg.build(std.sdk, { host, target });
+				envs.push(crossSdk);
+			}
 		}
 	}
 

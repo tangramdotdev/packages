@@ -5,6 +5,7 @@ import * as ncurses from "ncurses" with { local: "../ncurses" };
 import * as openssl from "openssl" with { local: "../openssl" };
 import * as readline from "readline" with { local: "../readline" };
 import * as std from "std" with { local: "../std" };
+import * as tzdb from "tzdb" with { local: "../tzdb" };
 import * as zlib from "zlib" with { local: "../zlib" };
 import * as zstd from "zstd" with { local: "../zstd" };
 
@@ -110,7 +111,11 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const sourceDir = source_ ?? source();
 
-	const configureArgs = ["--disable-rpath", "--with-lz4", "--with-zstd"];
+	const configureArgs: tg.Unresolved<Array<tg.Template.Arg>> = [
+		"--disable-rpath",
+		"--with-lz4",
+		"--with-zstd",
+	];
 
 	const configure = {
 		args: configureArgs,
@@ -121,6 +126,43 @@ export const build = async (...args: std.Args<Arg>) => {
 		env.push({
 			LDFLAGS_SL: tg.Mutation.suffix("-Wl,-undefined,dynamic_lookup", " "),
 		});
+	}
+
+	let libraryDirs = [
+		icuArtifact,
+		ncursesArtifact,
+		opensslArtifact,
+		readlineArtifact,
+		lz4Artifact,
+		zlibArtifact,
+		zstdArtifact,
+	];
+
+	let libraryLibDirs = libraryDirs
+		.filter((v) => v !== undefined)
+		.map((dir) => dir.get("lib").then(tg.Directory.expect));
+	let libraryIncludeDirs = libraryDirs
+		.filter((v) => v !== undefined)
+		.map((dir) => dir.get("include").then(tg.Directory.expect));
+
+	if (build !== host) {
+		// For cross, the library directories must be explicitly enumerated.
+		let libDirTemplate = libraryLibDirs.reduce(
+			(acc, el) => tg.Template.join(":", acc, el),
+			tg``,
+		);
+		let includeDirTemplate = libraryIncludeDirs.reduce(
+			(acc, el) => tg.Template.join(":", acc, el),
+			tg``,
+		);
+		configureArgs.push(
+			tg`--with-libraries=${libDirTemplate}`,
+			tg`--with-includes=${includeDirTemplate}`,
+			"--without-icu",
+		);
+		// For cross builds, we must provide `zic` for the build machine.
+		const tzdbArtifact = tzdb.build({ build, host: build });
+		env.push(tzdbArtifact);
 	}
 
 	let parallel = os !== "darwin";
@@ -138,23 +180,12 @@ export const build = async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
-	let libraryPaths = [
-		icuArtifact,
-		ncursesArtifact,
-		opensslArtifact,
-		readlineArtifact,
-		lz4Artifact,
-		zlibArtifact,
-		zstdArtifact,
-	]
-		.filter((v) => v !== undefined)
-		.map((dir) => dir.get("lib").then(tg.Directory.expect));
-	libraryPaths.push(output.get("lib").then(tg.Directory.expect));
+	libraryLibDirs.push(output.get("lib").then(tg.Directory.expect));
 
 	let binDir = await output.get("bin").then(tg.Directory.expect);
 	for await (let [name, artifact] of binDir) {
 		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths });
+		let wrappedBin = await std.wrap(file, { libraryPaths: libraryLibDirs });
 		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
 	}
 

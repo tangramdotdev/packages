@@ -151,6 +151,8 @@ export namespace sdk {
 			target = host;
 		}
 
+		validateCrossTarget({ host, target });
+
 		// Set the default toolchain if not provided.
 		if (toolchain_ === undefined) {
 			toolchain_ = hostOs === "darwin" ? "llvm" : "gnu";
@@ -311,7 +313,6 @@ export namespace sdk {
 		});
 		const os = std.triple.os(host);
 		const target = targetTriple ?? host;
-		const standardizedTarget = std.sdk.canonicalTriple(target);
 		const detectedHost = await std.triple.host();
 		const host__ = host_ ?? detectedHost;
 		const standardizedHost = std.sdk.canonicalTriple(host__);
@@ -344,10 +345,8 @@ export namespace sdk {
 		// Locate dynamic interpreter and lib directory
 		const { ldso, libDir } = await locateDynamicComponents(
 			directory,
-			env,
 			os,
 			target,
-			host,
 			isCross,
 		);
 
@@ -462,7 +461,7 @@ export namespace sdk {
 		if (flavor === "gnu") {
 			return await tryDetectGnuCompilers(env, targetPrefix);
 		} else {
-			return await tryDetectLlvmCompilers(env, targetPrefix);
+			return await tryDetectLlvmCompilers(env);
 		}
 	};
 
@@ -495,7 +494,6 @@ export namespace sdk {
 
 	const tryDetectLlvmCompilers = async (
 		env: std.env.EnvObject,
-		targetPrefix: string,
 	): Promise<Omit<CompilerInfo, "targetPrefix"> | undefined> => {
 		const clang = await std.env.tryWhich({ env, name: "clang" });
 		if (!clang) {
@@ -595,16 +593,14 @@ export namespace sdk {
 
 	const locateDynamicComponents = async (
 		directory: tg.Directory,
-		env: std.env.EnvObject,
 		os: string,
 		target: string,
-		host: string,
 		isCross: boolean,
 	): Promise<{ ldso?: tg.File; libDir: tg.Directory }> => {
 		if (os === "darwin") {
 			return await locateDarwinComponents(directory, target, isCross);
 		} else {
-			return await locateUnixComponents(directory, env, target, host, isCross);
+			return await locateUnixComponents(directory, target, isCross);
 		}
 	};
 
@@ -636,9 +632,7 @@ export namespace sdk {
 
 	const locateUnixComponents = async (
 		directory: tg.Directory,
-		env: std.env.EnvObject,
 		target: string,
-		host: string,
 		isCross: boolean,
 	): Promise<{ ldso?: tg.File; libDir: tg.Directory }> => {
 		// The Linux-to-Darwin cross toolchain has no LDSO.
@@ -1179,7 +1173,6 @@ type ValidateCrossTargetArg = {
 	target: string;
 };
 
-// FIXME - this is never called?
 const validateCrossTarget = (arg: ValidateCrossTargetArg) => {
 	const { host, target } = arg;
 

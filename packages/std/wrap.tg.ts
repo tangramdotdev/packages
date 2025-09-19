@@ -283,7 +283,9 @@ export namespace wrap {
 				} else if (metadata.format === "elf") {
 					os = "linux";
 					arch = metadata.arch;
-					host = std.triple.fromComponents({ arch, os });
+					host = std.sdk.canonicalTriple(
+						std.triple.fromComponents({ arch, os }),
+					);
 				} else {
 					host = detectedHost;
 				}
@@ -2415,6 +2417,51 @@ export const testSingleArgObjectNoMutations = async () => {
 		"Expected second arg to be --arg2",
 	);
 	tg.assert(text.includes("HELLO=WORLD"), "Expected HELLO to be set");
+
+	return wrapper;
+};
+
+export const testBasicCross = async () => {
+	const detectedBuild = await std.triple.host();
+	const detectedOs = std.triple.os(detectedBuild);
+	if (detectedOs === "darwin") {
+		throw new Error(`Cross-compilation is not supported on Darwin`);
+	}
+	const detectedArch = std.triple.arch(detectedBuild);
+	const crossArch = detectedArch === "x86_64" ? "aarch64" : "x86_64";
+	const crossHost = std.sdk.canonicalTriple(
+		std.triple.create(detectedBuild, { arch: crossArch }),
+	);
+
+	const executable = await argAndEnvDump({
+		build: detectedBuild,
+		host: crossHost,
+	});
+	await executable.store();
+	const executableID = executable.id;
+	// The program is a wrapper produced by the LD proxy.
+	console.log("argAndEnvDump wrapper ID", executableID);
+
+	const wrapper = await wrap(executable, {
+		args: ["--arg1", "--arg2"],
+		env: {
+			HELLO: "WORLD",
+		},
+	});
+	await wrapper.store();
+	const wrapperID = wrapper.id;
+	console.log("wrapper id", wrapperID);
+
+	// Check the manifest can be deserialized properly.
+	const manifest = await wrap.Manifest.read(wrapper);
+	console.log("wrapper manifest", manifest);
+	tg.assert(manifest);
+	tg.assert(manifest.interpreter);
+
+	// Asser the wrapper was built for the cross host.
+	const wrapperMetadata = await std.file.executableMetadata(wrapper);
+	tg.assert(wrapperMetadata.format === "elf");
+	tg.assert(wrapperMetadata.arch === crossArch);
 
 	return wrapper;
 };
