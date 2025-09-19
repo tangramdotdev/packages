@@ -40,26 +40,26 @@ typedef struct
 
 // Debugging helper.
 static void print_stack (Stack* stack) {
-	DBG("{\n");
-	DBG("\targc: %d,\n", stack->argc);
-	DBG("\targv: [\n");
+	trace("{\n");
+	trace("\targc: %d,\n", stack->argc);
+	trace("\targv: [\n");
 	for (int n = 0; n < stack->argc; n++) {
-		DBG("\t\t\"%s\",\n", stack->argv[n]);
+		trace("\t\t\"%s\",\n", stack->argv[n]);
 	}
-	DBG("\t]\n,");
-	DBG("\tenvp: [\n");
+	trace("\t],\n");
+	trace("\tenvp: [\n");
 	for (int n = 0; n < stack->envc; n++) {
-		DBG("\t\t\"%s\",\n", stack->envp[n]);
+		trace("\t\t\"%s\",\n", stack->envp[n]);
 	}
-	DBG("\t],\n");
-	DBG("\tauxv: [\n");
+	trace("\t],\n");
+	trace("\tauxv: [\n");
 	for (int n = 0; n < stack->auxc; n++) {
-		DBG("\t\t{ a_type: \"%s\", a_un: %08lx },\n",
+		trace("\t\t{ a_type: \"%s\", a_un: %08lx },\n",
 			auxv_type_string(stack->auxv[n].a_type),
 			stack->auxv[n].a_un.a_val
 		);
 	}
-	DBG("\t]\n}\n");
+	trace("\t]\n}\n");
 }
 
 static void parse_options(Stack* stack, Options* options) {
@@ -222,10 +222,8 @@ static inline void* prepare_stack (
 	argv[a++] = sp;
 
 	for (int i = 0; i < manifest->argc; i++) {
-		String arg = manifest->argv[a];
-		sp -= (arg.len + 1);
-		memcpy(sp, (void*)arg.ptr, arg.len);
-		((char*)sp)[arg.len] = 0;
+		char* arg = cstr(arena, manifest->argv[i]);
+		push_str(&sp, arg);
 		argv[a++] = sp;
 	}
 
@@ -664,13 +662,6 @@ int read_footer(Footer* footer) {
 	return 0;
 }
 
-char* cstr (Arena *arena, String s) {
-	char* c = ALLOC_N(arena, s.len + 1, char);
-	memset(c, 0, s.len + 1);
-	memcpy((void*)c, s.ptr, s.len);
-	return c;
-}
-
 void exec (Arena* arena, Manifest* manifest, char* argv0, Options* options) {
 	// Sanity check.
 	ABORT_IF(!manifest->executable.ptr, "missing executable");
@@ -765,8 +756,10 @@ void _stub_start (void *sp) {
 	// Parse options.
 	parse_options(&stack, &options);
 	if (options.enable_tracing) {
+		trace("original stack:\n");
 		print_stack(&stack);
 	}
+
 	// We need to search the aux vector for the program header table and index of the entry point.
 	Elf64_Phdr* phdr    = (Elf64_Phdr*)stack.auxv_glob[AT_PHDR];
 	uint64_t    ph_num  = (uint64_t)stack.auxv_glob[AT_PHNUM];
@@ -883,13 +876,17 @@ void _stub_start (void *sp) {
 	}
 
 	// Prepare a new stack.
-	DBG("preparing stack");
 	sp = prepare_stack(&arena, &stack, manifest);
+	if (options.enable_tracing) {
+		Stack dbg_stack = { .sp = sp };
+		scan_stack(&dbg_stack);
+		trace("new stack:\n");
+		print_stack(&dbg_stack);
+	}
 
 	// Cleanup all the memory we allocatd.
 	destroy_arena(&arena);
 
-	// Jump to the new entrypoint!
-	DBG("jumping to entrypoint %p", entrypoint);
+	// Jump to the new entrypoint.
 	transfer_control(sp, entrypoint);
 }

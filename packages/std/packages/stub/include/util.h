@@ -100,6 +100,15 @@ static bool cstreq (String s, const char* cstr) {
 	return true;
 }
 
+static char* cstr (Arena *arena, String s) {
+	if (s.ptr[s.len] == 0) {
+		return s.ptr;
+	}
+	char* c = ALLOC_N(arena, s.len + 1, char);
+	memcpy((void*)c, s.ptr, s.len);
+	return c;
+}
+
 static bool starts_with (String a, String prefix) {
 	if (a.len < prefix.len) {
 		return false;
