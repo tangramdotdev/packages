@@ -10,17 +10,17 @@ export const metadata = {
 	license: "https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright",
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
-	version: "2.14.1",
+	version: "2.14.5",
 	provides: {
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],
 	},
 };
 
-export const source = async (): Promise<tg.Directory> => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:310df85878b65fa717e5e28e0d9e8f6205fd29d883929303a70a4f2fc4f6f1f2";
+		"sha256:03d006f3537616833c16c53addcdc32a0eb20e55443cba4038307e3fa7d8d44b";
 	const extension = ".tar.xz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const base = `https://download.gnome.org/sources/${name}/${majorMinor}`;

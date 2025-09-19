@@ -485,6 +485,21 @@ export const testUnproxiedWorkspace = async () => {
 	return true;
 };
 
+export const testUnproxiedWorkspaceCross = async () => {
+	const helloWorkspace = build({
+		host: "aarch64-unknown-linux-gnu",
+		target: "x86_64-unknown-linux-gnu",
+		source: tests.get("hello-workspace").then(tg.Directory.expect),
+		env: {
+			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+		},
+		pre: "set -x",
+		proxy: false,
+		verbose: true,
+	});
+	return helloWorkspace;
+};
+
 // Compare the results of cargo vendor and vendorDependencies.
 export const testVendorDependencies = async () => {
 	const sourceDirectory = await tests
