@@ -454,7 +454,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			let dependencies = BTreeMap::from_iter(
 				futures::future::try_join_all(library_paths.unwrap().into_iter().map(
 					|dir_with_subpath| async {
-						let key = tg::Reference::with_object(&dir_with_subpath.id.clone().into());
+						let key = tg::Reference::with_object(dir_with_subpath.id.clone().into());
 						let item = tg::Directory::with_id(dir_with_subpath.id).into();
 						let value = tg::Referent::with_item(item);
 						Ok::<_, tg::Error>((key, value))

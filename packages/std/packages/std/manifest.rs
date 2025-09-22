@@ -379,21 +379,21 @@ pub fn collect_dependencies_from_value_data(
 			tg::object::Id::File(id) => {
 				let id = tg::object::Id::from(id.clone());
 				dependencies.insert(
-					tg::Reference::with_object(&id),
+					tg::Reference::with_object(id.clone()),
 					dependency_from_object_id(&id),
 				);
 			},
 			tg::object::Id::Symlink(id) => {
 				let id = tg::object::Id::from(id.clone());
 				dependencies.insert(
-					tg::Reference::with_object(&id),
+					tg::Reference::with_object(id.clone()),
 					dependency_from_object_id(&id),
 				);
 			},
 			tg::object::Id::Directory(id) => {
 				let id = tg::object::Id::from(id.clone());
 				dependencies.insert(
-					tg::Reference::with_object(&id),
+					tg::Reference::with_object(id.clone()),
 					dependency_from_object_id(&id),
 				);
 			},
@@ -427,7 +427,7 @@ pub fn collect_dependencies_from_template_data(
 		if let tg::template::data::Component::Artifact(id) = component {
 			let id = tg::object::Id::from(id.clone());
 			dependencies.insert(
-				tg::Reference::with_object(&id),
+				tg::Reference::with_object(id.clone()),
 				dependency_from_object_id(&id),
 			);
 		}
