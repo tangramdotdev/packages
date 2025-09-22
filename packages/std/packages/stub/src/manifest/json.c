@@ -20,7 +20,7 @@ static String render_object (Cx* cx, JsonValue* value);
 
 void create_manifest_from_json (Cx* cx, JsonValue* value) {
 	// Validate.
-	ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
+	ABORT_IF(value->kind != JSON_OBJECT, "expected an object (1)");
 
 	// Parse fields.
 	JsonObject* object = &value->value._object;
@@ -41,7 +41,7 @@ void create_manifest_from_json (Cx* cx, JsonValue* value) {
 }
 
 static void create_interpreter (Cx* cx, JsonValue* value) {
-	ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
+	ABORT_IF(value->kind != JSON_OBJECT, "expected an object (2), got %d", value->kind);
 	JsonObject* object = &value->value._object;
 	JsonValue* kind = json_get(object, "kind");
 	ABORT_IF(!kind, "expected a kind string");
@@ -131,7 +131,7 @@ static void create_interp_args (Cx* cx, JsonValue* value) {
 }
 
 static void create_executable (Cx* cx, JsonValue* value) {
-	ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
+	ABORT_IF(value->kind != JSON_OBJECT, "expected an object (3)");
 	JsonObject* object = &value->value._object;
 	JsonValue* kind = json_get(object, "kind");
 	ABORT_IF(!kind, "missing kind");
@@ -154,7 +154,7 @@ static void create_env (Cx* cx, JsonValue* value) {
 	if (!value) {
 		return;
 	}
-	ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
+	ABORT_IF(value->kind != JSON_OBJECT, "expected an object (4)");
 	JsonObject* object = &value->value._object;
 	JsonValue* kind = json_get(object, "kind");
 	ABORT_IF(!kind, "missing kind");
@@ -163,9 +163,21 @@ static void create_env (Cx* cx, JsonValue* value) {
 	if (cstreq(kind->value._string, "unset")) {
 		clear(&cx->manifest->env);
 	} else if (cstreq(kind->value._string, "set")) {
+		// Extract the inner object.
 		value = json_get(object, "value");
 		ABORT_IF(!value, "expected a value");
-		ABORT_IF(value->kind != JSON_OBJECT, "expected an object");
+		ABORT_IF(value->kind != JSON_OBJECT, "expected an object (5)");
+		object = &value->value._object;
+
+		// Get the inner kind.
+		JsonValue* kind = json_get(object, "kind");
+		ABORT_IF(!kind || kind->kind != JSON_STRING, "missing kind (1)");
+		ABORT_IF(!cstreq(kind->value._string, "map"), "expected a map (1)");
+
+		// Get the inner object.
+		value = json_get(object, "value");
+		ABORT_IF(value->kind != JSON_OBJECT, "expected an object (6)");
+		object = &value->value._object;
 		apply_env(cx, &value->value._object);
 	} else {
 		ABORT("unsupported mutation type");
@@ -223,13 +235,11 @@ static void apply_env (Cx* cx, JsonObject* env) {
 	while(env) {
 		if (env->value) {
 			String* key = &env->key;
-			if (is_mutation(env->value)) {
-				apply_mutation_to_key(cx, key, &env->value->value._object);
-			} else if (env->value->kind == JSON_ARRAY) {
+			if (env->value->kind == JSON_ARRAY) {
 				JsonArray* array = &env->value->value._array;
 				while(array) {
 					if (array->value) {
-						ABORT_IF(array->value->kind != JSON_OBJECT, "expected an object");
+						ABORT_IF(array->value->kind != JSON_OBJECT, "expected an object (7)");
 						apply_mutation_to_key(cx, key, &array->value->value._object);
 					}
 					array = array->next;
@@ -251,8 +261,8 @@ static void apply_mutation_to_key (Cx* cx, String* key, JsonObject* mutation) {
 	} else if (cstreq(kind->value._string, "set")) {
 		JsonValue* value = json_get(mutation, "value");
 		apply_value_to_key(cx, key, value);
-	} else if (cstreq(kind->value._string, "set-if-unset")) {
-		if (lookup(&cx->manifest->env, *key).ptr) {
+	} else if (cstreq(kind->value._string, "set_if_unset")) {
+		if (!lookup(&cx->manifest->env, *key).ptr) {
 			JsonValue* value = json_get(mutation, "value");
 			apply_value_to_key(cx, key, value);
 		}
@@ -292,14 +302,23 @@ static void apply_mutation_to_key (Cx* cx, String* key, JsonObject* mutation) {
 		String s = STRING_LITERAL(":");
 		insert(cx->arena, &cx->manifest->env, *key, join(cx->arena, s, ss, len));
 	} else if (cstreq(kind->value._string, "prefix")) {
+		// Lookup the existing value.
 		String a = lookup(&cx->manifest->env, *key);
+
+		// Destructure the value.
 		JsonValue* template = json_get(mutation, "template");
 		JsonValue* separator = json_get(mutation, "separator");
 
-		// Render the template.
+		// Destructure the object.
 		ABORT_IF(!template, "expected a template");
 		String b = {0};
 		render_template(cx, template, &b);
+
+		// Don't join if the value doesn't exist.
+		if (!a.ptr) {
+			insert(cx->arena, &cx->manifest->env, *key, b);
+			return;
+		}
 
 		// Get the separator if it exists.
 		String s = {0};
@@ -312,7 +331,10 @@ static void apply_mutation_to_key (Cx* cx, String* key, JsonObject* mutation) {
 		String ss[2] = { b, a };
 		insert(cx->arena, &cx->manifest->env, *key, join(cx->arena, s, ss, 2));
 	} else if (cstreq(kind->value._string, "suffix")) {
+		// Lookup the existing value.
 		String a = lookup(&cx->manifest->env, *key);
+
+		// Destructure the object.
 		JsonValue* template = json_get(mutation, "template");
 		JsonValue* separator = json_get(mutation, "separator");
 
@@ -320,6 +342,12 @@ static void apply_mutation_to_key (Cx* cx, String* key, JsonObject* mutation) {
 		ABORT_IF(!template, "expected a template");
 		String b = {0};
 		render_template(cx, template, &b);
+
+		// Don't join if the value doesn't exist.
+		if (!a.ptr) {
+			insert(cx->arena, &cx->manifest->env, *key, b);
+			return;
+		}
 
 		// Get the separator if it exists.
 		String s = {0};
@@ -331,21 +359,34 @@ static void apply_mutation_to_key (Cx* cx, String* key, JsonObject* mutation) {
 		// Update the env.
 		String ss[2] = { a, b };
 		insert(cx->arena, &cx->manifest->env, *key, join(cx->arena, s, ss, 2));
-	} else if (cstreq(kind->value._string, "suffix")) {
+	} else if (cstreq(kind->value._string, "merge")) {
 		ABORT("merge mutations are not supported for environment variables");
 	} else {
-		ABORT("unsupported mutation type");
+		ABORT(" unsupported mutation type (%s)", cstr(cx->arena, kind->value._string));
 	}
 }
 
 static void apply_value_to_key (Cx* cx, String* key, JsonValue* val) {
+	// Handle mutations.
+	if(val->kind == JSON_OBJECT) {
+		JsonValue* kind = json_get(&val->value._object, "kind");
+		if (kind && kind->kind == JSON_STRING && cstreq(kind->value._string, "mutation")) {
+
+			val = json_get(&val->value._object, "value");
+			ABORT_IF(!val || val->kind != JSON_OBJECT, "expected an object (8)");
+			apply_mutation_to_key(cx, key, &val->value._object);
+			return;
+		}
+	}
+
+	// Otherwise render the value and insert it.
 	String rendered = render_value(cx, val);
 	insert(cx->arena, &cx->manifest->env, *key, rendered);
 }
 
 static void render_template (Cx* cx, JsonValue* template, String* rendered) {
 	// Type check.
-	ABORT_IF(template->kind != JSON_OBJECT, "expected an object")
+	ABORT_IF(template->kind != JSON_OBJECT, "expected an object (9)")
 
 	// Get the components.
 	JsonValue* components = json_get(&template->value._object, "components");
@@ -360,7 +401,7 @@ static void render_template (Cx* cx, JsonValue* template, String* rendered) {
 	JsonArray* array = &components->value._array;
 	while (array) {
 		if (array->value) {
-			ABORT_IF(array->value->kind != JSON_OBJECT, "expected an object");
+			ABORT_IF(array->value->kind != JSON_OBJECT, "expected an object (10)");
 			JsonObject* object = &array->value->value._object;
 			JsonValue* kind = json_get(object, "kind");
 			JsonValue* value = json_get(object, "value");
@@ -462,30 +503,40 @@ static String render_value (Cx* cx, JsonValue* value) {
 
 		// String
 		case JSON_STRING: {
-			String s = value->value._string;
-			if (cstarts_with(s, "dir_0")
-				|| cstarts_with(s, "fil_0")
-				|| cstarts_with(s, "sym_0")) {
-				String ss[2] = { cx->artifacts_dir, s };
-				String s = STRING_LITERAL("/");
-				join(cx->arena, s, ss, 2);
-			} else {
-				rendered.ptr = s.ptr;
-				rendered.len = s.len;
-			}
+			rendered = value->value._string;
 			break;
 		}
 
-		// Template.
+		// Objects.
 		case JSON_OBJECT: {
-			if (is_template(value)) {
+			// Get the kind.
+			JsonObject* object = &value->value._object;
+			JsonValue* kind = json_get(object, "kind");
+			ABORT_IF(!kind || kind->kind != JSON_STRING, "missing kind (2)");
+			value = json_get(object, "value");
+			ABORT_IF(!value, "expected a value");
+			if (cstreq(kind->value._string, "map")) {
+				ABORT("cannot render map in this context");
+			} else if (cstreq(kind->value._string, "object")) {
+				value = json_get(object, "value");
+				ABORT_IF(!value || value->kind != JSON_STRING, "expected an ID");
+				String ss[2] = { cx->artifacts_dir, value->value._string };
+				String s = STRING_LITERAL("/");
+				rendered = join(cx->arena, s, ss, 2);
+				break;
+			} else if (cstreq(kind->value._string, "bytes")) {
+				ABORT("cannot render bytes in this context");
+			} else if (cstreq(kind->value._string, "mutation")) {
+				ABORT("cannot render mutation in this context");
+			} else if (cstreq(kind->value._string, "template")) {
 				render_template(cx, value, &rendered);
+			} else {
+				ABORT("unknown value type");
 			}
-			ABORT("malformed manifest");
 			break;
 		}
 
-		default: ABORT("malformed manifest");
+		default: ABORT("malformed manifest (2) kind: %d", value->kind);
 	}
 	return rendered;
 }

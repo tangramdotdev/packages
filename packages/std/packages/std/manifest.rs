@@ -316,7 +316,11 @@ impl Manifest {
 		
 		// Create a temp file for the manifest.
 		let mut manifest = tempfile::NamedTempFile::new().map_err(|source| tg::error!(!source, "failed to get temp file"))?;
-		let output = "/tmp/__wrap_output__";
+
+		// Create a random output name.
+		let tempfile = tempfile::NamedTempFile::new()
+			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
+		let output = tempfile.path();
 
 		// Create the manifest file. TODO: asyncify.
 		let contents = serde_json::to_vec(self)

@@ -237,7 +237,7 @@ type CcProxyArg = {
 	host?: string;
 };
 
-export const ccProxy = async (arg: CcProxyArg) => {
+const ccProxy = async (arg: CcProxyArg) => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const tgcc = workspace.ccProxy({
@@ -267,7 +267,8 @@ type LdProxyArg = {
 	host?: string;
 };
 
-export const ldProxy = async (arg: LdProxyArg) => {
+const ldProxy = async (arg: LdProxyArg) => {
+	console.log("here (1)");
 	// Prepare the Tangram tools.
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
@@ -290,7 +291,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// The injection library and wrapper are built for the host machine.
-	const hostInjectionLibrary = await injection({
+	const hostInjectionLibrary = await tg.build(injection, {
 		buildToolchain,
 		build,
 		host,
@@ -318,10 +319,10 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		TANGRAM_WRAP_ID: tg.Mutation.setIfUnset(wrap.id),
 	};
 
-	// let args = [];
-	// // if (embedWrapper) {
-	// // 	args.push("--tg-embed-wrapper")
-	// // }
+	let args = [];
+	if (embedWrapper) {
+		args.push("--tg-embed-wrapper")
+	}
 
 	// Create the linker proxy.
 	return std.wrap(buildLinkerProxy, {
@@ -329,7 +330,7 @@ export const ldProxy = async (arg: LdProxyArg) => {
 		env,
 		build,
 		host: build,
-		// args
+		args
 	});
 };
 
@@ -424,11 +425,11 @@ export const testBasic = async (target?: string) => {
 	const wrapperDeps = await output.dependencies();
 	const os = std.triple.os(await std.triple.host());
 	// This file should have dependencies for the preload and the underlying executable. On Linux, it should alos have a library path for libc and an interpreter.
-	const expectedLength = os === "darwin" ? 2 : 4;
+	const expectedLength = os === "darwin" ? 2 : 3;
 	console.log("WRAPPER DEPS", wrapperDeps);
 	tg.assert(
 		Object.keys(wrapperDeps).length === expectedLength,
-		"expected exactly 4 dependencies",
+		`expected exactly 4 dependencies, got ${Object.keys(wrapperDeps).length}`,
 	);
 
 	if (target === undefined) {

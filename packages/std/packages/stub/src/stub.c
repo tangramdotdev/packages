@@ -547,7 +547,7 @@ static int read_and_process_manifest (
 			};
 			String val = {
 				.ptr = (e + midpoint + 1),
-				.len = len - midpoint
+				.len = len - midpoint - 1
 			};
 			insert(arena, &manifest->env, key, val);
 		}
@@ -603,6 +603,15 @@ static int read_and_process_manifest (
 
 	// Close the file.
 	close(fd);
+
+	// Print the manifest if provided.
+	if (options->enable_tracing && data[0] == '{') {
+		trace("manifest: \n");
+		for (int ch = 0; ch < footer->size; ch++) {
+			trace("%c", data[ch]);
+		}
+		trace("\n");
+	}
 
 	// Parse the manifest.
 	DBG("parsing manifest ptr: %lx, len: %ld", (uintptr_t)data, footer->size);

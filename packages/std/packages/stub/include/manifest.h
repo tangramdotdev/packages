@@ -176,10 +176,12 @@ static String render_ld_preload (Arena* arena, Manifest* manifest) {
 
 static void print_manifest (Manifest* manifest) {
 	if (manifest->executable.ptr) {
-		trace("executable: %s\n", manifest->executable);
+		trace("executable: ");
+		print_json_string(&manifest->executable);
+		trace("\n");
 	}
 	if (manifest->entrypoint) {
-		trace("entrypoint: %s\n", manifest->entrypoint);
+		trace("entrypoint: %d\n", manifest->entrypoint);
 	}
 	trace("interpreter: %s\n", manifest->interpreter.ptr);
 	trace("libary_paths:\n");

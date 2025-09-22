@@ -259,6 +259,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		interpreter,
 		name,
 		needed_libraries: initial_needed_libraries,
+		entrypoint,
 	} = analyze_output_file(&options.output_path).await?;
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
@@ -446,12 +447,15 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_artifact_id = output_file.id().clone().into();
 
 		// Create the manifest.
-		let manifest =
+		let mut manifest =
 			create_manifest(output_artifact_id, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
 
 		// If requested, emebd the wrapper.
 		let new_wrapper = if options.embed {
+			if let Some(entrypoint) = entrypoint {
+				manifest.executable = tangram_std::manifest::Executable::Address(entrypoint);
+			}
 			manifest.embed(&tg, &output_file).await?
 		} else {
 			manifest.write(&tg).await?
@@ -736,6 +740,8 @@ struct AnalyzeOutputFileOutput {
 	name: Option<String>,
 	/// Does the output file specify libraries required at runtime?
 	needed_libraries: Vec<String>,
+	/// The entrypoint of the executable.
+	entrypoint: Option<u64>,
 }
 
 /// The possible interpreter requirements of an output file.
@@ -1262,6 +1268,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 			interpreter: InterpreterRequirement::None,
 			name: None,
 			needed_libraries: vec![],
+			entrypoint: None,
 		},
 
 		// Handle an ELF file.
@@ -1282,12 +1289,14 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				.map(std::string::ToString::to_string)
 				.collect_vec();
 
+			let entrypoint = (elf.entry != 0).then_some(elf.entry);
+
 			// Check whether or not the object requires an interpreter:
 			// - If the object has an interpreter field.
 			// - If the object is a PIE and has 1 or more NEEDS.
 			let interpreter =
 				if elf.interpreter.is_some() || (is_pie && !needed_libraries.is_empty()) {
-					let interpreter = elf.interpreter.unwrap();
+					let interpreter = elf.interpreter.ok_or_else(|| tg::error!("missing interpreter in ELF"))?;
 					if interpreter.starts_with("/lib") {
 						if interpreter.contains("musl") {
 							InterpreterRequirement::Default(InterpreterFlavor::Musl)
@@ -1307,6 +1316,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 				interpreter,
 				name,
 				needed_libraries,
+				entrypoint,
 			}
 		},
 
@@ -1321,12 +1331,13 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 					.map(extract_filename)
 					.filter(|file_name| name.as_ref().is_none_or(|n| n != file_name))
 					.collect_vec();
-
+				let entrypoint = mach.entry;
 				AnalyzeOutputFileOutput {
 					is_executable,
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
 					name,
 					needed_libraries,
+					entrypoint: Some(entrypoint)
 				}
 			},
 			goblin::mach::Mach::Fat(mach) => {
@@ -1353,6 +1364,7 @@ fn analyze_executable(bytes: &[u8]) -> tg::Result<AnalyzeOutputFileOutput> {
 					interpreter: InterpreterRequirement::Default(InterpreterFlavor::Dyld),
 					name,
 					needed_libraries,
+					entrypoint: None
 				}
 			},
 		},

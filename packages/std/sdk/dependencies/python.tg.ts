@@ -60,7 +60,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		);
 	}
 
-	const env = await std.env.arg(...envs, env_, { utils: false });
+	const env = await std.env.arg(...envs, env_, { utils: false }, { TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace" });
 	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configureArgs.push(`CC="$CC"`);

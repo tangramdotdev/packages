@@ -77,15 +77,18 @@ static int insert (
 	while(node) {
 		// If this is an empty node, use it.
 		if (node->key.ptr == 0) {
-			node->key = key;
-			node->val = val;
+			node->key.ptr = key.ptr;
+			node->key.len = key.len;
+			node->val.ptr = val.ptr;
+			node->val.len = val.len;
 			table->size++;
 			return 0;
 		}
 
 		// If this has the same key, overwrite its value.
 		if (streq(node->key, key)) {
-			node->val = val;
+			node->val.ptr = val.ptr;
+			node->val.len = val.len;
 			return 0;
 		}
 		node = node->next;
@@ -96,8 +99,10 @@ static int insert (
 	if (!new_node) {
 		return -1;
 	}
-	new_node->key	= key;
-	new_node->val	= val;
+	new_node->key.ptr = key.ptr;
+	new_node->key.len = key.len;
+	new_node->val.ptr = val.ptr;
+	new_node->val.len = val.len;
 	new_node->next	= NULL;
 	node->next	= new_node;
 	table->size++;

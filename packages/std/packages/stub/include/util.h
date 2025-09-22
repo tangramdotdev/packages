@@ -134,6 +134,7 @@ static bool cstarts_with (String a, const char* prefix) {
 }
 
 static String join (Arena* arena, String separator, String* strings, size_t nstrings) {
+	// Compute the max length of the string.
 	size_t len = 0;
 	for (size_t n = 0; n < nstrings; n++) {
 		len += strings[n].len;
@@ -142,9 +143,11 @@ static String join (Arena* arena, String separator, String* strings, size_t nstr
 		}
 	}
 
+	// Allocate the new string.
 	String out = {0};
 	out.ptr = ALLOC_N(arena, len + 1, uint8_t);
 
+	// Append new strings to it.
 	for (size_t n = 0; n < nstrings; n++) {
 		if (strings[n].ptr) {
 			memcpy(out.ptr + out.len, strings[n].ptr, strings[n].len);

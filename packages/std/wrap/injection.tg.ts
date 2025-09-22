@@ -13,6 +13,8 @@ type Arg = {
 
 export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 	const arg = await tg.resolve(unresolved);
+	console.log(`arg.host: ${arg.host}`);
+
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const os = std.triple.os(host);
@@ -33,7 +35,7 @@ export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 		if (std.triple.os(build) === "linux") {
 			additionalArgs.push("-Wl,--no-as-needed", "-s");
 		}
-		const injection = dylib({
+		const injection = tg.build(dylib, {
 			build,
 			buildToolchain,
 			env,
@@ -54,8 +56,6 @@ export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 		return tg.unreachable();
 	}
 };
-
-export default injection;
 
 type MacOsInjectionArg = {
 	buildToolchain: std.env.Arg;
@@ -85,7 +85,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 
 	// Compile arm64 dylib.
 	const arm64Args = additionalArgs.concat(["--target=aarch64-apple-darwin"]);
-	const arm64injection = dylib({
+	const arm64injection = await tg.build(dylib, {
 		...arg,
 		source,
 		additionalArgs: arm64Args,
@@ -94,7 +94,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 
 	// Compile amd64 dylib.
 	const amd64Args = additionalArgs.concat(["--target=x86_64-apple-darwin"]);
-	const amd64injection = dylib({
+	const amd64injection = await tg.build(dylib, {
 		...arg,
 		source,
 		additionalArgs: amd64Args,
@@ -127,7 +127,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	const build = arg.build ?? host;
 	// On macOS builds, the compiler is clang, so no triple prefix.
 	const useTriplePrefix = std.triple.os(build) === "linux" && build !== host;
-
+	console.log(`useTriplePrefix? ${useTriplePrefix} build: ${build} host: ${host} arg.host: ${arg.host}`);
 	let args: Array<tg.Unresolved<tg.Template.Arg>> = [
 		"-shared",
 		"-fPIC",

@@ -14,7 +14,6 @@ export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 /** Wrap an executable. */
 export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const arg = await wrap.arg(...args);
-
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
 
 	// Check if the executable is already a wrapper and get its manifest
@@ -24,12 +23,14 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 
 	const executable =
 		existingManifest?.executable ??
-		(await manifestExecutableFromArg(arg.executable));
-
+		(await manifestExecutableFromArg(arg.executable))
+		;
 	const host = arg.host ?? (await std.triple.host());
 	std.triple.assert(host);
+
 	const buildTriple = arg.build ?? host;
 	std.triple.assert(buildTriple);
+
 	const buildToolchain = arg.buildToolchain
 		? arg.buildToolchain
 		: std.triple.os(host) === "linux"
@@ -50,25 +51,27 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
 			buildToolchain,
 			build: buildTriple,
+			host,
 			interpreter: arg.interpreter,
 			executable: undefined,
 			libraryPaths: arg.libraryPaths,
 			libraryPathStrategy: arg.libraryPathStrategy
 		});
-	}
-	if (existingManifest?.interpreter) {
-		manifestInterpreter = existingManifest.interpreter;
-	}
-	if (arg.executable && typeof arg.executable !== "number") {
+	} else if (existingManifest?.interpreter) {
+		// TODO: actually handle rewrapping things
+		manifestInterpreter = existingManifest?.interpreter;
+	} else if (arg.executable && typeof arg.executable !== "number") {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
 			buildToolchain,
 			build: buildTriple,
+			host,
 			interpreter: undefined,
 			executable: arg.executable,
 			libraryPaths: arg.libraryPaths,
 			libraryPathStrategy: arg.libraryPathStrategy
 		});
 	}
+	console.log(`interpreter: ${JSON.stringify(manifestInterpreter)}`);
 
 	// Use existing manifest values as defaults if we're wrapping a wrapper
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(
@@ -99,13 +102,21 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		detectedOs === "linux"
 			? await bootstrap.toolchainTriple(buildTriple)
 			: buildTriple;
-	const wrapper = binary ? binary : await workspace.wrapper({
-		build,
-		host,
-	});
 
-	// Write the manifest to the wrapper and return.
-	return await wrap.Manifest.write(wrapper, manifest);
+	// If there's an existing binary, use it.
+	if (binary) {
+		return wrap.Manifest.write(binary, manifest);
+	} else {
+		// We can't wrap a non-existent binary with a manifest specifying an address.
+		if (manifest.executable.kind === "address") {
+			throw new Error("invalid manifest");
+		}
+		let wrapper = await workspace.wrapper({
+			build,
+			host,
+		});
+		return wrap.Manifest.write(wrapper, manifest);
+	}
 }
 
 export default wrap;
@@ -343,9 +354,13 @@ export namespace wrap {
 				);
 			}
 
-			executable = await wrap.executableFromManifestExecutable(
-				existingManifest.executable,
-			);
+			// TODO: figure this API out a little better.
+			if (existingManifest.executable.kind !== "address") {
+				executable = await wrap.executableFromManifestExecutable(
+					existingManifest.executable,
+				);
+			}
+
 			args_ = (args_ ?? []).concat(
 				await Promise.all(
 					(existingManifest.args ?? []).map(templateFromManifestTemplate),
@@ -875,7 +890,6 @@ export namespace wrap {
 				const length = Number(
 					new DataView(lengthBytes.buffer).getBigUint64(0, true),
 				);
-				console.log(`length: ${length}`);
 				
 				// Read the manifest length.
 				const entryBytes = await file.read({
@@ -964,7 +978,6 @@ export namespace wrap {
 				const length = Number(
 					new DataView(lengthBytes.buffer).getBigUint64(0, true),
 				);
-				console.log(`length: ${length}`);
 				
 				// Read the manifest length.
 				const entryBytes = await file.read({
@@ -1251,7 +1264,7 @@ const interpreterFromArg = async (
 		arg instanceof tg.Symlink ||
 		arg instanceof tg.Template
 	) {
-		const executable = await std.wrap({
+		const executable = await tg.build(std.wrap, {
 			buildToolchain: buildToolchainArg,
 			build: buildTriple,
 			host,
@@ -1297,7 +1310,7 @@ const interpreterFromArg = async (
 				const buildToolchain = buildToolchainArg
 					? buildToolchainArg
 					: await std.env.arg(await tg.build(gnu.toolchain, { host }));
-				const injectionLibrary = await injection.default({
+				const injectionLibrary = await tg.build(injection.injection, {
 					buildToolchain,
 					build: buildArg ?? detectedBuild,
 					host,
@@ -1341,7 +1354,7 @@ const interpreterFromArg = async (
 				const host = `${arch}-linux-musl`;
 				const buildToolchain = bootstrap.sdk.env(host);
 				const detectedBuild = await std.triple.host();
-				const injectionLibrary = await injection.default({
+				const injectionLibrary = await tg.build(injection.injection, {
 					buildToolchain,
 					build: buildArg ?? detectedBuild,
 					host,
@@ -1367,7 +1380,7 @@ const interpreterFromArg = async (
 				const buildToolchain = buildToolchainArg
 					? buildToolchainArg
 					: bootstrap.sdk.env(host);
-				const injectionLibrary = await injection.default({
+				const injectionLibrary = await tg.build(injection.injection, {
 					buildToolchain,
 					build: buildArg,
 					host,
@@ -1430,7 +1443,7 @@ const interpreterFromExecutableArg = async (
 			const host = hostArg ?? std.triple.create({ os: "darwin", arch });
 			const buildTriple = buildArg ?? host;
 			const buildToolchain = bootstrap.sdk.env(host);
-			const injectionDylib = await injection.default({
+			const injectionDylib = await tg.build(injection.injection, {
 				buildToolchain,
 				build: buildTriple,
 				host,
@@ -1499,7 +1512,7 @@ const interpreterFromElf = async (
 				);
 
 	// Obtain injection library.
-	const injectionLib = await injection.default({
+	const injectionLib = await tg.build(injection.injection, {
 		buildToolchain,
 		build: buildTriple,
 		host,
