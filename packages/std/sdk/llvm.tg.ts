@@ -1,8 +1,10 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { $ } from "../tangram.ts";
+import * as gnu from "./gnu.tg.ts";
 import * as cmake from "./cmake.tg.ts";
 import * as dependencies from "./dependencies.tg.ts";
+import * as utils from "../utils.tg.ts";
 import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
 import ncurses from "./llvm/ncurses.tg.ts";
@@ -24,13 +26,13 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.6",
+	version: "20.1.8",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:5c70549d524284c184fe9fbff862c3d2d7a61b787570611b5a30e5cc345f145e";
+		"sha256:6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -47,23 +49,26 @@ export type LLVMArg = {
 	env?: std.env.Arg;
 	host?: string;
 	lto?: boolean;
+	prebuilt?: boolean;
 	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	target?: string;
 };
 
-/** Produce a complete clang+lld distribution using a 2-stage bootstrapping build. */
+/** Produce a complete clang+lld distribution. */
 export const toolchain = async (arg?: LLVMArg) => {
 	const {
 		build: build_,
 		env: env_,
 		host: host_,
 		lto = true,
+		prebuilt: prebuilt_ = true,
 		sdk,
 		source: source_,
 		target: target_,
 	} = arg ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+
 	const build = build_ ?? host;
 	const target = target_ ?? host;
 
@@ -91,6 +96,13 @@ export const toolchain = async (arg?: LLVMArg) => {
 		} else {
 			return tg.unimplemented(`unrecognized target OS: ${targetOs}`);
 		}
+	}
+
+	if (!prebuilt_) {
+		throw new Error("only prebuilt LLVM toolchains are currently supported.");
+	}
+	if (prebuilt_) {
+		return prebuilt({ host });
 	}
 
 	const sourceDir = source_ ?? source();
@@ -374,13 +386,12 @@ type WrapArgsArg = {
 export const wrapArgs = async (arg: WrapArgsArg) => {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
-	const version = llvmMajorVersion();
 
 	let clangArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
-		// If the target is darwin, set resource dir..
+		// If the host is darwin, set resource dir.
 		// Note - the Apple Clang version provided by the OS is 17, not ${version}.
 		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/17.0.0`);
 
@@ -405,20 +416,13 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 		// If the target is darwin, set sysroot and target flags.
 
 		// Define common flags.
-		const commonFlags = [
-			tg`-resource-dir=${toolchainDir}/lib/clang/${version}`,
-			tg`-L${toolchainDir}/lib/${target}`,
-		];
+		const commonFlags = ["-rtlib=compiler-rt", tg`--sysroot=${toolchainDir}`];
 
 		// Set C flags.
 		clangArgs = clangArgs.concat(commonFlags);
 
 		// Set C++ flags.
-		const cxxFlags = [
-			"-unwindlib=libunwind",
-			tg`-isystem${toolchainDir}/include/c++/v1`,
-			tg`-isystem${toolchainDir}/include/${target}/c++/v1`,
-		];
+		const cxxFlags = ["--stdlib=libc++", "-lc++", "-unwindlib=libunwind"];
 		clangxxArgs = clangxxArgs.concat(commonFlags, cxxFlags);
 	}
 
@@ -447,6 +451,141 @@ export const getLinuxSysroot = async (
 		.then(tg.Directory.expect);
 };
 
+type PrebuiltArg = {
+	host?: string;
+};
+
+export const prebuilt = async (arg?: PrebuiltArg) => {
+	const { host: host_ } = arg ?? {};
+	const { version } = metadata;
+	const host = host_ ?? (await std.triple.host());
+
+	const arch = std.triple.arch(host);
+	const os = std.triple.os(host);
+
+	// The upstream does not provide x86_64-darwin builds.
+	if (arch === "x86_64" && os === "darwin") {
+		throw new Error(
+			"Prebuilt LLVM binaries are not available for x86_64-darwin",
+		);
+	}
+
+	const checksums: Record<string, tg.Checksum> = {
+		["aarch64-linux"]:
+			"sha256:b855cc17d935fdd83da82206b7a7cfc680095efd1e9e8182c4a05e761958bef8",
+		["x86_64-linux"]:
+			"sha256:1ead36b3dfcb774b57be530df42bec70ab2d239fbce9889447c7a29a4ddc1ae6",
+		["aarch64-darwin"]:
+			"sha256:a9a22f450d35f1f73cd61ab6a17c6f27d8f6051d56197395c1eb397f0c9bbec4",
+	};
+	const archAndOs = `${arch}-${os}`;
+	const checksum = checksums[archAndOs];
+	tg.assert(checksum, `unable to locate checksum for ${archAndOs}`);
+
+	const filenameArch = arch === "aarch64" ? "ARM64" : "X64";
+	const filenameOs = os === "darwin" ? "macOS" : "Linux";
+
+	const url = `https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/LLVM-${version}-${filenameOs}-${filenameArch}.tar.xz`;
+
+	let output = await std
+		.download({ url, checksum, mode: "extract" })
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
+
+	const buildToolchain = await std.sdk({ host });
+
+	// Add libc.
+	const m4ForBuild = dependencies.m4.build({ host, env: buildToolchain });
+	const bisonForBuild = dependencies.bison.build({
+		host,
+		env: std.env.arg(buildToolchain, m4ForBuild),
+	});
+	const pythonForBuild = dependencies.python.build({
+		host,
+		env: buildToolchain,
+	});
+	const sysroot = await constructSysroot({
+		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild, {
+			utils: false,
+		}),
+		host,
+	})
+		.then((dir) => dir.get(host))
+		.then(tg.Directory.expect);
+
+	// The precompiled components link against libatomic.so.1 instead of compiler-rt for atomics. Include host's libatomic.so.1 in sysroot.
+	const hostGcc = await gnu.toolchain({ host });
+	const libAtomic = await hostGcc
+		.get("lib/libatomic.so.1")
+		.then(tg.File.expect);
+
+	// Add sysroot, cfg, and symlinks.
+	output = await tg.directory(output, sysroot, {
+		"bin/ar": tg.symlink("llvm-ar"),
+		"bin/cc": tg.symlink("clang"),
+		"bin/c++": tg.symlink("clang++"),
+		"bin/nm": tg.symlink("llvm-nm"),
+		"bin/objcopy": tg.symlink("llvm-objcopy"),
+		"bin/objdump": tg.symlink("llvm-objdump"),
+		"bin/ranlib": tg.symlink("llvm-ar"),
+		"bin/readelf": tg.symlink("llvm-readobj"),
+		"bin/strings": tg.symlink("llvm-strings"),
+		"bin/strip": tg.symlink("llvm-strip"),
+		"lib/libatomic.so.1": libAtomic,
+	});
+
+	// Collect library paths.
+	const zlibLibDir = dependencies.zlib
+		.build({ host, env: buildToolchain })
+		.then((d) => d.get("lib"))
+		.then(tg.Directory.expect);
+	const libxmlLibDir = dependencies.libxml2
+		.build({
+			host,
+			env: std.env.arg(buildToolchain, pythonForBuild, { utils: false }),
+		})
+		.then((d) => d.get("lib"))
+		.then(tg.Directory.expect);
+	const xzLibDir = utils.xz
+		.build({ host, env: buildToolchain })
+		.then((d) => d.get("lib"))
+		.then(tg.Directory.expect);
+	const libraryPaths = [libxmlLibDir, xzLibDir, zlibLibDir];
+
+	// Wrap binaries.
+	const binDir = await output.get("bin").then(tg.Directory.expect);
+	for await (let [name, file] of binDir) {
+		// If the file is an executable with an interpreter, wrap it.
+		if (file instanceof tg.File) {
+			try {
+				const metadata = await std.file.executableMetadata(file);
+				if (metadata.format === "elf" && metadata.interpreter !== undefined) {
+					const wrapped = await std.wrap(file, {
+						libraryPaths,
+					});
+					output = await tg.directory(output, {
+						[`bin/${name}`]: wrapped,
+					});
+				}
+			} catch (_) {}
+		}
+	}
+
+	// Add shell wrappers for clang and clang++ that use parameter expansion to avoid dirname.
+	const bins = ["clang", "clang++"];
+	for (const bin of bins) {
+		// FIXME - use std.wrap, not shell wrapper ?
+		output = await tg.directory(output, {
+			[`bin/${bin}`]: tg.file(
+				`#!/bin/sh\nexec "clang-20" --sysroot "\${0%/*}/.." -rtlib=compiler-rt "$@"`,
+				{ executable: true },
+			),
+		});
+	}
+
+	return output;
+};
+
 export const test = async () => {
 	// Build a triple for the detected host.
 	const host = std.sdk.canonicalTriple(await std.triple.host());
@@ -454,8 +593,8 @@ export const test = async () => {
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
 
-	const expectedInterpreter =
-		os === "darwin" ? undefined : `/lib/${libc.interpreterName(host)}`;
+	const expectedInterpreterName =
+		os === "darwin" ? undefined : libc.interpreterName(host);
 
 	const directory = await toolchain({ host });
 	tg.Directory.assert(directory);
@@ -482,8 +621,10 @@ export const test = async () => {
 			`expected elf, got ${cMetadata.format}`,
 		);
 		tg.assert(
-			cMetadata.interpreter === expectedInterpreter,
-			`expected ${expectedInterpreter}, got ${cMetadata.interpreter}`,
+			expectedInterpreterName !== undefined
+				? cMetadata.interpreter?.includes(expectedInterpreterName)
+				: cMetadata.interpreter === undefined,
+			`expected ${expectedInterpreterName}, got ${cMetadata.interpreter}`,
 		);
 		tg.assert(
 			cMetadata.arch === hostArch,
@@ -504,7 +645,7 @@ export const test = async () => {
 		}
 	`;
 	const cxxOut = await $`
-		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
+		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
 	`
 		.env(directory)
 		.host(system)
@@ -517,8 +658,10 @@ export const test = async () => {
 			`expected elf, got ${cxxMetadata.format}`,
 		);
 		tg.assert(
-			cxxMetadata.interpreter === expectedInterpreter,
-			`expected ${expectedInterpreter}, got ${cxxMetadata.interpreter}`,
+			expectedInterpreterName !== undefined
+				? cxxMetadata.interpreter?.includes(expectedInterpreterName)
+				: cxxMetadata.interpreter === undefined,
+			`expected ${expectedInterpreterName}, got ${cxxMetadata.interpreter}`,
 		);
 		tg.assert(
 			cxxMetadata.arch === hostArch,

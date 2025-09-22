@@ -756,6 +756,7 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 					tg.assert(subpathComponent.kind === "string");
 					tg.assert(
 						subpathComponent.value === "/lib" ||
+							subpathComponent.value === "/usr/lib" ||
 							subpathComponent.value ===
 								"/bin/../lib/gcc/x86_64-linux-musl/11.2.1/../../..",
 					);

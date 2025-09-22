@@ -399,7 +399,7 @@ export namespace sdk {
 	): Promise<CompilerInfo> => {
 		const preferredFlavor: "gnu" | "llvm" = os === "linux" ? "gnu" : "llvm";
 
-		// For cross-compilation, require prefixed tools
+		// For cross-compilation, require prefixed tools.
 		if (isCross) {
 			const targetPrefix = `${target}-`;
 			const result = await tryDetectCompilerFlavor(
@@ -415,34 +415,34 @@ export namespace sdk {
 			return { ...result, targetPrefix };
 		}
 
-		// For native compilation, try without prefix first, then with prefix
+		// For native compilation, try without prefix first, then with prefix.
 		let result = await tryDetectCompilerFlavor(env, preferredFlavor, "");
 		if (result) {
 			return { ...result, targetPrefix: "" };
 		}
 
-		// Try with prefix
+		// Try with prefix.
 		const targetPrefix = `${target}-`;
 		result = await tryDetectCompilerFlavor(env, preferredFlavor, targetPrefix);
 		if (result) {
 			return { ...result, targetPrefix };
 		}
 
-		// Fall back to other flavor without prefix
+		// Fall back to other flavor without prefix.
 		const fallbackFlavor: "gnu" | "llvm" =
 			preferredFlavor === "gnu" ? "llvm" : "gnu";
-		const fallbackResult = await tryDetectCompilerFlavor(
-			env,
-			fallbackFlavor,
-			targetPrefix,
-		);
+		result = await tryDetectCompilerFlavor(env, fallbackFlavor, "");
+		if (result) {
+			return { ...result, targetPrefix: "" };
+		}
 
-		tg.assert(
-			fallbackResult,
-			`No suitable compiler found (tried both GNU and LLVM toolchains)`,
-		);
+		// Try fallback flavor with prefix.
+		result = await tryDetectCompilerFlavor(env, fallbackFlavor, targetPrefix);
+		if (result) {
+			return { ...result, targetPrefix };
+		}
 
-		// Try fallback with prefix
+		// Try fallback with prefix.
 		result = await tryDetectCompilerFlavor(env, fallbackFlavor, targetPrefix);
 		if (result) {
 			return { ...result, targetPrefix };

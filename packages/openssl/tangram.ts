@@ -74,6 +74,8 @@ export const build = async (...args: std.Args<Arg>) => {
 			CC: "cc",
 			CXX: "c++",
 		});
+	} else if (sdk && sdk.toolchain === "llvm") {
+		env.unshift({ CC: "clang", CXX: "clang++" });
 	}
 
 	const openssl = await std.autotools.build(
