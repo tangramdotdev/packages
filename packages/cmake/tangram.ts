@@ -24,7 +24,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export const source = async () => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:e3cde3ca83dc2d3212105326b8f1b565116be808394384007e7ef1c253af6caa";
@@ -76,6 +76,9 @@ export const self = async (...args: std.Args<Arg>) => {
 	const processDependency = (dep: any) =>
 		std.env.envArgFromDependency(build, env_, host, sdk, dep);
 
+	const curlRoot = processDependency(
+		std.env.runtimeDependency(curl.build, dependencyArgs.curl),
+	);
 	const ncursesRoot = processDependency(
 		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
 	);
@@ -91,26 +94,26 @@ export const self = async (...args: std.Args<Arg>) => {
 	const zstdRoot = processDependency(
 		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
 	);
-	const deps = [ncursesRoot, libpslRoot, opensslRoot, zlibRoot, zstdRoot];
+	const deps = [
+		curlRoot,
+		ncursesRoot,
+		libpslRoot,
+		opensslRoot,
+		zlibRoot,
+		zstdRoot,
+	];
 
 	if (os === "darwin") {
 		deps.push(processDependency(std.env.runtimeDependency(libiconv.build)));
 	}
 
-	let configureArgs = ["--parallel=$(nproc)"];
-	if (os === "linux") {
-		deps.push(
-			processDependency(
-				std.env.runtimeDependency(curl.build, dependencyArgs.curl),
-			),
-		);
-		configureArgs.push(
-			`--system-curl`,
-			"--",
-			`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
-			`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
-		);
-	}
+	let configureArgs = [
+		"--parallel=$(nproc)",
+		"--system-curl",
+		"--",
+		`-DCMAKE_LIBRARY_PATH="$(echo $LIBRARY_PATH | tr ':' ';')"`,
+		`-DCMAKE_INCLUDE_PATH="$(echo $CPATH | tr ':' ';')"`,
+	];
 	const prepare = {
 		command: tg.Mutation.prefix("mkdir work && cd work", "\n"),
 	};
@@ -120,17 +123,7 @@ export const self = async (...args: std.Args<Arg>) => {
 	};
 	const phases = { prepare, configure };
 
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [...deps];
-	if (os === "darwin") {
-		// On macOS, the bootstrap script wants to test for `ext/stdio_filebuf.h`, which is not part of the macOS toolchain.
-		// Using the `gcc` and `g++` named symlinks to the AppleClang compiler instead of `clang`/`clang++` prevents this.
-		envs.push({
-			CC: "gcc",
-			CXX: "g++",
-		});
-	}
-
-	const env = await std.env.arg(...envs, env_);
+	const env = await std.env.arg(...deps, env_);
 
 	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
