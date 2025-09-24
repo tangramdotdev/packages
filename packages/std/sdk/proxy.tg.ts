@@ -101,9 +101,6 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 			cc = tg.File.expect(await directory.get(`bin/clang`));
 			cxx = cc;
 		}
-		const ldProxyDir = tg.directory({
-			ld: ldProxyArtifact,
-		});
 
 		// Construct wrappers that always pass the ld proxy.
 		let wrappedCC;
@@ -111,6 +108,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 		let wrappedGFortran;
 		switch (flavor) {
 			case "gnu": {
+				const ldProxyDir = tg.directory({ ld: ldProxyArtifact });
 				const { ccArgs, cxxArgs, fortranArgs } = await gnu.gcc.wrapArgs({
 					host: build,
 					target: host,
@@ -167,14 +165,14 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 				// On Linux, don't wrap in place.
 				const merge = os === "darwin";
 				wrappedCC = std.wrap(cc, {
-					args: [tg`-B${ldProxyDir}`, ...clangArgs],
+					args: [...clangArgs],
 					buildToolchain: buildToolchainDir,
 					env,
 					host: build,
 					merge,
 				});
 				wrappedCXX = std.wrap(cxx, {
-					args: [tg`-B${ldProxyDir}`, ...clangxxArgs],
+					args: [...clangxxArgs],
 					buildToolchain: buildToolchainDir,
 					env,
 					host: build,
@@ -185,11 +183,13 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 					replacements[`${host}-clang++`] = wrappedCXX;
 					replacements[`${host}-cc`] = tg.symlink(`${host}-clang`);
 					replacements[`${host}-c++`] = tg.symlink(`${host}-clang++`);
+					replacements[`${host}-ld`] = ldProxyArtifact;
 				} else {
 					replacements.clang = wrappedCC;
 					replacements["clang++"] = wrappedCXX;
 					replacements.cc = tg.symlink("clang");
 					replacements["c++"] = tg.symlink("clang++");
+					replacements["ld"] = ldProxyArtifact;
 				}
 			}
 		}

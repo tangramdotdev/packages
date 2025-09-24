@@ -2307,6 +2307,7 @@ export const argAndEnvDump = async (arg?: BuildAndHostArg) => {
 		buildToolchain,
 		{
 			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 		},
 		{ utils: false },
 	);
@@ -2394,11 +2395,9 @@ export const testSingleArgObjectNoMutations = async () => {
 	} else if (os === "darwin") {
 		tg.assert(
 			text.match(
-				new RegExp(
-					`_NSGetExecutablePath: .*\\.tangram/artifacts/${origExecutableId}`,
-				),
+				new RegExp(`_NSGetExecutablePath: .*\\.tangram/artifacts/${wrapperID}`),
 			),
-			"Expected _NSGetExecutablePath to point to the wrapped executable",
+			"Expected _NSGetExecutablePath to point to the wrapper",
 		);
 		tg.assert(
 			text.match(

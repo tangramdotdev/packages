@@ -391,10 +391,6 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
-		// If the host is darwin, set resource dir.
-		// Note - the Apple Clang version provided by the OS is 17, not ${version}.
-		clangArgs.push(tg`-resource-dir=${toolchainDir}/lib/clang/17.0.0`);
-
 		const targetOs = std.triple.os(target);
 		if (targetOs === "darwin") {
 			// If the target is darwin, use the macOS SDK for the SDKROOT.
