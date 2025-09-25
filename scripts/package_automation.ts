@@ -6,7 +6,7 @@ const separator = "-".repeat(50);
 
 const entrypoint = async () => {
   try {
-    const config = await ConfigParser.parseFromArgs();
+    const config = ConfigParser.parseFromArgs();
     await config.validateTangram();
     log(`Starting! Configuration:\n${config.summarize()}\n${separator}`);
     const executor = new PackageExecutor(config);
@@ -310,6 +310,7 @@ interface ActionContext {
   dryRun: boolean;
   verbose: boolean;
   recursive: boolean;
+  versionedName?: string;
 }
 
 type ActionResultKind =
@@ -394,8 +395,15 @@ class BuildAction extends Action {
   async execute(context: ActionContext): Promise<ActionResult> {
     const results: string[] = [];
 
+    // Get the package version first
+    const versionResult = await getPackageVersion(context);
+    if (versionResult.kind !== "ok") {
+      return versionResult;
+    }
+    const version = versionResult.message as string;
+
     for (const target of context.buildTargets) {
-      const result = await this.buildTarget(context, target);
+      const result = await this.buildTarget(context, target, version);
       if (result.kind !== "ok") {
         return result;
       }
@@ -410,18 +418,19 @@ class BuildAction extends Action {
   private async buildTarget(
     context: ActionContext,
     target: BuildTarget,
+    version: string,
   ): Promise<ActionResult> {
     const exportName = target.export || "default";
     const platform = target.platform || context.platform;
     const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
-    const tag =
-      target.tag || `${context.packageName}/${exportName}/${platform}`;
+    const buildTag = `${context.packageName}/builds/${version}/${exportName}/${platform}`;
+    const tag = target.tag || buildTag;
 
-    this.log(`building ${tag}...`);
+    this.log(`building ${buildTag}...`);
 
     if (context.dryRun) {
-      this.log(`would build ${tag} (dry run)`);
-      return { kind: "ok", message: `would build ${tag} (dry run)` };
+      this.log(`would build ${buildTag} (dry run)`);
+      return { kind: "ok", message: `would build ${buildTag} (dry run)` };
     }
 
     let processId: string | undefined;
@@ -435,13 +444,18 @@ class BuildAction extends Action {
         context.processTracker.add(processId);
       }
 
-      this.log(`${tag}: ${processId}`);
+      this.log(`${buildTag}: ${processId}`);
       await $`${context.tangram} process output ${processId}`.quiet();
-      this.log(`finished building ${tag}`);
+      this.log(`finished building ${buildTag}`);
 
-      return { kind: "ok", message: tag };
+      // Tag the build process
+      if (processId) {
+        await this.tagBuildProcess(context, processId, buildTag);
+      }
+
+      return { kind: "ok", message: buildTag };
     } catch (err) {
-      this.log(`error building ${tag}`);
+      this.log(`error building ${buildTag}`);
       const stderr = err.stderr?.toString() || "";
 
       if (stderr.includes("not found in supported hosts")) {
@@ -454,6 +468,52 @@ class BuildAction extends Action {
       if (processId) {
         context.processTracker.remove(processId);
       }
+    }
+  }
+
+  private async tagBuildProcess(
+    context: ActionContext,
+    processId: string,
+    buildTag: string,
+  ): Promise<void> {
+    if (context.dryRun) {
+      this.log(`would tag build process ${processId} as ${buildTag} (dry run)`);
+      return;
+    }
+
+    this.log(`tagging build process ${processId} as ${buildTag}`);
+
+    try {
+      // Check if the tag already exists and matches this process ID
+      const existing = await this.getExistingBuildTag(context, buildTag);
+
+      if (processId === existing) {
+        this.log(
+          `Existing tag for ${buildTag} matches current process ID:`,
+          existing,
+        );
+        return;
+      }
+
+      await $`${context.tangram} tag ${buildTag} ${processId}`.quiet();
+      this.log(`tagged build process ${buildTag}: ${processId}`);
+    } catch (err) {
+      this.log(`error tagging build process ${buildTag}: ${err}`);
+    }
+  }
+
+  private async getExistingBuildTag(
+    context: ActionContext,
+    tagName: string,
+  ): Promise<string> {
+    this.log("checking for existing build tag", tagName);
+    try {
+      const result = await $`${context.tangram} tag get ${tagName}`
+        .text()
+        .then((t) => t.trim());
+      return result;
+    } catch (err) {
+      return "not found";
     }
   }
 }
@@ -491,13 +551,15 @@ class PublishAction extends Action {
       return pushResult;
     }
 
-    return { kind: "ok", message: `published ${context.packageName}` };
+    const tagName = context.versionedName || context.packageName;
+    return { kind: "ok", message: `published ${tagName}` };
   }
 
   private async pushTag(context: ActionContext): Promise<ActionResult> {
-    this.log(`pushing ${context.packageName}`);
+    const tagName = context.versionedName || context.packageName;
+    this.log(`pushing ${tagName}`);
     try {
-      await $`${context.tangram} push ${context.packageName}`.quiet();
+      await $`${context.tangram} push ${tagName}`.quiet();
       return { kind: "ok" };
     } catch (err) {
       return { kind: "pushError", message: err.stderr?.toString() };
@@ -760,8 +822,19 @@ class PackageExecutor {
   private async tagPackage(context: ActionContext): Promise<ActionResult> {
     log(`[tag] processing ${context.packageName}`);
 
+    // Get the package version from metadata
+    const versionResult = await getPackageVersion(context);
+    if (versionResult.kind !== "ok") {
+      return versionResult;
+    }
+    const version = versionResult.message as string;
+    const versionedName = `${context.packageName}/${version}`;
+
+    // Update context with versioned name for other actions to use
+    context.versionedName = versionedName;
+
     if (context.dryRun) {
-      log(`[tag] would check in and tag ${context.packageName} (dry run)`);
+      log(`[tag] would check in and tag ${versionedName} (dry run)`);
       return { kind: "ok", message: "would check in and tag (dry run)" };
     }
 
@@ -776,27 +849,27 @@ class PackageExecutor {
     }
 
     // Check if the tag already matches this ID.
-    const existing = await this.getExistingTag(context);
+    const existing = await this.getExistingTag(context, versionedName);
 
     if (packageId === existing) {
       log(
-        `[tag] Existing tag for ${context.packageName} matches current ID:`,
+        `[tag] Existing tag for ${versionedName} matches current ID:`,
         existing,
       );
       return {
         kind: "ok",
-        message: `${context.packageName} unchanged, no action taken.`,
+        message: `${versionedName} unchanged, no action taken.`,
       };
     }
 
-    log(`[tag] tagging ${context.packageName}: ${packageId}...`);
-    const tagResult = await this.tagItem(context, packageId);
+    log(`[tag] tagging ${versionedName}: ${packageId}...`);
+    const tagResult = await this.tagItem(context, packageId, versionedName);
     if (tagResult.kind !== "ok") {
       return tagResult;
     }
     return {
       kind: "ok",
-      message: `tagged ${context.packageName}: ${packageId}`,
+      message: `tagged ${versionedName}: ${packageId}`,
     };
   }
 
@@ -816,10 +889,13 @@ class PackageExecutor {
   }
 
   /** Get the existing tagged item for a given name, if present. */
-  private async getExistingTag(context: ActionContext): Promise<string> {
-    log("[tag] checking for existing tag", context.packageName);
+  private async getExistingTag(
+    context: ActionContext,
+    tagName: string,
+  ): Promise<string> {
+    log("[tag] checking for existing tag", tagName);
     try {
-      const result = await $`${context.tangram} tag get ${context.packageName}`
+      const result = await $`${context.tangram} tag get ${tagName}`
         .text()
         .then((t) => t.trim());
       return result;
@@ -832,10 +908,11 @@ class PackageExecutor {
   private async tagItem(
     context: ActionContext,
     packageId: string,
+    tagName: string,
   ): Promise<ActionResult> {
-    log("[tag] tagging", context.packageName, context.packagePath);
+    log("[tag] tagging", tagName, context.packagePath);
     try {
-      await $`${context.tangram} tag ${context.packageName} ${context.packagePath}`.quiet();
+      await $`${context.tangram} tag ${tagName} ${context.packagePath}`.quiet();
       return { kind: "ok" };
     } catch (err) {
       return { kind: "tagError" };
@@ -885,6 +962,36 @@ class ProcessTracker {
 const packagesPath = () => path.join(path.dirname(import.meta.dir), "packages");
 
 export const getPackagePath = (name: string) => path.join(packagesPath(), name);
+
+/** Get the package version from metadata. */
+async function getPackageVersion(
+  context: ActionContext,
+): Promise<ActionResult> {
+  log("getting version from metadata for", context.packagePath);
+  try {
+    const metadataJson =
+      await $`${context.tangram} build ${context.packagePath}#metadata`
+        .text()
+        .then((t) => t.trim());
+
+    const metadata = JSON.parse(metadataJson);
+    if (!metadata.version) {
+      return {
+        kind: "tagError",
+        message: `no version found in metadata for ${context.packagePath}`,
+      };
+    }
+
+    log(`found version ${metadata.version} for ${context.packagePath}`);
+    return { kind: "ok", message: metadata.version };
+  } catch (err) {
+    log(`error getting version for ${context.packagePath}: ${err}`);
+    return {
+      kind: "tagError",
+      message: err.stderr?.toString() || err.toString(),
+    };
+  }
+}
 
 const log = (...data: any[]) => {
   const timestamp = `[${new Date().toUTCString()}]`;
