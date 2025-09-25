@@ -258,35 +258,39 @@ export namespace wrap {
 		let host = host_;
 		if (host === undefined) {
 			if (executable instanceof tg.File) {
-				const metadata = await std.file.executableMetadata(executable);
-				let os;
-				let arch;
-				if (metadata.format === "mach-o") {
-					os = "darwin";
-					if (metadata.arches.length === 1) {
-						arch = metadata.arches[0];
-						tg.assert(arch);
-						host = std.triple.fromComponents({ arch, os });
-					} else {
-						// Check if the detected arch matches any. Error if not?
-						const detectedArch = std.triple.arch(detectedHost);
-						if (metadata.arches.includes(detectedArch)) {
-							arch = detectedArch;
+				try {
+					const metadata = await std.file.executableMetadata(executable);
+					let os;
+					let arch;
+					if (metadata.format === "mach-o") {
+						os = "darwin";
+						if (metadata.arches.length === 1) {
+							arch = metadata.arches[0];
+							tg.assert(arch);
 							host = std.triple.fromComponents({ arch, os });
 						} else {
-							const id = await executable.store();
-							throw new Error(
-								`fat binary detected containing only unsupported architectures: ${id}`,
-							);
+							// Check if the detected arch matches any. Error if not?
+							const detectedArch = std.triple.arch(detectedHost);
+							if (metadata.arches.includes(detectedArch)) {
+								arch = detectedArch;
+								host = std.triple.fromComponents({ arch, os });
+							} else {
+								const id = await executable.store();
+								throw new Error(
+									`fat binary detected containing only unsupported architectures: ${id}`,
+								);
+							}
 						}
+					} else if (metadata.format === "elf") {
+						os = "linux";
+						arch = metadata.arch;
+						host = std.sdk.canonicalTriple(
+							std.triple.fromComponents({ arch, os }),
+						);
+					} else {
+						host = detectedHost;
 					}
-				} else if (metadata.format === "elf") {
-					os = "linux";
-					arch = metadata.arch;
-					host = std.sdk.canonicalTriple(
-						std.triple.fromComponents({ arch, os }),
-					);
-				} else {
+				} catch (_) {
 					host = detectedHost;
 				}
 			} else {
