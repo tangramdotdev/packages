@@ -1,10 +1,12 @@
 import * as std from "std" with { local: "../std" };
-import zlib from "zlib" with { local: "../zlib" };
+import { $ } from "std" with { local: "../std" };
+import libarchive from "libarchive" with { local: "../libarchive" };
+import xar from "xar" with { local: "../xar" };
 import xz from "xz" with { local: "../xz" };
+import zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://www.foundationdb.org/",
-	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "Apache-2.0",
 	name: "foundationdb",
 	repository: "https://github.com/apple/foundationdb",
@@ -22,13 +24,20 @@ export type Arg = {
 
 export const build = async (...args: std.Args<Arg>) => {
 	const { build, host } = await std.packages.applyArgs<Arg>(...args);
-	std.assert.supportedHost(host, metadata);
-	const checksums = binaryChecksums[host];
-	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);
-	const arch = std.triple.arch(host);
+	const os = std.triple.os(host);
+	if (os === "linux") {
+		return downloadLinuxPrebuilt(build, host);
+	} else if (os === "darwin") {
+		return downloadMacosPrebuilt(build, host);
+	} else {
+		return tg.unreachable(`unrecognized os ${os}`);
+	}
+};
+
+export default build;
+
+export const downloadLinuxPrebuilt = async (build: string, host: string) => {
 	const { repository, version } = metadata;
-	const binaries = metadata.provides.binaries;
-	const base = `${repository}/releases/download/${version}`;
 	const build_ = std.triple.create(std.triple.normalize(build), {
 		environment: "gnu",
 	});
@@ -43,6 +52,11 @@ export const build = async (...args: std.Args<Arg>) => {
 			d.get("lib").then(tg.Directory.expect),
 		),
 	]);
+	const binaries = metadata.provides.binaries;
+	const checksums = linuxChecksums[host];
+	tg.assert(checksums !== undefined, `unable to locate checksums for ${host}`);
+	const arch = std.triple.arch(host);
+	const base = `${repository}/releases/download/${version}`;
 	const binDir = Object.fromEntries(
 		await Promise.all(
 			binaries.map(async (binary) => {
@@ -72,9 +86,63 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 };
 
-export default build;
+export const downloadMacosPrebuilt = async (build: string, host: string) => {
+	const { repository, version } = metadata;
+	const arch = std.triple.arch(host) === "aarch64" ? "arm64" : "x86_64";
+	const checksum =
+		arch === "arm64"
+			? "sha256:b7c65742ad6a9ae1eddd347031a8946546ad35d594a4c78e1448dd9094282135"
+			: "sha256:0630fd903646f4c5c777c2341ec3671899e2dcc7eca3b4ad8a53c86eb4e8baa6";
+	const base = `${repository}/releases/download/${version}`;
+	const fileName = `FoundationDB-${version}_${arch}.pkg`;
+	const url = `${base}/${fileName}`;
+	const packageFile = await std.download({ url, checksum }).then((b) => {
+		tg.assert(b instanceof tg.Blob);
+		return tg.file(b);
+	});
 
-const binaryChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
+	return await $`
+			WORKDIR=$(mktemp -d)
+			cd $WORKDIR
+			xar -xf ${packageFile}
+			gunzip -dc FoundationDB-clients.pkg/Payload | bsdcpio -i
+			gunzip -dc FoundationDB-server.pkg/Payload | bsdcpio -i
+			mkdir $OUTPUT
+			cd $OUTPUT
+			mkdir -p bin
+			mkdir -p etc/foundationdb
+			mkdir -p include/foundationdb
+			mkdir -p lib
+			mkdir -p libexec
+			mkdir -p share/foundationdb
+			mkdir -p lib/python2.7/site-packages
+	    cp -p $WORKDIR/usr/local/bin/fdbcli bin/
+	    ln -sf ../libexec/backup_agent bin/dr_agent
+	    ln -sf ../libexec/backup_agent bin/fdbbackup
+	    ln -sf ../libexec/backup_agent bin/fdbdr
+	    ln -sf ../libexec/backup_agent bin/fdbrestore
+	    cp -p $WORKDIR/usr/local/libexec/fdbmonitor libexec/
+	    cp -p $WORKDIR/usr/local/libexec/fdbserver libexec/
+	    ln -sf ../libexec/fdbmonitor bin/fdbmonitor
+	    ln -sf ../libexec/fdbserver bin/fdbserver
+	    cp -p $WORKDIR/usr/local/foundationdb/backup_agent/backup_agent libexec/
+	    cp -p $WORKDIR/usr/local/etc/foundationdb/foundationdb.conf.new etc/foundationdb/
+	    cp -p $WORKDIR/usr/local/include/foundationdb/* include/foundationdb/
+	    cp -p $WORKDIR/usr/local/lib/libfdb_c.dylib lib/
+	    cp -rp $WORKDIR/Library/Python/2.7/site-packages/fdb lib/python2.7/site-packages/
+	    mkdir -p share/foundationdb/launchdaemons
+	    cp -p $WORKDIR/Library/LaunchDaemons/com.foundationdb.fdbmonitor.plist share/foundationdb/launchdaemons/
+	    cp -p $WORKDIR/usr/local/foundationdb/README share/foundationdb/
+	    cp -p $WORKDIR/usr/local/foundationdb/uninstall-FoundationDB.sh share/foundationdb/
+	    mkdir -p share/foundationdb/resources
+	    cp -rp $WORKDIR/Resources/* share/foundationdb/resources/
+			rm -rf $WORKDIR
+			`
+		.env(libarchive({ host }), xar({ host }))
+		.then(tg.Directory.expect);
+};
+
+const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	["aarch64-linux"]: {
 		fdbcli:
 			"sha256:a313bf868b06bc86c658efe81b980a62d59223eb4152d61d787534a4e4090066",
