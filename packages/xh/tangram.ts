@@ -1,4 +1,3 @@
-import pkgConfig from "pkg-config" with { local: "../pkg-config" };
 import openssl from "openssl" with { local: "../openssl" };
 import { cargo } from "rust" with { local: "../rust" };
 import * as std from "std" with { local: "../std" };
@@ -8,7 +7,7 @@ export const metadata = {
 	license: "MIT",
 	name: "xh",
 	repository: "https://github.com/ducaale/xh",
-	version: "0.24.1",
+	version: "0.25.0",
 	provides: {
 		binaries: ["xh"],
 	},
@@ -17,7 +16,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c5902052c66e20fd2c0b49db14edb027f54500b502108327e17260c64a42edee";
+		"sha256:6145f48cbefbb2bd1aa97ebcc8528d15ada1303e6e80fdd6a4637014f0f1df1c";
 	const owner = "ducaale";
 	const repo = name;
 	const tag = `v${version}`;
@@ -62,7 +61,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		disableDefaultFeatures = true;
 		features.push("native-tls");
 		if (std.triple.os(host) === "linux") {
-			env.push(pkgConfig({ build, host: build }), openssl({ build, host }));
+			env.push(openssl({ build, host }));
 		}
 	}
 
