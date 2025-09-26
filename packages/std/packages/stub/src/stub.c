@@ -73,7 +73,7 @@ static void parse_options(Stack* stack, Options* options) {
 	String TANGRAM_SUPPRESS_ARGS = STRING_LITERAL("TANGRAM_SUPPRESS_ARGS");
 	String TANGRAM_SUPPRESS_ENV = STRING_LITERAL("TANGRAM_SUPPRESS_ENV");
 	String TANGRAM_TRACING = STRING_LITERAL("TANGRAM_TRACING");
-	
+
 	char **itr, **end;
 
 	// Parse args.
@@ -609,7 +609,7 @@ static int read_and_process_manifest (
 	if (!options->suppress_env) {
 		for (int i = 0; i < stack->envc; i++) {
 			char* e = stack->envp[i];
-			
+
 			// Find the length and midpoint of the env var.
 			size_t n = 0;
 			size_t m = 0;
@@ -629,7 +629,7 @@ static int read_and_process_manifest (
 			key.ptr = ALLOC_N(arena, m + 1, uint8_t);
 			key.len = m;
 			memcpy(key.ptr, e, m);
-	
+
 			String val = {0};
 			val.ptr = ALLOC_N(arena, n - m, uint8_t);
 			val.len = n - m - 1;
@@ -774,15 +774,15 @@ void exec (Arena* arena, Manifest* manifest, char* argv0, Options* options) {
 	// Sanity check.
 	ABORT_IF(!manifest->executable.ptr, "missing executable");
 	ABORT_IF(!argv0, "missing argv0");
-	
+
 	// Get the executable path.
 	char* pathname = manifest->interpreter.ptr
 		? cstr(arena, manifest->interpreter)
 		: cstr(arena, manifest->executable);
 
 	// Compute argc.
-	size_t argc = manifest->argc 
-		+ manifest->interp_argc 
+	size_t argc = manifest->argc
+		+ manifest->interp_argc
 		+ 1  // pathname
 		+ 1  // --argv0
 		+ 1  // argv[0]
@@ -792,7 +792,7 @@ void exec (Arena* arena, Manifest* manifest, char* argv0, Options* options) {
 	// Create argv, envp
 	char** argv = ALLOC_N(arena, argc + 1, char*);
 	char** envp = ALLOC_N(arena, manifest->env.size + 1, char*);
-	
+
 	// Fill argv.
 	size_t n = 0;
 	argv[n++] = pathname;
@@ -870,13 +870,13 @@ void _stub_start (void *sp) {
 
 	if (options.enable_tracing) {
 		trace(
-			"options: enable_tracing:%d, suppress_args:%d, suppress_env:%d, loader_cli:%d\n", 
+			"options: enable_tracing:%d, suppress_args:%d, suppress_env:%d, loader_cli:%d\n",
 			options.enable_tracing, options.suppress_args, options.suppress_env, options.loader_cli
 		);
 		trace("original stack:\n");
 		print_stack(&stack);
 	}
-	
+
 	// Check for reentrancy.
 	if (stack.envc) {
 		String tangram_entrypoint = STRING_LITERAL("TANGRAM_REENTRY=");
@@ -892,12 +892,11 @@ void _stub_start (void *sp) {
 					trace("TANGRAM_REENTRY: %lx\n", original_entrypoint);
 				}
 				stack.envp[stack.envc] = "TANGRAM_REENTRY=0";
-				BREAK;
 				transfer_control(sp, (void*)original_entrypoint);
 			}
 		}
 	}
-	
+
 	// We need to search the aux vector for the program header table and index of the entry point.
 	Elf64_Phdr* phdr    = (Elf64_Phdr*)stack.auxv_glob[AT_PHDR];
 	uint64_t    ph_num  = (uint64_t)stack.auxv_glob[AT_PHNUM];
@@ -908,7 +907,7 @@ void _stub_start (void *sp) {
 	if (options.enable_tracing) {
 		trace("initialized arena\n");
 	}
-	
+
 	// Search for the positions of AT_ENTRY, AT_BASE, AT_PHDR, AT_PHNUM
 	int nentry = -1;
 	int nbase = -1;
@@ -1004,7 +1003,7 @@ void _stub_start (void *sp) {
 		if (nbase >= 0) {
 			stack.auxv[nbase].a_un.a_val = loaded.base_address;
 		}
-		
+
 		// Set the entrypoint as the interpreter.
 		entrypoint = (void*)(loaded.base_address + loaded.entry);
 
@@ -1055,6 +1054,6 @@ void _stub_start (void *sp) {
 		trace("about to transfer control\n");
 		trace("entrypoint: 0x%lx\n", (uintptr_t)entrypoint);
 	}
-	// BREAK;
+
 	transfer_control(sp, entrypoint);
 }

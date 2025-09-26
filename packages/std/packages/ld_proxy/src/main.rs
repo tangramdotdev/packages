@@ -264,7 +264,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	tracing::debug!(?is_executable, ?interpreter, ?initial_needed_libraries);
 
 	// If the file is executable but does not need an interpreter, it is static or static-PIE linked. Abort here.
-	if is_executable && matches!(interpreter, InterpreterRequirement::None) {
+	if !options.embed && is_executable && matches!(interpreter, InterpreterRequirement::None) {
 		tracing::info!("No interpreter needed for static executable. Exiting without wrapping.");
 		return Ok(());
 	}
