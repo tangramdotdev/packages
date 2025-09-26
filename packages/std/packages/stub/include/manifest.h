@@ -7,10 +7,17 @@
 #include "table.h"
 #include "util.h"
 
+enum {
+	INTERPRETER_KIND_NORMAL,
+	INTERPRETER_KIND_LD_LINUX,
+	INTERPRETER_KIND_LD_MUSL
+};
+
 typedef struct {
 	uint64_t entrypoint;
 	String  executable;
 	String	interpreter;
+	uint64_t interpreter_kind;
 	size_t	num_library_paths;
 	String*	library_paths;
 	size_t	num_preloads;
@@ -19,6 +26,8 @@ typedef struct {
 	String* argv;
 	size_t	interp_argc;
 	String*	interp_argv;
+	String ld_library_path;
+	String ld_preload;
 	Table	env;
 } Manifest;
 

@@ -36,6 +36,8 @@ typedef struct
 	bool enable_tracing;
 	bool suppress_args;
 	bool suppress_env;
+	bool loader_cli;
+	bool reentrant;
 } Options;
 
 // Debugging helper.
@@ -67,9 +69,11 @@ static void parse_options(Stack* stack, Options* options) {
 	options->suppress_args = false;
 	options->suppress_env = false;
 
+	String TANGRAM_LOADER_CLI = STRING_LITERAL("TANGRAM_LOADER_CLI");
 	String TANGRAM_SUPPRESS_ARGS = STRING_LITERAL("TANGRAM_SUPPRESS_ARGS");
 	String TANGRAM_SUPPRESS_ENV = STRING_LITERAL("TANGRAM_SUPPRESS_ENV");
 	String TANGRAM_TRACING = STRING_LITERAL("TANGRAM_TRACING");
+	
 	char **itr, **end;
 
 	// Parse args.
@@ -82,6 +86,9 @@ static void parse_options(Stack* stack, Options* options) {
 		}
 		if (cstreq(s, "--tangram-suppress-env")) {
 			options->suppress_env = true;
+		}
+		if (cstreq(s, "--tangram-loader-cli")) {
+			options->loader_cli = true;
 		}
 	}
 
@@ -98,6 +105,9 @@ static void parse_options(Stack* stack, Options* options) {
 		}
 		if (starts_with(s, TANGRAM_TRACING)) {
 			options->enable_tracing = true;
+		}
+		if (starts_with(s, TANGRAM_LOADER_CLI)) {
+			options->loader_cli = true;
 		}
 	}
 }
@@ -166,7 +176,9 @@ static inline void* find_base_address (Elf64_Phdr* phdr, size_t ph_num) {
 static inline void* prepare_stack (
 	Arena* arena,
 	Stack* stack,
-	Manifest* manifest
+	Manifest* manifest,
+	String entrypoint,
+	Options* options
 ) {
 	// Get the default stack size using ulimit. TODO: how does this work w/ cgroups?
 	rlimit_t rlim;
@@ -213,13 +225,56 @@ static inline void* prepare_stack (
 		}
 	}
 
+	// Push the entrypoint string.
+	if (entrypoint.ptr) {
+		push_str(&sp, cstr(arena, entrypoint));
+		envp[e++] = sp;
+	}
+
 	// Push arg vector. Order still does not matter.
 	int a = 0;
-	char** argv = ALLOC_N(arena, manifest->argc + 1, char*);
+	char** argv = ALLOC_N(arena, manifest->argc + 8, char*);
 
-	// Add argv0
-	push_str(&sp, stack->argv[0]);
-	argv[a++] = sp;
+	if (options->loader_cli) {
+		push_str(&sp, manifest->interpreter.ptr);
+		argv[a++] = sp;
+
+		// Add --library-path arg.
+		if (manifest->ld_library_path.ptr) {
+			push_str(&sp, "--library-path\0");
+			argv[a++] = sp;
+			push_str(&sp, cstr(arena, manifest->ld_library_path));
+			argv[a++] = sp;
+		}
+
+		// Add --preload arg.
+		if (manifest->ld_preload.ptr) {
+			push_str(&sp, "--preload");
+			argv[a++] = sp;
+			push_str(&sp, cstr(arena, manifest->ld_preload));
+			argv[a++] = sp;
+		}
+
+		// Add --argv0
+		push_str(&sp, "--argv0");
+		argv[a++] = sp;
+		push_str(&sp, stack->argv[0]);
+		argv[a++] = sp;
+
+		// Add the separator if necessary.
+		if (manifest->interpreter_kind == INTERPRETER_KIND_LD_MUSL) {
+			push_str(&sp, "--");
+			argv[a++] = sp;
+		}
+
+		// Add the executable.
+		push_str(&sp, cstr(arena, manifest->executable));
+		argv[a++] = sp;
+	} else {
+		// Add argv0
+		push_str(&sp, stack->argv[0]);
+		argv[a++] = sp;
+	}
 
 	for (int i = 0; i < manifest->argc; i++) {
 		char* arg = cstr(arena, manifest->argv[i]);
@@ -286,17 +341,20 @@ typedef struct {
 static LoadedInterpreter load_interpreter(
 	Arena* arena,
 	const char* path,
-	uint64_t page_sz
+	uint64_t page_sz,
+	Options* options
 ) {
-	DBG("loading interpreter with path: %s, page_sz: %ld\n", path, page_sz);
+	if (options->enable_tracing) {
+		trace("loading interpreter with path: %s, page_sz: %ld\n", path, page_sz);
+	}
 
 	// Open the interpreter.
 	int fd = open(path, O_RDONLY, 0);
-	if (fd < 0) ABORT("failed to open interpreter path: %s", path);
+	ABORT_IF(fd < 0, "failed to open interpreter %s", path);
 
 	// Read the e_hdr
 	Elf64_Ehdr* ehdr = ALLOC(arena, Elf64_Ehdr);
-	if (pread64(fd, (void*)ehdr, sizeof(Elf64_Ehdr), 0) < 0) ABORT("failed to read ehdr");
+	ABORT_IF(pread64(fd, (void*)ehdr, sizeof(Elf64_Ehdr), 0) < 0, "failed to read ehdr");
 
 	// Validate
 	bool is_elf64 = (ehdr->e_ident[EI_MAG0] == ELFMAG0)
@@ -305,15 +363,18 @@ static LoadedInterpreter load_interpreter(
 		&& (ehdr->e_ident[EI_MAG3] == ELFMAG3)
 		&& (ehdr->e_ident[EI_DATA] == ELFDATA2LSB)
 		&& (ehdr->e_ident[EI_CLASS] == ELFCLASS64);
-	if (!is_elf64) ABORT("invalid ELF file");
-	if (ehdr->e_phentsize != sizeof(Elf64_Phdr)) ABORT(
+	ABORT_IF(!is_elf64, "invalid ELF file");
+	ABORT_IF(ehdr->e_phentsize != sizeof(Elf64_Phdr),
 		"e_phentsize=%ld,  sizeof(Elf64_Phdr)=%ld",
 		ehdr->e_phentsize, sizeof(Elf64_Phdr)
 	);
 
 	// Get the program header table.
 	Elf64_Phdr* phdr = ALLOC_N(arena, ehdr->e_phnum, Elf64_Phdr);
-	if (pread64(fd, (void*)phdr, sizeof(Elf64_Phdr) * ehdr->e_phnum, ehdr->e_phoff) < 0) ABORT("failed to read phdr");
+	ABORT_IF(
+		pread64(fd, (void*)phdr, sizeof(Elf64_Phdr) * ehdr->e_phnum, ehdr->e_phoff) < 0,
+		"failed to read phdr"
+	);
 
 	// We scan the program header table looking for the address range it should be mapped to.
 	uint64_t minvaddr = (uint64_t)-1;
@@ -340,11 +401,15 @@ static LoadedInterpreter load_interpreter(
 		}
 		default: ABORT("invalid interpreter e_type"); // TODO: static interpreters?
 	}
-	DBG("loader virtual address range: %08lx..%08lx\n", minvaddr, maxvaddr);
+	if (options->enable_tracing) {
+		trace("loader virtual address range: %08lx..%08lx\n", minvaddr, maxvaddr);
+	}
 
 	// Create one big mapping for the entire interpreter with PROT_NONE permissions. We'll slice it up in a second.
 	void* base_address = mmap(0, ALIGN(maxvaddr, page_sz), 0, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	DBG("mapped %08lx..%08lx", (uintptr_t)base_address, (uintptr_t)base_address + maxvaddr);
+	if (options->enable_tracing) {
+		trace("mapped %08lx..%08lx", (uintptr_t)base_address, (uintptr_t)base_address + maxvaddr);
+	}
 
 	// Compute the bias, the logical base address of the interpeter.
 	void* bias = base_address - minvaddr;
@@ -400,7 +465,6 @@ static LoadedInterpreter load_interpreter(
 		if (memsz > filesz) {
 			uintptr_t start = (uintptr_t)segment_address + filesz;
 			uintptr_t end = start + (memsz - filesz);
-			DBG("mapping extra memory from %08lx .. %08lx", start, end);
 			void* p = mmap(
 				(void*)start,
 				(end - start),
@@ -424,11 +488,13 @@ static LoadedInterpreter load_interpreter(
 		// Sanity check our work.
 		ABORT_IF(mapped < itr->p_memsz, "failed to map segment");
 
-		DBG("LOADER: %08lx..%08lx to %08lx..%08lx %03o\n",
-			itr->p_vaddr, itr->p_vaddr + itr->p_memsz,
-			(uintptr_t)segment_address, (uintptr_t)(segment_address + mapped),
-			prot
-		);
+		if (options->enable_tracing) {
+			trace("LOADER: %08lx..%08lx to %08lx..%08lx %03o\n",
+				itr->p_vaddr, itr->p_vaddr + itr->p_memsz,
+				(uintptr_t)segment_address, (uintptr_t)(segment_address + mapped),
+				prot
+			);
+		}
 
 		// If this segment contains the phdr address, update it.
 		uint64_t file_start = itr->p_offset;
@@ -447,6 +513,15 @@ static LoadedInterpreter load_interpreter(
 		.entry = (uintptr_t)ehdr->e_entry,
 		.base_address = (uintptr_t)bias
 	};
+
+	if (options->enable_tracing) {
+		trace("loaded interpreter: phdr: %lx, phnum: %d, entry: %lx, base_address: %lx\n",
+			loaded.phdr,
+			loaded.phnum,
+			loaded.entry,
+			loaded.base_address
+		);
+	}
 
 	// Close the file.
 	close(fd);
@@ -526,30 +601,43 @@ static int read_and_process_manifest (
 ) {
 	// Initialize envp.
 	create_table(arena, &manifest->env, 4096);
+	if (options->enable_tracing) {
+		trace("created env\n");
+	}
 
 	// Fill the env table.
 	if (!options->suppress_env) {
 		for (int i = 0; i < stack->envc; i++) {
 			char* e = stack->envp[i];
-			size_t len = strlen(stack->envp[i]);
-			size_t midpoint = 0;
-			for(; midpoint < len; midpoint++) {
-				if (stack->envp[i][midpoint] == '=') {
-					break;
+			
+			// Find the length and midpoint of the env var.
+			size_t n = 0;
+			size_t m = 0;
+			for (; e[n]; n++) {
+				if (e[n] == '=') {
+					m = n;
 				}
 			}
-			if (midpoint == len) {
+
+			// No '=' found. Skip it.
+			if (m == 0) {
 				continue;
 			}
-			String key = {
-				.ptr = e,
-				.len = midpoint
-			};
-			String val = {
-				.ptr = (e + midpoint + 1),
-				.len = len - midpoint - 1
-			};
+
+			// Allocate strings for key/value pair.
+			String key = {0};
+			key.ptr = ALLOC_N(arena, m + 1, uint8_t);
+			key.len = m;
+			memcpy(key.ptr, e, m);
+	
+			String val = {0};
+			val.ptr = ALLOC_N(arena, n - m, uint8_t);
+			val.len = n - m - 1;
+			memcpy(val.ptr, e + m + 1, n - m - 1);
 			insert(arena, &manifest->env, key, val);
+		}
+		if (options->enable_tracing) {
+			trace("initialized env\n");
 		}
 	}
 
@@ -560,12 +648,17 @@ static int read_and_process_manifest (
 	if (offset < 0) {
 		ABORT("failed to seek");
 	}
+	if (options->enable_tracing) {
+		trace("got fd\n");
+	}
 
 	// Read the manifest footer.
 	if (pread64(fd, footer, sizeof(Footer), offset - sizeof(Footer)) != sizeof(Footer)) {
 		ABORT("failed to read footer");
 	}
-
+	if (options->enable_tracing) {
+		trace("read footer\n");
+	}
 	// Check the magic number.
 	int matches = footer->magic[0] == 't'
 		&& footer->magic[1] == 'a'
@@ -576,12 +669,17 @@ static int read_and_process_manifest (
 		&& footer->magic[6] == 'm'
 		&& footer->magic[7] == '\0';
 	if (!matches) {
+		if (options->enable_tracing) {
+			trace("mismatched footer\n");
+		}
 		close(fd);
 		return 0;
 	}
 
 	// Read the manifest data.
-	DBG("allocating memory for the data: %ld", footer->size);
+	if (options->enable_tracing) {
+		trace("allocating memory for the data: %ld\n", footer->size);
+	}
 
 	char* data = (char*)alloc(arena, footer->size, 1);
 	size_t count = 0;
@@ -614,9 +712,7 @@ static int read_and_process_manifest (
 	}
 
 	// Parse the manifest.
-	DBG("parsing manifest ptr: %lx, len: %ld", (uintptr_t)data, footer->size);
 	parse_manifest(arena, manifest, (uint8_t*)data, footer->size);
-	DBG("parsed manifest.");
 
 	// Append the arg list if necessary.
 	if (!options->suppress_args) {
@@ -652,6 +748,9 @@ static int read_and_process_manifest (
 	String k = STRING_LITERAL("TANGRAM_INJECTION_IDENTITY_PATH");
 	insert(arena, &manifest->env, k, proc_self_exe);
 
+	if (options->loader_cli && !manifest->executable.ptr) {
+		manifest->executable = proc_self_exe;
+	}
 	return 1;
 }
 
@@ -703,7 +802,9 @@ void exec (Arena* arena, Manifest* manifest, char* argv0, Options* options) {
 		}
 		argv[n++] = "--argv0";
 		argv[n++] = argv0;
-		argv[n++] = "--";
+		if (manifest->interpreter_kind == INTERPRETER_KIND_LD_MUSL){
+			argv[n++] = "--";
+		}
 		argv[n++] = cstr(arena, manifest->executable);
 	}
 	for (int i = 0; i < manifest->argc; i++) {
@@ -750,6 +851,8 @@ void exec (Arena* arena, Manifest* manifest, char* argv0, Options* options) {
 
 // Main entrypoint.
 void _stub_start (void *sp) {
+	trace("CUSTOM STUB\n");
+
 	// State.
 	Arena arena = {0};
 	Footer footer = {0};
@@ -764,11 +867,37 @@ void _stub_start (void *sp) {
 
 	// Parse options.
 	parse_options(&stack, &options);
+
 	if (options.enable_tracing) {
+		trace(
+			"options: enable_tracing:%d, suppress_args:%d, suppress_env:%d, loader_cli:%d\n", 
+			options.enable_tracing, options.suppress_args, options.suppress_env, options.loader_cli
+		);
 		trace("original stack:\n");
 		print_stack(&stack);
 	}
-
+	
+	// Check for reentrancy.
+	if (stack.envc) {
+		String tangram_entrypoint = STRING_LITERAL("TANGRAM_REENTRY=");
+		String last_envp = STRING_LITERAL(stack.envp[stack.envc - 1]);
+		if (starts_with(last_envp, tangram_entrypoint)) {
+			String val = {
+				.ptr = last_envp.ptr + tangram_entrypoint.len,
+				.len = last_envp.len - tangram_entrypoint.len
+			};
+			if (!cstreq(val, "0")) {
+				uintptr_t original_entrypoint = parse_uint_from_hex(val);
+				if (options.enable_tracing) {
+					trace("TANGRAM_REENTRY: %lx\n", original_entrypoint);
+				}
+				stack.envp[stack.envc] = "TANGRAM_REENTRY=0";
+				BREAK;
+				transfer_control(sp, (void*)original_entrypoint);
+			}
+		}
+	}
+	
 	// We need to search the aux vector for the program header table and index of the entry point.
 	Elf64_Phdr* phdr    = (Elf64_Phdr*)stack.auxv_glob[AT_PHDR];
 	uint64_t    ph_num  = (uint64_t)stack.auxv_glob[AT_PHNUM];
@@ -776,34 +905,37 @@ void _stub_start (void *sp) {
 
 	// Initialize the arena.
 	create_arena(&arena, page_sz);
-
+	if (options.enable_tracing) {
+		trace("initialized arena\n");
+	}
+	
 	// Search for the positions of AT_ENTRY, AT_BASE, AT_PHDR, AT_PHNUM
 	int nentry = -1;
 	int nbase = -1;
 	int nphdr = -1;
-	int nnum = -1;
+	int nphnum = -1;
 	for (int i = 0; i < stack.auxc; i++) {
 		if (nentry >= 0 && nbase >= 0) {
 			break;
 		}
 		switch(stack.auxv[i].a_type) {
 			case AT_PHDR: {
-				if (nphdr >= 0) ABORT("duplicate PT_PHDR");
+				ABORT_IF(nphdr >= 0, "duplicate AT_PHDR");
 				nphdr = i;
 				break;
 			}
 			case AT_PHNUM: {
-				if (nnum >= 0) ABORT("duplicate PT_PHNUM");
-				nnum = i;
+				ABORT_IF(nphnum >= 0, "duplicate AT_PHNUM");
+				nphnum = i;
 				break;
 			}
 			case AT_ENTRY: {
-				if (nentry >= 0) ABORT("duplicate entrypoints");
+				ABORT_IF(nentry >= 0, "duplicate AT_ENTRY");
 				nentry = i;
 				break;
 			}
 			case AT_BASE: {
-				if (nbase >= 0) ABORT("duplicate base");
+				ABORT_IF(nbase >= 0, "duplicate AT_BASE");
 				nbase = i;
 				break;
 			}
@@ -811,7 +943,9 @@ void _stub_start (void *sp) {
 		}
 	}
 	page_sz = page_sz ? page_sz : 4096;
-
+	if (options.enable_tracing) {
+		trace("scanned program headers\n");
+	}
 	// Sanity check.
 	ABORT_IF((!phdr && !ph_num) || nentry < 0, "invalid wrapped executable");
 
@@ -822,6 +956,9 @@ void _stub_start (void *sp) {
 	Manifest* manifest = ALLOC(&arena, Manifest);
 	if (!read_and_process_manifest(&arena, &stack, &options, manifest, &footer)) {
 		ABORT("failed to parse manifest");
+	}
+	if (options.enable_tracing) {
+		trace("parsed manifest\n");
 	}
 
 	// If "--tangram-print-manifest" was passed to the stub, dump the manifest and exit.
@@ -849,34 +986,51 @@ void _stub_start (void *sp) {
 		ABORT("missing executable or entrypoint");
 	}
 
-	// Fix program headers.
-	Arena preserved_memory;
-	create_arena(&preserved_memory, page_sz);
-	ProgramHeaders new_phdrs = create_program_headers(
-		&preserved_memory,
-		manifest,
-		base_address,
-		stack.auxv[nentry].a_un.a_val,
-		phdr,
-		ph_num
-	);
-	stack.auxv[nphdr].a_un.a_val = (uintptr_t)new_phdrs.new;
-	stack.auxv[nnum].a_un.a_val = (uintptr_t)new_phdrs.num;
-
 	// Get the entrypoint.
+	String entrypoint_string = {0};
 	void* entrypoint = (void*)stack.auxv[nentry].a_un.a_val;
 
 	// Load the interpreter if required.
 	if (manifest->interpreter.ptr) {
+		// Create the reentry variable.
+		String k = STRING_LITERAL("TANGRAM_REENTRY");
+		String v = serialize_uint_to_hex(&arena, (uintptr_t)entrypoint);
+		String ss[2] = { k, v };
+		String s = STRING_LITERAL("=");
+		entrypoint_string = join(&arena, s, ss, 2);
+
 		// Load the interpreter. We use a separate arena to avoid use-after-free issues.
-		LoadedInterpreter loaded = load_interpreter(&arena, manifest->interpreter.ptr, page_sz);
-		DBG("loaded interpreter");
+		LoadedInterpreter loaded = load_interpreter(&arena, manifest->interpreter.ptr, page_sz, &options);
 		if (nbase >= 0) {
 			stack.auxv[nbase].a_un.a_val = loaded.base_address;
 		}
-
+		
 		// Set the entrypoint as the interpreter.
 		entrypoint = (void*)(loaded.base_address + loaded.entry);
+
+		// If the option is enabled, try and trick the loader into thinking its a CLI.
+		if (options.loader_cli) {
+			stack.auxv[nentry].a_un.a_val = loaded.base_address + loaded.entry;
+			stack.auxv[nphdr].a_un.a_val  = loaded.base_address + loaded.phdr;
+			stack.auxv[nphnum].a_un.a_val = loaded.phnum;
+		}
+	}
+
+	// If we're not running the loader as a CLI, patch the program headers.
+	if (!options.loader_cli) {
+		// Fix program headers.
+		Arena preserved_memory;
+		create_arena(&preserved_memory, page_sz);
+		ProgramHeaders new_phdrs = create_program_headers(
+			&preserved_memory,
+			manifest,
+			base_address,
+			stack.auxv[nentry].a_un.a_val,
+			phdr,
+			ph_num
+		);
+		stack.auxv[nphdr].a_un.a_val = (uintptr_t)new_phdrs.new;
+		stack.auxv[nphnum].a_un.a_val = (uintptr_t)new_phdrs.num;
 	}
 
 	// Get the entrypiont.
@@ -885,7 +1039,7 @@ void _stub_start (void *sp) {
 	}
 
 	// Prepare a new stack.
-	sp = prepare_stack(&arena, &stack, manifest);
+	sp = prepare_stack(&arena, &stack, manifest, entrypoint_string, &options);
 	if (options.enable_tracing) {
 		Stack dbg_stack = { .sp = sp };
 		scan_stack(&dbg_stack);
@@ -897,5 +1051,10 @@ void _stub_start (void *sp) {
 	destroy_arena(&arena);
 
 	// Jump to the new entrypoint.
+	if (options.enable_tracing) {
+		trace("about to transfer control\n");
+		trace("entrypoint: 0x%lx\n", (uintptr_t)entrypoint);
+	}
+	// BREAK;
 	transfer_control(sp, entrypoint);
 }

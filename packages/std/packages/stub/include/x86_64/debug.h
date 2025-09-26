@@ -1,5 +1,5 @@
 #pragma once
-#ifdef SOFTWARE_BREAKPOINTS
+#ifdef BREAKPOINTS
 	#define BREAK do { asm volatile ("int3"); } while (0)
 #else
 	#define BREAK

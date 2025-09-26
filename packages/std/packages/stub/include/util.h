@@ -1,9 +1,4 @@
 #pragma once
-#if BREAKPOINTS
-	#define BREAK asm volatile ("int3");
-#else
-	#define BREAK
-#endif
 
 // Common includes.
 #include <elf.h>
@@ -32,7 +27,7 @@ static size_t strlen_including_nul (const char* str) {
 
 static size_t strlen (const char* s) {
 	size_t n = 0;
-	for (; s[n] != 0; n++) {}
+	for (; s[n]; n++) {}
 	return n;
 }
 
@@ -43,7 +38,6 @@ struct PathComponent {
 	int    type; 		
 	String contents;
 };
-
 
 static String parent_dir (String path) {
 	// Edge case: root directory.
@@ -193,4 +187,43 @@ static void double_to_string (Arena* arena, double d, String* s) {
 	}
 
 	reverse(s);
+}
+
+static uint64_t parse_uint_from_hex (String s) {
+	ABORT_IF(s.len < 16, "invalid string");
+	uint64_t u = 0;
+	for (int ch = 0; ch < 16; ch++) {
+		u <<= 4;
+		switch(s.ptr[ch]) {
+			case '0': u |= 0x0; break;
+			case '1': u |= 0x1; break;
+			case '2': u |= 0x2; break;
+			case '3': u |= 0x3; break;
+			case '4': u |= 0x4; break;
+			case '5': u |= 0x5; break;
+			case '6': u |= 0x6; break;
+			case '7': u |= 0x7; break;
+			case '8': u |= 0x8; break;
+			case '9': u |= 0x9; break;
+			case 'a': u |= 0xa; break;
+			case 'b': u |= 0xb; break;
+			case 'c': u |= 0xc; break;
+			case 'd': u |= 0xd; break;
+			case 'e': u |= 0xe; break;
+			case 'f': u |= 0xf; break;
+			default: exit(2);
+		}
+	}
+	return u;
+}
+
+static String serialize_uint_to_hex (Arena* arena, uint64_t u) {
+	String s = {0};
+	s.ptr = ALLOC_N(arena, 17, uint8_t);
+	s.len = 16;
+	for (uint64_t ch = 0; ch < 16; ch++) {
+		uint8_t nibble = 0xf & (u >> 60 - (4 * ch));
+		s.ptr[ch] = "0123456789abcdef"[nibble];
+	}
+	return s;
 }

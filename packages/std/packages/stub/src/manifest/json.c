@@ -46,18 +46,18 @@ static void create_interpreter (Cx* cx, JsonValue* value) {
 	JsonValue* kind = json_get(object, "kind");
 	ABORT_IF(!kind, "expected a kind string");
 	ABORT_IF(kind->kind != JSON_STRING, "expected a string");
-	if (
-		cstreq(kind->value._string, "normal")
-		|| cstreq(kind->value._string, "ld-musl")
-		|| cstreq(kind->value._string, "ld-musl")
-	) {
-		// ok
+	if (cstreq(kind->value._string, "normal")) {
+		cx->manifest->interpreter_kind = INTERPRETER_KIND_NORMAL;
+	} else if (cstreq(kind->value._string, "ld-linux")) {
+		cx->manifest->interpreter_kind = INTERPRETER_KIND_LD_LINUX;
+	} else if (cstreq(kind->value._string, "ld-musl")) {
+		cx->manifest->interpreter_kind = INTERPRETER_KIND_LD_MUSL;
 	} else if (cstreq(kind->value._string, "dyld")) {
 		ABORT("dyld interpreter is unsupported in this context");
 	} else {
-		ABORT("unknown interpreter kind");
+		char* s = cstr(cx->arena, kind->value._string);
+		ABORT("unknown interpreter kind %s", s);
 	}
-
 	JsonValue* path = json_get(object, "path");
 	JsonValue* library_paths = json_get(object, "libraryPaths");
 	JsonValue* preloads = json_get(object, "preloads");

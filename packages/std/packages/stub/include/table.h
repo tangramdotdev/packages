@@ -74,7 +74,8 @@ static int insert (
 	// Search for the key in the table.
 	uint64_t index = hash % table->capacity;
 	Node* node = table->list + index;
-	while(node) {
+
+	for(;;) {
 		// If this is an empty node, use it.
 		if (node->key.ptr == 0) {
 			node->key.ptr = key.ptr;
@@ -91,14 +92,16 @@ static int insert (
 			node->val.len = val.len;
 			return 0;
 		}
-		node = node->next;
+		
+		if (node->next) {
+			node = node->next;
+		} else {
+			break;
+		}
 	}
 
 	// Allocate a new node.
-	Node* new_node = (Node*)alloc(arena, sizeof(Node), _Alignof(Node));
-	if (!new_node) {
-		return -1;
-	}
+	Node* new_node = ALLOC(arena, Node);
 	new_node->key.ptr = key.ptr;
 	new_node->key.len = key.len;
 	new_node->val.ptr = val.ptr;

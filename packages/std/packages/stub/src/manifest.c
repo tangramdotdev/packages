@@ -80,18 +80,40 @@ void parse_manifest (
 		create_manifest_from_value(&cx, &value);
 	}
 
+	String true_ = STRING_LITERAL("true");
+	String clear_ld_library_path = STRING_LITERAL("TANGRAM_CLEAR_LD_LIBRARY_PATH");
+	String clear_ld_preload = STRING_LITERAL("TANGRAM_CLEAR_LD_PRELOAD");
+	String restore_ld_library_path = STRING_LITERAL("TANGRAM_RESTORE_LD_LIBRARY_PATH");
+	String restore_ld_preload = STRING_LITERAL("TANGRAM_RESTORE_LD_PRELOAD");
+
 	// Render paths.
-	String ld_library_path = render_ld_library_path(arena, manifest);
-	if (ld_library_path.ptr) {
+	manifest-> ld_library_path = render_ld_library_path(arena, manifest);
+	if (manifest->ld_library_path.ptr) {
 		String key = STRING_LITERAL("LD_LIBRARY_PATH");
-		insert(arena, &manifest->env, key, ld_library_path);
+		String val = lookup(&manifest->env, key);
+		if (val.ptr) {
+			String ss[2] = { val, manifest->ld_library_path };
+			String s = STRING_LITERAL(":");
+			manifest->ld_library_path = join(arena, s, ss, 2);
+			insert(arena, &manifest->env, restore_ld_library_path, val);
+		} else {
+			insert(arena, &manifest->env, clear_ld_library_path, true_);
+		}
+		insert(arena, &manifest->env, key, manifest->ld_library_path);
 	}
-
-	String ld_preload = render_ld_preload(arena, manifest);
-	if (ld_preload.ptr) {
+	manifest->ld_preload = render_ld_preload(arena, manifest);
+	if (manifest->ld_preload.ptr) {
 		String key = STRING_LITERAL("LD_PRELOAD");
-		insert(arena, &manifest->env, key, ld_preload);
+		String val = lookup(&manifest->env, key);
+		if (val.ptr) {
+			String ss[2] = { val, manifest->ld_preload };
+			String s = STRING_LITERAL(":");
+			manifest->ld_preload = join(arena, s, ss, 2);
+			insert(arena, &manifest->env, restore_ld_preload, val);
+		} else {
+			insert(arena, &manifest->env, clear_ld_preload, true_);
+		}
+		insert(arena, &manifest->env, key, manifest->ld_preload);
 	}
-
 }
 #undef PATH_MAX

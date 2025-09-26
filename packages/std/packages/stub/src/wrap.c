@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 
 // Internals.
 #include "footer.h"
@@ -82,6 +83,33 @@ int append (int src, int dst) {
 				return 1;
 			}
 			num_written += n;
+		}
+	}
+}
+
+// Bubble sort loadable segments
+void sort_segments (Elf64_Phdr* phdr, size_t num) {
+	TRACE("num segments = %d", num);
+	Elf64_Addr start_addr, end_addr;
+	for(;;) {
+		bool swapped = false;
+		for (int n = 0; n < (num - 1); n++) {
+			if (phdr[n].p_type != PT_LOAD || phdr[n+1].p_type != PT_LOAD) {
+				fprintf(stderr, "oh fuck");
+			}
+			end_addr = phdr[n].p_vaddr + phdr[n].p_memsz;
+			start_addr = phdr[n + 1].p_vaddr;
+			TRACE("phdr[%d].end = %lx, phdr[%d].start = %lx", n, end_addr, n + 1, start_addr);
+			if (end_addr > start_addr) {
+				TRACE("swap phdr[%d], phdr[%d]", n, n+1);
+				Elf64_Phdr tmp = phdr[n];
+				phdr[n] = phdr[n+1];
+				phdr[n + 1] = tmp;
+				swapped = true;
+			}
+		}
+		if (!swapped) {
+			break;
 		}
 	}
 }
@@ -191,12 +219,14 @@ int main(int argc, const char** argv) {
 	
 	// Get the elf header.
 	Elf64_Ehdr* ehdr = (Elf64_Ehdr*)elf;
+
+	Elf64_Phdr* old_phdr = (Elf64_Phdr*)((char*)ehdr + ehdr->e_phoff);
 	
 	// Find the PT_INTERP segment and the max virtual address.
 	Elf64_Phdr* pt_interp	= NULL;
 	Elf64_Phdr* pt_load	= NULL;
 	Elf64_Addr vaddr	= 0;
-	char* itr = ((char*)elf + ehdr->e_phoff);
+	char* itr = (char*)old_phdr;
 	char* end = itr + (ehdr->e_phnum * ehdr->e_phentsize);
 	int n = 0;
 	for (; itr != end; itr += ehdr->e_phentsize) {
@@ -214,23 +244,70 @@ int main(int argc, const char** argv) {
 	}
 	TRACE("found PT_INTERP, PT_LOAD, vaddr");
 
-	// Keep track of where we're going to append the stub.
-	size_t file_offset = ALIGN(output_size, 4096);
-	if (pt_interp) {
-		size_t sz = ALIGN(stub_size, 4096);
-		// If there is an interpreter, reuse it as PT_LOAD segment.
-		pt_interp->p_align	= 0x1000;
-		pt_interp->p_filesz	= sz;
-		pt_interp->p_flags	= PF_R | PF_X;
-		pt_interp->p_memsz	= sz;
-		pt_interp->p_offset	= file_offset;
-		pt_interp->p_paddr	= vaddr;
-		pt_interp->p_type	= PT_LOAD;
-		pt_interp->p_vaddr	= vaddr;
-	} else {
-		TRACE("Missing pt_interp for %s\n", input);
-		EXIT_WITH_ERROR("unimplemented: insert a new PT_LOAD segment and update all offsets");
+	// Get the segment that we'll write the stub to.
+	Elf64_Phdr* segment  = pt_interp;
+		
+	// We may need to append a program header table to the start of the stub.
+	Elf64_Phdr* new_phdr   = NULL;
+	size_t new_phdr_offset = 0;
+	size_t new_phdr_sz     = 0;
+	int new_phdr_num       = 0;
+
+	// If there is no pt_interp, create a new program header table.
+	bool update_pt_phdr = false;
+	if (!segment) {
+		TRACE("no PT_INTERP, creating new program header table");
+
+		// Align the new program header table to the pagesize.
+		new_phdr_offset = ALIGN(new_phdr_offset, 64);
+
+		// Compute the size of the new program header table.
+		new_phdr_sz = (ehdr->e_phnum + 1) * ehdr->e_phentsize;
+
+		// Allocate.
+		new_phdr = (Elf64_Phdr*)malloc(new_phdr_sz);
+		
+		// Offset from 1, to account for the new PT_PHDR.
+		new_phdr_num++;
+
+		// Fill in PT_LOAD segments first, skipping the first entry.
+		for (int i = 0; i < ehdr->e_phnum; i++) {
+			if (old_phdr[i].p_type == PT_PHDR) {
+				EXIT_WITH_ERROR("unexpected PT_PHDR");
+			}
+			if (old_phdr[i].p_type != PT_LOAD) {
+				continue;
+			}
+			new_phdr[new_phdr_num++] = old_phdr[i];
+		}
+		segment = &new_phdr[new_phdr_num++];
+		for (int i = 0; i < ehdr->e_phnum; i++) {
+			if (old_phdr[i].p_type == old_phdr[i].p_type == PT_LOAD) {
+				continue;
+			}
+			new_phdr[new_phdr_num++] = old_phdr[i];
+		}
 	}
+	
+	// Find out where we're going to write the stub.
+	size_t stub_offset = new_phdr 
+		? new_phdr[0].p_offset + new_phdr[0].p_filesz
+		: ALIGN(output_size, 4096);
+	TRACE("stub offset: %d", stub_offset);
+	
+	// Make the stub size page-aligned, as a sanity check.
+	size_t sz = ALIGN(stub_size + new_phdr_sz, 4096);
+	TRACE("stub offset: %d", stub_offset);
+	
+	// Create segment for the stub.
+	segment->p_type   = PT_LOAD;
+	segment->p_flags  = PF_R | PF_X;
+	segment->p_align  = 0x1000;
+	segment->p_offset = stub_offset;
+	segment->p_paddr  = vaddr;
+	segment->p_vaddr  = vaddr;
+	segment->p_filesz = sz;
+	segment->p_memsz  = sz;
 
 	// Create the footer.
 	Footer footer;
@@ -243,14 +320,42 @@ int main(int argc, const char** argv) {
 	// Patch the entrypoint.
 	ehdr->e_entry = vaddr;
 
+	// Patch the program header table if necessary.
+	if (new_phdr){
+		ehdr->e_phoff = new_phdr_offset;
+		ehdr->e_phnum = new_phdr_num;
+	} else {
+		// Sort program headers because bad shit happens when you don't.
+		Elf64_Phdr* start = NULL;
+		size_t num = 0;
+		for(int i = 0; i < ehdr->e_phnum; i++) {
+			if (old_phdr[i].p_type != PT_LOAD) {
+				continue;
+			}
+			if (!start) {
+				start = &old_phdr[i];
+			}
+			num++;
+		}
+		sort_segments(start, num);
+	}
+
 	// Unmap
 	munmap(elf, output_size);
 	elf = NULL;
 	TRACE("unmapped output");
 
-	// Truncate.
-	if (ftruncate(output_fd, file_offset) < 0) {
+	// Resize the file.
+	if (ftruncate(output_fd, stub_offset) < 0) {
 		EXIT_WITH_ERROR("failed to resize the output");
+	}
+
+	// Append the new program header table, if it exists.
+	if (new_phdr) {
+		if (write(output_fd, (void*)new_phdr, new_phdr_sz) != new_phdr_sz) {
+			EXIT_WITH_ERROR("failed to append new program header table");
+		}
+		TRACE("appended new program header table");
 	}
 
 	// Append the stub and manifest.
