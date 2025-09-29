@@ -737,13 +737,20 @@ class PackageExecutor {
 
       log(`Processing package: ${packageName}`);
 
-      // First, check in and tag the package (like the original script)
-      const tagResult = await this.tagPackage(context);
-      if (tagResult.kind !== "ok") {
+      // Check if any actions require tagging (build, test, publish, upload, push)
+      const requiresTagging = this.config.actions.some((a) =>
+        ["build", "test", "publish", "upload", "push"].includes(a.name),
+      );
+
+      // Check in and tag the package only if needed
+      if (requiresTagging) {
+        const tagResult = await this.tagPackage(context);
+        if (tagResult.kind !== "ok") {
+          results.log(packageName, "tag", tagResult);
+          return; // Stop processing this package if tagging fails
+        }
         results.log(packageName, "tag", tagResult);
-        return; // Stop processing this package if tagging fails
       }
-      results.log(packageName, "tag", tagResult);
 
       for (const actionConfig of this.config.actions) {
         const action = this.registry.get(actionConfig.name);
