@@ -49,6 +49,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		executable: arg.interpreter ? undefined : arg.executable,
 		libraryPaths: arg.libraryPaths,
 		libraryPathStrategy: arg.libraryPathStrategy,
+		preloads: arg.preloads,
 	});
 
 	// Use existing manifest values as defaults if we're wrapping a wrapper
@@ -121,6 +122,9 @@ export namespace wrap {
 
 		/** Which library path strategy should we use? The default is "unfilteredIsolate", which separates libraries into individual directories. */
 		libraryPathStrategy?: LibraryPathStrategy | undefined;
+
+		/** Preloads to include. If the executable is wrapped, they will be merged. */
+		preloads?: Array<tg.File | tg.Symlink | tg.Template>;
 
 		/** Specify how to handle executables that are already Tangram wrappers. When `merge` is true, retain the original executable in the resulting manifest. When `merge` is set to false, produce a manifest pointing to the original wrapper. This option is ignored if the executable being wrapped is not a Tangram wrapper. Default: true. */
 		merge?: boolean;
@@ -226,6 +230,7 @@ export namespace wrap {
 			merge: merge_ = true,
 			libraryPaths = [],
 			libraryPathStrategy,
+			preloads = [],
 		} = await std.args.apply<wrap.Arg, wrap.ArgObject>({
 			args,
 			map: async (arg) => {
@@ -247,6 +252,7 @@ export namespace wrap {
 			reduce: {
 				env: (a, b) => std.env.arg(a, b, { utils: false }),
 				libraryPaths: "append",
+				preloads: "append",
 				args: "append",
 			},
 		});
@@ -320,11 +326,23 @@ export namespace wrap {
 
 			envs.push(await wrap.envObjectFromManifestEnv(existingManifest.env));
 
-			// Only use the existing interpreter if no explicit interpreter was provided
-			if (interpreter === undefined) {
-				interpreter = await wrap.interpreterFromManifestInterpreter(
-					existingManifest.interpreter,
+			// Merge the existing interpreter with any new interpreter provided
+			const existingInterpreter = await wrap.interpreterFromManifestInterpreter(
+				existingManifest.interpreter,
+			);
+			if (interpreter !== undefined) {
+				const newInterpreter = await interpreterFromArg(
+					interpreter,
+					buildToolchain,
+					build,
+					host,
 				);
+				interpreter = await wrap.mergeInterpreters(
+					existingInterpreter,
+					newInterpreter,
+				);
+			} else {
+				interpreter = existingInterpreter;
 			}
 
 			executable = await wrap.executableFromManifestExecutable(
@@ -357,6 +375,7 @@ export namespace wrap {
 			merge,
 			libraryPaths,
 			libraryPathStrategy,
+			preloads,
 		};
 	};
 
@@ -581,6 +600,117 @@ export namespace wrap {
 			}
 		}
 		return ret;
+	};
+
+	/** Merge two interpreters, with the new interpreter's properties taking precedence but arrays being concatenated. */
+	export const mergeInterpreters = async (
+		existingInterpreter: wrap.Interpreter | undefined,
+		newInterpreter: wrap.Interpreter | undefined,
+	): Promise<wrap.Interpreter | undefined> => {
+		// If no existing interpreter, just return the new one
+		if (!existingInterpreter) {
+			return newInterpreter;
+		}
+
+		// If no new interpreter, just return the existing one
+		if (!newInterpreter) {
+			return existingInterpreter;
+		}
+
+		// Both interpreters must be the same kind to merge
+		if (existingInterpreter.kind !== newInterpreter.kind) {
+			return newInterpreter; // New interpreter completely replaces existing one
+		}
+
+		const kind = existingInterpreter.kind;
+
+		switch (kind) {
+			case "normal": {
+				const existing = existingInterpreter as wrap.NormalInterpreter;
+				const new_ = newInterpreter as wrap.NormalInterpreter;
+				return {
+					kind,
+					// New executable takes precedence
+					executable: new_.executable ?? existing.executable,
+					// Concatenate args arrays
+					args:
+						[...(existing.args ?? []), ...(new_.args ?? [])].length > 0
+							? [...(existing.args ?? []), ...(new_.args ?? [])]
+							: undefined,
+				};
+			}
+			case "ld-linux": {
+				const existing = existingInterpreter as wrap.LdLinuxInterpreter;
+				const new_ = newInterpreter as wrap.LdLinuxInterpreter;
+				return {
+					kind,
+					// New executable takes precedence
+					executable: new_.executable ?? existing.executable,
+					// Concatenate libraryPaths arrays
+					libraryPaths:
+						[...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
+							.length > 0
+							? [...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
+							: undefined,
+					// Concatenate preloads arrays
+					preloads:
+						[...(existing.preloads ?? []), ...(new_.preloads ?? [])].length > 0
+							? [...(existing.preloads ?? []), ...(new_.preloads ?? [])]
+							: undefined,
+					// Concatenate args arrays
+					args:
+						[...(existing.args ?? []), ...(new_.args ?? [])].length > 0
+							? [...(existing.args ?? []), ...(new_.args ?? [])]
+							: undefined,
+				};
+			}
+			case "ld-musl": {
+				const existing = existingInterpreter as wrap.LdMuslInterpreter;
+				const new_ = newInterpreter as wrap.LdMuslInterpreter;
+				return {
+					kind,
+					// New executable takes precedence
+					executable: new_.executable ?? existing.executable,
+					// Concatenate libraryPaths arrays
+					libraryPaths:
+						[...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
+							.length > 0
+							? [...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
+							: undefined,
+					// Concatenate preloads arrays
+					preloads:
+						[...(existing.preloads ?? []), ...(new_.preloads ?? [])].length > 0
+							? [...(existing.preloads ?? []), ...(new_.preloads ?? [])]
+							: undefined,
+					// Concatenate args arrays
+					args:
+						[...(existing.args ?? []), ...(new_.args ?? [])].length > 0
+							? [...(existing.args ?? []), ...(new_.args ?? [])]
+							: undefined,
+				};
+			}
+			case "dyld": {
+				const existing = existingInterpreter as wrap.DyLdInterpreter;
+				const new_ = newInterpreter as wrap.DyLdInterpreter;
+				return {
+					kind,
+					// Concatenate libraryPaths arrays
+					libraryPaths:
+						[...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
+							.length > 0
+							? [...(existing.libraryPaths ?? []), ...(new_.libraryPaths ?? [])]
+							: undefined,
+					// Concatenate preloads arrays
+					preloads:
+						[...(existing.preloads ?? []), ...(new_.preloads ?? [])].length > 0
+							? [...(existing.preloads ?? []), ...(new_.preloads ?? [])]
+							: undefined,
+				};
+			}
+			default: {
+				return tg.unreachable(`Unexpected interpreter kind ${kind}`);
+			}
+		}
 	};
 
 	export const executableFromManifestExecutable = async (
@@ -963,6 +1093,7 @@ type ManifestInterpreterArg = {
 	executable?: string | tg.Template | tg.File | tg.Symlink | undefined;
 	libraryPaths?: Array<tg.Template.Arg> | undefined;
 	libraryPathStrategy?: wrap.LibraryPathStrategy | undefined;
+	preloads?: Array<tg.File | tg.Symlink | tg.Template> | undefined;
 };
 
 /** Produce the manifest interpreter object given a set of parameters. */
@@ -988,16 +1119,28 @@ const manifestInterpreterFromWrapArgObject = async (
 
 	// If this is not a "normal" interpreter run the library path optimization, including any additional paths from the user.
 	if (interpreter.kind !== "normal") {
-		const { executable, libraryPaths, libraryPathStrategy } = arg;
+		const { executable, libraryPaths, libraryPathStrategy, preloads } = arg;
 		interpreter = await optimizeLibraryPaths({
 			executable,
 			interpreter,
 			libraryPaths,
 			libraryPathStrategy,
 		});
+
+		// Add any additional preloads from the arg
+		if (preloads && preloads.length > 0) {
+			// Merge with existing preloads
+			const existingPreloads = interpreter.preloads ?? [];
+			interpreter = {
+				...interpreter,
+				preloads: [...existingPreloads, ...preloads],
+			};
+		}
 	}
 
-	return manifestInterpreterFromWrapInterpreter(interpreter);
+	return interpreter
+		? manifestInterpreterFromWrapInterpreter(interpreter)
+		: undefined;
 };
 
 /** Serialize an interpreter into its manifest form. */
@@ -2336,6 +2479,7 @@ export const test = async () => {
 		testContentExecutable(),
 		testContentExecutableVariadic(),
 		testInterpreterSwappingNormal(),
+		testInterpreterWrappingPreloads(),
 	]);
 	return true;
 };
@@ -2666,4 +2810,113 @@ export const testInterpreterSwappingNormal = async () => {
 	);
 
 	return secondWrapper;
+};
+
+export const testInterpreterWrappingPreloads = async () => {
+	const host = await std.triple.host();
+	const os = std.triple.os(host);
+	const expectedKind = os === "darwin" ? "dyld" : "ld-musl";
+
+	const bootstrapSdk = await bootstrap.sdk(host);
+
+	const testSource = tg.file(`
+    #include <stdio.h>
+    int main() {
+      printf("Hello from test executable\\n");
+      return 0;
+    }
+  `);
+
+	const testExecutable = await std.build`cc -xc -o $OUTPUT ${testSource}`
+		.bootstrap(true)
+		.env(bootstrapSdk)
+		.then(tg.File.expect);
+
+	// Create a simple shared library that can be used as a preload.
+	const preloadSource = tg.file(`
+    #include <stdio.h>
+    void __attribute__((constructor)) init() {
+      fprintf(stderr, "Custom preload loaded\\n");
+    }
+  `);
+
+	const customPreloadLib =
+		await std.build`cc -shared -fPIC -xc -o $OUTPUT ${preloadSource}`
+			.bootstrap(true)
+			.env(bootstrapSdk)
+			.then(tg.File.expect);
+
+	// First, create a wrapper with the default interpreter (will have injection preload)
+	const originalWrapper = await wrap(testExecutable, {
+		buildToolchain: bootstrapSdk,
+	});
+	await originalWrapper.store();
+
+	// Verify it has an ld-linux interpreter with preloads
+	const originalManifest = await wrap.Manifest.read(originalWrapper);
+	tg.assert(originalManifest);
+	tg.assert(originalManifest.interpreter);
+	tg.assert(originalManifest.interpreter.kind === expectedKind);
+	tg.assert(originalManifest.interpreter.preloads);
+	const originalPreloadCount = originalManifest.interpreter.preloads.length;
+	tg.assert(
+		originalPreloadCount >= 1,
+		"Expected at least one default preload (injection library)",
+	);
+
+	// Test adding preloads to an existing wrapper using the top-level preloads field
+	const extendedWrapper = await wrap(originalWrapper, {
+		preloads: [customPreloadLib],
+	});
+	await extendedWrapper.store();
+
+	// Read the extended manifest
+	const extendedManifest = await wrap.Manifest.read(extendedWrapper);
+	tg.assert(extendedManifest);
+	tg.assert(extendedManifest.interpreter);
+	tg.assert(extendedManifest.interpreter.kind === expectedKind);
+	tg.assert(extendedManifest.interpreter.preloads);
+
+	// Verify that we have both the original preloads AND the new one,.
+	tg.assert(
+		extendedManifest.interpreter.preloads.length === originalPreloadCount + 1,
+		`Expected ${originalPreloadCount + 1} preloads (${originalPreloadCount} original + 1 new), but got ${extendedManifest.interpreter.preloads.length}`,
+	);
+
+	// Verify that the executable in the extended wrapper is still the original.
+	tg.assert(
+		JSON.stringify(extendedManifest.executable) ===
+			JSON.stringify(originalManifest.executable),
+		"Expected the executable to remain the same through re-wrapping",
+	);
+
+	// Verify that all original preloads are still present in the extended wrapper.
+	const originalPreloadTemplates = originalManifest.interpreter.preloads;
+	const extendedPreloadTemplates = extendedManifest.interpreter.preloads;
+
+	let foundOriginalPreloads = 0;
+	for (const originalPreload of originalPreloadTemplates) {
+		const found = extendedPreloadTemplates.some(
+			(extendedPreload) =>
+				JSON.stringify(originalPreload) === JSON.stringify(extendedPreload),
+		);
+		if (found) {
+			foundOriginalPreloads++;
+		}
+	}
+
+	tg.assert(
+		foundOriginalPreloads === originalPreloadTemplates.length,
+		`Expected all ${originalPreloadTemplates.length} original preloads to be preserved, but only found ${foundOriginalPreloads}`,
+	);
+
+	// Verify that the custom preload was added.
+	const customPreloadTemplate = await manifestTemplateFromArg(customPreloadLib);
+	const foundCustomPreload = extendedPreloadTemplates.some(
+		(extendedPreload) =>
+			JSON.stringify(extendedPreload) === JSON.stringify(customPreloadTemplate),
+	);
+	tg.assert(foundCustomPreload, "Expected the custom preload to be added");
+
+	return extendedWrapper;
 };
