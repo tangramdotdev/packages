@@ -1,0 +1,93 @@
+name: Build Packages
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_target:
+    types: [opened]
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+env:
+  TANGRAM_CI_DIR: ${{ github.workspace }}/../.tangram-ci-${{ github.event.repository.name }}
+  TG_EXE: ${{ github.workspace }}/../.tangram-ci-${{ github.event.repository.name }}/bin/tangram
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.runner }}
+    environment: test
+    strategy:
+      matrix:
+        include:
+          - runner: [self-hosted, macOS, ARM64]
+            enabled: true
+          - runner: [self-hosted, Linux, X64]
+            enabled: false
+
+    steps:
+      - name: Check out packages repository
+        uses: actions/checkout@v4
+
+      - name: Configure Tangram
+        run: |
+          mkdir -p "$TANGRAM_CI_DIR/bin"
+          cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
+          {}
+          EOF
+          cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
+          #!/bin/sh
+          exec tangram --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          EOF
+          chmod +x "$TANGRAM_CI_DIR/bin/tangram"
+
+      - name: Test packages
+        if: matrix.enabled
+        shell: bash
+        run: |
+          "$TG_EXE" server start
+          while [ "$("$TG_EXE" server status)" != "started" ]; do
+            sleep 1
+          done
+          bun run auto --test --sequential
+          "$TG_EXE" server stop
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    strategy:
+      matrix:
+        include:
+          - runner: [self-hosted, macOS, ARM64]
+            enabled: true
+          - runner: [self-hosted, Linux, X64]
+            enabled: false
+
+    steps:
+      - name: Check out packages repository
+        uses: actions/checkout@v4
+
+      - name: Configure Tangram
+        run: |
+          mkdir -p "$TANGRAM_CI_DIR/bin"
+          cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
+          {}
+          EOF
+          cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
+          #!/bin/sh
+          exec tangram --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          EOF
+          chmod +x "$TANGRAM_CI_DIR/bin/tangram"
+
+      - name: Release packages
+        if: matrix.enabled
+        shell: bash
+        run: |
+          "$TG_EXE" server start
+          while [ "$("$TG_EXE" server status)" != "started" ]; do
+            sleep 1
+          done
+          bun run auto --release --sequential
+          "$TG_EXE" server stop
