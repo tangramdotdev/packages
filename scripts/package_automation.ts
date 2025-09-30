@@ -379,6 +379,7 @@ async function getPackageVersion(ctx: Context): Promise<Result<string>> {
 /** Helper to manage build process with tracking */
 async function executeBuild(
 	ctx: Context,
+	actionName: string,
 	buildPath: string,
 	options: { tag?: string } = {},
 ): Promise<Result<void>> {
@@ -393,7 +394,7 @@ async function executeBuild(
 		}
 
 		log(
-			`[build] ${buildPath}: ${processId}${options.tag ? ` (tag: ${options.tag})` : ""}`,
+			`[${actionName}] ${buildPath}: ${processId}${options.tag ? ` (tag: ${options.tag})` : ""}`,
 		);
 		await ctx.tangram.processOutput(processId);
 		return { ok: true, value: undefined };
@@ -462,14 +463,12 @@ async function buildAction(ctx: Context): Promise<Result<string[]>> {
 		const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
 		const buildPath = `${ctx.packagePath}${exportSuffix}`;
 
-		log(`[build] ${buildPath}`);
-
 		if (ctx.dryRun) {
 			built.push(buildPath);
 			continue;
 		}
 
-		const result = await executeBuild(ctx, buildPath);
+		const result = await executeBuild(ctx, "build", buildPath);
 		if (!result.ok) {
 			return result as Result<string[]>;
 		}
@@ -533,9 +532,7 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		const tag = buildTag(ctx.packageName, version, exportName, ctx.platform);
 		const buildSource = `${versionedName}${exportSuffix}`;
 
-		log(`[release] tagging ${tag}`);
-
-		const result = await executeBuild(ctx, buildSource, { tag });
+		const result = await executeBuild(ctx, "release", buildSource, { tag });
 		if (!result.ok) {
 			return result as Result<string>;
 		}
@@ -586,13 +583,12 @@ class Results {
 
 async function testAction(ctx: Context): Promise<Result<void>> {
 	const buildPath = `${ctx.packagePath}#test`;
-	log(`[test] ${buildPath}`);
 
 	if (ctx.dryRun) {
 		return { ok: true, value: undefined };
 	}
 
-	return await executeBuild(ctx, buildPath);
+	return await executeBuild(ctx, "test", buildPath);
 }
 
 /** Ordered actions - dependencies implicit in order */
