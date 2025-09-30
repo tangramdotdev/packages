@@ -1,1013 +1,767 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parseArgs } from "node:util";
 import { $ } from "bun";
 
 const separator = "-".repeat(50);
 
+/** Unified logging */
+const log = (...data: unknown[]) => {
+	const timestamp = `[${new Date().toUTCString()}]`;
+	console.log(timestamp, ...data);
+};
+
+/** Extract error message from various error types */
+const extractErrorMessage = (err: unknown): string => {
+	if (err && typeof err === "object") {
+		const e = err as { stderr?: { toString(): string }; message?: string };
+		return e.stderr?.toString() || e.message || String(err);
+	}
+	return String(err);
+};
+
+/** Check if error indicates unsupported host */
+const isUnsupportedHostError = (err: unknown): boolean => {
+	const message = extractErrorMessage(err);
+	return message.includes("not found in supported hosts");
+};
+
+/** Tangram CLI client for all tangram operations */
+class TangramClient {
+	constructor(private readonly exe: string) {}
+
+	async validateInstallation(): Promise<void> {
+		try {
+			const result = await $`${this.exe} --version`.text();
+			if (!result.includes("tangram")) {
+				throw new Error(`${this.exe} --version produced unexpected result`);
+			}
+		} catch (err) {
+			throw new Error(`Error running ${this.exe}: ${err}`);
+		}
+	}
+
+	async checkin(path: string): Promise<string> {
+		const id = await $`${this.exe} checkin ${path}`
+			.text()
+			.then((t) => t.trim());
+		return id;
+	}
+
+	async tag(name: string, target: string): Promise<void> {
+		await $`${this.exe} tag ${name} ${target}`.quiet();
+	}
+
+	async getTag(name: string): Promise<string | null> {
+		try {
+			const result = await $`${this.exe} tag get ${name}`
+				.text()
+				.then((t) => t.trim());
+			return result;
+		} catch (_err) {
+			return null;
+		}
+	}
+
+	async build(
+		target: string,
+		options: { tag?: string } = {},
+	): Promise<{ id: string; token?: string }> {
+		const args = [target, "-d"];
+		if (options.tag) {
+			args.push(`--tag=${options.tag}`);
+		}
+
+		const output = await $`${this.exe} build ${args}`
+			.text()
+			.then((t) => t.trim());
+
+		// Output can be either just a process ID or "processId cancellationToken"
+		const parts = output.split(/\s+/);
+		if (parts.length === 1) {
+			return { id: parts[0] };
+		}
+		return { id: parts[0], token: parts[1] };
+	}
+
+	async processOutput(processId: string): Promise<string> {
+		return await $`${this.exe} process output ${processId}`
+			.text()
+			.then((t) => t.trim());
+	}
+
+	async push(target: string): Promise<void> {
+		await $`${this.exe} push ${target}`.quiet();
+	}
+
+	async cancel(processId: string, token: string): Promise<void> {
+		await $`${this.exe} cancel ${processId} ${token}`.quiet();
+	}
+
+	async format(path: string): Promise<void> {
+		await $`${this.exe} format ${path}`.quiet();
+	}
+
+	async check(path: string): Promise<void> {
+		await $`${this.exe} check ${path}`.quiet();
+	}
+}
+
 const entrypoint = async () => {
-  try {
-    const config = ConfigParser.parseFromArgs();
-    await config.validateTangram();
-    log(`Starting! Configuration:\n${config.summarize()}\n${separator}`);
-    const executor = new PackageExecutor(config);
-    const results = await executor.run();
-    log(`Done! Results:\n${results.summarize()}`);
-  } catch (error) {
-    console.error("Error:", error.message);
-    process.exit(1);
-  }
+	try {
+		const config = parseFromArgs();
+		await config.validateTangram();
+		log(`Starting! Configuration:\n${config.summarize()}\n${separator}`);
+		const executor = new PackageExecutor(config);
+		const results = await executor.run();
+		log(`Done! Results:\n${results.summarize()}`);
+
+		if (results.hasFailures()) {
+			process.exit(1);
+		}
+	} catch (error) {
+		log("Error:", error.message);
+		process.exit(1);
+	}
 };
 
 interface PackageFilter {
-  include?: string[];
-  exclude?: string[];
-  recursive?: boolean;
+	include?: string[];
+	exclude?: string[];
 }
 
-interface BuildTarget {
-  export?: string;
-  platform?: string;
-  tag?: string;
-}
+/** Resolves which packages to process from the filesystem */
+function resolvePackages(filter: PackageFilter): string[] {
+	const blacklist = new Set(["demo", "sanity", "webdemo"]);
+	let packages: string[] = [];
 
-interface ActionConfig {
-  name: string;
-  options?: Record<string, any>;
+	if (filter.include && filter.include.length > 0) {
+		packages = [...filter.include];
+	} else {
+		const entries = fs.readdirSync(packagesPath(), { withFileTypes: true });
+
+		for (const entry of entries) {
+			if (blacklist.has(entry.name)) continue;
+
+			const fullPath = path.join(packagesPath(), entry.name);
+			if (
+				entry.isDirectory() &&
+				fs.existsSync(path.join(fullPath, "tangram.ts"))
+			) {
+				packages.push(entry.name);
+			}
+		}
+	}
+
+	if (filter.exclude) {
+		packages = packages.filter((pkg) => !filter.exclude?.includes(pkg));
+	}
+
+	return packages.sort();
 }
 
 class Configuration {
-  readonly packages: PackageFilter;
-  readonly actions: ActionConfig[];
-  readonly parallel: boolean;
-  readonly tangramExe: string;
-  readonly currentPlatform: string;
-  readonly buildTargets: BuildTarget[];
-  readonly dryRun: boolean;
-  readonly verbose: boolean;
+	readonly packages: PackageFilter;
+	readonly actions: string[];
+	readonly parallel: boolean;
+	readonly tangram: string;
+	readonly currentPlatform: string;
+	readonly exports: string[];
+	readonly dryRun: boolean;
+	readonly verbose: boolean;
 
-  constructor(options: {
-    packages?: PackageFilter;
-    actions?: ActionConfig[];
-    parallel?: boolean;
-    tangramExe?: string;
-    buildTargets?: BuildTarget[];
-    dryRun?: boolean;
-    verbose?: boolean;
-  }) {
-    this.packages = options.packages || { recursive: false };
-    this.actions = options.actions || [];
-    this.parallel = options.parallel ?? true;
-    this.tangramExe = options.tangramExe || this.detectTangramExe();
-    this.currentPlatform = this.detectPlatform();
-    this.buildTargets = options.buildTargets || [{ export: "default" }];
-    this.dryRun = options.dryRun ?? false;
-    this.verbose = options.verbose ?? false;
-  }
+	constructor(options: {
+		packages?: PackageFilter;
+		actions?: string[];
+		parallel?: boolean;
+		tangram?: string;
+		exports?: string[];
+		dryRun?: boolean;
+		verbose?: boolean;
+		platform?: string;
+	}) {
+		this.packages = options.packages || {};
+		this.actions = options.actions || [];
+		this.parallel = options.parallel ?? true;
+		this.tangram = options.tangram || this.detectTangramExe();
+		this.currentPlatform = options.platform || this.detectPlatform();
+		this.exports = options.exports || ["default"];
+		this.dryRun = options.dryRun ?? false;
+		this.verbose = options.verbose ?? false;
+	}
 
-  private detectTangramExe(): string {
-    return Bun.env.TG_EXE || "tangram";
-  }
+	private detectTangramExe(): string {
+		return Bun.env.TG_EXE || "tangram";
+	}
 
-  private detectPlatform(): string {
-    const detectedArch = process.arch;
-    let tangramArch: string;
-    if (detectedArch === "x64") {
-      tangramArch = "x86_64";
-    } else if (detectedArch === "arm64") {
-      tangramArch = "aarch64";
-    } else {
-      throw new Error(`unsupported host arch: ${detectedArch}`);
-    }
+	private detectPlatform(): string {
+		const detectedArch = process.arch;
+		let tangramArch: string;
+		if (detectedArch === "x64") {
+			tangramArch = "x86_64";
+		} else if (detectedArch === "arm64") {
+			tangramArch = "aarch64";
+		} else {
+			throw new Error(`unsupported host arch: ${detectedArch}`);
+		}
 
-    const os = process.platform;
-    if (os !== "linux" && os !== "darwin") {
-      throw new Error(`unsupported host os: ${os}`);
-    }
+		const os = process.platform;
+		if (os !== "linux" && os !== "darwin") {
+			throw new Error(`unsupported host os: ${os}`);
+		}
 
-    return `${tangramArch}-${os}`;
-  }
+		return `${tangramArch}-${os}`;
+	}
 
-  async validateTangram(): Promise<void> {
-    if (this.dryRun) {
-      log("Dry run mode - skipping tangram validation");
-      return;
-    }
+	async validateTangram(): Promise<void> {
+		if (this.dryRun) {
+			log("Dry run mode - skipping tangram validation");
+			return;
+		}
 
-    try {
-      const result = await $`${this.tangramExe} --version`.text();
-      if (!result.includes("tangram")) {
-        throw new Error(
-          `${this.tangramExe} --version produced unexpected result`,
-        );
-      }
-    } catch (err) {
-      throw new Error(`Error running ${this.tangramExe}: ${err}`);
-    }
-  }
+		const tangram = new TangramClient(this.tangram);
+		await tangram.validateInstallation();
+	}
 
-  summarize(): string {
-    const actions = `Actions: ${this.actions.map((a) => a.name).join(", ")}`;
-    const packages = `Package Filter: ${JSON.stringify(this.packages)}`;
-    const targets = `Build Targets: ${this.buildTargets
-      .map(
-        (t) => `${t.export || "default"}${t.platform ? `@${t.platform}` : ""}`,
-      )
-      .join(", ")}`;
-    const config = `Parallel: ${this.parallel}, DryRun: ${this.dryRun}`;
-    const tangram = `Tangram: ${this.tangramExe}`;
-    const platform = `Platform: ${this.currentPlatform}`;
-    return [actions, packages, targets, config, tangram, platform].join("\n");
-  }
+	summarize(): string {
+		const actions = `Actions: ${this.actions.join(", ")}`;
+		const packages = `Package Filter: ${JSON.stringify(this.packages)}`;
+		const exports = `Exports: ${this.exports.join(", ")}`;
+		const config = `Parallel: ${this.parallel}, DryRun: ${this.dryRun}`;
+		const tangram = `Tangram: ${this.tangram}`;
+		const platform = `Platform: ${this.currentPlatform}`;
+		return [actions, packages, exports, config, tangram, platform].join("\n");
+	}
 }
 
-class ConfigParser {
-  private static readonly USAGE = `Usage: bun run scripts/package_automation.ts <flags> [packages]
+const USAGE = `Usage: bun run scripts/package_automation.ts <flags> [packages]
 
 This script can run one or more actions on one or more packages with enhanced flexibility.
 
 Examples:
-  # Run all steps on all packages
+  # Run all steps on all packages (excludes format)
   bun run scripts/package_automation.ts
 
   # Run specific actions on specific packages
-  bun run scripts/package_automation.ts -cbt ripgrep jq
+  bun run scripts/package_automation.ts -t ripgrep jq
+
+  # Format and test (format must be explicitly requested)
+  bun run scripts/package_automation.ts -ft ripgrep
 
   # Build custom exports
   bun run scripts/package_automation.ts --build --export=custom --export=test ripgrep
 
-  # Recursive push with custom exports
-  bun run scripts/package_automation.ts --push --recursive --export=default --export=custom
-
   # Dry run with verbose output
-  bun run scripts/package_automation.ts --dry-run --verbose -cbt
+  bun run scripts/package_automation.ts --dry-run --verbose -t
 
 Flags:
   -b, --build           Build specified exports (default: "default")
   -c, --check           Run tg check
-  -f, --format          Run tg format
+  -f, --format          Run tg format (only runs when explicitly specified)
   -h, --help            Print this message and exit
-  -p, --publish         Create and push tags if out of date
+  -p, --publish         Tag and push package directory
+  -r, --release         Upload build artifacts
   -t, --test            Build test export
-  -u, --upload          Push builds (implies --publish and --build)
-      --push            Push specific items recursively
-      --export=NAME     Specify export to build/push (can be used multiple times)
+      --export=NAME     Specify export to build (can be used multiple times)
       --exclude=PKG     Exclude specific packages
-      --recursive       Enable recursive operations
       --dry-run         Show what would be done without executing
       --verbose         Enable verbose output
       --sequential      Run packages sequentially (default: parallel)
       --platform=PLAT   Override target platform
+
+Action Dependencies:
+  Actions have implicit dependencies: check → build → test → publish → release
+  Format is NOT a prerequisite and only runs when explicitly requested with -f.
+  When you specify an action, all its prerequisites run automatically.
+  Examples:
+    -t runs: check → build → test
+    -r runs: check → build → test → publish → release
+    -ft runs: format → check → build → test
 `;
 
-  static parseFromArgs(): Configuration {
-    const args = process.argv.slice(2);
-    return this.parse(args);
-  }
+function parseFromArgs(): Configuration {
+	const { values, positionals } = parseArgs({
+		args: process.argv.slice(2),
+		options: {
+			help: { type: "boolean", short: "h", default: false },
+			build: { type: "boolean", short: "b", default: false },
+			check: { type: "boolean", short: "c", default: false },
+			format: { type: "boolean", short: "f", default: false },
+			publish: { type: "boolean", short: "p", default: false },
+			release: { type: "boolean", short: "r", default: false },
+			test: { type: "boolean", short: "t", default: false },
+			"dry-run": { type: "boolean", default: false },
+			verbose: { type: "boolean", default: false },
+			sequential: { type: "boolean", default: false },
+			export: { type: "string", multiple: true },
+			exclude: { type: "string", multiple: true },
+			platform: { type: "string" },
+			tangram: { type: "string" },
+		},
+		strict: true,
+		allowPositionals: true,
+	});
 
-  static parse(args: string[]): Configuration {
-    const config: {
-      packages: PackageFilter;
-      actions: ActionConfig[];
-      parallel: boolean;
-      buildTargets: BuildTarget[];
-      dryRun: boolean;
-      verbose: boolean;
-      tangramExe?: string;
-    } = {
-      packages: { include: [], exclude: [], recursive: false },
-      actions: [],
-      parallel: true,
-      buildTargets: [],
-      dryRun: false,
-      verbose: false,
-    };
+	if (values.help) {
+		console.log(USAGE);
+		process.exit(0);
+	}
 
-    const actionSet = new Set<string>();
-    const exportSet = new Set<string>();
+	const actions: string[] = [];
 
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i];
+	// Process action flags - order matters for execution
+	if (values.format) actions.push("format");
+	if (values.check) actions.push("check");
+	if (values.build) actions.push("build");
+	if (values.test) actions.push("test");
+	if (values.publish) actions.push("publish");
+	if (values.release) actions.push("release");
 
-      if (arg === "--help" || arg === "-h") {
-        console.log(this.USAGE);
-        process.exit(0);
-      } else if (arg === "--dry-run") {
-        config.dryRun = true;
-      } else if (arg === "--verbose") {
-        config.verbose = true;
-      } else if (arg === "--recursive") {
-        config.packages.recursive = true;
-      } else if (arg === "--sequential") {
-        config.parallel = false;
-      } else if (arg.startsWith("--export=")) {
-        exportSet.add(arg.split("=")[1]);
-      } else if (arg.startsWith("--exclude=")) {
-        config.packages.exclude!.push(arg.split("=")[1]);
-      } else if (arg.startsWith("--platform=")) {
-        const platform = arg.split("=")[1];
-        config.buildTargets.forEach((target) => (target.platform = platform));
-      } else if (arg.startsWith("--tangram=")) {
-        config.tangramExe = arg.split("=")[1];
-      } else if (arg.startsWith("--")) {
-        const action = arg.slice(2);
-        if (
-          [
-            "build",
-            "check",
-            "format",
-            "publish",
-            "upload",
-            "push",
-            "test",
-          ].includes(action)
-        ) {
-          actionSet.add(action);
-        } else {
-          throw new Error(`Unknown option: ${arg}\n${this.USAGE}`);
-        }
-      } else if (arg.startsWith("-")) {
-        for (const char of arg.slice(1)) {
-          switch (char) {
-            case "b":
-              actionSet.add("build");
-              break;
-            case "c":
-              actionSet.add("check");
-              break;
-            case "f":
-              actionSet.add("format");
-              break;
-            case "p":
-              actionSet.add("publish");
-              break;
-            case "t":
-              actionSet.add("test");
-              exportSet.add("test");
-              break;
-            case "u":
-              actionSet.add("upload");
-              break;
-            default:
-              throw new Error(`Unknown option: -${char}\n${this.USAGE}`);
-          }
-        }
-      } else {
-        // Package name
-        if (!fs.existsSync(path.join(packagesPath(), arg))) {
-          throw new Error(`No such package directory: ${arg}`);
-        }
-        config.packages.include!.push(arg);
-      }
-    }
+	// Default actions if none specified
+	if (actions.length === 0) {
+		actions.push("check", "build", "test", "publish", "release");
+	}
 
-    // Set defaults
-    if (actionSet.size === 0) {
-      actionSet.add("check");
-      actionSet.add("format");
-      actionSet.add("build");
-      actionSet.add("test");
-      actionSet.add("upload");
-      actionSet.add("publish");
-    }
+	// Process export flags - multiple: true ensures it's always an array or undefined
+	const exportList = values.export || [];
+	const exports = exportList.length > 0 ? exportList : ["default"];
 
-    if (exportSet.size === 0) {
-      exportSet.add("default");
-    }
+	// Process positional arguments (package names)
+	const includePackages = positionals.filter((pkg) => {
+		if (!fs.existsSync(path.join(packagesPath(), pkg))) {
+			throw new Error(`No such package directory: ${pkg}`);
+		}
+		return true;
+	});
 
-    // Convert sets to arrays
-    config.actions = Array.from(actionSet).map((name) => ({ name }));
-    config.buildTargets = Array.from(exportSet).map((exp) => ({ export: exp }));
-
-    // Handle special cases
-    if (actionSet.has("test") && !exportSet.has("test")) {
-      config.buildTargets.push({ export: "test" });
-    }
-
-    return new Configuration(config);
-  }
+	return new Configuration({
+		packages: {
+			include: includePackages.length > 0 ? includePackages : undefined,
+			exclude: values.exclude,
+		},
+		actions,
+		parallel: !values.sequential,
+		exports,
+		dryRun: values["dry-run"] ?? false,
+		verbose: values.verbose ?? false,
+		tangram: values.tangram,
+		platform: values.platform,
+	});
 }
 
-/** Action registry for pluggable actions */
-abstract class Action {
-  abstract readonly name: string;
-  abstract execute(
-    context: ActionContext,
-    options?: Record<string, any>,
-  ): Promise<ActionResult>;
-
-  protected log(message: string, ...args: any[]): void {
-    log(`[${this.name}]`, message, ...args);
-  }
+/** Execution context for actions */
+interface Context {
+	packageName: string;
+	packagePath: string;
+	tangram: TangramClient;
+	platform: string;
+	exports: string[];
+	processTracker: ProcessTracker;
+	dryRun: boolean;
+	verbose: boolean;
 }
 
-interface ActionContext {
-  packageName: string;
-  packagePath: string;
-  tangram: string;
-  platform: string;
-  buildTargets: BuildTarget[];
-  processTracker: ProcessTracker;
-  dryRun: boolean;
-  verbose: boolean;
-  recursive: boolean;
-  versionedName?: string;
+/** Helper to get version from package metadata */
+async function getPackageVersion(ctx: Context): Promise<Result<string>> {
+	try {
+		const process = await ctx.tangram.build(`${ctx.packagePath}#metadata`);
+		const metadataJson = await ctx.tangram.processOutput(process.id);
+		const metadata = JSON.parse(metadataJson);
+		if (!metadata.version) {
+			throw new Error(`no version found in metadata for ${ctx.packagePath}`);
+		}
+		return { ok: true, value: metadata.version };
+	} catch (err) {
+		return { ok: false, error: extractErrorMessage(err) };
+	}
 }
 
-type ActionResultKind =
-  | "ok"
-  | "checkError"
-  | "formatError"
-  | "buildError"
-  | "testError"
-  | "tagError"
-  | "pushError"
-  | "uploadError"
-  | "publishError"
-  | "skipped";
+/** Helper to manage build process with tracking */
+async function executeBuild(
+	ctx: Context,
+	buildPath: string,
+	options: { tag?: string } = {},
+): Promise<Result<void>> {
+	let processId: string | undefined;
+	try {
+		const process = await ctx.tangram.build(buildPath, options);
+		processId = process.id;
 
-interface ActionResult {
-  kind: ActionResultKind;
-  message?: string | string[];
+		// Only track processes that have a cancellation token
+		if (process.token) {
+			ctx.processTracker.add(process.id, process.token);
+		}
+
+		log(
+			`[build] ${buildPath}: ${processId}${options.tag ? ` (tag: ${options.tag})` : ""}`,
+		);
+		await ctx.tangram.processOutput(processId);
+		return { ok: true, value: undefined };
+	} catch (err) {
+		if (isUnsupportedHostError(err)) {
+			return { ok: false, error: "unsupported host", skipped: true };
+		}
+		return { ok: false, error: extractErrorMessage(err) };
+	} finally {
+		if (processId) {
+			ctx.processTracker.remove(processId);
+		}
+	}
 }
 
-class ActionRegistry {
-  private actions = new Map<string, Action>();
-
-  register(action: Action): void {
-    this.actions.set(action.name, action);
-  }
-
-  get(name: string): Action | undefined {
-    return this.actions.get(name);
-  }
-
-  getAll(): Action[] {
-    return Array.from(this.actions.values());
-  }
+/** Helper to construct build tag */
+function buildTag(
+	packageName: string,
+	version: string,
+	exportName: string,
+	platform: string,
+): string {
+	return `${packageName}/builds/${version}/${exportName}/${platform}`;
 }
 
-/** Built-in actions */
-class FormatAction extends Action {
-  readonly name = "format";
+/** Simple result type */
+type Result<T> =
+	| { ok: true; value: T }
+	| { ok: false; error: string; skipped?: boolean };
 
-  async execute(context: ActionContext): Promise<ActionResult> {
-    this.log(`formatting ${context.packagePath}`);
+/** Action functions */
+async function formatAction(ctx: Context): Promise<Result<void>> {
+	log(`[format] ${ctx.packagePath}`);
 
-    if (context.dryRun) {
-      return { kind: "ok", message: "would format (dry run)" };
-    }
+	if (ctx.dryRun) {
+		return { ok: true, value: undefined };
+	}
 
-    try {
-      await $`${context.tangram} format ${context.packagePath}`.quiet();
-      this.log(`finished formatting ${context.packagePath}`);
-      return { kind: "ok" };
-    } catch (err) {
-      this.log(`error formatting ${context.packagePath}`);
-      return { kind: "formatError", message: err.stderr?.toString() };
-    }
-  }
+	try {
+		await ctx.tangram.format(ctx.packagePath);
+		return { ok: true, value: undefined };
+	} catch (err) {
+		return { ok: false, error: extractErrorMessage(err) };
+	}
 }
 
-class CheckAction extends Action {
-  readonly name = "check";
+async function checkAction(ctx: Context): Promise<Result<void>> {
+	log(`[check] ${ctx.packagePath}`);
 
-  async execute(context: ActionContext): Promise<ActionResult> {
-    this.log(`checking ${context.packagePath}`);
+	if (ctx.dryRun) {
+		return { ok: true, value: undefined };
+	}
 
-    if (context.dryRun) {
-      return { kind: "ok", message: "would check (dry run)" };
-    }
-
-    try {
-      await $`${context.tangram} check ${context.packagePath}`.quiet();
-      this.log(`finished checking ${context.packagePath}`);
-      return { kind: "ok" };
-    } catch (err) {
-      this.log(`error checking ${context.packagePath}`);
-      return { kind: "checkError", message: err.stderr?.toString() };
-    }
-  }
+	try {
+		await ctx.tangram.check(ctx.packagePath);
+		return { ok: true, value: undefined };
+	} catch (err) {
+		return { ok: false, error: extractErrorMessage(err) };
+	}
 }
 
-class BuildAction extends Action {
-  readonly name = "build";
+async function buildAction(ctx: Context): Promise<Result<string[]>> {
+	const built: string[] = [];
 
-  async execute(context: ActionContext): Promise<ActionResult> {
-    const results: string[] = [];
+	for (const exportName of ctx.exports) {
+		const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
+		const buildPath = `${ctx.packagePath}${exportSuffix}`;
 
-    // Get the package version first
-    const versionResult = await getPackageVersion(context);
-    if (versionResult.kind !== "ok") {
-      return versionResult;
-    }
-    const version = versionResult.message as string;
+		log(`[build] ${buildPath}`);
 
-    for (const target of context.buildTargets) {
-      const result = await this.buildTarget(context, target, version);
-      if (result.kind !== "ok") {
-        return result;
-      }
-      if (result.message) {
-        results.push(result.message as string);
-      }
-    }
+		if (ctx.dryRun) {
+			built.push(buildPath);
+			continue;
+		}
 
-    return { kind: "ok", message: results };
-  }
+		const result = await executeBuild(ctx, buildPath);
+		if (!result.ok) {
+			return result as Result<string[]>;
+		}
+		built.push(buildPath);
+	}
 
-  private async buildTarget(
-    context: ActionContext,
-    target: BuildTarget,
-    version: string,
-  ): Promise<ActionResult> {
-    const exportName = target.export || "default";
-    const platform = target.platform || context.platform;
-    const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
-    const buildTag = `${context.packageName}/builds/${version}/${exportName}/${platform}`;
-    const tag = target.tag || buildTag;
-
-    this.log(`building ${buildTag}...`);
-
-    if (context.dryRun) {
-      this.log(`would build ${buildTag} (dry run)`);
-      return { kind: "ok", message: `would build ${buildTag} (dry run)` };
-    }
-
-    let processId: string | undefined;
-    try {
-      processId =
-        await $`${context.tangram} build ${context.packageName}${exportSuffix} --tag=${tag} -d`
-          .text()
-          .then((t) => t.trim());
-
-      if (processId) {
-        context.processTracker.add(processId);
-      }
-
-      this.log(`${buildTag}: ${processId}`);
-      await $`${context.tangram} process output ${processId}`.quiet();
-      this.log(`finished building ${buildTag}`);
-
-      // Tag the build process
-      if (processId) {
-        await this.tagBuildProcess(context, processId, buildTag);
-      }
-
-      return { kind: "ok", message: buildTag };
-    } catch (err) {
-      this.log(`error building ${buildTag}`);
-      const stderr = err.stderr?.toString() || "";
-
-      if (stderr.includes("not found in supported hosts")) {
-        this.log(`${context.packageName}: unsupported host`);
-        return { kind: "skipped", message: "unsupported host" };
-      }
-
-      return { kind: "buildError", message: stderr };
-    } finally {
-      if (processId) {
-        context.processTracker.remove(processId);
-      }
-    }
-  }
-
-  private async tagBuildProcess(
-    context: ActionContext,
-    processId: string,
-    buildTag: string,
-  ): Promise<void> {
-    if (context.dryRun) {
-      this.log(`would tag build process ${processId} as ${buildTag} (dry run)`);
-      return;
-    }
-
-    this.log(`tagging build process ${processId} as ${buildTag}`);
-
-    try {
-      // Check if the tag already exists and matches this process ID
-      const existing = await this.getExistingBuildTag(context, buildTag);
-
-      if (processId === existing) {
-        this.log(
-          `Existing tag for ${buildTag} matches current process ID:`,
-          existing,
-        );
-        return;
-      }
-
-      await $`${context.tangram} tag ${buildTag} ${processId}`.quiet();
-      this.log(`tagged build process ${buildTag}: ${processId}`);
-    } catch (err) {
-      this.log(`error tagging build process ${buildTag}: ${err}`);
-    }
-  }
-
-  private async getExistingBuildTag(
-    context: ActionContext,
-    tagName: string,
-  ): Promise<string> {
-    this.log("checking for existing build tag", tagName);
-    try {
-      const result = await $`${context.tangram} tag get ${tagName}`
-        .text()
-        .then((t) => t.trim());
-      return result;
-    } catch (err) {
-      return "not found";
-    }
-  }
+	return { ok: true, value: built };
 }
 
-class TestAction extends Action {
-  readonly name = "test";
+async function publishAction(ctx: Context): Promise<Result<string>> {
+	if (ctx.dryRun) {
+		log("[publish] would check in and tag package (dry run)");
+		return { ok: true, value: "dry run" };
+	}
 
-  async execute(context: ActionContext): Promise<ActionResult> {
-    // Ensure test target is included
-    const testTargets = context.buildTargets.filter((t) => t.export === "test");
-    if (testTargets.length === 0) {
-      testTargets.push({ export: "test" });
-    }
+	// Get version from metadata
+	const versionResult = await getPackageVersion(ctx);
+	if (!versionResult.ok) {
+		return versionResult;
+	}
+	const version = versionResult.value;
 
-    const buildAction = new BuildAction();
-    const testContext = { ...context, buildTargets: testTargets };
+	const versionedName = `${ctx.packageName}/${version}`;
 
-    return await buildAction.execute(testContext);
-  }
+	// Tag the package
+	log(`[publish] ${versionedName}: ${ctx.packagePath}`);
+	try {
+		const packageId = await ctx.tangram.checkin(ctx.packagePath);
+
+		const existingTag = await ctx.tangram.getTag(versionedName);
+		if (existingTag !== packageId) {
+			await ctx.tangram.tag(versionedName, packageId);
+		}
+
+		await ctx.tangram.push(versionedName);
+		return { ok: true, value: `published ${versionedName}` };
+	} catch (err) {
+		return { ok: false, error: extractErrorMessage(err) };
+	}
 }
 
-class PublishAction extends Action {
-  readonly name = "publish";
+async function releaseAction(ctx: Context): Promise<Result<string>> {
+	if (ctx.dryRun) {
+		log("[release] would build and upload build artifacts (dry run)");
+		return { ok: true, value: "dry run" };
+	}
 
-  async execute(context: ActionContext): Promise<ActionResult> {
-    this.log(`publishing ${context.packageName}`);
+	// Get version from metadata
+	const versionResult = await getPackageVersion(ctx);
+	if (!versionResult.ok) {
+		return versionResult;
+	}
+	const version = versionResult.value;
 
-    if (context.dryRun) {
-      return { kind: "ok", message: "would publish (dry run)" };
-    }
+	const versionedName = `${ctx.packageName}/${version}`;
 
-    // Since tagging is now handled upfront, we just need to push the tag
-    const pushResult = await this.pushTag(context);
-    if (pushResult.kind !== "ok") {
-      return pushResult;
-    }
+	// Build and push each export
+	const uploadedTags: string[] = [];
+	for (const exportName of ctx.exports) {
+		const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
+		const tag = buildTag(ctx.packageName, version, exportName, ctx.platform);
+		const buildSource = `${versionedName}${exportSuffix}`;
 
-    const tagName = context.versionedName || context.packageName;
-    return { kind: "ok", message: `published ${tagName}` };
-  }
+		log(`[release] tagging ${tag}`);
 
-  private async pushTag(context: ActionContext): Promise<ActionResult> {
-    const tagName = context.versionedName || context.packageName;
-    this.log(`pushing ${tagName}`);
-    try {
-      await $`${context.tangram} push ${tagName}`.quiet();
-      return { kind: "ok" };
-    } catch (err) {
-      return { kind: "pushError", message: err.stderr?.toString() };
-    }
-  }
+		const result = await executeBuild(ctx, buildSource, { tag });
+		if (!result.ok) {
+			return result as Result<string>;
+		}
+
+		await ctx.tangram.push(tag);
+		uploadedTags.push(tag);
+	}
+
+	return { ok: true, value: `uploaded ${uploadedTags.join(", ")}` };
 }
 
-class UploadAction extends Action {
-  readonly name = "upload";
-
-  async execute(context: ActionContext): Promise<ActionResult> {
-    // First build
-    const buildAction = new BuildAction();
-    const buildResult = await buildAction.execute(context);
-
-    if (
-      buildResult.kind !== "ok" ||
-      buildResult.message === "unsupported host"
-    ) {
-      return buildResult;
-    }
-
-    if (context.dryRun) {
-      this.log("would upload builds (dry run)");
-      return { kind: "ok", message: "would upload (dry run)" };
-    }
-
-    // Then push the builds
-    const tags = Array.isArray(buildResult.message)
-      ? buildResult.message
-      : [buildResult.message].filter(Boolean);
-
-    for (const tag of tags) {
-      this.log(`uploading ${tag}`);
-      try {
-        await $`${context.tangram} push ${tag}`.quiet();
-        this.log(`finished uploading ${tag}`);
-      } catch (err) {
-        return { kind: "pushError", message: err.stderr?.toString() };
-      }
-    }
-
-    return { kind: "ok", message: `uploaded ${tags.join(", ")}` };
-  }
-}
-
-class PushAction extends Action {
-  readonly name = "push";
-
-  async execute(context: ActionContext): Promise<ActionResult> {
-    if (context.dryRun) {
-      this.log("would push recursively (dry run)");
-      return { kind: "ok", message: "would push recursively (dry run)" };
-    }
-
-    // Push each build target
-    for (const target of context.buildTargets) {
-      const exportName = target.export || "default";
-      const item = context.recursive
-        ? context.packageName
-        : `${context.packageName}/${exportName}`;
-
-      this.log(`pushing ${item} ${context.recursive ? "recursively" : ""}`);
-
-      try {
-        const cmd = context.recursive
-          ? $`${context.tangram} push --recursive ${item}`
-          : $`${context.tangram} push ${item}`;
-
-        await cmd.quiet();
-        this.log(`finished pushing ${item}`);
-      } catch (err) {
-        return { kind: "pushError", message: err.stderr?.toString() };
-      }
-    }
-
-    return { kind: "ok", message: "push completed" };
-  }
-}
-
-/** Enhanced results tracking */
+/** Results tracking */
 class Results {
-  private results = new Map<string, Map<string, ActionResult>>();
+	private packageResults = new Map<string, boolean>();
 
-  log(packageName: string, actionName: string, result: ActionResult): void {
-    if (!this.results.has(packageName)) {
-      this.results.set(packageName, new Map());
-    }
-    this.results.get(packageName)!.set(actionName, result);
-  }
+	logSuccess(packageName: string): void {
+		this.packageResults.set(packageName, true);
+	}
 
-  summarize(): string {
-    const lines: string[] = [separator];
-    const successPackages: string[] = [];
-    const failedPackages: string[] = [];
+	logFailure(packageName: string): void {
+		this.packageResults.set(packageName, false);
+	}
 
-    for (const [packageName, actions] of this.results) {
-      const hasFailures = Array.from(actions.values()).some(
-        (r) => r.kind !== "ok" && r.kind !== "skipped",
-      );
+	hasFailures(): boolean {
+		return Array.from(this.packageResults.values()).some((v) => !v);
+	}
 
-      if (hasFailures) {
-        failedPackages.push(packageName);
-        lines.push(`Package: ${packageName} - FAILED`);
+	summarize(): string {
+		const success: string[] = [];
+		const failed: string[] = [];
 
-        for (const [actionName, result] of actions) {
-          if (result.kind !== "ok" && result.kind !== "skipped") {
-            lines.push(`  ${actionName}: ${result.kind}`);
-            if (result.message) {
-              const message = Array.isArray(result.message)
-                ? result.message.join("; ")
-                : result.message;
-              lines.push(`    ${message}`);
-            }
-          }
-        }
-        lines.push(separator);
-      } else {
-        successPackages.push(packageName);
-      }
-    }
+		for (const [name, passed] of this.packageResults) {
+			if (passed) {
+				success.push(name);
+			} else {
+				failed.push(name);
+			}
+		}
 
-    lines.push(`Successful: ${successPackages.sort().join(" ")}`);
-    lines.push(`Failed: ${failedPackages.sort().join(" ")}`);
-
-    const total = this.results.size;
-    const passed = successPackages.length;
-    const failed = failedPackages.length;
-
-    lines.push(`Total: ${total} | Passed: ${passed} | Failed: ${failed}`);
-
-    return lines.join("\n");
-  }
+		return [
+			separator,
+			`Successful: ${success.sort().join(" ")}`,
+			`Failed: ${failed.sort().join(" ")}`,
+			`Total: ${this.packageResults.size} | Passed: ${success.length} | Failed: ${failed.length}`,
+		].join("\n");
+	}
 }
+
+async function testAction(ctx: Context): Promise<Result<void>> {
+	const buildPath = `${ctx.packagePath}#test`;
+	log(`[test] ${buildPath}`);
+
+	if (ctx.dryRun) {
+		return { ok: true, value: undefined };
+	}
+
+	return await executeBuild(ctx, buildPath);
+}
+
+/** Ordered actions - dependencies implicit in order */
+const ACTION_ORDER = ["format", "check", "build", "test", "publish", "release"];
+
+type ActionFunction = (ctx: Context) => Promise<Result<unknown>>;
+
+const ACTION_MAP: Record<string, ActionFunction> = {
+	format: formatAction,
+	check: checkAction,
+	build: buildAction,
+	test: testAction,
+	publish: publishAction,
+	release: releaseAction,
+};
 
 class PackageExecutor {
-  private config: Configuration;
-  private registry: ActionRegistry;
-  private processTracker: ProcessTracker;
+	private config: Configuration;
+	private processTracker: ProcessTracker;
+	private tangram: TangramClient;
 
-  constructor(config: Configuration) {
-    this.config = config;
-    this.registry = new ActionRegistry();
-    this.processTracker = new ProcessTracker(config.tangramExe);
-    this.registerBuiltinActions();
-  }
+	constructor(config: Configuration) {
+		this.config = config;
+		this.tangram = new TangramClient(config.tangram);
+		this.processTracker = new ProcessTracker(this.tangram);
+	}
 
-  private registerBuiltinActions(): void {
-    this.registry.register(new FormatAction());
-    this.registry.register(new CheckAction());
-    this.registry.register(new BuildAction());
-    this.registry.register(new TestAction());
-    this.registry.register(new PublishAction());
-    this.registry.register(new UploadAction());
-    this.registry.register(new PushAction());
-  }
+	async run(): Promise<Results> {
+		const results = new Results();
+		const packages = resolvePackages(this.config.packages);
 
-  async run(): Promise<Results> {
-    const results = new Results();
-    const packages = this.resolvePackages();
+		// Build list of actions to run, including prerequisites
+		// Format is NOT a prerequisite - it only runs if explicitly requested
+		const orderedActions: string[] = [];
 
-    const processPackage = async (packageName: string) => {
-      const packagePath = getPackagePath(packageName);
-      const context: ActionContext = {
-        packageName,
-        packagePath,
-        tangram: this.config.tangramExe,
-        platform: this.config.currentPlatform,
-        buildTargets: this.config.buildTargets,
-        processTracker: this.processTracker,
-        dryRun: this.config.dryRun,
-        verbose: this.config.verbose,
-        recursive: this.config.packages.recursive || false,
-      };
+		// Add format first if explicitly requested
+		if (this.config.actions.includes("format")) {
+			orderedActions.push("format");
+		}
 
-      log(`Processing package: ${packageName}`);
+		// For other actions, include all prerequisites (check, build, test, publish, release)
+		const nonFormatActions = this.config.actions.filter((a) => a !== "format");
+		if (nonFormatActions.length > 0) {
+			// Find the highest requested action (excluding format)
+			const actionOrderWithoutFormat = ACTION_ORDER.filter(
+				(a) => a !== "format",
+			);
+			const maxIndex = Math.max(
+				...nonFormatActions.map((action) =>
+					actionOrderWithoutFormat.indexOf(action),
+				),
+			);
+			// Add all actions from check up to and including the highest requested
+			for (const action of actionOrderWithoutFormat.slice(0, maxIndex + 1)) {
+				if (!orderedActions.includes(action)) {
+					orderedActions.push(action);
+				}
+			}
+		}
 
-      // Check if any actions require tagging (build, test, publish, upload, push)
-      const requiresTagging = this.config.actions.some((a) =>
-        ["build", "test", "publish", "upload", "push"].includes(a.name),
-      );
+		const processPackage = async (packageName: string) => {
+			const packagePath = getPackagePath(packageName);
 
-      // Check in and tag the package only if needed
-      if (requiresTagging) {
-        const tagResult = await this.tagPackage(context);
-        if (tagResult.kind !== "ok") {
-          results.log(packageName, "tag", tagResult);
-          return; // Stop processing this package if tagging fails
-        }
-        results.log(packageName, "tag", tagResult);
-      }
+			log(`Processing package: ${packageName}`);
 
-      for (const actionConfig of this.config.actions) {
-        const action = this.registry.get(actionConfig.name);
-        if (!action) {
-          results.log(packageName, actionConfig.name, {
-            kind: "buildError",
-            message: `Unknown action: ${actionConfig.name}`,
-          });
-          continue;
-        }
+			const context: Context = {
+				packageName,
+				packagePath,
+				tangram: this.tangram,
+				platform: this.config.currentPlatform,
+				exports: this.config.exports,
+				processTracker: this.processTracker,
+				dryRun: this.config.dryRun,
+				verbose: this.config.verbose,
+			};
 
-        const result = await action.execute(context, actionConfig.options);
-        results.log(packageName, actionConfig.name, result);
+			let packageSuccess = true;
 
-        // Stop on first failure unless it's a skip
-        if (result.kind !== "ok" && result.kind !== "skipped") {
-          break;
-        }
-      }
-    };
+			for (const actionName of orderedActions) {
+				const actionFn = ACTION_MAP[actionName];
+				if (!actionFn) {
+					log(`Unknown action: ${actionName}`);
+					packageSuccess = false;
+					break;
+				}
 
-    if (this.config.parallel) {
-      await Promise.all(packages.map(processPackage));
-    } else {
-      for (const pkg of packages) {
-        await processPackage(pkg);
-      }
-    }
+				const result = await actionFn(context);
 
-    // Clean up any remaining processes
-    if (!this.processTracker.isEmpty()) {
-      console.warn("Process tracker not clear after run!");
-      await this.processTracker.cancelAll();
-    }
+				if (!result.ok) {
+					if (result.skipped) {
+						log(`Skipping ${packageName}: ${result.error}`);
+					} else {
+						log(`Failed ${actionName} for ${packageName}: ${result.error}`);
+						packageSuccess = false;
+					}
+					break;
+				}
+			}
 
-    return results;
-  }
+			if (packageSuccess) {
+				results.logSuccess(packageName);
+			} else {
+				results.logFailure(packageName);
+			}
+		};
 
-  private resolvePackages(): string[] {
-    let packages: string[] = [];
+		if (this.config.parallel) {
+			await Promise.all(packages.map(processPackage));
+		} else {
+			for (const pkg of packages) {
+				await processPackage(pkg);
+			}
+		}
 
-    if (
-      this.config.packages.include &&
-      this.config.packages.include.length > 0
-    ) {
-      packages = [...this.config.packages.include];
-    } else {
-      // Auto-discover packages
-      const entries = fs.readdirSync(packagesPath(), { withFileTypes: true });
-      const blacklist = new Set(["demo", "sanity", "webdemo"]);
+		if (!this.processTracker.isEmpty()) {
+			log("Process tracker not clear after run!");
+			await this.processTracker.cancelAll();
+		}
 
-      for (const entry of entries) {
-        if (blacklist.has(entry.name)) continue;
-
-        const fullPath = path.join(packagesPath(), entry.name);
-        if (
-          entry.isDirectory() &&
-          fs.existsSync(path.join(fullPath, "tangram.ts"))
-        ) {
-          packages.push(entry.name);
-        }
-      }
-    }
-
-    // Apply exclusions
-    if (this.config.packages.exclude) {
-      packages = packages.filter(
-        (pkg) => !this.config.packages.exclude!.includes(pkg),
-      );
-    }
-
-    return packages.sort();
-  }
-
-  /** Check in and tag a package, returning the result like the original script. */
-  private async tagPackage(context: ActionContext): Promise<ActionResult> {
-    log(`[tag] processing ${context.packageName}`);
-
-    // Get the package version from metadata
-    const versionResult = await getPackageVersion(context);
-    if (versionResult.kind !== "ok") {
-      return versionResult;
-    }
-    const version = versionResult.message as string;
-    const versionedName = `${context.packageName}/${version}`;
-
-    // Update context with versioned name for other actions to use
-    context.versionedName = versionedName;
-
-    if (context.dryRun) {
-      log(`[tag] would check in and tag ${versionedName} (dry run)`);
-      return { kind: "ok", message: "would check in and tag (dry run)" };
-    }
-
-    // Check in the package, store the ID.
-    const packageIdResult = await this.checkinPackage(context);
-    if (packageIdResult.kind !== "ok") {
-      return packageIdResult;
-    }
-    const packageId = packageIdResult.message as string;
-    if (!packageId) {
-      return { kind: "tagError", message: `no ID for ${context.packagePath}` };
-    }
-
-    // Check if the tag already matches this ID.
-    const existing = await this.getExistingTag(context, versionedName);
-
-    if (packageId === existing) {
-      log(
-        `[tag] Existing tag for ${versionedName} matches current ID:`,
-        existing,
-      );
-      return {
-        kind: "ok",
-        message: `${versionedName} unchanged, no action taken.`,
-      };
-    }
-
-    log(`[tag] tagging ${versionedName}: ${packageId}...`);
-    const tagResult = await this.tagItem(context, packageId, versionedName);
-    if (tagResult.kind !== "ok") {
-      return tagResult;
-    }
-    return {
-      kind: "ok",
-      message: `tagged ${versionedName}: ${packageId}`,
-    };
-  }
-
-  /** Check in a package, returning the resulting ID or error. */
-  private async checkinPackage(context: ActionContext): Promise<ActionResult> {
-    log("[tag] checking in", context.packagePath);
-    try {
-      const id = await $`${context.tangram} checkin ${context.packagePath}`
-        .text()
-        .then((t) => t.trim());
-      log(`[tag] finished checkin ${context.packagePath}`);
-      return { kind: "ok", message: id };
-    } catch (err) {
-      log(`[tag] error checking in ${context.packagePath}: ${err}`);
-      return { kind: "tagError", message: err.stdout?.toString() };
-    }
-  }
-
-  /** Get the existing tagged item for a given name, if present. */
-  private async getExistingTag(
-    context: ActionContext,
-    tagName: string,
-  ): Promise<string> {
-    log("[tag] checking for existing tag", tagName);
-    try {
-      const result = await $`${context.tangram} tag get ${tagName}`
-        .text()
-        .then((t) => t.trim());
-      return result;
-    } catch (err) {
-      return "not found";
-    }
-  }
-
-  /** Tag an item. */
-  private async tagItem(
-    context: ActionContext,
-    packageId: string,
-    tagName: string,
-  ): Promise<ActionResult> {
-    log("[tag] tagging", tagName, context.packagePath);
-    try {
-      await $`${context.tangram} tag ${tagName} ${context.packagePath}`.quiet();
-      return { kind: "ok" };
-    } catch (err) {
-      return { kind: "tagError" };
-    }
-  }
+		return results;
+	}
 }
 
 /** Process tracker for build management */
 class ProcessTracker {
-  private ids = new Set<string>();
-  private readonly tangramExe: string;
+	private processes = new Map<string, string>();
+	private readonly tangram: TangramClient;
 
-  constructor(tangramExe: string) {
-    this.tangramExe = tangramExe;
-    process.on("SIGINT", async () => {
-      await this.cancelAll();
-      process.exit(0);
-    });
-  }
+	constructor(tangram: TangramClient) {
+		this.tangram = tangram;
+		process.on("SIGINT", async () => {
+			await this.cancelAll();
+			process.exit(0);
+		});
+	}
 
-  add(id: string): void {
-    this.ids.add(id);
-  }
+	add(id: string, token: string): void {
+		this.processes.set(id, token);
+	}
 
-  remove(id: string): void {
-    this.ids.delete(id);
-  }
+	remove(id: string): void {
+		this.processes.delete(id);
+	}
 
-  async cancelAll(): Promise<void> {
-    log("Cancelling all tracked processes...");
-    for (const id of this.ids) {
-      log(`cancelling ${id}`);
-      try {
-        await $`${this.tangramExe} cancel ${id}`.quiet();
-      } catch (err) {
-        log(`Failed to cancel process ${id}: ${err}`);
-      }
-    }
-    this.ids.clear();
-  }
+	async cancelAll(): Promise<void> {
+		log("Cancelling all tracked processes...");
+		for (const [id, token] of this.processes) {
+			log(`cancelling ${id}`);
+			try {
+				await this.tangram.cancel(id, token);
+			} catch (err) {
+				log(`Failed to cancel process ${id}: ${err}`);
+			}
+		}
+		this.processes.clear();
+	}
 
-  isEmpty(): boolean {
-    return this.ids.size === 0;
-  }
+	isEmpty(): boolean {
+		return this.processes.size === 0;
+	}
 }
 
 const packagesPath = () => path.join(path.dirname(import.meta.dir), "packages");
 
 export const getPackagePath = (name: string) => path.join(packagesPath(), name);
 
-/** Get the package version from metadata. */
-async function getPackageVersion(
-  context: ActionContext,
-): Promise<ActionResult> {
-  log("getting version from metadata for", context.packagePath);
-  try {
-    const metadataJson =
-      await $`${context.tangram} build ${context.packagePath}#metadata`
-        .text()
-        .then((t) => t.trim());
-
-    const metadata = JSON.parse(metadataJson);
-    if (!metadata.version) {
-      return {
-        kind: "tagError",
-        message: `no version found in metadata for ${context.packagePath}`,
-      };
-    }
-
-    log(`found version ${metadata.version} for ${context.packagePath}`);
-    return { kind: "ok", message: metadata.version };
-  } catch (err) {
-    log(`error getting version for ${context.packagePath}: ${err}`);
-    return {
-      kind: "tagError",
-      message: err.stderr?.toString() || err.toString(),
-    };
-  }
-}
-
-const log = (...data: any[]) => {
-  const timestamp = `[${new Date().toUTCString()}]`;
-  console.log(timestamp, ...data);
-};
-
 if (import.meta.main) {
-  entrypoint().catch((error) => {
-    console.error("Fatal error:", error);
-    process.exit(1);
-  });
+	entrypoint().catch((error) => {
+		log("Fatal error:", error);
+		process.exit(1);
+	});
 }
