@@ -661,6 +661,21 @@ pub fn template_data_to_symlink_data(
 	}
 }
 
+/// Check if a directory looks like a Tangram artifacts directory by examining its contents.
+/// Returns true if the directory contains at least one entry that parses as a valid Tangram ID.
+fn looks_like_artifacts_dir(path: &Path) -> bool {
+	let Ok(entries) = std::fs::read_dir(path) else {
+		return false;
+	};
+
+	entries.filter_map(Result::ok).any(|entry| {
+		let name = entry.file_name();
+		name.to_str()
+			.and_then(|s| s.parse::<tg::Id>().ok())
+			.is_some()
+	})
+}
+
 /// Compute the closest located artifact path for the current running process, reusing the result for subsequent lookups.
 pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
 	let mut closest_artifact_path = None;
@@ -671,8 +686,8 @@ pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
 		vec![]
 	};
 	for path in paths.into_iter().chain(cwd.ancestors().skip(1)) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
+		let directory = path.join("artifacts");
+		if directory.exists() && looks_like_artifacts_dir(&directory) {
 			closest_artifact_path = Some(
 				directory
 					.to_str()
@@ -680,6 +695,21 @@ pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
 					.to_string(),
 			);
 			break;
+		}
+
+		// On Linux, when we reach the root, check /.tangram/artifacts (chroot path)
+		#[cfg(target_os = "linux")]
+		if path == Path::new("/") {
+			let directory = path.join(".tangram/artifacts");
+			if directory.exists() && looks_like_artifacts_dir(&directory) {
+				closest_artifact_path = Some(
+					directory
+						.to_str()
+						.expect("artifacts directory should be valid UTF-8")
+						.to_string(),
+				);
+				break;
+			}
 		}
 	}
 	closest_artifact_path.expect("Failed to find the closest artifact path")
