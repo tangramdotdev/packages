@@ -6,16 +6,13 @@ on:
   push:
     branches: ["main"]
 
-env:
-  TANGRAM_CI_DIR: ${{ github.workspace }}/../.tangram-ci-${{ github.event.repository.name }}
-  TG_EXE: ${{ github.workspace }}/../.tangram-ci-${{ github.event.repository.name }}/bin/tangram
-
 jobs:
   test:
     if: github.event_name == 'pull_request'
     runs-on: ${{ matrix.runner }}
     environment: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: [self-hosted, macOS, ARM64]
@@ -27,6 +24,11 @@ jobs:
       - name: Check out packages repository
         uses: actions/checkout@v4
 
+      - name: Set environment variables
+        run: |
+          echo "TANGRAM_CI_DIR=$HOME/.tangram-ci" >> $GITHUB_ENV
+          echo "TG_EXE=$HOME/.tangram-ci/bin/tangram" >> $GITHUB_ENV
+
       - name: Configure Tangram
         run: |
           mkdir -p "$TANGRAM_CI_DIR/bin"
@@ -35,7 +37,7 @@ jobs:
           EOF
           cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
           #!/bin/sh
-          exec tangram -m server --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          exec tangram --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
           EOF
           chmod +x "$TANGRAM_CI_DIR/bin/tangram"
 
@@ -50,6 +52,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     environment: release
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: [self-hosted, macOS, ARM64]
@@ -61,6 +64,11 @@ jobs:
       - name: Check out packages repository
         uses: actions/checkout@v4
 
+      - name: Set environment variables
+        run: |
+          echo "TANGRAM_CI_DIR=$HOME/.tangram-ci" >> $GITHUB_ENV
+          echo "TG_EXE=$HOME/.tangram-ci/bin/tangram" >> $GITHUB_ENV
+
       - name: Configure Tangram
         run: |
           mkdir -p "$TANGRAM_CI_DIR/bin"
@@ -69,7 +77,7 @@ jobs:
           EOF
           cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
           #!/bin/sh
-          exec tangram -m server --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          exec tangram --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
           EOF
           chmod +x "$TANGRAM_CI_DIR/bin/tangram"
 
