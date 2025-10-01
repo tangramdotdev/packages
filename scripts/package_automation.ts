@@ -76,12 +76,12 @@ class TangramClient {
 			.text()
 			.then((t) => t.trim());
 
-		// Output can be either just a process ID or "processId cancellationToken"
-		const parts = output.split(/\s+/);
-		if (parts.length === 1) {
-			return { id: parts[0] };
+		const result = JSON.parse(output);
+		const returnValue: { id: string; token?: string } = { id: result.process };
+		if (result.token) {
+			returnValue.token = result.token;
 		}
-		return { id: parts[0], token: parts[1] };
+		return returnValue;
 	}
 
 	async processOutput(processId: string): Promise<string> {
@@ -239,11 +239,11 @@ const USAGE = `Usage: bun run scripts/package_automation.ts <flags> [packages]
 This script can run one or more actions on one or more packages with enhanced flexibility.
 
 Examples:
-  # Run all steps on all packages (excludes format)
+  # Run all check, build, and test on all packages
   bun run scripts/package_automation.ts
 
   # Run specific actions on specific packages
-  bun run scripts/package_automation.ts -t ripgrep jq
+  bun run scripts/package_automation.ts -r ripgrep jq
 
   # Format and test (format must be explicitly requested)
   bun run scripts/package_automation.ts -ft ripgrep
@@ -319,7 +319,7 @@ function parseFromArgs(): Configuration {
 
 	// Default actions if none specified
 	if (actions.length === 0) {
-		actions.push("check", "build", "test", "publish", "release");
+		actions.push("test");
 	}
 
 	// Process export flags - multiple: true ensures it's always an array or undefined
