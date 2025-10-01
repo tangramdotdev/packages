@@ -71,7 +71,6 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 			libraryPathStrategy: arg.libraryPathStrategy
 		});
 	}
-	console.log(`interpreter: ${JSON.stringify(manifestInterpreter)}`);
 
 	// Use existing manifest values as defaults if we're wrapping a wrapper
 	const manifestEnv = await wrap.manifestEnvFromEnvObject(

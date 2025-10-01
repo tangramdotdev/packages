@@ -2,7 +2,7 @@ import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import * as sdk from "../sdk.tg.ts";
 import { injection } from "../wrap/injection.tg.ts";
-import * as embedded from "../wrap/embedded.tg.ts";
+import * as stub from "../wrap/stub.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
 import * as llvmToolchain from "./llvm.tg.ts";
@@ -268,19 +268,16 @@ type LdProxyArg = {
 };
 
 const ldProxy = async (arg: LdProxyArg) => {
-	console.log("here (1)");
 	// Prepare the Tangram tools.
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
 	const buildToolchain = arg.buildToolchain;
 	const embedWrapper = arg.embedWrapper ?? true;
 
-	console.log("is wrapper embedded?", embedWrapper);
-
-	// Get the embedded workspace
-	let embeddedArtifacts = await embedded.workspace(arg);
-	let wrap = await embeddedArtifacts.get("wrap");
-	let stub = await embeddedArtifacts.get("stub.bin");
+	// Get the embedded wrapper artifacts.
+	const stubArtifacts = await stub.workspace(arg);
+	const wrapBin = await stubArtifacts.get("wrap");
+	const stubBin = await stubArtifacts.get("stub.bin");
 
 	// Obtain wrapper components.
 
@@ -315,14 +312,10 @@ const ldProxy = async (arg: LdProxyArg) => {
 			arg.interpreter ?? "none",
 		),
 		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
-		TANGRAM_STUB_ID: tg.Mutation.setIfUnset(stub.id),
-		TANGRAM_WRAP_ID: tg.Mutation.setIfUnset(wrap.id),
+		TANGRAM_STUB_ID: tg.Mutation.setIfUnset(stubBin.id),
+		TANGRAM_WRAP_ID: tg.Mutation.setIfUnset(wrapBin.id),
+		TANGRAM_EMBED_WRAPPER: tg.Mutation.setIfUnset("true")
 	};
-
-	let args = [];
-	if (embedWrapper) {
-		args.push("--tg-embed-wrapper")
-	}
 
 	// Create the linker proxy.
 	return std.wrap(buildLinkerProxy, {
@@ -330,7 +323,6 @@ const ldProxy = async (arg: LdProxyArg) => {
 		env,
 		build,
 		host: build,
-		args
 	});
 };
 
@@ -745,10 +737,10 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 	);
 	const libraryPaths = interpreter.libraryPaths;
 	tg.assert(libraryPaths !== undefined);
-	console.log("manifest library paths", libraryPaths);
+	
 	// NOTE - the input has six paths: libc, greeta, constantsa, greetb, constantsb, empty. The output will differ based on the opt level and OS.
 	const numLibraryPaths = libraryPaths.length;
-	console.log("numLibraryPaths", numLibraryPaths);
+	
 	switch (opt) {
 		case "none": {
 			// All the paths are retained.
@@ -915,7 +907,7 @@ export const testSamePrefix = async (target?: string) => {
 		)
 		.then(tg.File.expect);
 	await output.store();
-	console.log("wrapped_exe", output.id);
+	
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
 };

@@ -13,7 +13,6 @@ type Arg = {
 
 export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 	const arg = await tg.resolve(unresolved);
-	console.log(`arg.host: ${arg.host}`);
 
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
@@ -127,7 +126,6 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	const build = arg.build ?? host;
 	// On macOS builds, the compiler is clang, so no triple prefix.
 	const useTriplePrefix = std.triple.os(build) === "linux" && build !== host;
-	console.log(`useTriplePrefix? ${useTriplePrefix} build: ${build} host: ${host} arg.host: ${arg.host}`);
 	let args: Array<tg.Unresolved<tg.Template.Arg>> = [
 		"-shared",
 		"-fPIC",
