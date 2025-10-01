@@ -65,59 +65,26 @@ pub fn template_from_artifact_and_subpath(
 	])
 }
 
-/// Check if a directory looks like a Tangram artifacts directory by examining its contents.
-/// Returns true if the directory contains at least one entry that parses as a valid Tangram ID.
-pub fn looks_like_artifacts_dir(path: &std::path::Path) -> bool {
-	let Ok(entries) = std::fs::read_dir(path) else {
-		return false;
-	};
-
-	entries.filter_map(Result::ok).any(|entry| {
-		let name = entry.file_name();
-		name.to_str()
-			.and_then(|s| s.parse::<tg::Id>().ok())
-			.is_some()
-	})
-}
-
-/// Find the artifacts directory by searching up from the given path.
-/// On Linux, falls back to /.tangram/artifacts when reaching the root.
-pub fn find_artifacts_dir(start_path: &std::path::Path) -> tg::Result<PathBuf> {
-	for path in start_path.ancestors() {
-		let directory = path.join("artifacts");
-		if directory.exists() && looks_like_artifacts_dir(&directory) {
-			return Ok(directory);
-		}
-
-		// On Linux, when we reach the root, check /.tangram/artifacts (chroot path)
-		#[cfg(target_os = "linux")]
-		if path == std::path::Path::new("/") {
-			let directory = path.join(".tangram/artifacts");
-			if directory.exists() && looks_like_artifacts_dir(&directory) {
-				return Ok(directory);
-			}
-		}
-	}
-	Err(tg::error!("failed to find artifacts directory"))
-}
-
 /// Compute the closest located artifact path for the current running process, reusing the result for subsequent lookups.
 pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
+	let mut closest_artifact_path = None;
 	let cwd = std::env::current_exe()
 		.expect("Failed to get the current directory")
 		.canonicalize()
 		.expect("failed to canonicalize current directory");
-
-	let parent = cwd
-		.parent()
-		.expect("executable should have a parent directory");
-	let artifacts_dir =
-		find_artifacts_dir(parent).expect("Failed to find the closest artifact path");
-
-	artifacts_dir
-		.to_str()
-		.expect("artifacts directory should be valid UTF-8")
-		.to_string()
+	for path in cwd.ancestors().skip(1) {
+		let directory = path.join(".tangram/artifacts");
+		if directory.exists() {
+			closest_artifact_path = Some(
+				directory
+					.to_str()
+					.expect("artifacts directory should be valid UTF-8")
+					.to_string(),
+			);
+			break;
+		}
+	}
+	closest_artifact_path.expect("Failed to find the closest artifact path")
 });
 
 /// Render a [`tg::template::Data`] to a `String` using the closest located artifact path.

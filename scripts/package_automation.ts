@@ -239,11 +239,11 @@ const USAGE = `Usage: bun run scripts/package_automation.ts <flags> [packages]
 This script can run one or more actions on one or more packages with enhanced flexibility.
 
 Examples:
-  # Run check, build, and test on all packages
+  # Run all steps on all packages (excludes format)
   bun run scripts/package_automation.ts
 
   # Run specific actions on specific packages
-  bun run scripts/package_automation.ts -r ripgrep jq
+  bun run scripts/package_automation.ts -t ripgrep jq
 
   # Format and test (format must be explicitly requested)
   bun run scripts/package_automation.ts -ft ripgrep
@@ -319,7 +319,7 @@ function parseFromArgs(): Configuration {
 
 	// Default actions if none specified
 	if (actions.length === 0) {
-		actions.push("test");
+		actions.push("check", "build", "test", "publish", "release");
 	}
 
 	// Process export flags - multiple: true ensures it's always an array or undefined

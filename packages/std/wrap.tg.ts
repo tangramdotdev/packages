@@ -2543,13 +2543,13 @@ export const testSingleArgObjectNoMutations = async () => {
 	} else if (os === "darwin") {
 		tg.assert(
 			text.match(
-				new RegExp(`_NSGetExecutablePath: .*artifacts/${wrapperID}`),
+				new RegExp(`_NSGetExecutablePath: .*\\.tangram/artifacts/${wrapperID}`),
 			),
 			"Expected _NSGetExecutablePath to point to the wrapper",
 		);
 		tg.assert(
 			text.match(
-				new RegExp(`argv\\[0\\]: .*artifacts/${wrapperID}`),
+				new RegExp(`argv\\[0\\]: .*\\.tangram/artifacts/${wrapperID}`),
 			),
 			"Expected argv[0] to point to the wrapper that was invoked",
 		);
