@@ -33,11 +33,13 @@ jobs:
         run: |
           mkdir -p "$TANGRAM_CI_DIR/bin"
           cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
-          {}
+          {
+            "directory": "$TANGRAM_CI_DIR/.tangram"
+          }
           EOF
           cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
           #!/bin/sh
-          exec tangram --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          exec tangram --config "$TANGRAM_CI_DIR/config.json" "$@"
           EOF
           chmod +x "$TANGRAM_CI_DIR/bin/tangram"
 
@@ -73,11 +75,13 @@ jobs:
         run: |
           mkdir -p "$TANGRAM_CI_DIR/bin"
           cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
-          {}
+          {
+            "directory": "$TANGRAM_CI_DIR/.tangram"
+          }
           EOF
           cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
           #!/bin/sh
-          exec tangram --directory "$TANGRAM_CI_DIR" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          exec tangram --config "$TANGRAM_CI_DIR/config.json" "$@"
           EOF
           chmod +x "$TANGRAM_CI_DIR/bin/tangram"
 
