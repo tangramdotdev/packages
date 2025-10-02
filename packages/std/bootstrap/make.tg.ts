@@ -49,7 +49,10 @@ export const build = async (arg?: Arg) => {
 		install,
 	};
 
-	let envArgs: Array<tg.Unresolved<std.env.Arg>> = [sdk(host), { utils: false }];
+	let envArgs: Array<tg.Unresolved<std.env.Arg>> = [
+		sdk(host),
+		{ utils: false },
+	];
 	if (embedWrapper) {
 		envArgs.push({ TANGRAM_LINKER_EMBED_WRAPPER: true });
 	}

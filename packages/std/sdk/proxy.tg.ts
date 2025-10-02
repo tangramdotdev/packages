@@ -35,7 +35,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
-	
+
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
@@ -314,7 +314,9 @@ const ldProxy = async (arg: LdProxyArg) => {
 		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
 		TANGRAM_STUB_ID: tg.Mutation.setIfUnset(stubBin.id),
 		TANGRAM_WRAP_ID: tg.Mutation.setIfUnset(wrapBin.id),
-		TANGRAM_EMBED_WRAPPER: tg.Mutation.setIfUnset("true")
+		TANGRAM_LINKER_EMBED_WRAPPER: embedWrapper
+			? tg.Mutation.setIfUnset("true")
+			: undefined,
 	};
 
 	// Create the linker proxy.
@@ -737,10 +739,10 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 	);
 	const libraryPaths = interpreter.libraryPaths;
 	tg.assert(libraryPaths !== undefined);
-	
+
 	// NOTE - the input has six paths: libc, greeta, constantsa, greetb, constantsb, empty. The output will differ based on the opt level and OS.
 	const numLibraryPaths = libraryPaths.length;
-	
+
 	switch (opt) {
 		case "none": {
 			// All the paths are retained.
@@ -907,7 +909,7 @@ export const testSamePrefix = async (target?: string) => {
 		)
 		.then(tg.File.expect);
 	await output.store();
-	
+
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
 };

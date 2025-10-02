@@ -140,7 +140,7 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 		build: host,
 		bundledSources: true, // Build gmp/isl/mpfr/mpc inline
 		crossNative: true, // Include workaround for configuring target libraries with an unproxied compiler.
-		env: std.env.arg (stage1HostSdk),
+		env: std.env.arg(stage1HostSdk),
 		host,
 		sysroot,
 		target,

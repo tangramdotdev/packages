@@ -51,11 +51,11 @@ export const ccProxy = async (arg: tg.Unresolved<Arg>) =>
 		.then((dir) => dir.get("bin/cc_proxy"))
 		.then(tg.File.expect);
 
-export const convertManifest = async (arg: tg.Unresolved<Arg>) => 
-		await tg
-			.build(workspace, arg)
-			.then((dir) => dir.get("bin/convert_manifest"))
-			.then(tg.File.expect);
+export const convertManifest = async (arg: tg.Unresolved<Arg>) =>
+	await tg
+		.build(workspace, arg)
+		.then((dir) => dir.get("bin/convert_manifest"))
+		.then(tg.File.expect);
 
 export const ldProxy = async (arg: tg.Unresolved<Arg>) =>
 	await tg

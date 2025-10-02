@@ -127,7 +127,7 @@ fn read_options() -> tg::Result<Options> {
 
 	// Get the wrap binary.
 	let mut embed = std::env::var("TANGRAM_LINKER_EMBED_WRAPPER").is_ok();
-
+	
 	// Get additional interpreter args, if any.
 	let interpreter_args = std::env::var("TANGRAM_LINKER_INTERPRETER_ARGS")
 		.ok()

@@ -31,21 +31,21 @@ export const embedWrapper = async (arg: WrapArg) => {
 	const workspace_ = workspace(arg.workspace ?? {});
 	const convertManifest = ogWorkspace.convertManifest({});
 	const unwrapped = std.wrap.unwrap(arg.executable);
-	const manifest = tg.file(std.wrap.Manifest.read(arg.executable).then(JSON.stringify));
-	const env: Array<tg.Unresolved<std.env.Arg>> = [
-		{ utils: false }
-	];
+	const manifest = tg.file(
+		std.wrap.Manifest.read(arg.executable).then(JSON.stringify),
+	);
+	const env: Array<tg.Unresolved<std.env.Arg>> = [{ utils: false }];
 
 	let build = {
 		command: tg`
 			${convertManifest} -o bin < ${manifest} > manifest.bin
 			${workspace_}/wrap ${unwrapped} manifest.bin ${workspace_}/stub.bin
-		`
+		`,
 	};
 	return tg.build(std.phases.run, {
 		bootstrap: true,
 		env: std.env.arg(...env),
-		phases: { build }
+		phases: { build },
 	});
 };
 
@@ -62,23 +62,20 @@ export const workspace = async (arg: WorkspaceArg) => {
 	const buildTriple = build_ ?? host;
 
 	// Get the source.
-	const source: tg.Directory = source_
-		? source_
-		: packages;
-	return build({ 
+	const source: tg.Directory = source_ ? source_ : packages;
+	return build({
 		// buildToolchain,
 		host,
 		verbose,
 		target: buildTriple,
 		source,
-	})
-	.then(tg.Directory.expect);
+	}).then(tg.Directory.expect);
 };
 
 export const bootstrapToolchain = async (host?: string) => {
-	let host_ = host ?? await std.triple.host();
+	let host_ = host ?? (await std.triple.host());
 	return bootstrap.sdk.env(host_);
-}
+};
 
 export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const arg = await tg.resolve(unresolved);
@@ -137,11 +134,11 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		{
 			[`AR_${tripleToEnvVar(target)}`]: `${prefix}ar`,
 			[`CC_${tripleToEnvVar(target)}`]: tg`${prefix}cc${suffix}`,
-		}
+		},
 	];
 
 	// Compile the stub binary.
-	let arch  = "x86_64"; // todo: aarch64
+	let arch = "x86_64"; // todo: aarch64
 	let releaseArgs = release ? "-Os" : "";
 	let verboseArgs = verbose ? "-v" : "";
 	let buildPhase = {
@@ -201,7 +198,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		env: std.env.arg(...env),
 		phases: { prepare: undefined, build: buildPhase, install: undefined },
 		command: {
-			host: system
+			host: system,
 		},
 		network: false,
 	});
@@ -246,5 +243,5 @@ export const test = async () => {
 	tg.assert(hostArch);
 
 	// const buildToolchain = await bootstrap.sdk.env(host);
-	return workspace({ host })
+	return workspace({ host });
 };

@@ -16,7 +16,6 @@ export const metadata = {
 	version: "5.2.37",
 };
 
-
 export type Arg = {
 	bootstrap?: boolean;
 	build?: string | undefined;
@@ -67,7 +66,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	env.push({
 		CFLAGS: tg.Mutation.prefix(
 			"-Wno-implicit-function-declaration -std=gnu17",
-			" "
+			" ",
 		),
 	});
 

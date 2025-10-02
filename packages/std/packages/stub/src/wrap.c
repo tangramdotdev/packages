@@ -331,11 +331,10 @@ int main(int argc, const char** argv) {
 
 	// Create the footer.
 	Footer footer;
-	footer.entry	= ehdr->e_entry;
 	footer.size	= manifest_size;
-	footer.version	= 1;
+	footer.version	= 0;
 	memcpy(&footer.magic, "tangram", 8);
-	TRACE("entry: %ld, size: %ld, version: %ld", footer.entry, footer.size, footer.version);
+	TRACE("size: %ld, version: %ld", footer.size, footer.version);
 	
 	// Patch the entrypoint.
 	ehdr->e_entry = vaddr;

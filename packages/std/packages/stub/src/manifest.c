@@ -104,15 +104,14 @@ void parse_manifest (
 	manifest->ld_preload = render_ld_preload(arena, manifest);
 	if (manifest->ld_preload.ptr) {
 		String key = STRING_LITERAL("LD_PRELOAD");
-		// TODO: support inheriting preloads.
-		// String val = lookup(&manifest->env, key);
-		// if (val.ptr) {
-		// 	String ss[2] = { val, manifest->ld_preload };
-		// 	String s = STRING_LITERAL(":");
-		// 	manifest->ld_preload = join(arena, s, ss, 2);
-		// 	insert(arena, &manifest->env, restore_ld_preload, val);
-		// } else {
-		// }
+		String val = lookup(&manifest->env, key);
+		if (val.ptr) {
+			String ss[2] = { val, manifest->ld_preload };
+			String s = STRING_LITERAL(":");
+			manifest->ld_preload = join(arena, s, ss, 2);
+			insert(arena, &manifest->env, restore_ld_preload, val);
+		} else {
+		}
 		insert(arena, &manifest->env, clear_ld_preload, true_);
 		insert(arena, &manifest->env, key, manifest->ld_preload);
 	}

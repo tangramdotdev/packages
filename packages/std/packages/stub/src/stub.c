@@ -559,10 +559,6 @@ static int read_executable (
 	}
 
 	// Fill the env table.
-	String TANGRAM_CLEAR_LD_PRELOAD = STRING_LITERAL("TANGRAM_CLEAR_LD_PRELOAD");
-	String TANGRAM_CLEAR_LD_LIBRARY_PATH = STRING_LITERAL("TANGRAM_CLEAR_LD_LIBRARY_PATH");
-	String LD_PRELOAD = STRING_LITERAL("LD_PRELOAD");
-
 	if (!options->suppress_env) {
 		for (int i = 0; i < stack->envc; i++) {
 			char* e = stack->envp[i];
@@ -592,13 +588,6 @@ static int read_executable (
 			val.len = n - m - 1;
 			memcpy(val.ptr, e + m + 1, n - m - 1);
 
-			// Don't inherit env vars set by the stub. unsetenv() is not guaranteed to work in the injection.
-			if (streq(key, TANGRAM_CLEAR_LD_PRELOAD)
-			 || streq(key, TANGRAM_CLEAR_LD_LIBRARY_PATH)
-			 || streq(key, LD_PRELOAD)
-			) {
-				continue;
-			}
 			insert(arena, &executable->manifest->env, key, val);
 		}
 		if (options->enable_tracing) {
@@ -628,7 +617,7 @@ static int read_executable (
 		ABORT("failed to seek");
 	}
 	if (options->enable_tracing) {
-		trace("got fd\n");
+		trace("file size: %d\n", offset);
 	}
 
 	// Read the manifest footer.
@@ -636,7 +625,9 @@ static int read_executable (
 		ABORT("failed to read footer");
 	}
 	if (options->enable_tracing) {
-		trace("read footer\n");
+		trace("read footer: size=%d, version=%d\n",
+			executable->footer->size,
+			executable->footer->version);
 	}
 	// Check the magic number.
 	int matches = executable->footer->magic[0] == 't'
@@ -663,9 +654,7 @@ static int read_executable (
 	char* data = (char*)alloc(arena, executable->footer->size, 1);
 	size_t count = 0;
 	offset -= (sizeof(Footer) + executable->footer->size);
-	if (executable->footer->version == 0) {
-		offset += 8;
-	}
+
 	while (count < executable->footer->size) {
 		long amt = pread64(fd, (void*)(data + count), executable->footer->size - count, offset);
 		if (amt < 0) {
@@ -682,7 +671,7 @@ static int read_executable (
 	close(fd);
 
 	// Print the manifest if provided.
-	if (options->enable_tracing && data[0] == '{') {
+	if (options->enable_tracing) {
 		trace("manifest: \n");
 		for (int ch = 0; ch < executable->footer->size; ch++) {
 			trace("%c", data[ch]);
@@ -830,7 +819,6 @@ void _stub_start (void *sp) {
 
 	// Parse options.
 	parse_options(&stack, &options);
-
 	if (options.enable_tracing) {
 		trace(
 			"options: enable_tracing:%d, suppress_args:%d, suppress_env:%d\n",
@@ -840,12 +828,10 @@ void _stub_start (void *sp) {
 		print_stack(&stack);
 
 	}
-	ABORT_IF(stack.auxv_glob[AT_PHENT] != sizeof(Elf64_Phdr), "unexpected size");
 
-	// We need to search the aux vector for the program header table and index of the entry point.
-	Elf64_Phdr* phdr    = (Elf64_Phdr*)stack.auxv_glob[AT_PHDR];
-	uint64_t    ph_num  = (uint64_t)stack.auxv_glob[AT_PHNUM];
-	uint64_t    page_sz = (uint64_t)stack.auxv_glob[AT_PAGESZ];
+	// We only grab the page size from the aux vector, we'll read the program headers later.
+	uint64_t page_sz = (uint64_t)stack.auxv_glob[AT_PAGESZ];
+	page_sz = page_sz ? page_sz : 4096;
 
 	// Initialize the arena.
 	create_arena(&arena, page_sz);
@@ -886,55 +872,37 @@ void _stub_start (void *sp) {
 			default: break;
 		}
 	}
-	page_sz = page_sz ? page_sz : 4096;
 
-	// Sanity check.
-	ABORT_IF((!phdr && !ph_num) || nentry < 0, "invalid wrapped executable");
+	// Check that we have space to write the new program header table and number of entries later.
+	ABORT_IF(!nphdr || nentry < 0, "missing AT_PHDR or AT_ENTRY");
 
-	// Process the manifest.
+	// Read the executable and manifest.
 	Executable executable = {
-		.manifest = ALLOC(&arena, Manifest),
-		.elf_header = ALLOC(&arena, Elf64_Ehdr),
+		.manifest	 = ALLOC(&arena, Manifest),
+		.elf_header	 = ALLOC(&arena, Elf64_Ehdr),
 		.program_headers = NULL,
-		.footer = &footer
+		.footer		= &footer
 	};
 	if (!read_executable(&arena, &stack, &options, &executable)) {
 		ABORT("failed to parse manifest");
 	}
 	if (options.enable_tracing) {
-		trace("parsed manifest\n");
+		trace("read executable\n");
 	}
 
-	// It's possible that AT_PHDR is garbage. Read the program headers directly.
-
-
-	// Compute the base address.
+	// Compute the base address. Normally this is computed using the program header table supplied in the aux vector, but this could be garbage if using a patched program header table.
 	uintptr_t load_address = stack.auxv_glob[AT_ENTRY] - executable.elf_header->e_entry;
-
-
-	if (options.enable_tracing) {
-		trace("load address = %p\n", load_address);
-		trace("phdr: %p, phdr[0].p_vaddr = 0x%lx\n", phdr, phdr[0].p_vaddr);
-		trace("scanned program headers. ph_num = %d, page_sz = %lx, load_address = %lx\n",
-			ph_num,
-			page_sz,
-			load_address
-		);
-	}
 
 	// If "--tangram-print-manifest" was passed to the stub, dump the manifest and exit.
 	String arg = STRING_LITERAL("--tangram-print-manifest");
 	for (int i = 1; i < stack.argc; i++) {
 		if (cstreq(arg, stack.argv[i])) {
-			if (footer.version == 1) {
-				trace("footer entrypoint: 0x%lx\n", footer.entry);
-			}
 			print_manifest(executable.manifest);
 			exit(0);
 		}
 	}
 
-	// Set the entrypoint. TODO: use manifest.
+	// If the executable is a string, fallback on execve.
 	if (executable.manifest->executable.ptr) {
 		exec(&arena, executable.manifest, stack.argv[0], &options);
 	}
@@ -942,13 +910,14 @@ void _stub_start (void *sp) {
 
 	// Get the entrypoint.
 	void* entrypoint = NULL;
-
-	// Load the interpreter if required.
 	if (executable.manifest->interpreter.ptr) {
+		// If there's an interpreter arg,
 		stack.auxv[nentry].a_un.a_val = load_address + executable.manifest->entrypoint;
 
-		// Load the interpreter. We use a separate arena to avoid use-after-free issues.
+		// Load the interpreter.
 		LoadedInterpreter loaded = load_interpreter(&arena, executable.manifest->interpreter.ptr, page_sz, &options);
+
+		// Update the AT_BASE entry of the aux vector.
 		if (nbase >= 0) {
 			stack.auxv[nbase].a_un.a_val = loaded.base_address;
 		}
@@ -970,14 +939,8 @@ void _stub_start (void *sp) {
 		executable.program_headers,
 		executable.elf_header->e_phnum
 	);
-	
 	stack.auxv[nphdr].a_un.a_val = (uintptr_t)new_phdrs.new;
 	stack.auxv[nphnum].a_un.a_val = (uintptr_t)new_phdrs.num;
-
-	// Get the entrypiont.
-	if (!entrypoint) {
-		ABORT("missing entrypoint");
-	}
 
 	// Prepare a new stack.
 	sp = prepare_stack(&arena, &stack, executable.manifest, &options);
@@ -996,6 +959,6 @@ void _stub_start (void *sp) {
 		trace("about to transfer control\n");
 		trace("entrypoint: 0x%lx\n", (uintptr_t)entrypoint);
 	}
-	// BREAK;
+
 	jump_to_entrypoint(sp, entrypoint);
 }

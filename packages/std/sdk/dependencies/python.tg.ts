@@ -69,7 +69,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const configure = {
 		pre: "env",
 		body: { args: configureArgs },
-	}
+	};
 	const buildPhase = { args: makeArgs };
 	const install = { args: makeArgs };
 	const phases = { configure, build: buildPhase, install };
