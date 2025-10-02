@@ -270,13 +270,17 @@ Flags:
       --platform=PLAT   Override target platform
 
 Action Dependencies:
-  Actions have implicit dependencies: check → build → test → publish → release
+  Actions have the following dependencies:
+    - build depends on: check
+    - test depends on: build (transitively includes check)
+    - publish has no dependencies (runs standalone)
+    - release depends on: test, publish (transitively includes check, build)
   Format is NOT a prerequisite and only runs when explicitly requested with -f.
   When you specify an action, all its prerequisites run automatically.
   Examples:
-    -t runs: check → build → test
+    -p runs: publish (only)
+    -tp runs: check → build → test → publish
     -r runs: check → build → test → publish → release
-    -ft runs: format → check → build → test
 `;
 
 function parseFromArgs(): Configuration {
@@ -594,6 +598,16 @@ async function testAction(ctx: Context): Promise<Result<void>> {
 /** Ordered actions - dependencies implicit in order */
 const ACTION_ORDER = ["format", "check", "build", "test", "publish", "release"];
 
+/** Action dependencies - each action lists its direct prerequisites */
+const ACTION_DEPENDENCIES: Record<string, string[]> = {
+	format: [],
+	check: [],
+	build: ["check"],
+	test: ["build"],
+	publish: [],
+	release: ["test", "publish"],
+};
+
 type ActionFunction = (ctx: Context) => Promise<Result<unknown>>;
 
 const ACTION_MAP: Record<string, ActionFunction> = {
@@ -620,34 +634,26 @@ class PackageExecutor {
 		const results = new Results();
 		const packages = resolvePackages(this.config.packages);
 
-		// Build list of actions to run, including prerequisites
-		// Format is NOT a prerequisite - it only runs if explicitly requested
-		const orderedActions: string[] = [];
+		// Build set of actions to run, including all dependencies (transitively)
+		const actionsToRun = new Set<string>();
 
-		// Add format first if explicitly requested
-		if (this.config.actions.includes("format")) {
-			orderedActions.push("format");
-		}
-
-		// For other actions, include all prerequisites (check, build, test, publish, release)
-		const nonFormatActions = this.config.actions.filter((a) => a !== "format");
-		if (nonFormatActions.length > 0) {
-			// Find the highest requested action (excluding format)
-			const actionOrderWithoutFormat = ACTION_ORDER.filter(
-				(a) => a !== "format",
-			);
-			const maxIndex = Math.max(
-				...nonFormatActions.map((action) =>
-					actionOrderWithoutFormat.indexOf(action),
-				),
-			);
-			// Add all actions from check up to and including the highest requested
-			for (const action of actionOrderWithoutFormat.slice(0, maxIndex + 1)) {
-				if (!orderedActions.includes(action)) {
-					orderedActions.push(action);
-				}
+		const addActionWithDeps = (action: string) => {
+			if (actionsToRun.has(action)) return;
+			actionsToRun.add(action);
+			const deps = ACTION_DEPENDENCIES[action] || [];
+			for (const dep of deps) {
+				addActionWithDeps(dep);
 			}
+		};
+
+		for (const action of this.config.actions) {
+			addActionWithDeps(action);
 		}
+
+		// Order actions according to ACTION_ORDER
+		const orderedActions = ACTION_ORDER.filter((action) =>
+			actionsToRun.has(action),
+		);
 
 		const processPackage = async (packageName: string) => {
 			const packagePath = getPackagePath(packageName);
