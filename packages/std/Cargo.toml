@@ -1,7 +1,6 @@
 [workspace]
 members = [
-  "packages/cc_proxy", 
-  "packages/convert_manifest",
+  "packages/cc_proxy",
   "packages/ld_proxy",
   "packages/strip_proxy",
   "packages/wrapper",
