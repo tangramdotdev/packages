@@ -967,9 +967,10 @@ void _stub_start (void *sp) {
 		executable.manifest,
 		(void*)load_address,
 		stack.auxv[nentry].a_un.a_val,
-		phdr,
-		ph_num
+		executable.program_headers,
+		executable.elf_header->e_phnum
 	);
+	
 	stack.auxv[nphdr].a_un.a_val = (uintptr_t)new_phdrs.new;
 	stack.auxv[nphnum].a_un.a_val = (uintptr_t)new_phdrs.num;
 
