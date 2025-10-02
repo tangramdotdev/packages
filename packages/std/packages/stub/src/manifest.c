@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include "arena.h"
 #include "manifest.h"
-#include "deserialize.h"
 #include "json.h"
 #include "util.h"
 
@@ -57,28 +56,16 @@ void parse_manifest (
 	};
 
 	// Parse json.
-	if (data[0] == '{') {
-		JsonParser parser = {
-			.arena = arena,
-			.input = { 
-				.ptr = data, 
-				.len = len
-			},
-		};
-		JsonValue value;
-		ABORT_IF(parse_json_value(&parser, &value), "failed to parse manifest JSON");
-		create_manifest_from_json(&cx, &value);
-	} else {
-		Deserializer de = {
-			.arena = arena,
-			.cursor = 0,
-			.data = data,
-			.len = len,
-		};
-		Value value;
-		ABORT_IF(deserialize_value(&de, &value), "failed to deserialize manifest");
-		create_manifest_from_value(&cx, &value);
-	}
+	JsonParser parser = {
+		.arena = arena,
+		.input = { 
+			.ptr = data, 
+			.len = len
+		},
+	};
+	JsonValue value;
+	ABORT_IF(parse_json_value(&parser, &value), "failed to parse manifest JSON");
+	create_manifest_from_json(&cx, &value);
 
 	String true_ = STRING_LITERAL("true");
 	String clear_ld_library_path = STRING_LITERAL("TANGRAM_CLEAR_LD_LIBRARY_PATH");

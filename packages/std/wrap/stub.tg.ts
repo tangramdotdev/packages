@@ -150,7 +150,6 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			$CC_${tripleToEnvVar(target)}			\
 				${source}/stub/src/stub.c			\
 				${source}/stub/src/manifest.c		\
-				${source}/stub/src/manifest/bin.c	\
 				${source}/stub/src/manifest/json.c	\
 				${source}/stub/src/${arch}/start.s	\
 				-I${source}/stub/include			\
@@ -163,13 +162,13 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 				-nostdlib							\
 				-Wl,--oformat=binary				\
 				-Werror								\
+				-Os									\
 				-o $OUTPUT/stub.bin ${releaseArgs} ${verboseArgs}
 			
 			# Compile the executable stub.
 			$CC_${tripleToEnvVar(target)}			\
 				${source}/stub/src/stub.c			\
 				${source}/stub/src/manifest.c		\
-				${source}/stub/src/manifest/bin.c	\
 				${source}/stub/src/manifest/json.c	\
 				${source}/stub/src/${arch}/start.s	\
 				-I${source}/stub/include			\

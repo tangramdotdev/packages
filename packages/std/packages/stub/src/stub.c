@@ -9,7 +9,6 @@
 // Internals.
 #include "arena.h"
 #include "debug.h"
-#include "deserialize.h"
 #include "footer.h"
 #include "manifest.h"
 #include "syscall.h"

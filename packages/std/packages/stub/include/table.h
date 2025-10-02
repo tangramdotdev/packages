@@ -8,7 +8,6 @@
 
 // Internals.
 #include "arena.h"
-#include "deserialize.h"
 #include "util.h"
 
 typedef struct Node Node;

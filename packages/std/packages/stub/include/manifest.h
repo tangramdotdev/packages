@@ -2,7 +2,6 @@
 #include <stdint.h>
 
 #include "arena.h"
-#include "deserialize.h"
 #include "json.h"
 #include "table.h"
 #include "util.h"
@@ -14,21 +13,21 @@ enum {
 };
 
 typedef struct {
-	uint64_t entrypoint;
-	String  executable;
-	String	interpreter;
-	uint64_t interpreter_kind;
-	size_t	num_library_paths;
-	String*	library_paths;
-	size_t	num_preloads;
-	String*	preloads;
-	size_t	argc;
-	String* argv;
-	size_t	interp_argc;
-	String*	interp_argv;
-	String ld_library_path;
-	String ld_preload;
-	Table	env;
+	uint64_t 	entrypoint;
+	String	 	executable;
+	String		interpreter;
+	uint64_t	interpreter_kind;
+	size_t		num_library_paths;
+	String*		library_paths;
+	size_t		num_preloads;
+	String*		preloads;
+	size_t		argc;
+	String*		argv;
+	size_t		interp_argc;
+	String*		interp_argv;
+	String 		ld_library_path;
+	String 		ld_preload;
+	Table		env;
 } Manifest;
 
 typedef struct {
@@ -47,7 +46,6 @@ typedef struct  {
 } Id;
 
 void parse_manifest (Arena* arena, Manifest* manifest, uint8_t* data, uint64_t len);
-void create_manifest_from_value (Cx*, Value* value);
 void create_manifest_from_json (Cx*, JsonValue* value);
 
 static void append_to_string (
@@ -68,61 +66,6 @@ static void append_ch_to_string (
 	ABORT_IF(dst->len + 1 >= capacity, "out of capacity");
 	dst->ptr[dst->len] = ch;
 	dst->len += 1;
-}
-
-static void append_id_to_string (String* src, const Bytes* bytes, size_t capacity) {
-	if (bytes->len <= 4) ABORT("expected at least four bytes");
-	Id* id = (Id*)(bytes->data);
-
-	// Check the version.
-	ABORT_IF(id->version != ID_VERSION, "unsupported id version");
-
-	// Check the kind.
-	switch(id->kind) {
-		case 1: {
-			String s = STRING_LITERAL("dir_");
-			append_to_string(src, &s, capacity);
-			break;
-		}
-		case 2: {
-			String s = STRING_LITERAL("fil_");
-			append_to_string(src, &s, capacity);
-			break;
-		}
-		case 3: {
-			String s = STRING_LITERAL("sym_");
-			append_to_string(src, &s, capacity);
-			break;
-		}
-		default: ABORT("expected an artifact");
-	}
-
-	// Version.
-	append_ch_to_string(src, id->version + 48, capacity);
-
-	// Algorithm.
-	append_ch_to_string(src, id->algorithm + 48, capacity);
-
-	// Base32 encode the rest.
-	const char* encoding = "0123456789abcdefghjkmnpqrstvwxyz";
-	uint8_t* itr = id->body;
-	uint8_t* end = itr + bytes->len - 4;
-
-	uint64_t bits = 0;
-	uint64_t count = 0;
-	for(; itr != end; itr++) {
-		bits = (bits << 8) | *itr;
-		count += 8;
-		while (count >= 5) {
-			char encoded = encoding[(bits >> (count - 5)) & 0x1f];
-			append_ch_to_string(src, encoded, capacity);
-			count -= 5;
-		}
-	}
-	if (count > 0) {
-		char encoded = encoding[(bits << (5  - count)) & 0x1f];
-		append_ch_to_string(src, encoded, capacity);
-	}
 }
 
 static String render_ld_library_path (Arena* arena, Manifest* manifest) {
