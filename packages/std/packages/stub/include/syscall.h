@@ -81,22 +81,12 @@ static inline int close (int fd) {
 	return (int)syscall1(__NR_close, (long)fd);
 }
 
+static inline int stat (const char* pathname, stat_t* statbuf) {
+	return (int)syscall2(__NR_stat, (long)pathname, (long)statbuf);
+}
+
 static inline long lseek (int fd, off_t offset, int whence) {
 	return syscall3(__NR_lseek, (long)fd, (long)offset, (long)whence);
-}
-
-static inline int getrlimit (int resource, rlimit_t* rlim) {
-	return (int)syscall2(__NR_getrlimit, (long)resource, (long)rlim);
-}
-
-static inline int pread64 (int fd, void* buf, size_t count, off_t offset) {
-	return (int)syscall4(__NR_pread64, (long)fd, (long)buf, (long)count, (long)offset);
-}
-
-static inline void exit (int status)
-{
-	syscall1(__NR_exit, (long)status);
-	__builtin_unreachable();
 }
 
 static inline void* mmap(
@@ -122,22 +112,31 @@ static inline int munmap(void* addr, uint64_t len) {
 	return (int)syscall2(__NR_munmap, (long)addr, (long)len);
 }
 
-static inline int getcwd(char* buf, size_t size) {
-	return (int)syscall2(__NR_getcwd, (long)buf, (long)size);
-}
-
-static inline int stat (const char* pathname, stat_t* statbuf) {
-	return (int)syscall2(__NR_stat, (long)pathname, (long)statbuf);
-}
-
-static inline long getrandom (void *buf, size_t buflen, unsigned int flags) {
-	return (long)syscall3(__NR_getrandom, (long)buf, (long)buflen, (long)flags);
+static inline int pread64 (int fd, void* buf, size_t count, off_t offset) {
+	return (int)syscall4(__NR_pread64, (long)fd, (long)buf, (long)count, (long)offset);
 }
 
 static inline int execve (char* pathname, char** argv, char** envp) {
 	return (int)syscall3(__NR_execve, (long)pathname, (long)argv, (long)envp);
 }
 
+static inline void exit (int status) {
+	syscall1(__NR_exit, (long)status);
+	__builtin_unreachable();
+}
+
+static inline int getcwd(char* buf, size_t size) {
+	return (int)syscall2(__NR_getcwd, (long)buf, (long)size);
+}
+
 static inline long readlink (const char* pathname, char* buf, size_t bufsiz) {
 	return syscall3(__NR_readlink, (long)pathname, (long)buf, (long)bufsiz);
+}
+
+static inline int getrlimit (int resource, rlimit_t* rlim) {
+	return (int)syscall2(__NR_getrlimit, (long)resource, (long)rlim);
+}
+
+static inline long getrandom (void *buf, size_t buflen, unsigned int flags) {
+	return (long)syscall3(__NR_getrandom, (long)buf, (long)buflen, (long)flags);
 }
