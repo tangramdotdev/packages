@@ -148,11 +148,14 @@ async fn run_proxy(
 		let stripped_file = tg::checkin(
 			&tg,
 			tg::checkin::Arg {
-				destructive: false,
-				deterministic: true,
-				ignore: false,
-				locked: false,
-				lock: false,
+				options: tg::checkin::Options {
+					local_dependencies: true,
+					destructive: false,
+					deterministic: true,
+					ignore: false,
+					locked: false,
+					lock: false,
+				},
 				path: local_executable_path,
 				updates: vec![],
 			},

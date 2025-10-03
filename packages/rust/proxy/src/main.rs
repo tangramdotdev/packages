@@ -254,11 +254,14 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		let directory = tg::checkin(
 			tg,
 			tg::checkin::Arg {
-				destructive: false,
-				deterministic: true,
-				ignore: false,
-				locked: true,
-				lock: false,
+				options: tg::checkin::Options {
+					destructive: false,
+					deterministic: true,
+					ignore: false,
+					local_dependencies: true,
+					locked: true,
+					lock: false,
+				},
 				path: dependency.parse().unwrap(),
 				updates: vec![],
 			},
@@ -563,11 +566,14 @@ async fn get_checked_in_path(
 	let artifact = tg::checkin(
 		tg,
 		tg::checkin::Arg {
-			destructive: false,
-			deterministic: true,
-			ignore: false,
-			locked: false,
-			lock: false,
+			options: tg::checkin::Options {
+				destructive: false,
+				deterministic: true,
+				ignore: false,
+				local_dependencies: true,
+				locked: false,
+				lock: false,
+			},
 			path: path.to_path_buf(),
 			updates: vec![],
 		},

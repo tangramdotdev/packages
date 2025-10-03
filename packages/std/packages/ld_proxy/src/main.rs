@@ -378,11 +378,14 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_file = tg::checkin(
 			&tg,
 			tg::checkin::Arg {
-				destructive: false,
-				deterministic: true,
-				ignore: false,
-				locked: false,
-				lock: false,
+				options: tg::checkin::Options {
+					destructive: false,
+					deterministic: true,
+					ignore: false,
+					local_dependencies: true,
+					locked: false,
+					lock: false,
+				},
 				path: output_path,
 				updates: vec![],
 			},
@@ -549,11 +552,14 @@ async fn checkin_local_library_path(
 				let library_candidate_file = tg::checkin(
 					tg,
 					tg::checkin::Arg {
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						locked: true,
-						lock: false,
+						options: tg::checkin::Options {
+							destructive: false,
+							deterministic: true,
+							ignore: false,
+							local_dependencies: true,
+							locked: true,
+							lock: false,
+						},
 						path: library_candidate_path,
 						updates: vec![],
 					},
@@ -835,11 +841,14 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 						tg::checkin(
 							tg,
 							tg::checkin::Arg {
-								destructive: false,
-								deterministic: true,
-								ignore: false,
-								locked: true,
-								lock: false,
+								options: tg::checkin::Options {
+									destructive: false,
+									deterministic: true,
+									ignore: false,
+									local_dependencies: true,
+									locked: true,
+									lock: false,
+								},
 								path: library_candidate_path.clone(),
 								updates: vec![],
 							},

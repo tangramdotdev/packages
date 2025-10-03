@@ -572,11 +572,14 @@ async fn check_in_source_tree(
 				let artifact = tg::checkin(
 					tg,
 					tg::checkin::Arg {
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						locked: false,
-						lock: false,
+						options: tg::checkin::Options {
+							destructive: false,
+							deterministic: true,
+							ignore: false,
+							local_dependencies: true,
+							locked: false,
+							lock: false,
+						},
 						path,
 						updates: vec![],
 					},

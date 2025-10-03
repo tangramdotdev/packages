@@ -5,7 +5,7 @@ export const metadata = {
 	name: "jq",
 	license: "https://github.com/jqlang/jq?tab=License-1-ov-file#readme",
 	repository: "https://github.com/jqlang/jq",
-	version: "1.8.1",
+	version: "1.8.0",
 	provides: {
 		binaries: ["jq"],
 	},
@@ -14,7 +14,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:2be64e7129cecb11d5906290eba10af694fb9e3e7f9fc208a311dc33ca837eb0";
+		"sha256:91811577f91d9a6195ff50c2bffec9b72c8429dc05ec3ea022fd95c06d2b319c";
 	const extension = ".tar.gz";
 	const base = `https://github.com/stedolan/${name}/releases/download/${name}-${version}`;
 	return await std.download
