@@ -1,5 +1,5 @@
 #pragma once
-__attribute__((naked))
+
 static long syscall1 (
 	long nr,
 	long arg1
@@ -15,7 +15,6 @@ static long syscall1 (
 	);
 }
 
-__attribute__((naked))
 static long syscall2 (
 	long nr,
 	long arg1,
@@ -33,7 +32,6 @@ static long syscall2 (
 	);
 }
 
-__attribute__((naked))
 static long syscall3 (
 	long nr,
 	long arg1,
@@ -53,7 +51,6 @@ static long syscall3 (
 	);
 }
 
-__attribute__((naked))
 static long syscall4 (
 	long nr,
 	long arg1,
@@ -75,7 +72,6 @@ static long syscall4 (
 	);
 }
 
-__attribute__((naked))
 static long syscall5 (
 	long nr,
 	long arg1,
@@ -99,7 +95,6 @@ static long syscall5 (
 	);
 }
 
-__attribute__((naked))
 static long syscall6 (
 	long nr,
 	long arg1,

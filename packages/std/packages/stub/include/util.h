@@ -88,10 +88,7 @@ static bool cstreq (String s, const char* cstr) {
 			return false;
 		}
 	}
-	if (cstr[s.len]) {
-		return false;
-	}
-	return true;
+	return !cstr[s.len];
 }
 
 static char* cstr (Arena *arena, String s) {

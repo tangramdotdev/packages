@@ -23,7 +23,6 @@ static void* memset (
 	return dst;
 }
 
-__attribute__((naked)) 
 static void jump_to_entrypoint (void* stack, void* entrypoint) {
 	asm volatile (
 		"mov sp, x0;"		// set the stack pointer.
