@@ -551,13 +551,22 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 /** Results tracking */
 class Results {
 	private packageResults = new Map<string, boolean>();
+	private packageErrors = new Map<
+		string,
+		Array<{ action: string; error: string }>
+	>();
 
 	logSuccess(packageName: string): void {
 		this.packageResults.set(packageName, true);
 	}
 
-	logFailure(packageName: string): void {
+	logFailure(packageName: string, action: string, error: string): void {
 		this.packageResults.set(packageName, false);
+
+		if (!this.packageErrors.has(packageName)) {
+			this.packageErrors.set(packageName, []);
+		}
+		this.packageErrors.get(packageName)?.push({ action, error });
 	}
 
 	hasFailures(): boolean {
@@ -576,12 +585,34 @@ class Results {
 			}
 		}
 
-		return [
+		const lines = [
 			separator,
 			`Successful: ${success.sort().join(" ")}`,
 			`Failed: ${failed.sort().join(" ")}`,
 			`Total: ${this.packageResults.size} | Passed: ${success.length} | Failed: ${failed.length}`,
-		].join("\n");
+		];
+
+		if (failed.length > 0) {
+			lines.push("", separator, "ERRORS:", separator);
+
+			for (const packageName of failed.sort()) {
+				const errors = this.packageErrors.get(packageName) || [];
+				lines.push("", `Package: ${packageName}`);
+				for (const { action, error } of errors) {
+					lines.push(`  Action: ${action}`);
+					lines.push(
+						`  Error: ${error
+							.split("\n")
+							.map((line, i) => (i === 0 ? line : `         ${line}`))
+							.join("\n")}`,
+					);
+				}
+			}
+
+			lines.push("", separator);
+		}
+
+		return lines.join("\n");
 	}
 }
 
@@ -677,6 +708,7 @@ class PackageExecutor {
 				const actionFn = ACTION_MAP[actionName];
 				if (!actionFn) {
 					log(`Unknown action: ${actionName}`);
+					results.logFailure(packageName, actionName, "Unknown action");
 					packageSuccess = false;
 					break;
 				}
@@ -687,7 +719,8 @@ class PackageExecutor {
 					if (result.skipped) {
 						log(`Skipping ${packageName}: ${result.error}`);
 					} else {
-						log(`Failed ${actionName} for ${packageName}: ${result.error}`);
+						log(`Failed ${actionName} for ${packageName}`);
+						results.logFailure(packageName, actionName, result.error);
 						packageSuccess = false;
 					}
 					break;
@@ -696,8 +729,6 @@ class PackageExecutor {
 
 			if (packageSuccess) {
 				results.logSuccess(packageName);
-			} else {
-				results.logFailure(packageName);
 			}
 		};
 
