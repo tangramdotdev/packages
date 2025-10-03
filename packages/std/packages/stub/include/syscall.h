@@ -1,9 +1,38 @@
 #pragma once
-#include <linux/unistd.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "x86_64/syscall.h"
 
+#if defined __aarch64__
+#include "aarch64/syscall.h"
+#endif
+
+#if defined __x86_64__
+#include "x86_64/syscall.h"
+#endif
+
+// Subset of syscalls we need
+#define __NR_write	1
+#define __NR_open	2
+#define __NR_close	3
+#define __NR_stat	4
+#define __NR_lseek	8
+#define __NR_mmap	9
+#define __NR_munmap	11
+#define __NR_pread64	17
+#define __NR_execve	59
+#define __NR_exit	60
+#define __NR_getcwd	79
+#define __NR_readlink	89
+#define __NR_getrlimit	97
+#define __NR_getrandom	318
+
+// open constants
+#define O_RDONLY     00
+#define O_WRONLY     01
+#define O_RDWR	     02
+#define O_CREAT	   0100
+
+// mmap constants
 #define PROT_READ 		0x1
 #define PROT_WRITE 		0x2
 #define PROT_EXEC 		0x4
@@ -13,32 +42,29 @@
 #define MAP_FIXED		0x10
 #define MAP_GROWSDOWN		0x00100
 #define MAP_FIXED_NOREPLACE 	0x100000
-
 #define MAP_FAILED		(void*)-1
+
+// rlimit constants
 #define RLIMIT_STACK 3
+
+// getrandom constants
 #define GRND_NONBLOCK 0x01
 
-#define O_RDONLY     00
-#define O_WRONLY     01
-#define O_RDWR	     02
-#define O_CREAT	   0100
-
+// lseek constants
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
 
+// stdio fds
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
 
 typedef long off_t;
-
 typedef unsigned long __rlim_t;
-
 typedef struct {
 	__rlim_t	soft;
 	__rlim_t	hard;
 } rlimit_t;
-
 typedef struct {
 	uint8_t buf[256];
 } stat_t;

@@ -7,6 +7,7 @@
 #define ARTIFACTS_DIR "/.tangram/artifacts"
 #define ARTIFACTS_DIR_LEN 19
 #define PATH_MAX 4096
+
 static void find_artifacts_dir (Arena* arena, String* path) {
 	stat_t statbuf;
 

@@ -1,7 +1,6 @@
 #include "json.h"
 #include "manifest.h"
 
-
 // Forward decls.
 static void create_interpreter (Cx* cx, JsonValue* interpeter);
 static void create_executable (Cx* cx, JsonValue* executable);
@@ -371,7 +370,6 @@ static void apply_value_to_key (Cx* cx, String* key, JsonValue* val) {
 	if(val->kind == JSON_OBJECT) {
 		JsonValue* kind = json_get(&val->value._object, "kind");
 		if (kind && kind->kind == JSON_STRING && cstreq(kind->value._string, "mutation")) {
-
 			val = json_get(&val->value._object, "value");
 			ABORT_IF(!val || val->kind != JSON_OBJECT, "expected an object (8)");
 			apply_mutation_to_key(cx, key, &val->value._object);
@@ -464,8 +462,6 @@ static void render_template_to_temp (Cx* cx, JsonValue* template) {
 	int fd = open(path.ptr, O_RDWR | O_CREAT, 0664);
 	ABORT_IF(fd < 0, "failed to open %s", path.ptr);
 
-	// TODO: unlink it.
-
 	// Render the template.
 	render_template(cx, template, &cx->manifest->executable);
 
@@ -485,36 +481,31 @@ static void render_template_to_temp (Cx* cx, JsonValue* template) {
 static String render_value (Cx* cx, JsonValue* value) {
 	String rendered = {0};
 	switch(value->kind) {
-		// Null
 		case JSON_NULL: return rendered;
-
-		// Bool
 		case JSON_BOOL: {
 			rendered.ptr = value->value._bool ? "true" : "false";
 			rendered.len = strlen(rendered.ptr);
 			break;
 		}
-
-		// Number
 		case JSON_NUMBER: {
 			double_to_string(cx->arena, value->value._number, &rendered);
 			break;
 		}
-
-		// String
 		case JSON_STRING: {
 			rendered = value->value._string;
 			break;
 		}
-
-		// Objects.
 		case JSON_OBJECT: {
 			// Get the kind.
 			JsonObject* object = &value->value._object;
 			JsonValue* kind = json_get(object, "kind");
 			ABORT_IF(!kind || kind->kind != JSON_STRING, "missing kind (2)");
+
+			// Get the value.
 			value = json_get(object, "value");
 			ABORT_IF(!value, "expected a value");
+
+			// Check the type of the value.
 			if (cstreq(kind->value._string, "map")) {
 				ABORT("cannot render map in this context");
 			} else if (cstreq(kind->value._string, "object")) {
@@ -535,7 +526,6 @@ static String render_value (Cx* cx, JsonValue* value) {
 			}
 			break;
 		}
-
 		default: ABORT("malformed manifest (2) kind: %d", value->kind);
 	}
 	return rendered;
