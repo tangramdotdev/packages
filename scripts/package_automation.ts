@@ -663,6 +663,7 @@ class PackageExecutor {
 
 	async run(): Promise<Results> {
 		const results = new Results();
+		this.processTracker.setResults(results);
 		const packages = resolvePackages(this.config.packages);
 
 		// Build set of actions to run, including all dependencies (transitively)
@@ -753,13 +754,22 @@ class PackageExecutor {
 class ProcessTracker {
 	private processes = new Map<string, string>();
 	private readonly tangram: TangramClient;
+	private results?: Results;
 
 	constructor(tangram: TangramClient) {
 		this.tangram = tangram;
 		process.on("SIGINT", async () => {
+			log("\nInterrupted! Cancelling processes...\n");
 			await this.cancelAll();
-			process.exit(0);
+			if (this.results) {
+				log(`\n${this.results.summarize()}`);
+			}
+			process.exit(1);
 		});
+	}
+
+	setResults(results: Results): void {
+		this.results = results;
 	}
 
 	add(id: string, token: string): void {
