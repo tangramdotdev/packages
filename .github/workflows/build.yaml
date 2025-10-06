@@ -33,7 +33,9 @@ jobs:
         run: |
           mkdir -p "$TANGRAM_CI_DIR/bin"
           cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
-          {}
+          {
+            "remotes": []
+          }
           EOF
           cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
           #!/bin/sh
@@ -73,7 +75,9 @@ jobs:
         run: |
           mkdir -p "$TANGRAM_CI_DIR/bin"
           cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
-          {}
+          {
+            "remotes": []
+          }
           EOF
           cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
           #!/bin/sh
