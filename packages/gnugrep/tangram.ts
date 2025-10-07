@@ -3,7 +3,7 @@ import * as std from "std" with { local: "../std" };
 export const metadata = {
 	homepage: "https://www.gnu.org/software/grep/",
 	license: "GPL-2.0-or-later",
-	name: "grep",
+	name: "gnugrep",
 	repository: "https://git.savannah.gnu.org/cgit/grep.git",
 	version: "3.12",
 	provides: {

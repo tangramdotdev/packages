@@ -3,7 +3,7 @@ import * as std from "std" with { local: "../std" };
 export const metadata = {
 	homepage: "https://www.gnu.org/software/make/",
 	license: "GPL-3.0-or-later",
-	name: "make",
+	name: "gnumake",
 	repository: "https://git.savannah.gnu.org/cgit/make.git",
 	version: "4.4.1",
 	provides: {

@@ -17,7 +17,7 @@ export { requirements };
 /** Package metadata for python */
 export const metadata = {
 	homepage: "https://www.python.org/",
-	name: "Python",
+	name: "python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
 	version: "3.13.7",
