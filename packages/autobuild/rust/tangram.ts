@@ -3,6 +3,11 @@ import cmake from "cmake" with { local: "../../cmake" };
 import openssl from "openssl" with { local: "../../openssl" };
 import * as rust from "rust" with { local: "../../rust" };
 
+export const metadata = {
+	name: "autobuild-rust",
+	version: "0.0.0",
+};
+
 export type Arg = {
 	build?: string;
 	env?: std.env.Arg;

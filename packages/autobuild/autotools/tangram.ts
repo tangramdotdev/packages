@@ -8,6 +8,11 @@ import help2man from "help2man" with { local: "../../help2man" };
 import perl from "perl" with { local: "../../perl" };
 import texinfo from "texinfo" with { local: "../../texinfo" };
 
+export const metadata = {
+	name: "autobuild-autotools",
+	version: "0.0.0",
+};
+
 export type Arg = {
 	build?: string;
 	env?: std.env.Arg;

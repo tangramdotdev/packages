@@ -1,6 +1,11 @@
 import * as std from "std" with { local: "../../std" };
 import * as cmake from "cmake" with { local: "../../cmake" };
 
+export const metadata = {
+	name: "autobuild-cmake",
+	version: "0.0.0",
+};
+
 export type Arg = {
 	build?: string;
 	env?: std.env.Arg;

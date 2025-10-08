@@ -2,6 +2,11 @@ import * as std from "std" with { local: "../../std" };
 import * as nodejs from "nodejs" with { local: "../../nodejs" };
 import { wrapScripts } from "../common";
 
+export const metadata = {
+	name: "autobuild-js",
+	version: "0.0.0",
+};
+
 export type Arg = {
 	build?: string;
 	env?: std.env.Arg;

@@ -3,6 +3,11 @@ import * as python from "python" with { local: "../../python" };
 // import * as poetry from "poetry" with { local: "../../poetry" };
 import { wrapScripts } from "../common";
 
+export const metadata = {
+	name: "autobuild-python",
+	version: "0.0.0",
+};
+
 export type Arg = {
 	build?: string;
 	env?: std.env.Arg;

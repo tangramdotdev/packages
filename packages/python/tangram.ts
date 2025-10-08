@@ -31,11 +31,12 @@ export const versionString = () => {
 
 /** Return the source code for the python specified by `metadata`. */
 export const source = async (): Promise<tg.Directory> => {
-	const { name, version } = metadata;
+	const { version } = metadata;
 	const checksum =
 		"sha256:5462f9099dfd30e238def83c71d91897d8caa5ff6ebc7a50f14d4802cdaaa79a";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
+	const name = "Python";
 	return await std.download
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)

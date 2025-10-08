@@ -1,4 +1,4 @@
-import grep from "grep" with { local: "../gnugrep" };
+import grep from "gnugrep" with { local: "../gnugrep" };
 import * as m4 from "m4" with { local: "../m4" };
 import * as perl from "perl" with { local: "../perl" };
 import * as std from "std" with { local: "../std" };

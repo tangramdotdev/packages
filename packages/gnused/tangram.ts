@@ -3,7 +3,7 @@ import * as std from "std" with { local: "../std" };
 export const metadata = {
 	homepage: "https://www.gnu.org/software/sed/",
 	license: "GPL-2.0-or-later",
-	name: "sed",
+	name: "gnused",
 	repository: "https://git.savannah.gnu.org/cgit/sed.git",
 	version: "4.9",
 	provides: {

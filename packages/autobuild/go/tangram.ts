@@ -1,6 +1,11 @@
 import * as std from "std" with { local: "../../std" };
 import * as go from "go" with { local: "../../go" };
 
+export const metadata = {
+	name: "autobuild-go",
+	version: "0.0.0",
+};
+
 export type Arg = {
 	build?: string;
 	env?: std.env.Arg;
