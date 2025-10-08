@@ -10,6 +10,7 @@ export const metadata = {
 	name: "httpie",
 	repository: "https://github.com/httpie/cli",
 	version: "3.2.3",
+	tag: "httpie/3.2.3",
 	provides: {
 		binaries: ["http", "https", "httpie"],
 	},

@@ -7,6 +7,7 @@ export const metadata = {
 	name: "isort",
 	repository: "https://github.com/PyCQA/isort",
 	version: "5.13.2",
+	tag: "isort/5.13.2",
 	provides: {
 		binaries: ["isort"],
 	},

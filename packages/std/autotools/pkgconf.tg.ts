@@ -7,6 +7,7 @@ export const metadata = {
 	name: "pkgconf",
 	repository: "https://github.com/pkgconf/pkgconf",
 	version: "2.5.1",
+	tag: "pkgconf/2.5.1",
 	provides: {
 		binaries: ["pkgconf"],
 	},

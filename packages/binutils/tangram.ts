@@ -7,6 +7,7 @@ export const metadata = {
 	name: "binutils",
 	repository: "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git",
 	version: "2.44",
+	tag: "binutils/2.44",
 	provides: {
 		binaries: [
 			"addr2line",

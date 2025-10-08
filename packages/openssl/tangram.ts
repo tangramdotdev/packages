@@ -6,13 +6,14 @@ export const metadata = {
 	license: "Apache-2.0",
 	name: "openssl",
 	repository: "https://github.com/openssl/openssl",
-	version: "3.5.2",
+	version: "3.5.4",
+	tag: "openssl/3.5.4",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:c53a47e5e441c930c3928cf7bf6fb00e5d129b630e0aa873b08258656e7345ec";
+		"sha256:967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99";
 	const owner = name;
 	const repo = name;
 	const tag = `${name}-${version}`;

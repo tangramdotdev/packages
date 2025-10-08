@@ -6,6 +6,7 @@ export const metadata = {
 	name: "libffi",
 	repository: "https://github.com/libffi/libffi",
 	version: "3.4.8",
+	tag: "libffi/3.4.8",
 	provides: {
 		docs: [
 			"info/libffi.info",

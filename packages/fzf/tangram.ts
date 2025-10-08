@@ -7,6 +7,7 @@ export const metadata = {
 	name: "fzf",
 	repository: "https://github.com/junegunn/fzf",
 	version: "0.57.0",
+	tag: "fzf/0.57.0",
 	provides: {
 		binaries: ["fzf"],
 	},

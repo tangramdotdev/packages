@@ -12,6 +12,7 @@ export const metadata = {
 	name: "bzip2",
 	repository: "https://sourceware.org/git/bzip2.git",
 	version: "1.0.8",
+	tag: "bzip2/1.0.8",
 	provides: {
 		binaries: ["bzip2"],
 		libraries: [{ name: "bz2", staticlib: true, dylib: false }],

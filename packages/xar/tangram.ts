@@ -12,6 +12,7 @@ export const metadata = {
 	name: "xar",
 	repository: "https://github.com/mackyle/xar/tree/master",
 	version: "498",
+	tag: "xar/498",
 	provides: {
 		binaries: ["xar"],
 	},

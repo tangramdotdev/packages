@@ -7,6 +7,7 @@ export const metadata = {
 	name: "pkg-config",
 	repository: "https://gitlab.freedesktop.org/pkg-config/pkg-config",
 	version: "0.29.2",
+	tag: "pkg-config/0.29.2",
 	provides: {
 		binaries: ["pkg-config"],
 	},

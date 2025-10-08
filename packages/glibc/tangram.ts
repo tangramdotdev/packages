@@ -10,6 +10,7 @@ export const metadata = {
 	name: "glibc",
 	repository: "https://sourceware.org/git/?p=glibc.git",
 	version: "2.41",
+	tag: "glibc/2.41",
 	provides: {
 		libraries: ["c"],
 	},

@@ -14,6 +14,7 @@ export const metadata = {
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
 	version: "14.1.0",
+	tag: "gcc/14.1.0",
 	provides: {
 		binaries: ["gcc"],
 	},

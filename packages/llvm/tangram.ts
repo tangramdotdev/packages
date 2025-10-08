@@ -15,6 +15,7 @@ export const metadata = {
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
 	version: "20.1.8",
+	tag: "llvm/20.1.8",
 };
 
 export const source = async () => {

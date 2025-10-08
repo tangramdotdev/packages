@@ -7,6 +7,7 @@ export const metadata = {
 	name: "blake3",
 	repository: "https://github.com/BLAKE3-team/BLAKE3",
 	version: "1.8.2",
+	tag: "blake3/1.8.2",
 	provides: {
 		binaries: ["b3sum"],
 	},

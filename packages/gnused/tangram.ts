@@ -6,6 +6,7 @@ export const metadata = {
 	name: "gnused",
 	repository: "https://git.savannah.gnu.org/cgit/sed.git",
 	version: "4.9",
+	tag: "gnused/4.9",
 	provides: {
 		binaries: ["sed"],
 	},

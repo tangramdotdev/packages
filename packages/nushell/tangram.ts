@@ -7,6 +7,7 @@ export const metadata = {
 	name: "nushell",
 	repository: "https://github.com/nushell/nushell",
 	version: "0.107.0",
+	tag: "nushell/0.107.0",
 	provides: {
 		binaries: ["nu"],
 	},

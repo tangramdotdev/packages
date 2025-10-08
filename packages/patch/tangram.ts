@@ -7,6 +7,7 @@ export const metadata = {
 	name: "patch",
 	repository: "https://git.savannah.gnu.org/cgit/patch.git",
 	version: "2.7.6",
+	tag: "patch/2.7.6",
 	provides: {
 		binaries: ["patch"],
 	},

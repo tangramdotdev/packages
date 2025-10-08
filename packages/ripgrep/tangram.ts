@@ -8,6 +8,7 @@ export const metadata = {
 	name: "ripgrep",
 	repository: "https://github.com/BurntSushi/ripgrep",
 	version: "14.1.1",
+	tag: "ripgrep/14.1.1",
 	provides: {
 		binaries: ["rg"],
 	},

@@ -13,6 +13,7 @@ export const metadata = {
 	name: "libarchive",
 	repository: "https://github.com/libarchive/libarchive",
 	version: "3.7.7",
+	tag: "libarchive/3.7.7",
 };
 
 export const source = async () => {

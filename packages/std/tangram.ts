@@ -44,6 +44,7 @@ import * as wrap from "./wrap.tg.ts";
 export const metadata = {
 	name: "std",
 	version: "0.0.0",
+	tag: "std/0.0.0",
 };
 
 /** The default export produces the default SDK env for the detected host, asserts its validity, and uses it to build the standard set of autotools build dependencies, returning the resulting env. */

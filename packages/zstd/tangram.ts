@@ -6,6 +6,7 @@ export const metadata = {
 	name: "zstd",
 	repository: "https://github.com/facebook/zstd",
 	version: "1.5.7",
+	tag: "zstd/1.5.7",
 	provides: {
 		binaries: ["zstd"],
 		libraries: ["zstd"],

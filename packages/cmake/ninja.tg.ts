@@ -7,6 +7,7 @@ export const metadata = {
 	name: "ninja",
 	repository: "https://github.com/ninja-build/ninja",
 	version: "1.13.1",
+	tag: "ninja/1.13.1",
 	provides: {
 		binaries: ["ninja"],
 	},

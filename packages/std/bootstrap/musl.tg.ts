@@ -9,6 +9,7 @@ export const metadata = {
 	name: "musl",
 	repository: "https://git.musl-libc.org/cgit/musl",
 	version: "1.2.5",
+	tag: "musl/1.2.5",
 };
 
 export const source = async () => {

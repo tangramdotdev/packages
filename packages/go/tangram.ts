@@ -7,6 +7,7 @@ export const metadata = {
 	name: "go",
 	repository: "https://github.com/golang/go",
 	version: "1.25.1",
+	tag: "go/1.25.1",
 };
 
 // See https://go.dev/dl.

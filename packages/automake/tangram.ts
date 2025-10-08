@@ -10,6 +10,7 @@ export const metadata = {
 	name: "automake",
 	repository: "https://git.savannah.gnu.org/git/automake.git",
 	version: "1.17",
+	tag: "automake/1.17",
 	provides: {
 		binaries: ["aclocal", "aclocal-1.17", "automake", "automake-1.17"],
 	},

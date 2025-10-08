@@ -9,6 +9,7 @@ export const metadata = {
 	name: "mold",
 	repository: "https://github.com/rui314/mold",
 	version: "2.40.2",
+	tag: "mold/2.40.2",
 	provides: {
 		binaries: ["mold"],
 	},

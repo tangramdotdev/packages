@@ -5,6 +5,7 @@ export const metadata = {
 	license: "https://invisible-island.net/ncurses/ncurses-license.html",
 	name: "ncurses",
 	version: "6.5",
+	tag: "ncurses/6.5",
 };
 
 export const source = () => {

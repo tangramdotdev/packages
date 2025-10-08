@@ -4,6 +4,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 export const metadata = {
 	name: "gawk",
 	version: "5.3.2",
+	tag: "gawk/5.3.2",
 };
 
 export const source = () => {

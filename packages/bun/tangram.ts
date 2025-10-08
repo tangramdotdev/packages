@@ -6,6 +6,7 @@ export const metadata = {
 	name: "bun",
 	repository: "https://github.com/oven-sh/bun",
 	version: "1.2.20",
+	tag: "bun/1.2.20",
 	provides: {
 		binaries: ["bun"],
 	},

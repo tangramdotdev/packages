@@ -11,6 +11,7 @@ import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch"
 export const metadata = {
 	name: "coreutils",
 	version: "9.7",
+	tag: "coreutils/9.7",
 };
 
 export const source = async (os: string) => {

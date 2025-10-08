@@ -8,6 +8,7 @@ export const metadata = {
 	name: "hello",
 	repository: "https://git.savannah.gnu.org/cgit/hello.git",
 	version: "2.12.1",
+	tag: "hello/2.12.1",
 	provides: {
 		binaries: ["hello"],
 	},

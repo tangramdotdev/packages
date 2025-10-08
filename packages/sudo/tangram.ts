@@ -8,6 +8,7 @@ export const metadata = {
 	name: "sudo",
 	repository: "https://github.com/sudo-project/sudo",
 	version: "1.9.17p1",
+	tag: "sudo/1.9.17p1",
 };
 
 export const source = async (): Promise<tg.Directory> => {

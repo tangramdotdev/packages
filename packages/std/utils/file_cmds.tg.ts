@@ -4,6 +4,7 @@ import * as std from "../tangram.ts";
 export const metadata = {
 	name: "file_cmds",
 	version: "457.120.3",
+	tag: "file_cmds/457.120.3",
 };
 
 export const source = async () => {

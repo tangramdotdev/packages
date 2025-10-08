@@ -11,6 +11,7 @@ export const metadata = {
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
 	version: "15.2.0",
+	tag: "gcc/15.2.0",
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */

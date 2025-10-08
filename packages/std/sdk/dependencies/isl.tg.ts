@@ -4,6 +4,7 @@ export const metadata = {
 	homepage: "https://libisl.sourceforge.io",
 	name: "isl",
 	version: "0.27",
+	tag: "isl/0.27",
 };
 
 export const source = async () => {

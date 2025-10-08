@@ -6,6 +6,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	repository: "https://git.savannah.gnu.org/git/gawk.git",
 	version: "5.3.2",
+	tag: "gawk/5.3.2",
 	provides: {
 		binaries: ["gawk"],
 	},

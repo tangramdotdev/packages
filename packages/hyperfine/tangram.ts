@@ -7,6 +7,7 @@ export const metadata = {
 	name: "hyperfine",
 	repository: "https://github.com/sharkdp/hyperfine",
 	version: "1.18.0",
+	tag: "hyperfine/1.18.0",
 	provides: {
 		binaries: ["hyperfine"],
 	},

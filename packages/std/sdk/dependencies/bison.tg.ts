@@ -3,6 +3,7 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "bison",
 	version: "3.8.2",
+	tag: "bison/3.8.2",
 	provides: {
 		binaries: ["bison"],
 	},

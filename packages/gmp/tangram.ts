@@ -6,6 +6,7 @@ export const metadata = {
 	license: "LGPL-3.0-or-later",
 	name: "gmp",
 	version: "6.3.0",
+	tag: "gmp/6.3.0",
 	provides: {
 		libraries: ["gmp"],
 	},

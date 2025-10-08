@@ -10,6 +10,7 @@ export const metadata = {
 	name: "coreutils",
 	repository: "http://git.savannah.gnu.org/gitweb/?p=coreutils.git",
 	version: "9.7",
+	tag: "coreutils/9.7",
 	provides: {
 		binaries: [
 			"cp",

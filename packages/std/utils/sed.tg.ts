@@ -4,6 +4,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 export const metadata = {
 	name: "sed",
 	version: "4.9",
+	tag: "sed/4.9",
 };
 
 export const source = () => {

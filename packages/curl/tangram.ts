@@ -11,6 +11,7 @@ export const metadata = {
 	name: "curl",
 	repository: "https://github.com/curl/curl",
 	version: "8.12.0",
+	tag: "curl/8.12.0",
 	provides: {
 		binaries: ["curl"],
 		libraries: ["curl"],

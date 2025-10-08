@@ -6,6 +6,7 @@ export const metadata = {
 	repository: "https://github.com/PCRE2Project/pcre2",
 	license: "https://github.com/PCRE2Project/pcre2/blob/master/LICENCE",
 	version: "10.44",
+	tag: "pcre2/10.44",
 	provides: {
 		libraries: ["pcre2-8"],
 	},

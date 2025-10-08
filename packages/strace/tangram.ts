@@ -7,6 +7,7 @@ export const metadata = {
 	license: "https://github.com/strace/strace/blob/master/COPYING",
 	repository: "https://github.com/strace/strace",
 	version: "6.10",
+	tag: "strace/6.10",
 	provides: {
 		binaries: ["strace"],
 	},

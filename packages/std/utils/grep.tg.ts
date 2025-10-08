@@ -4,6 +4,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 export const metadata = {
 	name: "grep",
 	version: "3.12",
+	tag: "grep/3.12",
 };
 
 export const source = () => {

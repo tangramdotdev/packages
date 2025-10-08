@@ -6,6 +6,7 @@ export const metadata = {
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
 	version: "0.25.1",
+	tag: "gettext/0.25.1",
 	provides: {
 		binaries: [
 			"autopoint",

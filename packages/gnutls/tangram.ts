@@ -11,6 +11,7 @@ export const metadata = {
 	name: "gnutls",
 	repository: "https://gitlab.com/gnutls/gnutls",
 	version: "3.8.9",
+	tag: "gnutls/3.8.9",
 };
 
 export const source = async () => {

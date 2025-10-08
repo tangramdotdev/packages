@@ -7,6 +7,7 @@ export const metadata = {
 	name: "linux",
 	repository: "https://git.kernel.org",
 	version: "6.12.48",
+	tag: "linux/6.12.48",
 };
 
 export const source = async () => {

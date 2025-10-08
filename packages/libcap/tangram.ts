@@ -9,6 +9,7 @@ export const metadata = {
 	name: "libcap",
 	repository: "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
 	version: "2.73",
+	tag: "libcap/2.73",
 	provides: {
 		binaries: ["capsh", "getcap", "setcap", "getpcaps"],
 		libraries: ["cap"],

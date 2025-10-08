@@ -7,6 +7,7 @@ export const metadata = {
 	name: "gh",
 	repository: "https://github.com/cli/cli",
 	version: "2.69.0",
+	tag: "gh/2.69.0",
 	provides: {
 		binaries: ["gh"],
 	},

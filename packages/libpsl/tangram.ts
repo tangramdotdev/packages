@@ -7,6 +7,7 @@ export const metadata = {
 	name: "libpsl",
 	repository: "https://github.com/rockdaboot/libpsl",
 	version: "0.21.5",
+	tag: "libpsl/0.21.5",
 	provides: {
 		libraries: ["psl"],
 	},

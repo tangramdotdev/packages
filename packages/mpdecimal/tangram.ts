@@ -5,6 +5,7 @@ export const metadata = {
 	license: "Simplified BSD",
 	name: "mpdecimal",
 	version: "4.0.0",
+	tag: "mpdecimal/4.0.0",
 	provides: {
 		headers: ["mpdecimal.h"],
 		libraries: ["mpdec"],

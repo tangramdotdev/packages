@@ -8,6 +8,7 @@ export const metadata = {
 	name: "libseccomp",
 	repository: "https://github.com/seccomp/libseccomp",
 	version: "2.5.5",
+	tag: "libseccomp/2.5.5",
 	provides: {
 		binaries: ["scmp_sys_resolver"],
 		libraries: ["seccomp"],

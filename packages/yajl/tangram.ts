@@ -7,6 +7,7 @@ export const metadata = {
 	name: "yajl",
 	repository: "https://github.com/lloyd/yajl",
 	version: "2.1.0",
+	tag: "yajl/2.1.0",
 	provides: {
 		binaries: ["json_reformat", "json_verify"],
 		libraries: [

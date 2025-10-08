@@ -6,6 +6,7 @@ export const metadata = {
 	name: "gnumake",
 	repository: "https://git.savannah.gnu.org/cgit/make.git",
 	version: "4.4.1",
+	tag: "gnumake/4.4.1",
 	provides: {
 		binaries: ["make"],
 	},

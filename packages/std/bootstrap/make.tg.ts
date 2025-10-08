@@ -8,6 +8,7 @@ export const metadata = {
 	name: "make",
 	repository: "https://savannah.gnu.org/projects/make/",
 	version: "4.4.1",
+	tag: "make/4.4.1",
 	provides: {
 		binaries: ["make"],
 	},

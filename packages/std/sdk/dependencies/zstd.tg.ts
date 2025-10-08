@@ -3,6 +3,7 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "zstd",
 	version: "1.5.7",
+	tag: "zstd/1.5.7",
 };
 
 export const source = () => {

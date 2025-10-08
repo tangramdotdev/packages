@@ -9,6 +9,7 @@ export const metadata = {
 	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",
 	repository: "https://www.sqlite.org/src/",
 	version: "3.50.3",
+	tag: "sqlite/3.50.3",
 	provides: {
 		binaries: ["sqlite3"],
 		headers: ["sqlite3.h"],

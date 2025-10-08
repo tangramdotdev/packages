@@ -10,6 +10,7 @@ export const metadata = {
 	name: "help2man",
 	repository: "https://git.savannah.gnu.org/git/help2man.git",
 	version: "1.49.3",
+	tag: "help2man/1.49.3",
 	provides: {
 		binaries: ["help2man"],
 	},

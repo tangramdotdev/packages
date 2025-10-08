@@ -6,6 +6,7 @@ export const metadata = {
 	license: "BSD-2-Clause",
 	repository: "https://github.com/gavinhoward/bc",
 	version: "7.0.3",
+	tag: "bc/7.0.3",
 	provides: {
 		binaries: ["bc", "dc"],
 	},

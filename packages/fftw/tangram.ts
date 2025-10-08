@@ -7,6 +7,7 @@ export const metadata = {
 	name: "fftw",
 	repository: "https://github.com/FFTW/fftw3",
 	version: "3.3.10",
+	tag: "fftw/3.3.10",
 	provides: {
 		binaries: ["fftw-wisdom", "fftw-wisdom-to-conf"],
 		libraries: ["fftw3"],

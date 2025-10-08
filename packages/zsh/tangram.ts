@@ -8,6 +8,7 @@ export const metadata = {
 	name: "zsh",
 	repository: "https://sourceforge.net/p/zsh/code/ci/master/tree/",
 	version: "5.9",
+	tag: "zsh/5.9",
 	provides: {
 		binaries: ["zsh"],
 	},

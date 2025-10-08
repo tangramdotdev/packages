@@ -4,6 +4,7 @@ import * as cmake from "cmake" with { local: "../../cmake" };
 export const metadata = {
 	name: "autobuild-cmake",
 	version: "0.0.0",
+	tag: "autobuild-cmake/0.0.0",
 };
 
 export type Arg = {

@@ -8,6 +8,7 @@ export const metadata = {
 	name: "xh",
 	repository: "https://github.com/ducaale/xh",
 	version: "0.25.0",
+	tag: "xh/0.25.0",
 	provides: {
 		binaries: ["xh"],
 	},

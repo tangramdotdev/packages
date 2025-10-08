@@ -4,6 +4,7 @@ export const metadata = {
 	homepage: "https://tukaani.org/xz/",
 	name: "xz",
 	version: "5.8.1",
+	tag: "xz/5.8.1",
 	provides: {
 		binaries: [
 			"lzmadec",

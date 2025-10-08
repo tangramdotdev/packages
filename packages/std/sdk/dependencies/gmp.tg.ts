@@ -5,6 +5,7 @@ export const metadata = {
 	homepage: "https://gmplib.org",
 	name: "gmp",
 	version: "6.3.0",
+	tag: "gmp/6.3.0",
 };
 
 export const source = async () => {

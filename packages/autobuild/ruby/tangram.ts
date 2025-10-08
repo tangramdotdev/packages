@@ -5,6 +5,7 @@ import { wrapScripts } from "../common";
 export const metadata = {
 	name: "autobuild-ruby",
 	version: "0.0.0",
+	tag: "autobuild-ruby/0.0.0",
 };
 
 export type Arg = {

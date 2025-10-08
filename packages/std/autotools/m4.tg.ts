@@ -3,6 +3,7 @@ import * as std from "../tangram.ts";
 export const metadata = {
 	name: "m4",
 	version: "1.4.20",
+	tag: "m4/1.4.20",
 };
 
 export const source = () => {

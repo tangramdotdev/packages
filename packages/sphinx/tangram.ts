@@ -9,6 +9,7 @@ export const metadata = {
 	name: "sphinx",
 	repository: "https://github.com/sphinx-doc/sphinx",
 	version: "8.1.3",
+	tag: "sphinx/8.1.3",
 	provides: {
 		binaries: [
 			"sphinx-apidoc",

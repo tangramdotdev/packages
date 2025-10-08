@@ -6,6 +6,7 @@ import * as rust from "rust" with { local: "../../rust" };
 export const metadata = {
 	name: "autobuild-rust",
 	version: "0.0.0",
+	tag: "autobuild-rust/0.0.0",
 };
 
 export type Arg = {

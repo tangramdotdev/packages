@@ -8,6 +8,7 @@ export const metadata = {
 		"https://github.com/vim/vim/blob/c8b47f26d8ae0db2d65a1cd34d7e34a2c7a6b462/LICENSE",
 	repository: "https://github.com/vim/vim",
 	version: "9.1.0814",
+	tag: "vim/9.1.0814",
 	provides: {
 		binaries: ["vim"],
 	},

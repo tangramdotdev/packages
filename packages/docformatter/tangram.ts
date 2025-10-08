@@ -8,6 +8,7 @@ export const metadata = {
 	license: "MIT",
 	repository: "https://github.com/PyCQA/docformatter",
 	version: "1.7.2",
+	tag: "docformatter/1.7.2",
 	provides: {
 		binaries: ["docformatter"],
 	},

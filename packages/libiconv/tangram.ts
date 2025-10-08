@@ -6,6 +6,7 @@ export const metadata = {
 	license: "LGPL-2.1-or-later",
 	repository: "https://git.savannah.gnu.org/git/libiconv.git",
 	version: "1.18",
+	tag: "libiconv/1.18",
 	provides: {
 		binaries: ["iconv"],
 		headers: ["iconv.h", "libcharset.h", "localcharset.h"],

@@ -6,6 +6,7 @@ export const metadata = {
 	name: "gzip",
 	repository: "https://git.savannah.gnu.org/git/gzip.git",
 	version: "1.14",
+	tag: "gzip/1.14",
 	provides: {
 		binaries: ["gzip"],
 	},

@@ -4,6 +4,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 export const metadata = {
 	name: "libiconv",
 	version: "1.18",
+	tag: "libiconv/1.18",
 };
 
 export const source = () => {

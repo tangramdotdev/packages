@@ -17,6 +17,7 @@ export const metadata = {
 	name: "rust",
 	repository: "https://github.com/rust-lang/rust",
 	version: "0.0.0",
+	tag: "rust/0.0.0",
 };
 
 const PROFILE = "minimal" as const;

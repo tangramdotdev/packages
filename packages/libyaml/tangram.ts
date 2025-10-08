@@ -6,6 +6,7 @@ export const metadata = {
 	name: "libyaml",
 	repository: "https://github.com/yaml/libyaml",
 	version: "0.2.5",
+	tag: "libyaml/0.2.5",
 	provides: {
 		libraries: ["yaml"],
 	},

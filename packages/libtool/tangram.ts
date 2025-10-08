@@ -9,6 +9,7 @@ export const metadata = {
 	name: "libtool",
 	repository: "https://git.savannah.gnu.org/git/libtool.git",
 	version: "2.5.4",
+	tag: "libtool/2.5.4",
 	provides: {
 		binaries: ["libtool", "libtoolize"],
 	},

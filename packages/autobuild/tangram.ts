@@ -26,6 +26,7 @@ import rustPlainTest from "./tests/rust-plain" with { type: "directory" };
 export const metadata = {
 	name: "autobuild",
 	version: "0.0.0",
+	tag: "autobuild/0.0.0",
 };
 
 export type Arg = {

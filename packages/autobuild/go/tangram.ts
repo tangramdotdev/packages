@@ -4,6 +4,7 @@ import * as go from "go" with { local: "../../go" };
 export const metadata = {
 	name: "autobuild-go",
 	version: "0.0.0",
+	tag: "autobuild-go/0.0.0",
 };
 
 export type Arg = {

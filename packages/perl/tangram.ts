@@ -10,6 +10,7 @@ export const metadata = {
 	license: "GPL-1.0-or-later",
 	repository: "https://github.com/Perl/perl5",
 	version: "5.42.0",
+	tag: "perl/5.42.0",
 	provides: {
 		binaries: ["perl"],
 	},

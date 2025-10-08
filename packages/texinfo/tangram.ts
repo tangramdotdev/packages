@@ -10,6 +10,7 @@ export const metadata = {
 	name: "texinfo",
 	repository: "https://git.savannah.gnu.org/git/texinfo.git",
 	version: "7.2",
+	tag: "texinfo/7.2",
 	provides: {
 		binaries: [
 			"install-info",

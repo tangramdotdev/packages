@@ -7,6 +7,7 @@ export const metadata = {
 	name: "readline",
 	repository: "http://git.savannah.gnu.org/cgit/readline.git/log/",
 	version: "8.2.13",
+	tag: "readline/8.2.13",
 	provides: {
 		libraries: ["readline"],
 	},

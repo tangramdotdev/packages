@@ -9,6 +9,7 @@ export const metadata = {
 	name: "http-server",
 	repository: "https://github.com/http-party/http-server",
 	version: "14.1.1",
+	tag: "http-server/14.1.1",
 	provides: {
 		binaries: ["http-server"],
 	},

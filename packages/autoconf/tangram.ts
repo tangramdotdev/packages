@@ -11,6 +11,7 @@ export const metadata = {
 	name: "autoconf",
 	repository: "https://git.savannah.gnu.org/git/autoconf.git",
 	version: "2.72",
+	tag: "autoconf/2.72",
 	provides: {
 		binaries: [
 			"autoconf",

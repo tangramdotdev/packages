@@ -4,6 +4,7 @@ import libmd from "./libmd.tg.ts";
 export const metadata = {
 	name: "libbsd",
 	version: "0.12.2",
+	tag: "libbsd/0.12.2",
 };
 
 export const source = async () => {

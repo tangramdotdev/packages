@@ -7,6 +7,7 @@ export const metadata = {
 	name: "libsigsegv",
 	repository: "https://git.savannah.gnu.org/gitweb/?p=libsigsegv.git",
 	version: "2.14",
+	tag: "libsigsegv/2.14",
 	provides: {
 		libraries: ["sigsegv"],
 	},

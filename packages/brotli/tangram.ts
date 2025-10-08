@@ -7,6 +7,7 @@ export const metadata = {
 	name: "brotli",
 	repository: "https://github.com/google/brotli",
 	version: "1.1.0",
+	tag: "brotli/1.1.0",
 	provides: {
 		binaries: ["brotli"],
 	},

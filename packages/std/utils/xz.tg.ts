@@ -5,6 +5,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 export const metadata = {
 	name: "xz",
 	version: "5.8.1",
+	tag: "xz/5.8.1",
 };
 
 export const source = async () => {

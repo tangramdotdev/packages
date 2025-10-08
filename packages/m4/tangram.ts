@@ -6,6 +6,7 @@ export const metadata = {
 	name: "m4",
 	repository: "https://git.savannah.gnu.org/cgit/m4.git",
 	version: "1.4.20",
+	tag: "m4/1.4.20",
 	provides: {
 		binaries: ["m4"],
 	},

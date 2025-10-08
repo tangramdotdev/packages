@@ -82,6 +82,8 @@ export type Metadata = {
 	provides?: Provides;
 	/** The project repository. */
 	repository?: string;
+	/** The tag to use for publishing. */
+	tag?: string;
 	/** The support build platforms (arch-os pairs) for producing this package. If not provided, assumes all supported Tangram platorms. */
 	buildPlatforms?: Array<string>;
 	/** The supported host platforms (arch-os pairs) for the output of this package. If not provided, assumes all supported Tangram platforms. */

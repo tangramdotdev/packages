@@ -22,6 +22,7 @@ export const metadata = {
 	license: "BSD-2-Clause",
 	repository: "https://git.ruby-lang.org/ruby.git",
 	version: "3.4.1",
+	tag: "ruby/3.4.1",
 	provides: {
 		binaries: [
 			"bundle",

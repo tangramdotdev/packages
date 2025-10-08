@@ -6,6 +6,7 @@ export const metadata = {
 	license: "LGPL-2.1",
 	repository: "https://github.com/besser82/libxcrypt",
 	version: "4.4.38",
+	tag: "libxcrypt/4.4.38",
 };
 
 export const source = () => {

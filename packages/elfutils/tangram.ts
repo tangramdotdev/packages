@@ -11,6 +11,7 @@ export const metadata = {
 	name: "elfutils",
 	repository: "https://sourceware.org/git/?p=elfutils.git;a=summary",
 	version: "0.191",
+	tag: "elfutils/0.191",
 };
 
 export const source = async () => {

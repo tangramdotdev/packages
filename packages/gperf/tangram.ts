@@ -6,6 +6,7 @@ export const metadata = {
 	name: "gperf",
 	repository: "https://git.savannah.gnu.org/git/gperf.git",
 	version: "3.1",
+	tag: "gperf/3.1",
 	provides: {
 		binaries: ["gperf"],
 	},

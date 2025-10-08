@@ -6,6 +6,7 @@ export const metadata = {
 	name: "diffutils",
 	repository: "https://git.savannah.gnu.org/cgit/diffutils.git",
 	version: "3.12",
+	tag: "diffutils/3.12",
 	provides: {
 		binaries: ["cmp", "diff", "diff3"],
 	},

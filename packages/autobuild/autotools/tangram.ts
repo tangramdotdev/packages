@@ -11,6 +11,7 @@ import texinfo from "texinfo" with { local: "../../texinfo" };
 export const metadata = {
 	name: "autobuild-autotools",
 	version: "0.0.0",
+	tag: "autobuild-autotools/0.0.0",
 };
 
 export type Arg = {

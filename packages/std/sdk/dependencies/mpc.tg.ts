@@ -4,6 +4,7 @@ export const metadata = {
 	homepage: "https://www.multiprecision.org",
 	name: "mpc",
 	version: "1.3.1",
+	tag: "mpc/1.3.1",
 };
 
 export const source = () => {

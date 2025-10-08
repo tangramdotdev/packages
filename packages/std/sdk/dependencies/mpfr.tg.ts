@@ -4,6 +4,7 @@ export const metadata = {
 	homepage: "https://www.mpfr.org",
 	name: "mpfr",
 	version: "4.2.2",
+	tag: "mpfr/4.2.2",
 };
 
 export const source = async () => {

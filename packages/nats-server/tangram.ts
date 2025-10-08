@@ -7,6 +7,7 @@ export const metadata = {
 	name: "nats-server",
 	repository: "https://github.com/nats-io/nats-server",
 	version: "2.11.6",
+	tag: "nats-server/2.11.6",
 	provides: {
 		binaries: ["nats-server"],
 	},

@@ -5,7 +5,8 @@ export const metadata = {
 	license: "https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright",
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
-	version: "2.9.14", // NOTE - this library is here in std to support the precompiled clang toolchain, which expects this older version.
+	version: "2.9.14",
+	tag: "libxml2/2.9.14", // NOTE - this library is here in std to support the precompiled clang toolchain, which expects this older version.
 	provides: {
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],

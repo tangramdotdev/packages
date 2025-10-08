@@ -3,6 +3,7 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "zlib",
 	version: "1.3.1",
+	tag: "zlib/1.3.1",
 };
 
 export const source = async () => {

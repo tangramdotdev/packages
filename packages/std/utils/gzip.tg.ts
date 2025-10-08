@@ -4,6 +4,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 export const metadata = {
 	name: "gzip",
 	version: "1.14",
+	tag: "gzip/1.14",
 };
 
 export const source = () => {

@@ -6,13 +6,15 @@ export const metadata = {
 	name: "gnugrep",
 	repository: "https://git.savannah.gnu.org/cgit/grep.git",
 	version: "3.12",
+	tag: "gnugrep/3.12",
 	provides: {
 		binaries: ["grep"],
 	},
 };
 
 export const source = () => {
-	const { name, version } = metadata;
+	const { version } = metadata;
+	const name = "grep";
 	const checksum =
 		"sha256:badda546dfc4b9d97e992e2c35f3b5c7f20522ffcbe2f01ba1e9cdcbe7644cdc";
 	return std.download.fromGnu({ name, version, checksum });

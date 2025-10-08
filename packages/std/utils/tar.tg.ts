@@ -5,6 +5,7 @@ import libiconv from "./libiconv.tg.ts";
 export const metadata = {
 	name: "tar",
 	version: "1.35",
+	tag: "tar/1.35",
 };
 
 export const source = () => {

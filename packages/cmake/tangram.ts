@@ -19,6 +19,7 @@ export const metadata = {
 	name: "cmake",
 	repository: "https://gitlab.kitware.com/cmake/cmake",
 	version: "3.31.8",
+	tag: "cmake/3.31.8",
 	provides: {
 		binaries: ["cmake"],
 	},

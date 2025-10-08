@@ -7,6 +7,7 @@ export const metadata = {
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
 	version: "77.1",
+	tag: "icu/77.1",
 	provides: {
 		binaries: [
 			"derb",

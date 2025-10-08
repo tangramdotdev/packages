@@ -8,6 +8,7 @@ export const metadata = {
 	name: "bash",
 	repository: "https://git.savannah.gnu.org/git/bash.git",
 	version: "5.2.37",
+	tag: "bash/5.2.37",
 	provides: {
 		// FIXME bashbug
 		// binaries: ["bash", "bashbug"],

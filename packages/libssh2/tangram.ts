@@ -8,6 +8,7 @@ export const metadata = {
 	name: "libssh2",
 	repository: "https://github.com/libssh2/libssh2",
 	version: "1.11.1",
+	tag: "libssh2/1.11.1",
 	provides: {
 		libraries: ["ssh2"],
 	},

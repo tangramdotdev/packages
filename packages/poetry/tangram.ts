@@ -11,6 +11,7 @@ export const metadata = {
 	name: "poetry",
 	repository: "https://github.com/python-poetry/poetry",
 	version: "2.1.2",
+	tag: "poetry/2.1.2",
 	provides: {
 		binaries: ["poetry"],
 	},

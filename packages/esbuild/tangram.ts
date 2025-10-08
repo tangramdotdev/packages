@@ -10,6 +10,7 @@ export const metadata = {
 	name: "esbuild",
 	repository: "https://github.com/evanw/esbuild",
 	version: "0.25.2",
+	tag: "esbuild/0.25.2",
 };
 
 export const source = async () => {

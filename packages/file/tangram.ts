@@ -8,6 +8,7 @@ export const metadata = {
 	name: "file",
 	repository: "https://github.com/file/file",
 	version: "5.45",
+	tag: "file/5.45",
 	provides: {
 		binaries: ["file"],
 		headers: ["magic.h"],

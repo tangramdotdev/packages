@@ -17,6 +17,7 @@ export const metadata = {
 	name: "postgresql",
 	repository: "https://git.postgresql.org/gitweb/?p=postgresql.git;a=summary",
 	version: "17.6",
+	tag: "postgresql/17.6",
 	provides: {
 		binaries: ["postgres", "psql"],
 		libraries: ["pq"],

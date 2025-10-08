@@ -6,6 +6,7 @@ export const metadata = {
 	license: "https://github.com/jqlang/jq?tab=License-1-ov-file#readme",
 	repository: "https://github.com/jqlang/jq",
 	version: "1.8.0",
+	tag: "jq/1.8.0",
 	provides: {
 		binaries: ["jq"],
 	},

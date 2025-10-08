@@ -7,6 +7,7 @@ export const metadata = {
 	name: "lz4",
 	repository: "https://github.com/lz4/lz4",
 	version: "1.10.0",
+	tag: "lz4/1.10.0",
 	provides: {
 		binaries: ["lz4"],
 		libraries: ["lz4"],

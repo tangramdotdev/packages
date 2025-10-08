@@ -5,6 +5,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 export const metadata = {
 	name: "make",
 	version: "4.4.1",
+	tag: "make/4.4.1",
 };
 
 export const source = () => {

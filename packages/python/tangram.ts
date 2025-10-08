@@ -21,6 +21,7 @@ export const metadata = {
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
 	version: "3.13.7",
+	tag: "python/3.13.7",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */

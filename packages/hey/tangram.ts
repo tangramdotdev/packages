@@ -7,6 +7,7 @@ export const metadata = {
 	name: "hey",
 	repository: "https://github.com/rakyll/hey",
 	version: "0.1.4",
+	tag: "hey/0.1.4",
 	provides: {
 		binaries: ["hey"],
 	},

@@ -11,6 +11,7 @@ export const metadata = {
 	name: "foundationdb",
 	repository: "https://github.com/apple/foundationdb",
 	version: "7.3.63",
+	tag: "foundationdb/7.3.63",
 	provides: {
 		binaries: ["fdbbackup", "fdbcli", "fdbdecode", "fdbmonitor", "fdbserver"],
 		libraries: [{ name: "fdb_c", dylib: true, staticlib: false }],

@@ -4,6 +4,7 @@ import * as cmake from "./cmake.tg.ts";
 export const metadata = {
 	name: "ninja",
 	version: "1.13.1",
+	tag: "ninja/1.13.1",
 };
 
 export const source = () => {

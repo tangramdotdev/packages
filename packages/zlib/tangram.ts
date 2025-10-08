@@ -5,6 +5,7 @@ export const metadata = {
 	license: "https://zlib.net/zlib_license.html",
 	name: "zlib",
 	version: "1.3.1",
+	tag: "zlib/1.3.1",
 	provides: {
 		docs: ["man/man3/zlib.3"],
 		libraries: ["z"],

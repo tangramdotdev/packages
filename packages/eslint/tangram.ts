@@ -9,6 +9,7 @@ export const metadata = {
 	name: "eslint",
 	repository: "https://github.com/eslint/eslint",
 	version: "9.1.1",
+	tag: "eslint/9.1.1",
 	provides: {
 		binaries: ["eslint"],
 	},

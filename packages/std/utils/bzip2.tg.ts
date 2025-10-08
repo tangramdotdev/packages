@@ -8,6 +8,7 @@ import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
 export const metadata = {
 	name: "bzip2",
 	version: "1.0.8",
+	tag: "bzip2/1.0.8",
 };
 
 export const source = async () => {

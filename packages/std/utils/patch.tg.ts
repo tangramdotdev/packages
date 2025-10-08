@@ -14,6 +14,7 @@ import rlimitFix from "./patch-rlimit-fix.patch" with { type: "file" };
 export const metadata = {
 	name: "patch",
 	version: "2.7.6",
+	tag: "patch/2.7.6",
 };
 
 export const source = async () => {

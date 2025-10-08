@@ -8,6 +8,7 @@ import disableLocatePatch from "./findutils-disable-locate.diff" with {
 export const metadata = {
 	name: "findutils",
 	version: "4.10.0",
+	tag: "findutils/4.10.0",
 };
 
 export const source = async (os: string) => {

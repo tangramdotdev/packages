@@ -8,6 +8,7 @@ export const metadata = {
 	name: "nettle",
 	repository: "https://git.lysator.liu.se/nettle/nettle",
 	version: "3.10",
+	tag: "nettle/3.10",
 };
 
 export const source = () => {

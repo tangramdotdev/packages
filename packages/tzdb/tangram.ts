@@ -8,6 +8,7 @@ export const metadata = {
 	license: "https://github.com/eggert/tz/blob/main/LICENSE",
 	repository: "https://github.com/eggert/tz",
 	version: "2025b",
+	tag: "tzdb/2025b",
 	provides: {
 		binaries: ["zdump", "zic"],
 		libraries: [{ name: "tz", dylib: false, staticlib: true }],

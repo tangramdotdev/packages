@@ -8,6 +8,7 @@ export const metadata = {
 	name: "acl",
 	repository: "https://git.savannah.nongnu.org/cgit/acl.git",
 	version: "2.3.2",
+	tag: "acl/2.3.2",
 	provides: {
 		binaries: ["chacl", "getfacl", "setfacl"],
 		headers: ["acl/libacl.h", "sys/acl.h"],

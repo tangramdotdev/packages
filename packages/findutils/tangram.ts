@@ -7,6 +7,7 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	repository: "https://git.savannah.gnu.org/cgit/findutils.git",
 	version: "4.10.0",
+	tag: "findutils/4.10.0",
 	provides: {
 		binaries: ["find", "locate", "updatedb", "xargs"],
 	},

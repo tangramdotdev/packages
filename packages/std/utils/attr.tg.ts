@@ -6,6 +6,7 @@ import basenamePatch from "./attr_basename.patch" with { type: "file" };
 export const metadata = {
 	name: "attr",
 	version: "2.5.2",
+	tag: "attr/2.5.2",
 };
 
 export const source = async () => {

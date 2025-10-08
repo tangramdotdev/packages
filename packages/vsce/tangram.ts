@@ -9,6 +9,7 @@ export const metadata = {
 	name: "vsce",
 	repository: "https://github.com/microsoft/vscode-vsce",
 	version: "2.15.0",
+	tag: "vsce/2.15.0",
 	provides: {
 		binaries: ["vsce"],
 	},

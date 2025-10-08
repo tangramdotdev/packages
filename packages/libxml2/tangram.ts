@@ -11,6 +11,7 @@ export const metadata = {
 	name: "libxml2",
 	repository: "https://gitlab.gnome.org/GNOME/libxml2/-/tree/master",
 	version: "2.14.5",
+	tag: "libxml2/2.14.5",
 	provides: {
 		binaries: ["xml2-config", "xmlcatalog", "xmllint"],
 		libraries: ["xml2"],

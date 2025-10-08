@@ -10,6 +10,7 @@ export const metadata = {
 	name: "git",
 	repository: "https://github.com/git/git",
 	version: "2.50.1",
+	tag: "git/2.50.1",
 	provides: {
 		binaries: ["git"],
 	},

@@ -3,6 +3,7 @@ import * as std from "std" with { local: "../../std" };
 export const metadata = {
 	name: "autobuild-common",
 	version: "0.0.0",
+	tag: "autobuild-common/0.0.0",
 };
 
 export type WrapScriptsArg = std.wrap.ArgObject & {

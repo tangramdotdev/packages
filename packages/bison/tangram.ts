@@ -6,6 +6,7 @@ export const metadata = {
 	name: "bison",
 	repository: "https://savannah.gnu.org/projects/bison/",
 	version: "3.8.2",
+	tag: "bison/3.8.2",
 	provides: {
 		// FIXME - yacc requires sed
 		binaries: ["bison"],

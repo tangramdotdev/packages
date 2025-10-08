@@ -3,6 +3,7 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "libmd",
 	version: "1.1.0",
+	tag: "libmd/1.1.0",
 };
 
 export const source = async () => {

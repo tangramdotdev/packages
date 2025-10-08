@@ -5,6 +5,7 @@ import noFixDepsPatch from "./perl_no_fix_deps.patch" with { type: "file" };
 export const metadata = {
 	name: "perl",
 	version: "5.42.0",
+	tag: "perl/5.42.0",
 };
 
 export const source = async (os: string) => {

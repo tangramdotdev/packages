@@ -15,6 +15,7 @@ export const metadata = {
 	name: "wget",
 	repository: "https://www.gnu.org/software/wget/",
 	version: "1.25.0",
+	tag: "wget/1.25.0",
 	provides: {
 		binaries: ["wget"],
 	},

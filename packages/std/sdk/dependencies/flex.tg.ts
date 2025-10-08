@@ -6,6 +6,7 @@ export const metadata = {
 	name: "flex",
 	repository: "https://github.com/westes/flex",
 	version: "2.6.4",
+	tag: "flex/2.6.4",
 };
 
 export const source = () => {

@@ -8,6 +8,7 @@ export const metadata = {
 	name: "nodejs",
 	repository: "https://github.com/nodejs/node",
 	version: "22.18.0",
+	tag: "nodejs/22.18.0",
 };
 
 export type ToolchainArg = {

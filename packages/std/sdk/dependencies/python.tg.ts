@@ -4,6 +4,7 @@ import * as std from "../../tangram.ts";
 export const metadata = {
 	name: "Python",
 	version: "3.13.7",
+	tag: "Python/3.13.7",
 };
 
 export const source = async () => {

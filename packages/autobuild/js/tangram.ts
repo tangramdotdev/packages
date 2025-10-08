@@ -5,6 +5,7 @@ import { wrapScripts } from "../common";
 export const metadata = {
 	name: "autobuild-js",
 	version: "0.0.0",
+	tag: "autobuild-js/0.0.0",
 };
 
 export type Arg = {
