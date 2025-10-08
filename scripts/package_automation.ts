@@ -67,7 +67,7 @@ class TangramClient {
 		target: string,
 		options: { tag?: string } = {},
 	): Promise<{ id: string; token?: string }> {
-		const args = [target, "-d"];
+		const args = [target, "--retry", "-d"];
 		if (options.tag) {
 			args.push(`--tag=${options.tag}`);
 		}
@@ -104,6 +104,10 @@ class TangramClient {
 
 	async check(path: string): Promise<void> {
 		await $`${this.exe} check ${path}`.quiet();
+	}
+
+	async publish(path: string): Promise<void> {
+		await $`${this.exe} publish ${path}`.quiet();
 	}
 }
 
@@ -484,7 +488,7 @@ async function buildAction(ctx: Context): Promise<Result<string[]>> {
 
 async function publishAction(ctx: Context): Promise<Result<string>> {
 	if (ctx.dryRun) {
-		log("[publish] would check in and tag package (dry run)");
+		log("[publish] would publish package (dry run)");
 		return { ok: true, value: "dry run" };
 	}
 
@@ -497,17 +501,10 @@ async function publishAction(ctx: Context): Promise<Result<string>> {
 
 	const versionedName = `${ctx.packageName}/${version}`;
 
-	// Tag the package
+	// Publish the package
 	log(`[publish] ${versionedName}: ${ctx.packagePath}`);
 	try {
-		const packageId = await ctx.tangram.checkin(ctx.packagePath);
-
-		const existingTag = await ctx.tangram.getTag(versionedName);
-		if (existingTag !== packageId) {
-			await ctx.tangram.tag(versionedName, packageId);
-		}
-
-		await ctx.tangram.push(versionedName);
+		await ctx.tangram.publish(ctx.packagePath);
 		return { ok: true, value: `published ${versionedName}` };
 	} catch (err) {
 		return { ok: false, error: extractErrorMessage(err) };
@@ -585,12 +582,7 @@ class Results {
 			}
 		}
 
-		const lines = [
-			separator,
-			`Successful: ${success.sort().join(" ")}`,
-			`Failed: ${failed.sort().join(" ")}`,
-			`Total: ${this.packageResults.size} | Passed: ${success.length} | Failed: ${failed.length}`,
-		];
+		const lines = [separator];
 
 		if (failed.length > 0) {
 			lines.push("", separator, "ERRORS:", separator);
@@ -611,6 +603,12 @@ class Results {
 
 			lines.push("", separator);
 		}
+
+		lines.push(
+			`Successful: ${success.sort().join(" ")}`,
+			`Failed: ${failed.sort().join(" ")}`,
+			`Total: ${this.packageResults.size} | Passed: ${success.length} | Failed: ${failed.length}`,
+		);
 
 		return lines.join("\n");
 	}
