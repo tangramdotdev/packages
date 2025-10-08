@@ -144,7 +144,7 @@ impl Args {
 fn main() {
 	// Setup tracing.
 	#[cfg(feature = "tracing")]
-	setup_tracing("TANGRAM_RUSTC_TRACING");
+	setup_tracing("TGRUSTC_TRACING");
 
 	if let Err(e) = main_inner() {
 		eprintln!("rustc proxy failed: {e}");
@@ -229,7 +229,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Create/Unrender the arguments passed to driver.sh.
 	let rustc = unrender(&args.rustc)?;
-	let name = "tangram_rustc_proxy".to_string().into();
+	let name = "tgrustc".to_string().into();
 	let mut command_args: Vec<tg::Value> = vec![
 		name,
 		"--rustc".to_owned().into(),
@@ -521,7 +521,7 @@ const ARGS_WITH_VALUES: [&str; 32] = [
 
 // Environment variables that must be filtered out before invoking the driver target.
 const BLACKLISTED_ENV_VARS: [&str; 5] = [
-	"TANGRAM_RUSTC_TRACING",
+	"TGRUSTC_TRACING",
 	"TANGRAM_HOST",
 	"TANGRAM_URL",
 	"HOME",

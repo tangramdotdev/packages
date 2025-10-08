@@ -207,7 +207,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	if (proxy) {
 		const proxyEnv = {
-			RUSTC_WRAPPER: tg`${proxy_.proxy()}/bin/tangram_rustc_proxy`,
+			RUSTC_WRAPPER: tg`${proxy_.proxy()}/bin/tgrustc`,
 		};
 		envs.push(proxyEnv);
 	}
@@ -454,7 +454,7 @@ export const testUnproxiedWorkspace = async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
-			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+			TGLD_TRACING: "tgld=trace",
 		},
 		pre: "set -x",
 		proxy: false,
@@ -470,7 +470,7 @@ export const testUnproxiedWorkspace = async () => {
 	const helloOpenssl = build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		env: std.env.arg(openssl(), pkgConfig(), {
-			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+			TGLD_TRACING: "tgld=trace",
 		}),
 		proxy: false,
 	});
@@ -491,7 +491,7 @@ export const testUnproxiedWorkspaceCross = async () => {
 		target: "x86_64-unknown-linux-gnu",
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
-			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+			TGLD_TRACING: "tgld=trace",
 		},
 		pre: "set -x",
 		proxy: false,

@@ -475,7 +475,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.1",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1409,7 +1409,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.1",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1681,22 +1681,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 
 [[package]]
-name = "tangram_cc_proxy"
-version = "0.0.0"
-dependencies = [
- "futures",
- "itertools",
- "serde",
- "serde_json",
- "tangram_client",
- "tangram_std",
- "tokio",
-]
-
-[[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1743,7 +1730,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -1752,7 +1739,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "dashmap",
  "futures",
@@ -1763,7 +1750,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "bytes",
  "derive_more",
@@ -1788,33 +1775,15 @@ dependencies = [
 [[package]]
 name = "tangram_itertools"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "tangram_either",
 ]
 
 [[package]]
-name = "tangram_ld_proxy"
-version = "0.0.0"
-dependencies = [
- "fnv",
- "futures",
- "goblin",
- "itertools",
- "serde",
- "serde_json",
- "tangram_client",
- "tangram_std",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "byteorder",
  "bytes",
@@ -1827,7 +1796,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "itertools",
  "num",
@@ -1849,42 +1818,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "tangram_strip_proxy"
-version = "0.0.0"
-dependencies = [
- "serde",
- "serde_json",
- "tangram_client",
- "tangram_std",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc#b0638ee3a7eb3775d800ec9787ecb2f6665dd8cc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=58527c57de3217c82d0c54e3dacaba6394245fec#58527c57de3217c82d0c54e3dacaba6394245fec"
 dependencies = [
  "derive_more",
  "regex",
  "serde_with",
  "tangram_serialize",
-]
-
-[[package]]
-name = "tangram_wrapper"
-version = "0.0.0"
-dependencies = [
- "fnv",
- "libc",
- "serde",
- "serde_json",
- "tangram_client",
- "tangram_std",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1903,7 +1844,52 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.1",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tgcc"
+version = "0.0.0"
+dependencies = [
+ "futures",
+ "itertools",
+ "serde",
+ "serde_json",
+ "tangram_client",
+ "tangram_std",
+ "tokio",
+]
+
+[[package]]
+name = "tgld"
+version = "0.0.0"
+dependencies = [
+ "fnv",
+ "futures",
+ "goblin",
+ "itertools",
+ "serde",
+ "serde_json",
+ "tangram_client",
+ "tangram_std",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "tgstrip"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tangram_client",
+ "tangram_std",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2330,9 +2316,9 @@ dependencies = [
 
 [[package]]
 name = "windows-core"
-version = "0.62.1"
+version = "0.62.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6844ee5416b285084d3d3fffd743b925a6c9385455f64f6d4fa3031c4c2749a9"
+checksum = "b8e83a14d34d0623b51dce9581199302a221863196a1dde71a7663a4c2be9deb"
 dependencies = [
  "windows-implement",
  "windows-interface",
@@ -2343,9 +2329,9 @@ dependencies = [
 
 [[package]]
 name = "windows-implement"
-version = "0.60.1"
+version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edb307e42a74fb6de9bf3a02d9712678b22399c87e6fa869d6dfcd8c1b7754e0"
+checksum = "053e2e040ab57b9dc951b72c264860db7eb3b0200ba345b4e4c3b14f67855ddf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2354,9 +2340,9 @@ dependencies = [
 
 [[package]]
 name = "windows-interface"
-version = "0.59.2"
+version = "0.59.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0abd1ddbc6964ac14db11c7213d6532ef34bd9aa042c2e5935f59d7908b46a5"
+checksum = "3f316c4a2570ba26bbec722032c4099d8c8bc095efccdc15688708623367e358"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2365,24 +2351,24 @@ dependencies = [
 
 [[package]]
 name = "windows-link"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45e46c0661abb7180e7b9c281db115305d49ca1709ab8242adf09666d2173c65"
+checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
 
 [[package]]
 name = "windows-result"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7084dcc306f89883455a206237404d3eaf961e5bd7e0f312f7c91f57eb44167f"
+checksum = "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5"
 dependencies = [
  "windows-link",
 ]
 
 [[package]]
 name = "windows-strings"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7218c655a553b0bed4426cf54b20d7ba363ef543b52d515b3e48d7fd55318dda"
+checksum = "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
 dependencies = [
  "windows-link",
 ]
@@ -2407,9 +2393,9 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.61.1"
+version = "0.61.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f109e41dd4a3c848907eb83d5a42ea98b3769495597450cf6d153507b166f0f"
+checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
 ]
@@ -2492,6 +2478,20 @@ name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+
+[[package]]
+name = "wrapper"
+version = "0.0.0"
+dependencies = [
+ "fnv",
+ "libc",
+ "serde",
+ "serde_json",
+ "tangram_client",
+ "tangram_std",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "wyz"

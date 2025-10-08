@@ -6,7 +6,7 @@ use tangram_std::{Manifest, manifest};
 fn main() {
 	// Setup tracing.
 	#[cfg(feature = "tracing")]
-	tangram_std::tracing::setup("TANGRAM_STRIP_PROXY_TRACING");
+	tangram_std::tracing::setup("TGSTRIP_TRACING");
 
 	if let Err(e) = main_inner() {
 		eprintln!("strip proxy failed: {e}");
@@ -256,12 +256,12 @@ struct Options {
 impl Options {
 	fn parse() -> tg::Result<Self> {
 		// Read env for options.
-		let mut passthrough = std::env::var("TANGRAM_STRIP_PROXY_PASSTHROUGH").is_ok();
-		let strip_program = std::env::var("TANGRAM_STRIP_COMMAND_PATH")
-			.map_err(|error| tg::error!(source = error, "TANGRAM_STRIP_COMMAND_PATH not set"))?
+		let mut passthrough = std::env::var("TGSTRIP_PASSTHROUGH").is_ok();
+		let strip_program = std::env::var("TGSTRIP_COMMAND_PATH")
+			.map_err(|error| tg::error!(source = error, "TGSTRIP_COMMAND_PATH not set"))?
 			.into();
 		let strip_runtime_library_path =
-			std::env::var("TANGRAM_STRIP_RUNTIME_LIBRARY_PATH").unwrap_or_default();
+			std::env::var("TGSTRIP_RUNTIME_LIBRARY_PATH").unwrap_or_default();
 		let strip_runtime_library_path = if strip_runtime_library_path.is_empty() {
 			None
 		} else {

@@ -1,5 +1,5 @@
 [package]
-name = "tangram_cc_proxy"
+name = "tgcc"
 
 description = { workspace = true }
 edition = { workspace = true }

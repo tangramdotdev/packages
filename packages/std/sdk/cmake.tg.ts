@@ -67,7 +67,7 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 		bootstrapSdk,
 		bootstrap.make.build({ host }),
 		{
-			TANGRAM_LINKER_PASSTHROUGH: true,
+			TGLD_PASSTHROUGH: true,
 		},
 	];
 	if (std.triple.os(host) === "linux") {

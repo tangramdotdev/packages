@@ -155,7 +155,7 @@ export const testBinary = async () => {
 			std.env.arg(
 				bootstrapSDK,
 				{
-					TANGRAM_LINKER_PASSTHROUGH: true,
+					TGLD_PASSTHROUGH: true,
 				},
 				{ utils: false },
 			),

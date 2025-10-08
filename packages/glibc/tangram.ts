@@ -83,7 +83,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		{
 			CPATH: tg.Mutation.unset(),
 			LIBRARY_PATH: tg.Mutation.unset(),
-			TANGRAM_LINKER_PASSTHROUGH: true,
+			TGLD_PASSTHROUGH: true,
 		},
 		env_,
 	);

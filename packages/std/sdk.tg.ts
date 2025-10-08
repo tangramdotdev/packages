@@ -873,7 +873,7 @@ export namespace sdk {
 					std.env.arg(
 						arg.sdkEnv,
 						{
-							TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+							TGLD_TRACING: "tgld=trace",
 						},
 						{ utils: false },
 					),
@@ -1022,7 +1022,7 @@ export namespace sdk {
 						sdkEnv: await std.env.arg(
 							env,
 							{
-								TANGRAM_LINKER_PASSTHROUGH: true,
+								TGLD_PASSTHROUGH: true,
 							},
 							{ utils: false },
 						),
@@ -1051,7 +1051,7 @@ export namespace sdk {
 						sdkEnv: await std.env.arg(
 							env,
 							{
-								TANGRAM_LINKER_PASSTHROUGH: true,
+								TGLD_PASSTHROUGH: true,
 							},
 							{ utils: false },
 						),
@@ -1088,7 +1088,7 @@ export namespace sdk {
 						sdkEnv: await std.env.arg(
 							env,
 							{
-								TANGRAM_LINKER_PASSTHROUGH: true,
+								TGLD_PASSTHROUGH: true,
 							},
 							{ utils: false },
 						),
@@ -1122,7 +1122,7 @@ export namespace sdk {
 							sdkEnv: await std.env.arg(
 								env,
 								{
-									TANGRAM_LINKER_PASSTHROUGH: true,
+									TGLD_PASSTHROUGH: true,
 								},
 								{ utils: false },
 							),

@@ -2453,7 +2453,7 @@ export const argAndEnvDump = async (arg?: BuildAndHostArg) => {
 	const sdkEnv = await std.env.arg(
 		buildToolchain,
 		{
-			TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+			TGLD_TRACING: "tgld=trace",
 			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 		},
 		{ utils: false },

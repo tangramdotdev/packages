@@ -48,19 +48,19 @@ export const workspace = async (
 export const ccProxy = async (arg: tg.Unresolved<Arg>) =>
 	await tg
 		.build(workspace, arg)
-		.then((dir) => dir.get("bin/cc_proxy"))
+		.then((dir) => dir.get("bin/tgcc"))
 		.then(tg.File.expect);
 
 export const ldProxy = async (arg: tg.Unresolved<Arg>) =>
 	await tg
 		.build(workspace, arg)
-		.then((dir) => dir.get("bin/ld_proxy"))
+		.then((dir) => dir.get("bin/tgld"))
 		.then(tg.File.expect);
 
 export const stripProxy = async (arg: tg.Unresolved<Arg>) =>
 	await tg
 		.build(workspace, arg)
-		.then((dir) => dir.get("bin/strip_proxy"))
+		.then((dir) => dir.get("bin/tgstrip"))
 		.then(tg.File.expect);
 
 export const wrapper = async (arg: tg.Unresolved<Arg>) =>
@@ -396,8 +396,8 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			for item in cc_proxy ld_proxy strip_proxy wrapper ; do
-				mv $TARGET/$RUST_TARGET${buildType}/tangram_$item $OUTPUT/bin/$item
+			for item in tgcc tgld tgstrip wrapper ; do
+				mv $TARGET/$RUST_TARGET${buildType}/$item $OUTPUT/bin/$item
 			done
 		`,
 	};

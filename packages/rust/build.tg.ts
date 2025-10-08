@@ -130,7 +130,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const outputLocation = crateType === "bin" ? "bin" : "lib";
 
 	// Set up the proxy if requested.
-	const rustcPrefix = proxy ? tg`${rustcProxy()}/bin/tangram_rustc_proxy ` : "";
+	const rustcPrefix = proxy ? tg`${rustcProxy()}/bin/tgrustc ` : "";
 
 	// Set the common rustc flags.
 	let flags: tg.Unresolved<Array<tg.Template.Arg>> = [
@@ -270,7 +270,7 @@ export const testBasicExeProxied = async () => {
 		crateName,
 		env: {
 			WATERMARK: "2",
-			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
+			TGRUSTC_TRACING: "tgrustc=trace",
 		},
 		proxy: true,
 		source: tests.get(crateName).then(tg.Directory.expect),
@@ -339,7 +339,7 @@ export const testExeWithCratesIoDependency = async () => {
 	const depsExe = await build({
 		crateName,
 		env: {
-			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
+			TGRUSTC_TRACING: "tgrustc=trace",
 		},
 		source: tests.get(crateName).then(tg.Directory.expect),
 		rustDependencies: [

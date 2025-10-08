@@ -291,14 +291,14 @@ export const ldProxy = async (arg: LdProxyArg) => {
 
 	// Define environment for the linker proxy.
 	const env = {
-		TANGRAM_LINKER_COMMAND_PATH: tg.Mutation.setIfUnset<
+		TGLD_COMMAND_PATH: tg.Mutation.setIfUnset<
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
-		TANGRAM_LINKER_INJECTION_PATH: tg.Mutation.setIfUnset(hostInjectionLibrary),
-		TANGRAM_LINKER_INTERPRETER_ARGS: arg.interpreterArgs
+		TGLD_INJECTION_PATH: tg.Mutation.setIfUnset(hostInjectionLibrary),
+		TGLD_INTERPRETER_ARGS: arg.interpreterArgs
 			? tg.Mutation.setIfUnset(tg.Template.join(" ", ...arg.interpreterArgs))
 			: undefined,
-		TANGRAM_LINKER_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
+		TGLD_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
 		),
 		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
@@ -340,7 +340,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 
 	const envs: tg.Unresolved<Array<std.env.Arg>> = [
 		{
-			TANGRAM_STRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
+			TGSTRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
 			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
@@ -348,7 +348,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	];
 	if (arg.runtimeLibraryPath !== undefined) {
 		envs.push({
-			TANGRAM_STRIP_RUNTIME_LIBRARY_PATH: arg.runtimeLibraryPath,
+			TGSTRIP_RUNTIME_LIBRARY_PATH: arg.runtimeLibraryPath,
 		});
 	}
 
@@ -392,8 +392,8 @@ export const testBasic = async (target?: string) => {
 			std.env.arg(
 				buildToolchain,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace,tangram_std=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TGLD_TRACING: "tgld=trace,tangram_std=trace",
+					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
 					TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 				},
 				{ utils: false },
@@ -446,7 +446,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 			std.env.arg(
 				sdk,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TGLD_TRACING: "tgld=trace",
 				},
 				{ utils: false },
 			),
@@ -510,7 +510,7 @@ export const testSharedLibraryWithDep = async (target?: string) => {
 			std.env.arg(
 				testSDK,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
+					TGLD_TRACING: "tgld=trace",
 				},
 				{ utils: false },
 			),
@@ -704,8 +704,8 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 				std.env.arg(
 					testSDK,
 					{
-						TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-						TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: opt,
+						TGLD_TRACING: "tgld=trace",
+						TGLD_LIBRARY_PATH_OPT_LEVEL: opt,
 					},
 					{ utils: false },
 				),
@@ -887,8 +887,8 @@ export const testSamePrefix = async (target?: string) => {
 			std.env.arg(
 				testSDK,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TGLD_TRACING: "tgld=trace",
+					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
 				},
 				{ utils: false },
 			),
@@ -944,8 +944,8 @@ export const testSamePrefixDirect = async (target?: string) => {
 			std.env.arg(
 				testSDK,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TGLD_TRACING: "tgld=trace",
+					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
 				},
 				{ utils: false },
 			),
@@ -995,8 +995,8 @@ export const testDifferentPrefixDirect = async (target?: string) => {
 			std.env.arg(
 				testSDK,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TGLD_TRACING: "tgld=trace",
+					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
 				},
 				{ utils: false },
 			),
@@ -1012,8 +1012,8 @@ export const testDifferentPrefixDirect = async (target?: string) => {
 			std.env.arg(
 				testSDK,
 				{
-					TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
-					TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL: "combine",
+					TGLD_TRACING: "tgld=trace",
+					TGLD_LIBRARY_PATH_OPT_LEVEL: "combine",
 				},
 				{ utils: false },
 			),
@@ -1042,7 +1042,7 @@ export const testStrip = async (target?: string) => {
 			std.env.arg(
 				toolchain,
 				{
-					TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
+					TGSTRIP_TRACING: "tgstrip=trace",
 				},
 				{ utils: false },
 			),

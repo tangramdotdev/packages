@@ -3,9 +3,9 @@ import { $ } from "std" with { local: "../std" };
 
 import { cargo, self, VERSION } from "./tangram.ts";
 
-import cargoToml from "./proxy/Cargo.toml" with { type: "file" };
-import cargoLock from "./proxy/Cargo.lock" with { type: "file" };
-import src from "./proxy/src" with { type: "directory" };
+import cargoToml from "./tgrustc/Cargo.toml" with { type: "file" };
+import cargoLock from "./tgrustc/Cargo.lock" with { type: "file" };
+import src from "./tgrustc/src" with { type: "directory" };
 
 export let source = async () => {
 	return tg.directory({
@@ -40,7 +40,7 @@ import tests from "./tests" with { type: "directory" };
 
 export const testProxyCompiles = async () => {
 	// Make sure the proxy compiles and runs.
-	const version = await $`tangram_rustc_proxy rustc - --version | tee $OUTPUT`
+	const version = await $`tgrustc rustc - --version | tee $OUTPUT`
 		.env(proxy())
 		.env(self())
 		.then(tg.File.expect);
@@ -56,7 +56,7 @@ export const testHello = async () => {
 		pre: "echo WATERMARK 1",
 		proxy: true,
 		env: {
-			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
+			TGRUSTC_TRACING: "tgrustc=trace",
 		},
 	});
 	console.log("helloWorld result", helloWorld.id);
@@ -106,7 +106,7 @@ export const testPkgconfig = async () => {
 		source,
 		pre: tg`set -x && echo WATERMARK 10`,
 		env: std.env.arg(pkgconf(), externalLibDir, {
-			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
+			TGRUSTC_TRACING: "tgrustc=trace",
 		}),
 		parallelJobs: 1,
 		proxy: true,
@@ -130,7 +130,7 @@ export const testOpenSSL = async () => {
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		pre: "echo WATERMARK 10",
 		env: std.env.arg(openssl(), pkgconf(), {
-			TANGRAM_RUSTC_TRACING: "tangram_rustc_proxy=trace",
+			TGRUSTC_TRACING: "tgrustc=trace",
 		}),
 		parallelJobs: 1,
 		proxy: true,
@@ -155,8 +155,8 @@ export const testWorkspace = async () => {
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		proxy: true,
 		env: {
-			TANGRAM_RUSTC_TRACING: "tangram_rust_proxy=trace",
-			TANGRAM_STRIP_PROXY_TRACING: "tangram_strip_proxy=trace",
+			TGRUSTC_TRACING: "tgrustc=trace",
+			TGSTRIP_TRACING: "tgstrip=trace",
 		},
 	});
 	console.log("helloWorkspace result", helloWorkspace.id);

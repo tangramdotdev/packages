@@ -9,7 +9,7 @@ use tangram_client as tg;
 // Data read from environment variables.
 #[derive(Debug)]
 struct Environment {
-	// The value of TANGRAM_CC_ENABLE
+	// The value of TGCC_ENABLE
 	enable: bool,
 
 	// The path to the C compiler.
@@ -70,9 +70,9 @@ impl Environment {
 		let mut enable = false;
 		for (key, value) in std::env::vars() {
 			match key.as_str() {
-				"TANGRAM_CC_ENABLE" => {
+				"TGCC_ENABLE" => {
 					enable = value.parse().map_err(|error| {
-						tg::error!(source = error, "Failed to parse TANGRAM_CC_ENABLE")
+						tg::error!(source = error, "Failed to parse TGCC_ENABLE")
 					})?;
 				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => {},
@@ -430,10 +430,10 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	Ok(())
 }
 
-// Find the C compiler by checking the TANGRAM_CC_CC compiler or searching PATH for cc.
+// Find the C compiler by checking the TGCC_COMPILER compiler or searching PATH for cc.
 fn which_cc() -> tg::Result<PathBuf> {
 	let compiler_name = std::env::args().next().unwrap();
-	if let Ok(cc) = std::env::var("TANGRAM_CC_COMPILER") {
+	if let Ok(cc) = std::env::var("TGCC_COMPILER") {
 		return Ok(cc.into());
 	}
 	let path =
@@ -623,8 +623,8 @@ const DRIVER_SH: &str = include_str!("driver.sh");
 // Environment variables that must be filtered out before invoking the driver target.
 const BLACKLISTED_ENV_VARS: [&str; 6] = [
 	"TANGRAM_ADDRESS",
-	"TANGRAM_CC_TRACING",
-	"TANGRAM_CC_COMPILER",
+	"TGCC_TRACING",
+	"TGCC_COMPILER",
 	"TANGRAM_HOST",
 	"HOME",
 	"OUTPUT",

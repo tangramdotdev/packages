@@ -23,7 +23,7 @@ fn main() {
 fn main_inner() -> tg::Result<()> {
 	// Read the options from the environment and arguments.
 	let options = read_options()?;
-	tangram_std::tracing::setup("TANGRAM_LINKER_TRACING");
+	tangram_std::tracing::setup("TGLD_TRACING");
 	tracing::debug!(?options);
 
 	// Run the command.
@@ -109,21 +109,21 @@ fn read_options() -> tg::Result<Options> {
 	let mut library_paths = Vec::new();
 
 	// Get the command.
-	let command_path = std::env::var("TANGRAM_LINKER_COMMAND_PATH")
-		.map_err(|error| tg::error!(source = error, "TANGRAM_LINKER_COMMAND_PATH must be set."))?
+	let command_path = std::env::var("TGLD_COMMAND_PATH")
+		.map_err(|error| tg::error!(source = error, "TGLD_COMMAND_PATH must be set."))?
 		.into();
 
 	// Get the passthrough flag.
-	let mut passthrough = std::env::var("TANGRAM_LINKER_PASSTHROUGH").is_ok();
+	let mut passthrough = std::env::var("TGLD_PASSTHROUGH").is_ok();
 
 	// Get the allow_missing flag.
-	let mut disallow_missing = std::env::var("TANGRAM_LINKER_DISALLOW_MISSING").is_ok();
+	let mut disallow_missing = std::env::var("TGLD_DISALLOW_MISSING").is_ok();
 
 	// Get the interpreter path.
-	let interpreter_path = std::env::var("TANGRAM_LINKER_INTERPRETER_PATH").ok();
+	let interpreter_path = std::env::var("TGLD_INTERPRETER_PATH").ok();
 
 	// Get additional interpreter args, if any.
-	let interpreter_args = std::env::var("TANGRAM_LINKER_INTERPRETER_ARGS")
+	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS")
 		.ok()
 		.map(|combined| {
 			combined
@@ -133,15 +133,15 @@ fn read_options() -> tg::Result<Options> {
 		});
 
 	// Get the max depth.
-	let mut max_depth = std::env::var("TANGRAM_LINKER_MAX_DEPTH")
+	let mut max_depth = std::env::var("TGLD_MAX_DEPTH")
 		.ok()
 		.map_or(MAX_DEPTH, |s| s.parse().unwrap_or(MAX_DEPTH));
 
 	// Get the injection path.
-	let injection_path = std::env::var("TANGRAM_LINKER_INJECTION_PATH").ok();
+	let injection_path = std::env::var("TGLD_INJECTION_PATH").ok();
 
 	// Get the option to disable combining library paths. Enabled by default.
-	let mut library_path_optimization = std::env::var("TANGRAM_LINKER_LIBRARY_PATH_OPT_LEVEL")
+	let mut library_path_optimization = std::env::var("TGLD_LIBRARY_PATH_OPT_LEVEL")
 		.ok()
 		.map_or(LibraryPathStrategy::default(), |s| {
 			s.parse().unwrap_or_default()
@@ -613,7 +613,7 @@ async fn create_manifest<H: BuildHasher>(
 				let path = options
 					.interpreter_path
 					.as_ref()
-					.expect("TANGRAM_LINKER_INTERPRETER_PATH must be set.");
+					.expect("TGLD_INTERPRETER_PATH must be set.");
 
 				Some((path.clone(), flavor))
 			},

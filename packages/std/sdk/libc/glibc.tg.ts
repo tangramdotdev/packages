@@ -96,7 +96,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	env.push({
 		CPATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
 		LIBRARY_PATH: tg.Mutation.unset() as tg.Mutation<tg.Template>,
-		TANGRAM_LINKER_PASSTHROUGH: true,
+		TGLD_PASSTHROUGH: true,
 		CFLAGS: tg.Mutation.suffix(
 			`-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection`,
 			" ",
