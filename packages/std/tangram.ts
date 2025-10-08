@@ -2,6 +2,8 @@ export { type Args } from "./args.tg.ts";
 export * as args from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
+export { expect } from "./expect.tg.ts";
+export * as matchers from "./expect.tg.ts";
 export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
 export { command } from "./command.tg.ts";

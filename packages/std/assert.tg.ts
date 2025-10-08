@@ -6,6 +6,545 @@ import {
 	wrap,
 } from "./wrap.tg.ts";
 
+// ========== New Composable Test System ==========
+
+/** Configurable path conventions for package layouts. */
+export type PathConfig = {
+	binDir: string;
+	libDir: string;
+	includeDir: string;
+	shareDir: string;
+	pkgConfigDir: string;
+};
+
+/** Default path configuration following standard Unix conventions. */
+export const defaultPaths: PathConfig = {
+	binDir: "bin",
+	libDir: "lib",
+	includeDir: "include",
+	shareDir: "share",
+	pkgConfigDir: "lib/pkgconfig",
+};
+
+/** Context provided to test execution functions. */
+export type TestContext = {
+	/** The package directory being tested. */
+	directory: tg.Directory;
+	/** Additional environment variables for test execution. */
+	env?: std.env.Arg;
+	/** The host triple for the test. */
+	host: string;
+	/** Path configuration for locating package components. */
+	paths: PathConfig;
+	/** Bootstrap mode flag. */
+	bootstrapMode?: boolean;
+};
+
+/** A single test that can be executed. */
+export type Test = {
+	/** Human-readable test name. */
+	name: string;
+	/** The test execution function. */
+	run: (context: TestContext) => Promise<boolean>;
+};
+
+/** Result of running a single test. */
+export type TestResult = {
+	/** The test that was run. */
+	test: Test;
+	/** Whether the test passed. */
+	passed: boolean;
+	/** Error message if the test failed. */
+	error?: string;
+	/** Duration in milliseconds. */
+	duration?: number;
+};
+
+/** Collection of tests to run together. */
+export type TestSuite = {
+	/** Tests to execute. */
+	tests: Array<Test>;
+	/** Run tests in parallel (default: true). */
+	parallel?: boolean;
+	/** Filter function to select which tests to run. */
+	filter?: (test: Test) => boolean;
+	/** Progress callback invoked after each test completes. */
+	onProgress?: (result: TestResult) => void;
+};
+
+/** Results from running a test suite. */
+export type TestResults = {
+	/** Individual test results. */
+	results: Array<TestResult>;
+	/** Total number of tests run. */
+	total: number;
+	/** Number of passed tests. */
+	passed: number;
+	/** Number of failed tests. */
+	failed: number;
+	/** Total duration in milliseconds. */
+	duration: number;
+};
+
+/** Execute a test suite and return results. */
+export const runTests = async (suite: TestSuite): Promise<TestResults> => {
+	const startTime = Date.now();
+
+	// Apply filter if provided.
+	let tests = suite.tests;
+	if (suite.filter) {
+		tests = tests.filter(suite.filter);
+	}
+
+	// Run tests in parallel or sequentially.
+	const parallel = suite.parallel ?? true;
+	const results: Array<TestResult> = [];
+
+	if (parallel) {
+		const promises = tests.map((test) => runSingleTest(test));
+		const testResults = await Promise.all(promises);
+		results.push(...testResults);
+	} else {
+		for (const test of tests) {
+			const result = await runSingleTest(test);
+			results.push(result);
+		}
+	}
+
+	// Invoke progress callback for each result if provided.
+	if (suite.onProgress) {
+		for (const result of results) {
+			suite.onProgress(result);
+		}
+	}
+
+	const endTime = Date.now();
+	const passed = results.filter((r) => r.passed).length;
+	const failed = results.filter((r) => !r.passed).length;
+
+	return {
+		results,
+		total: results.length,
+		passed,
+		failed,
+		duration: endTime - startTime,
+	};
+};
+
+/** Execute a single test and capture the result. */
+const runSingleTest = async (
+	test: Test,
+	context?: TestContext,
+): Promise<TestResult> => {
+	const startTime = Date.now();
+	try {
+		// Tests created by the builder will have context already bound in their run function.
+		// If context is provided here, it will be passed to the test.
+		let passed: boolean;
+		if (context) {
+			passed = await test.run(context);
+		} else {
+			// If no context provided, the test's run function should be a closure that captures its own context.
+			// Cast to any to handle both signatures.
+			passed = await (test.run as () => Promise<boolean>)();
+		}
+		const endTime = Date.now();
+		return {
+			test,
+			passed,
+			duration: endTime - startTime,
+		};
+	} catch (error) {
+		const endTime = Date.now();
+		return {
+			test,
+			passed: false,
+			error: error instanceof Error ? error.message : String(error),
+			duration: endTime - startTime,
+		};
+	}
+};
+
+// ========== Composable Test Builder ==========
+
+export type TestBuilder = {
+	/** Configure environment variables. */
+	withEnv: (env: std.env.Arg) => TestBuilder;
+	/** Configure the host triple. */
+	withHost: (host: string) => TestBuilder;
+	/** Configure path conventions. */
+	withPaths: (paths: Partial<PathConfig>) => TestBuilder;
+	/** Enable bootstrap mode. */
+	withBootstrap: (enabled: boolean) => TestBuilder;
+
+	/** Add a binary test. */
+	binary: (name: string) => BinaryTestBuilder;
+	/** Add a library test. */
+	library: (name: string) => LibraryTestBuilder;
+	/** Add a header test. */
+	header: (name: string) => HeaderTestBuilder;
+	/** Add a custom test. */
+	custom: (test: Test) => TestBuilder;
+
+	/** Build the test suite. */
+	build: () => Promise<TestSuite>;
+};
+
+export type BinaryTestBuilder = {
+	/** Test that the binary exists. */
+	exists: () => TestBuilder;
+	/** Test that the binary runs successfully. */
+	runs: (args?: Array<string>) => TestBuilder;
+	/** Test that the binary output matches a predicate. */
+	outputMatches: (
+		predicate: (stdout: string) => boolean,
+		args?: Array<string>,
+	) => TestBuilder;
+};
+
+export type LibraryTestBuilder = {
+	/** Test that the static library exists. */
+	staticlib: () => TestBuilder;
+	/** Test that the dynamic library exists. */
+	dylib: () => TestBuilder;
+	/** Test that the library can be linked. */
+	canLink: () => TestBuilder;
+	/** Test all library forms (staticlib, dylib, and linking). */
+	all: () => TestBuilder;
+};
+
+export type HeaderTestBuilder = {
+	/** Test that the header exists. */
+	exists: () => TestBuilder;
+	/** Test that the header can be included and compiled. */
+	canInclude: () => TestBuilder;
+};
+
+/** Create a composable test builder for a package directory. */
+export const test = (directory: tg.Directory): TestBuilder => {
+	// Mutable state for the builder
+	const state = {
+		directory,
+		env: undefined as std.env.Arg | undefined,
+		host: undefined as string | undefined,
+		paths: defaultPaths,
+		bootstrapMode: false,
+		tests: [] as Array<Test>,
+	};
+
+	const builder: TestBuilder = {
+		withEnv: (env: std.env.Arg) => {
+			state.env = env;
+			return builder;
+		},
+
+		withHost: (host: string) => {
+			state.host = host;
+			return builder;
+		},
+
+		withPaths: (paths: Partial<PathConfig>) => {
+			state.paths = { ...state.paths, ...paths };
+			return builder;
+		},
+
+		withBootstrap: (enabled: boolean) => {
+			state.bootstrapMode = enabled;
+			return builder;
+		},
+
+		binary: (name: string) => {
+			const binaryBuilder: BinaryTestBuilder = {
+				exists: () => {
+					state.tests.push({
+						name: `binary ${name} exists`,
+						run: async (ctx) => {
+							return await fileExists({
+								directory: ctx.directory,
+								subpath: `${ctx.paths.binDir}/${name}`,
+							});
+						},
+					});
+					return builder;
+				},
+
+				runs: (args?: Array<string>) => {
+					state.tests.push({
+						name: `binary ${name} runs`,
+						run: async (ctx) => {
+							return await runnableBin({
+								directory: ctx.directory,
+								binary: {
+									name,
+									testArgs: args ?? ["--version"],
+								},
+								env: ctx.env,
+								host: ctx.host,
+							});
+						},
+					});
+					return builder;
+				},
+
+				outputMatches: (
+					predicate: (stdout: string) => boolean,
+					args?: Array<string>,
+				) => {
+					state.tests.push({
+						name: `binary ${name} output matches predicate`,
+						run: async (ctx) => {
+							return await runnableBin({
+								directory: ctx.directory,
+								binary: {
+									name,
+									testArgs: args ?? ["--version"],
+									testPredicate: predicate,
+								},
+								env: ctx.env,
+								host: ctx.host,
+							});
+						},
+					});
+					return builder;
+				},
+			};
+			return binaryBuilder;
+		},
+
+		library: (name: string) => {
+			const libraryBuilder: LibraryTestBuilder = {
+				staticlib: () => {
+					state.tests.push({
+						name: `library ${name} staticlib exists`,
+						run: async (ctx) => {
+							return await fileExists({
+								directory: ctx.directory,
+								subpath: `${ctx.paths.libDir}/lib${name}.a`,
+							});
+						},
+					});
+					return builder;
+				},
+
+				dylib: () => {
+					state.tests.push({
+						name: `library ${name} dylib exists`,
+						run: async (ctx) => {
+							const hostOs = std.triple.os(ctx.host);
+							const ext = hostOs === "darwin" ? "dylib" : "so";
+							return await fileExists({
+								directory: ctx.directory,
+								subpath: `${ctx.paths.libDir}/lib${name}.${ext}`,
+							});
+						},
+					});
+					return builder;
+				},
+
+				canLink: () => {
+					state.tests.push({
+						name: `library ${name} can link`,
+						run: async (ctx) => {
+							return await linkableLib({
+								directory: ctx.directory,
+								library: { name },
+								env: ctx.env,
+								host: ctx.host,
+							});
+						},
+					});
+					return builder;
+				},
+
+				all: () => {
+					libraryBuilder.staticlib();
+					libraryBuilder.dylib();
+					libraryBuilder.canLink();
+					return builder;
+				},
+			};
+			return libraryBuilder;
+		},
+
+		header: (name: string) => {
+			const headerBuilder: HeaderTestBuilder = {
+				exists: () => {
+					state.tests.push({
+						name: `header ${name} exists`,
+						run: async (ctx) => {
+							return await fileExists({
+								directory: ctx.directory,
+								subpath: `${ctx.paths.includeDir}/${name}`,
+							});
+						},
+					});
+					return builder;
+				},
+
+				canInclude: () => {
+					state.tests.push({
+						name: `header ${name} can be included`,
+						run: async (ctx) => {
+							return await headerCanBeIncluded({
+								directory: ctx.directory,
+								header: name,
+								env: ctx.env,
+							});
+						},
+					});
+					return builder;
+				},
+			};
+			return headerBuilder;
+		},
+
+		custom: (test: Test) => {
+			state.tests.push(test);
+			return builder;
+		},
+
+		build: async () => {
+			// Ensure host is set
+			const host = state.host ?? (await std.triple.host());
+
+			// Create the context that will be passed to all tests
+			const context: TestContext = {
+				directory: state.directory,
+				env: state.env,
+				host,
+				paths: state.paths,
+				bootstrapMode: state.bootstrapMode,
+			};
+
+			// Wrap each test to bind the context
+			const testsWithContext: Array<Test> = state.tests.map((t) => ({
+				name: t.name,
+				run: async () => t.run(context),
+			}));
+
+			return {
+				tests: testsWithContext,
+				parallel: true,
+			};
+		},
+	};
+
+	return builder;
+};
+
+// ========== Simplified API Functions ==========
+
+/** Simple assertion function that runs tests and throws if any fail. */
+export const assertPackage = async (
+	directory: tg.Directory,
+	...tests: Array<Test>
+): Promise<TestResults> => {
+	const results = await runTests({ tests, parallel: true });
+	if (results.failed > 0) {
+		const failures = results.results
+			.filter((r) => !r.passed)
+			.map((r) => `  - ${r.test.name}: ${r.error}`)
+			.join("\n");
+		throw new Error(
+			`Package assertion failed (${results.failed}/${results.total} tests failed):\n${failures}`,
+		);
+	}
+	return results;
+};
+
+/** Convert a PackageSpec to a TestSuite using the composable builder. */
+export const fromSpec = async (
+	directory: tg.Directory,
+	spec: PackageSpec,
+): Promise<TestSuite> => {
+	const builder = test(directory);
+
+	// Configure builder from spec
+	if (spec.env) {
+		builder.withEnv(spec.env);
+	}
+	if (spec.bootstrapMode) {
+		builder.withBootstrap(spec.bootstrapMode);
+	}
+
+	// Add binary tests
+	if (spec.binaries) {
+		for (const binarySpec of spec.binaries) {
+			if (typeof binarySpec === "string") {
+				builder.binary(binarySpec).runs();
+			} else {
+				const name = binarySpec.name;
+				if (binarySpec.testPredicate) {
+					builder
+						.binary(name)
+						.outputMatches(binarySpec.testPredicate, binarySpec.testArgs);
+				} else {
+					builder.binary(name).runs(binarySpec.testArgs);
+				}
+			}
+		}
+	}
+
+	// Add header tests
+	if (spec.headers) {
+		for (const header of spec.headers) {
+			builder.header(header).canInclude();
+		}
+	}
+
+	// Add library tests
+	if (spec.libraries) {
+		for (const librarySpec of spec.libraries) {
+			if (typeof librarySpec === "string") {
+				builder.library(librarySpec).all();
+			} else {
+				const name = librarySpec.name;
+				const libBuilder = builder.library(name);
+
+				// Add specific library tests based on spec
+				if (librarySpec.staticlib ?? true) {
+					libBuilder.staticlib();
+				}
+				if (librarySpec.dylib ?? true) {
+					libBuilder.dylib();
+				}
+				// Always test linking for libraries
+				libBuilder.canLink();
+			}
+		}
+	}
+
+	// Add documentation file existence tests
+	if (spec.docs) {
+		for (const docPath of spec.docs) {
+			builder.custom({
+				name: `doc ${docPath} exists`,
+				run: async (ctx) => {
+					return await fileExists({
+						directory: ctx.directory,
+						subpath: `${ctx.paths.shareDir}/${docPath}`,
+					});
+				},
+			});
+		}
+	}
+
+	return await builder.build();
+};
+
+/** Convenience function that builds and runs tests in one call. Throws on failure. */
+export const testPackage = async (
+	directory: tg.Directory,
+	builderFn: (builder: TestBuilder) => TestBuilder | void,
+): Promise<TestResults> => {
+	const builder = test(directory);
+	builderFn(builder);
+	const suite = await builder.build();
+	return await assertPackage(directory, ...suite.tests);
+};
+
+// ========== Legacy API (Preserved for Backward Compatibility) ==========
+
 /** Define the expected behavior of each package component. A `PackageProvides` object is a valid `PackageSpec`, but most packages will have additional behavior to assert. */
 export type PackageSpec = {
 	/** All executables that should exist under `bin/`, with optional behavior to check. */
