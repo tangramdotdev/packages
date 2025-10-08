@@ -3,7 +3,7 @@ import * as std from "std" with { local: "../std" };
 export const metadata = {
 	homepage: "https://www.gnu.org/software/grep/",
 	license: "GPL-2.0-or-later",
-	name: "gnugrep",
+	name: "grep",
 	repository: "https://git.savannah.gnu.org/cgit/grep.git",
 	version: "3.12",
 	tag: "gnugrep/3.12",
@@ -13,8 +13,7 @@ export const metadata = {
 };
 
 export const source = () => {
-	const { version } = metadata;
-	const name = "grep";
+	const { name, version } = metadata;
 	const checksum =
 		"sha256:badda546dfc4b9d97e992e2c35f3b5c7f20522ffcbe2f01ba1e9cdcbe7644cdc";
 	return std.download.fromGnu({ name, version, checksum });
