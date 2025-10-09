@@ -6,8 +6,8 @@ export const metadata = {
 	license: "https://tiswww.cwru.edu/php/chet/readline/rltop.html",
 	name: "readline",
 	repository: "http://git.savannah.gnu.org/cgit/readline.git/log/",
-	version: "8.2.13",
-	tag: "readline/8.2.13",
+	version: "8.3",
+	tag: "readline/8.3",
 	provides: {
 		libraries: ["readline"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:0e5be4d2937e8bd9b7cd60d46721ce79f88a33415dd68c2d738fb5924638f656";
+		"sha256:fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc";
 	return std.download.fromGnu({ name, version, checksum });
 };
 

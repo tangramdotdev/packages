@@ -118,16 +118,19 @@ export const build = async (...args: std.Args<Arg>) => {
 		"--with-zstd",
 	];
 
-	const configure = {
-		args: configureArgs,
-	};
-	const phases = { configure };
-
 	if (os === "darwin") {
+		configureArgs.push(
+			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+		);
 		env.push({
 			LDFLAGS_SL: tg.Mutation.suffix("-Wl,-undefined,dynamic_lookup", " "),
 		});
 	}
+
+	const configure = {
+		args: configureArgs,
+	};
+	const phases = { configure };
 
 	let libraryDirs = [
 		icuArtifact,
