@@ -406,31 +406,27 @@ export const linkableLib = async (arg: LibraryArg) => {
 
 	// Check for the dylib if requested.
 	if (dylib) {
-		tests.push(async () => {
-			// Combine internal libnames with external runtime dependency libnames.
-			const dylibName_ = dylibName(name);
-
-			// Assert the files exist.
-			await fileExists({
+		const dylibName_ = dylibName(name);
+		const runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
+		const runtimeDepLibs = runtimeDeps.flatMap((dep) =>
+			dep.libs.map(dylibName),
+		);
+		tests.push(
+			fileExists({
 				directory: arg.directory,
 				subpath: `lib/${dylibName_}`,
-			});
-
-			// Assert it can be dlopened.
-			const runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
-			const runtimeDepLibs = runtimeDeps.flatMap((dep) =>
-				dep.libs.map(dylibName),
-			);
-			await dlopen({
-				directory: arg.directory,
-				dylib: dylibName_,
-				env,
-				host,
-				runtimeDepDirs,
-				runtimeDepLibs,
-				sdk,
-			});
-		});
+			}).then(() =>
+				dlopen({
+					directory: arg.directory,
+					dylib: dylibName_,
+					env,
+					host,
+					runtimeDepDirs,
+					runtimeDepLibs,
+					sdk,
+				}),
+			),
+		);
 	}
 
 	// Check for the staticlib if requested.
