@@ -198,7 +198,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	}
 
 	if (variant === "stage2_full") {
-		preConfigureHook = tg`${preConfigureHook}\nunset LD_PRELOAD\nenv\n`;
+		preConfigureHook = tg`${preConfigureHook}\nunset LD_PRELOAD\n`;
 	}
 
 	// Set up phases.

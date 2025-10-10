@@ -904,14 +904,6 @@ export namespace sdk {
 			}
 
 			tg.assert(metadata.format === "elf");
-			// const expectedInterpreter = libc.interpreterName(expectedTarget);
-			// const actualInterpreter = metadata.interpreter;
-
-			// tg.assert(actualInterpreter, "File should have been dynamically linked.");
-			// tg.assert(
-			// 	actualInterpreter.includes(expectedInterpreter),
-			// 	`Expected interpreter named ${expectedInterpreter} but got ${actualInterpreter}.`,
-			// );
 		} else if (metadata.format === "mach-o") {
 			tg.assert(metadata.arches.includes(expectedArch as string));
 		} else {

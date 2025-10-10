@@ -844,8 +844,9 @@ export namespace wrap {
 		if (wrappedExecutable.kind !== "path") {
 			return [];
 		}
+		tg.assert(manifest.executable.kind !== "address");
 		const wrappedExecutableFile = await fileOrSymlinkFromManifestTemplate(
-			manifest.executable.value as wrap.Manifest.Template,
+			manifest.executable.value
 		);
 		tg.assert(
 			wrappedExecutableFile instanceof tg.File,

@@ -55,7 +55,7 @@ export const build = async (arg?: Arg) => {
 		{ utils: false },
 	];
 	if (embedWrapper) {
-		envArgs.push({ TANGRAM_LINKER_EMBED_WRAPPER: true });
+		envArgs.push({ TGLD_EMBED_WRAPPER: true });
 	}
 	const env = std.env.arg(...envArgs);
 

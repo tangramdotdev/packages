@@ -324,7 +324,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 			? tg.Mutation.setIfUnset(stubElf.id)
 			: undefined,
 		TANGRAM_WRAP_ID: wrapBin ? tg.Mutation.setIfUnset(wrapBin.id) : undefined,
-		TANGRAM_LINKER_EMBED_WRAPPER: embedWrapper
+		TGLD_EMBED_WRAPPER: embedWrapper
 			? tg.Mutation.setIfUnset("true")
 			: undefined,
 	};
