@@ -91,7 +91,7 @@ class TangramClient {
 	}
 
 	async push(target: string): Promise<void> {
-		await $`${this.exe} push ${target}`.quiet();
+		await $`${this.exe} push ${target}`;
 	}
 
 	async cancel(processId: string, token: string): Promise<void> {
@@ -99,15 +99,15 @@ class TangramClient {
 	}
 
 	async format(path: string): Promise<void> {
-		await $`${this.exe} format ${path}`.quiet();
+		await $`${this.exe} format ${path}`;
 	}
 
 	async check(path: string): Promise<void> {
-		await $`${this.exe} check ${path}`.quiet();
+		await $`${this.exe} check ${path}`;
 	}
 
 	async publish(path: string): Promise<void> {
-		await $`${this.exe} publish ${path}`.quiet();
+		await $`${this.exe} publish ${path}`;
 	}
 }
 
@@ -138,9 +138,11 @@ interface PackageFilter {
 function resolvePackages(filter: PackageFilter): string[] {
 	const blacklist = new Set(["demo", "sanity", "webdemo"]);
 	let packages: string[] = [];
+	let wasExplicitlyIncluded = false;
 
 	if (filter.include && filter.include.length > 0) {
 		packages = [...filter.include];
+		wasExplicitlyIncluded = true;
 	} else {
 		const entries = fs.readdirSync(packagesPath(), { withFileTypes: true });
 
@@ -161,7 +163,9 @@ function resolvePackages(filter: PackageFilter): string[] {
 		packages = packages.filter((pkg) => !filter.exclude?.includes(pkg));
 	}
 
-	return packages.sort();
+	// Only sort if packages were discovered from the filesystem
+	// Preserve order if explicitly included via command-line arguments
+	return wasExplicitlyIncluded ? packages : packages.sort();
 }
 
 class Configuration {
@@ -186,7 +190,7 @@ class Configuration {
 	}) {
 		this.packages = options.packages || {};
 		this.actions = options.actions || [];
-		this.parallel = options.parallel ?? true;
+		this.parallel = options.parallel ?? false;
 		this.tangram = options.tangram || this.detectTangramExe();
 		this.currentPlatform = options.platform || this.detectPlatform();
 		this.exports = options.exports || ["default"];
@@ -270,7 +274,7 @@ Flags:
       --exclude=PKG     Exclude specific packages
       --dry-run         Show what would be done without executing
       --verbose         Enable verbose output
-      --sequential      Run packages sequentially (default: parallel)
+      --parallel        Run packages in parallel (default: sequential)
       --platform=PLAT   Override target platform
 
 Action Dependencies:
@@ -300,7 +304,7 @@ function parseFromArgs(): Configuration {
 			test: { type: "boolean", short: "t", default: false },
 			"dry-run": { type: "boolean", default: false },
 			verbose: { type: "boolean", default: false },
-			sequential: { type: "boolean", default: false },
+			parallel: { type: "boolean", default: false },
 			export: { type: "string", multiple: true },
 			exclude: { type: "string", multiple: true },
 			platform: { type: "string" },
@@ -348,7 +352,7 @@ function parseFromArgs(): Configuration {
 			exclude: values.exclude,
 		},
 		actions,
-		parallel: !values.sequential,
+		parallel: values.parallel ?? false,
 		exports,
 		dryRun: values["dry-run"] ?? false,
 		verbose: values.verbose ?? false,
