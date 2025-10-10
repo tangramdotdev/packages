@@ -5,8 +5,8 @@ export const metadata = {
 	name: "pcre2",
 	repository: "https://github.com/PCRE2Project/pcre2",
 	license: "https://github.com/PCRE2Project/pcre2/blob/master/LICENCE",
-	version: "10.44",
-	tag: "pcre2/10.44",
+	version: "10.46",
+	tag: "pcre2/10.46",
 	provides: {
 		libraries: ["pcre2-8"],
 	},
@@ -15,7 +15,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:86b9cb0aa3bcb7994faa88018292bc704cdbb708e785f7c74352ff6ea7d3175b";
+		"sha256:8d28d7f2c3b970c3a4bf3776bcbb5adfc923183ce74bc8df1ebaad8c1985bd07";
 	const owner = "PCRE2Project";
 	const repo = name;
 	const tag = `pcre2-${version}`;
