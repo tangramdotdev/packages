@@ -3,7 +3,7 @@ import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: std.Args<env.Arg>) {
-	return std.wrap(gnuEnv(), {
+	return std.wrap(await tg.build(gnuEnv), {
 		env: std.env.arg(...args),
 	});
 }
