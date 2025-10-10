@@ -1,0 +1,54 @@
+diff --git a/shell.c b/shell.c
+index ebd8965..74a66c8 100644
+--- a/shell.c
++++ b/shell.c
+@@ -359,6 +359,39 @@ _cygwin32_check_tmp ()
+ }
+ #endif /* __CYGWIN__ */
+ 
++static void tangram_restore () {
++	const char* k= NULL;
++	const char* v = NULL;
++
++	k = "TANGRAM_CLEAR_LD_LIBRARY_PATH";
++	v = getenv(k);
++	if (v) {
++		unsetenv("LD_LIBRARY_PATH");
++	}
++	unsetenv(k);
++
++	k = "TANGRAM_CLEAR_LD_PRELOAD";
++	v = getenv(k);
++	if (v) {
++		unsetenv("LD_PRELOAD");
++	}
++	unsetenv(k);
++
++	k = "TANGRAM_RESTORE_LD_LIBRARY_PATH";
++	v = getenv(k);
++	if (v) {
++		setenv(k, v, 1);
++	}
++	unsetenv(k);
++
++	k = "TANGRAM_RESTORE_LD_PRELOAD";
++	v = getenv(k);
++	if (v) {
++		setenv(k, v, 1);
++	}
++	unsetenv(k);
++}
++
+ #if defined (NO_MAIN_ENV_ARG)
+ /* systems without third argument to main() */
+ int
+@@ -1980,6 +2013,9 @@ shell_initialize ()
+   initialize_shell_variables (shell_environment, privileged_mode||running_setuid);
+ #endif
+ 
++  /* We must do this after the shell has been initialized to use the overriden setenv/unsetenv */
++  tangram_restore();
++
+   /* Initialize the data structures for storing and running jobs. */
+   initialize_job_control (jobs_m_flag);
+ 

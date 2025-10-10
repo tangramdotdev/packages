@@ -1809,10 +1809,13 @@ dependencies = [
 name = "tangram_std"
 version = "0.0.0"
 dependencies = [
+ "bytes",
  "futures",
  "serde",
  "serde_json",
  "tangram_client",
+ "tangram_serialize",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]
