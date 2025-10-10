@@ -165,7 +165,18 @@ function resolvePackages(filter: PackageFilter): string[] {
 
 	// Only sort if packages were discovered from the filesystem
 	// Preserve order if explicitly included via command-line arguments
-	return wasExplicitlyIncluded ? packages : packages.sort();
+	if (!wasExplicitlyIncluded) {
+		packages.sort();
+	}
+
+	// Always move std to the front if it exists in the list
+	const stdIndex = packages.indexOf("std");
+	if (stdIndex > 0) {
+		packages.splice(stdIndex, 1);
+		packages.unshift("std");
+	}
+
+	return packages;
 }
 
 class Configuration {
@@ -530,15 +541,24 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 
 	const versionedName = `${ctx.packageName}/${version}`;
 
-	// Build and push each export
+	// Build and push both default and build exports
+	// Special case: std uses default_ instead of build
+	const secondExport = ctx.packageName === "std" ? "default_" : "build";
 	const uploadedTags: string[] = [];
-	for (const exportName of ctx.exports) {
+	const exportsToRelease = ["default", secondExport];
+
+	for (const exportName of exportsToRelease) {
 		const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
 		const tag = buildTag(ctx.packageName, version, exportName, ctx.platform);
 		const buildSource = `${versionedName}${exportSuffix}`;
 
 		const result = await executeBuild(ctx, "release", buildSource, { tag });
 		if (!result.ok) {
+			// Gracefully skip second export if it fails, but fail for default
+			if (exportName === secondExport) {
+				log(`[release] Skipping ${secondExport} export: ${result.error}`);
+				continue;
+			}
 			return result as Result<string>;
 		}
 
