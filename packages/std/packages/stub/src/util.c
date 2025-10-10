@@ -9,7 +9,7 @@
 
 #ifdef __x86_64__
 __attribute__((naked))
-static void* memcpy (
+void* memcpy (
 	void*		dst, 
 	const void*	src, 
 	size_t		len
