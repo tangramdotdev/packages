@@ -135,12 +135,12 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	});
 
 	// Build a fully native GCC toolchain.
-	const nativeGcc = gcc.build({
+	const nativeGcc = tg.build(gcc.build, {
 		bootstrap: true,
 		build: host,
 		bundledSources: true, // Build gmp/isl/mpfr/mpc inline
 		crossNative: true, // Include workaround for configuring target libraries with an unproxied compiler.
-		env: stage1HostSdk,
+		env: std.env.arg(stage1HostSdk),
 		host,
 		sysroot,
 		target,
@@ -229,7 +229,7 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 	});
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
-	const crossGcc = await gcc.build({
+	const crossGcc = await tg.build(gcc.build, {
 		bootstrap: true,
 		build: buildTriple,
 		env: buildEnv,
@@ -300,7 +300,7 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 	});
 
 	// Produce the initial gcc required to build the standard C library.
-	const initialGccDir = await gcc.build({
+	const initialGccDir = await tg.build(gcc.build, {
 		bootstrap: true,
 		build: buildTriple,
 		env: buildEnv,

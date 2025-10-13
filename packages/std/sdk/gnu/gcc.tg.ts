@@ -197,6 +197,10 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		preConfigureHook = tg`${preConfigureHook}\nexport LD_LIBRARY_PATH=${sysrootLibDir}\nexport WATERMARK=3`;
 	}
 
+	if (variant === "stage2_full") {
+		preConfigureHook = tg`${preConfigureHook}\nunset LD_PRELOAD\n`;
+	}
+
 	// Set up phases.
 	const configure = {
 		pre: preConfigureHook,
