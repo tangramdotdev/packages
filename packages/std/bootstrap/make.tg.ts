@@ -28,7 +28,7 @@ export type Arg = {
 
 export const build = async (arg?: Arg) => {
 	const host = arg?.host ?? (await std.triple.host());
-	const embedWrapper = arg?.embedWrapper ?? true;
+	const embedWrapper = arg?.embedWrapper ?? std.triple.os(host) === "linux";
 
 	const configure = {
 		args: ["--disable-dependency-tracking"],
