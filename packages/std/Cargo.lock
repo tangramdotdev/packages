@@ -1761,6 +1761,7 @@ dependencies = [
  "tangram_client",
  "tangram_serialize",
  "tempfile",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

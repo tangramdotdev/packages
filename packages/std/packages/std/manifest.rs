@@ -344,7 +344,7 @@ impl Manifest {
 			.map_err(|source| tg::error!(!source, "failed to write manifest"))?;
 
 		// Run the command.
-		let success = std::process::Command::new(wrap)
+		let success = tokio::process::Command::new(wrap)
 			.arg(input)
 			.arg(output)
 			.arg(stub_elf)
@@ -353,6 +353,7 @@ impl Manifest {
 			.stdout(std::process::Stdio::inherit())
 			.stderr(std::process::Stdio::inherit())
 			.output()
+			.await
 			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?
 			.status
 			.success();
