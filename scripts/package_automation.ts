@@ -433,6 +433,44 @@ function buildTag(
 	return `${packageName}/builds/${version}/${exportName}/${platform}`;
 }
 
+/** Export configuration for release action */
+type ExportConfig = {
+	ref: string; // Export name ("default", "build") or path ("sdk.tg.ts#sdk")
+	tagPath: string; // Tag path segment (e.g., "sdk" → "pkg/builds/1.0.0/sdk/platform")
+	args?: Record<string, unknown>; // Optional build arguments
+};
+
+type ExportMatrix = ExportConfig[];
+
+/** Package-specific export matrices for release action */
+const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
+	std: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "default_", tagPath: "default_" },
+		{ ref: "sdk.tg.ts#sdk", tagPath: "sdk" },
+		{ ref: "utils.tg.ts#defaultEnv", tagPath: "utils/env" },
+		{ ref: "utils/coreutils.tg.ts#gnuEnv", tagPath: "utils/gnuEnv" },
+		{ ref: "wrap/injection.tg.ts#injection", tagPath: "wrap/injection" },
+		{ ref: "wrap/workspace.tg.ts#workspace", tagPath: "wrap/workspace" },
+		{ ref: "wrap/workspace.tg.ts#defaultWrapper", tagPath: "wrap/defaultWrapper" },
+		{
+			ref: "sdk/dependencies.tg.ts#extendedBuildTools",
+			tagPath: "dependencies/buildTools/extended",
+		},
+	],
+};
+
+/** Default export matrix for packages without custom configuration */
+const DEFAULT_EXPORT_MATRIX: ExportMatrix = [
+	{ ref: "default", tagPath: "default" },
+	{ ref: "build", tagPath: "build" },
+];
+
+/** Get export matrix for a package */
+function getExportMatrix(packageName: string): ExportMatrix {
+	return PACKAGE_EXPORT_MATRICES[packageName] || DEFAULT_EXPORT_MATRIX;
+}
+
 /** Simple result type */
 type Result<T> =
 	| { ok: true; value: T }
@@ -507,104 +545,48 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	const version = versionResult.value;
 
 	const versionedName = `${ctx.packageName}/${version}`;
-
-	// Build and push both default and build exports
-	// Special case: std uses default_ instead of build
-	const secondExport = ctx.packageName === "std" ? "default_" : "build";
 	const uploadedTags: string[] = [];
-	const exportsToRelease = ["default", secondExport];
+	const exportMatrix = getExportMatrix(ctx.packageName);
 
-	for (const exportName of exportsToRelease) {
-		const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
-		const tag = buildTag(ctx.packageName, version, exportName, ctx.platform);
-		const buildSource = `${versionedName}${exportSuffix}`;
+	for (const [index, exportConfig] of exportMatrix.entries()) {
+		const { ref, tagPath } = exportConfig;
 
-		const result = await executeBuild(ctx, "release", buildSource, { tag });
-		if (!result.ok) {
-			// Gracefully skip second export if it fails, but fail for default
-			if (exportName === secondExport) {
-				log(`[release] Skipping ${secondExport} export: ${result.error}`);
-				continue;
-			}
-			return result as Result<string>;
+		// Determine build source based on ref type
+		// If ref contains "/" or ".tg.ts", treat it as a path; otherwise, as an export name
+		const isPath = ref.includes("/") || ref.includes(".tg.ts");
+		let buildSource: string;
+
+		if (isPath) {
+			// Path-based ref: build from local package path
+			buildSource = `${ctx.packagePath}/${ref}`;
+		} else {
+			// Export name: build from versioned package
+			const exportSuffix = ref !== "default" ? `#${ref}` : "";
+			buildSource = `${versionedName}${exportSuffix}`;
 		}
 
+		// Construct tag
+		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
+
+		// Build with tag
+		const result = await executeBuild(ctx, "release", buildSource, { tag });
+		if (!result.ok) {
+			// Fail for the first export, skip subsequent exports
+			if (index === 0) {
+				return result as Result<string>;
+			}
+			log(`[release] Skipping ${ref}: ${result.error}`);
+			continue;
+		}
+
+		// Push the build
 		log(`[release] Pushing ${tag}`);
 		await ctx.tangram.push(tag);
 		log(`[release] Pushed ${tag}`);
 		uploadedTags.push(tag);
 	}
 
-	// Special case: for std package, also release internal components for cache hits
-	if (ctx.packageName === "std") {
-		const stdComponentsResult = await releaseStdComponents(ctx, version);
-		if (!stdComponentsResult.ok) {
-			return stdComponentsResult;
-		}
-		uploadedTags.push(...stdComponentsResult.value);
-	}
-
 	return { ok: true, value: `uploaded ${uploadedTags.join(", ")}` };
-}
-
-/** Release internal std components for cache hits */
-async function releaseStdComponents(
-	ctx: Context,
-	version: string,
-): Promise<Result<string[]>> {
-	const uploadedTags: string[] = [];
-
-	// Define components to build and push
-	const components: Array<{ ref: string; tagPath: string }> = [
-		{
-			ref: `${ctx.packagePath}/sdk.tg.ts#sdk`,
-			tagPath: `std/builds/${version}/sdk/${ctx.platform}`,
-		},
-		{
-			ref: `${ctx.packagePath}/utils.tg.ts#defaultEnv`,
-			tagPath: `std/builds/${version}/utils/env/${ctx.platform}`,
-		},
-		{
-			ref: `${ctx.packagePath}/utils/coreutils.tg.ts#gnuEnv`,
-			tagPath: `std/builds/${version}/utils/gnuEnv/${ctx.platform}`,
-		},
-		{
-			ref: `${ctx.packagePath}/wrap/injection.tg.ts#injection`,
-			tagPath: `std/builds/${version}/wrap/injection/${ctx.platform}`,
-		},
-		{
-			ref: `${ctx.packagePath}/wrap/workspace.tg.ts#workspace`,
-			tagPath: `std/builds/${version}/wrap/workspace/${ctx.platform}`,
-		},
-		{
-			ref: `${ctx.packagePath}/wrap/workspace.tg.ts#defaultWrapper`,
-			tagPath: `std/builds/${version}/wrap/defaultWrapper/${ctx.platform}`,
-		},
-		{
-			ref: `${ctx.packagePath}/sdk/dependencies.tg.ts#extendedBuildTools`,
-			tagPath: `std/builds/${version}/dependencies/buildTools/extended/${ctx.platform}`,
-		},
-	];
-
-	for (const { ref, tagPath } of components) {
-		log(`[release-std] Building ${ref}`);
-		const result = await executeBuild(ctx, "release-std", ref, {
-			tag: tagPath,
-		});
-
-		if (!result.ok) {
-			// Log warning but continue with other components
-			log(`[release-std] Warning: Failed to build ${ref}: ${result.error}`);
-			continue;
-		}
-
-		log(`[release-std] Pushing ${tagPath}`);
-		await ctx.tangram.push(tagPath);
-		log(`[release-std] Pushed ${tagPath}`);
-		uploadedTags.push(tagPath);
-	}
-
-	return { ok: true, value: uploadedTags };
 }
 
 /** Results tracking */
