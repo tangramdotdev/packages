@@ -327,6 +327,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		executable,
 		host: Some(host),
 		mounts: None,
+		name: None,
 		network: Some(false),
 		parent: None,
 		remote: None,
