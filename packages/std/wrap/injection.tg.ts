@@ -5,28 +5,28 @@ import injectionSource from "./injection" with { type: "directory" };
 
 type Arg = {
 	build?: string | undefined;
-	buildToolchain: std.env.Arg;
+	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source?: tg.Directory;
 };
 
-export const injection = async (unresolved: tg.Unresolved<Arg>) => {
+export const injection = async (unresolved?: tg.Unresolved<Arg>) => {
 	const arg = await tg.resolve(unresolved);
 
-	const host = arg.host ?? (await std.triple.host());
-	const build = arg.build ?? host;
+	const host = arg?.host ?? (await std.triple.host());
+	const build = arg?.build ?? host;
 	const os = std.triple.os(host);
 
 	// Get the source.
 	const sourceDir = arg?.source ? arg.source : injectionSource;
 	const source = await sourceDir.get(`${os}/lib.c`).then(tg.File.expect);
 
-	// Get the build toolchain.
-	const buildToolchain = arg.buildToolchain;
+	// Get the build toolchain. If not provided, use bootstrap SDK.
+	const buildToolchain = arg?.buildToolchain ?? (await bootstrap.sdk.env(host));
 
 	// Get any additional env.
-	const env = arg.env;
+	const env = arg?.env;
 
 	// Select the correct toolchain and options for the given triple.
 	let additionalArgs: Array<string | tg.Template> = [];
@@ -57,7 +57,7 @@ export const injection = async (unresolved: tg.Unresolved<Arg>) => {
 };
 
 type MacOsInjectionArg = {
-	buildToolchain: std.env.Arg;
+	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -72,6 +72,9 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 
 	const source = arg.source;
 
+	// Get the build toolchain. If not provided, use bootstrap SDK.
+	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
+
 	// Define common options.
 	const additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
 	const env = await std.env.arg(
@@ -85,7 +88,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 	// Compile arm64 dylib.
 	const arm64Args = additionalArgs.concat(["--target=aarch64-apple-darwin"]);
 	const arm64injection = await tg.build(dylib, {
-		...arg,
+		buildToolchain,
 		source,
 		additionalArgs: arm64Args,
 		env,
@@ -94,7 +97,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 	// Compile amd64 dylib.
 	const amd64Args = additionalArgs.concat(["--target=x86_64-apple-darwin"]);
 	const amd64injection = await tg.build(dylib, {
-		...arg,
+		buildToolchain,
 		source,
 		additionalArgs: amd64Args,
 		env,
@@ -106,7 +109,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 		await std.build`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
 			.bootstrap(true)
 			.host(system)
-			.env(arg.buildToolchain)
+			.env(buildToolchain)
 			.env(env)
 			.then(tg.File.expect);
 	return injection;
@@ -115,7 +118,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
 	build?: string;
-	buildToolchain: std.env.Arg;
+	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
 	source: tg.File;
@@ -124,6 +127,9 @@ type DylibArg = {
 export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	const host = arg.host ?? (await std.triple.host());
 	const build = arg.build ?? host;
+
+	// Get the build toolchain. If not provided, use bootstrap SDK.
+	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
 	// On macOS builds, the compiler is clang, so no triple prefix.
 	const useTriplePrefix = std.triple.os(build) === "linux" && build !== host;
 	let args: Array<tg.Unresolved<tg.Template.Arg>> = [
@@ -142,7 +148,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		args = [...args, ...arg.additionalArgs];
 	}
 	if (std.triple.os(host) === "linux") {
-		const toolchainEnv = await std.env.arg(arg.buildToolchain, {
+		const toolchainEnv = await std.env.arg(buildToolchain, {
 			utils: false,
 		});
 		// On linux build, add these flags.
@@ -172,7 +178,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 
 	const system = std.triple.archAndOs(build);
 	const env = std.env.arg(
-		arg.buildToolchain,
+		buildToolchain,
 		{
 			// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
 			TGLD_PASSTHROUGH: true,
@@ -212,6 +218,16 @@ export const test = async () => {
 		return tg.unreachable();
 	}
 	return nativeInjection;
+};
+
+/** The default injection library built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
+export const defaultInjection = async () => {
+	const host = await std.triple.host();
+	const buildToolchain = await bootstrap.sdk.env(host);
+	return tg.build(injection, {
+		buildToolchain,
+		host,
+	});
 };
 
 export const testCross = async () => {

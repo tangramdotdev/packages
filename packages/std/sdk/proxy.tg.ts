@@ -298,10 +298,14 @@ const ldProxy = async (arg: LdProxyArg) => {
 		build,
 		host,
 	});
-	const hostWrapper = await workspace.wrapper({
-		build,
-		host,
-	});
+	// Use default wrapper when no custom build or host is provided.
+	const hostWrapper =
+		arg.build === undefined && arg.host === undefined
+			? await tg.build(workspace.defaultWrapper)
+			: await workspace.wrapper({
+					build,
+					host,
+				});
 	await hostWrapper.store();
 
 	// Define environment for the linker proxy.
@@ -352,10 +356,14 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	const host = host_ ?? (await std.triple.host());
 	const build = build_ ?? host;
 
-	const hostWrapper = await workspace.wrapper({
-		build,
-		host,
-	});
+	// Use default wrapper when no custom build or host is provided.
+	const hostWrapper =
+		build_ === undefined && host_ === undefined
+			? await tg.build(workspace.defaultWrapper)
+			: await workspace.wrapper({
+					build,
+					host,
+				});
 	await hostWrapper.store();
 
 	const stripProxy = await workspace.stripProxy({

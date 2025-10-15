@@ -3,7 +3,7 @@ import * as std from "../tangram.ts";
 
 /** Produce a std.sdk() consisting only of components from the bootstrap bundles, with the `ld` proxy enabled. Will not compile any utilities or toolchains. */
 export async function sdk(host?: string) {
-	return std.sdk(sdk.arg(host));
+	return await tg.build(std.sdk, sdk.arg(host));
 }
 
 export namespace sdk {

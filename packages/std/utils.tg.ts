@@ -1,4 +1,5 @@
 import * as bootstrap from "./bootstrap.tg.ts";
+import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as std from "./tangram.ts";
 import * as bash from "./utils/bash.tg.ts";
 import bzip2 from "./utils/bzip2.tg.ts";
@@ -44,10 +45,13 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		build,
 		env: env_,
 		host: host_,
-		sdk,
+		sdk: sdk_,
 	} = arg ? await tg.resolve(arg) : {};
 	const bootstrap = true;
 	const host = host_ ?? (await std.triple.host());
+
+	// If no env or SDK is provided, use bootstrap SDK as default.
+	const sdk = sdk_ ?? (env_ ? undefined : await bootstrapSdk.sdk.arg(host));
 
 	const shellArtifact = await bash.build({
 		bootstrap,
@@ -87,6 +91,13 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 };
 
 export default env;
+
+/** The standard utils built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
+export const defaultEnv = async () => {
+	const host = await std.triple.host();
+	const sdk = await tg.build(std.sdk, { host });
+	return tg.build(env, { host, env: sdk });
+};
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {

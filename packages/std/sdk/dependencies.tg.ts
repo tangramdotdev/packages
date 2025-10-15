@@ -41,9 +41,9 @@ export * as zlib from "./dependencies/zlib.tg.ts";
 export * as zstd from "./dependencies/zstd.tg.ts";
 
 export type BuildToolsArg = {
-	host: string;
-	buildToolchain: std.env.Arg;
-	level: Level;
+	host?: string;
+	buildToolchain?: std.env.Arg;
+	level?: Level;
 };
 
 // This level thing doesn't make sense. Theser are bools, you need better logic for them.
@@ -51,22 +51,35 @@ export type Level = "pkgconfig" | "extended" | "python" | "devtools";
 
 /** An env containing the standard utils plus additional build-time tools needed for toolchain components: m4, bison, perl, python */
 export const buildTools = async (
-	unresolvedArg: tg.Unresolved<BuildToolsArg>,
+	unresolvedArg?: tg.Unresolved<BuildToolsArg>,
 ) => {
 	const {
-		host,
-		level,
+		host: host_,
+		level: level_,
 		buildToolchain: buildToolchain_,
-	} = await tg.resolve(unresolvedArg);
+	} = unresolvedArg ? await tg.resolve(unresolvedArg) : {};
+
+	// Default values
+	const host = host_ ?? (await std.triple.host());
+	const level = level_ ?? "extended";
 	const os = std.triple.os(host);
+
+	// If no buildToolchain is provided, use SDK + utils as default.
+	let buildToolchain: std.env.Arg;
+	if (buildToolchain_) {
+		buildToolchain = buildToolchain_;
+	} else {
+		buildToolchain = await std.env.arg(
+			await tg.build(std.sdk),
+			await tg.build(std.utils.env, { host }),
+		);
+	}
 
 	// This list collects artifacts to return. It does not include the build toolchain or standard utils..
 	const retEnvs: tg.Unresolved<Array<std.env.Arg>> = [{ utils: false }];
 
-	// The original env, with utils ensured.
-	const buildToolchain = await std.env.arg(buildToolchain_);
 	// A running modified build env including pieces we build along the way.
-	let buildEnv = buildToolchain;
+	let buildEnv = await std.env.arg(buildToolchain);
 
 	const bashExe = await std.env
 		.getArtifactByKey({ env: buildEnv, key: "SHELL" })
@@ -212,8 +225,19 @@ export const buildTools = async (
 	return std.env.arg(...retEnvs);
 };
 
+/** The extended build tools (autotools dependencies) built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
+export const extendedBuildTools = async () => {
+	const host = await std.triple.host();
+	const sdk = await tg.build(std.sdk, { host });
+	const utils = await tg.build(std.utils.defaultEnv);
+	return tg.build(buildTools, {
+		host,
+		buildToolchain: std.env.arg(sdk, utils),
+		level: "extended",
+	});
+};
+
 export type HostLibrariesArg = {
-	debug?: boolean;
 	host: string;
 	buildToolchain: std.env.Arg;
 	/** Should we include gmp/isl/mfpr/mpc? Default: true */
@@ -222,12 +246,7 @@ export type HostLibrariesArg = {
 
 /** An env containing libraries built for the given host: gmp, mpfr, isl, mpc, zlib, zstd. Assumes the incoming env contains a toolchain plus the build tools (m4 is required). */
 export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
-	const {
-		debug = false,
-		host,
-		buildToolchain,
-		withGccLibs = true,
-	} = await tg.resolve(arg);
+	const { host, buildToolchain, withGccLibs = true } = await tg.resolve(arg);
 
 	const zlibArtifact = zlib({
 		host,

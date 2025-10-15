@@ -3,7 +3,7 @@ import { gnuEnv } from "./utils/coreutils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: std.Args<env.Arg>) {
-	return std.wrap(gnuEnv(), {
+	return await std.wrap(await tg.build(gnuEnv), {
 		env: std.env.arg(...args),
 	});
 }
@@ -50,9 +50,7 @@ export namespace env {
 		if (includeUtils && !(await env.providesUtils(originalEnv))) {
 			return await env.mergeArgObjects(
 				originalEnv,
-				await tg.build(std.utils.env, {
-					env: await tg.build(std.sdk),
-				}),
+				await tg.build(std.utils.defaultEnv),
 			);
 		} else {
 			return originalEnv;

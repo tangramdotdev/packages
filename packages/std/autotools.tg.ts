@@ -223,12 +223,18 @@ export const build = async (...args: std.Args<Arg>) => {
 			level = "devtools";
 		}
 		if (level !== undefined) {
-			// Ignore the sdkArg from the user to ensure a cache hit for the build environment components.
-			const buildToolsEnv = await tg.build(buildTools, {
-				host,
-				buildToolchain: await tg.build(std.sdk, { host }),
-				level,
-			});
+			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
+			// Use the pre-built extendedBuildTools for the "extended" level to ensure cache hits.
+			if (level === "extended") {
+				buildToolsEnv = await tg.build(std.dependencies.extendedBuildTools);
+			} else {
+				// For other levels, build with the appropriate level parameter.
+				buildToolsEnv = await tg.build(buildTools, {
+					host,
+					buildToolchain: await tg.build(std.sdk, { host }),
+					level,
+				});
+			}
 			envs.push(sdk, buildToolsEnv);
 			// Add a cross SDK if necessary.
 			if (host !== target) {

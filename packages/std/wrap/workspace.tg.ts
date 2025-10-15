@@ -16,7 +16,7 @@ export type Arg = {
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
 export const workspace = async (
-	arg: tg.Unresolved<Arg>,
+	arg?: tg.Unresolved<Arg>,
 ): Promise<tg.Directory> => {
 	const {
 		build: build_,
@@ -24,7 +24,7 @@ export const workspace = async (
 		release = true,
 		source: source_,
 		verbose = false,
-	} = await tg.resolve(arg);
+	} = await tg.resolve(arg ?? {});
 	const host = host_ ?? (await std.triple.host());
 	const buildTriple = build_ ?? host;
 
@@ -45,29 +45,105 @@ export const workspace = async (
 	});
 };
 
-export const ccProxy = async (arg: tg.Unresolved<Arg>) =>
-	await tg
+/** Check if the resolved arguments match the defaults and should use the default workspace for cache optimization. */
+const shouldUseDefaultWorkspace = async (arg: {
+	build: string | undefined;
+	host: string | undefined;
+	release: boolean;
+	source: tg.Directory | undefined;
+	verbose: boolean;
+}): Promise<boolean> => {
+	const detectedHost = await std.triple.host();
+	const host = arg.host ?? detectedHost;
+	const build = arg.build ?? host;
+
+	return (
+		build === host &&
+		host === detectedHost &&
+		arg.release === true &&
+		arg.source === undefined &&
+		arg.verbose === false
+	);
+};
+
+export const ccProxy = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		const workspace = await tg.build(defaultWorkspace);
+		return workspace.get("bin/tgcc").then(tg.File.expect);
+	}
+
+	return await tg
 		.build(workspace, arg)
 		.then((dir) => dir.get("bin/tgcc"))
 		.then(tg.File.expect);
+};
 
-export const ldProxy = async (arg: tg.Unresolved<Arg>) =>
-	await tg
+export const ldProxy = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		const workspace = await tg.build(defaultWorkspace);
+		return workspace.get("bin/tgld").then(tg.File.expect);
+	}
+
+	return await tg
 		.build(workspace, arg)
 		.then((dir) => dir.get("bin/tgld"))
 		.then(tg.File.expect);
+};
 
-export const stripProxy = async (arg: tg.Unresolved<Arg>) =>
-	await tg
+export const stripProxy = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		const workspace = await tg.build(defaultWorkspace);
+		return workspace.get("bin/tgstrip").then(tg.File.expect);
+	}
+
+	return await tg
 		.build(workspace, arg)
 		.then((dir) => dir.get("bin/tgstrip"))
 		.then(tg.File.expect);
+};
 
-export const wrapper = async (arg: tg.Unresolved<Arg>) =>
-	await tg
+export const wrapper = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		return tg.build(defaultWrapper);
+	}
+
+	return await tg
 		.build(workspace, arg)
 		.then((dir) => dir.get("bin/wrapper"))
 		.then(tg.File.expect);
+};
+
+/** The default workspace built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
+export const defaultWorkspace = async () => {
+	const host = await std.triple.host();
+	return tg.build(workspace, { host });
+};
+
+/** The default wrapper built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
+export const defaultWrapper = async () => {
+	const workspace = await tg.build(defaultWorkspace);
+	return workspace.get("bin/wrapper").then(tg.File.expect);
+};
 
 type ToolchainArg = {
 	target?: string;

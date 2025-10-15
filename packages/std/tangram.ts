@@ -49,21 +49,11 @@ export const metadata = {
 	tag: "std/0.0.0",
 };
 
-/** The default export produces the default SDK env for the detected host, asserts its validity, and uses it to build the standard set of autotools build dependencies, returning the resulting env. */
+/** The default SDK for the detected host. */
 export const default_ = async () => {
-	const host = await triple.host();
-	const defaultSdk = await sdk.testDefault();
-	const stdUtils = await tg.build(utils.env, {
-		env: defaultSdk,
-		host,
-	});
-	const buildTools = await tg.build(dependencies.buildTools, {
-		host,
-		buildToolchain: stdEnv(defaultSdk, stdUtils),
-		level: "extended",
-	});
-	return stdEnv(stdUtils, defaultSdk, buildTools);
+	return await stdEnv(sdk.sdk(), dependencies.extendedBuildTools());
 };
+
 export default default_;
 
 /** Mapping of strings to pass to "test" to the test targets they run. */

@@ -30,15 +30,6 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const buildTriple = arg.build ?? host;
 	std.triple.assert(buildTriple);
 
-	const buildToolchain = arg.buildToolchain
-		? arg.buildToolchain
-		: std.triple.os(host) === "linux"
-			? await std.env.arg(
-					await tg.build(gnu.toolchain, { host: buildTriple, target: host }),
-					{ utils: false },
-				)
-			: await bootstrap.sdk.env(host);
-
 	// Construct the interpreter.
 	// Cases:
 	// - the user provided an interpreter argument.
@@ -48,25 +39,27 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	let manifestInterpreter = undefined;
 	if (arg.interpreter) {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
-			buildToolchain,
+			buildToolchain: arg.buildToolchain,
 			build: buildTriple,
 			host,
 			interpreter: arg.interpreter,
 			executable: undefined,
 			libraryPaths: arg.libraryPaths,
 			libraryPathStrategy: arg.libraryPathStrategy,
+			preloads: arg.preloads,
 		});
 	} else if (existingManifest?.interpreter) {
 		manifestInterpreter = existingManifest?.interpreter;
 	} else if (arg.executable && typeof arg.executable !== "number") {
 		manifestInterpreter = await manifestInterpreterFromWrapArgObject({
-			buildToolchain,
+			buildToolchain: arg.buildToolchain,
 			build: buildTriple,
 			host,
 			interpreter: undefined,
 			executable: arg.executable,
 			libraryPaths: arg.libraryPaths,
 			libraryPathStrategy: arg.libraryPathStrategy,
+			preloads: arg.preloads,
 		});
 	}
 
@@ -108,10 +101,14 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		if (manifest.executable.kind === "address") {
 			throw new Error("invalid manifest");
 		}
-		let wrapper = await workspace.wrapper({
-			build,
-			host,
-		});
+		// Use default wrapper when no custom build or host is provided.
+		let wrapper =
+			arg.build === undefined && arg.host === undefined
+				? await tg.build(workspace.defaultWrapper)
+				: await workspace.wrapper({
+						build,
+						host,
+					});
 		return wrap.Manifest.write(wrapper, manifest);
 	}
 }
@@ -454,7 +451,7 @@ export namespace wrap {
 		if (buildToolchain_) {
 			buildArg = { ...buildArg, bootstrap: true, env: buildToolchain_ };
 		} else {
-			buildArg = { ...buildArg, bootstrap: true, env: std.sdk() };
+			buildArg = { ...buildArg, bootstrap: true, env: await tg.build(std.sdk) };
 		}
 		const shellExecutable = await std.utils.bash
 			.build(buildArg)
@@ -846,7 +843,7 @@ export namespace wrap {
 		}
 		tg.assert(manifest.executable.kind !== "address");
 		const wrappedExecutableFile = await fileOrSymlinkFromManifestTemplate(
-			manifest.executable.value
+			manifest.executable.value,
 		);
 		tg.assert(
 			wrappedExecutableFile instanceof tg.File,
@@ -1247,6 +1244,23 @@ type ManifestInterpreterArg = {
 	preloads?: Array<tg.File | tg.Symlink | tg.Template> | undefined;
 };
 
+/** Compute the buildToolchain, using the provided value or computing a default. */
+const getBuildToolchain = async (
+	buildToolchain: std.env.Arg | undefined,
+	build: string,
+	host: string,
+): Promise<std.env.Arg> => {
+	if (buildToolchain !== undefined) {
+		return buildToolchain;
+	}
+	return std.triple.os(host) === "linux"
+		? await std.env.arg(
+				await tg.build(gnu.toolchain, { host: build, target: host }),
+				{ utils: false },
+			)
+		: await bootstrap.sdk.env(host);
+};
+
 /** Produce the manifest interpreter object given a set of parameters. */
 const manifestInterpreterFromWrapArgObject = async (
 	arg: ManifestInterpreterArg,
@@ -1414,12 +1428,15 @@ const interpreterFromArg = async (
 				const arch = interpreterMetadata.arch;
 				const host = `${arch}-unknown-linux-gnu`;
 				const detectedBuild = await std.triple.host();
-				const buildToolchain = buildToolchainArg
-					? buildToolchainArg
-					: await std.env.arg(await tg.build(gnu.toolchain, { host }));
+				const build = buildArg ?? detectedBuild;
+				const buildToolchain = await getBuildToolchain(
+					buildToolchainArg,
+					build,
+					host,
+				);
 				const injectionLibrary = await tg.build(injection.injection, {
 					buildToolchain,
-					build: buildArg ?? detectedBuild,
+					build,
 					host,
 				});
 
@@ -1459,11 +1476,16 @@ const interpreterFromArg = async (
 			if (preloads.length === 0) {
 				const arch = interpreterMetadata.arch;
 				const host = `${arch}-linux-musl`;
-				const buildToolchain = bootstrap.sdk.env(host);
 				const detectedBuild = await std.triple.host();
+				const build = buildArg ?? detectedBuild;
+				const buildToolchain = await getBuildToolchain(
+					buildToolchainArg,
+					build,
+					host,
+				);
 				const injectionLibrary = await tg.build(injection.injection, {
 					buildToolchain,
-					build: buildArg ?? detectedBuild,
+					build,
 					host,
 				});
 				preloads.push(injectionLibrary);
@@ -1484,15 +1506,24 @@ const interpreterFromArg = async (
 			// If no preload is defined, add the default injection preload.
 			if (preloads.length === 0) {
 				const host = await std.triple.host();
-				const buildToolchain = buildToolchainArg
-					? buildToolchainArg
-					: bootstrap.sdk.env(host);
-				const injectionLibrary = await tg.build(injection.injection, {
-					buildToolchain,
-					build: buildArg,
-					host,
-				});
-				preloads.push(injectionLibrary);
+				// Use default injection when no custom build or buildToolchain is provided.
+				if (buildArg === undefined && buildToolchainArg === undefined) {
+					const injectionLibrary = await tg.build(injection.defaultInjection);
+					preloads.push(injectionLibrary);
+				} else {
+					const build = buildArg ?? host;
+					const buildToolchain = await getBuildToolchain(
+						buildToolchainArg,
+						build,
+						host,
+					);
+					const injectionLibrary = await tg.build(injection.injection, {
+						buildToolchain,
+						build: buildArg,
+						host,
+					});
+					preloads.push(injectionLibrary);
+				}
 			}
 
 			return {
@@ -1546,20 +1577,38 @@ const interpreterFromExecutableArg = async (
 			return interpreterFromElf(metadata, buildToolchainArg, buildArg, hostArg);
 		}
 		case "mach-o": {
-			const arch = std.triple.arch(await std.triple.host());
-			const host = hostArg ?? std.triple.create({ os: "darwin", arch });
-			const buildTriple = buildArg ?? host;
-			const buildToolchain = bootstrap.sdk.env(host);
-			const injectionDylib = await tg.build(injection.injection, {
-				buildToolchain,
-				build: buildTriple,
-				host,
-			});
-			return {
-				kind: "dyld",
-				libraryPaths: undefined,
-				preloads: [injectionDylib],
-			};
+			// Use default injection when no custom build, host, or buildToolchain is provided.
+			if (
+				buildArg === undefined &&
+				hostArg === undefined &&
+				buildToolchainArg === undefined
+			) {
+				const injectionDylib = await tg.build(injection.defaultInjection);
+				return {
+					kind: "dyld",
+					libraryPaths: undefined,
+					preloads: [injectionDylib],
+				};
+			} else {
+				const arch = std.triple.arch(await std.triple.host());
+				const host = hostArg ?? std.triple.create({ os: "darwin", arch });
+				const buildTriple = buildArg ?? host;
+				const buildToolchain = await getBuildToolchain(
+					buildToolchainArg,
+					buildTriple,
+					host,
+				);
+				const injectionDylib = await tg.build(injection.injection, {
+					buildToolchain,
+					build: buildTriple,
+					host,
+				});
+				return {
+					kind: "dyld",
+					libraryPaths: undefined,
+					preloads: [injectionDylib],
+				};
+			}
 		}
 		case "shebang": {
 			if (metadata.interpreter === undefined) {
@@ -1627,17 +1676,9 @@ const interpreterFromElf = async (
 
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {
-		// Handle an ld-linux interpreter.
-		const toolchainEnv = buildToolchainArg
-			? buildToolchainArg
-			: await std.env.arg(
-					await tg.build(gnu.toolchain, { host: buildTriple, target: host }),
-					{
-						utils: false,
-					},
-				);
+		// Handle an ld-linux interpreter. Reuse buildToolchain for toolchain components.
 		const { ldso, libDir } = await std.sdk.toolchainComponents({
-			env: await std.env.arg(toolchainEnv, { utils: false }),
+			env: await std.env.arg(buildToolchain, { utils: false }),
 			host: buildTriple,
 			target: host,
 		});

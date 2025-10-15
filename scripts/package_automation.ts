@@ -91,7 +91,7 @@ class TangramClient {
 	}
 
 	async push(target: string): Promise<void> {
-		await $`${this.exe} push ${target}`;
+		await $`${this.exe} push ${target}`.quiet();
 	}
 
 	async cancel(processId: string, token: string): Promise<void> {
@@ -186,7 +186,6 @@ class Configuration {
 	readonly tangram: string;
 	readonly currentPlatform: string;
 	readonly exports: string[];
-	readonly dryRun: boolean;
 	readonly verbose: boolean;
 
 	constructor(options: {
@@ -195,7 +194,6 @@ class Configuration {
 		parallel?: boolean;
 		tangram?: string;
 		exports?: string[];
-		dryRun?: boolean;
 		verbose?: boolean;
 		platform?: string;
 	}) {
@@ -205,7 +203,6 @@ class Configuration {
 		this.tangram = options.tangram || this.detectTangramExe();
 		this.currentPlatform = options.platform || this.detectPlatform();
 		this.exports = options.exports || ["default"];
-		this.dryRun = options.dryRun ?? false;
 		this.verbose = options.verbose ?? false;
 	}
 
@@ -233,11 +230,6 @@ class Configuration {
 	}
 
 	async validateTangram(): Promise<void> {
-		if (this.dryRun) {
-			log("Dry run mode - skipping tangram validation");
-			return;
-		}
-
 		const tangram = new TangramClient(this.tangram);
 		await tangram.validateInstallation();
 	}
@@ -246,7 +238,7 @@ class Configuration {
 		const actions = `Actions: ${this.actions.join(", ")}`;
 		const packages = `Package Filter: ${JSON.stringify(this.packages)}`;
 		const exports = `Exports: ${this.exports.join(", ")}`;
-		const config = `Parallel: ${this.parallel}, DryRun: ${this.dryRun}`;
+		const config = `Parallel: ${this.parallel}`;
 		const tangram = `Tangram: ${this.tangram}`;
 		const platform = `Platform: ${this.currentPlatform}`;
 		return [actions, packages, exports, config, tangram, platform].join("\n");
@@ -270,9 +262,6 @@ Examples:
   # Build custom exports
   bun run scripts/package_automation.ts --build --export=custom --export=test ripgrep
 
-  # Dry run with verbose output
-  bun run scripts/package_automation.ts --dry-run --verbose -t
-
 Flags:
   -b, --build           Build specified exports (default: "default")
   -c, --check           Run tg check
@@ -283,7 +272,6 @@ Flags:
   -t, --test            Build test export
       --export=NAME     Specify export to build (can be used multiple times)
       --exclude=PKG     Exclude specific packages
-      --dry-run         Show what would be done without executing
       --verbose         Enable verbose output
       --parallel        Run packages in parallel (default: sequential)
       --platform=PLAT   Override target platform
@@ -313,7 +301,6 @@ function parseFromArgs(): Configuration {
 			publish: { type: "boolean", short: "p", default: false },
 			release: { type: "boolean", short: "r", default: false },
 			test: { type: "boolean", short: "t", default: false },
-			"dry-run": { type: "boolean", default: false },
 			verbose: { type: "boolean", default: false },
 			parallel: { type: "boolean", default: false },
 			export: { type: "string", multiple: true },
@@ -365,7 +352,6 @@ function parseFromArgs(): Configuration {
 		actions,
 		parallel: values.parallel ?? false,
 		exports,
-		dryRun: values["dry-run"] ?? false,
 		verbose: values.verbose ?? false,
 		tangram: values.tangram,
 		platform: values.platform,
@@ -380,7 +366,6 @@ interface Context {
 	platform: string;
 	exports: string[];
 	processTracker: ProcessTracker;
-	dryRun: boolean;
 	verbose: boolean;
 }
 
@@ -411,15 +396,20 @@ async function executeBuild(
 		const process = await ctx.tangram.build(buildPath, options);
 		processId = process.id;
 
-		// Only track processes that have a cancellation token
+		// Only track and wait for processes that have a cancellation token
 		if (process.token) {
 			ctx.processTracker.add(process.id, process.token);
+			log(
+				`[${actionName}] ${buildPath}: ${processId}${options.tag ? ` (tag: ${options.tag})` : ""}`,
+			);
+			await ctx.tangram.processOutput(processId);
+		} else {
+			// No token means the build is cached/already complete
+			log(
+				`[${actionName}] ${buildPath}: ${processId} (cached)${options.tag ? ` (tag: ${options.tag})` : ""}`,
+			);
 		}
 
-		log(
-			`[${actionName}] ${buildPath}: ${processId}${options.tag ? ` (tag: ${options.tag})` : ""}`,
-		);
-		await ctx.tangram.processOutput(processId);
 		return { ok: true, value: undefined };
 	} catch (err) {
 		if (isUnsupportedHostError(err)) {
@@ -452,10 +442,6 @@ type Result<T> =
 async function formatAction(ctx: Context): Promise<Result<void>> {
 	log(`[format] ${ctx.packagePath}`);
 
-	if (ctx.dryRun) {
-		return { ok: true, value: undefined };
-	}
-
 	try {
 		await ctx.tangram.format(ctx.packagePath);
 		return { ok: true, value: undefined };
@@ -466,10 +452,6 @@ async function formatAction(ctx: Context): Promise<Result<void>> {
 
 async function checkAction(ctx: Context): Promise<Result<void>> {
 	log(`[check] ${ctx.packagePath}`);
-
-	if (ctx.dryRun) {
-		return { ok: true, value: undefined };
-	}
 
 	try {
 		await ctx.tangram.check(ctx.packagePath);
@@ -486,11 +468,6 @@ async function buildAction(ctx: Context): Promise<Result<string[]>> {
 		const exportSuffix = exportName !== "default" ? `#${exportName}` : "";
 		const buildPath = `${ctx.packagePath}${exportSuffix}`;
 
-		if (ctx.dryRun) {
-			built.push(buildPath);
-			continue;
-		}
-
 		const result = await executeBuild(ctx, "build", buildPath);
 		if (!result.ok) {
 			return result as Result<string[]>;
@@ -502,11 +479,6 @@ async function buildAction(ctx: Context): Promise<Result<string[]>> {
 }
 
 async function publishAction(ctx: Context): Promise<Result<string>> {
-	if (ctx.dryRun) {
-		log("[publish] would publish package (dry run)");
-		return { ok: true, value: "dry run" };
-	}
-
 	// Get version from metadata
 	const versionResult = await getPackageVersion(ctx);
 	if (!versionResult.ok) {
@@ -527,11 +499,6 @@ async function publishAction(ctx: Context): Promise<Result<string>> {
 }
 
 async function releaseAction(ctx: Context): Promise<Result<string>> {
-	if (ctx.dryRun) {
-		log("[release] would build and upload build artifacts (dry run)");
-		return { ok: true, value: "dry run" };
-	}
-
 	// Get version from metadata
 	const versionResult = await getPackageVersion(ctx);
 	if (!versionResult.ok) {
@@ -562,11 +529,82 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 			return result as Result<string>;
 		}
 
+		log(`[release] Pushing ${tag}`);
 		await ctx.tangram.push(tag);
+		log(`[release] Pushed ${tag}`);
 		uploadedTags.push(tag);
 	}
 
+	// Special case: for std package, also release internal components for cache hits
+	if (ctx.packageName === "std") {
+		const stdComponentsResult = await releaseStdComponents(ctx, version);
+		if (!stdComponentsResult.ok) {
+			return stdComponentsResult;
+		}
+		uploadedTags.push(...stdComponentsResult.value);
+	}
+
 	return { ok: true, value: `uploaded ${uploadedTags.join(", ")}` };
+}
+
+/** Release internal std components for cache hits */
+async function releaseStdComponents(
+	ctx: Context,
+	version: string,
+): Promise<Result<string[]>> {
+	const uploadedTags: string[] = [];
+
+	// Define components to build and push
+	const components: Array<{ ref: string; tagPath: string }> = [
+		{
+			ref: `${ctx.packagePath}/sdk.tg.ts#sdk`,
+			tagPath: `std/builds/${version}/sdk/${ctx.platform}`,
+		},
+		{
+			ref: `${ctx.packagePath}/utils.tg.ts#defaultEnv`,
+			tagPath: `std/builds/${version}/utils/env/${ctx.platform}`,
+		},
+		{
+			ref: `${ctx.packagePath}/utils/coreutils.tg.ts#gnuEnv`,
+			tagPath: `std/builds/${version}/utils/gnuEnv/${ctx.platform}`,
+		},
+		{
+			ref: `${ctx.packagePath}/wrap/injection.tg.ts#injection`,
+			tagPath: `std/builds/${version}/wrap/injection/${ctx.platform}`,
+		},
+		{
+			ref: `${ctx.packagePath}/wrap/workspace.tg.ts#workspace`,
+			tagPath: `std/builds/${version}/wrap/workspace/${ctx.platform}`,
+		},
+		{
+			ref: `${ctx.packagePath}/wrap/workspace.tg.ts#defaultWrapper`,
+			tagPath: `std/builds/${version}/wrap/defaultWrapper/${ctx.platform}`,
+		},
+		{
+			ref: `${ctx.packagePath}/sdk/dependencies.tg.ts#extendedBuildTools`,
+			tagPath: `std/builds/${version}/dependencies/buildTools/extended/${ctx.platform}`,
+		},
+	];
+
+	for (const { ref, tagPath } of components) {
+		log(`[release-std] Building ${ref}`);
+		const result = await executeBuild(ctx, "release-std", ref, {
+			tag: tagPath,
+		});
+
+		if (!result.ok) {
+			// Log warning but continue with other components
+			log(`[release-std] Warning: Failed to build ${ref}: ${result.error}`);
+			continue;
+		}
+
+		log(`[release-std] Pushing ${tagPath}`);
+		await ctx.tangram.push(tagPath);
+		log(`[release-std] Pushed ${tagPath}`);
+		uploadedTags.push(tagPath);
+	}
+
+	return { ok: true, value: uploadedTags };
 }
 
 /** Results tracking */
@@ -640,10 +678,6 @@ class Results {
 
 async function testAction(ctx: Context): Promise<Result<void>> {
 	const buildPath = `${ctx.packagePath}#test`;
-
-	if (ctx.dryRun) {
-		return { ok: true, value: undefined };
-	}
 
 	return await executeBuild(ctx, "test", buildPath);
 }
@@ -721,7 +755,6 @@ class PackageExecutor {
 				platform: this.config.currentPlatform,
 				exports: this.config.exports,
 				processTracker: this.processTracker,
-				dryRun: this.config.dryRun,
 				verbose: this.config.verbose,
 			};
 
