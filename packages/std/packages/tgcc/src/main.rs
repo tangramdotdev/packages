@@ -366,7 +366,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		env: environment.env,
 		executable,
 		host: Some(host),
-		name: None,
+		name: Some("cc".into()),
 		network: Some(false),
 		mounts: None,
 		parent: None,
@@ -580,6 +580,7 @@ async fn check_in_source_tree(
 							local_dependencies: true,
 							locked: false,
 							lock: false,
+							..tg::checkin::Options::default()
 						},
 						path,
 						updates: vec![],

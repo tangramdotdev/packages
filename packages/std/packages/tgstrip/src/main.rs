@@ -155,6 +155,7 @@ async fn run_proxy(
 					ignore: false,
 					locked: false,
 					lock: false,
+					..tg::checkin::Options::default()
 				},
 				path: local_executable_path,
 				updates: vec![],

@@ -67,7 +67,7 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		CONFIG_SHELL: shellExecutable,
 		SHELL: shellExecutable,
 	};
-	const env = await std.env.arg(env_, shellEnv, { utils: false });
+	const env = await std.env.arg(env_, shellEnv, { utils: false }, { WATERMARK: "3" });
 	const commonArg = { bootstrap, build, env, host, sdk };
 
 	let utils = [shellArtifact, shellEnv];
