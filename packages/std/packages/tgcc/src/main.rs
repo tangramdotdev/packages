@@ -360,22 +360,12 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	let host = tg::host().to_string();
 	let run_arg = tg::run::Arg {
 		args,
-		cached: None,
-		checksum: None,
-		cwd: None,
 		env: environment.env,
 		executable,
 		host: Some(host),
-		name: None,
+		name: Some("cc".into()),
 		network: Some(false),
-		mounts: None,
-		parent: None,
-		remote: None,
-		retry: false,
-		stdout: None,
-		stderr: None,
-		stdin: None,
-		user: None,
+		..Default::default()
 	};
 	let build_directory = tg::run::run(tg, run_arg)
 		.await?
@@ -580,6 +570,7 @@ async fn check_in_source_tree(
 							local_dependencies: true,
 							locked: false,
 							lock: false,
+							..tg::checkin::Options::default()
 						},
 						path,
 						updates: vec![],

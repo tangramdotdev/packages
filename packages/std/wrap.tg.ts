@@ -1027,7 +1027,7 @@ export namespace wrap {
 				);
 				let new_file = await tg.file(bytes, {
 					executable: true,
-					dependencies: file.dependencies(),
+					dependencies: await file.dependencies(),
 				});
 
 				return [new_file, manifest];
@@ -2888,8 +2888,6 @@ export const testDependencies = async () => {
 	console.log("wrapper", wrapper.id);
 	const wrapperDependencies = await wrapper.dependencies();
 	console.log("wrapperDependencies", wrapperDependencies);
-
-	// return wrapper;
 
 	const bundle = tg.bundle(await tg.directory({ wrapper }));
 	return bundle;

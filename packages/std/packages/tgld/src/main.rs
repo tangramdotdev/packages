@@ -1,4 +1,4 @@
-use futures::{StreamExt as _, TryStreamExt as _};
+use futures::{StreamExt as _, TryFutureExt, TryStreamExt as _};
 use itertools::Itertools;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -17,6 +17,37 @@ fn main() {
 	if let Err(e) = main_inner() {
 		eprintln!("linker proxy failed: {e}");
 		std::process::exit(1);
+	}
+}
+
+trait Ext {
+	type T;
+	fn timeout(
+		self,
+		t: std::time::Duration,
+		msg: &str,
+	) -> impl Future<Output = Result<Self::T, tokio::time::error::Elapsed>>;
+}
+
+impl<F, T> Ext for F
+where
+	F: Future<Output = T>,
+{
+	type T = T;
+	fn timeout(
+		self,
+		t: std::time::Duration,
+		msg: &str,
+	) -> impl Future<Output = Result<Self::T, tokio::time::error::Elapsed>> {
+		async move {
+			match tokio::time::timeout(t, self).await {
+				Ok(result) => Ok(result),
+				Err(elapsed) => {
+					eprintln!("{msg} timed out");
+					Err(elapsed)
+				},
+			}
+		}
 	}
 }
 
@@ -55,7 +86,11 @@ fn main_inner() -> tg::Result<()> {
 		.enable_all()
 		.build()
 		.unwrap()
-		.block_on(create_wrapper(&options))?;
+		.block_on(
+			create_wrapper(&options)
+				.timeout(std::time::Duration::from_secs(30), "tgld")
+				.map_err(|_| tg::error!("tgld timed out")),
+		)??;
 
 	Ok(())
 }
@@ -129,14 +164,12 @@ fn read_options() -> tg::Result<Options> {
 	let mut embed = std::env::var("TGLD_EMBED_WRAPPER").is_ok();
 
 	// Get additional interpreter args, if any.
-	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS")
-		.ok()
-		.map(|combined| {
-			combined
-				.split_whitespace()
-				.map(std::string::ToString::to_string)
-				.collect_vec()
-		});
+	let interpreter_args = std::env::var("TGLD_INTERPRETER_ARGS").ok().map(|combined| {
+		combined
+			.split_whitespace()
+			.map(std::string::ToString::to_string)
+			.collect_vec()
+	});
 
 	// Get the max depth.
 	let mut max_depth = std::env::var("TGLD_MAX_DEPTH")
@@ -249,7 +282,10 @@ fn read_options() -> tg::Result<Options> {
 async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Create the tangram instance.
 	let tg = tg::Client::with_env()?;
-	tg.connect().await?;
+	tg.connect()
+		.timeout(std::time::Duration::from_secs(1), "connect")
+		.map_err(|_| tg::error!("connect() timed out"))
+		.await??;
 	let tg_url = tg.url();
 	tracing::debug!(?tg_url, "connected client");
 
@@ -368,7 +404,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				};
 				Ok::<_, tg::Error>(artifact_path)
 			}))
-			.await?
+			.timeout(std::time::Duration::from_secs(1), "collect")
+			.map_err(|_| tg::error!("collecting library paths timed out"))
+			.await??
 			.into_iter()
 			.flatten(),
 		)
@@ -395,12 +433,15 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 					local_dependencies: true,
 					locked: false,
 					lock: false,
+					..tg::checkin::Options::default()
 				},
 				path: output_path,
 				updates: vec![],
 			},
 		)
-		.await?
+		.timeout(std::time::Duration::from_secs(30), "checkin")
+		.map_err(|_| tg::error!("checkin timed out"))
+		.await??
 		.try_unwrap_file()
 		.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
@@ -432,7 +473,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			options.max_depth,
 			options.disallow_missing,
 		)
-		.await?;
+		.timeout(
+			std::time::Duration::from_secs(1),
+			"optimizing library paths",
+		)
+		.map_err(|source| tg::error!(!source, "optimizing library paths timed out"))
+		.await??;
 
 		tracing::trace!(
 			?library_paths,
@@ -450,8 +496,10 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_artifact_id = output_file.id().clone().into();
 
 		// Create the manifest.
-		let mut manifest =
-			create_manifest(output_artifact_id, options, interpreter, library_paths).await?;
+		let mut manifest = create_manifest(output_artifact_id, options, interpreter, library_paths)
+			.timeout(std::time::Duration::from_millis(1), "create_manifest")
+			.map_err(|source| tg::error!(!source, "creating the manifest timed out"))
+			.await??;
 		tracing::trace!(?manifest);
 
 		// If requested, emebd the wrapper.
@@ -465,7 +513,6 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		};
 
 		// Write the manifest to a wrapper.
-
 		let new_wrapper_id = new_wrapper.id();
 		tracing::trace!(?new_wrapper_id);
 
@@ -480,7 +527,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 						let key = tg::Reference::with_object(dir_with_subpath.id.clone().into());
 						let item = tg::Directory::with_id(dir_with_subpath.id).into();
 						let value = tg::Referent::with_item(item);
-						Ok::<_, tg::Error>((key, value))
+						Ok::<_, tg::Error>((key, Some(value)))
 					},
 				))
 				.await?,
@@ -579,6 +626,7 @@ async fn checkin_local_library_path(
 							local_dependencies: true,
 							locked: true,
 							lock: false,
+							..tg::checkin::Options::default()
 						},
 						path: library_candidate_path,
 						updates: vec![],
@@ -870,6 +918,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 									local_dependencies: true,
 									locked: true,
 									lock: false,
+									..tg::checkin::Options::default()
 								},
 								path: library_candidate_path.clone(),
 								updates: vec![],

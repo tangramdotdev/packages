@@ -474,7 +474,7 @@ impl Manifest {
 
 	/// Collect the dependencies from a manifest.
 	#[must_use]
-	pub fn dependencies(&self) -> BTreeMap<tg::Reference, tg::Referent<tg::Object>> {
+	pub fn dependencies(&self) -> BTreeMap<tg::Reference, Option<tg::Referent<tg::Object>>> {
 		let mut dependencies = BTreeMap::default();
 
 		// Collect the references from the interpreter.
@@ -550,6 +550,9 @@ impl Manifest {
 		}
 
 		dependencies
+			.into_iter()
+			.map(|(reference, referent)| (reference, Some(referent)))
+			.collect()
 	}
 }
 

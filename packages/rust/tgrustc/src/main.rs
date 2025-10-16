@@ -320,22 +320,12 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	let host = host().to_string();
 	let run_arg = tg::run::Arg {
 		args: command_args,
-		cwd: None,
-		cached: None,
-		checksum: None,
 		env,
 		executable,
 		host: Some(host),
-		mounts: None,
-		name: None,
+		name: Some("rustc".into()),
 		network: Some(false),
-		parent: None,
-		remote: None,
-		retry: false,
-		stderr: None,
-		stdout: None,
-		stdin: None,
-		user: None,
+		..Default::default()
 	};
 
 	// Get the process output.

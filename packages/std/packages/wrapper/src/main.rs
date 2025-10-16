@@ -104,6 +104,7 @@ fn main_inner() -> std::io::Result<()> {
 	) = &manifest.interpreter
 	{
 		// Set `TANGRAM_INJECTION_IDENTITY_PATH`.
+		#[cfg(feature = "tracing")]
 		tracing::trace!("SETTING IDENTITY PATH: {}", wrapper_path.display());
 		unsafe {
 			std::env::set_var("TANGRAM_INJECTION_IDENTITY_PATH", wrapper_path);
