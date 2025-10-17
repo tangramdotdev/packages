@@ -83,6 +83,13 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
+	const spec: std.assert.PackageSpec = {
+		...std.assert.defaultSpec(metadata),
+		libraries: [
+			std.assert.library("readline", {
+				runtimeDeps: [await std.assert.runtimeDep(ncurses.build, ["ncursesw"])],
+			}),
+		],
+	};
 	return await std.assert.pkg(build, spec);
 };

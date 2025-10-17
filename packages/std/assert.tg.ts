@@ -724,6 +724,74 @@ export const allBinaries = (
 	return names.map((name) => ({ name, ...override }));
 };
 
+/** Helper to create a runtime dependency from a build command and library names. */
+export const runtimeDep = async <T extends std.args.PackageArg>(
+	buildCmd: std.packages.BuildCommand<T>,
+	libs: Array<string>,
+	arg?: T,
+): Promise<RuntimeDep> => {
+	const directory = await std.packages.buildCommandOutput(buildCmd, arg ?? ({} as T));
+	return { directory, libs };
+};
+
+/** Helper to create a library spec without redundantly specifying the name field. */
+export function library(name: string): string;
+export function library(
+	name: string,
+	overrides: {
+		pkgConfigName?: boolean | string;
+		dylib?: boolean;
+		staticlib?: boolean;
+		runtimeDeps?: Array<RuntimeDep>;
+		symbols?: Array<string>;
+	},
+): {
+	name: string;
+	pkgConfigName?: boolean | string;
+	dylib?: boolean;
+	staticlib?: boolean;
+	runtimeDeps?: Array<RuntimeDep>;
+	symbols?: Array<string>;
+};
+export function library(
+	name: string,
+	overrides?: {
+		pkgConfigName?: boolean | string;
+		dylib?: boolean;
+		staticlib?: boolean;
+		runtimeDeps?: Array<RuntimeDep>;
+		symbols?: Array<string>;
+	},
+): LibrarySpec {
+	if (!overrides || Object.keys(overrides).length === 0) {
+		return name;
+	}
+	return {
+		name,
+		...overrides,
+	};
+}
+
+/** Helper to create library specs from a list of names with selective overrides. */
+export const libraries = (
+	names: Array<string>,
+	overrides?: Record<
+		string,
+		{
+			pkgConfigName?: boolean | string;
+			dylib?: boolean;
+			staticlib?: boolean;
+			runtimeDeps?: Array<RuntimeDep>;
+			symbols?: Array<string>;
+		}
+	>,
+): Array<LibrarySpec> => {
+	return names.map((name) => {
+		const override = overrides?.[name];
+		return override ? { name, ...override } : name;
+	});
+};
+
 /** Normalize a string by removing common leading whitespace from all lines. */
 const normalizeString = (input: string): string => {
 	// Split the lines.
