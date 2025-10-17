@@ -63,11 +63,8 @@ export const test = async () => {
 	const majorMinor = metadata.version.split(".").slice(2).join(".");
 	const spec = {
 		...std.assert.defaultSpec(metadata),
-		binaries: metadata.provides.binaries.map((name) => {
-			return {
-				name,
-				testPredicate: (stdout: string) => stdout.includes(majorMinor),
-			};
+		binaries: std.assert.allBinaries(metadata.provides.binaries, {
+			snapshot: majorMinor,
 		}),
 	};
 	return await std.assert.pkg(build, spec);

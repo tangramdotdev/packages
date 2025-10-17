@@ -42,8 +42,8 @@ export type BinarySpec =
 			name: string;
 			/** Arguments to pass. Defaults to `["--version"]`. */
 			testArgs?: Array<string>;
-			// /** The expected output of the binary when run with testArgs. If unspecified, just assert a 0 exit code. */
-			testPredicate?: (stdout: string) => boolean;
+			/** The expected output snapshot. If unspecified, defaults to checking for the package version. Whitespace is normalized before comparison. */
+			snapshot?: string;
 	  };
 
 /** Optionally specify whether a particular library provides staticlibs, dylibs, or both. */
@@ -170,27 +170,7 @@ const singlePackageArg = async (
 	// Assert the package contains the specified libraries.
 	if (spec.libraries) {
 		spec.libraries.forEach((lib) => {
-			let library;
-			if (typeof lib === "string") {
-				library = {
-					name: lib,
-					pkgConfigName: lib,
-					dylib: true,
-					staticlib: true,
-					runtimeDeps: [],
-				};
-			} else {
-				library = {
-					name: lib.name,
-					pkgConfigName: lib.pkgConfigName ?? lib.name,
-					dylib: lib.dylib ?? true,
-					staticlib: lib.staticlib ?? true,
-					runtimeDeps: lib.runtimeDeps ?? [],
-				};
-			}
-			if (library) {
-				tests.push(linkableLib({ directory, env, host, library }));
-			}
+			tests.push(linkableLib({ directory, env, host, library: lib }));
 		});
 	}
 
@@ -218,6 +198,25 @@ export const fileExists = async (arg: FileExistsArg) => {
 	return true;
 };
 
+type FileExistsOneOfArg = {
+	directory: tg.Directory;
+	subpaths: Array<string>;
+};
+
+/** Assert at least one of the provided paths exists in the directory. Useful for heuristic checks with multiple possible locations. */
+export const fileExistsOneOf = async (arg: FileExistsOneOfArg) => {
+	for (const subpath of arg.subpaths) {
+		const maybeFile = await arg.directory.tryGet(subpath);
+		if (maybeFile !== undefined && maybeFile instanceof tg.File) {
+			return true;
+		}
+	}
+	tg.assert(
+		false,
+		`None of the following paths exist: ${arg.subpaths.join(", ")}`,
+	);
+};
+
 type RunnableBinArg = {
 	directory: tg.Directory;
 	binary: BinarySpec;
@@ -231,7 +230,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		return true;
 	}
 	let name: string | undefined;
-	let testPredicate;
+	let snapshot: string | undefined;
 	let testArgs = ["--version"];
 	let exitOnErr = true;
 	if (typeof arg.binary === "string") {
@@ -243,8 +242,8 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		if (arg.binary.testArgs) {
 			testArgs = arg.binary.testArgs;
 		}
-		if (arg.binary.testPredicate) {
-			testPredicate = arg.binary.testPredicate;
+		if (arg.binary.snapshot) {
+			snapshot = arg.binary.snapshot;
 		}
 		if ("exitOnErr" in arg.binary) {
 			exitOnErr = arg.binary.exitOnErr;
@@ -269,10 +268,12 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		.host(arg.host)
 		.then(tg.File.expect)
 		.then((file) => file.text());
-	if (testPredicate !== undefined) {
+	if (snapshot !== undefined) {
+		const normalizedSnapshot = normalizeSnapshot(snapshot);
+		const normalizedStdout = normalizeSnapshot(stdout);
 		tg.assert(
-			testPredicate(stdout),
-			`Binary ${name} did not produce expected output. Received: ${stdout}`,
+			normalizedStdout.includes(normalizedSnapshot),
+			`Binary ${name} did not produce expected output.\n\nExpected snapshot:\n${normalizedSnapshot}\n\nActual output:\n${normalizedStdout}`,
 		);
 	}
 	return true;
@@ -365,6 +366,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 	// Set up parameters.
 	let name: string | undefined;
 	let pkgConfigName: string | undefined;
+	let pkgConfigNameExplicit = false;
 	let host = arg.host;
 	let dylib = true;
 	let staticlib = true;
@@ -373,8 +375,21 @@ export const linkableLib = async (arg: LibraryArg) => {
 	let runtimeDeps: Array<RuntimeDep> = [];
 	if (typeof arg.library === "string") {
 		name = arg.library;
+		pkgConfigName = arg.library;
+		pkgConfigNameExplicit = false;
 	} else {
 		name = arg.library.name;
+		// Handle pkgConfigName: defaults to name, unless explicitly set to false or a custom string.
+		if (arg.library.pkgConfigName === false) {
+			pkgConfigName = undefined;
+			pkgConfigNameExplicit = true;
+		} else if (typeof arg.library.pkgConfigName === "string") {
+			pkgConfigName = arg.library.pkgConfigName;
+			pkgConfigNameExplicit = true;
+		} else {
+			pkgConfigName = arg.library.name;
+			pkgConfigNameExplicit = false;
+		}
 		if (arg.library.dylib !== undefined) {
 			dylib = arg.library.dylib;
 		}
@@ -396,12 +411,26 @@ export const linkableLib = async (arg: LibraryArg) => {
 
 	// Check for the pkg-config file if requested.
 	if (pkgConfigName !== undefined) {
-		tests.push(
-			fileExists({
-				directory: arg.directory,
-				subpath: `lib/pkgconfig/${pkgConfigName}.pc`,
-			}),
-		);
+		// If pkgConfigName was explicitly provided, check only that exact name.
+		// Otherwise, use a heuristic to try both {name}.pc and lib{name}.pc.
+		if (pkgConfigNameExplicit) {
+			tests.push(
+				fileExists({
+					directory: arg.directory,
+					subpath: `lib/pkgconfig/${pkgConfigName}.pc`,
+				}),
+			);
+		} else {
+			tests.push(
+				fileExistsOneOf({
+					directory: arg.directory,
+					subpaths: [
+						`lib/pkgconfig/${pkgConfigName}.pc`,
+						`lib/pkgconfig/lib${pkgConfigName}.pc`,
+					],
+				}),
+			);
+		}
 	}
 
 	// Check for the dylib if requested.
@@ -416,7 +445,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 				directory: arg.directory,
 				subpath: `lib/${dylibName_}`,
 			}).then(() =>
-				dlopen({
+				testDylib({
 					directory: arg.directory,
 					dylib: dylibName_,
 					env,
@@ -435,7 +464,15 @@ export const linkableLib = async (arg: LibraryArg) => {
 			fileExists({
 				directory: arg.directory,
 				subpath: `lib/lib${name}.a`,
-			}),
+			}).then(() =>
+				testStaticlib({
+					directory: arg.directory,
+					library: name,
+					env,
+					host,
+					sdk,
+				}),
+			),
 		);
 	}
 
@@ -443,7 +480,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 	return true;
 };
 
-type DlopenArg = {
+type TestDylibArg = {
 	directory: tg.Directory;
 	dylib: string;
 	env?: std.env.Arg;
@@ -451,54 +488,124 @@ type DlopenArg = {
 	runtimeDepDirs: Array<tg.Directory>;
 	runtimeDepLibs: Array<string>;
 	sdk?: std.sdk.Arg;
+	testSource?: string;
 };
 
-/** Build and run a small program that dlopens the given dylib. */
-export const dlopen = async (arg: DlopenArg) => {
+/** Compile, link, and run a program against a dynamic library. */
+export const testDylib = async (arg: TestDylibArg) => {
 	if (arg.host != (await std.triple.host())) {
 		throw new Error("unsupported");
 	}
+
 	const directory = arg.directory;
-	const dylibs = [arg.dylib, ...arg.runtimeDepLibs];
+	const libs = [arg.dylib, ...arg.runtimeDepLibs];
 
-	const testCode = dylibs
-		.map(
-			(name, i) => `
-		void* handle_${i} = dlopen("${name}", RTLD_NOW);
-			if (!handle_${i}) {
-				return -1;
+	let source: tg.Unresolved<tg.File>;
+	if (arg.testSource) {
+		// Use provided test code
+		source = tg.file(arg.testSource);
+	} else {
+		// Extract a symbol to reference, proving the library exports something
+		const hostOs = std.triple.os(arg.host);
+		const nmFlags = hostOs === "darwin" ? "-gU" : "-D";
+		const dylibPath = tg`${directory}/lib/${arg.dylib}`;
+
+		const symbols = await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > $OUTPUT`
+			.env(std.sdk(arg?.sdk))
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.catch(() => null);
+
+		if (symbols && symbols.trim()) {
+			const symbol = symbols.trim().split(/\s+/).pop() ?? "";
+			if (symbol) {
+				// On Linux, nm may return versioned symbols like "symbol@@VERSION"
+				// Strip version info (everything from first @ onwards)
+				let cleanSymbol = symbol.includes("@")
+					? symbol.substring(0, symbol.indexOf("@"))
+					: symbol;
+
+				// On macOS, nm returns symbols with leading underscore (_adler32)
+				// but C extern declarations add their own underscore, so strip it
+				if (hostOs === "darwin" && cleanSymbol.startsWith("_")) {
+					cleanSymbol = cleanSymbol.substring(1);
+				}
+
+				// Reference the symbol (but don't call it - may need args we don't know).
+				source = tg.file`
+					extern void ${cleanSymbol}();
+					int main() {
+						// Reference but don't call - just ensure it links
+						void* ptr = (void*)&${cleanSymbol};
+						return ptr ? 0 : 1;
+					}`;
+			} else {
+				// Fallback: just link, don't reference anything specific.
+				source = tg.file`int main() { return 0; }`;
 			}
-			dlclose(handle_${i});`,
-		)
-		.join("\n");
+		} else {
+			// Fallback: just link, don't reference anything specific.
+			source = tg.file`int main() { return 0; }`;
+		}
+	}
 
-	// Generate the source.
-	const source = tg.file`
-		#include <dlfcn.h>
-		int main() {
-			${testCode}
-			return 0;
-		}`;
-
-	// Compile the program.
-	const linkerFlags = dylibs.map((name) => `-l${baseName(name)}`).join(" ");
+	// Compile and link against the libraries
+	const linkerFlags = libs.map((name) => `-l${baseName(name)}`).join(" ");
 	const sdkEnv = std.sdk(arg?.sdk);
-	await $`cc -v -xc "${source}" ${linkerFlags} -o $OUTPUT`
+	const program = await $`cc -xc "${source}" ${linkerFlags} -o $OUTPUT`
 		.bootstrap(true)
 		.env(
 			std.env.arg(
 				sdkEnv,
 				directory,
 				...arg.runtimeDepDirs,
-				{
-					TGLD_TRACING: "tgld=trace",
-				},
 				arg.env,
 				{ utils: false },
 			),
 		)
 		.host(arg.host)
 		.then(tg.File.expect);
+
+	// Run the program to ensure it's functional
+	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);
+
+	return true;
+};
+
+type TestStaticlibArg = {
+	directory: tg.Directory;
+	library: string;
+	env?: std.env.Arg;
+	host: string;
+	sdk?: std.sdk.Arg;
+	testSource?: string;
+};
+
+/** Compile, link, and run a program against a static library. */
+export const testStaticlib = async (arg: TestStaticlibArg) => {
+	if (arg.host != (await std.triple.host())) {
+		throw new Error("unsupported");
+	}
+
+	let source: tg.Unresolved<tg.File>;
+	if (arg.testSource) {
+		// Use provided test code
+		source = tg.file(arg.testSource);
+	} else {
+		// Generate a minimal program - static linking will fail if library is broken
+		source = tg.file`int main() { return 0; }`;
+	}
+
+	// Compile and link statically against the library
+	const sdkEnv = std.sdk(arg?.sdk);
+	const program = await $`cc -xc "${source}" -l${arg.library} -o $OUTPUT`
+		.bootstrap(true)
+		.env(std.env.arg(sdkEnv, arg.directory, arg.env, { utils: false }))
+		.host(arg.host)
+		.then(tg.File.expect);
+
+	// Run the program to ensure it's functional
+	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);
 
 	return true;
 };
@@ -551,8 +658,163 @@ export const displaysVersion = (name: string, version: string) => {
 	return {
 		name,
 		testArgs: ["--version"],
-		testPredicate: (stdout: string) => stdout.includes(version),
+		snapshot: version,
 	};
+};
+
+/** Helper to create a binary spec without redundantly specifying the name field. */
+export function binary(name: string): string;
+export function binary(
+	name: string,
+	overrides: {
+		testArgs?: Array<string>;
+		snapshot?: string;
+		exitOnErr?: boolean;
+	},
+): {
+	name: string;
+	testArgs?: Array<string>;
+	snapshot?: string;
+	exitOnErr?: boolean;
+};
+export function binary(
+	name: string,
+	overrides?: {
+		testArgs?: Array<string>;
+		snapshot?: string;
+		exitOnErr?: boolean;
+	},
+): BinarySpec {
+	if (!overrides || Object.keys(overrides).length === 0) {
+		return name;
+	}
+	return {
+		name,
+		...overrides,
+	};
+}
+
+/** Helper to create binary specs from a list of names with selective overrides. */
+export const binaries = (
+	names: Array<string>,
+	overrides?: Record<
+		string,
+		{
+			testArgs?: Array<string>;
+			snapshot?: string;
+			exitOnErr?: boolean;
+		}
+	>,
+): Array<BinarySpec> => {
+	return names.map((name) => {
+		const override = overrides?.[name];
+		return override ? { name, ...override } : name;
+	});
+};
+
+/** Helper to create binary specs from a list of names, applying the same override to all. */
+export const allBinaries = (
+	names: Array<string>,
+	override: {
+		testArgs?: Array<string>;
+		snapshot?: string;
+		exitOnErr?: boolean;
+	},
+): Array<BinarySpec> => {
+	return names.map((name) => ({ name, ...override }));
+};
+
+/** Normalize a string by removing common leading whitespace from all lines. */
+const normalizeString = (input: string): string => {
+	// Split the lines.
+	let lines = input.split("\n");
+
+	// Trim leading empty lines.
+	while (lines.length > 0 && lines[0]?.trim() === "") {
+		lines = lines.slice(1);
+	}
+	// Trim trailing empty lines.
+	while (lines.length > 0 && lines[lines.length - 1]?.trim() === "") {
+		lines = lines.slice(0, -1);
+	}
+
+	if (lines.length === 0) {
+		return "";
+	}
+
+	// Get the number of leading whitespace characters to remove.
+	let leadingWhitespaceCount = Math.min(
+		...lines
+			.filter((line) => line.trim().length > 0)
+			.map((line) => line.search(/\S|$/)),
+	);
+
+	// Remove the leading whitespace from each line, normalize tabs to spaces, and combine with newlines.
+	return lines
+		.map((line) => line.slice(leadingWhitespaceCount).replace(/\t/g, "  "))
+		.join("\n");
+};
+
+export const dedent = (
+	strings: TemplateStringsArray,
+	...placeholders: Array<string>
+): string => {
+	// Concatenate the strings and placeholders.
+	let string = "";
+	let i = 0;
+
+	while (i < placeholders.length) {
+		string += strings[i];
+		string += placeholders[i];
+		i = i + 1;
+	}
+	string += strings[i];
+
+	return normalizeString(string);
+};
+
+/** Normalize a snapshot string for comparison by removing common leading whitespace. */
+export const normalizeSnapshot = (snapshot: string): string => {
+	return normalizeString(snapshot);
+};
+
+/** Sort object keys recursively for consistent comparison */
+const sortKeys = (obj: unknown): unknown => {
+	if (obj === null || typeof obj !== "object") {
+		return obj;
+	}
+	if (Array.isArray(obj)) {
+		return obj.map(sortKeys);
+	}
+	const sorted: Record<string, unknown> = {};
+	for (const key of Object.keys(obj).sort()) {
+		sorted[key] = sortKeys((obj as Record<string, unknown>)[key]);
+	}
+	return sorted;
+};
+
+/** Assert that a value matches a JSON snapshot. Compares structure by parsing and normalizing both sides. */
+export const assertJsonSnapshot = (
+	actual: unknown,
+	expected: string,
+	message?: string,
+) => {
+	// Parse the expected snapshot as JSON to compare structure, not formatting
+	const expectedParsed = JSON.parse(normalizeSnapshot(expected));
+
+	// Sort keys in both for order-independent comparison
+	const actualSorted = sortKeys(actual);
+	const expectedSorted = sortKeys(expectedParsed);
+
+	// Stringify both with consistent formatting
+	const actualJson = JSON.stringify(actualSorted, null, 2);
+	const expectedJson = JSON.stringify(expectedSorted, null, 2);
+
+	tg.assert(
+		actualJson === expectedJson,
+		message ??
+			`JSON snapshot mismatch.\n\nExpected:\n${expectedJson}\n\nActual:\n${actualJson}`,
+	);
 };
 
 const allPlatforms = [

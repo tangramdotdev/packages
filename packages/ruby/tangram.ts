@@ -314,12 +314,8 @@ const bundledGems = (): Promise<tg.Directory> => {
 };
 
 export const test = async () => {
-	const hasVersion = (name: string, version: string) => {
-		return {
-			name,
-			testPredicate: (stdout: string) => stdout.toLowerCase().includes(version),
-		};
-	};
+	const hasVersion = (name: string, version: string) =>
+		std.assert.binary(name, { snapshot: version });
 
 	const binaries = [
 		hasVersion("bundle", "2.6.2"),

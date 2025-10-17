@@ -75,16 +75,12 @@ const provides = {
 };
 
 export const test = async () => {
-	const displaysUsage = (name: string) => {
-		return {
-			name,
-			testArgs: [],
-			testPredicate: (stdout: string) => stdout.includes("Usage:"),
-		};
-	};
 	const spec = {
 		...provides,
-		binaries: provides.binaries.map(displaysUsage),
+		binaries: std.assert.allBinaries(provides.binaries, {
+			testArgs: [],
+			snapshot: "Usage:",
+		}),
 		metadata,
 	};
 	return await std.assert.pkg(build, spec);

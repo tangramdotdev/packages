@@ -541,11 +541,25 @@ export const test = async () => {
 	tg.File.assert(nativeWrapper);
 	const nativeMetadata = await std.file.executableMetadata(nativeWrapper);
 	if (os === "linux") {
-		tg.assert(nativeMetadata.format === "elf");
-		tg.assert(nativeMetadata.arch === hostArch);
+		std.assert.assertJsonSnapshot(
+			nativeMetadata,
+			`
+			{
+				"format": "elf",
+				"arch": "${hostArch}"
+			}
+		`,
+		);
 	} else if (os === "darwin") {
-		tg.assert(nativeMetadata.format === "mach-o");
-		tg.assert(nativeMetadata.arches.includes(hostArch));
+		std.assert.assertJsonSnapshot(
+			nativeMetadata,
+			`
+			{
+				"format": "mach-o",
+				"arches": ["${hostArch}"]
+			}
+		`,
+		);
 	} else {
 		return tg.unreachable();
 	}
@@ -575,7 +589,14 @@ export const testCross = async () => {
 	const crossWrapper = await crossWorkspace.get("bin/wrapper");
 	tg.File.assert(crossWrapper);
 	const crossMetadata = await std.file.executableMetadata(crossWrapper);
-	tg.assert(crossMetadata.format === "elf");
-	tg.assert(crossMetadata.arch === targetArch);
+	std.assert.assertJsonSnapshot(
+		crossMetadata,
+		`
+		{
+			"format": "elf",
+			"arch": "${targetArch}"
+		}
+	`,
+	);
 	return true;
 };

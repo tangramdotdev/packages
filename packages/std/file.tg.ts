@@ -176,43 +176,56 @@ export const testBinary = async () => {
 	const exeMetadata = await executableMetadata(exeFile);
 	console.log("exe metadata", exeMetadata);
 
+	// Assert the metadata matches expected structure.
 	if (os === "darwin") {
-		tg.assert(libgreetMetadata.format === "mach-o");
-		tg.assert(libgreetMetadata.arches.includes(arch));
-		tg.assert(libgreetMetadata.installName === `libgreet.${versionedDylibExt}`);
-		tg.assert(libgreetMetadata.dependencies !== undefined);
-		tg.assert(libgreetMetadata.dependencies.length === 1);
-		tg.assert(
-			libgreetMetadata.dependencies.includes("/usr/lib/libSystem.B.dylib"),
+		std.assert.assertJsonSnapshot(
+			libgreetMetadata,
+			`
+			{
+				"format": "mach-o",
+				"arches": ["${arch}"],
+				"installName": "libgreet.${versionedDylibExt}",
+				"dependencies": ["/usr/lib/libSystem.B.dylib"]
+			}
+		`,
 		);
 
-		tg.assert(exeMetadata.format === "mach-o");
-		tg.assert(exeMetadata.arches.includes(arch));
-		tg.assert(exeMetadata.installName === undefined);
-		tg.assert(exeMetadata.dependencies !== undefined);
-		tg.assert(exeMetadata.dependencies.length === 2);
-		tg.assert(exeMetadata.dependencies.includes(libgreetMetadata.installName));
-		tg.assert(exeMetadata.dependencies.includes("/usr/lib/libSystem.B.dylib"));
+		std.assert.assertJsonSnapshot(
+			exeMetadata,
+			`
+			{
+				"format": "mach-o",
+				"arches": ["${arch}"],
+				"dependencies": ["libgreet.${versionedDylibExt}", "/usr/lib/libSystem.B.dylib"]
+			}
+		`,
+		);
 	}
 
-	// Assert the results.
 	if (os === "linux") {
-		tg.assert(libgreetMetadata.format === "elf");
-		tg.assert(libgreetMetadata.arch === arch);
-		tg.assert(libgreetMetadata.interpreter === undefined);
-		tg.assert(libgreetMetadata.soname === `libgreet.${versionedDylibExt}`);
-		tg.assert(libgreetMetadata.needed !== undefined);
-		tg.assert(libgreetMetadata.needed.length === 1);
-		tg.assert(libgreetMetadata.needed.includes("libc.so"));
+		std.assert.assertJsonSnapshot(
+			libgreetMetadata,
+			`
+			{
+				"format": "elf",
+				"arch": "${arch}",
+				"soname": "libgreet.${versionedDylibExt}",
+				"needed": ["libc.so"]
+			}
+		`,
+		);
 
-		tg.assert(exeMetadata.format === "elf");
-		tg.assert(exeMetadata.arch === arch);
-		tg.assert(exeMetadata.interpreter === `/lib/ld-musl-${arch}.so.1`);
-		tg.assert(exeMetadata.soname === undefined);
-		tg.assert(exeMetadata.needed !== undefined);
-		tg.assert(exeMetadata.needed.length === 2);
-		tg.assert(exeMetadata.needed.includes("libc.so"));
-		tg.assert(exeMetadata.needed.includes(libgreetMetadata.soname));
+		std.assert.assertJsonSnapshot(
+			exeMetadata,
+			`
+			{
+				"format": "elf",
+				"arch": "${arch}",
+				"interpreter": "/lib/ld-musl-${arch}.so.1",
+				"needed": ["libc.so", "libgreet.${versionedDylibExt}"]
+			}
+		`,
+		);
 	}
 
 	return true;
@@ -223,6 +236,13 @@ export const testShebang = async () => {
 		executable: true,
 	});
 	const metadata = await std.file.executableMetadata(file);
-	tg.assert(metadata.format === "shebang");
-	tg.assert(metadata.interpreter === "/bin/sh");
+	std.assert.assertJsonSnapshot(
+		metadata,
+		`
+		{
+			"format": "shebang",
+			"interpreter": "/bin/sh"
+		}
+	`,
+	);
 };

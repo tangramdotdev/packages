@@ -120,7 +120,7 @@ export const test = async () => {
 		binaries: [
 			{
 				name: "xar",
-				testPredicate: (stdout: string) => stdout.includes("xar 1.8dev"),
+				snapshot: "xar 1.8dev",
 			},
 		],
 	};

@@ -613,24 +613,30 @@ export const test = async () => {
 
 	const cMetadata = await std.file.executableMetadata(cOut);
 	if (os === "linux") {
-		tg.assert(
-			cMetadata.format === "elf",
-			`expected elf, got ${cMetadata.format}`,
+		std.assert.assertJsonSnapshot(
+			cMetadata,
+			`
+			{
+				"format": "elf",
+				"arch": "${hostArch}"
+			}
+		`,
 		);
+		tg.assert(cMetadata.format === "elf");
 		tg.assert(
 			expectedInterpreterName !== undefined
 				? cMetadata.interpreter?.includes(expectedInterpreterName)
 				: cMetadata.interpreter === undefined,
 			`expected ${expectedInterpreterName}, got ${cMetadata.interpreter}`,
 		);
-		tg.assert(
-			cMetadata.arch === hostArch,
-			`expected ${hostArch}, got ${cMetadata.arch}`,
-		);
 	} else if (os === "darwin") {
-		tg.assert(
-			cMetadata.format === "mach-o",
-			`expected mach-o, got ${cMetadata.format}`,
+		std.assert.assertJsonSnapshot(
+			cMetadata,
+			`
+			{
+				"format": "mach-o"
+			}
+		`,
 		);
 	}
 
@@ -650,24 +656,30 @@ export const test = async () => {
 
 	const cxxMetadata = await std.file.executableMetadata(cxxOut);
 	if (os === "linux") {
-		tg.assert(
-			cxxMetadata.format === "elf",
-			`expected elf, got ${cxxMetadata.format}`,
+		std.assert.assertJsonSnapshot(
+			cxxMetadata,
+			`
+			{
+				"format": "elf",
+				"arch": "${hostArch}"
+			}
+		`,
 		);
+		tg.assert(cxxMetadata.format === "elf");
 		tg.assert(
 			expectedInterpreterName !== undefined
 				? cxxMetadata.interpreter?.includes(expectedInterpreterName)
 				: cxxMetadata.interpreter === undefined,
 			`expected ${expectedInterpreterName}, got ${cxxMetadata.interpreter}`,
 		);
-		tg.assert(
-			cxxMetadata.arch === hostArch,
-			`expected ${hostArch}, got ${cxxMetadata.arch}`,
-		);
 	} else if (os === "darwin") {
-		tg.assert(
-			cxxMetadata.format === "mach-o",
-			`expected mach-o, got ${cxxMetadata.format}`,
+		std.assert.assertJsonSnapshot(
+			cxxMetadata,
+			`
+			{
+				"format": "mach-o"
+			}
+		`,
 		);
 	}
 

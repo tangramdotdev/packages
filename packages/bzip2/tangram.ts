@@ -94,11 +94,8 @@ export default build;
 export const test = async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
-		binaries: metadata.provides.binaries.map((name) => {
-			return {
-				name,
-				testArgs: ["--help"],
-			};
+		binaries: std.assert.allBinaries(metadata.provides.binaries, {
+			testArgs: ["--help"],
 		}),
 	};
 	return await std.assert.pkg(build, spec);

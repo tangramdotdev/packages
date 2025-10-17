@@ -890,22 +890,44 @@ export namespace sdk {
 		const expectedArch = std.triple.arch(expectedTarget);
 		let metadata = await std.file.executableMetadata(compiledProgram);
 		if (metadata.format === "elf") {
-			const actualArch = metadata.arch;
-			tg.assert(expectedArch === actualArch);
+			std.assert.assertJsonSnapshot(
+				metadata,
+				`
+				{
+					"format": "elf",
+					"arch": "${expectedArch}"
+				}
+			`,
+			);
 
 			// Ensure the correct libc was used.
 			let executable = compiledProgram;
 			if (proxiedLinker) {
 				executable = tg.File.expect(await std.wrap.unwrap(compiledProgram));
 				metadata = await std.file.executableMetadata(executable);
+				std.assert.assertJsonSnapshot(
+					metadata,
+					`
+					{
+						"format": "elf",
+						"arch": "${expectedArch}"
+					}
+				`,
+				);
 			}
 			if (linkerFlavor) {
 				await assertComment(executable, arg.sdkEnv, linkerFlavor);
 			}
-
-			tg.assert(metadata.format === "elf");
 		} else if (metadata.format === "mach-o") {
-			tg.assert(metadata.arches.includes(expectedArch as string));
+			tg.assert(metadata.format === "mach-o");
+			tg.assert(
+				metadata.arches.includes(expectedArch),
+				`Expected arch ${expectedArch}, got ${metadata.arches.join(", ")}`,
+			);
+			tg.assert(
+				metadata.dependencies?.includes("/usr/lib/libSystem.B.dylib"),
+				`Missing required dependency: /usr/lib/libSystem.B.dylib. Found: ${metadata.dependencies?.join(", ") ?? "none"}`,
+			);
 		} else {
 			throw new Error(`Unexpected executable format ${metadata.format}.`);
 		}

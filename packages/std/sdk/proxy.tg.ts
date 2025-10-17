@@ -395,6 +395,7 @@ export const test = async () => {
 	const tests = [
 		testBasic(),
 		testTransitiveAll(),
+		testTransitiveDiscovery(),
 		testSamePrefix(),
 		testSamePrefixDirect(),
 		testDifferentPrefixDirect(),
@@ -1082,4 +1083,105 @@ export const testStrip = async (target?: string) => {
 		)
 		.then(tg.File.expect);
 	return output;
+};
+
+/** Test that TGLD discovers transitive dependencies when only the top-level library is explicitly linked. This mirrors the ncurses case where multiple libraries are in the same directory, but only one is explicitly linked. This test would catch the bug where TGLD returns early before analyzing libraries for their dependencies. */
+export const testTransitiveDiscovery = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const os = std.triple.os(targetTriple);
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+
+	// Create bottom library with no dependencies.
+	const bottomSource = await tg.file`
+		const char* getBottomMessage() {
+			return "Hello from bottom library!";
+		}
+	`;
+	let bottom = await makeShared({
+		libName: "libbottom",
+		sdk: testSDK,
+		source: bottomSource,
+		target,
+	});
+
+	// Create top library that depends on bottom, linking against the same directory.
+	const topSource = await tg.file`
+		#include <stdio.h>
+		extern const char* getBottomMessage();
+		void printFromTop() {
+			printf("%s\\n", getBottomMessage());
+		}
+	`;
+	let top = await makeShared({
+		flags: [tg`-L${bottom}/lib`, "-lbottom"],
+		libName: "libtop",
+		sdk: testSDK,
+		source: topSource,
+		target,
+	});
+
+	// Combine both libraries into a single directory.
+	const combined = await tg.directory({
+		lib: tg.directory({
+			[`libbottom.${dylibExt}`]: bottom.get(`lib/libbottom.${dylibExt}`).then(tg.File.expect),
+			[`libtop.${dylibExt}`]: top.get(`lib/libtop.${dylibExt}`).then(tg.File.expect),
+		}),
+	});
+
+	// Create main executable that ONLY links against top library.
+	const mainSource = await tg.file`
+		extern void printFromTop();
+		int main() {
+			printFromTop();
+			return 0;
+		}
+	`;
+
+	// Link only against top - provide only ONE library path containing both libraries.
+	// TGLD must discover bottom by analyzing top's dependencies.
+	// On Linux, we need -rpath-link to help the linker find transitive dependencies at link time.
+	const rpathLink = os === "linux" ? tg`-Wl,-rpath-link,${combined}/lib` : "";
+	const output =
+		await std.build`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o $OUTPUT`
+			.bootstrap(target ? false : true)
+			.env(
+				std.env.arg(
+					testSDK,
+					{
+						TGLD_TRACING: "tgld=trace",
+						TGLD_LIBRARY_PATH_OPT_LEVEL: "isolate",
+					},
+					{ utils: false },
+				),
+			)
+			.then(tg.File.expect);
+
+	// Verify the manifest includes both libraries.
+	const manifest = await std.wrap.Manifest.read(output);
+	tg.assert(manifest !== undefined);
+	const interpreter = manifest.interpreter;
+	tg.assert(interpreter !== undefined);
+	const expectedInterpreterKind = os === "darwin" ? "dyld" : "ld-musl";
+	tg.assert(
+		interpreter.kind === expectedInterpreterKind,
+		`expected ${expectedInterpreterKind}, got ${interpreter.kind}`,
+	);
+	const libraryPaths = interpreter.libraryPaths;
+	tg.assert(libraryPaths !== undefined);
+
+	// With isolate mode, we should get separate directories for each library.
+	// On Linux, we also have libc.
+	const expectedNumLibraryPaths = os === "linux" ? 3 : 2;
+	tg.assert(
+		libraryPaths.length === expectedNumLibraryPaths,
+		`Expected ${expectedNumLibraryPaths} library paths but got ${libraryPaths.length}`,
+	);
+
+	// Verify the executable runs correctly.
+	await std.assert.stdoutIncludes(output, "Hello from bottom library!");
+
+	return true;
 };

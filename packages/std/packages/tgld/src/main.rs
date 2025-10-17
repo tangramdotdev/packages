@@ -1192,11 +1192,6 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 	max_depth: usize,
 	depth: usize,
 ) -> tg::Result<()> {
-	// Check if we're done.
-	if found_all_libraries(all_needed_libraries) || depth == max_depth {
-		return Ok(());
-	}
-
 	// Check for transitive dependencies if we've recurred beyond the initial file.
 	if depth > 0 {
 		let id = file.id();
@@ -1217,6 +1212,11 @@ async fn find_transitive_needed_libraries<H: BuildHasher + Default + Send + Sync
 				tracing::debug!(?e, ?id, "failed to analyze file as an object!");
 			},
 		}
+	}
+
+	// Check if we're done after analyzing the current file.
+	if found_all_libraries(all_needed_libraries) || depth == max_depth {
+		return Ok(());
 	}
 
 	for dir_with_subpath in library_paths {

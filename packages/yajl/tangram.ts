@@ -70,17 +70,12 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const hasUsage = (name: string) => {
-		return {
-			name,
-			testArgs: ["--help"],
-			testPredicate: (stdout: string) =>
-				stdout.toLowerCase().includes("usage:"),
-		};
-	};
 	const spec = {
 		...std.assert.defaultSpec(metadata),
-		binaries: metadata.provides.binaries.map(hasUsage),
+		binaries: std.assert.allBinaries(metadata.provides.binaries, {
+			testArgs: ["--help"],
+			snapshot: "usage:",
+		}),
 	};
 	return await std.assert.pkg(build, spec);
 };

@@ -209,11 +209,25 @@ export const test = async () => {
 	const os = std.triple.os(std.triple.archAndOs(detectedHost));
 	const nativeMetadata = await std.file.executableMetadata(nativeInjection);
 	if (os === "linux") {
-		tg.assert(nativeMetadata.format === "elf");
-		tg.assert(nativeMetadata.arch === hostArch);
+		std.assert.assertJsonSnapshot(
+			nativeMetadata,
+			`
+			{
+				"format": "elf",
+				"arch": "${hostArch}"
+			}
+		`,
+		);
 	} else if (os === "darwin") {
-		tg.assert(nativeMetadata.format === "mach-o");
-		tg.assert(nativeMetadata.arches.includes(hostArch));
+		std.assert.assertJsonSnapshot(
+			nativeMetadata,
+			`
+			{
+				"format": "mach-o",
+				"arches": ["${hostArch}"]
+			}
+		`,
+		);
 	} else {
 		return tg.unreachable();
 	}
@@ -248,15 +262,29 @@ export const testCross = async () => {
 		host: target,
 	});
 
-	// Assert theinjection dylib was built for the target machine.
+	// Assert the injection dylib was built for the target machine.
 	const os = std.triple.os(std.triple.archAndOs(detectedHost));
 	const nativeMetadata = await std.file.executableMetadata(nativeInjection);
 	if (os === "linux") {
-		tg.assert(nativeMetadata.format === "elf");
-		tg.assert(nativeMetadata.arch === targetArch);
+		std.assert.assertJsonSnapshot(
+			nativeMetadata,
+			`
+			{
+				"format": "elf",
+				"arch": "${targetArch}"
+			}
+		`,
+		);
 	} else if (os === "darwin") {
-		tg.assert(nativeMetadata.format === "mach-o");
-		tg.assert(nativeMetadata.arches.includes(targetArch));
+		std.assert.assertJsonSnapshot(
+			nativeMetadata,
+			`
+			{
+				"format": "mach-o",
+				"arches": ["${targetArch}"]
+			}
+		`,
+		);
 	} else {
 		return tg.unreachable();
 	}

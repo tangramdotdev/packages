@@ -2800,10 +2800,17 @@ export const testBasicCross = async () => {
 	tg.assert(manifest);
 	tg.assert(manifest.interpreter);
 
-	// Asser the wrapper was built for the cross host.
+	// Assert the wrapper was built for the cross host.
 	const wrapperMetadata = await std.file.executableMetadata(wrapper);
-	tg.assert(wrapperMetadata.format === "elf");
-	tg.assert(wrapperMetadata.arch === crossArch);
+	std.assert.assertJsonSnapshot(
+		wrapperMetadata,
+		`
+		{
+			"format": "elf",
+			"arch": "${crossArch}"
+		}
+	`,
+	);
 
 	return wrapper;
 };

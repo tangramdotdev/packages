@@ -108,25 +108,12 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const outputIncludes = (
-		name: string,
-		includes: string,
-		args?: Array<string>,
-	) => {
-		return {
-			name,
-			testArgs: args ?? ["--version"],
-			testPredicate: (stdout: string) =>
-				stdout.toLowerCase().includes(includes),
-		};
-	};
 	const spec = {
 		...std.assert.defaultSpec(metadata),
-		binaries: [
-			"xml2-config",
-			outputIncludes("xmlcatalog", "catalogs cleanup", ["--verbose"]),
-			outputIncludes("xmllint", "21401"),
-		],
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			xmlcatalog: { testArgs: ["--verbose"], snapshot: "Catalogs cleanup" },
+			xmllint: { snapshot: "using libxml version 21405" },
+		}),
 	};
 	return await std.assert.pkg(build, spec);
 };

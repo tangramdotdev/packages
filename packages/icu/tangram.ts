@@ -125,30 +125,18 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const hasUsage = (name: string) => {
-		return {
-			name,
-			testArgs: ["--help"],
-			testPredicate: (stdout: string) =>
-				stdout.toLowerCase().includes("usage:"),
-		};
-	};
+	const hasUsage = { testArgs: ["--help"], snapshot: "usage:" };
 	const spec = {
 		...std.assert.defaultSpec(metadata),
-		binaries: [
-			"derb",
-			hasUsage("genbrk"),
-			hasUsage("gencfu"),
-			hasUsage("gencnval"),
-			hasUsage("gendict"),
-			"icuexportdata",
-			{ name: "icuinfo", testArgs: [] },
-			{
-				name: "makeconv",
-				testPredicate: (stdout: string) => stdout.includes("6.2"),
-			},
-			{ ...hasUsage("pkgdata"), exitOnErr: false },
-		],
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			genbrk: hasUsage,
+			genfcu: hasUsage,
+			gencnval: hasUsage,
+			gendict: hasUsage,
+			icuinfo: { testArgs: [] },
+			makeconv: { snapshot: "6.2" },
+			pkgdata: { ...hasUsage, exitOnErr: false },
+		}),
 	};
 	return await std.assert.pkg(build, spec);
 };
