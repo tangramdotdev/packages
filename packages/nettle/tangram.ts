@@ -9,6 +9,9 @@ export const metadata = {
 	repository: "https://git.lysator.liu.se/nettle/nettle",
 	version: "3.10",
 	tag: "nettle/3.10",
+	provides: {
+		libraries: ["hogweed", "nettle"],
+	},
 };
 
 export const source = () => {
@@ -76,19 +79,11 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	// FIXME spec
-	const source = tg.directory({
-		["main.c"]: tg.file`
-			#include <stdio.h>
-			int main () {}
-		`,
-	});
-
-	return await $`
-			echo "Checking if we can link against nettle and hogweed."
-			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp
-		`
-		.env(std.sdk())
-		.env(build())
-		.env(gmp.build());
+	const spec: std.assert.PackageSpec = {
+		...std.assert.defaultSpec(metadata),
+		libraries: std.assert.allLibraries(["hogweed", "nettle"], {
+			runtimeDeps: [gmp.build()],
+		}),
+	};
+	return await std.assert.pkg(build, spec);
 };

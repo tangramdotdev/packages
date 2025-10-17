@@ -1,5 +1,4 @@
 import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
 
 export const metadata = {
 	homepage: "https://openssl.org/",
@@ -8,6 +7,10 @@ export const metadata = {
 	repository: "https://github.com/openssl/openssl",
 	version: "3.5.4",
 	tag: "openssl/3.5.4",
+	provides: {
+		binaries: ["openssl"],
+		libraries: ["crypto", "ssl"],
+	},
 };
 
 export const source = async () => {
@@ -101,31 +104,6 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	// FIXME spec
-	const source = tg.directory({
-		["main.c"]: tg.file`
-			#include <stdio.h>
-			int main () {}
-		`,
-	});
-
-	const output = await $`
-		 	echo "Checking if we can run openssl"
-		 	mkdir -p $OUTPUT
-			openssl --version | tee -a $OUTPUT/version.txt
-			echo "Checking if we can link against libssl."
-			cc ${source}/main.c -o $OUTPUT/prog -lssl -lcrypto
-		`
-		.pipefail(false)
-		.env(std.sdk())
-		.env(build())
-		.then(tg.Directory.expect);
-
-	const text = await output
-		.get("version.txt")
-		.then(tg.File.expect)
-		.then((f) => f.text());
-	tg.assert(text.includes(metadata.version));
-
-	return true;
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
 };

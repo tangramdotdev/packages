@@ -12,6 +12,9 @@ export const metadata = {
 	repository: "https://gitlab.com/gnutls/gnutls",
 	version: "3.8.9",
 	tag: "gnutls/3.8.9",
+	provides: {
+		libraries: ["gnutls"],
+	},
 };
 
 export const source = async () => {
@@ -98,22 +101,16 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	// TODO spec
-	const source = tg.directory({
-		["main.c"]: tg.file`
-			#include <stdio.h>
-			int main () {}
-		`,
-	});
-
-	return await $`
-			echo "Checking if we can link against gnutls."
-			cc ${source}/main.c -o $OUTPUT -lnettle -lhogweed -lgmp -lgnutls -lz -lzstd
-		`
-		.env(std.sdk())
-		.env(build())
-		.env(nettle.build())
-		.env(gmp.build())
-		.env(zstd.build())
-		.env(zlib.build());
+	const spec: std.assert.PackageSpec = {
+		...std.assert.defaultSpec(metadata),
+		libraries: std.assert.allLibraries(["gnutls"], {
+			runtimeDeps: [
+				nettle.build(),
+				gmp.build(),
+				zlib.build(),
+				zstd.build(),
+			],
+		}),
+	};
+	return await std.assert.pkg(build, spec);
 };

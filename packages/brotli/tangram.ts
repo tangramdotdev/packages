@@ -10,6 +10,7 @@ export const metadata = {
 	tag: "brotli/1.1.0",
 	provides: {
 		binaries: ["brotli"],
+		libraries: ["brotlicommon", "brotlidec", "brotlienc"],
 	},
 };
 
@@ -75,17 +76,20 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const dylibOnly = (name: string) => {
-		return { name, dylib: true, staticlib: false };
-	};
 	let env = {};
 	if ((await std.triple.host().then(std.triple.os)) === "linux") {
 		env = { LD_LIBRARY_PATH: await tg`${build()}/lib` };
 	}
-	const spec = {
+	const spec: std.assert.PackageSpec = {
 		...std.assert.defaultSpec(metadata),
 		env,
-		libraries: ["brotlicommon", "brotlidec", "brotlienc"].map(dylibOnly),
+		libraries: std.assert.allLibraries(
+			["brotlicommon", "brotlidec", "brotlienc"],
+			{
+				dylib: true,
+				staticlib: false,
+			},
+		),
 	};
 	return await std.assert.pkg(build, spec);
 };

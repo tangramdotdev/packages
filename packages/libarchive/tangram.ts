@@ -14,6 +14,9 @@ export const metadata = {
 	repository: "https://github.com/libarchive/libarchive",
 	version: "3.7.7",
 	tag: "libarchive/3.7.7",
+	provides: {
+		libraries: ["archive"],
+	},
 };
 
 export const source = async () => {
@@ -95,23 +98,17 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	// FIXME spec
-	const source = tg.directory({
-		["main.c"]: tg.file`
-			#include <stdio.h>
-			int main () {}
-		`,
-	});
-
-	return await $`
-			echo "Checking if we can link against libarchive."
-			cc ${source}/main.c -o $OUTPUT -lssl -lcrypto -larchive -lz -lbz2 -liconv -llzma
-		`
-		.env(std.sdk())
-		.env(build())
-		.env(bzip2.build())
-		.env(libiconv.build())
-		.env(openssl.build())
-		.env(xz.build())
-		.env(zlib.build());
+	const spec: std.assert.PackageSpec = {
+		...std.assert.defaultSpec(metadata),
+		libraries: std.assert.allLibraries(["archive"], {
+			runtimeDeps: [
+				openssl.build(),
+				zlib.build(),
+				bzip2.build(),
+				libiconv.build(),
+				xz.build(),
+			],
+		}),
+	};
+	return await std.assert.pkg(build, spec);
 };

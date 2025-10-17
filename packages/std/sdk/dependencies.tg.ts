@@ -69,9 +69,10 @@ export const buildTools = async (
 	if (buildToolchain_) {
 		buildToolchain = buildToolchain_;
 	} else {
+		const sdk = await tg.build(std.sdk);
 		buildToolchain = await std.env.arg(
-			await tg.build(std.sdk),
-			await tg.build(std.utils.env, { host }),
+			sdk,
+			await tg.build(std.utils.env, { env: sdk, host }),
 		);
 	}
 
