@@ -7,7 +7,7 @@ homepage = "https://www.tangram.dev"
 license = "MIT"
 publish = false
 repository = "https://github.com/tangramdotdev/packages"
-rust-version = "1.85.0"
+rust-version = "1.90.0"
 version = "0.0.0"
 
 [features]
@@ -19,7 +19,7 @@ futures = "0.3"
 itertools = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "672bf6735a72f91be57d31a1c1d0ea6c3a8a7a2e" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "9b804b38b8ed0a6dc74f88671d5d0604574c3b81" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "fs",
