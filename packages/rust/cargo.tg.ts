@@ -291,6 +291,19 @@ const vendoredSources = async (
 			export CARGO_HOME=$PWD
 			mkdir -p "$OUTPUT/tg_vendor_dir"
 			cd "$OUTPUT"
+			cargo fetch --locked --manifest-path $SOURCE/${manifestPathArg}
+
+			# Copy git checkouts without .git directories to avoid macOS sandbox issues.
+			if [ -d "$CARGO_HOME/git/checkouts" ]; then
+				TEMP_CHECKOUTS="$CARGO_HOME/git/checkouts_temp"
+				mkdir -p "$TEMP_CHECKOUTS"
+				cd "$CARGO_HOME/git/checkouts"
+				tar cf - --exclude='.git' . | (cd "$TEMP_CHECKOUTS" && tar xf -)
+				cd "$OUTPUT"
+				rm -rf "$CARGO_HOME/git/checkouts"
+				mv "$TEMP_CHECKOUTS" "$CARGO_HOME/git/checkouts"
+			fi
+
 			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "$OUTPUT/config"
 		`;
 		const rustArtifact = self();
