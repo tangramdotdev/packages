@@ -10,8 +10,8 @@ export const metadata = {
 	license: "MIT",
 	name: "curl",
 	repository: "https://github.com/curl/curl",
-	version: "8.12.0",
-	tag: "curl/8.12.0",
+	version: "8.16.0",
+	tag: "curl/8.16.0",
 	provides: {
 		binaries: ["curl"],
 		libraries: ["curl"],
@@ -21,7 +21,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:b72ec874e403c90462dc3019c5b24cc3cdd895247402bf23893b3b59419353bc";
+		"sha256:a21e20476e39eca5a4fc5cfb00acf84bbc1f5d8443ec3853ad14c26b3c85b970";
 	const owner = name;
 	const repo = name;
 	const tag = `curl-${version.replace(/\./g, "_")}`;

@@ -7,8 +7,8 @@ export const metadata = {
 	license: "Unlicense",
 	name: "ripgrep",
 	repository: "https://github.com/BurntSushi/ripgrep",
-	version: "15.0.0",
-	tag: "ripgrep/15.0.0",
+	version: "15.1.0",
+	tag: "ripgrep/15.1.0",
 	provides: {
 		binaries: ["rg"],
 	},
@@ -17,7 +17,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:e6b2d35ff79c3327edc0c92a29dc4bb74e82d8ee4b8156fb98e767678716be7a";
+		"sha256:046fa01a216793b8bd2750f9d68d4ad43986eb9c0d6122600f993906012972e8";
 	const owner = "BurntSushi";
 	const repo = name;
 	return std.download.fromGithub({

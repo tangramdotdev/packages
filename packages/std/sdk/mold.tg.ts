@@ -11,14 +11,14 @@ export const metadata = {
 	license: "MIT",
 	name: "mold",
 	repository: "https://github.com/rui314/mold",
-	version: "2.40.2",
-	tag: "mold/2.40.2",
+	version: "2.40.4",
+	tag: "mold/2.40.4",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:28c7976c39e53ee440217b6b9f036a8cf13e3b2f93e8da83e19c66f4fc9a774c";
+		"sha256:69414c702ec1084e1fa8ca16da24f167f549e5e11e9ecd5d70a8dcda6f08c249";
 	const owner = "rui314";
 	const repo = name;
 	const tag = `v${version}`;

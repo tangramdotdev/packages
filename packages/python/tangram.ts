@@ -20,8 +20,8 @@ export const metadata = {
 	name: "python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.13.7",
-	tag: "python/3.13.7",
+	version: "3.14.0",
+	tag: "python/3.14.0",
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
@@ -34,7 +34,7 @@ export const versionString = () => {
 export const source = async (): Promise<tg.Directory> => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:5462f9099dfd30e238def83c71d91897d8caa5ff6ebc7a50f14d4802cdaaa79a";
+		"sha256:2299dae542d395ce3883aca00d3c910307cd68e0b2f7336098c8e7b7eee9f3e9";
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	const name = "Python";
@@ -153,6 +153,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+			"ax_cv_c_float_words_bigendian=no"
 		);
 		makeArgs.push(
 			"RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
@@ -469,7 +470,7 @@ except ImportError as e:
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());
-	tg.assert(pipVersionOutput.includes("25.1.1"), "failed to run pip3");
+	tg.assert(pipVersionOutput.includes("25.2"), "failed to run pip3");
 
 	const venv = await $`set -x && python -m venv $OUTPUT --copies`
 		.env(self())

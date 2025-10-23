@@ -5,17 +5,17 @@ export const metadata = {
 	license: "GPL-2.0-or-later",
 	name: "automake",
 	repository: "https://git.savannah.gnu.org/git/automake.git",
-	version: "1.17",
-	tag: "automake/1.17",
+	version: "1.18",
+	tag: "automake/1.18",
 	provides: {
-		binaries: ["aclocal", "aclocal-1.17", "automake", "automake-1.17"],
+		binaries: ["aclocal", "aclocal-1.18", "automake", "automake-1.18"],
 	},
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:8920c1fc411e13b90bf704ef9db6f29d540e76d232cb3b2c9f4dc4cc599bd990";
+		"sha256:5bdccca96b007a7e344c24204b9b9ac12ecd17f5971931a9063bdee4887f4aaf";
 	return std.download.fromGnu({
 		name,
 		version,
