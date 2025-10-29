@@ -102,7 +102,17 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
+	const spec: std.assert.PackageSpec = {
+		...std.assert.defaultSpec(metadata),
+		libraries: std.assert.allLibraries(["curl"], {
+			runtimeDeps: [
+				openssl.build(),
+				zlib.build(),
+				zstd.build(),
+				libpsl.build(),
+			],
+		}),
+	};
 	await std.assert.pkg(build, spec);
 
 	const result = await $`

@@ -9,7 +9,7 @@ export const metadata = {
 	version: "8.3",
 	tag: "readline/8.3",
 	provides: {
-		libraries: ["readline"],
+		libraries: ["history", "readline"],
 	},
 };
 
@@ -83,6 +83,11 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
+	const spec: std.assert.PackageSpec = {
+		...std.assert.defaultSpec(metadata),
+		libraries: std.assert.allLibraries(["history", "readline"], {
+			runtimeDeps: [ncurses.build()],
+		}),
+	};
 	return await std.assert.pkg(build, spec);
 };

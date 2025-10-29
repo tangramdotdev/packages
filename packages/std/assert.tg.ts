@@ -5,6 +5,7 @@ import {
 	manifestDependencies,
 	wrap,
 } from "./wrap.tg.ts";
+import { buildTools } from "./sdk/dependencies.tg.ts";
 
 /** Define the expected behavior of each package component. A `PackageProvides` object is a valid `PackageSpec`, but most packages will have additional behavior to assert. */
 export type PackageSpec = {
@@ -59,15 +60,10 @@ export type LibrarySpec =
 			/** Is there a static library? E.g. `libz.a`. */
 			staticlib?: boolean;
 			/** What additional dependencies are required at runtime to use this library? */
-			runtimeDeps?: Array<RuntimeDep>;
+			runtimeDeps?: Array<tg.Unresolved<tg.Directory>>;
 			/** What symbols should we expect this library to provide? */
 			symbols?: Array<string>;
 	  };
-
-export type RuntimeDep = {
-	directory: tg.Directory;
-	libs: Array<string>;
-};
 
 export type Metadata = {
 	/** The package name. */
@@ -372,7 +368,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 	let staticlib = true;
 	const env = arg.env ?? {};
 	const sdk = arg.sdk;
-	let runtimeDeps: Array<RuntimeDep> = [];
+	let runtimeDeps: Array<tg.Unresolved<tg.Directory>> = [];
 	if (typeof arg.library === "string") {
 		name = arg.library;
 		pkgConfigName = arg.library;
@@ -436,10 +432,6 @@ export const linkableLib = async (arg: LibraryArg) => {
 	// Check for the dylib if requested.
 	if (dylib) {
 		const dylibName_ = dylibName(name);
-		const runtimeDepDirs = runtimeDeps.map((dep) => dep.directory);
-		const runtimeDepLibs = runtimeDeps.flatMap((dep) =>
-			dep.libs.map(dylibName),
-		);
 		tests.push(
 			fileExists({
 				directory: arg.directory,
@@ -447,11 +439,11 @@ export const linkableLib = async (arg: LibraryArg) => {
 			}).then(() =>
 				testDylib({
 					directory: arg.directory,
-					dylib: dylibName_,
+					libraryName: name,
+					pkgConfigName,
 					env,
 					host,
-					runtimeDepDirs,
-					runtimeDepLibs,
+					runtimeDepDirs: runtimeDeps,
 					sdk,
 				}),
 			),
@@ -468,8 +460,10 @@ export const linkableLib = async (arg: LibraryArg) => {
 				testStaticlib({
 					directory: arg.directory,
 					library: name,
+					pkgConfigName,
 					env,
 					host,
+					runtimeDepDirs: runtimeDeps,
 					sdk,
 				}),
 			),
@@ -480,13 +474,30 @@ export const linkableLib = async (arg: LibraryArg) => {
 	return true;
 };
 
+/** Helper to get pkg-config flags for a library. Returns undefined if pkg-config fails. */
+const getPkgConfigFlags = async (
+	pkgConfigName: string,
+	env: tg.Unresolved<std.env.Arg>,
+): Promise<string | undefined> => {
+	try {
+		const flags = await $`pkg-config --cflags --libs ${pkgConfigName} > $OUTPUT`
+			.env(env)
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((text) => text.trim());
+		return flags;
+	} catch {
+		return undefined;
+	}
+};
+
 type TestDylibArg = {
 	directory: tg.Directory;
-	dylib: string;
+	libraryName: string;
+	pkgConfigName?: string | undefined;
 	env?: std.env.Arg;
 	host: string;
-	runtimeDepDirs: Array<tg.Directory>;
-	runtimeDepLibs: Array<string>;
+	runtimeDepDirs: Array<tg.Unresolved<tg.Directory>>;
 	sdk?: std.sdk.Arg;
 	testSource?: string;
 };
@@ -498,7 +509,10 @@ export const testDylib = async (arg: TestDylibArg) => {
 	}
 
 	const directory = arg.directory;
-	const libs = [arg.dylib, ...arg.runtimeDepLibs];
+	const libraryName = arg.libraryName;
+	const hostOs = std.triple.os(arg.host);
+	const dylibExtension = hostOs === "darwin" ? "dylib" : "so";
+	const dylibName = `lib${libraryName}.${dylibExtension}`;
 
 	let source: tg.Unresolved<tg.File>;
 	if (arg.testSource) {
@@ -506,9 +520,8 @@ export const testDylib = async (arg: TestDylibArg) => {
 		source = tg.file(arg.testSource);
 	} else {
 		// Extract a symbol to reference, proving the library exports something
-		const hostOs = std.triple.os(arg.host);
 		const nmFlags = hostOs === "darwin" ? "-gU" : "-D";
-		const dylibPath = tg`${directory}/lib/${arg.dylib}`;
+		const dylibPath = tg`${directory}/lib/${dylibName}`;
 
 		const symbols = await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > $OUTPUT`
 			.env(std.sdk(arg?.sdk))
@@ -549,20 +562,25 @@ export const testDylib = async (arg: TestDylibArg) => {
 		}
 	}
 
-	// Compile and link against the libraries
-	const linkerFlags = libs.map((name) => `-l${baseName(name)}`).join(" ");
+	// Set up environment with pkg-config and all directories
 	const sdkEnv = std.sdk(arg?.sdk);
-	const program = await $`cc -xc "${source}" ${linkerFlags} -o $OUTPUT`
+	const pkgConfigEnv = buildTools({ level: "pkgconfig" });
+	const allEnvDirs = [directory, ...arg.runtimeDepDirs];
+	const compileEnv = std.env.arg(sdkEnv, pkgConfigEnv, ...allEnvDirs, arg.env, {
+		utils: false,
+	});
+
+	const pkgConfigLibName = arg.pkgConfigName ?? libraryName;
+	const pkgConfigFlags = await getPkgConfigFlags(pkgConfigLibName, compileEnv);
+	tg.assert(
+		pkgConfigFlags,
+		`pkg-config failed to get flags for ${pkgConfigLibName}`,
+	);
+
+	// Compile and link using the flags from pkg-config
+	const program = await $`cc -xc "${source}" ${pkgConfigFlags} -o $OUTPUT`
 		.bootstrap(true)
-		.env(
-			std.env.arg(
-				sdkEnv,
-				directory,
-				...arg.runtimeDepDirs,
-				arg.env,
-				{ utils: false },
-			),
-		)
+		.env(compileEnv)
 		.host(arg.host)
 		.then(tg.File.expect);
 
@@ -575,8 +593,10 @@ export const testDylib = async (arg: TestDylibArg) => {
 type TestStaticlibArg = {
 	directory: tg.Directory;
 	library: string;
+	pkgConfigName?: string | undefined;
 	env?: std.env.Arg;
 	host: string;
+	runtimeDepDirs?: Array<tg.Unresolved<tg.Directory>>;
 	sdk?: std.sdk.Arg;
 	testSource?: string;
 };
@@ -596,11 +616,31 @@ export const testStaticlib = async (arg: TestStaticlibArg) => {
 		source = tg.file`int main() { return 0; }`;
 	}
 
-	// Compile and link statically against the library
+	// Set up environment with pkg-config and all directories
 	const sdkEnv = std.sdk(arg?.sdk);
-	const program = await $`cc -xc "${source}" -l${arg.library} -o $OUTPUT`
+	const pkgConfigEnv = buildTools({ level: "pkgconfig" });
+	const runtimeDepDirs = arg.runtimeDepDirs ?? [];
+	const allEnvDirs = [arg.directory, ...runtimeDepDirs];
+	const compileEnv = std.env.arg(sdkEnv, pkgConfigEnv, ...allEnvDirs, arg.env, {
+		utils: false,
+	});
+
+	// Get pkg-config flags if available
+	let compileFlags = `-l${arg.library}`;
+	if (arg.pkgConfigName) {
+		const pkgConfigFlags = await getPkgConfigFlags(
+			arg.pkgConfigName,
+			compileEnv,
+		);
+		if (pkgConfigFlags) {
+			compileFlags = pkgConfigFlags;
+		}
+	}
+
+	// Compile and link statically against the library
+	const program = await $`cc -xc "${source}" ${compileFlags} -o $OUTPUT`
 		.bootstrap(true)
-		.env(std.env.arg(sdkEnv, arg.directory, arg.env, { utils: false }))
+		.env(compileEnv)
 		.host(arg.host)
 		.then(tg.File.expect);
 
@@ -722,6 +762,78 @@ export const allBinaries = (
 	},
 ): Array<BinarySpec> => {
 	return names.map((name) => ({ name, ...override }));
+};
+
+/** Helper to create a library spec without redundantly specifying the name field. */
+export function library(name: string): string;
+export function library(
+	name: string,
+	overrides: {
+		pkgConfigName?: boolean | string;
+		dylib?: boolean;
+		staticlib?: boolean;
+		runtimeDeps?: Array<tg.Unresolved<tg.Directory>>;
+		symbols?: Array<string>;
+	},
+): {
+	name: string;
+	pkgConfigName?: boolean | string;
+	dylib?: boolean;
+	staticlib?: boolean;
+	runtimeDeps?: Array<tg.Unresolved<tg.Directory>>;
+	symbols?: Array<string>;
+};
+export function library(
+	name: string,
+	overrides?: {
+		pkgConfigName?: boolean | string;
+		dylib?: boolean;
+		staticlib?: boolean;
+		runtimeDeps?: Array<tg.Unresolved<tg.Directory>>;
+		symbols?: Array<string>;
+	},
+): LibrarySpec {
+	if (!overrides || Object.keys(overrides).length === 0) {
+		return name;
+	}
+	return {
+		name,
+		...overrides,
+	};
+}
+
+/** Helper to create library specs from a list of names with selective overrides. */
+export const libraries = (
+	names: Array<string>,
+	overrides?: Record<
+		string,
+		{
+			pkgConfigName?: boolean | string;
+			dylib?: boolean;
+			staticlib?: boolean;
+			runtimeDeps?: Array<tg.Unresolved<tg.Directory>>;
+			symbols?: Array<string>;
+		}
+	>,
+): Array<LibrarySpec> => {
+	return names.map((name) => {
+		const override = overrides?.[name];
+		return override ? { name, ...override } : name;
+	});
+};
+
+/** Helper to create library specs from a list of names, applying the same configuration to all. */
+export const allLibraries = (
+	names: Array<string>,
+	config: {
+		pkgConfigName?: boolean | string;
+		dylib?: boolean;
+		staticlib?: boolean;
+		runtimeDeps?: Array<tg.Unresolved<tg.Directory>>;
+		symbols?: Array<string>;
+	},
+): Array<LibrarySpec> => {
+	return names.map((name) => ({ name, ...config }));
 };
 
 /** Normalize a string by removing common leading whitespace from all lines. */
