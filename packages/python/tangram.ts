@@ -10,6 +10,7 @@ import * as openssl from "openssl" with { local: "../openssl" };
 import * as readline from "readline" with { local: "../readline" };
 import * as sqlite from "sqlite" with { local: "../sqlite" };
 import * as zlib from "zlib" with { local: "../zlib" };
+import * as zstd from "zstd" with { local: "../zstd" };
 
 import * as requirements from "./requirements.tg.ts";
 export { requirements };
@@ -59,6 +60,7 @@ export type Arg = {
 		readline?: std.args.DependencyArg<readline.Arg>;
 		sqlite?: std.args.DependencyArg<sqlite.Arg>;
 		zlib?: std.args.DependencyArg<zlib.Arg>;
+		zstd?: std.args.DependencyArg<zstd.Arg>;
 	};
 
 	/** Optional environment variables to set. */
@@ -131,11 +133,15 @@ export const self = async (...args: std.Args<Arg>) => {
 	const zlibForHost = await processDependency(
 		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
 	);
+	const zstdForHost = await processDependency(
+		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
+	)
 	let hostLibDirs = [
 		libffiForHost,
 		mpdecimalForHost,
 		opensslForHost,
 		zlibForHost,
+		zstdForHost,
 	];
 
 	// Resolve env.
@@ -185,6 +191,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		mpdecimalForHost,
 		opensslForHost,
 		zlibForHost,
+		zstdForHost
 	]
 		.filter((v) => v !== undefined)
 		.map((dir) => dir.get("lib").then(tg.Directory.expect));
