@@ -124,7 +124,7 @@ export const self = async (...args: std.Args<Arg>) => {
 	};
 	const phases = { prepare, configure };
 
-	const env = await std.env.arg(...deps, { CXXFLAGS: tg.Mutation.suffix("-fpermissive", " ") }, env_);
+	const env = await std.env.arg(...deps, env_);
 
 	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),

@@ -10,10 +10,7 @@ export const metadata = {
 	tag: "openssl/3.5.4",
 	provides: {
 		binaries: ["c_rehash" ,"openssl"],
-		libraries: [
-			{ name: "crypto", pkgConfigName: "libcrypto" },
-			{ name: "ssl", pkgConfigName: "libssl" },
-		],
+		libraries: ["crypto", "ssl"],
 	},
 };
 

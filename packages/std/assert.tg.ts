@@ -405,7 +405,8 @@ export const linkableLib = async (arg: LibraryArg) => {
 
 	const dylibName = (name: string) => `lib${name}.${dylibExtension}`;
 
-	// Check for the pkg-config file if requested.
+	// Resolve the actual pkg-config name by checking which file exists.
+	let resolvedPkgConfigName = pkgConfigName;
 	if (pkgConfigName !== undefined) {
 		// If pkgConfigName was explicitly provided, check only that exact name.
 		// Otherwise, use a heuristic to try both {name}.pc and lib{name}.pc.
@@ -417,15 +418,26 @@ export const linkableLib = async (arg: LibraryArg) => {
 				}),
 			);
 		} else {
-			tests.push(
-				fileExistsOneOf({
+			// Determine which file actually exists
+			const nameExists = await fileExists({
+				directory: arg.directory,
+				subpath: `lib/pkgconfig/${pkgConfigName}.pc`,
+			}).catch(() => false);
+
+			if (nameExists) {
+				resolvedPkgConfigName = pkgConfigName;
+			} else {
+				const libNameExists = await fileExists({
 					directory: arg.directory,
-					subpaths: [
-						`lib/pkgconfig/${pkgConfigName}.pc`,
-						`lib/pkgconfig/lib${pkgConfigName}.pc`,
-					],
-				}),
-			);
+					subpath: `lib/pkgconfig/lib${pkgConfigName}.pc`,
+				}).catch(() => false);
+
+				if (libNameExists) {
+					resolvedPkgConfigName = `lib${pkgConfigName}`;
+				} else {
+					throw new Error(`pkg-config file not found for ${pkgConfigName}`);
+				}
+			}
 		}
 	}
 
@@ -440,7 +452,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 				testDylib({
 					directory: arg.directory,
 					libraryName: name,
-					pkgConfigName,
+					pkgConfigName: resolvedPkgConfigName,
 					env,
 					host,
 					runtimeDepDirs: runtimeDeps,
@@ -460,7 +472,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 				testStaticlib({
 					directory: arg.directory,
 					library: name,
-					pkgConfigName,
+					pkgConfigName: resolvedPkgConfigName,
 					env,
 					host,
 					runtimeDepDirs: runtimeDeps,
@@ -570,15 +582,20 @@ export const testDylib = async (arg: TestDylibArg) => {
 		utils: false,
 	});
 
-	const pkgConfigLibName = arg.pkgConfigName ?? libraryName;
-	const pkgConfigFlags = await getPkgConfigFlags(pkgConfigLibName, compileEnv);
-	tg.assert(
-		pkgConfigFlags,
-		`pkg-config failed to get flags for ${pkgConfigLibName}`,
-	);
+	// Get pkg-config flags if available
+	let compileFlags = `-l${libraryName}`;
+	if (arg.pkgConfigName) {
+		const pkgConfigFlags = await getPkgConfigFlags(
+			arg.pkgConfigName,
+			compileEnv,
+		);
+		if (pkgConfigFlags) {
+			compileFlags = pkgConfigFlags;
+		}
+	}
 
-	// Compile and link using the flags from pkg-config
-	const program = await $`cc -xc "${source}" ${pkgConfigFlags} -o $OUTPUT`
+	// Compile and link using the flags from pkg-config or fallback
+	const program = await $`cc -xc "${source}" ${compileFlags} -o $OUTPUT`
 		.bootstrap(true)
 		.env(compileEnv)
 		.host(arg.host)

@@ -1,0 +1,28 @@
+diff --git a/Source/CTest/cmCTestCurl.cxx b/Source/CTest/cmCTestCurl.cxx
+index 1234567..abcdefg 100644
+--- a/Source/CTest/cmCTestCurl.cxx
++++ b/Source/CTest/cmCTestCurl.cxx
+@@ -263,7 +263,7 @@ void cmCTestCurl::SetProxyType()
+ {
+   this->HTTPProxy.clear();
+   // this is the default
+-  this->HTTPProxyType = CURLPROXY_HTTP;
++  this->HTTPProxyType = static_cast<curl_proxytype>(CURLPROXY_HTTP);
+   this->HTTPProxyAuth.clear();
+   if (cmSystemTools::GetEnv("HTTP_PROXY", this->HTTPProxy)) {
+     std::string port;
+@@ -275,11 +275,11 @@ void cmCTestCurl::SetProxyType()
+     if (cmSystemTools::GetEnv("HTTP_PROXY_TYPE", type)) {
+       // HTTP/SOCKS4/SOCKS5
+       if (type == "HTTP") {
+-        this->HTTPProxyType = CURLPROXY_HTTP;
++        this->HTTPProxyType = static_cast<curl_proxytype>(CURLPROXY_HTTP);
+       } else if (type == "SOCKS4") {
+-        this->HTTPProxyType = CURLPROXY_SOCKS4;
++        this->HTTPProxyType = static_cast<curl_proxytype>(CURLPROXY_SOCKS4);
+       } else if (type == "SOCKS5") {
+-        this->HTTPProxyType = CURLPROXY_SOCKS5;
++        this->HTTPProxyType = static_cast<curl_proxytype>(CURLPROXY_SOCKS5);
+       }
+     }
+     cmSystemTools::GetEnv("HTTP_PROXY_USER", this->HTTPProxyAuth);

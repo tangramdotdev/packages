@@ -12,7 +12,7 @@ export const metadata = {
 		binaries: [
 			"derb",
 			"genbrk",
-			"genfcu",
+			"gencfu",
 			"gencnval",
 			"gendict",
 			"icuexportdata",
@@ -125,18 +125,26 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const hasUsage = { testArgs: ["--help"], snapshot: "usage:" };
+	const hasUsage = { testArgs: ["--help"], snapshot: "Usage:" };
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.binaries(metadata.provides.binaries, {
 			genbrk: hasUsage,
-			genfcu: hasUsage,
-			gencnval: hasUsage,
+			gencfu: hasUsage,
+			gencnval: { testArgs: ["--help"], snapshot: "usage" },
 			gendict: hasUsage,
-			icuinfo: { testArgs: [] },
+			icuinfo: { testArgs: [], snapshot: "77.1" },
 			makeconv: { snapshot: "6.2" },
-			pkgdata: { ...hasUsage, exitOnErr: false },
+			pkgdata: { testArgs: ["--help"], snapshot: "usage:", exitOnErr: false },
 		}),
+		libraries: [
+			{ name: "icudata", pkgConfigName: false },
+			{ name: "icui18n", pkgConfigName: "icu-i18n" },
+			{ name: "icuio", pkgConfigName: "icu-io" },
+			{ name: "icutest", pkgConfigName: false },
+			{ name: "icutu", pkgConfigName: false },
+			{ name: "icuuc", pkgConfigName: "icu-uc" },
+		],
 	};
 	return await std.assert.pkg(build, spec);
 };

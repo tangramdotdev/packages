@@ -19,8 +19,49 @@ export const metadata = {
 	version: "17.6",
 	tag: "postgresql/17.6",
 	provides: {
-		binaries: ["postgres", "psql"],
-		libraries: ["pq"],
+		binaries: [
+			"clusterdb",
+			"createdb",
+			"createuser",
+			"dropdb",
+			"dropuser",
+			"ecpg",
+			"initdb",
+			"pg_amcheck",
+			"pg_archivecleanup",
+			"pg_basebackup",
+			"pg_checksums",
+			"pg_combinebackup",
+			"pg_config",
+			"pg_controldata",
+			"pg_createsubscriber",
+			"pg_ctl",
+			"pg_dump",
+			"pg_dumpall",
+			"pg_isready",
+			"pg_receivewal",
+			"pg_recvlogical",
+			"pg_resetwal",
+			"pg_restore",
+			"pg_rewind",
+			"pg_test_fsync",
+			"pg_test_timing",
+			"pg_upgrade",
+			"pg_verifybackup",
+			"pg_waldump",
+			"pg_walsummary",
+			"pgbench",
+			"postgres",
+			"psql",
+			"reindexdb",
+			"vacuumdb"
+		],
+		libraries: [
+			"ecpg",
+			"ecpg_compat",
+			"pgtypes",
+			"pq"
+		],
 	},
 };
 
@@ -171,7 +212,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	let parallel = os !== "darwin";
 
-	let output = await std.autotools.build(
+	return await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(...env),
@@ -183,17 +224,6 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
-
-	libraryLibDirs.push(output.get("lib").then(tg.Directory.expect));
-
-	let binDir = await output.get("bin").then(tg.Directory.expect);
-	for await (let [name, artifact] of binDir) {
-		let file = tg.File.expect(artifact);
-		let wrappedBin = await std.wrap(file, { libraryPaths: libraryLibDirs });
-		output = await tg.directory(output, { [`bin/${name}`]: wrappedBin });
-	}
-
-	return output;
 };
 
 export default build;
