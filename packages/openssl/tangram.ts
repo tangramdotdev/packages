@@ -1,3 +1,4 @@
+import * as perl from "perl" with { local: "../perl" };
 import * as std from "std" with { local: "../std" };
 
 export const metadata = {
@@ -8,8 +9,11 @@ export const metadata = {
 	version: "3.5.4",
 	tag: "openssl/3.5.4",
 	provides: {
-		binaries: ["openssl"],
-		libraries: ["crypto", "ssl"],
+		binaries: ["c_rehash" ,"openssl"],
+		libraries: [
+			{ name: "crypto", pkgConfigName: "libcrypto" },
+			{ name: "ssl", pkgConfigName: "libssl" },
+		],
 	},
 };
 
@@ -96,7 +100,18 @@ export const build = async (...args: std.Args<Arg>) => {
 		autotools,
 	);
 
+	// Wrap the `c_rehash` perl script.
+	const perlArtifact = await perl.build(
+		{ build, env: env_, host, sdk },
+	);
+	const perlInterpreter = await tg.symlink({
+		artifact: perlArtifact,
+		path: "bin/perl",
+	});
+	const origCRehash = openssl.get("bin/c_rehash").then(tg.File.expect);
+
 	return tg.directory(openssl, {
+		["bin/c_rehash"]: std.wrap(origCRehash, { interpreter: perlInterpreter }),
 		["share/pkgconfig"]: tg.symlink("../lib/pkgconfig"),
 	});
 };
@@ -104,6 +119,11 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			c_rehash: { testArgs: ["-h"], snapshot: "Usage: c_rehash" },
+		}),
+	};
 	return await std.assert.pkg(build, spec);
 };
