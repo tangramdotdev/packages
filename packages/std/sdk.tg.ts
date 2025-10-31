@@ -890,36 +890,25 @@ export namespace sdk {
 		const expectedArch = std.triple.arch(expectedTarget);
 		let metadata = await std.file.executableMetadata(compiledProgram);
 		if (metadata.format === "elf") {
-			std.assert.assertJsonSnapshot(
-				metadata,
-				`
-				{
-					"format": "elf",
-					"arch": "${expectedArch}"
-				}
-			`,
-			);
-
-			// Ensure the correct libc was used.
 			let executable = compiledProgram;
 			if (proxiedLinker) {
 				executable = tg.File.expect(await std.wrap.unwrap(compiledProgram));
 				metadata = await std.file.executableMetadata(executable);
-				std.assert.assertJsonSnapshot(
-					metadata,
-					`
-					{
-						"format": "elf",
-						"arch": "${expectedArch}"
-					}
-				`,
-				);
 			}
+			// Assert the executable has the correct format, architecture, and dependencies.
+			tg.assert(metadata.format === "elf");
+			tg.assert(metadata.arch === expectedArch);
+			// Check for the correct libc name based on the environment.
+			const targetEnvironment = std.triple.environment(expectedTarget);
+			const expectedLibc = targetEnvironment === "musl" ? "libc.so" : "libc.so.6";
+			tg.assert(
+				metadata.needed?.includes(expectedLibc),
+				`Expected libc dependency ${expectedLibc}, got ${metadata.needed?.join(", ") ?? "none"}`,
+			);
 			if (linkerFlavor) {
 				await assertComment(executable, arg.sdkEnv, linkerFlavor);
 			}
 		} else if (metadata.format === "mach-o") {
-			tg.assert(metadata.format === "mach-o");
 			tg.assert(
 				metadata.arches.includes(expectedArch),
 				`Expected arch ${expectedArch}, got ${metadata.arches.join(", ")}`,

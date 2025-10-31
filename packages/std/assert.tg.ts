@@ -595,8 +595,18 @@ export const testDylib = async (arg: TestDylibArg) => {
 		}
 	}
 
+	// On Linux, add -rpath-link to help the linker find transitive dependencies at link time
+	let rpathLink = "";
+	if (hostOs === "linux") {
+		// Include both the primary library directory and all runtime dependency directories
+		const allLibDirs = [directory, ...arg.runtimeDepDirs].map(
+			(dir) => tg`${dir}/lib`,
+		);
+		rpathLink = tg`-Wl,-rpath-link,${tg.Template.join(":", ...allLibDirs)}`;
+	}
+
 	// Compile and link using the flags from pkg-config or fallback
-	const program = await $`cc -xc "${source}" ${compileFlags} -o $OUTPUT`
+	const program = await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
 		.bootstrap(true)
 		.env(compileEnv)
 		.host(arg.host)
@@ -655,8 +665,19 @@ export const testStaticlib = async (arg: TestStaticlibArg) => {
 		}
 	}
 
+	// On Linux, add -rpath-link to help the linker find transitive dependencies at link time
+	const hostOs = std.triple.os(arg.host);
+	let rpathLink = "";
+	if (hostOs === "linux") {
+		// Include both the primary library directory and all runtime dependency directories
+		const allLibDirs = [arg.directory, ...runtimeDepDirs].map(
+			(dir) => tg`${dir}/lib`,
+		);
+		rpathLink = tg`-Wl,-rpath-link,${tg.Template.join(":", ...allLibDirs)}`;
+	}
+
 	// Compile and link statically against the library
-	const program = await $`cc -xc "${source}" ${compileFlags} -o $OUTPUT`
+	const program = await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
 		.bootstrap(true)
 		.env(compileEnv)
 		.host(arg.host)
