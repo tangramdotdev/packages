@@ -104,12 +104,7 @@ export const test = async () => {
 	const spec: std.assert.PackageSpec = {
 		...std.assert.defaultSpec(metadata),
 		libraries: std.assert.allLibraries(["gnutls"], {
-			runtimeDeps: [
-				nettle.build(),
-				gmp.build(),
-				zlib.build(),
-				zstd.build(),
-			],
+			runtimeDeps: [nettle.build(), gmp.build(), zlib.build(), zstd.build()],
 		}),
 	};
 	return await std.assert.pkg(build, spec);

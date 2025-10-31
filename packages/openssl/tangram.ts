@@ -9,7 +9,7 @@ export const metadata = {
 	version: "3.5.4",
 	tag: "openssl/3.5.4",
 	provides: {
-		binaries: ["c_rehash" ,"openssl"],
+		binaries: ["c_rehash", "openssl"],
 		libraries: ["crypto", "ssl"],
 	},
 };
@@ -98,9 +98,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 
 	// Wrap the `c_rehash` perl script.
-	const perlArtifact = await perl.build(
-		{ build, env: env_, host, sdk },
-	);
+	const perlArtifact = await perl.build({ build, env: env_, host, sdk });
 	const perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
 		path: "bin/perl",

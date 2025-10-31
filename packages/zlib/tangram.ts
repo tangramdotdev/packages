@@ -8,7 +8,7 @@ export const metadata = {
 	tag: "zlib/1.3.1",
 	provides: {
 		docs: ["man/man3/zlib.3"],
-		libraries: [{name: "z", pkgConfigName: "zlib" }],
+		libraries: [{ name: "z", pkgConfigName: "zlib" }],
 	},
 };
 

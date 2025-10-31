@@ -135,7 +135,7 @@ export const self = async (...args: std.Args<Arg>) => {
 	);
 	const zstdForHost = await processDependency(
 		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
-	)
+	);
 	let hostLibDirs = [
 		libffiForHost,
 		mpdecimalForHost,
@@ -159,7 +159,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
-			"ax_cv_c_float_words_bigendian=no"
+			"ax_cv_c_float_words_bigendian=no",
 		);
 		makeArgs.push(
 			"RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
@@ -191,7 +191,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		mpdecimalForHost,
 		opensslForHost,
 		zlibForHost,
-		zstdForHost
+		zstdForHost,
 	]
 		.filter((v) => v !== undefined)
 		.map((dir) => dir.get("lib").then(tg.Directory.expect));

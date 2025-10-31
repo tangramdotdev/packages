@@ -1126,8 +1126,12 @@ export const testTransitiveDiscovery = async (target?: string) => {
 	// Combine both libraries into a single directory.
 	const combined = await tg.directory({
 		lib: tg.directory({
-			[`libbottom.${dylibExt}`]: bottom.get(`lib/libbottom.${dylibExt}`).then(tg.File.expect),
-			[`libtop.${dylibExt}`]: top.get(`lib/libtop.${dylibExt}`).then(tg.File.expect),
+			[`libbottom.${dylibExt}`]: bottom
+				.get(`lib/libbottom.${dylibExt}`)
+				.then(tg.File.expect),
+			[`libtop.${dylibExt}`]: top
+				.get(`lib/libtop.${dylibExt}`)
+				.then(tg.File.expect),
 		}),
 	});
 

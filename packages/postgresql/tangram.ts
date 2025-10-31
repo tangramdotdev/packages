@@ -54,14 +54,9 @@ export const metadata = {
 			"postgres",
 			"psql",
 			"reindexdb",
-			"vacuumdb"
+			"vacuumdb",
 		],
-		libraries: [
-			"ecpg",
-			"ecpg_compat",
-			"pgtypes",
-			"pq"
-		],
+		libraries: ["ecpg", "ecpg_compat", "pgtypes", "pq"],
 	},
 };
 

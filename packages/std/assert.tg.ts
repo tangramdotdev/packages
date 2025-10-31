@@ -535,11 +535,12 @@ export const testDylib = async (arg: TestDylibArg) => {
 		const nmFlags = hostOs === "darwin" ? "-gU" : "-D";
 		const dylibPath = tg`${directory}/lib/${dylibName}`;
 
-		const symbols = await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > $OUTPUT`
-			.env(std.sdk(arg?.sdk))
-			.then(tg.File.expect)
-			.then((f) => f.text())
-			.catch(() => null);
+		const symbols =
+			await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > $OUTPUT`
+				.env(std.sdk(arg?.sdk))
+				.then(tg.File.expect)
+				.then((f) => f.text())
+				.catch(() => null);
 
 		if (symbols && symbols.trim()) {
 			const symbol = symbols.trim().split(/\s+/).pop() ?? "";
