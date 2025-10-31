@@ -6,8 +6,8 @@ export const metadata = {
 	license: "MIT",
 	name: "fzf",
 	repository: "https://github.com/junegunn/fzf",
-	version: "0.57.0",
-	tag: "fzf/0.57.0",
+	version: "0.66.1",
+	tag: "fzf/0.66.1",
 	provides: {
 		binaries: ["fzf"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export const source = (): Promise<tg.Directory> => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:d4e8e25fad2d3f75943b403c40b61326db74b705bf629c279978fdd0ceb1f97c";
+		"sha256:ae70923dba524d794451b806dbbb605684596c1b23e37cc5100daa04b984b706";
 	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
@@ -44,13 +44,13 @@ export const build = async (...args: std.Args<Arg>) => {
 		host,
 		sdk,
 		source: source_,
-		...rest
 	} = await std.packages.applyArgs<Arg>(...args);
 
 	return go.build(
 		{
-			...rest,
 			...(await std.triple.rotate({ build, host })),
+			env,
+			sdk,
 			source: source_ ?? source(),
 		},
 		goArg,
@@ -60,7 +60,7 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const majorMinor = metadata.version.split(".").slice(2).join(".");
+	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {

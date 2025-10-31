@@ -51,7 +51,6 @@ export const build = async (...args: std.Args<Arg>) => {
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
-			network: true,
 			sdk,
 			source: source_ ?? source(),
 		},
