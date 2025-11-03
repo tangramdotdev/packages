@@ -341,12 +341,28 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		throw new Error("Invalid pyproject.toml: missing 'project.name'.");
 	}
 
+	// Determine where the package source is located.
+	// Try src/${name} first (PEP 517/518 src-layout), then fall back to ${name} (flat layout).
+	let packageSourcePath: tg.Template.Arg;
+	const srcLayoutPath = await source.tryGet(`src/${name}`);
+	if (srcLayoutPath !== undefined) {
+		packageSourcePath = tg`${source}/src/${name}`;
+	} else {
+		const flatLayoutPath = await source.tryGet(name);
+		if (flatLayoutPath === undefined) {
+			throw new Error(
+				`Could not locate package source at ${name} or src/${name}`,
+			);
+		}
+		packageSourcePath = tg`${source}/${name}`;
+	}
+
 	// Construct the python environment.
 	const pythonArtifact = await tg.directory(
 		self({ ...pythonArg, build: buildTriple, env, host }),
 		{
 			["lib/python3/site-packages"]: {
-				[name]: tg.symlink(tg`${source}/src/${name}`),
+				[name]: tg.symlink(packageSourcePath),
 			},
 		},
 	);

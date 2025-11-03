@@ -1,5 +1,4 @@
 import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
 
 import * as python from "python" with { local: "../python" };
 
@@ -8,8 +7,8 @@ export const metadata = {
 	license: "BSD-2-Clause",
 	name: "sphinx",
 	repository: "https://github.com/sphinx-doc/sphinx",
-	version: "8.1.3",
-	tag: "sphinx/8.1.3",
+	version: "8.2.3",
+	tag: "sphinx/8.2.3",
 	provides: {
 		binaries: [
 			"sphinx-apidoc",
@@ -26,7 +25,7 @@ import requirements from "./requirements.txt" with { type: "file" };
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:0fcc28999fe8e4fcc49a4ab01e3e987f6fbb3af32995db74e6fc8f8d01dcaaca";
+		"sha256:94cd09fa065b819dcc40de329441d53710cf51f6857b39ce20840bb2b5d3ec78";
 	const owner = "sphinx-doc";
 	const repo = name;
 	const tag = `v${version}`;
