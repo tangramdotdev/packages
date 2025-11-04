@@ -1,14 +1,13 @@
 import * as poetry from "poetry" with { local: "../poetry" };
 import * as std from "std" with { local: "../std" };
-import poetryLock from "./poetry.lock" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://pypi.org/project/docformatter/",
 	name: "docformatter",
 	license: "MIT",
 	repository: "https://github.com/PyCQA/docformatter",
-	version: "1.7.2",
-	tag: "docformatter/1.7.2",
+	version: "1.7.7",
+	tag: "docformatter/1.7.7",
 	provides: {
 		binaries: ["docformatter"],
 	},
@@ -17,7 +16,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:8c4a509f77261c05e093f6268bedd36a2782c0d6ccc01d62d1ddf3a46835aa98";
+		"sha256:6d76165e3a52384ed982889672751bf3d96f3126b57c47c04f66925b35dd7374";
 	const owner = "PyCQA";
 	const repo = name;
 	const tag = `v${version}`;
@@ -25,9 +24,8 @@ export const source = () => {
 		checksum,
 		owner,
 		repo,
-		source: "release",
+		source: "tag",
 		tag,
-		version,
 	});
 };
 
@@ -47,7 +45,6 @@ export const build = async (...args: std.Args<Arg>) => {
 	return poetry.build({
 		build,
 		source: source_ ?? (await source()),
-		lockfile: poetryLock,
 		host,
 	});
 };
