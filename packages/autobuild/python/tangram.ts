@@ -1,6 +1,6 @@
 import * as std from "std" with { local: "../../std" };
 import * as python from "python" with { local: "../../python" };
-// import * as poetry from "poetry" with { local: "../../poetry" };
+import * as poetry from "poetry" with { local: "../../poetry" };
 import { wrapScripts } from "../common";
 
 export const metadata = {
@@ -59,14 +59,6 @@ export const plain = async (arg: tg.Unresolved<Arg>) => {
 	});
 };
 
-// export const poetry = tg.target(async (arg: Arg) => {
-// 	const { build, env: envArg, host, source } = arg ?? {};
-
-// 	const env_ = envArg ?? std.env.arg(env({ build, host }), envArg);
-// 	const arg_ = { build, env: env_, host, source };
-// 	return poetry.build(arg_);
-// });
-
 export const pyproject = async (arg: tg.Unresolved<Arg>) => {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, source, ...rest } = resolved;
@@ -80,6 +72,25 @@ export const pyproject = async (arg: tg.Unresolved<Arg>) => {
 	const pyprojectToml = await source.get("pyproject.toml").then(tg.File.expect);
 	const arg_ = { ...rest, env: env_, pyprojectToml, source };
 	return python.build(arg_);
+};
+
+export const poetryBuild = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg);
+	const { source, build, host } = resolved;
+
+	const maybePoetryLock = await source.tryGet("poetry.lock");
+	const buildArgs: poetry.BuildArgs = { source };
+	if (maybePoetryLock instanceof tg.File) {
+		buildArgs.lockfile = maybePoetryLock;
+	}
+	if (build !== undefined) {
+		buildArgs.build = build;
+	}
+	if (host !== undefined) {
+		buildArgs.host = host;
+	}
+
+	return poetry.build(buildArgs);
 };
 
 type EnvArg = {

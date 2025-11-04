@@ -16,6 +16,7 @@ import jsNodeTest from "./tests/js-node" with { type: "directory" };
 import jsPlainTest from "./tests/js-plain" with { type: "directory" };
 import pythonTest from "./tests/python" with { type: "directory" };
 import pythonPlainTest from "./tests/python-plain" with { type: "directory" };
+import pythonPoetryTest from "./tests/python-poetry" with { type: "directory" };
 import pythonPyprojectTest from "./tests/python-pyproject" with {
 	type: "directory",
 };
@@ -71,6 +72,9 @@ export const build = async (unresolvedArg: tg.Unresolved<Arg>) => {
 		case "python-plain": {
 			return python.plain(arg_);
 		}
+		case "python-poetry": {
+			return python.poetryBuild(arg_);
+		}
 		case "python-pyproject": {
 			return python.pyproject(arg_);
 		}
@@ -124,6 +128,7 @@ export const env = async (unresolvedArg: tg.Unresolved<EnvArg>) => {
 		}
 		case "python":
 		case "python-plain":
+		case "python-poetry":
 		case "python-pyproject": {
 			return python.env(arg_);
 		}
@@ -150,6 +155,7 @@ export type Kind =
 	| "js-plain"
 	| "python"
 	| "python-plain"
+	| "python-poetry"
 	| "python-pyproject"
 	| "ruby-plain"
 	| "rust-cargo"
@@ -175,7 +181,17 @@ export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 	if (hasExecutableFile("configure") || hasFile("configure.ac"))
 		return "cc-autotools";
 	if (hasFile("package.json")) return "js-node";
-	if (hasFile("pyproject.toml")) return "python-pyproject";
+	if (hasFile("pyproject.toml")) {
+		// Check if it is a poetry project.
+		const pyprojectToml = await source
+			.get("pyproject.toml")
+			.then(tg.File.expect);
+		const content = await pyprojectToml.text();
+		if (content.includes("[tool.poetry]")) {
+			return "python-poetry";
+		}
+		return "python-pyproject";
+	}
 	if (hasFile("setup.py") || hasFile("setup.cfg")) return "python";
 	if (hasFile("go.mod") || hasDir("vendor")) return "go";
 
@@ -196,6 +212,7 @@ export const test = async () => {
 		"js-plain",
 		"js-node",
 		"python-plain",
+		"python-poetry",
 		"ruby-plain",
 		"rust-cargo",
 		"rust-plain",
@@ -237,6 +254,7 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
 				tg`${buildOutput}/main.py`,
 		},
+		"python-poetry": defaultTestArg,
 		"python-pyproject": defaultTestArg,
 		"ruby-plain": {
 			...defaultTestArg,
@@ -261,6 +279,7 @@ const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
 		"js-plain": jsPlainTest,
 		python: pythonTest,
 		"python-plain": pythonPlainTest,
+		"python-poetry": pythonPoetryTest,
 		"python-pyproject": pythonPyprojectTest,
 		"ruby-plain": rubyPlainTest,
 		"rust-cargo": rustCargoTest,

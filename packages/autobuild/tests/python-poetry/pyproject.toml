@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "demo-package"
+version = "0.1.0"
+description = "A demonstration package that displays text to stdout"
+authors = ["Tangram <hello@tangram.dev>"]
+readme = "README.md"
+packages = [{include = "demo_package", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.scripts]
+test = "demo_package.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
