@@ -1,4 +1,4 @@
-use futures::{StreamExt as _, TryFutureExt, TryStreamExt as _};
+use futures::{StreamExt as _, TryStreamExt as _};
 use itertools::Itertools;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -17,37 +17,6 @@ fn main() {
 	if let Err(e) = main_inner() {
 		eprintln!("linker proxy failed: {e}");
 		std::process::exit(1);
-	}
-}
-
-trait Ext {
-	type T;
-	fn timeout(
-		self,
-		t: std::time::Duration,
-		msg: &str,
-	) -> impl Future<Output = Result<Self::T, tokio::time::error::Elapsed>>;
-}
-
-impl<F, T> Ext for F
-where
-	F: Future<Output = T>,
-{
-	type T = T;
-	fn timeout(
-		self,
-		t: std::time::Duration,
-		msg: &str,
-	) -> impl Future<Output = Result<Self::T, tokio::time::error::Elapsed>> {
-		async move {
-			match tokio::time::timeout(t, self).await {
-				Ok(result) => Ok(result),
-				Err(elapsed) => {
-					eprintln!("{msg} timed out");
-					Err(elapsed)
-				},
-			}
-		}
 	}
 }
 
@@ -86,11 +55,7 @@ fn main_inner() -> tg::Result<()> {
 		.enable_all()
 		.build()
 		.unwrap()
-		.block_on(
-			create_wrapper(&options)
-				.timeout(std::time::Duration::from_secs(30), "tgld")
-				.map_err(|_| tg::error!("tgld timed out")),
-		)??;
+		.block_on(create_wrapper(&options))?;
 
 	Ok(())
 }
@@ -282,10 +247,7 @@ fn read_options() -> tg::Result<Options> {
 async fn create_wrapper(options: &Options) -> tg::Result<()> {
 	// Create the tangram instance.
 	let tg = tg::Client::with_env()?;
-	tg.connect()
-		.timeout(std::time::Duration::from_secs(1), "connect")
-		.map_err(|_| tg::error!("connect() timed out"))
-		.await??;
+	tg.connect().await?;
 	let tg_url = tg.url();
 	tracing::debug!(?tg_url, "connected client");
 
@@ -404,9 +366,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				};
 				Ok::<_, tg::Error>(artifact_path)
 			}))
-			.timeout(std::time::Duration::from_secs(1), "collect")
-			.map_err(|_| tg::error!("collecting library paths timed out"))
-			.await??
+			.await?
 			.into_iter()
 			.flatten(),
 		)
@@ -439,9 +399,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				updates: vec![],
 			},
 		)
-		.timeout(std::time::Duration::from_secs(30), "checkin")
-		.map_err(|_| tg::error!("checkin timed out"))
-		.await??
+		.await?
 		.try_unwrap_file()
 		.map_err(|error| tg::error!(source = error, "expected a file"))?;
 
@@ -473,12 +431,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			options.max_depth,
 			options.disallow_missing,
 		)
-		.timeout(
-			std::time::Duration::from_secs(1),
-			"optimizing library paths",
-		)
-		.map_err(|source| tg::error!(!source, "optimizing library paths timed out"))
-		.await??;
+		.await?;
 
 		tracing::trace!(
 			?library_paths,
@@ -496,10 +449,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		let output_artifact_id = output_file.id().clone().into();
 
 		// Create the manifest.
-		let mut manifest = create_manifest(output_artifact_id, options, interpreter, library_paths)
-			.timeout(std::time::Duration::from_millis(1), "create_manifest")
-			.map_err(|source| tg::error!(!source, "creating the manifest timed out"))
-			.await??;
+		let mut manifest =
+			create_manifest(output_artifact_id, options, interpreter, library_paths).await?;
 		tracing::trace!(?manifest);
 
 		// If requested, emebd the wrapper.
