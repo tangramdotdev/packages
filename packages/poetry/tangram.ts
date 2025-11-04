@@ -10,8 +10,8 @@ export const metadata = {
 	license: "MIT",
 	name: "poetry",
 	repository: "https://github.com/python-poetry/poetry",
-	version: "2.1.2",
-	tag: "poetry/2.1.2",
+	version: "2.2.1",
+	tag: "poetry/2.2.1",
 	provides: {
 		binaries: ["poetry"],
 	},
@@ -20,7 +20,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6a0694645ee24ba93cb94254db66e47971344562ddd5578e82bf35e572bc546d";
+		"sha256:bef9aa4bb00ce4c10b28b25e7bac724094802d6958190762c45df6c12749b37c";
 	const owner = "python-poetry";
 	const repo = name;
 	const tag = version;
@@ -38,7 +38,7 @@ export const source = () => {
 export type Arg = {
 	build?: string;
 	host?: string;
-	requirements?: tg.File;
+	python?: python.Arg;
 };
 
 /** Create an environment with poetry installed. */
@@ -46,10 +46,17 @@ export const self = async (...args: std.Args<Arg>) => {
 	const {
 		build,
 		host,
-		requirements: requirements_,
+		python: pythonArg = {},
 	} = await std.packages.applyArgs<Arg>(...args);
-	const requirements = requirements_ ?? requirementsTxt;
-	return python.self({ build, host, requirements });
+
+	return python.self(
+		{
+			build,
+			host,
+			requirements: requirementsTxt,
+		},
+		pythonArg,
+	);
 };
 
 export default self;
