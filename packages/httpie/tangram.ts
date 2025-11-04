@@ -9,8 +9,8 @@ export const metadata = {
 	license: "BSD-3-Clause",
 	name: "httpie",
 	repository: "https://github.com/httpie/cli",
-	version: "3.2.3",
-	tag: "httpie/3.2.3",
+	version: "3.2.4",
+	tag: "httpie/3.2.4",
 	provides: {
 		binaries: ["http", "https", "httpie"],
 	},
@@ -19,7 +19,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:91cb6cbd1f9e6115ffc13824e87b2a4d903d76c769859e81924913adbf609c1b";
+		"sha256:b185cd8d81325f97c773582e50f1c5e047c2d8575b53d676469c9daf2a52f341";
 	const owner = name;
 	const repo = name;
 	const tag = version;
