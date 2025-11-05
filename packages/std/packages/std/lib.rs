@@ -1,5 +1,5 @@
 use std::{path::PathBuf, sync::LazyLock};
-use tangram_client as tg;
+use tangram_client::prelude::*;
 
 pub mod manifest;
 pub use manifest::Manifest;

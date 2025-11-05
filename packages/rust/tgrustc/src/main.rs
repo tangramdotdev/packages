@@ -6,7 +6,7 @@ use std::{
 	str::FromStr,
 	sync::LazyLock,
 };
-use tangram_client as tg;
+use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
 // Input arguments to the rustc proxy.
@@ -261,6 +261,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 					local_dependencies: true,
 					locked: true,
 					lock: false,
+					..tg::checkin::Options::default()
 				},
 				path: dependency.parse().unwrap(),
 				updates: vec![],
@@ -564,6 +565,8 @@ async fn get_checked_in_path(
 				local_dependencies: true,
 				locked: false,
 				lock: false,
+				solve: true,
+				watch: false,
 			},
 			path: path.to_path_buf(),
 			updates: vec![],

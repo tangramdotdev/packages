@@ -1,5 +1,5 @@
 use std::{collections::BTreeMap, ffi::OsStr, os::unix::process::CommandExt, path::PathBuf};
-use tangram_client as tg;
+use tangram_client::prelude::*;
 use tangram_std::manifest;
 
 fn main() {

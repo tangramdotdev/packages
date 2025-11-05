@@ -6,7 +6,7 @@ use std::{
 	path::PathBuf,
 	str::FromStr,
 };
-use tangram_client as tg;
+use tangram_client::prelude::*;
 use tokio::io::AsyncReadExt as _;
 
 type Hasher = fnv::FnvBuildHasher;

@@ -5,7 +5,7 @@ use std::{
 	str::FromStr as _,
 	sync::LazyLock,
 };
-use tangram_client as tg;
+use tangram_client::prelude::*;
 
 use crate::CLOSEST_ARTIFACT_PATH;
 

@@ -4,7 +4,7 @@ use std::{
 	os::unix::process::CommandExt,
 	path::{Path, PathBuf},
 };
-use tangram_client as tg;
+use tangram_client::prelude::*;
 
 // Data read from environment variables.
 #[derive(Debug)]

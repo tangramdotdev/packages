@@ -1,6 +1,6 @@
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 
-use tangram_client as tg;
+use tangram_client::prelude::*;
 use tangram_std::{Manifest, manifest};
 
 fn main() {

@@ -399,7 +399,7 @@ dependencies = [
 [[package]]
 name = "derive_more"
 version = "2.0.1"
-source = "git+https://github.com/jeltef/derive_more#be3edc4c9fcb0005b7212710136c3c90796afcf1"
+source = "git+https://github.com/jeltef/derive_more#8e9104d5389844a0323f018c22d7714ec71e3345"
 dependencies = [
  "derive_more-impl",
 ]
@@ -407,7 +407,7 @@ dependencies = [
 [[package]]
 name = "derive_more-impl"
 version = "2.0.1"
-source = "git+https://github.com/jeltef/derive_more#be3edc4c9fcb0005b7212710136c3c90796afcf1"
+source = "git+https://github.com/jeltef/derive_more#8e9104d5389844a0323f018c22d7714ec71e3345"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -1395,9 +1395,9 @@ dependencies = [
 
 [[package]]
 name = "schemars"
-version = "1.0.5"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1317c3bf3e7df961da95b0a56a172a02abead31276215a0497241a7624b487ce"
+checksum = "9558e172d4e8533736ba97870c4b2cd63f84b382a3d6eb063da41b91cce17289"
 dependencies = [
  "dyn-clone",
  "ref-cast",
@@ -1521,7 +1521,7 @@ dependencies = [
  "indexmap 1.9.3",
  "indexmap 2.12.0",
  "schemars 0.9.0",
- "schemars 1.0.5",
+ "schemars 1.1.0",
  "serde_core",
  "serde_json",
  "serde_with_macros",
@@ -1646,7 +1646,7 @@ checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1692,7 +1692,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -1701,7 +1701,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "dashmap",
  "futures",
@@ -1713,7 +1713,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "bytes",
  "derive_more",
@@ -1738,7 +1738,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "byteorder",
  "bytes",
@@ -1751,7 +1751,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "itertools",
  "num",
@@ -1779,7 +1779,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "derive_more",
  "regex",
@@ -1790,7 +1790,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=b77bf5505e988b35d9870c1f903be1e566130062#b77bf5505e988b35d9870c1f903be1e566130062"
+source = "git+https://github.com/tangramdotdev/tangram?rev=2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3#2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3"
 dependencies = [
  "bytes",
  "data-encoding",
