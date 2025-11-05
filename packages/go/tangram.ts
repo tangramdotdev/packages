@@ -215,7 +215,8 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 
 	// Determine if we should use -mod=vendor flag
 	// Use it if: we created a vendor dir, OR the source already has one (unless explicitly disabled)
-	const useModVendor = vendor_ !== false && (shouldCreateVendor || hasVendorDir);
+	const useModVendor =
+		vendor_ !== false && (shouldCreateVendor || hasVendorDir);
 
 	// Build args for go build/install
 	let buildArgs = "";
@@ -402,9 +403,7 @@ export const parseGoSum = async (
  * regardless of whether they have the "// indirect" comment or not.
  * Only modules that appear ONLY in go.sum (not in go.mod) should lack the explicit marker.
  */
-export const parseGoMod = async (
-	goModFile: tg.File,
-): Promise<Set<string>> => {
+export const parseGoMod = async (goModFile: tg.File): Promise<Set<string>> => {
 	const content = await goModFile.text();
 	const modulePaths = new Set<string>();
 	let inRequireBlock = false;
@@ -425,7 +424,12 @@ export const parseGoMod = async (
 			const [path, version] = requireLine.split(/\s+/);
 
 			// Skip local replace directives
-			if (path && version && !path.startsWith(".") && !version.startsWith(".")) {
+			if (
+				path &&
+				version &&
+				!path.startsWith(".") &&
+				!version.startsWith(".")
+			) {
 				modulePaths.add(path);
 			}
 		}
@@ -624,9 +628,13 @@ const findGoPackages = async (
 
 	// Recursively check subdirectories (skip testdata and vendor).
 	for (const [name, entry] of Object.entries(entries)) {
-		if (entry instanceof tg.Directory && name !== "testdata" && name !== "vendor") {
+		if (
+			entry instanceof tg.Directory &&
+			name !== "testdata" &&
+			name !== "vendor"
+		) {
 			const subPrefix = prefix ? `${prefix}/${name}` : name;
-			packages.push(...await findGoPackages(modulePath, entry, subPrefix));
+			packages.push(...(await findGoPackages(modulePath, entry, subPrefix)));
 		}
 	}
 

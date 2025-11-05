@@ -596,7 +596,7 @@ export const testDylib = async (arg: TestDylibArg) => {
 	}
 
 	// On Linux, add -rpath-link to help the linker find transitive dependencies at link time
-	let rpathLink = "";
+	let rpathLink: tg.Unresolved<tg.Template.Arg> = "";
 	if (hostOs === "linux") {
 		// Include both the primary library directory and all runtime dependency directories
 		const allLibDirs = [directory, ...arg.runtimeDepDirs].map(
@@ -606,11 +606,12 @@ export const testDylib = async (arg: TestDylibArg) => {
 	}
 
 	// Compile and link using the flags from pkg-config or fallback
-	const program = await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
-		.bootstrap(true)
-		.env(compileEnv)
-		.host(arg.host)
-		.then(tg.File.expect);
+	const program =
+		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
+			.bootstrap(true)
+			.env(compileEnv)
+			.host(arg.host)
+			.then(tg.File.expect);
 
 	// Run the program to ensure it's functional
 	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);
@@ -667,7 +668,7 @@ export const testStaticlib = async (arg: TestStaticlibArg) => {
 
 	// On Linux, add -rpath-link to help the linker find transitive dependencies at link time
 	const hostOs = std.triple.os(arg.host);
-	let rpathLink = "";
+	let rpathLink: tg.Unresolved<tg.Template.Arg> = "";
 	if (hostOs === "linux") {
 		// Include both the primary library directory and all runtime dependency directories
 		const allLibDirs = [arg.directory, ...runtimeDepDirs].map(
@@ -677,11 +678,12 @@ export const testStaticlib = async (arg: TestStaticlibArg) => {
 	}
 
 	// Compile and link statically against the library
-	const program = await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
-		.bootstrap(true)
-		.env(compileEnv)
-		.host(arg.host)
-		.then(tg.File.expect);
+	const program =
+		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
+			.bootstrap(true)
+			.env(compileEnv)
+			.host(arg.host)
+			.then(tg.File.expect);
 
 	// Run the program to ensure it's functional
 	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);

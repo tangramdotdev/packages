@@ -900,7 +900,8 @@ export namespace sdk {
 			tg.assert(metadata.arch === expectedArch);
 			// Check for the correct libc name based on the environment.
 			const targetEnvironment = std.triple.environment(expectedTarget);
-			const expectedLibc = targetEnvironment === "musl" ? "libc.so" : "libc.so.6";
+			const expectedLibc =
+				targetEnvironment === "musl" ? "libc.so" : "libc.so.6";
 			tg.assert(
 				metadata.needed?.includes(expectedLibc),
 				`Expected libc dependency ${expectedLibc}, got ${metadata.needed?.join(", ") ?? "none"}`,

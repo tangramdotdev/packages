@@ -346,7 +346,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	let packageSourcePath: tg.Template.Arg;
 	const srcLayoutPath = await source.tryGet(`src/${name}`);
 	if (srcLayoutPath !== undefined) {
-		packageSourcePath = tg`${source}/src/${name}`;
+		packageSourcePath = await tg`${source}/src/${name}`;
 	} else {
 		const flatLayoutPath = await source.tryGet(name);
 		if (flatLayoutPath === undefined) {
@@ -354,7 +354,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 				`Could not locate package source at ${name} or src/${name}`,
 			);
 		}
-		packageSourcePath = tg`${source}/${name}`;
+		packageSourcePath = await tg`${source}/${name}`;
 	}
 
 	// Construct the python environment.
