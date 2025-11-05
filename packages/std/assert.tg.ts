@@ -937,7 +937,12 @@ const sortKeys = (obj: unknown): unknown => {
 		return obj;
 	}
 	if (Array.isArray(obj)) {
-		return obj.map(sortKeys);
+		const mapped = obj.map(sortKeys);
+		// Sort arrays of primitives for deterministic comparison
+		if (mapped.every((el) => typeof el !== "object" || el === null)) {
+			return mapped.sort();
+		}
+		return mapped;
 	}
 	const sorted: Record<string, unknown> = {};
 	for (const key of Object.keys(obj).sort()) {
