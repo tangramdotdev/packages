@@ -240,7 +240,7 @@ export const test = async () => {
 	tests.push(testBasicExeWithLib());
 	tests.push(testExeWithCratesIoDependency());
 	tests.push(testConditionalCompilation());
-	tests.push(testLinkLibcurl());
+	tests.push(testLinkReadline());
 
 	const results = await Promise.all(tests);
 	tg.assert(results.every((r) => r === true));
@@ -388,27 +388,15 @@ export const testConditionalCompilation = async () => {
 	return true;
 };
 
-import * as curl from "curl" with { local: "../curl" };
-import * as libpsl from "libpsl" with { local: "../libpsl" };
-import * as openssl from "openssl" with { local: "../openssl" };
-import * as zlib from "zlib" with { local: "../zlib" };
-import * as zstd from "zstd" with { local: "../zstd" };
-export const testLinkLibcurl = async () => {
-	const crateName = "native_exe_libcurl";
+import * as ncurses from "ncurses" with { local: "../ncurses" };
+import * as readline from "readline" with { local: "../readline" };
+export const testLinkReadline = async () => {
+	const crateName = "native_exe_readline";
 
-	// Obtain dependencies. Libcurl transitively requires libssl, libz, and libzstd.
-	const libcurl = curl.build();
-	const libpslArtifact = libpsl.build();
-	const sslArtifact = openssl.build();
-	const zlibArtifact = zlib.build();
-	const zstdArtifact = zstd.build();
-	const deps = [
-		libcurl,
-		libpslArtifact,
-		sslArtifact,
-		zlibArtifact,
-		zstdArtifact,
-	];
+	// Obtain dependencies. Readline transitively requires ncurses.
+	const readlineArtifact = readline.build();
+	const ncursesArtifact = ncurses.build();
+	const deps = [readlineArtifact, ncursesArtifact];
 
 	// Build the test.
 	const exe = await build({
@@ -419,7 +407,7 @@ export const testLinkLibcurl = async () => {
 	});
 	console.log("exe", exe.id);
 
-	// Libcurl transitively requires libssl at runtime.
+	// Readline transitively requires ncurses at runtime.
 	const host = await std.triple.host();
 	const os = std.triple.os(host);
 	const runtimeLibVar =
@@ -429,7 +417,7 @@ export const testLinkLibcurl = async () => {
 			.env(std.env.arg(exe, ...deps))
 			.then(tg.File.expect);
 	const exeText = await exeOutput.text();
-	tg.assert(exeText.trim().includes(curl.metadata.version));
+	tg.assert(exeText.trim().includes(readline.metadata.version));
 
 	return true;
 };
