@@ -74,6 +74,9 @@ export type BuildArgs = {
 	/** The system to compile for. */
 	host?: string;
 
+	/** Optional Python arguments. */
+	python?: python.Arg;
+
 	// TODO: groups, preferWheel vs sdist
 };
 
@@ -81,12 +84,22 @@ export type BuildArgs = {
 export const build = async (args: BuildArgs) => {
 	const host = args.host ?? (await std.triple.host());
 	const build = args.build ?? host;
-	// Construct the basic build environment.
+
+	// Construct the poetry tool environment.
+	// Note: poetry itself uses the default Python version to match requirements.txt.
 	const poetryArtifact = await self({
 		build,
 		host,
 	});
 	console.log(`poetryArtifact`, poetryArtifact.id);
+
+	// Construct the project Python environment.
+	const projectPython = await python.self({
+		build,
+		host,
+		...(args.python && args.python),
+	});
+	console.log(`projectPython`, projectPython.id);
 
 	const poetryLock =
 		args.lockfile ??
@@ -97,9 +110,9 @@ export const build = async (args: BuildArgs) => {
 	const requirements = await lockfile.requirements(poetryLock);
 	console.log("requirements from poetry.lock", requirements.id);
 
-	// Install the requirements specified by the poetry.lock file.
+	// Install the requirements specified by the poetry.lock file using the project Python.
 	const installedRequirements = python.requirements.install(
-		poetryArtifact,
+		projectPython,
 		requirements,
 	);
 	console.log(`installedRequirements: ${(await installedRequirements).id}`);
@@ -110,31 +123,58 @@ export const build = async (args: BuildArgs) => {
 	});
 	console.log(`source: ${(await source).id}`);
 
-	const env = await std.env.arg(poetryArtifact, {
+	// Set up certificates for HTTPS requests.
+	const certFile = tg`${std.caCertificates()}/cacert.pem`;
+
+	// Create env with both poetry (for the tool) and projectPython (for building).
+	const env = await std.env.arg(projectPython, poetryArtifact, {
 		PYTHONPATH: tg.Mutation.suffix(
 			tg`${installedRequirements}/lib/python3/site-packages`,
 			":",
 		),
+		SSL_CERT_FILE: certFile,
+		REQUESTS_CA_BUNDLE: certFile,
+		PIP_CERT: certFile,
 	});
 	console.log("env", env);
 
 	const sdist = await $`
 		set -x
+		# Create a writable temporary directory for poetry.
+		mkdir -p $PWD/tmp
+		export TMPDIR=$PWD/tmp
+
+		# Create a writable cache directory for poetry.
+		mkdir -p $PWD/.cache/poetry
+		export POETRY_CACHE_DIR=$PWD/.cache/poetry
+
+		# Disable keyring to avoid macOS Keychain access.
+		export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
+
 		# Create the virtual env to install to.
 		python3 -m venv $OUTPUT --copies
 		export VIRTUAL_ENV=$OUTPUT
 
 		poetry install --no-interaction --only-root --directory ${source} -vvv`
 		.env(env)
+		.network(true)
+		.checksum("sha256:any")
 		.then(tg.Directory.expect);
 
 	// Merge the installed sdist with the requirements.
 	const installed = await tg.directory(installedRequirements, sdist);
 
-	// Wrap any binaries that appear.
+	// Determine the Python version string for the project.
+	const pythonVersionString = args.python?.pythonVersion
+		? python.versions[args.python.pythonVersion].version
+		: python.versions[python.defaultVersion].version;
+
+	// Wrap any binaries that appear using the project Python.
 	return python.wrapScripts(
-		await tg.symlink(tg`${poetryArtifact}/bin/python${python.versionString()}`),
-		poetryArtifact,
+		await tg.symlink(
+			tg`${projectPython}/bin/python${python.versionString(pythonVersionString)}`,
+		),
+		projectPython,
 		installed,
 	);
 };

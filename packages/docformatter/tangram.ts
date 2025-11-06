@@ -46,6 +46,9 @@ export const build = async (...args: std.Args<Arg>) => {
 		build,
 		source: source_ ?? (await source()),
 		host,
+		python: {
+			pythonVersion: "3.13",
+		},
 	});
 };
 
