@@ -603,10 +603,53 @@ except ImportError as e:
 		`failed to run pip3 with version ${versionInfo.version}`,
 	);
 
-	const venv = await $`set -x && python -m venv $OUTPUT --copies`
+	let venv = await $`set -x && python -m venv $OUTPUT --copies`
 		.env(pythonEnv)
 		.then(tg.Directory.expect);
 	console.log(`venv for Python ${versionInfo.version}:`, venv.id);
+
+	// Wrap the venv to make its scripts executable.
+	venv = await wrapVenv(venv, versionInfo.version);
+
+	// Test that the venv actually works by running python from it.
+	const venvPython = await venv.get("bin/python3").then(tg.File.expect);
+	const venvHelloOutput =
+		await $`set -x && ${venvPython} -c 'print("Hello from venv!")' > $OUTPUT`
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((t) => t.trim());
+	tg.assert(
+		venvHelloOutput === "Hello from venv!",
+		`venv python could not run a simple script with version ${versionInfo.version}`,
+	);
+
+	// Test that pip is available and executable in the venv.
+	const venvPip = await venv.get("bin/pip3").then(tg.File.expect);
+	const venvPipVersionOutput = await $`set -x && ${venvPip} --version > $OUTPUT`
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((t) => t.trim());
+	tg.assert(
+		venvPipVersionOutput.includes("pip"),
+		`venv pip could not run with version ${versionInfo.version}`,
+	);
+
+	// Test that the venv can import standard library modules.
+	const testImportScript = tg.file`
+		import sys
+		import os
+		print(f"Python version: {sys.version}")
+		print(f"Executable: {sys.executable}")
+		print("Standard library imports work!")`;
+	const venvImportOutput =
+		await $`set -x && ${venvPython} ${testImportScript} > $OUTPUT`
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((t) => t.trim());
+	tg.assert(
+		venvImportOutput.includes("Standard library imports work!"),
+		`venv could not import standard library modules with version ${versionInfo.version}`,
+	);
 
 	console.log(`✓ Python ${versionInfo.version} tests passed`);
 	return true;
