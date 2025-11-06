@@ -151,8 +151,12 @@ export const build = async (args: BuildArgs) => {
 		# Disable keyring to avoid macOS Keychain access.
 		export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
+		# Disable isolated builds to avoid creating temporary venvs.
+		export POETRY_NO_INTERACTION=1
+		export PIP_NO_BUILD_ISOLATION=1
+
 		# Create the virtual env to install to.
-		python3 -m venv $OUTPUT --copies
+		python3 -m venv $OUTPUT --system-site-packages
 		export VIRTUAL_ENV=$OUTPUT
 
 		poetry install --no-interaction --only-root --directory ${source} -vvv`
