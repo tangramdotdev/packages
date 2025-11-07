@@ -237,6 +237,19 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 		buildArgs += " -ldflags=-linkmode=external";
 	}
 
+	// On Darwin, when cgo is enabled, we need to strip DWARF debug information to avoid linker errors.
+	// The Go linker fails with "combining dwarf failed: no room to add dwarf info" when wrapping executables.
+	// See https://github.com/tangramdotdev/packages/issues/169
+	if (cgo && std.triple.os(system) === "darwin") {
+		// If buildArgs already has -ldflags, append to it. Otherwise, add new -ldflags.
+		if (buildArgs.includes("-ldflags=")) {
+			// Append to existing ldflags (replace the closing quote).
+			buildArgs = buildArgs.replace(/-ldflags=([^ ]+)/, "-ldflags='$1 -w'");
+		} else {
+			buildArgs += " -ldflags=-w";
+		}
+	}
+
 	// Come up with the right command to run in the `go generate` phase.
 	// If using vendor mode, add -mod=vendor to the generate command.
 	const generateArgs = useModVendor ? "-mod=vendor" : "";
@@ -777,12 +790,12 @@ export const testCgo = async () => {
 
 	// FIXME: Skip CGO test on Darwin due to code signing issue.
 	// https://github.com/tangramdotdev/packages/issues/169
-	if (os === "darwin") {
-		console.log(
-			"Skipping testCgo on Darwin due to Go 1.25.3 linker code signing issues",
-		);
-		return;
-	}
+	// if (os === "darwin") {
+	// 	console.log(
+	// 		"Skipping testCgo on Darwin due to Go 1.25.3 linker code signing issues",
+	// 	);
+	// 	return;
+	// }
 
 	// Build using go.build with CGO enabled
 	const artifact = await build({
