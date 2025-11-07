@@ -12,6 +12,8 @@ import * as sqlite from "sqlite" with { local: "../sqlite" };
 import * as zlib from "zlib" with { local: "../zlib" };
 import * as zstd from "zstd" with { local: "../zstd" };
 
+import venvShebangPatch from "./venv_shebang.patch" with { type: "file" };
+
 import * as requirements from "./requirements.tg.ts";
 export { requirements };
 
@@ -197,9 +199,16 @@ export const self = async (...args: std.Args<Arg>) => {
 	const configure = { args: configureArgs };
 	const buildPhase = { args: makeArgs };
 	const install = { args: makeArgs };
+
 	const phases = { configure, build: buildPhase, install };
 
-	const output = await std.autotools.build(
+	// Apply patch to fix venv shebangs.
+	const patchedSource = await std.patch(
+		source_ ?? (await source(versionKey)),
+		venvShebangPatch,
+	);
+
+	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
@@ -207,10 +216,32 @@ export const self = async (...args: std.Args<Arg>) => {
 			opt: "3",
 			sdk,
 			setRuntimeLibraryPath: true,
-			source: source_ ?? (await source(versionKey)),
+			source: patchedSource,
 		},
 		autotools,
 	);
+
+	// Create a sitecustomize.py that sets PYTHONHOME dynamically.
+	// This ensures that all Python interpreters, including those in venvs,
+	// can find the standard library without needing post-processing.
+	const sitecustomize = tg.file(`
+import os
+import sys
+
+# Only set PYTHONHOME if it is not already set.
+if 'PYTHONHOME' not in os.environ:
+    # Determine PYTHONHOME by walking up from the interpreter location.
+    # For the main interpreter: sys.executable is in bin/python3.x
+    # For venvs: sys.executable is in venv/bin/python3.x, but sys.base_prefix points to the parent.
+    pythonhome = sys.base_prefix
+    os.environ['PYTHONHOME'] = pythonhome
+`);
+
+	// Install sitecustomize.py into the standard library directory.
+	output = await tg.directory(output, {
+		[`lib/python${versionString(pythonVersionString)}/sitecustomize.py`]:
+			sitecustomize,
+	});
 
 	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper.
 	const libraryPaths = [
@@ -324,61 +355,6 @@ const isPythonScript = (
 	} else {
 		return false;
 	}
-};
-
-/** Wrap a Python virtual environment directory to make its scripts executable.
- *
- * This function takes a venv directory created with `python -m venv` and wraps
- * all the scripts in its bin/ directory so they can be executed properly. This
- * includes setting the correct interpreter and PYTHONHOME environment variable.
- */
-export const wrapVenv = async (
-	venvDir: tg.Directory,
-	pythonVersionStr?: string,
-): Promise<tg.Directory> => {
-	const venvBin = await venvDir.get("bin").then(tg.Directory.expect);
-
-	// Find the python interpreter in the venv.
-	const versionSuffix = pythonVersionStr
-		? versionString(pythonVersionStr)
-		: versionString();
-	const venvPythonInterpreter = await venvBin
-		.get(`python${versionSuffix}`)
-		.then(tg.File.expect);
-
-	// Wrap all executable scripts in the venv's bin directory.
-	let wrappedBin = await tg.directory();
-	for await (const [name, artifact] of venvBin) {
-		if (artifact instanceof tg.File && (await artifact.executable())) {
-			const metadata = await std.file.executableMetadata(artifact);
-			// If it is a shebang script, wrap it with the venv's python interpreter.
-			if (metadata.format === "shebang") {
-				wrappedBin = await tg.directory(wrappedBin, {
-					[name]: std.wrap(artifact, {
-						interpreter: venvPythonInterpreter,
-						env: {
-							PYTHONHOME: venvDir,
-						},
-					}),
-				});
-			} else {
-				// Keep non-shebang files as-is.
-				wrappedBin = await tg.directory(wrappedBin, {
-					[name]: artifact,
-				});
-			}
-		} else {
-			// Keep non-executable files and symlinks as-is.
-			wrappedBin = await tg.directory(wrappedBin, {
-				[name]: artifact,
-			});
-		}
-	}
-
-	// Replace the venv's bin directory with the wrapped version.
-	return tg.directory(venvDir, {
-		bin: wrappedBin,
-	});
 };
 
 export type BuildArg = {
@@ -603,13 +579,10 @@ except ImportError as e:
 		`failed to run pip3 with version ${versionInfo.version}`,
 	);
 
-	let venv = await $`set -x && python -m venv $OUTPUT --copies`
+	const venv = await $`set -x && python -m venv $OUTPUT --copies`
 		.env(pythonEnv)
 		.then(tg.Directory.expect);
 	console.log(`venv for Python ${versionInfo.version}:`, venv.id);
-
-	// Wrap the venv to make its scripts executable.
-	venv = await wrapVenv(venv, versionInfo.version);
 
 	// Test that the venv actually works by running python from it.
 	const venvPython = await venv.get("bin/python3").then(tg.File.expect);

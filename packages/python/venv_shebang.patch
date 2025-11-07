@@ -1,0 +1,37 @@
+--- a/Lib/venv/__init__.py	2025-11-07 16:14:41
++++ b/Lib/venv/__init__.py	2025-11-07 16:15:43
+@@ -457,6 +457,34 @@
+         """Installs or upgrades pip in a virtual environment"""
+         self._call_new_python(context, '-m', 'ensurepip', '--upgrade',
+                               '--default-pip', stderr=subprocess.STDOUT)
++        # Fix shebangs in scripts to use /usr/bin/env python3
++        # This ensures scripts work in Tangram's artifact system
++        self._fix_shebangs(context)
++
++    def _fix_shebangs(self, context):
++        """
++        Replace absolute path shebangs with /usr/bin/env python3.
++        This is necessary for scripts to work in Tangram's artifact system.
++        """
++        bin_dir = os.path.join(context.env_dir, context.bin_name)
++        if not os.path.exists(bin_dir):
++            return
++
++        for filename in os.listdir(bin_dir):
++            filepath = os.path.join(bin_dir, filename)
++            if os.path.isfile(filepath) and os.access(filepath, os.X_OK):
++                try:
++                    with open(filepath, 'rb') as f:
++                        content = f.read()
++                    if content.startswith(b'#!') and b'python' in content[:200]:
++                        # Replace the shebang line
++                        lines = content.split(b'\n', 1)
++                        if len(lines) > 1:
++                            new_content = b'#!/usr/bin/env python3\n' + lines[1]
++                            with open(filepath, 'wb') as f:
++                                f.write(new_content)
++                except (IOError, OSError):
++                    pass  # Skip files we can't read/write
+ 
+     def setup_scripts(self, context):
+         """

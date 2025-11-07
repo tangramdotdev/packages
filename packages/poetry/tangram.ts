@@ -86,7 +86,7 @@ export const build = async (args: BuildArgs) => {
 	const build = args.build ?? host;
 
 	// Construct the poetry tool environment.
-	// Note: poetry itself uses the default Python version to match requirements.txt.
+	// Use default Python for poetry to ensure compatibility.
 	const poetryArtifact = await self({
 		build,
 		host,
@@ -138,7 +138,7 @@ export const build = async (args: BuildArgs) => {
 	});
 	console.log("env", env);
 
-	const sdist = await $`
+	const venvResult = await $`
 		set -x
 		# Create a writable temporary directory for poetry.
 		mkdir -p $PWD/tmp
@@ -151,12 +151,16 @@ export const build = async (args: BuildArgs) => {
 		# Disable keyring to avoid macOS Keychain access.
 		export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
-		# Disable isolated builds to avoid creating temporary venvs.
+		# Disable isolated builds and venv creation.
 		export POETRY_NO_INTERACTION=1
 		export PIP_NO_BUILD_ISOLATION=1
+		export POETRY_VIRTUALENVS_CREATE=false
 
-		# Create the virtual env to install to.
-		python3 -m venv $OUTPUT --system-site-packages
+		# Unset PYTHONHOME if set, as it interferes with venv creation.
+		unset PYTHONHOME
+
+		# Create the virtual env to install to with --copies for proper operation.
+		python3 -m venv $OUTPUT --system-site-packages --copies
 		export VIRTUAL_ENV=$OUTPUT
 
 		poetry install --no-interaction --only-root --directory ${source} -vvv`
@@ -165,22 +169,11 @@ export const build = async (args: BuildArgs) => {
 		.checksum("sha256:any")
 		.then(tg.Directory.expect);
 
-	// Merge the installed sdist with the requirements.
-	const installed = await tg.directory(installedRequirements, sdist);
+	// Merge the venv with the requirements.
+	const installed = await tg.directory(installedRequirements, venvResult);
 
-	// Determine the Python version string for the project.
-	const pythonVersionString = args.python?.pythonVersion
-		? python.versions[args.python.pythonVersion].version
-		: python.versions[python.defaultVersion].version;
-
-	// Wrap any binaries that appear using the project Python.
-	return python.wrapScripts(
-		await tg.symlink(
-			tg`${projectPython}/bin/python${python.versionString(pythonVersionString)}`,
-		),
-		projectPython,
-		installed,
-	);
+	// Return the installed directory.
+	return installed;
 };
 
 export const test = async () => {
