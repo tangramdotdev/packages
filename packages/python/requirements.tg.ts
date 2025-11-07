@@ -22,6 +22,10 @@ export const install = async (
 			export TMPDIR=tmp
 			mkdir -p $OUTPUT
 
+			# Set up a writable CARGO_HOME for Rust-based packages.
+			mkdir -p "$PWD/.cargo"
+			export CARGO_HOME=$PWD/.cargo
+
 			# Download dependencies using the requirements.txt file.
 			pip3               \\
 				download         \\
@@ -48,6 +52,11 @@ export const install = async (
 				export TMPDIR=tmp
 				export PYTHONUSERBASE=$OUTPUT
 				mkdir -p $OUTPUT
+
+				# Set up a writable CARGO_HOME for Rust-based packages.
+				mkdir -p "$PWD/.cargo"
+				export CARGO_HOME=$PWD/.cargo
+
 				pip3                          \\
 					install                     \\
 					--no-warn-script-location   \\

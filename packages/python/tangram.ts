@@ -15,27 +15,46 @@ import * as zstd from "zstd" with { local: "../zstd" };
 import * as requirements from "./requirements.tg.ts";
 export { requirements };
 
-/** Package metadata for python */
+/** Version metadata for each supported Python version. */
+export const versions = {
+	"3.13": {
+		version: "3.13.9",
+		checksum:
+			"sha256:ed5ef34cda36cfa2f3a340f07cac7e7814f91c7f3c411f6d3562323a866c5c66",
+	},
+	"3.14": {
+		version: "3.14.0",
+		checksum:
+			"sha256:2299dae542d395ce3883aca00d3c910307cd68e0b2f7336098c8e7b7eee9f3e9",
+	},
+} as const;
+
+/** The default Python version. */
+export const defaultVersion = "3.14" as const;
+
+/** Package metadata for python (uses default version). */
 export const metadata = {
 	homepage: "https://www.python.org/",
 	name: "python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.14.0",
-	tag: "python/3.14.0",
+	version: versions[defaultVersion].version,
+	tag: `python/${versions[defaultVersion].version}`,
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
-export const versionString = () => {
-	const [maj, min, ..._] = metadata.version.split(".");
+export const versionString = (version?: string) => {
+	const versionToUse = version ?? metadata.version;
+	const [maj, min, ..._] = versionToUse.split(".");
 	return `${maj}.${min}`;
 };
 
-/** Return the source code for the python specified by `metadata`. */
-export const source = async (): Promise<tg.Directory> => {
-	const { version } = metadata;
-	const checksum =
-		"sha256:2299dae542d395ce3883aca00d3c910307cd68e0b2f7336098c8e7b7eee9f3e9";
+/** Return the source code for the specified Python version. */
+export const source = async (
+	pythonVersion?: keyof typeof versions,
+): Promise<tg.Directory> => {
+	const versionKey = pythonVersion ?? defaultVersion;
+	const { version, checksum } = versions[versionKey];
 	const extension = ".tar.xz";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	const name = "Python";
@@ -72,6 +91,9 @@ export type Arg = {
 	 */
 	requirements?: requirements.Arg;
 
+	/** The Python version to build. Defaults to the latest version. */
+	pythonVersion?: keyof typeof versions;
+
 	/** The system to build python upon. */
 	build?: string;
 
@@ -97,10 +119,15 @@ export const self = async (...args: std.Args<Arg>) => {
 		enableOptimizations: enableOptimizations_,
 		env: env_,
 		host,
+		pythonVersion,
 		requirements: requirementsArg,
 		sdk,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
+
+	// Determine the Python version to use.
+	const versionKey = pythonVersion ?? defaultVersion;
+	const pythonVersionString = versions[versionKey].version;
 
 	const os = std.triple.os(host);
 
@@ -180,7 +207,7 @@ export const self = async (...args: std.Args<Arg>) => {
 			opt: "3",
 			sdk,
 			setRuntimeLibraryPath: true,
-			source: source_ ?? (await source()),
+			source: source_ ?? (await source(versionKey)),
 		},
 		autotools,
 	);
@@ -197,14 +224,19 @@ export const self = async (...args: std.Args<Arg>) => {
 		.map((dir) => dir.get("lib").then(tg.Directory.expect));
 
 	const pythonInterpreter = await std.wrap(
-		tg.symlink(tg`${output}/bin/python${versionString()}`),
+		tg.symlink(tg`${output}/bin/python${versionString(pythonVersionString)}`),
 		{
 			env: { PYTHONHOME: output },
 			libraryPaths,
 		},
 	);
 
-	let python = wrapScripts(pythonInterpreter, undefined, output);
+	let python = wrapScripts(
+		pythonInterpreter,
+		undefined,
+		output,
+		pythonVersionString,
+	);
 
 	// When pip3 installs a python script it writes the absolute path of the python interpreter on the shebang line. We force it to be /usr/bin/env python3.
 	python = tg.directory(python, {
@@ -217,8 +249,8 @@ export const self = async (...args: std.Args<Arg>) => {
 	python = tg.directory(python, {
 		["bin/pip"]: tg.symlink("pip3"),
 		["bin/python"]: tg.symlink("python3"),
-		["bin/python3"]: tg.symlink(`python${versionString()}`),
-		[`bin/python${versionString()}`]: pythonInterpreter,
+		["bin/python3"]: tg.symlink(`python${versionString(pythonVersionString)}`),
+		[`bin/python${versionString(pythonVersionString)}`]: pythonInterpreter,
 	});
 
 	if (requirementsArg) {
@@ -236,6 +268,7 @@ export const wrapScripts = async (
 	pythonInterpreter: tg.Symlink | tg.File,
 	pythonPath: tg.Template.Arg,
 	artifact: tg.Directory,
+	pythonVersionStr?: string,
 ) => {
 	const scripts = [];
 	let interpreterId;
@@ -252,7 +285,7 @@ export const wrapScripts = async (
 	for await (const [filename, file] of bin) {
 		if (file instanceof tg.File && (await file.executable())) {
 			const metadata = await std.file.executableMetadata(file);
-			if (isPythonScript(metadata, interpreterId)) {
+			if (isPythonScript(metadata, interpreterId, pythonVersionStr)) {
 				scripts.push(filename);
 			}
 		}
@@ -276,10 +309,14 @@ export const wrapScripts = async (
 const isPythonScript = (
 	metadata: std.file.ExecutableMetadata,
 	knownId?: string,
+	pythonVersionStr?: string,
 ): boolean => {
 	if (metadata.format === "shebang") {
 		const interpreter = metadata.interpreter;
-		const recognizedNames = ["python3", "python", `python${versionString}`];
+		const versionSuffix = pythonVersionStr
+			? versionString(pythonVersionStr)
+			: versionString();
+		const recognizedNames = ["python3", "python", `python${versionSuffix}`];
 		if (knownId !== undefined) {
 			recognizedNames.push(knownId);
 		}
@@ -287,6 +324,61 @@ const isPythonScript = (
 	} else {
 		return false;
 	}
+};
+
+/** Wrap a Python virtual environment directory to make its scripts executable.
+ *
+ * This function takes a venv directory created with `python -m venv` and wraps
+ * all the scripts in its bin/ directory so they can be executed properly. This
+ * includes setting the correct interpreter and PYTHONHOME environment variable.
+ */
+export const wrapVenv = async (
+	venvDir: tg.Directory,
+	pythonVersionStr?: string,
+): Promise<tg.Directory> => {
+	const venvBin = await venvDir.get("bin").then(tg.Directory.expect);
+
+	// Find the python interpreter in the venv.
+	const versionSuffix = pythonVersionStr
+		? versionString(pythonVersionStr)
+		: versionString();
+	const venvPythonInterpreter = await venvBin
+		.get(`python${versionSuffix}`)
+		.then(tg.File.expect);
+
+	// Wrap all executable scripts in the venv's bin directory.
+	let wrappedBin = await tg.directory();
+	for await (const [name, artifact] of venvBin) {
+		if (artifact instanceof tg.File && (await artifact.executable())) {
+			const metadata = await std.file.executableMetadata(artifact);
+			// If it is a shebang script, wrap it with the venv's python interpreter.
+			if (metadata.format === "shebang") {
+				wrappedBin = await tg.directory(wrappedBin, {
+					[name]: std.wrap(artifact, {
+						interpreter: venvPythonInterpreter,
+						env: {
+							PYTHONHOME: venvDir,
+						},
+					}),
+				});
+			} else {
+				// Keep non-shebang files as-is.
+				wrappedBin = await tg.directory(wrappedBin, {
+					[name]: artifact,
+				});
+			}
+		} else {
+			// Keep non-executable files and symlinks as-is.
+			wrappedBin = await tg.directory(wrappedBin, {
+				[name]: artifact,
+			});
+		}
+	}
+
+	// Replace the venv's bin directory with the wrapped version.
+	return tg.directory(venvDir, {
+		bin: wrappedBin,
+	});
 };
 
 export type BuildArg = {
@@ -404,6 +496,7 @@ type PyProjectToml = {
 export const generateScripts = (
 	pythonArtifact: tg.Directory,
 	pyproject?: PyProjectToml,
+	pythonVersionStr?: string,
 ) => {
 	// Make sure that there is a [project] field in the pyproject.toml.
 	const project = pyproject?.project;
@@ -442,11 +535,14 @@ export const generateScripts = (
 			sys.exit(${attribute}())`;
 
 		// Wrap the script.
+		const versionSuffix = pythonVersionStr
+			? versionString(pythonVersionStr)
+			: versionString();
 		bin = tg.directory(bin, {
 			[name]: std.wrap({
 				executable: script,
 				interpreter: tg.symlink(
-					tg`${pythonArtifact}/bin/python${versionString()}`,
+					tg`${pythonArtifact}/bin/python${versionSuffix}`,
 				),
 				env: {
 					PYTHONPATH: tg`${pythonArtifact}/lib/python3/site-packages`,
@@ -458,16 +554,25 @@ export const generateScripts = (
 	return bin;
 };
 
-export const test = async () => {
+/** Run tests for a specific Python version. */
+const testVersion = async (pythonVersion?: keyof typeof versions) => {
+	const versionKey = pythonVersion ?? defaultVersion;
+	const versionInfo = versions[versionKey];
+	console.log(`Testing Python ${versionInfo.version}...`);
+
+	const pythonEnv = self({
+		...(pythonVersion && { pythonVersion }),
+	});
+
 	const helloOutput =
 		await $`set -x && python -c 'print("Hello, world!")' > $OUTPUT`
-			.env(self())
+			.env(pythonEnv)
 			.then(tg.File.expect)
 			.then((f) => f.text())
 			.then((t) => t.trim());
 	tg.assert(
 		helloOutput === "Hello, world!",
-		"could not run a simple python script",
+		`could not run a simple python script with version ${versionInfo.version}`,
 	);
 
 	const testImportZlibScript = tg.file`
@@ -479,26 +584,88 @@ except ImportError as e:
 	print(f"Failed to import zlib: {str(e)}")`;
 	const importZlibOutput =
 		await $`set -x && python ${testImportZlibScript} > $OUTPUT`
-			.env(self())
+			.env(pythonEnv)
 			.then(tg.File.expect)
 			.then((f) => f.text())
 			.then((t) => t.trim());
 	tg.assert(
 		importZlibOutput.includes(zlib.metadata.version),
-		"failed to import the zlib module",
+		`failed to import the zlib module with version ${versionInfo.version}`,
 	);
 
 	const pipVersionOutput = await $`set -x && pip3 --version > $OUTPUT`
-		.env(self())
+		.env(pythonEnv)
 		.then(tg.File.expect)
 		.then((f) => f.text())
 		.then((t) => t.trim());
-	tg.assert(pipVersionOutput.includes("25.2"), "failed to run pip3");
+	tg.assert(
+		pipVersionOutput.includes("25.2"),
+		`failed to run pip3 with version ${versionInfo.version}`,
+	);
 
-	const venv = await $`set -x && python -m venv $OUTPUT --copies`
-		.env(self())
+	let venv = await $`set -x && python -m venv $OUTPUT --copies`
+		.env(pythonEnv)
 		.then(tg.Directory.expect);
-	console.log("venv", venv.id);
+	console.log(`venv for Python ${versionInfo.version}:`, venv.id);
 
+	// Wrap the venv to make its scripts executable.
+	venv = await wrapVenv(venv, versionInfo.version);
+
+	// Test that the venv actually works by running python from it.
+	const venvPython = await venv.get("bin/python3").then(tg.File.expect);
+	const venvHelloOutput =
+		await $`set -x && ${venvPython} -c 'print("Hello from venv!")' > $OUTPUT`
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((t) => t.trim());
+	tg.assert(
+		venvHelloOutput === "Hello from venv!",
+		`venv python could not run a simple script with version ${versionInfo.version}`,
+	);
+
+	// Test that pip is available and executable in the venv.
+	const venvPip = await venv.get("bin/pip3").then(tg.File.expect);
+	const venvPipVersionOutput = await $`set -x && ${venvPip} --version > $OUTPUT`
+		.then(tg.File.expect)
+		.then((f) => f.text())
+		.then((t) => t.trim());
+	tg.assert(
+		venvPipVersionOutput.includes("pip"),
+		`venv pip could not run with version ${versionInfo.version}`,
+	);
+
+	// Test that the venv can import standard library modules.
+	const testImportScript = tg.file`
+		import sys
+		import os
+		print(f"Python version: {sys.version}")
+		print(f"Executable: {sys.executable}")
+		print("Standard library imports work!")`;
+	const venvImportOutput =
+		await $`set -x && ${venvPython} ${testImportScript} > $OUTPUT`
+			.then(tg.File.expect)
+			.then((f) => f.text())
+			.then((t) => t.trim());
+	tg.assert(
+		venvImportOutput.includes("Standard library imports work!"),
+		`venv could not import standard library modules with version ${versionInfo.version}`,
+	);
+
+	console.log(`✓ Python ${versionInfo.version} tests passed`);
 	return true;
+};
+
+/** Test the default Python version. */
+export const test = async () => {
+	return await testVersion();
+};
+
+/** Test Python 3.13. */
+export const test313 = async () => {
+	return await testVersion("3.13");
+};
+
+/** Test Python 3.14. */
+export const test314 = async () => {
+	return await testVersion("3.14");
 };
