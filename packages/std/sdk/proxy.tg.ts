@@ -14,6 +14,10 @@ export type Arg = {
 	build?: string;
 	/** Should the compiler get proxied? Default: false. */
 	compiler?: boolean;
+	/** Should `codesign` get proxied on macOS? Default: true.  */
+	codesign?: boolean;
+	/** Optional codesign command to use. If omitted, will use the codesign located with the toolchain. */
+	codesignExe?: tg.File | tg.Symlink | tg.Template;
 	/** Should the ld proxy embed wrappers? Default: false.  */
 	embedWrapper?: boolean | undefined;
 	/** Should the linker get proxied? Default: true. */
@@ -39,10 +43,11 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	const proxyCompiler = arg.compiler ?? false;
 	const proxyLinker = arg.linker ?? true;
 	const proxyStrip = arg.strip ?? true;
+	const proxyCodesign = arg.codesign ?? true;
 	const buildToolchainDir = arg.toolchain;
 	const buildToolchain = await std.env.arg(buildToolchainDir, { utils: false });
 
-	if (!proxyCompiler && !proxyLinker && !proxyStrip) {
+	if (!proxyCompiler && !proxyLinker && !proxyStrip && !proxyCodesign) {
 		return buildToolchainDir;
 	}
 
@@ -223,6 +228,24 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 		replacements.strip = stripProxyArtifact;
 	}
 
+	if (proxyCodesign && os === "darwin") {
+		// Codesign is only available on macOS.
+		const codesignCommand =
+			arg.codesignExe ??
+			tg.File.expect(await directory.tryGet("bin/codesign")) ??
+			tg`/usr/bin/codesign`;
+		const codesignProxyArtifact = await codesignProxy({
+			build,
+			buildToolchain,
+			host,
+			codesignCommand,
+			runtimeLibraryPath: await directory
+				.get("lib")
+				.then(tg.Directory.expect),
+		});
+		replacements.codesign = codesignProxyArtifact;
+	}
+
 	// Apply replacements to the bin directory
 	binDir = await tg.directory(binDir, replacements);
 
@@ -391,6 +414,55 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	});
 };
 
+type CodesignProxyArg = {
+	build?: string;
+	buildToolchain: std.env.Arg;
+	host?: string;
+	codesignCommand: tg.File | tg.Symlink | tg.Template;
+	runtimeLibraryPath?: tg.Directory | undefined;
+};
+
+export const codesignProxy = async (arg: CodesignProxyArg) => {
+	const { build: build_, buildToolchain, host: host_, codesignCommand } = arg;
+
+	const host = host_ ?? (await std.triple.host());
+	const build = build_ ?? host;
+
+	// Use default wrapper when no custom build or host is provided.
+	const hostWrapper =
+		build_ === undefined && host_ === undefined
+			? await tg.build(workspace.defaultWrapper)
+			: await workspace.wrapper({
+					build,
+					host,
+				});
+	await hostWrapper.store();
+
+	const codesignProxy = await workspace.codesignProxy({
+		build,
+		host,
+	});
+
+	const envs: tg.Unresolved<Array<std.env.Arg>> = [
+		{
+			TGCODESIGN_COMMAND_PATH: tg.Mutation.setIfUnset<
+				tg.File | tg.Symlink | tg.Template
+			>(codesignCommand),
+			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
+		},
+	];
+	if (arg.runtimeLibraryPath !== undefined) {
+		envs.push({
+			TGCODESIGN_RUNTIME_LIBRARY_PATH: arg.runtimeLibraryPath,
+		});
+	}
+
+	return std.wrap(codesignProxy, {
+		buildToolchain,
+		env: std.env.arg(...envs, { utils: false }),
+	});
+};
+
 export const test = async () => {
 	const tests = [
 		testBasic(),
@@ -401,6 +473,7 @@ export const test = async () => {
 		testDifferentPrefixDirect(),
 		testSharedLibraryWithDep(),
 		testStrip(),
+		testCodesign(),
 	];
 	await Promise.all(tests);
 	return true;
@@ -1077,6 +1150,38 @@ export const testStrip = async (target?: string) => {
 				toolchain,
 				{
 					TGSTRIP_TRACING: "tgstrip=trace",
+				},
+				{ utils: false },
+			),
+		)
+		.then(tg.File.expect);
+	return output;
+};
+
+export const testCodesign = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const os = std.triple.os(targetTriple);
+
+	// Codesign is only available on macOS.
+	if (os !== "darwin") {
+		console.log("Skipping testCodesign: codesign is only available on macOS");
+		return true;
+	}
+
+	const sdkArg = target ? { host, target } : undefined;
+	const toolchain = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+	const output = await std.build`
+		set -x
+		cc -o main -xc ${inspectProcessSource}
+		codesign -s - main
+		mv main $OUTPUT`
+		.bootstrap(target ? false : true)
+		.env(
+			std.env.arg(
+				toolchain,
+				{
+					TGCODESIGN_TRACING: "tgcodesign=trace",
 				},
 				{ utils: false },
 			),

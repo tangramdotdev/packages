@@ -117,6 +117,23 @@ export const stripProxy = async (arg: tg.Unresolved<Arg>) => {
 		.then(tg.File.expect);
 };
 
+export const codesignProxy = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		const workspace = await tg.build(defaultWorkspace);
+		return workspace.get("bin/tgcodesign").then(tg.File.expect);
+	}
+
+	return await tg
+		.build(workspace, arg)
+		.then((dir) => dir.get("bin/tgcodesign"))
+		.then(tg.File.expect);
+};
+
 export const wrapper = async (arg: tg.Unresolved<Arg>) => {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
@@ -472,7 +489,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const install = {
 		pre: `mkdir -p $OUTPUT/bin`,
 		body: `
-			for item in tgcc tgld tgstrip wrapper ; do
+			for item in tgcc tgcodesign tgld tgstrip wrapper ; do
 				mv $TARGET/$RUST_TARGET${buildType}/$item $OUTPUT/bin/$item
 			done
 		`,

@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "packages/tgcc",
+  "packages/tgcodesign",
   "packages/tgld",
   "packages/tgstrip",
   "packages/wrapper",
@@ -50,6 +51,7 @@ tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
 
 tangram_std = { path = "." }
 tgcc = { path = "packages/tgcc" }
+tgcodesign = { path = "packages/tgcodesign" }
 tgld = { path = "packages/tgld" }
 tgstrip = { path = "packages/tgstrip" }
 wrapper = { path = "packages/wrapper" }

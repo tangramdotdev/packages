@@ -20,7 +20,7 @@ export * as sdkModule from "./sdk.tg.ts";
 export * as triple from "./triple.tg.ts";
 export * as utils from "./utils.tg.ts";
 export { wrap } from "./wrap.tg.ts";
-export { stripProxy } from "./sdk/proxy.tg.ts";
+export { codesignProxy, stripProxy } from "./sdk/proxy.tg.ts";
 export * as bootstrap from "./bootstrap.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
@@ -97,6 +97,7 @@ const testActions = (): Record<string, () => any> => {
 		proxySamePrefixDirect: sdk.proxy.testSamePrefixDirect,
 		proxyDifferentPrefixDirect: sdk.proxy.testDifferentPrefixDirect,
 		proxyStrip: sdk.proxy.testStrip,
+		proxyCodesign: sdk.proxy.testCodesign,
 		proxySharedWithDep: sdk.proxy.testSharedLibraryWithDep,
 		proxy: sdk.proxy.test,
 		utilsPrerequisites: utils.testPrerequisites,
