@@ -243,7 +243,7 @@ export const mergeArgs = async (
 				return {
 					args: ["-c", arg],
 					executable: "/bin/sh",
-					host: (await tg.process.env("TANGRAM_HOST")) as string,
+					host: tg.process.env.TANGRAM_HOST as string,
 				};
 			} else if (arg instanceof tg.Command) {
 				let object = await arg.object();
@@ -278,7 +278,7 @@ export const mergeArgs = async (
 };
 
 export const testBuild = async () => {
-	const expected = await tg.process.env("TANGRAM_HOST");
+	const expected = tg.process.env.TANGRAM_HOST;
 	const output = await std.build`echo $TANGRAM_HOST > $OUTPUT`.then(
 		tg.File.expect,
 	);
@@ -288,7 +288,7 @@ export const testBuild = async () => {
 };
 
 export const testBuildBootstrap = async () => {
-	const expected = await tg.process.env("TANGRAM_HOST");
+	const expected = tg.process.env.TANGRAM_HOST;
 	const output = await std.build`echo $TANGRAM_HOST > $OUTPUT`
 		.bootstrap(true)
 		.env({ SHELL: "/bin/sh" })

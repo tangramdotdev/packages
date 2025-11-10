@@ -213,7 +213,7 @@ export const mergeArgs = async (
 				return {
 					args: ["-c", arg],
 					executable: "/bin/sh",
-					host: (await tg.process.env("TANGRAM_HOST")) as string,
+					host: tg.process.env.TANGRAM_HOST as string,
 				};
 			} else if (arg instanceof tg.Command) {
 				const obj = await arg.object();
