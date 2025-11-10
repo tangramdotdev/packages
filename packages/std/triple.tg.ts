@@ -47,7 +47,7 @@ export const tryArchAndOs = (s: string): string | undefined => {
 
 /** Retrieve the configured host for the current running process. */
 export const host = async (): Promise<string> => {
-	let val = await tg.process.env("TANGRAM_HOST");
+	let val = tg.process.env?.TANGRAM_HOST;
 	tg.assert(
 		val !== undefined,
 		"unable to read TANGRAM_HOST from current process",
@@ -228,7 +228,7 @@ export const rotate = async (arg: {
 	build?: string | undefined;
 	host?: string | undefined;
 }): Promise<{ host: string; target: string }> => {
-	const host = arg.host ?? ((await tg.process.env("TANGRAM_HOST")) as string);
+	const host = arg.host ?? (tg.process.env["TANGRAM_HOST"] as string);
 	const build = arg.build ?? host;
 	return { host: build, target: host };
 };
