@@ -1,39 +1,46 @@
 import * as std from "std" with { local: "../std" };
+import nasm from "nasm" with { local: "../nasm" };
 import { $ } from "std" with { local: "../std" };
 
 export const metadata = {
-	homepage: "https://www.nasm.us/",
-	name: "nasm",
-	repository: "https://github.com/netwide-assembler/nasm",
-	version: "3.01",
-	tag: "nasm-3.01",
+	homepage: "https://www.ffmpeg.org/",
+	name: "FFmpeg",
+	repository: "https://github.com/FFmpeg/FFmpeg",
+	version: "7.1.2",
+	tag: "n7.1.2",
 	provides: {
-		binaries: ["nasm", "ndisasm"],
+		binaries: ["ffmpeg", "ffprobe"],
+		libraries: [
+			"avcodec",
+			"avdevice",
+			"avfilter",
+			"avformat",
+			"avutil",
+			"swresample",
+			"swscale",
+		],
 	},
 };
 
 export const source = () => {
-	std.download;
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:aea120d4adb0241f08ae24d6add09e4a993bc1c4d9f754dbfc8020d6916c9be1";
-	const owner = "netwide-assembler";
+		"sha256:8cb1bb8cfa9aeae13279b4da42ae8307ae6777456d4270f2e603c95aa08ca8ef";
+	const owner = name;
 	const repo = name;
-	return std
-		.download({
-			url: `https://www.nasm.us/pub/${name}/releasebuilds/${version}/nasm-${version}.tar.gz`,
-			checksum,
-			mode: "extract",
-		})
-		.then(tg.Directory.expect)
-		.then((directory) => directory.get(`${name}-${version}`))
-		.then(tg.Directory.expect);
+	const tag = `n${version}`;
+	return std.download.fromGithub({
+		owner,
+		repo,
+		tag,
+		checksum,
+		source: "tag",
+	});
 };
 
 export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
-	dependencies?: {};
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -50,18 +57,18 @@ export const build = async (...args: std.Args<Arg>) => {
 		sdk,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
-	const phases = {
-		configure: {
-			args: [],
-		},
+
+	const configure = {
+		args: ["--disable-stripping"],
 	};
+	const phases = { configure };
+
 	return std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
+			env: std.env.arg(env, nasm()),
 			phases,
 			sdk,
-			setRuntimeLibraryPath: true,
 			source: source_ ?? source(),
 		},
 		autotools,
