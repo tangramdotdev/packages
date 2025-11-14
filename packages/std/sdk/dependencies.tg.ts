@@ -168,13 +168,13 @@ export const buildTools = async (
 	const grepArtifact = await grep({
 		host,
 		bootstrap: true,
-		env: buildToolchain,
+		env: buildEnv,
 	});
 	const grepExe = await grepArtifact.get("bin/grep").then(tg.File.expect);
 	const sedArtifact = await sed({
 		host,
 		bootstrap: true,
-		env: buildToolchain,
+		env: buildEnv,
 	});
 	const sedExe = await sedArtifact.get("bin/sed").then(tg.File.expect);
 	const libtoolArtifact = await libtool({
