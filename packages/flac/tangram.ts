@@ -1,0 +1,43 @@
+import * as std from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
+import * as cmake from "cmake" with { local: "../cmake" };
+import * as ogg from "ogg" with { local: "../ogg" };
+
+export const metadata = {
+	homepage: "https://xiph.org/flac",
+	name: "flac",
+	version: "1.5.0",
+	provides: {},
+};
+
+export const source = () => {
+	std.download;
+	const { name, version } = metadata;
+	const checksum =
+		"sha256:f2c1c76592a82ffff8413ba3c4a1299b6c7ab06c734dee03fd88630485c2b920";
+	return std
+		.download({
+			url: `https://ftp.osuosl.org/pub/xiph/releases/${name}/${name}-${version}.tar.xz`,
+			checksum,
+			mode: "extract",
+		})
+		.then(tg.Directory.expect)
+		.then((directory) => directory.get(`${name}-${version}`))
+		.then(tg.Directory.expect);
+};
+
+export type Arg = cmake.Arg;
+
+export const build = async (...args: std.Args<Arg>) => {
+	return cmake.build(
+		{ source: source() },
+		{ env: std.env.arg(ogg.env()) },
+		...args,
+	);
+};
+
+export const env = () => std.env.arg({
+	PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+});
+
+export default build;
