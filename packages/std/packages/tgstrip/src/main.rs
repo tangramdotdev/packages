@@ -107,141 +107,163 @@ async fn run_proxy(
 	target_path: &std::path::Path,
 	manifest: Manifest,
 ) -> tg::Result<()> {
-	// Get the executable path from the manifest.
-	if let manifest::Executable::Path(artifact_path) = manifest.executable {
-		// Create the tangram instance.
-		let tg = tg::Client::with_env()?;
-		tg.connect().await?;
+	// Handle the executable based on its type.
+	match manifest.executable {
+		manifest::Executable::Path(artifact_path) => {
+			// Create the tangram instance.
+			let tg = tg::Client::with_env()?;
+			tg.connect().await?;
 
-		#[cfg(feature = "tracing")]
-		tracing::info!(?artifact_path, "found executable artifact path");
+			#[cfg(feature = "tracing")]
+			tracing::info!(?artifact_path, "found executable artifact path");
 
-		// Get the path to the actual executable.
-		let executable_path =
-			std::path::PathBuf::from(tangram_std::render_template_data(&artifact_path).map_err(
-				|source| tg::error!(!source, ?artifact_path, "unable to render executable path"),
-			)?);
+			// Get the path to the actual executable.
+			let executable_path =
+				std::path::PathBuf::from(tangram_std::render_template_data(&artifact_path).map_err(
+					|source| tg::error!(!source, ?artifact_path, "unable to render executable path"),
+				)?);
 
-		#[cfg(feature = "tracing")]
-		tracing::info!(?executable_path, "found executable path");
+			#[cfg(feature = "tracing")]
+			tracing::info!(?executable_path, "found executable path");
 
-		// Copy the file to a temp directory.
-		#[cfg(target_os = "linux")]
-		let tmpdir = tempfile::TempDir::new_in("/")
-			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
-		#[cfg(target_os = "macos")]
-		let tmpdir = tempfile::TempDir::new()
-			.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
-		let tmp_path = tmpdir.path();
-		let local_executable_path = tmp_path.join("executable");
-		#[cfg(feature = "tracing")]
-		tracing::info!(?local_executable_path, "copying the executable");
+			// Copy the file to a temp directory.
+			#[cfg(target_os = "linux")]
+			let tmpdir = tempfile::TempDir::new_in("/")
+				.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
+			#[cfg(target_os = "macos")]
+			let tmpdir = tempfile::TempDir::new()
+				.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
+			let tmp_path = tmpdir.path();
+			let local_executable_path = tmp_path.join("executable");
+			#[cfg(feature = "tracing")]
+			tracing::info!(?local_executable_path, "copying the executable");
 
-		tokio::fs::copy(&executable_path, &local_executable_path)
-			.await
-			.map_err(|error| tg::error!(source = error, "failed to copy the executable"))?;
+			tokio::fs::copy(&executable_path, &local_executable_path)
+				.await
+				.map_err(|error| tg::error!(source = error, "failed to copy the executable"))?;
 
-		// Set the file to be writable.
-		let mut perms = tokio::fs::metadata(&local_executable_path)
-			.await
-			.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to get the file metadata"))?.permissions();
-		perms.set_mode(perms.mode() | 0o200);
-		tokio::fs::set_permissions(&local_executable_path, perms)
-			.await
-			.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to set file permissions"))?;
+			// Set the file to be writable.
+			let mut perms = tokio::fs::metadata(&local_executable_path)
+				.await
+				.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to get the file metadata"))?.permissions();
+			perms.set_mode(perms.mode() | 0o200);
+			tokio::fs::set_permissions(&local_executable_path, perms)
+				.await
+				.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to set file permissions"))?;
 
-		// Call strip with the correct arguments on the executable.
-		run_strip(strip_program, strip_args, &[&local_executable_path])?;
-		#[cfg(feature = "tracing")]
-		tracing::info!(?local_executable_path, "strip succeeded");
+			// Call strip with the correct arguments on the executable.
+			run_strip(strip_program, strip_args, &[&local_executable_path])?;
+			#[cfg(feature = "tracing")]
+			tracing::info!(?local_executable_path, "strip succeeded");
 
-		// Check in the result.
-		let stripped_file = tg::checkin(
-			&tg,
-			tg::checkin::Arg {
-				options: tg::checkin::Options {
-					local_dependencies: true,
-					destructive: false,
-					deterministic: true,
-					ignore: false,
-					locked: false,
-					lock: false,
-					..tg::checkin::Options::default()
+			// Check in the result.
+			let stripped_file = tg::checkin(
+				&tg,
+				tg::checkin::Arg {
+					options: tg::checkin::Options {
+						local_dependencies: true,
+						destructive: false,
+						deterministic: true,
+						ignore: false,
+						locked: false,
+						lock: false,
+						..tg::checkin::Options::default()
+					},
+					path: local_executable_path,
+					updates: vec![],
 				},
-				path: local_executable_path,
-				updates: vec![],
-			},
-		)
-		.await?
-		.try_unwrap_file()
-		.map_err(|error| tg::error!(source = error, "expected a file"))?;
-		let stripped_file_id = stripped_file.id();
-		#[cfg(feature = "tracing")]
-		tracing::info!(?stripped_file_id, "checked in the stripped executable");
-
-		#[cfg(feature = "tracing")]
-		if let Err(e) = tmpdir.close() {
-			tracing::warn!(?e, "failed to close tempdir");
-		}
-		#[cfg(not(feature = "tracing"))]
-		let _ = tmpdir.close();
-
-		// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
-		let new_manifest = Manifest {
-			executable: manifest::Executable::Path(
-				tangram_std::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
-					.to_data(),
-			),
-			..manifest
-		};
-		#[cfg(feature = "tracing")]
-		tracing::info!(?new_manifest, "created new manifest");
-
-		let new_wrapper = new_manifest.write(&tg).await?;
-		new_wrapper.store(&tg).await?;
-		#[cfg(feature = "tracing")]
-		{
-			let new_wrapper_id = new_wrapper.id();
-			tracing::info!(?new_wrapper_id, "wrote new wrapper");
-		}
-
-		// Check out the new output file.
-		let canonical_target_path = std::fs::canonicalize(target_path).map_err(|error| {
-			tg::error!(
-				source = error,
-				"could not get canonical path for the output file"
 			)
-		})?;
-		#[cfg(feature = "tracing")]
-		tracing::info!(?canonical_target_path, "checking out the new output file");
+			.await?
+			.try_unwrap_file()
+			.map_err(|error| tg::error!(source = error, "expected a file"))?;
+			let stripped_file_id = stripped_file.id();
+			#[cfg(feature = "tracing")]
+			tracing::info!(?stripped_file_id, "checked in the stripped executable");
 
-		// Remove the existing file.
-		tokio::fs::remove_file(&canonical_target_path)
-			.await
-			.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
+			#[cfg(feature = "tracing")]
+			if let Err(e) = tmpdir.close() {
+				tracing::warn!(?e, "failed to close tempdir");
+			}
+			#[cfg(not(feature = "tracing"))]
+			let _ = tmpdir.close();
 
-		let artifact = tg::Artifact::from(new_wrapper).id();
-		tg::checkout(
-			&tg,
-			tg::checkout::Arg {
-				artifact,
-				dependencies: false,
-				force: true,
-				path: Some(canonical_target_path),
-				lock: true,
-			},
-		)
-		.await?;
-		#[cfg(feature = "tracing")]
-		tracing::info!("checked out the new output file");
-	} else {
-		#[cfg(feature = "tracing")]
-		tracing::warn!(
-			"found a content executable. passing through, but this is probably an error and likely to fail"
-		);
-		// If the executable is not a path, pass through the arguments to strip unchanged.
-		run_strip(strip_program, strip_args, &[target_path])?;
-		return Ok(());
+			// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
+			let new_manifest = Manifest {
+				executable: manifest::Executable::Path(
+					tangram_std::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
+						.to_data(),
+				),
+				..manifest
+			};
+			#[cfg(feature = "tracing")]
+			tracing::info!(?new_manifest, "created new manifest");
+
+			let new_wrapper = new_manifest.write(&tg).await?;
+			new_wrapper.store(&tg).await?;
+			#[cfg(feature = "tracing")]
+			{
+				let new_wrapper_id = new_wrapper.id();
+				tracing::info!(?new_wrapper_id, "wrote new wrapper");
+			}
+
+			// Check out the new output file.
+			let canonical_target_path = std::fs::canonicalize(target_path).map_err(|error| {
+				tg::error!(
+					source = error,
+					"could not get canonical path for the output file"
+				)
+			})?;
+			#[cfg(feature = "tracing")]
+			tracing::info!(?canonical_target_path, "checking out the new output file");
+
+			// Remove the existing file.
+			tokio::fs::remove_file(&canonical_target_path)
+				.await
+				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
+
+			let artifact = tg::Artifact::from(new_wrapper).id();
+			tg::checkout(
+				&tg,
+				tg::checkout::Arg {
+					artifact,
+					dependencies: true,
+					force: true,
+					path: Some(canonical_target_path),
+					lock: true,
+				},
+			)
+			.await?;
+			#[cfg(feature = "tracing")]
+			tracing::info!("checked out the new output file");
+		},
+		manifest::Executable::Address(address) => {
+			#[cfg(feature = "tracing")]
+			tracing::info!(?address, "found address executable (embedded wrapper), stripping in place");
+
+			// For Address executables, the target file itself is the embedded wrapper.
+			// Make the file writable and strip it in place.
+			let mut perms = tokio::fs::metadata(target_path)
+				.await
+				.map_err(|source| tg::error!(!source, %path = target_path.display(), "failed to get the file metadata"))?.permissions();
+			perms.set_mode(perms.mode() | 0o200);
+			tokio::fs::set_permissions(target_path, perms)
+				.await
+				.map_err(|source| tg::error!(!source, %path = target_path.display(), "failed to set file permissions"))?;
+
+			// Call strip directly on the embedded wrapper.
+			run_strip(strip_program, strip_args, &[target_path])?;
+			#[cfg(feature = "tracing")]
+			tracing::info!(?target_path, "strip succeeded on embedded wrapper");
+		},
+		manifest::Executable::Content(_) => {
+			#[cfg(feature = "tracing")]
+			tracing::warn!(
+				"found a content executable. passing through, but this is probably an error and likely to fail"
+			);
+			// If the executable is content, pass through the arguments to strip unchanged.
+			run_strip(strip_program, strip_args, &[target_path])?;
+			return Ok(());
+		},
 	}
 
 	Ok(())
