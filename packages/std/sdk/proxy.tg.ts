@@ -401,6 +401,7 @@ export const test = async () => {
 		testDifferentPrefixDirect(),
 		testSharedLibraryWithDep(),
 		testStrip(),
+		testStripMultipleFiles(),
 	];
 	await Promise.all(tests);
 	return true;
@@ -1063,7 +1064,6 @@ import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 
 export const testStrip = async (target?: string) => {
 	const host = await std.triple.host();
-	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
 	const toolchain = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
 	const output = await std.build`
@@ -1082,6 +1082,75 @@ export const testStrip = async (target?: string) => {
 			),
 		)
 		.then(tg.File.expect);
+	return output;
+};
+
+/** This test verifies that strip can handle multiple files in a single invocation, like `strip foo bar baz`. */
+export const testStripMultipleFiles = async () => {
+	const toolchain = await bootstrap.sdk();
+
+	const sourceA = await tg.file`
+		#include <stdio.h>
+		int main() {
+			printf("Program A\\n");
+			return 1;
+		}
+	`;
+
+	const sourceB = await tg.file`
+		#include <stdio.h>
+		int main() {
+			printf("Program B\\n");
+			return 2;
+		}
+	`;
+
+	const sourceC = await tg.file`
+		#include <stdio.h>
+		int main() {
+			printf("Program C\\n");
+			return 3;
+		}
+	`;
+
+	const output = await std.build`
+		set -x
+		# Compile three separate executables with debug symbols.
+		cc -g -o progA -xc ${sourceA}
+		cc -g -o progB -xc ${sourceB}
+		cc -g -o progC -xc ${sourceC}
+		# Try to strip all three files in one invocation.
+	  strip progA progB progC
+		# Move them to output.
+		mkdir -p $OUTPUT
+		mv progA $OUTPUT/progA
+		mv progB $OUTPUT/progB
+		mv progC $OUTPUT/progC`
+		.bootstrap(true)
+		.env(
+			std.env.arg(
+				toolchain,
+				{
+					TGSTRIP_TRACING: "tgstrip=trace",
+				},
+				{ utils: false },
+			),
+		)
+		.then(tg.Directory.expect);
+
+	// Assert that each output file is still a valid Tangram wrapper with a manifest.
+	const progA = await output.get("progA").then(tg.File.expect);
+	const manifestA = await std.wrap.Manifest.read(progA);
+	tg.assert(manifestA !== undefined, "progA should have a manifest");
+
+	const progB = await output.get("progB").then(tg.File.expect);
+	const manifestB = await std.wrap.Manifest.read(progB);
+	tg.assert(manifestB !== undefined, "progB should have a manifest");
+
+	const progC = await output.get("progC").then(tg.File.expect);
+	const manifestC = await std.wrap.Manifest.read(progC);
+	tg.assert(manifestC !== undefined, "progC should have a manifest");
+
 	return output;
 };
 
