@@ -304,23 +304,77 @@ impl Options {
 		// Parse the arguments.
 		let mut strip_targets = Vec::new();
 		let mut strip_args = vec![];
+		let mut output_file_specified = false;
 
-		for arg in std::env::args().skip(1) {
+		// Flags that take a value.
+		let flags_with_values = ["-F", "-I", "-O", "-K", "-N", "-R", "-o"];
+
+		let args: Vec<String> = std::env::args().skip(1).collect();
+		let mut i = 0;
+		while i < args.len() {
+			let arg = &args[i];
+
 			// Catch any --tg- args.
 			if arg.starts_with("--tg-") {
 				// Handle --tg-passthrough.
 				if arg == "--tg-passthrough" {
 					passthrough = true;
 				}
-			} else {
-				// If the argument starts with `-`, it's an argument to strip.
-				if arg.starts_with('-') {
-					strip_args.push(arg);
-				} else {
-					// This is a target file to strip.
-					strip_targets.push(arg.into());
-				}
+				i += 1;
+				continue;
 			}
+
+			// If the argument starts with `-`, it is an argument to strip.
+			if arg.starts_with('-') {
+				// Check if this is a flag that takes a value.
+				let mut handled = false;
+				for flag in &flags_with_values {
+					if arg == *flag {
+						// The value is in the next argument.
+						if i + 1 < args.len() {
+							let value = &args[i + 1];
+							if flag == &"-o" {
+								output_file_specified = true;
+							}
+							strip_args.push(arg.clone());
+							strip_args.push(value.clone());
+							i += 2; // Skip both the flag and its value.
+							handled = true;
+							break;
+						} else {
+							return Err(tg::error!("flag {} requires a value", flag));
+						}
+					} else if arg.starts_with(&format!("{}=", flag))
+						|| (flag.len() == 2 && arg.len() > 2 && arg.starts_with(flag))
+					{
+						// The value is in the same argument (e.g., -Fvalue or -F=value).
+						if flag == &"-o" {
+							output_file_specified = true;
+						}
+						strip_args.push(arg.clone());
+						i += 1;
+						handled = true;
+						break;
+					}
+				}
+				if !handled {
+					// Regular flag without a value.
+					strip_args.push(arg.clone());
+					i += 1;
+				}
+			} else {
+				// This is a target file to strip.
+				strip_targets.push(arg.clone().into());
+				i += 1;
+			}
+		}
+
+		// If -o is present, verify only one input file is provided.
+		if output_file_specified && strip_targets.len() > 1 {
+			return Err(tg::error!(
+				"when -o is specified, only one object file can be provided, but {} were given",
+				strip_targets.len()
+			));
 		}
 
 		// Construct options struct.

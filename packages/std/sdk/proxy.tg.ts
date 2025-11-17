@@ -402,6 +402,7 @@ export const test = async () => {
 		testSharedLibraryWithDep(),
 		testStrip(),
 		testStripMultipleFiles(),
+		testStripWithValueArgs(),
 	];
 	await Promise.all(tests);
 	return true;
@@ -1152,6 +1153,226 @@ export const testStripMultipleFiles = async () => {
 	tg.assert(manifestC !== undefined, "progC should have a manifest");
 
 	return output;
+};
+
+/** This test verifies that strip correctly handles the -o flag to specify an output file. */
+export const testStripWithOutputFlag = async () => {
+	const toolchain = await bootstrap.sdk();
+
+	const source = await tg.file`
+		#include <stdio.h>
+
+		// A symbol we want to keep.
+		void keepThisSymbol() {
+			printf("This symbol should be kept\\n");
+		}
+
+		// A symbol that will be stripped.
+		void stripThisSymbol() {
+			printf("This symbol may be stripped\\n");
+		}
+
+		int main() {
+			keepThisSymbol();
+			return 0;
+		}
+	`;
+
+	const output = await std.build`
+		set -x
+		# Compile with debug symbols.
+		cc -g -o prog -xc ${source}
+		# Use strip with -o flag to specify output file.
+		mkdir -p $OUTPUT
+		strip -o $OUTPUT/stripped prog
+	`
+		.bootstrap(true)
+		.env(
+			std.env.arg(
+				toolchain,
+				{
+					TGSTRIP_TRACING: "tgstrip=trace",
+				},
+				{ utils: false },
+			),
+		)
+		.then(tg.Directory.expect);
+
+	// Verify the output file exists and is a valid wrapper.
+	const strippedFile = await output.get("stripped").then(tg.File.expect);
+	const manifest = await std.wrap.Manifest.read(strippedFile);
+	tg.assert(manifest !== undefined, "stripped file should have a manifest");
+
+	return output;
+};
+
+/** This test verifies that strip correctly handles the -K flag to keep a specific symbol. */
+export const testStripWithKeepSymbol = async () => {
+	const toolchain = await bootstrap.sdk();
+
+	const source = await tg.file`
+		#include <stdio.h>
+
+		// A symbol we want to keep.
+		void keepThisSymbol() {
+			printf("This symbol should be kept\\n");
+		}
+
+		// A symbol that will be stripped.
+		void stripThisSymbol() {
+			printf("This symbol may be stripped\\n");
+		}
+
+		int main() {
+			keepThisSymbol();
+			return 0;
+		}
+	`;
+
+	const output = await std.build`
+		set -x
+		# Compile with debug symbols.
+		cc -g -o prog -xc ${source}
+		# Use strip with -K flag to keep a specific symbol.
+		strip -K keepThisSymbol prog
+		mv prog $OUTPUT
+	`
+		.bootstrap(true)
+		.env(
+			std.env.arg(
+				toolchain,
+				{
+					TGSTRIP_TRACING: "tgstrip=trace",
+				},
+				{ utils: false },
+			),
+		)
+		.then(tg.File.expect);
+
+	// Verify the output is a valid wrapper.
+	const manifest = await std.wrap.Manifest.read(output);
+	tg.assert(manifest !== undefined, "file with kept symbol should have a manifest");
+
+	return output;
+};
+
+/** This test verifies that strip correctly handles multiple value-taking flags in a single invocation. */
+export const testStripWithMultipleValueFlags = async () => {
+	const toolchain = await bootstrap.sdk();
+
+	const source = await tg.file`
+		#include <stdio.h>
+
+		// A symbol we want to keep.
+		void keepThisSymbol() {
+			printf("This symbol should be kept\\n");
+		}
+
+		// A symbol that will be stripped.
+		void stripThisSymbol() {
+			printf("This symbol may be stripped\\n");
+		}
+
+		int main() {
+			keepThisSymbol();
+			return 0;
+		}
+	`;
+
+	const output = await std.build`
+		set -x
+		# Compile with debug symbols.
+		cc -g -o prog -xc ${source}
+		# Use multiple flags that take values.
+		mkdir -p $OUTPUT
+		strip -K keepThisSymbol -o $OUTPUT/multi prog
+	`
+		.bootstrap(true)
+		.env(
+			std.env.arg(
+				toolchain,
+				{
+					TGSTRIP_TRACING: "tgstrip=trace",
+				},
+				{ utils: false },
+			),
+		)
+		.then(tg.Directory.expect);
+
+	// Verify the output file exists and is a valid wrapper.
+	const multiFile = await output.get("multi").then(tg.File.expect);
+	const manifest = await std.wrap.Manifest.read(multiFile);
+	tg.assert(
+		manifest !== undefined,
+		"file with multiple flags should have a manifest",
+	);
+
+	return output;
+};
+
+/** This test verifies that strip correctly handles the combined form of flags (e.g., -Ksymbol instead of -K symbol). */
+export const testStripWithCombinedForm = async () => {
+	const toolchain = await bootstrap.sdk();
+
+	const source = await tg.file`
+		#include <stdio.h>
+
+		// A symbol we want to keep.
+		void keepThisSymbol() {
+			printf("This symbol should be kept\\n");
+		}
+
+		// A symbol that will be stripped.
+		void stripThisSymbol() {
+			printf("This symbol may be stripped\\n");
+		}
+
+		int main() {
+			keepThisSymbol();
+			return 0;
+		}
+	`;
+
+	const output = await std.build`
+		set -x
+		# Compile with debug symbols.
+		cc -g -o prog -xc ${source}
+		# Use the combined form -Ksymbol.
+		strip -KkeepThisSymbol prog
+		mv prog $OUTPUT
+	`
+		.bootstrap(true)
+		.env(
+			std.env.arg(
+				toolchain,
+				{
+					TGSTRIP_TRACING: "tgstrip=trace",
+				},
+				{ utils: false },
+			),
+		)
+		.then(tg.File.expect);
+
+	// Verify the output is a valid wrapper.
+	const manifest = await std.wrap.Manifest.read(output);
+	tg.assert(
+		manifest !== undefined,
+		"file with combined flag form should have a manifest",
+	);
+
+	return output;
+};
+
+/** This test runs all strip tests that exercise arguments with values. */
+export const testStripWithValueArgs = async () => {
+	const tests = [
+		testStripWithOutputFlag(),
+		testStripWithKeepSymbol(),
+		testStripWithMultipleValueFlags(),
+		testStripWithCombinedForm(),
+	];
+	await Promise.all(tests);
+	return true;
 };
 
 /** Test that TGLD discovers transitive dependencies when only the top-level library is explicitly linked. This mirrors the ncurses case where multiple libraries are in the same directory, but only one is explicitly linked. This test would catch the bug where TGLD returns early before analyzing libraries for their dependencies. */
