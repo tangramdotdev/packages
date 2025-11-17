@@ -1118,9 +1118,11 @@ export const testStripMultipleFiles = async () => {
 		# Compile three separate executables with debug symbols.
 		cc -g -o progA -xc ${sourceA}
 		cc -g -o progB -xc ${sourceB}
+		# Disable embedding for the third.
+		export TGLD_EMBED_WRAPPER=false
 		cc -g -o progC -xc ${sourceC}
 		# Try to strip all three files in one invocation.
-		strip progA progB progC
+	  strip progA progB progC
 		# Move them to output.
 		mkdir -p $OUTPUT
 		mv progA $OUTPUT/progA

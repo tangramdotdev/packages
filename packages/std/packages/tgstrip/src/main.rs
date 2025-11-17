@@ -61,22 +61,25 @@ fn main_inner() -> tg::Result<()> {
 		}
 	}
 
-	// Process all wrappers.
+	// Process all wrappers concurrently.
 	if !wrappers.is_empty() {
 		tokio::runtime::Builder::new_multi_thread()
 			.enable_all()
 			.build()
 			.unwrap()
 			.block_on(async {
-				for (target_path, manifest) in wrappers {
-					run_proxy(
-						&options.strip_program,
-						&options.strip_args,
-						&target_path,
-						manifest,
-					)
-					.await?;
-				}
+				let futures: Vec<_> = wrappers
+					.into_iter()
+					.map(|(target_path, manifest)| {
+						run_proxy(
+							&options.strip_program,
+							&options.strip_args,
+							&target_path,
+							manifest,
+						)
+					})
+					.collect();
+				futures::future::try_join_all(futures).await?;
 				Ok::<(), tg::Error>(())
 			})?;
 	}
@@ -248,28 +251,9 @@ async fn run_proxy(
 			#[cfg(feature = "tracing")]
 			tracing::info!(
 				?address,
-				"found address executable (embedded wrapper), stripping in place"
+				?target_path,
+				"found address executable (embedded wrapper), skipping strip to preserve manifest"
 			);
-
-			// For Address executables, the target file itself is the embedded wrapper.
-			// Make the file writable and strip it in place.
-			let mut perms = tokio::fs::metadata(target_path)
-				.await
-				.map_err(
-					|source| tg::error!(!source, %path = target_path.display(), "failed to get the file metadata"),
-				)?
-				.permissions();
-			perms.set_mode(perms.mode() | 0o200);
-			tokio::fs::set_permissions(target_path, perms)
-				.await
-				.map_err(
-					|source| tg::error!(!source, %path = target_path.display(), "failed to set file permissions"),
-				)?;
-
-			// Call strip directly on the embedded wrapper.
-			run_strip(strip_program, strip_args, &[target_path])?;
-			#[cfg(feature = "tracing")]
-			tracing::info!(?target_path, "strip succeeded on embedded wrapper");
 		},
 		manifest::Executable::Content(_) => {
 			#[cfg(feature = "tracing")]
