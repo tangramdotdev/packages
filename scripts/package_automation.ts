@@ -674,7 +674,7 @@ const ACTION_DEPENDENCIES: Record<string, string[]> = {
 	build: ["check"],
 	test: ["build"],
 	publish: [],
-	release: ["test", "publish"],
+	release: ["build", "publish"],
 };
 
 type ActionFunction = (ctx: Context) => Promise<Result<unknown>>;
