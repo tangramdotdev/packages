@@ -1087,8 +1087,6 @@ export const testStrip = async (target?: string) => {
 
 /** This test verifies that strip can handle multiple files in a single invocation, like `strip foo bar baz`. */
 export const testStripMultipleFiles = async () => {
-	const host = await std.triple.host();
-	const os = std.triple.os(host);
 	const toolchain = await bootstrap.sdk();
 
 	const sourceA = await tg.file`
@@ -1115,17 +1113,11 @@ export const testStripMultipleFiles = async () => {
 		}
 	`;
 
-	// On linux, we want to switch between embedded and path wrappers.
-	const disableEmbedLine =
-		os === "linux" ? "export TGLD_EMBED_WRAPPER=false" : "";
-
 	const output = await std.build`
 		set -x
 		# Compile three separate executables with debug symbols.
 		cc -g -o progA -xc ${sourceA}
 		cc -g -o progB -xc ${sourceB}
-		# Disable embedding for the third.
-		${disableEmbedLine}
 		cc -g -o progC -xc ${sourceC}
 		# Try to strip all three files in one invocation.
 	  strip progA progB progC
