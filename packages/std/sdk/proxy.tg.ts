@@ -401,6 +401,7 @@ export const test = async () => {
 		testDifferentPrefixDirect(),
 		testSharedLibraryWithDep(),
 		testStrip(),
+		testStripMultipleFiles(),
 	];
 	await Promise.all(tests);
 	return true;
