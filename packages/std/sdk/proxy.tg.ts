@@ -1085,6 +1085,64 @@ export const testStrip = async (target?: string) => {
 	return output;
 };
 
+/** This test verifies that strip can handle multiple files in a single invocation, like `strip foo.o bar.o baz.o`. This test is expected to fail because tgstrip currently only supports stripping one file at a time. */
+export const testStripMultipleFiles = async (target?: string) => {
+	const host = await std.triple.host();
+	const targetTriple = target ?? host;
+	const sdkArg = target ? { host, target } : undefined;
+	const toolchain = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
+
+	const sourceA = await tg.file`
+		#include <stdio.h>
+		int functionA() {
+			printf("Function A\\n");
+			return 1;
+		}
+	`;
+
+	const sourceB = await tg.file`
+		#include <stdio.h>
+		int functionB() {
+			printf("Function B\\n");
+			return 2;
+		}
+	`;
+
+	const sourceC = await tg.file`
+		#include <stdio.h>
+		int functionC() {
+			printf("Function C\\n");
+			return 3;
+		}
+	`;
+
+	const output = await std.build`
+		set -x
+		# Compile three separate object files with debug symbols.
+		cc -g -c -o a.o -xc ${sourceA}
+		cc -g -c -o b.o -xc ${sourceB}
+		cc -g -c -o c.o -xc ${sourceC}
+		# Try to strip all three files in one invocation.
+		strip a.o b.o c.o
+		# Move them to output.
+		mkdir -p $OUTPUT
+		mv a.o $OUTPUT/a.o
+		mv b.o $OUTPUT/b.o
+		mv c.o $OUTPUT/c.o`
+		.bootstrap(target ? false : true)
+		.env(
+			std.env.arg(
+				toolchain,
+				{
+					TGSTRIP_TRACING: "tgstrip=trace",
+				},
+				{ utils: false },
+			),
+		)
+		.then(tg.Directory.expect);
+	return output;
+};
+
 /** Test that TGLD discovers transitive dependencies when only the top-level library is explicitly linked. This mirrors the ncurses case where multiple libraries are in the same directory, but only one is explicitly linked. This test would catch the bug where TGLD returns early before analyzing libraries for their dependencies. */
 export const testTransitiveDiscovery = async (target?: string) => {
 	const host = await std.triple.host();
