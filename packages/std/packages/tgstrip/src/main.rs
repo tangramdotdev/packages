@@ -69,8 +69,13 @@ fn main_inner() -> tg::Result<()> {
 			.unwrap()
 			.block_on(async {
 				for (target_path, manifest) in wrappers {
-					run_proxy(&options.strip_program, &options.strip_args, &target_path, manifest)
-						.await?;
+					run_proxy(
+						&options.strip_program,
+						&options.strip_args,
+						&target_path,
+						manifest,
+					)
+					.await?;
 				}
 				Ok::<(), tg::Error>(())
 			})?;
@@ -118,10 +123,11 @@ async fn run_proxy(
 			tracing::info!(?artifact_path, "found executable artifact path");
 
 			// Get the path to the actual executable.
-			let executable_path =
-				std::path::PathBuf::from(tangram_std::render_template_data(&artifact_path).map_err(
-					|source| tg::error!(!source, ?artifact_path, "unable to render executable path"),
-				)?);
+			let executable_path = std::path::PathBuf::from(
+				tangram_std::render_template_data(&artifact_path).map_err(|source| {
+					tg::error!(!source, ?artifact_path, "unable to render executable path")
+				})?,
+			);
 
 			#[cfg(feature = "tracing")]
 			tracing::info!(?executable_path, "found executable path");
@@ -190,8 +196,10 @@ async fn run_proxy(
 			// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 			let new_manifest = Manifest {
 				executable: manifest::Executable::Path(
-					tangram_std::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
-						.to_data(),
+					tangram_std::template_from_artifact(tg::Artifact::with_id(
+						stripped_file_id.into(),
+					))
+					.to_data(),
 				),
 				..manifest
 			};
@@ -226,7 +234,7 @@ async fn run_proxy(
 				&tg,
 				tg::checkout::Arg {
 					artifact,
-					dependencies: true,
+					dependencies: false,
 					force: true,
 					path: Some(canonical_target_path),
 					lock: true,
@@ -238,17 +246,25 @@ async fn run_proxy(
 		},
 		manifest::Executable::Address(address) => {
 			#[cfg(feature = "tracing")]
-			tracing::info!(?address, "found address executable (embedded wrapper), stripping in place");
+			tracing::info!(
+				?address,
+				"found address executable (embedded wrapper), stripping in place"
+			);
 
 			// For Address executables, the target file itself is the embedded wrapper.
 			// Make the file writable and strip it in place.
 			let mut perms = tokio::fs::metadata(target_path)
 				.await
-				.map_err(|source| tg::error!(!source, %path = target_path.display(), "failed to get the file metadata"))?.permissions();
+				.map_err(
+					|source| tg::error!(!source, %path = target_path.display(), "failed to get the file metadata"),
+				)?
+				.permissions();
 			perms.set_mode(perms.mode() | 0o200);
 			tokio::fs::set_permissions(target_path, perms)
 				.await
-				.map_err(|source| tg::error!(!source, %path = target_path.display(), "failed to set file permissions"))?;
+				.map_err(
+					|source| tg::error!(!source, %path = target_path.display(), "failed to set file permissions"),
+				)?;
 
 			// Call strip directly on the embedded wrapper.
 			run_strip(strip_program, strip_args, &[target_path])?;
