@@ -101,7 +101,7 @@ pub fn render_template_data(data: &tg::template::Data) -> std::io::Result<String
 					.map_err(|e| {
 						std::io::Error::new(
 							std::io::ErrorKind::InvalidData,
-							format!("unable to convert OsString to String: {e:?}"),
+							format!("unable to convert OsString to String: {}", e.display()),
 						)
 					})
 			},

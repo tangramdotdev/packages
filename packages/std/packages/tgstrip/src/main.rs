@@ -31,8 +31,11 @@ fn main_inner() -> tg::Result<()> {
 	if options.passthrough || options.strip_targets.is_empty() {
 		#[cfg(feature = "tracing")]
 		tracing::info!("passing through, running strip with unmodified arguments");
-		let target_refs: Vec<&std::path::Path> =
-			options.strip_targets.iter().map(|p| p.as_path()).collect();
+		let target_refs: Vec<&std::path::Path> = options
+			.strip_targets
+			.iter()
+			.map(std::path::PathBuf::as_path)
+			.collect();
 		run_strip(&options.strip_program, &options.strip_args, &target_refs)?;
 		return Ok(());
 	}
@@ -63,6 +66,8 @@ fn main_inner() -> tg::Result<()> {
 
 	// Process all wrappers concurrently.
 	if !wrappers.is_empty() {
+		let strip_program = &options.strip_program;
+		let strip_args = &options.strip_args;
 		tokio::runtime::Builder::new_multi_thread()
 			.enable_all()
 			.build()
@@ -70,13 +75,8 @@ fn main_inner() -> tg::Result<()> {
 			.block_on(async {
 				let futures: Vec<_> = wrappers
 					.into_iter()
-					.map(|(target_path, manifest)| {
-						run_proxy(
-							&options.strip_program,
-							&options.strip_args,
-							&target_path,
-							manifest,
-						)
+					.map(|(target_path, manifest)| async move {
+						run_proxy(strip_program, strip_args, &target_path, manifest).await
 					})
 					.collect();
 				futures::future::try_join_all(futures).await?;
@@ -247,10 +247,9 @@ async fn run_proxy(
 			#[cfg(feature = "tracing")]
 			tracing::info!("checked out the new output file");
 		},
-		manifest::Executable::Address(address) => {
+		manifest::Executable::Address(_address) => {
 			#[cfg(feature = "tracing")]
 			tracing::info!(
-				?address,
 				?target_path,
 				"found address executable (embedded wrapper), skipping strip to preserve manifest"
 			);

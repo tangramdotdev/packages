@@ -90,10 +90,8 @@ fn main_inner() -> std::io::Result<()> {
 	};
 
 	// Set the env.
-	if !suppress_env {
-		if let Some(env) = &manifest.env {
-			mutate_env(env)?;
-		}
+	if !suppress_env && let Some(env) = &manifest.env {
+		mutate_env(env)?;
 	}
 
 	// Set `TANGRAM_INJECTION_IDENTITY_PATH` if necessary.
@@ -120,16 +118,14 @@ fn main_inner() -> std::io::Result<()> {
 	command.arg0(arg0);
 
 	// Add the args.
-	if !suppress_args {
-		if let Some(args) = manifest.args {
-			let command_args = args
-				.iter()
-				.map(tangram_std::render_template_data)
-				.collect::<std::io::Result<Vec<_>>>()?;
-			#[cfg(feature = "tracing")]
-			tracing::trace!(?command_args);
-			command.args(command_args);
-		}
+	if !suppress_args && let Some(args) = manifest.args {
+		let command_args = args
+			.iter()
+			.map(tangram_std::render_template_data)
+			.collect::<std::io::Result<Vec<_>>>()?;
+		#[cfg(feature = "tracing")]
+		tracing::trace!(?command_args);
+		command.args(command_args);
 	}
 
 	// Add the wrapper args.
