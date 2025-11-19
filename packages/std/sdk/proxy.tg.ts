@@ -275,15 +275,18 @@ const ldProxy = async (arg: LdProxyArg) => {
 	const embedWrapper = arg.embedWrapper ?? std.triple.os(build) === "linux";
 
 	// Get the embedded wrapper artifacts.
-	let wrapBin = undefined;
 	let stubBin = undefined;
 	let stubElf = undefined;
-
+	let wrapBin = undefined;
+	let objcopy = undefined;
 	if (std.triple.os(build) === "linux") {
 		const stub_ = await stub.workspace(arg);
-		wrapBin = await stub_.get("wrap");
 		stubBin = await stub_.get("stub.bin");
 		stubElf = await stub_.get("stub.elf");
+		// watermark
+		console.log("build toolchain", buildToolchain.id);
+		objcopy = await buildToolchain.get("bin/objcopy");
+		wrapBin = await stub_.get("wrap");
 	}
 
 	// The linker proxy is built for the build machine.
@@ -326,6 +329,9 @@ const ldProxy = async (arg: LdProxyArg) => {
 			: undefined,
 		TANGRAM_STUB_ELF_ID: stubElf
 			? tg.Mutation.setIfUnset(stubElf.id)
+			: undefined,
+		TANGRAM_OBJCOPY_ID: objcopy
+			? tg.Mutation.setIfUnset(objcopy.id)
 			: undefined,
 		TANGRAM_WRAP_ID: wrapBin ? tg.Mutation.setIfUnset(wrapBin.id) : undefined,
 		TGLD_EMBED_WRAPPER: embedWrapper

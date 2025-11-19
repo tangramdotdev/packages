@@ -1,11 +1,13 @@
 use std::{
 	collections::BTreeMap,
-	io::{Read, Seek, Write},
+	io::{Read, Seek},
+	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
 	str::FromStr as _,
 	sync::LazyLock,
 };
 use tangram_client::prelude::*;
+use tokio::io::AsyncWriteExt;
 
 use crate::CLOSEST_ARTIFACT_PATH;
 
@@ -290,21 +292,30 @@ impl Manifest {
 		Ok(Some(manifest))
 	}
 
-	pub async fn embed(&self, tg: &impl tg::Handle, file: &tg::File) -> tg::Result<tg::File> {
+	pub async fn embed(
+		&self,
+		tg: &impl tg::Handle,
+		file: &tg::File,
+		target: &str,
+	) -> tg::Result<tg::File> {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?self, "Embedding manifest");
 
-		// Get the stub and wrap files.
+		// Get the required files.
 		let stub_bin = TANGRAM_STUB_BIN
 			.as_ref()
 			.ok_or_else(|| tg::error!("expected a stub"))?;
 		let stub_elf = TANGRAM_STUB_ELF
 			.as_ref()
 			.ok_or_else(|| tg::error!("expected a stub"))?;
+		let objcopy = TANGRAM_OBJCOPY
+			.as_ref()
+			.ok_or_else(|| tg::error!("expected objcopy"))?;
 		let wrap = TANGRAM_WRAP
 			.as_ref()
 			.ok_or_else(|| tg::error!("expected a wrap binary"))?;
 
+		// Cache all the artifacts.
 		tg::cache::cache(
 			tg,
 			tg::cache::Arg {
@@ -312,6 +323,7 @@ impl Manifest {
 					file.id().into(),
 					stub_bin.id().into(),
 					stub_elf.id().into(),
+					objcopy.id().into(),
 					wrap.id().into(),
 				],
 			},
@@ -324,41 +336,73 @@ impl Manifest {
 		let input = path.join(file.id().to_string());
 		let stub_bin = path.join(stub_bin.id().to_string());
 		let stub_elf = path.join(stub_elf.id().to_string());
+		let objcopy = path.join(objcopy.id().to_string());
 		let wrap = path.join(wrap.id().to_string());
 
 		// Create a temp file for the manifest.
-		let mut manifest = tempfile::NamedTempFile::new()
+		let manifest = tempfile::NamedTempFile::new()
 			.map_err(|source| tg::error!(!source, "failed to get temp file"))?;
+
+		// Create the manifest file.
+		let contents = serde_json::to_vec(self)
+			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
+		tokio::fs::write(manifest.path(), &contents)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to write the manifest"))?;
+
+		eprintln!("input: {}", input.display());
+
+		// Copy the input file to a a temp.
+		let tempfile = tempfile::NamedTempFile::new()
+			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
+		tokio::fs::copy(&input, tempfile.path())
+			.await
+			.map_err(|source| tg::error!(!source, "failed to copy file"))?;
+		tokio::fs::set_permissions(tempfile.as_ref(), std::fs::Permissions::from_mode(0o755))
+			.await
+			.map_err(|source| tg::error!(!source, "failed to set permissions"))?;
+
+		let input = tempfile.path();
+
+		// Add sections for the stub and manifest.
+		let output_ = tokio::process::Command::new(&objcopy)
+			.arg("-v")
+			.arg("--add-section")
+			.arg(".text.tangram-stub=/dev/null")
+			.arg("--add-section")
+			.arg(".note.tangram-manifest=/dev/null")
+			.arg(input)
+			.stdout(std::process::Stdio::piped())
+			.stderr(std::process::Stdio::piped())
+			.output()
+			.await
+			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?;
+		tokio::io::stderr().write_all(&output_.stderr).await.ok();
+		if !output_.status.success() {
+			return Err(tg::error!("objcopy subcommand failed"));
+		}
 
 		// Create a random output name.
 		let tempfile = tempfile::NamedTempFile::new()
 			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
 		let output = tempfile.path();
 
-		// Create the manifest file. TODO: asyncify.
-		let contents = serde_json::to_vec(self)
-			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
-		manifest
-			.as_file_mut()
-			.write_all(&contents)
-			.map_err(|source| tg::error!(!source, "failed to write manifest"))?;
-
 		// Run the command.
-		let success = tokio::process::Command::new(wrap)
+		let output_ = tokio::process::Command::new(wrap)
+			.arg(target)
 			.arg(input)
 			.arg(output)
 			.arg(stub_elf)
 			.arg(stub_bin)
 			.arg(manifest.path())
-			.stdout(std::process::Stdio::inherit())
-			.stderr(std::process::Stdio::inherit())
+			.stdout(std::process::Stdio::piped())
+			.stderr(std::process::Stdio::piped())
 			.output()
 			.await
-			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?
-			.status
-			.success();
-		if !success {
-			return Err(tg::error!("failed to run the command"));
+			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?;
+		tokio::io::stderr().write_all(&output_.stderr).await.ok();
+		if !output_.status.success() {
+			return Err(tg::error!("wrap subcommand failed"));
 		}
 
 		let bytes = std::fs::read(output)
@@ -667,6 +711,13 @@ static TANGRAM_STUB_BIN: LazyLock<Option<tg::File>> = LazyLock::new(|| {
 static TANGRAM_STUB_ELF: LazyLock<Option<tg::File>> = LazyLock::new(|| {
 	std::env::var("TANGRAM_STUB_ELF_ID").ok().map(|id| {
 		let id = id.parse().expect("TANGRAM_STUB_ELF_ID is not a valid ID");
+		tg::File::with_id(id)
+	})
+});
+
+static TANGRAM_OBJCOPY: LazyLock<Option<tg::File>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_OBJCOPY_ID").ok().map(|id| {
+		let id = id.parse().expect("TANGRAM_WRAP_ID is not a valid ID");
 		tg::File::with_id(id)
 	})
 });

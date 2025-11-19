@@ -458,7 +458,15 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			if let Some(entrypoint) = entrypoint {
 				manifest.executable = tangram_std::manifest::Executable::Address(entrypoint);
 			}
-			manifest.embed(&tg, &output_file).await?
+			// TODO: cross compilation.
+			let target = if cfg!(target_arch = "aarch64") {
+				"aarch64"
+			} else if cfg!(target_arch = "x86_64") {
+				"x86_64"
+			} else {
+				return Err(tg::error!("unsupported target architecture"));
+			};
+			manifest.embed(&tg, &output_file, target).await?
 		} else {
 			manifest.write(&tg).await?
 		};

@@ -298,3 +298,42 @@ export const testFull = async () => {
 		env: { CUSTOM_ENV: "true", TANGRAM_SUPPRESS_ENV: "true" },
 	});
 };
+
+export const testStrip = async () => {
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdio.h>
+			extern char** environ;
+			int main(int argc, const char** argv) {
+				for (int i = 0; i < 2; i++) {
+					const char* var = i ? "envp" : "argv";
+					const char** s = i ? (const char**)environ : argv;
+					int j = 0;
+					for (; *s; s++, j++) {
+						printf("%s[%d] = %s\\n", var, j, *s);
+					}
+				}
+				return 0;
+			}	
+		`),
+	});
+	return std.run`
+		mkdir -p $OUTPUT
+		gcc ${source}/main.c -o $OUTPUT/original
+		echo "Compiled $OUTPUT/original"
+		cp $OUTPUT/original $OUTPUT/stripped
+		strip --keep-section-symbols --verbose $OUTPUT/stripped
+		echo "Stripped $OUTPUT/stripped"
+	`
+		.bootstrap(true)
+		.env(
+			toolchain,
+			{ utils: false },
+			{
+				TANGRAM_TRACING: "true",
+				TGLD_TRACING: "tgld=trace",
+				TGSTRIP_TRACING: "tgstrip=trace",
+			},
+		);
+};
