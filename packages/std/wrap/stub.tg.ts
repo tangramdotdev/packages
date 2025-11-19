@@ -26,26 +26,6 @@ type WrapArg = {
 	executable: tg.File;
 };
 
-export const embedWrapper = async (arg: WrapArg) => {
-	// Build the wrap workspace.
-	const workspace_ = workspace(arg.workspace ?? {});
-	const unwrapped = std.wrap.unwrap(arg.executable);
-	const manifest = tg.file(
-		std.wrap.Manifest.read(arg.executable).then(JSON.stringify),
-	);
-	const env: Array<tg.Unresolved<std.env.Arg>> = [{ utils: false }];
-	let build = {
-		command: tg`
-			${workspace_}/wrap ${unwrapped} ${tg.output} ${workspace_}/stub.elf ${workspace_}/stub.bin ${manifest}
-		`,
-	};
-	return tg.build(std.phases.run, {
-		bootstrap: true,
-		env: std.env.arg(...env),
-		phases: { build },
-	});
-};
-
 export const workspace = async (arg: WorkspaceArg) => {
 	const {
 		target: target_,
@@ -267,7 +247,8 @@ export const testCompile = async () => {
 				TANGRAM_TRACING: "true",
 				TANGRAM_LINKER_TRACING: "tangram_ld_proxy=trace",
 			},
-		);
+		)
+		.then(tg.File.expect);
 };
 
 export const testFull = async () => {
@@ -297,4 +278,54 @@ export const testFull = async () => {
 	return std.wrap(file, {
 		env: { CUSTOM_ENV: "true", TANGRAM_SUPPRESS_ENV: "true" },
 	});
+};
+
+export const testStrip = async () => {
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdio.h>
+			extern char** environ;
+			int main(int argc, const char** argv) {
+				for (int i = 0; i < 2; i++) {
+					const char* var = i ? "envp" : "argv";
+					const char** s = i ? (const char**)environ : argv;
+					int j = 0;
+					for (; *s; s++, j++) {
+						printf("%s[%d] = %s\\n", var, j, *s);
+					}
+				}
+				return 0;
+			}	
+		`),
+	});
+	return std.run`
+		mkdir -p ${tg.output}
+		gcc ${source}/main.c -o ${tg.output}/original
+		echo "Compiled ${tg.output}/original"
+		cp ${tg.output}/original ${tg.output}/stripped
+		strip --keep-section-symbols --verbose ${tg.output}/stripped
+		echo "Stripped ${tg.output}/stripped"
+	`
+		.bootstrap(true)
+		.env(
+			toolchain,
+			{ utils: false },
+			{
+				TANGRAM_TRACING: "true",
+				TGLD_TRACING: "tgld=trace",
+				TGSTRIP_TRACING: "tgstrip=trace",
+			},
+		);
+};
+
+export const testModify = async () => {
+	let file = await tg.file("nothing to see here\n");
+	return std.run`
+		ls -al /.tangram/artifacts
+		echo 'sandbox modification' > ${file}
+		echo 'adfad' > ${tg.output}
+	`
+		.bootstrap(true)
+		.env({ utils: true });
 };

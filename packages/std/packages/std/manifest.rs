@@ -1,16 +1,20 @@
 use std::{
 	collections::BTreeMap,
-	io::{Read, Seek, Write},
+	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
 	str::FromStr as _,
 	sync::LazyLock,
 };
 use tangram_client::prelude::*;
+use tokio::io::AsyncWriteExt;
 
 use crate::CLOSEST_ARTIFACT_PATH;
 
 /// The magic number used to indicate an executable has a manifest.
 pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
+
+/// The name of the section that will appear in the binary.
+pub const SECTION_NAME: &str = "tg-manifest";
 
 /// The manifest version.
 pub const VERSION: u64 = 0;
@@ -213,98 +217,57 @@ pub enum Executable {
 impl Manifest {
 	/// Read a manifest from the end of the given `[tg::File]`.
 	pub async fn read_from_file(tg: &impl tg::Handle, file: tg::File) -> tg::Result<Option<Self>> {
-		#[cfg(feature = "tracing")]
 		tracing::debug!(?file, "Reading manifest from file");
-		let blob = file.contents(tg).await?;
-		let bytes = blob.bytes(tg).await?;
-		let mut cursor = std::io::Cursor::new(bytes);
-		Self::read(&mut cursor)
-			.map_err(|error| tg::error!(source = error, "failed to read manifest from file"))
+		let path = tg::checkout(
+			tg,
+			tg::checkout::Arg {
+				artifact: file.id().into(),
+				dependencies: false,
+				force: false,
+				lock: false,
+				path: None,
+			},
+		)
+		.await
+		.map_err(|source| tg::error!(!source, "failed to checkout the file"))?;
+		tokio::task::spawn_blocking(move || Self::read_from_path(path))
+			.await
+			.map_err(|source| tg::error!(!source, "failed to read the manifest"))?
+			.map_err(|source| tg::error!(!source, "failed to read the manifest"))
 	}
 
 	/// Read a manifest from the end of the file at the given path.
 	pub fn read_from_path(path: impl AsRef<Path>) -> std::io::Result<Option<Self>> {
 		let path = path.as_ref();
-		#[cfg(feature = "tracing")]
-		tracing::debug!(?path, "Reading manifest from path");
-		let mut file = std::fs::File::open(path)?;
-		Self::read(&mut file)
+		tracing::debug!(path = %path.display(), "Reading manifest from path");
+		Ok(manifest_tool::read_manifest(path, None).manifest)
 	}
 
-	/// Read a manifest from the end of a file.
-	pub fn read<R>(reader: &mut R) -> std::io::Result<Option<Self>>
-	where
-		R: Read + Seek,
-	{
-		reader.seek(std::io::SeekFrom::End(0))?;
-
-		// Create a buffer to read 64-bit values.
-		let buf = &mut [0u8; 8];
-
-		// Read and verify the magic number.
-		reader.seek(std::io::SeekFrom::Current(-8))?;
-		reader.read_exact(buf)?;
-		reader.seek(std::io::SeekFrom::Current(-8))?;
-		if buf != MAGIC_NUMBER {
-			#[cfg(feature = "tracing")]
-			tracing::info!(
-				"Magic number mismatch.  Recognized: {:?}, Read: {:?}",
-				MAGIC_NUMBER,
-				buf
-			);
-			return Ok(None);
-		}
-
-		// Read and verify the manifest version.
-		reader.seek(std::io::SeekFrom::Current(-8))?;
-		reader.read_exact(buf)?;
-		let version = u64::from_le_bytes(*buf);
-		reader.seek(std::io::SeekFrom::Current(-8))?;
-		if version != VERSION {
-			#[cfg(feature = "tracing")]
-			tracing::info!(
-				"Version mismatch.  Recognized: {:?}, Read: {:?}",
-				VERSION,
-				version
-			);
-			return Ok(None);
-		}
-
-		// Read the manifest length.
-		reader.seek(std::io::SeekFrom::Current(-8))?;
-		reader.read_exact(buf)?;
-		let length = u64::from_le_bytes(*buf);
-		reader.seek(std::io::SeekFrom::Current(-8))?;
-
-		// Read the manifest.
-		reader.seek(std::io::SeekFrom::Current(-i64::try_from(length).unwrap()))?;
-		let mut manifest = vec![0u8; usize::try_from(length).unwrap()];
-		reader.read_exact(&mut manifest)?;
-		reader.seek(std::io::SeekFrom::Current(-i64::try_from(length).unwrap()))?;
-		#[cfg(feature = "tracing")]
-		tracing::debug!(manifest = ?std::str::from_utf8(&manifest).unwrap());
-
-		// Deserialize the manifest.
-		let manifest = serde_json::from_slice(&manifest)?;
-
-		Ok(Some(manifest))
-	}
-
-	pub async fn embed(&self, tg: &impl tg::Handle, file: &tg::File) -> tg::Result<tg::File> {
+	#[allow(clippy::too_many_lines)]
+	pub async fn embed(
+		&self,
+		tg: &impl tg::Handle,
+		file: &tg::File,
+		target: &str,
+	) -> tg::Result<tg::File> {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?self, "Embedding manifest");
 
-		// Get the stub and wrap files.
+		// Get the required files.
 		let stub_bin = TANGRAM_STUB_BIN
 			.as_ref()
 			.ok_or_else(|| tg::error!("expected a stub"))?;
 		let stub_elf = TANGRAM_STUB_ELF
 			.as_ref()
 			.ok_or_else(|| tg::error!("expected a stub"))?;
+		let objcopy = TANGRAM_OBJCOPY
+			.as_ref()
+			.ok_or_else(|| tg::error!("expected objcopy"))?;
 		let wrap = TANGRAM_WRAP
 			.as_ref()
 			.ok_or_else(|| tg::error!("expected a wrap binary"))?;
 
+		// Cache all the artifacts.
 		tg::cache::cache(
 			tg,
 			tg::cache::Arg {
@@ -312,6 +275,7 @@ impl Manifest {
 					file.id().into(),
 					stub_bin.id().into(),
 					stub_elf.id().into(),
+					objcopy.id().into(),
 					wrap.id().into(),
 				],
 			},
@@ -324,41 +288,71 @@ impl Manifest {
 		let input = path.join(file.id().to_string());
 		let stub_bin = path.join(stub_bin.id().to_string());
 		let stub_elf = path.join(stub_elf.id().to_string());
+		let objcopy = path.join(objcopy.id().to_string());
 		let wrap = path.join(wrap.id().to_string());
 
 		// Create a temp file for the manifest.
-		let mut manifest = tempfile::NamedTempFile::new()
+		let manifest = tempfile::NamedTempFile::new()
 			.map_err(|source| tg::error!(!source, "failed to get temp file"))?;
+
+		// Create the manifest file.
+		let contents = serde_json::to_vec(self)
+			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
+		tokio::fs::write(manifest.path(), &contents)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to write the manifest"))?;
+
+		// Copy the input file to a a temp.
+		let tempfile = tempfile::NamedTempFile::new()
+			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
+		tokio::fs::copy(&input, tempfile.path())
+			.await
+			.map_err(|source| tg::error!(!source, "failed to copy file"))?;
+		tokio::fs::set_permissions(tempfile.as_ref(), std::fs::Permissions::from_mode(0o755))
+			.await
+			.map_err(|source| tg::error!(!source, "failed to set permissions"))?;
+
+		let input = tempfile.path();
+
+		// Add sections for the stub and manifest.
+		let output_ = tokio::process::Command::new(&objcopy)
+			.arg("-v")
+			.arg("--add-section")
+			.arg(".text.tangram-stub=/dev/null")
+			.arg("--add-section")
+			.arg(".note.tg-manifest=/dev/null")
+			.arg(input)
+			.stdout(std::process::Stdio::piped())
+			.stderr(std::process::Stdio::piped())
+			.output()
+			.await
+			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?;
+		tokio::io::stderr().write_all(&output_.stderr).await.ok();
+		if !output_.status.success() {
+			return Err(tg::error!("objcopy subcommand failed"));
+		}
 
 		// Create a random output name.
 		let tempfile = tempfile::NamedTempFile::new()
 			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
 		let output = tempfile.path();
 
-		// Create the manifest file. TODO: asyncify.
-		let contents = serde_json::to_vec(self)
-			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
-		manifest
-			.as_file_mut()
-			.write_all(&contents)
-			.map_err(|source| tg::error!(!source, "failed to write manifest"))?;
-
 		// Run the command.
-		let success = tokio::process::Command::new(wrap)
+		let output_ = tokio::process::Command::new(wrap)
+			.arg(target)
 			.arg(input)
 			.arg(output)
 			.arg(stub_elf)
 			.arg(stub_bin)
 			.arg(manifest.path())
-			.stdout(std::process::Stdio::inherit())
-			.stderr(std::process::Stdio::inherit())
+			.stdout(std::process::Stdio::piped())
+			.stderr(std::process::Stdio::piped())
 			.output()
 			.await
-			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?
-			.status
-			.success();
-		if !success {
-			return Err(tg::error!("failed to run the command"));
+			.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?;
+		tokio::io::stderr().write_all(&output_.stderr).await.ok();
+		if !output_.status.success() {
+			return Err(tg::error!("wrap subcommand failed"));
 		}
 
 		let bytes = std::fs::read(output)
@@ -395,80 +389,117 @@ impl Manifest {
 		Ok(output_file)
 	}
 
+	pub fn write_to_path(&self, path: &Path) -> tg::Result<()> {
+		manifest_tool::write_manifest(path, self, None);
+		Ok(())
+	}
+
 	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_ID` environment variable.
 	pub async fn write(&self, tg: &impl tg::Handle) -> tg::Result<tg::File> {
-		#[cfg(feature = "tracing")]
 		tracing::debug!(?self, "Writing manifest");
 
-		// Obtain the contents of the wrapper file.
-		let wrapper_contents = TANGRAM_WRAPPER.contents(tg).await?;
-		let wrapper_length = wrapper_contents.length(tg).await?;
+		// Check out the wrapper file.
+		let path = tg::checkout(
+			tg,
+			tg::checkout::Arg {
+				artifact: TANGRAM_WRAPPER.id().into(),
+				dependencies: false,
+				force: false,
+				lock: false,
+				path: None,
+			},
+		)
+		.await
+		.map_err(|source| tg::error!(!source, "failed to checkout the wrapper binary"))?;
 
-		// Serialize the manifest.
-		let mut manifest = serde_json::to_vec(self).map_err(|error| {
-			tg::error!(source = error, ?self, "failed to serialize the manifest")
-		})?;
+		// Create a temp.
+		let temp = tempfile::NamedTempFile::new()
+			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
 
-		// Add three 64-bit values (manifest length, version, magic number).
-		manifest.reserve_exact(3 * std::mem::size_of::<u64>());
-		let suffix = u64::try_from(manifest.len())
-			.unwrap()
-			.to_le_bytes()
-			.into_iter()
-			.chain(VERSION.to_le_bytes().into_iter())
-			.chain(MAGIC_NUMBER.iter().copied());
-		manifest.extend(suffix);
+		// Copy the wrapper to a temp.
+		tokio::fs::copy(&path, temp.path())
+			.await
+			.map_err(|source| tg::error!(!source, "failed to copy the file"))?;
+		tokio::fs::set_permissions(temp.path(), std::fs::Permissions::from_mode(0o755))
+			.await
+			.map_err(|source| tg::error!(!source, "failed to set permissions"))?;
 
-		// Create the manifest blob.
-		let manifest = std::io::Cursor::new(manifest);
+		// Append the manifest to the temp.
+		let path = temp.path().to_owned();
+		let manifest = self.clone();
+		tokio::task::spawn_blocking({
+			let path = path.clone();
+			move || manifest.write_to_path(&path)
+		})
+		.await
+		.map_err(|source| tg::error!(!source, "failed to write manifest to file"))?
+		.map_err(|source| tg::error!(!source, "failed to append manifest"))?;
 
-		let manifest_blob = tg::Blob::with_reader(tg, manifest).await?;
-		let manifest_length = manifest_blob.length(tg).await?;
-		#[cfg(feature = "tracing")]
-		{
-			let blob_id = manifest_blob.id();
-			tracing::trace!(?blob_id, ?manifest_length, "created manifest blob");
+		// Codesign if necessary.
+		if matches!(
+			manifest_tool::detect_format(&path),
+			Ok(Some(manifest_tool::Format::Mach64))
+		) {
+			tracing::info!("codesigning binary");
+			let path = tg::checkout(
+				tg,
+				tg::checkout::Arg {
+					artifact: TANGRAM_CODESIGN.id().into(),
+					dependencies: false,
+					force: false,
+					lock: false,
+					path: None,
+				},
+			)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to checkout the wrapper binary"))?;
+			let output = tokio::process::Command::new(path)
+				.arg("sign")
+				.arg(temp.path())
+				.stdout(std::process::Stdio::piped())
+				.stdout(std::process::Stdio::piped())
+				.output()
+				.await
+				.map_err(|source| tg::error!(!source, "codesign command failed"))?;
+			if !output.status.success() {
+				tokio::io::stderr().write_all(&output.stderr).await.ok();
+				return Err(tg::error!("codesign command failed"));
+			}
 		}
 
-		// Create a new blob with the wrapper contents and the manifest, keeping the wrapper in a separate blob.
-		let output_blob = tg::Blob::new(vec![
-			tg::blob::Child {
-				blob: wrapper_contents,
-				length: wrapper_length,
+		// Check the temp in.
+		let wrapped = tg::checkin(
+			tg,
+			tg::checkin::Arg {
+				options: tg::checkin::Options::default(),
+				path: temp.path().to_owned(),
+				updates: Vec::new(),
 			},
-			tg::blob::Child {
-				blob: manifest_blob,
-				length: manifest_length,
-			},
-		]);
-		#[cfg(feature = "tracing")]
-		{
-			let blob_id = output_blob.id();
-			tracing::trace!(?blob_id, "created wrapper blob");
-		}
+		)
+		.await
+		.map_err(|source| tg::error!(!source, "failed to check in file"))?
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("expected a file"))?;
 
 		// Obtain the dependencies from the manifest to add to the file.
 		// NOTE: We know the wrapper file has no dependencies, so there is no need to merge.
 		let dependencies = self.dependencies();
-		let dependencies = if dependencies.is_empty() {
-			None
-		} else {
-			Some(dependencies)
-		};
 
 		// Create a file with the new blob and references.
-		let mut output_file = tg::File::builder(output_blob).executable(true);
-		if let Some(dependencies) = dependencies {
-			output_file = output_file.dependencies(dependencies);
-		}
-		let output_file = output_file.build();
-
-		#[cfg(feature = "tracing")]
-		{
-			let file_id = output_file.id();
-			tracing::trace!(?file_id, "created wrapper file");
+		let contents = wrapped
+			.contents(tg)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to get the file contents"))?;
+		let mut builder = tg::File::builder(contents).executable(true);
+		if !dependencies.is_empty() {
+			builder = builder.dependencies(dependencies);
 		}
 
+		// Create the file.
+		let output_file = builder.build();
+		tracing::trace!(file = %output_file.id(), "created wrapper file");
+
+		// Return the output file.
 		Ok(output_file)
 	}
 
@@ -671,9 +702,24 @@ static TANGRAM_STUB_ELF: LazyLock<Option<tg::File>> = LazyLock::new(|| {
 	})
 });
 
+static TANGRAM_OBJCOPY: LazyLock<Option<tg::File>> = LazyLock::new(|| {
+	std::env::var("TANGRAM_OBJCOPY_ID").ok().map(|id| {
+		let id = id.parse().expect("TANGRAM_WRAP_ID is not a valid ID");
+		tg::File::with_id(id)
+	})
+});
+
 static TANGRAM_WRAP: LazyLock<Option<tg::File>> = LazyLock::new(|| {
 	std::env::var("TANGRAM_WRAP_ID").ok().map(|id| {
 		let id = id.parse().expect("TANGRAM_WRAP_ID is not a valid ID");
 		tg::File::with_id(id)
 	})
+});
+
+static TANGRAM_CODESIGN: LazyLock<tg::File> = LazyLock::new(|| {
+	let id_value = std::env::var("TANGRAM_CODESIGN_ID").expect("TANGRAM_CODESIGN_ID not set");
+	let id = id_value
+		.parse()
+		.expect("TANGRAM_CODESIGN_ID is not a valid ID");
+	tg::File::with_id(id)
 });

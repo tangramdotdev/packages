@@ -295,7 +295,6 @@ export async function parse(file: tg.File): Promise<File> {
 		offset += 8;
 		return value;
 	};
-
 	const header: Header = !is64
 		? {
 				ei_class,

@@ -31,6 +31,9 @@ static bool TRACING_ENABLED = false;
 	abort();				\
 }
 
+#define TANGRAM_STUB_SECTION_NAME ".text.tangram-stub"
+#define TANGRAM_MANIFEST_SECTION_NAME ".note.tg-manifest"
+
 typedef struct File File;
 struct File {
 	int fd;
@@ -43,11 +46,14 @@ struct Elf {
 	off_t sz;
 	Elf64_Ehdr* ehdr;
 	Elf64_Phdr* phdr;
+	Elf64_Shdr* shdr;
 };
 
 typedef struct Analysis Analysis;
 struct Analysis {
 	Elf64_Phdr*	pt_interp;
+	Elf64_Shdr*	tg_manifest;
+	Elf64_Shdr*	tg_stub;
 	Elf64_Addr	max_vaddr;
 	Elf64_Addr	max_align;
 };
@@ -74,11 +80,11 @@ void file_close (File file) {
 	close(file.fd);
 }
 
-Elf elf_read (File file, bool readonly) {
-	Elf elf;
+Elf elf_read (File file, Elf64_Half machine, bool readonly) {
+	Elf elf = {0};
 	int flags = readonly ? PROT_READ : PROT_READ | PROT_WRITE;
 	elf.ehdr = (Elf64_Ehdr*) mmap (NULL, (size_t) file.sz, flags, MAP_SHARED, file.fd, 0);
-	ABORT_IF_ERRNO(elf.ehdr == (Elf64_Ehdr*)MAP_FAILED, "failed to load %s (len:%ld, flags:%lx, fd:%d)", file.path, file.sz, flags, file.fd);
+	ABORT_IF_ERRNO(elf.ehdr == (Elf64_Ehdr*)MAP_FAILED, "failed to load %s (len:%ld, flags:%x, fd:%d)", file.path, file.sz, flags, file.fd);
 	bool is_elf = 
 			elf.ehdr->e_ident[EI_MAG0] == ELFMAG0
 		&&	elf.ehdr->e_ident[EI_MAG1] == ELFMAG1
@@ -88,8 +94,11 @@ Elf elf_read (File file, bool readonly) {
 		&& 	elf.ehdr->e_ident[EI_DATA] == ELFDATA2LSB
 		&&	elf.ehdr->e_phentsize == sizeof(Elf64_Phdr);
 	ABORT_IF(!is_elf, "not a 64 bit LE elf binary");
-	ABORT_IF(elf.ehdr->e_machine != MACHINE, "unsupported architecture");
+	ABORT_IF(elf.ehdr->e_machine != machine, "invalid architecture");
+	ABORT_IF(elf.ehdr->e_phentsize != sizeof(Elf64_Phdr), "invalid ELF file");
+	ABORT_IF(elf.ehdr->e_shentsize != sizeof(Elf64_Shdr), "invalid ELF file");
 	elf.phdr = (Elf64_Phdr*)((char*)elf.ehdr + elf.ehdr->e_phoff);
+	elf.shdr = (Elf64_Shdr*)((char*)elf.ehdr + elf.ehdr->e_shoff);
 	elf.sz = file.sz;
 	return elf;
 }
@@ -141,14 +150,42 @@ Analysis elf_analyze (Elf elf) {
 			analysis.pt_interp = itr;
 		}
 	}
-	TRACE("analysis: pt_interp:%p, max_vaddr:%lx", analysis.pt_interp, analysis.max_vaddr);
+
+	// Get the section header string table.
+	Elf64_Shdr* sh_strings = NULL;
+	if (elf.ehdr->e_shstrndx == SHN_XINDEX) {
+		sh_strings = &elf.shdr[elf.shdr[0].sh_link];
+	} else {
+		sh_strings = &elf.shdr[elf.ehdr->e_shstrndx];
+	}
+	ABORT_IF(sh_strings->sh_type != SHT_STRTAB, "expected a string table");
+
+	// Get the list of section names.
+	const char* section_names = ((const char*)elf.ehdr) + sh_strings->sh_offset;
+
+	// Find the section headers of the stub and manifest.
+	Elf64_Shdr* sitr = elf.shdr;
+	Elf64_Shdr* send = sitr + elf.ehdr->e_shnum;
+	for(; sitr != send; sitr++) {
+		size_t offset = sitr->sh_name + (sitr == elf.shdr ? 1 : 0);
+		const char* name = section_names + offset;
+		TRACE("section %s: offset:0x%lx, size:0x%lx", 
+			name, sitr->sh_offset, sitr->sh_size);
+		if (strcmp(name, TANGRAM_STUB_SECTION_NAME) == 0) {
+			TRACE("found %s", TANGRAM_STUB_SECTION_NAME);
+			analysis.tg_stub = sitr;
+		}
+		if (strcmp(name, TANGRAM_MANIFEST_SECTION_NAME) == 0) {
+			TRACE("found %s", TANGRAM_MANIFEST_SECTION_NAME);
+			analysis.tg_manifest = sitr;
+		}
+	}
 	return analysis;
 }
 
-
 // Bubble sort loadable segments
 void elf_sort_segments (Elf64_Phdr* phdr, size_t num) {
-	TRACE("num segments = %d", num);
+	TRACE("num segments = %ld", num);
 	Elf64_Addr start_addr, end_addr;
 	for(;;) {
 		bool swapped = false;
@@ -178,14 +215,24 @@ int main (int argc, const char** argv) {
 	TRACING_ENABLED = getenv("TANGRAM_TRACING") != NULL;
 
 	// Check args.
-	ABORT_IF(argc != 6, "usage is %s <input> <output> <stub.elf> <stub.bin> <manifest>");
+	ABORT_IF(argc != 7, "usage is %s <arch> <input> <output> <stub.elf> <stub.bin> <manifest>");
+
+	const char* arch = argv[0];
+	Elf64_Half machine = 0;
+	if (strcmp(arch, "aarch64") == 0) {
+		machine = EM_AARCH64;
+	} else if (strcmp(arch, "x86_64")) {
+		machine = EM_X86_64;
+	} else {
+		ABORT_IF(true, "invalid arch, expected one of: aarch64,x86_64 got: %s", arch);
+	};
 
 	// Open input/output/stub/manifest.
-	File input	= file_open(argv[1], O_RDONLY, 0);
-	File output	= file_open(argv[2], O_RDWR, O_CREAT);
-	File stub_elf	= file_open(argv[3], O_RDONLY, 0);
-	File stub_bin	= file_open(argv[4], O_RDONLY, 0);
-	File manifest	= file_open(argv[5], O_RDONLY, 0);
+	File input	= file_open(argv[2], O_RDONLY, 0);
+	File output	= file_open(argv[3], O_RDWR, O_CREAT);
+	File stub_elf	= file_open(argv[4], O_RDONLY, 0);
+	File stub_bin	= file_open(argv[5], O_RDONLY, 0);
+	File manifest	= file_open(argv[6], O_RDONLY, 0);
 	TRACE( "input:%s,   output:%s,   stub.elf:%s,   stub.bin:%s,   manifest:%s",
 		input.path, output.path, stub_elf.path, stub_bin.path, manifest.path);
 
@@ -194,9 +241,9 @@ int main (int argc, const char** argv) {
 	TRACE("copied %s to %s", input.path, output.path);
 	
 	// Parse the elf files.
-	Elf output_exe	= elf_read(output, false);
+	Elf output_exe	= elf_read(output, machine, false);
 	TRACE("parsed %s", output.path);
-	Elf stub_exe	= elf_read(stub_elf, true);
+	Elf stub_exe	= elf_read(stub_elf, machine, true);
 	TRACE("parsed %s", stub_elf.path);
 	
 	// Scan the executable for its pt_interp and max vaddr
@@ -240,7 +287,7 @@ int main (int argc, const char** argv) {
 	size_t stub_offs = headers.phdr 
 		? ALIGN(headers.offs + headers.sz, analysis.max_align)
 		: ALIGN(output.sz, analysis.max_align);
-	size_t stub_sz = ALIGN(stub_bin.sz, analysis.max_align);
+	size_t stub_sz = stub_bin.sz + manifest.sz;
 
 	// Create segment for the stub.
 	stub_segment->p_type   = PT_LOAD;
@@ -250,9 +297,34 @@ int main (int argc, const char** argv) {
 	stub_segment->p_paddr  = ALIGN(analysis.max_vaddr, analysis.max_align);
 	stub_segment->p_vaddr  = ALIGN(analysis.max_vaddr, analysis.max_align);
 	stub_segment->p_filesz = stub_sz;
-	stub_segment->p_memsz  = stub_sz;
+	stub_segment->p_memsz  = ALIGN(stub_sz, analysis.max_align);
 
-	TRACE("new segment vaddr: %lx, memsz: %lx", stub_segment->p_vaddr, stub_segment->p_memsz);
+	TRACE("new segment vaddr: %lx, memsz: %lx offset: %lx, size: %lx", stub_segment->p_vaddr, stub_segment->p_memsz, stub_segment->p_offset, stub_segment->p_filesz);
+
+	// Patch the section headers.
+	ABORT_IF(!analysis.tg_stub, "missing stub section");
+	analysis.tg_stub->sh_type	= SHT_PROGBITS;
+	analysis.tg_stub->sh_flags	= SHF_ALLOC | SHF_EXECINSTR;
+	analysis.tg_stub->sh_addr	= stub_segment->p_vaddr;
+	analysis.tg_stub->sh_offset	= stub_segment->p_offset;
+	analysis.tg_stub->sh_size	= stub_segment->p_filesz;
+	analysis.tg_stub->sh_link	= 0;
+	analysis.tg_stub->sh_addralign	= analysis.max_align;
+	analysis.tg_stub->sh_entsize	= 0;
+	TRACE("patched %s: offset:%lx, size:%lx", 
+		TANGRAM_STUB_SECTION_NAME, analysis.tg_stub->sh_offset, analysis.tg_stub->sh_size);
+
+	ABORT_IF(!analysis.tg_manifest, "missing manifest section");
+	analysis.tg_manifest->sh_type	= SHT_NOTE;
+	analysis.tg_manifest->sh_flags	= 0;
+	analysis.tg_manifest->sh_addr	= stub_segment->p_vaddr + stub_bin.sz;
+	analysis.tg_manifest->sh_offset	= stub_segment->p_offset + stub_bin.sz;
+	analysis.tg_manifest->sh_size	= manifest.sz + sizeof(Footer); // the manifest and footer are in the same section
+	analysis.tg_manifest->sh_link	= SHN_UNDEF;
+	analysis.tg_manifest->sh_addralign = SHN_UNDEF;
+	analysis.tg_manifest->sh_entsize = SHN_UNDEF;
+	TRACE("patched %s: offset:%lx, size:%lx", 
+		TANGRAM_MANIFEST_SECTION_NAME, analysis.tg_manifest->sh_offset, analysis.tg_manifest->sh_size);
 
 	// Create the footer.
 	Footer footer = {
@@ -323,4 +395,6 @@ int main (int argc, const char** argv) {
 	file_close(stub_elf);
 	file_close(stub_bin);
 	file_close(manifest);
+
+	return 0;
 }

@@ -26,7 +26,7 @@ fn main_inner() -> tg::Result<()> {
 	// Read the manifest.
 	let manifest = tangram_std::Manifest::read_from_path(&wrapper_path)
 		.map_err(
-			|source| tg::error!(!source, path = %wrapper_path.display(), "faield to read manifest"),
+			|source| tg::error!(!source, path = %wrapper_path.display(), "failed to read manifest"),
 		)?
 		.expect("Malformed manifest.");
 
