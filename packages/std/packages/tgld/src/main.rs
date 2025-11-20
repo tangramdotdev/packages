@@ -503,7 +503,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		tracing::trace!(output_file = ?output_file.id(), "stored");
 		tokio::fs::remove_file(&options.output_path)
 			.await
-			.map_err(|source| tg::error!(!source, %path = &options.output_path.display(), "failed to remove the output file"))?;
+			.map_err(|source| tg::error!(!source, path = %&options.output_path.display(), "failed to remove the output file"))?;
 		let cwd = std::env::current_dir()
 			.map_err(|source| tg::error!(!source, "failed to get the current directory"))?;
 		let output_path = cwd.join(&options.output_path);
@@ -524,7 +524,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 
 		// Restore the original file permissions after checkout.
 		std::fs::set_permissions(&output_path, original_permissions)
-			.map_err(|source| tg::error!(!source, %path = output_path.display(), "failed to restore file permissions"))?;
+			.map_err(|source| tg::error!(!source, path = %output_path.display(), "failed to restore file permissions"))?;
 		tracing::debug!(?output_path, "restored original file permissions");
 	}
 
@@ -815,7 +815,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 						tracing::trace!("found an artifact, extracting file object");
 						let template =
 							tangram_std::unrender(library_candidate_path.to_str().ok_or_else(
-								|| tg::error!(%path = library_candidate_path.display(), "unable to convert path to str"),
+								|| tg::error!(path = %library_candidate_path.display(), "unable to convert path to str"),
 							)?)?;
 						tracing::trace!(?template, "unrendered library candidate path");
 						// Obtain the file object from the artifact.
@@ -1118,10 +1118,10 @@ async fn resolve_directories<H: BuildHasher + Default>(
 				let directory = tg::Directory::with_id(dir_with_subpath.id.clone());
 				let Some(inner) = directory.try_get(tg, &subpath).await? else {
 					return Err(
-						tg::error!(%directory = dir_with_subpath.id, %subpath = subpath.display(), "unable to retrieve subpath from directory"),
+						tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
 					);
 				};
-				let inner = inner.try_unwrap_directory().map_err(|source| tg::error!(!source, %outer = dir_with_subpath.id, %subpath = subpath.display(), "expected a directory"))?;
+				let inner = inner.try_unwrap_directory().map_err(|source| tg::error!(!source, outer =% dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
 				dir_with_subpath_from_directory( tg, &inner, None).await?
 			} else {
 				dir_with_subpath
@@ -1224,7 +1224,7 @@ async fn analyze_output_file(
 ) -> tg::Result<AnalyzeOutputFileOutput> {
 	let bytes = bytes_from_path(&path).await?;
 	analyze_executable(&bytes).map_err(
-		|source| tg::error!(!source, %path = path.as_ref().display(), "failed to analyze output file"),
+		|source| tg::error!(!source, path = %path.as_ref().display(), "failed to analyze output file"),
 	)
 }
 
@@ -1415,10 +1415,10 @@ pub async fn directory_from_dir_with_subpath(
 	let directory = if let Some(ref subpath) = dir_with_subpath.subpath {
 		let Some(inner) = outer.try_get(tg, subpath).await? else {
 			return Err(
-				tg::error!(%directory = dir_with_subpath.id, %subpath = subpath.display(), "unable to retrieve subpath from directory"),
+				tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
 			);
 		};
-		inner.try_unwrap_directory().map_err(|source| tg::error!(!source, %outer = dir_with_subpath.id, %subpath = subpath.display(), "expected a directory"))?
+		inner.try_unwrap_directory().map_err(|source| tg::error!(!source, outer = %dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?
 	} else {
 		outer
 	};

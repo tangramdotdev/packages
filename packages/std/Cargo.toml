@@ -15,7 +15,7 @@ homepage = "https://www.tangram.dev"
 license = "MIT"
 publish = false
 repository = "https://github.com/tangramdotdev/packages"
-rust-version = "1.90.0"
+rust-version = "1.91"
 version = "0.0.0"
 
 [workspace.lints.clippy]
@@ -35,8 +35,8 @@ itertools = "0.14"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3" }
-tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "2e7c8c2ae24b2cad94c7cda9f63ad7d65a3d4dd3" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "6c2afd0e51e84d53addd0cb81ceeda45b6e0f895" }
+tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "6c2afd0e51e84d53addd0cb81ceeda45b6e0f895" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",

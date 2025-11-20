@@ -154,11 +154,11 @@ async fn run_proxy(
 			// Set the file to be writable.
 			let mut perms = tokio::fs::metadata(&local_executable_path)
 				.await
-				.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to get the file metadata"))?.permissions();
+				.map_err(|source| tg::error!(!source, path = %local_executable_path.display(), "failed to get the file metadata"))?.permissions();
 			perms.set_mode(perms.mode() | 0o200);
 			tokio::fs::set_permissions(&local_executable_path, perms)
 				.await
-				.map_err(|source| tg::error!(!source, %path = local_executable_path.display(), "failed to set file permissions"))?;
+				.map_err(|source| tg::error!(!source, path = %local_executable_path.display(), "failed to set file permissions"))?;
 
 			// Call strip with the correct arguments on the executable.
 			run_strip(strip_program, strip_args, &[&local_executable_path])?;
