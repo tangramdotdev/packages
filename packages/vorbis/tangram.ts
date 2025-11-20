@@ -7,7 +7,10 @@ export const metadata = {
 	homepage: "https://xiph.org/vorbis",
 	name: "vorbis",
 	version: "1.3.7",
-	provides: {},
+	tag: "vorbis/1.3.7",
+	provides: {
+		libs: ["vorbis"]
+	},
 };
 
 export const source = () => {
@@ -41,3 +44,8 @@ export const env = () => std.env.arg({
 });
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

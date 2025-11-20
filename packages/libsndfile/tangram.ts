@@ -53,3 +53,8 @@ export const env = () => std.env.arg({
 });
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

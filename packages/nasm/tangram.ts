@@ -6,7 +6,7 @@ export const metadata = {
 	name: "nasm",
 	repository: "https://github.com/netwide-assembler/nasm",
 	version: "3.01",
-	tag: "nasm-3.01",
+	tag: "nasm/3.01",
 	provides: {
 		binaries: ["nasm", "ndisasm"],
 	},

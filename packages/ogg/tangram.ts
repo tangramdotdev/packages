@@ -6,7 +6,10 @@ export const metadata = {
 	homepage: "https://xiph.org/ogg",
 	name: "ogg",
 	version: "1.3.6",
-	provides: {},
+	tag: "ogg/1.3.6",
+	provides: {
+		libs: ["ogg"]
+	},
 };
 
 export const source = () => {
@@ -35,3 +38,8 @@ export const env = () => std.env.arg({
 });
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

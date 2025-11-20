@@ -7,7 +7,7 @@ export const metadata = {
 	name: "FFmpeg",
 	repository: "https://github.com/FFmpeg/FFmpeg",
 	version: "7.1.2",
-	tag: "n7.1.2",
+	tag: "FFmpeg/7.1.2",
 	provides: {
 		binaries: ["ffmpeg", "ffprobe"],
 		libraries: [
@@ -76,3 +76,8 @@ export const build = async (...args: std.Args<Arg>) => {
 };
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

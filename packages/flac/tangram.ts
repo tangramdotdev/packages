@@ -7,6 +7,7 @@ export const metadata = {
 	homepage: "https://xiph.org/flac",
 	name: "flac",
 	version: "1.5.0",
+	tag: "flac/1.5.0"
 	provides: {},
 };
 
@@ -41,3 +42,8 @@ export const env = () => std.env.arg({
 });
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

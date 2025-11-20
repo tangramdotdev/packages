@@ -5,8 +5,10 @@ import * as cmake from "cmake" with { local: "../cmake" };
 export const metadata = {
 	homepage: "https://opus-codec.org/",
 	name: "opus",
-	version: "1.5.2",
-	provides: {},
+	version: "opus/1.5.2",
+	provides: {
+		libs: ["opus"]
+	},
 };
 
 export const source = () => {
