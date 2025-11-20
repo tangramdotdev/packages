@@ -337,3 +337,17 @@ export const testStrip = async () => {
 			},
 		);
 };
+
+export const testModify = async () => {
+	let file = await tg.file("nothing to see here\n");
+	console.log("file:", file.id);
+	return std.run`
+		ls -al /.tangram/artifacts
+		echo 'sandbox modification' > ${file}
+		echo 'adfad' > $OUTPUT
+	`
+		.bootstrap(true)
+		.env(
+			{ utils: true },
+		);
+};

@@ -439,6 +439,24 @@ impl Manifest {
 		Ok(output_file)
 	}
 
+	pub async fn append_to_file(&self, path: &Path) -> tg::Result<()> {
+		let mut footer = serde_json::to_vec(self)
+			.map_err(|source| tg::error!(!source, "failed to serialize manifest"))?;
+		footer.extend_from_slice(&(footer.len() as u64).to_le_bytes());
+		footer.extend_from_slice(&VERSION.to_le_bytes());
+		footer.extend_from_slice(b"tangram\0");
+		tokio::fs::OpenOptions::new()
+			.append(true)
+			.write(true)
+			.open(path)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to open the file"))?
+			.write_all(&footer)
+			.await
+			.map_err(|source| tg::error!(!source, "failed to write the footer"))?;
+		Ok(())
+	}
+
 	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_ID` environment variable.
 	pub async fn write(&self, tg: &impl tg::Handle) -> tg::Result<tg::File> {
 		#[cfg(feature = "tracing")]
