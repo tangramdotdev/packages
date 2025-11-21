@@ -546,6 +546,7 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 
 	const versionedName = `${ctx.packageName}/${version}`;
 	const uploadedTags: string[] = [];
+	const pushErrors: string[] = [];
 	const exportMatrix = getExportMatrix(ctx.packageName);
 
 	for (const [index, exportConfig] of exportMatrix.entries()) {
@@ -581,9 +582,20 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 
 		// Push the build
 		log(`[release] Pushing ${tag}`);
-		await ctx.tangram.push(tag);
-		log(`[release] Pushed ${tag}`);
-		uploadedTags.push(tag);
+		try {
+			await ctx.tangram.push(tag);
+			log(`[release] Pushed ${tag}`);
+			uploadedTags.push(tag);
+		} catch (err) {
+			const errorMessage = extractErrorMessage(err);
+			log(`[release] Failed to push ${tag}: ${errorMessage}`);
+			pushErrors.push(`${tag}: ${errorMessage}`);
+		}
+	}
+
+	// If any pushes failed, return an error
+	if (pushErrors.length > 0) {
+		return { ok: false, error: pushErrors.join("; ") };
 	}
 
 	return { ok: true, value: `uploaded ${uploadedTags.join(", ")}` };
