@@ -4,21 +4,21 @@ import * as std from "std" with { local: "../std" };
 export const metadata = {
 	homepage: "https://github.com/BLAKE3-team/BLAKE3",
 	license: "CC0-1.0",
-	name: "blake3",
+	name: "b3sum",
 	repository: "https://github.com/BLAKE3-team/BLAKE3",
 	version: "1.8.2",
-	tag: "blake3/1.8.2",
+	tag: "b3sum/1.8.2",
 	provides: {
 		binaries: ["b3sum"],
 	},
 };
 
 export const source = async () => {
-	const { name, version } = metadata;
+	const { version } = metadata;
 	const checksum =
 		"sha256:6b51aefe515969785da02e87befafc7fdc7a065cd3458cf1141f29267749e81f";
 	const owner = "BLAKE3-team";
-	const repo = name;
+	const repo = "blake3";
 	return std.download.fromGithub({
 		checksum,
 		owner,

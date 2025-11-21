@@ -55,6 +55,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
+			"ax_cv_c_float_words_bigendian=no",
 		);
 		makeArgs.push(
 			"RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",

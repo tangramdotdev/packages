@@ -7,6 +7,7 @@ import * as zlib from "zlib" with { local: "../zlib" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/elfutils/",
+	hostPlatforms: ["aarch64-linux", "x86_64-linux"],
 	license: "GPL-3.0-or-later",
 	name: "elfutils",
 	repository: "https://sourceware.org/git/?p=elfutils.git;a=summary",
