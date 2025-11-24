@@ -26,8 +26,10 @@ pedantic = { level = "warn", priority = -1 }
 result_large_err = "allow"
 
 [workspace.dependencies]
+anstream = "0.6"
 bytes = { version = "1", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
+crossterm = "0.28"
 fnv = "1"
 futures = "0.3"
 goblin = "0.9"
@@ -35,8 +37,8 @@ itertools = "0.14"
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "6c2afd0e51e84d53addd0cb81ceeda45b6e0f895" }
-tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "6c2afd0e51e84d53addd0cb81ceeda45b6e0f895" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "70cd21f567e9c0cb435bb0c6df882080877862e1" }
+tangram_serialize = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "70cd21f567e9c0cb435bb0c6df882080877862e1" }
 tempfile = "3"
 tokio = { version = "1", default-features = false, features = [
   "rt",
@@ -79,7 +81,9 @@ path = "packages/std/lib.rs"
 workspace = true
 
 [dependencies]
+anstream = { workspace = true }
 bytes = { workspace = true }
+crossterm = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

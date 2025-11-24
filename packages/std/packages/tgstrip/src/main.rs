@@ -9,7 +9,7 @@ fn main() {
 	tangram_std::tracing::setup("TGSTRIP_TRACING");
 
 	if let Err(e) = main_inner() {
-		eprintln!("strip proxy failed: {e}");
+		tangram_std::error::print_error(e);
 		std::process::exit(1);
 	}
 }

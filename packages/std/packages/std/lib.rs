@@ -7,6 +7,8 @@ pub use manifest::Manifest;
 #[cfg(feature = "tracing")]
 pub mod tracing;
 
+pub mod error;
+
 /// Convert a [`tg::template::Data`] to its corresponding [`tg::symlink::Data`] object.
 pub fn template_data_to_symlink_data(
 	template: tg::template::Data,

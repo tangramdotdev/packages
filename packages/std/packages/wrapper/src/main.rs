@@ -4,25 +4,31 @@ use tangram_std::manifest;
 
 fn main() {
 	if let Err(e) = main_inner() {
-		eprintln!("wrapper failed: {e}");
+		tangram_std::error::print_error(e);
 		std::process::exit(1);
 	}
 }
 
 #[allow(clippy::too_many_lines)]
-fn main_inner() -> std::io::Result<()> {
+fn main_inner() -> tg::Result<()> {
 	// Setup tracing.
 	#[cfg(feature = "tracing")]
 	tangram_std::tracing::setup("TANGRAM_WRAPPER_TRACING");
 
 	// Get the wrapper path.
-	let wrapper_path = std::env::current_exe()?.canonicalize()?;
+	let wrapper_path = std::env::current_exe()
+		.map_err(|source| tg::error!(!source, "failed to get the current executable path"))?
+		.canonicalize()
+		.map_err(|source| tg::error!(!source, "failed to canonicalize the wrapper path"))?;
 	#[cfg(feature = "tracing")]
 	tracing::trace!(?wrapper_path);
 
 	// Read the manifest.
-	let manifest =
-		tangram_std::Manifest::read_from_path(&wrapper_path)?.expect("Malformed manifest.");
+	let manifest = tangram_std::Manifest::read_from_path(&wrapper_path)
+		.map_err(
+			|source| tg::error!(!source, path = %wrapper_path.display(), "faield to read manifest"),
+		)?
+		.expect("Malformed manifest.");
 
 	// Search args for known flags.
 	let mut suppress_args = false;
@@ -64,11 +70,14 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Render the executable.
 	let executable_path = match &manifest.executable {
-		manifest::Executable::Path(file) => tangram_std::render_template_data(file)?.into(),
-		manifest::Executable::Content(template) => {
-			content_executable(&tangram_std::render_template_data(template)?)?
-		},
-		manifest::Executable::Address(_) => return Err(std::io::Error::other("invalid manifest")),
+		manifest::Executable::Path(file) => tangram_std::render_template_data(file)
+			.map_err(|source| tg::error!(!source, "failed to render the executable path"))?
+			.into(),
+		manifest::Executable::Content(template) => content_executable(
+			&tangram_std::render_template_data(template)
+				.map_err(|source| tg::error!(!source, "failed to render the template"))?,
+		)?,
+		manifest::Executable::Address(_) => return Err(tg::error!("invalid manifest")),
 	};
 
 	// Create the command.
@@ -91,7 +100,8 @@ fn main_inner() -> std::io::Result<()> {
 
 	// Set the env.
 	if !suppress_env && let Some(env) = &manifest.env {
-		mutate_env(env)?;
+		mutate_env(env)
+			.map_err(|source| tg::error!(!source, "failed to mutate the environment"))?;
 	}
 
 	// Set `TANGRAM_INJECTION_IDENTITY_PATH` if necessary.
@@ -122,7 +132,8 @@ fn main_inner() -> std::io::Result<()> {
 		let command_args = args
 			.iter()
 			.map(tangram_std::render_template_data)
-			.collect::<std::io::Result<Vec<_>>>()?;
+			.collect::<std::io::Result<Vec<_>>>()
+			.map_err(|source| tg::error!(!source, "failed to render the arguments"))?;
 		#[cfg(feature = "tracing")]
 		tracing::trace!(?command_args);
 		command.args(command_args);
@@ -136,7 +147,8 @@ fn main_inner() -> std::io::Result<()> {
 
 	#[cfg(feature = "tracing")]
 	tracing::trace!(?command);
-	Err(command.exec())
+	let error = command.exec();
+	Err(tg::error!(source = error, "failed to execute command"))
 }
 
 /// Unset all currently set env vars.
@@ -145,7 +157,7 @@ fn clear_env() {
 }
 
 /// Create a temporary file with the given contents and return the path to the file.
-fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
+fn content_executable(contents: &str) -> tg::Result<PathBuf> {
 	#[cfg(feature = "tracing")]
 	tracing::trace!("producing content executable.");
 	let fd = unsafe {
@@ -155,7 +167,11 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 		if fd == -1 {
 			#[cfg(feature = "tracing")]
 			tracing::error!(?temp_path, "Failed to create temporary file.");
-			return Err(std::io::Error::last_os_error());
+			let error = std::io::Error::last_os_error();
+			return Err(tg::error!(
+				source = error,
+				"failed to create temporary file"
+			));
 		}
 
 		// Unlink the temporary file.
@@ -163,7 +179,11 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 		if ret == -1 {
 			#[cfg(feature = "tracing")]
 			tracing::error!(?temp_path, "Failed to unlink temporary file.");
-			return Err(std::io::Error::last_os_error());
+			let error = std::io::Error::last_os_error();
+			return Err(tg::error!(
+				source = error,
+				"failed to unlink temporary file"
+			));
 		}
 
 		// Write the contents to the temporary file.
@@ -174,7 +194,11 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 			if ret == -1 {
 				#[cfg(feature = "tracing")]
 				tracing::error!(?temp_path, "Failed to write to temporary file.");
-				return Err(std::io::Error::last_os_error());
+				let error = std::io::Error::last_os_error();
+				return Err(tg::error!(
+					source = error,
+					"failed to write to temporary file"
+				));
 			}
 			#[allow(clippy::cast_sign_loss)]
 			let ret: usize = if ret >= 0 { ret as usize } else { 0 };
@@ -189,7 +213,11 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 				?temp_path,
 				"Failed to seek to the beginning of the temporary file."
 			);
-			return Err(std::io::Error::last_os_error());
+			let error = std::io::Error::last_os_error();
+			return Err(tg::error!(
+				source = error,
+				"failed to seek to the beginning of the temporary file"
+			));
 		}
 
 		fd
@@ -204,27 +232,42 @@ fn content_executable(contents: &str) -> std::io::Result<PathBuf> {
 fn handle_interpreter(
 	interpreter: Option<&manifest::Interpreter>,
 	arg0: &OsStr,
-) -> Result<Option<(PathBuf, Vec<String>)>, std::io::Error> {
+) -> tg::Result<Option<(PathBuf, Vec<String>)>> {
 	let result = match interpreter {
 		// Handle a normal interpreter.
 		Some(manifest::Interpreter::Normal(interpreter)) => {
-			let interpreter_path = tangram_std::render_template_data(&interpreter.path)?;
-			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
+			let interpreter_path = tangram_std::render_template_data(&interpreter.path)
+				.map_err(|source| tg::error!(!source, "failed to render the interpreter path"))?;
+			let interpreter_path =
+				PathBuf::from(interpreter_path)
+					.canonicalize()
+					.map_err(|source| {
+						tg::error!(!source, "failed to canonicalize the interpreter path")
+					})?;
 			let interpreter_args = interpreter
 				.args
 				.iter()
 				.map(tangram_std::render_template_data)
-				.collect::<std::io::Result<_>>()?;
+				.collect::<std::io::Result<_>>()
+				.map_err(|source| {
+					tg::error!(!source, "failed to render the interpreter arguments")
+				})?;
 			Some((interpreter_path, interpreter_args))
 		},
 
 		// Handle an ld-linux interpreter.
 		Some(manifest::Interpreter::LdLinux(interpreter)) => {
 			// Render the interpreter path.
-			let interpreter_path = tangram_std::render_template_data(&interpreter.path)?;
+			let interpreter_path = tangram_std::render_template_data(&interpreter.path)
+				.map_err(|source| tg::error!(!source, "failed to render the interpreter path"))?;
 
 			// Canonicalize the interpreter path.
-			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
+			let interpreter_path =
+				PathBuf::from(interpreter_path)
+					.canonicalize()
+					.map_err(|source| {
+						tg::error!(!source, "failed to canonicalize the interpreter path")
+					})?;
 
 			// Initialize the interpreter arguments.
 			let mut interpreter_args = vec![];
@@ -238,7 +281,8 @@ fn handle_interpreter(
 				.iter()
 				.flatten()
 				.map(tangram_std::render_template_data)
-				.collect::<std::io::Result<Vec<_>>>()?
+				.collect::<std::io::Result<Vec<_>>>()
+				.map_err(|source| tg::error!(!source, "failed to render the library paths"))?
 				.join(":");
 
 			// Prepend any paths found in LD_LIBRARY_PATH.
@@ -256,7 +300,8 @@ fn handle_interpreter(
 				let preload = preloads
 					.iter()
 					.map(tangram_std::render_template_data)
-					.collect::<std::io::Result<Vec<_>>>()?
+					.collect::<std::io::Result<Vec<_>>>()
+					.map_err(|source| tg::error!(!source, "failed to render the preloads"))?
 					.join(":");
 				#[cfg(feature = "tracing")]
 				tracing::trace!(?preload);
@@ -270,7 +315,10 @@ fn handle_interpreter(
 					additional_args
 						.iter()
 						.map(tangram_std::render_template_data)
-						.collect::<std::io::Result<Vec<_>>>()?,
+						.collect::<std::io::Result<Vec<_>>>()
+						.map_err(|source| {
+							tg::error!(!source, "failed to render the interpreter arguments")
+						})?,
 				);
 			}
 
@@ -284,7 +332,8 @@ fn handle_interpreter(
 		// Handle an ld-musl interpreter.
 		Some(manifest::Interpreter::LdMusl(interpreter)) => {
 			// Render the interpreter path.
-			let interpreter_path = tangram_std::render_template_data(&interpreter.path)?;
+			let interpreter_path = tangram_std::render_template_data(&interpreter.path)
+				.map_err(|source| tg::error!(!source, "failed to render the interpreter path"))?;
 
 			// Canonicalize the interpreter path.
 			#[cfg(feature = "tracing")]
@@ -292,7 +341,12 @@ fn handle_interpreter(
 				?interpreter_path,
 				"rendered ld-musl interpreter path string"
 			);
-			let interpreter_path = PathBuf::from(interpreter_path).canonicalize()?;
+			let interpreter_path =
+				PathBuf::from(interpreter_path)
+					.canonicalize()
+					.map_err(|source| {
+						tg::error!(!source, "failed to canonicalize the interpreter path")
+					})?;
 			#[cfg(feature = "tracing")]
 			tracing::debug!(
 				?interpreter_path,
@@ -308,7 +362,8 @@ fn handle_interpreter(
 				.iter()
 				.flatten()
 				.map(tangram_std::render_template_data)
-				.collect::<std::io::Result<Vec<_>>>()?
+				.collect::<std::io::Result<Vec<_>>>()
+				.map_err(|source| tg::error!(!source, "failed to render the library paths"))?
 				.join(":");
 
 			// Prepend any paths found in LD_LIBRARY_PATH.
@@ -326,7 +381,8 @@ fn handle_interpreter(
 				let preload = preloads
 					.iter()
 					.map(tangram_std::render_template_data)
-					.collect::<std::io::Result<Vec<_>>>()?
+					.collect::<std::io::Result<Vec<_>>>()
+					.map_err(|source| tg::error!(!source, "failed to render the preloads"))?
 					.join(":");
 				#[cfg(feature = "tracing")]
 				tracing::trace!(?preload);
@@ -340,7 +396,10 @@ fn handle_interpreter(
 					additional_args
 						.iter()
 						.map(tangram_std::render_template_data)
-						.collect::<std::io::Result<Vec<_>>>()?,
+						.collect::<std::io::Result<Vec<_>>>()
+						.map_err(|source| {
+							tg::error!(!source, "failed to render the interpreter arguments")
+						})?,
 				);
 			}
 
@@ -357,7 +416,7 @@ fn handle_interpreter(
 	Ok(result)
 }
 
-fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) -> std::io::Result<()> {
+fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) -> tg::Result<()> {
 	// Set `TANGRAM_INJECTION_DYLD_LIBRARY_PATH`.
 	if let Some(library_paths) = &interpreter.library_paths {
 		let mut user_library_path = None;
@@ -370,7 +429,8 @@ fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) -> std::io::Res
 		let manifest_library_path = library_paths
 			.iter()
 			.map(tangram_std::render_template_data)
-			.collect::<std::io::Result<Vec<_>>>()?
+			.collect::<std::io::Result<Vec<_>>>()
+			.map_err(|source| tg::error!(!source, "failed to render the library paths"))?
 			.join(":");
 		let library_path = if let Some(dyld_library_path) = user_library_path {
 			format!("{dyld_library_path}:{manifest_library_path}")
@@ -397,14 +457,15 @@ fn set_dyld_environment(interpreter: &manifest::DyLdInterpreter) -> std::io::Res
 		let insert_libraries = preloads
 			.iter()
 			.map(tangram_std::render_template_data)
-			.collect::<std::io::Result<Vec<_>>>()?
+			.collect::<std::io::Result<Vec<_>>>()
+			.map_err(|source| tg::error!(!source, "failed to render the insert libraries"))?
 			.join(":");
 		unsafe { std::env::set_var("DYLD_INSERT_LIBRARIES", insert_libraries) };
 	}
 	Ok(())
 }
 
-fn mutate_env(env: &tg::mutation::Data) -> std::io::Result<()> {
+fn mutate_env(env: &tg::mutation::Data) -> tg::Result<()> {
 	match env {
 		tg::mutation::Data::Unset => {
 			clear_env();
@@ -416,7 +477,7 @@ fn mutate_env(env: &tg::mutation::Data) -> std::io::Result<()> {
 			} else {
 				#[cfg(feature = "tracing")]
 				tracing::error!(?value, "Unexpected value found for env, expected a map.");
-				std::process::exit(1);
+				return Err(tg::error!("unexpected value found for env, expected a map"));
 			}
 		},
 		_ => {
@@ -425,13 +486,15 @@ fn mutate_env(env: &tg::mutation::Data) -> std::io::Result<()> {
 				?env,
 				"Unexpected mutation found for env, expected Set or Unset."
 			);
-			std::process::exit(1);
+			return Err(tg::error!(
+				"unexpected mutation found for env, expected Set or Unset"
+			));
 		},
 	}
 	Ok(())
 }
 
-fn apply_env(env: &BTreeMap<String, tg::value::Data>) -> std::io::Result<()> {
+fn apply_env(env: &BTreeMap<String, tg::value::Data>) -> tg::Result<()> {
 	for (key, value) in env {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?key, ?value, "Setting env.");
@@ -440,7 +503,7 @@ fn apply_env(env: &BTreeMap<String, tg::value::Data>) -> std::io::Result<()> {
 	Ok(())
 }
 
-fn apply_value_to_key(key: &str, value: &tg::value::Data) -> std::io::Result<()> {
+fn apply_value_to_key(key: &str, value: &tg::value::Data) -> tg::Result<()> {
 	if let tg::value::Data::Array(mutations) = value {
 		for mutation in mutations {
 			if let tg::value::Data::Mutation(mutation) = mutation {
@@ -450,12 +513,18 @@ fn apply_value_to_key(key: &str, value: &tg::value::Data) -> std::io::Result<()>
 	} else if let tg::value::Data::Mutation(mutation) = value {
 		apply_mutation_to_key(key, mutation)?;
 	} else {
-		unsafe { std::env::set_var(key, render_value_data(value)?) };
+		unsafe {
+			std::env::set_var(
+				key,
+				render_value_data(value)
+					.map_err(|source| tg::error!(!source, "failed to render the value data"))?,
+			);
+		};
 	}
 	Ok(())
 }
 
-fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::Result<()> {
+fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::debug!(?key, ?mutation, "Applying mutation.");
 	match mutation {
@@ -474,7 +543,8 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			let values = values
 				.iter()
 				.map(render_value_data)
-				.collect::<Result<Vec<_>, _>>()?;
+				.collect::<Result<Vec<_>, _>>()
+				.map_err(|source| tg::error!(!source, "failed to render the values"))?;
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
@@ -487,7 +557,8 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			let values = values
 				.iter()
 				.map(render_value_data)
-				.collect::<Result<Vec<_>, _>>()?;
+				.collect::<Result<Vec<_>, _>>()
+				.map_err(|source| tg::error!(!source, "failed to render the values"))?;
 			let existing_values = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_values) = existing_values {
 				let s = values.join(":");
@@ -500,7 +571,8 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			template,
 			separator,
 		} => {
-			let value = tangram_std::render_template_data(template)?;
+			let value = tangram_std::render_template_data(template)
+				.map_err(|source| tg::error!(!source, "failed to render the template"))?;
 			let existing_value = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_value) = existing_value {
 				let s = separator.clone().unwrap_or(String::new());
@@ -513,7 +585,8 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			template,
 			separator,
 		} => {
-			let value = tangram_std::render_template_data(template)?;
+			let value = tangram_std::render_template_data(template)
+				.map_err(|source| tg::error!(!source, "failed to render the template"))?;
 			let existing_value = std::env::var(key).ok().filter(|value| !value.is_empty());
 			if let Some(existing_value) = existing_value {
 				let s = separator.clone().unwrap_or(String::new());
@@ -523,21 +596,21 @@ fn apply_mutation_to_key(key: &str, mutation: &tg::mutation::Data) -> std::io::R
 			}
 		},
 		tg::mutation::Data::Merge { .. } => {
-			return Err(std::io::Error::new(
-				std::io::ErrorKind::InvalidInput,
-				"merge mutations are not supported for environment variables",
+			return Err(tg::error!(
+				"merge mutations are not supported for environment variables"
 			));
 		},
 	}
 	Ok(())
 }
 
-fn render_symlink_data(symlink: &tg::symlink::Data) -> std::io::Result<String> {
+fn render_symlink_data(symlink: &tg::symlink::Data) -> tg::Result<String> {
 	let template = template_from_symlink(symlink)?;
 	tangram_std::render_template_data(&template)
+		.map_err(|source| tg::error!(!source, "failed to render the template data"))
 }
 
-fn render_value_data(value: &tg::value::Data) -> std::io::Result<String> {
+fn render_value_data(value: &tg::value::Data) -> tg::Result<String> {
 	let result = match value {
 		tg::value::Data::Null => String::new(),
 		tg::value::Data::Bool(value) => {
@@ -553,7 +626,8 @@ fn render_value_data(value: &tg::value::Data) -> std::io::Result<String> {
 			let symlink = symlink_from_artifact_value_data(value);
 			render_symlink_data(&symlink)?
 		},
-		tg::value::Data::Template(template) => tangram_std::render_template_data(template)?,
+		tg::value::Data::Template(template) => tangram_std::render_template_data(template)
+			.map_err(|source| tg::error!(!source, "failed to render the template data"))?,
 		_ => {
 			#[cfg(feature = "tracing")]
 			tracing::error!(?value, "Malformed manifest env value.");
@@ -592,7 +666,7 @@ fn symlink_from_artifact_value_data(value: &tg::value::Data) -> tg::symlink::Dat
 	std::process::exit(1);
 }
 
-fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::template::Data> {
+fn template_from_symlink(symlink: &tg::symlink::Data) -> tg::Result<tg::template::Data> {
 	let mut components = Vec::with_capacity(3);
 	match symlink {
 		tg::symlink::Data::Node(tg::symlink::data::Node {
@@ -617,15 +691,11 @@ fn template_from_symlink(symlink: &tg::symlink::Data) -> std::io::Result<tg::tem
 			artifact: None,
 			path: None,
 		}) => {
-			return Err(std::io::Error::new(
-				std::io::ErrorKind::InvalidInput,
-				"symlink has no artifact or path",
-			));
+			return Err(tg::error!("symlink has no artifact or path"));
 		},
 		_ => {
-			return Err(std::io::Error::new(
-				std::io::ErrorKind::InvalidInput,
-				"cannot produce a template from a symlink pointing into a graph",
+			return Err(tg::error!(
+				"cannot produce a template from a symlink pointing into a graph"
 			));
 		},
 	}

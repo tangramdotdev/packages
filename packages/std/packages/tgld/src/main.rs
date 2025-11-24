@@ -15,7 +15,7 @@ const MAX_DEPTH: usize = 16;
 
 fn main() {
 	if let Err(e) = main_inner() {
-		eprintln!("linker proxy failed: {e}");
+		tangram_std::error::print_error(e);
 		std::process::exit(1);
 	}
 }
