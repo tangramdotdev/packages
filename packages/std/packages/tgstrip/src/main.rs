@@ -262,9 +262,6 @@ async fn run_proxy(
 
 			// If the executable is content, pass through the arguments to strip unchanged.
 			run_strip(strip_program, strip_args, &[target_path])?;
-
-			// Strip may reorder the footer. As a workaround, write it back.
-			manifest.append_to_file(target_path).await?;
 		},
 	}
 

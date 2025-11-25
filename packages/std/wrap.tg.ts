@@ -95,7 +95,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 
 	// If there's an existing binary, use it.
 	if (binary) {
-		return wrap.Manifest.write(binary, manifest);
+		return wrap.Manifest.writeSection(host, binary, manifest);
 	} else {
 		// We can't wrap a non-existent binary with a manifest specifying an address.
 		if (manifest.executable.kind === "address") {
@@ -1036,8 +1036,43 @@ export namespace wrap {
 			}
 		};
 
+		export const read = async (file: tg.File) : Promise<wrap.Manifest | undefined> => {
+			try {
+				const manifest = await readFromElf(elf);
+				if (manifest !== undefined) {
+					return manifest;
+				}
+			} catch (e) {
+				console.log(`warning: failed to parse ELF binary. ${e}`);
+			}
+			return readFromEndOFFile(file);
+		};
+
+		/** Read a manifest from an ELF binary. */
+		const readFromElf = async (
+			file: tg.File
+		): Promise<wrap.Manifest | undefined> => {
+			const elf_ = await elf.parse(file);
+			for (let sectionHeader of elf_.sectionHeaders) {
+				if (section.sh_name === ".note.tangram-manifest") {
+					const position = section.sh_offset;
+					const length = section.sh_size;
+					const data = await file.read({
+						position,
+						length,
+					});
+					const manifestString = tg.encoding.utf8.decode(manifestBytes);
+					const manifest = tg.encoding.json.decode(
+						manifestString,
+					) as wrap.Manifest;
+					return manifest;
+				}
+			}
+			return undefined;
+		};
+
 		/** Read a manifest from the end of a file. */
-		export const read = async (
+		const readFromEndOFFile = async (
 			file: tg.File,
 		): Promise<wrap.Manifest | undefined> => {
 			// Read the header.
@@ -1091,8 +1126,21 @@ export namespace wrap {
 			}
 		};
 
+		export const writeSection = async (target: string, file: tg.File, manifest: wrap.Manifest) => {
+			// Serialize the manifest.
+			const manifestBytes = tg.encoding.utf8.encode(
+				tg.encoding.json.encode(manifest),
+			);
+
+			// Get a toolchain.
+			let toolchain;
+			if (std.triple.os(target) === "")
+			const toolchain = await bootstrap.musl.build({ host })
+			
+		};
+
 		/** Write a manifest to a file. */
-		export const write = async (file: tg.File, manifest: wrap.Manifest) => {
+		export const appendToFile = async (file: tg.File, manifest: wrap.Manifest) => {
 			// Serialize the manifest.
 			const manifestBytes = tg.encoding.utf8.encode(
 				tg.encoding.json.encode(manifest),

@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = ["packages/add-section",
   "packages/tgcc",
   "packages/tgld",
   "packages/tgstrip",
@@ -33,6 +33,8 @@ futures = "0.3"
 goblin = "0.9"
 itertools = "0.14"
 libc = "0.2"
+paste = "1"
+rustix = { version = "1", features = ["all-apis"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df" }
@@ -47,6 +49,7 @@ tokio = { version = "1", default-features = false, features = [
 tokio-stream = { version = "0.1", default-features = false, features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
+zerocopy = { version = "0.8", features = ["derive"] }
 
 tangram_std = { path = "." }
 tgcc = { path = "packages/tgcc" }
