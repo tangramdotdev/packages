@@ -107,11 +107,9 @@ export const defaultEnv = async () => {
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
-	const components: Array<tg.Unresolved<std.env.Arg>> = [bootstrap.utils(host)];
 
 	// Add GNU make.
 	const makeArtifact = await bootstrap.make.build({ host });
-	components.push(makeArtifact);
 
 	// Add patched GNU coreutils.
 	const coreutilsArtifact = await coreutils({
@@ -120,7 +118,13 @@ export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 		host,
 		usePrerequisites: false,
 	});
-	components.push(coreutilsArtifact);
+
+	// Order matters: items later in the array prepend to PATH later, so they appear first.
+	// We want coreutils first, then make. The SDK provides baseline utils (busybox/toybox) at lowest precedence.
+	const components: Array<tg.Unresolved<std.env.Arg>> = [
+		makeArtifact,
+		coreutilsArtifact,
+	];
 
 	return std.env.arg(...components, { utils: false });
 };

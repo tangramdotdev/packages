@@ -43,14 +43,15 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	};
 
 	const env: Array<tg.Unresolved<std.env.Arg>> = [];
-	if (usePrerequisites) {
-		env.push(prerequisites(build));
-	}
+
+	const envArg = usePrerequisites
+		? std.env.arg(env_, ...env, prerequisites(build), { utils: false })
+		: std.env.arg(...env, env_, { utils: false });
 
 	const output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: bootstrap_,
-		env: std.env.arg(...env, env_, { utils: false }),
+		env: envArg,
 		phases: { configure },
 		sdk,
 		source: source_ ?? source(),

@@ -62,7 +62,6 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const phases = { configure };
 
 	const env: Array<tg.Unresolved<std.env.Arg>> = [];
-	env.push(prerequisites(build));
 	env.push(bootstrap.shell(host));
 	env.push({
 		CFLAGS: tg.Mutation.prefix(
@@ -74,7 +73,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	let output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: bootstrap_,
-		env: std.env.arg(...env, env_, { utils: false }),
+		env: std.env.arg(env_, ...env, prerequisites(build), { utils: false }),
 		phases,
 		sdk,
 		source: source_ ?? source(),
