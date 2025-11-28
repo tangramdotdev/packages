@@ -90,8 +90,12 @@ class TangramClient {
 			.then((t) => t.trim());
 	}
 
-	async push(target: string): Promise<void> {
-		await $`${this.exe} push ${target}`.quiet();
+	async push(target: string, options: { lazy?: boolean } = {}): Promise<void> {
+		const args = [target];
+		if (options.lazy ?? true) {
+			args.push("--lazy");
+		}
+		await $`${this.exe} push ${args}`.quiet();
 	}
 
 	async cancel(processId: string, token: string): Promise<void> {
@@ -187,6 +191,7 @@ class Configuration {
 	readonly currentPlatform: string;
 	readonly exports: string[];
 	readonly verbose: boolean;
+	readonly lazy: boolean;
 
 	constructor(options: {
 		packages?: PackageFilter;
@@ -196,6 +201,7 @@ class Configuration {
 		exports?: string[];
 		verbose?: boolean;
 		platform?: string;
+		lazy?: boolean;
 	}) {
 		this.packages = options.packages || {};
 		this.actions = options.actions || [];
@@ -204,6 +210,7 @@ class Configuration {
 		this.currentPlatform = options.platform || this.detectPlatform();
 		this.exports = options.exports || ["default"];
 		this.verbose = options.verbose ?? false;
+		this.lazy = options.lazy ?? true;
 	}
 
 	private detectTangramExe(): string {
@@ -241,7 +248,10 @@ class Configuration {
 		const config = `Parallel: ${this.parallel}`;
 		const tangram = `Tangram: ${this.tangram}`;
 		const platform = `Platform: ${this.currentPlatform}`;
-		return [actions, packages, exports, config, tangram, platform].join("\n");
+		const lazy = `Lazy Push: ${this.lazy}`;
+		return [actions, packages, exports, config, tangram, platform, lazy].join(
+			"\n",
+		);
 	}
 }
 
@@ -275,6 +285,7 @@ Flags:
       --verbose         Enable verbose output
       --parallel        Run packages in parallel (default: sequential)
       --platform=PLAT   Override target platform
+      --eager           Disable lazy push (lazy push is enabled by default)
 
 Action Dependencies:
   Actions have the following dependencies:
@@ -303,6 +314,7 @@ function parseFromArgs(): Configuration {
 			test: { type: "boolean", short: "t", default: false },
 			verbose: { type: "boolean", default: false },
 			parallel: { type: "boolean", default: false },
+			eager: { type: "boolean", default: false },
 			export: { type: "string", multiple: true },
 			exclude: { type: "string", multiple: true },
 			platform: { type: "string" },
@@ -355,6 +367,7 @@ function parseFromArgs(): Configuration {
 		verbose: values.verbose ?? false,
 		tangram: values.tangram,
 		platform: values.platform,
+		lazy: !values.eager,
 	});
 }
 
@@ -367,6 +380,7 @@ interface Context {
 	exports: string[];
 	processTracker: ProcessTracker;
 	verbose: boolean;
+	lazy: boolean;
 }
 
 /** Helper to get version from package metadata */
@@ -423,16 +437,6 @@ async function executeBuild(
 	}
 }
 
-/** Helper to construct build tag */
-function buildTag(
-	packageName: string,
-	version: string,
-	exportName: string,
-	platform: string,
-): string {
-	return `${packageName}/builds/${version}/${exportName}/${platform}`;
-}
-
 /** Export configuration for release action */
 type ExportConfig = {
 	ref: string; // Export name ("default", "build") or path ("sdk.tg.ts#sdk")
@@ -452,7 +456,10 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 		{ ref: "utils/coreutils.tg.ts#gnuEnv", tagPath: "utils/gnuEnv" },
 		{ ref: "wrap/injection.tg.ts#injection", tagPath: "wrap/injection" },
 		{ ref: "wrap/workspace.tg.ts#workspace", tagPath: "wrap/workspace" },
-		{ ref: "wrap/workspace.tg.ts#defaultWrapper", tagPath: "wrap/defaultWrapper" },
+		{
+			ref: "wrap/workspace.tg.ts#defaultWrapper",
+			tagPath: "wrap/defaultWrapper",
+		},
 		{
 			ref: "sdk/dependencies.tg.ts#extendedBuildTools",
 			tagPath: "dependencies/buildTools/extended",
@@ -581,9 +588,9 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		}
 
 		// Push the build
-		log(`[release] Pushing ${tag}`);
+		log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
 		try {
-			await ctx.tangram.push(tag);
+			await ctx.tangram.push(tag, { lazy: ctx.lazy });
 			log(`[release] Pushed ${tag}`);
 			uploadedTags.push(tag);
 		} catch (err) {
@@ -750,6 +757,7 @@ class PackageExecutor {
 				exports: this.config.exports,
 				processTracker: this.processTracker,
 				verbose: this.config.verbose,
+				lazy: this.config.lazy,
 			};
 
 			let packageSuccess = true;
