@@ -19,16 +19,20 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269";
-	const extension = ".tar.gz" as const;
-	const base = `https://sourceware.org/pub/${name}`;
-	const source = std.download
-		.extractArchive({ base, checksum, name, version, extension })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
+		"sha256:db106b740252669664fd8f3a1c69fe7f689d5cd4b132f82ba82b9afba27627df";
+	const owner = "libarchive";
+	const repo = name;
+	const tag = `${name}-${version}`;
+	const source = std.download.fromGithub({
+		checksum,
+		repo,
+		tag,
+		owner,
+		source: "tag",
+	});
 	return std.patch(source, dylibDetectOsPatch);
 };
 
