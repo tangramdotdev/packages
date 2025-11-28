@@ -47,9 +47,8 @@ export const testWrappedEntrypoint = async () => {
 };
 
 export const testBasicRootfs = async () => {
-	const shell = bootstrap.shell();
-	const utils = bootstrap.utils();
-	const rootFs = tg.directory(shell, utils, {
+	const utils = bootstrap.sdk.prepareBootstrapUtils();
+	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
 	});
 	const imageFile = await image(rootFs, {
@@ -61,9 +60,8 @@ export const testBasicRootfs = async () => {
 };
 
 export const testBasicRootfsWithEnv = async () => {
-	const shell = bootstrap.shell();
-	const utils = bootstrap.utils();
-	const rootFs = tg.directory(shell, utils, {
+	const utils = bootstrap.sdk.prepareBootstrapUtils();
+	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
 	});
 	const env = { NAME: "Tangram" };
@@ -77,9 +75,8 @@ export const testBasicRootfsWithEnv = async () => {
 };
 
 export const testBasicRootfsWithEnvAndEntrypoint = async () => {
-	const shell = bootstrap.shell();
-	const utils = bootstrap.utils();
-	const rootFs = tg.directory(shell, utils, {
+	const utils = bootstrap.sdk.prepareBootstrapUtils();
+	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
 	});
 	const env = { NAME: "Tangram" };
@@ -94,7 +91,7 @@ export const testBasicRootfsWithEnvAndEntrypoint = async () => {
 };
 
 export const testBootstrapEnv = async () => {
-	const utils = await bootstrap.utils();
+	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const bootstrapEnvArg = await std.env.arg(
 		utils,

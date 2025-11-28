@@ -67,12 +67,7 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		CONFIG_SHELL: shellExecutable,
 		SHELL: shellExecutable,
 	};
-	const env = await std.env.arg(
-		env_,
-		shellEnv,
-		{ utils: false },
-		{ WATERMARK: "3" },
-	);
+	const env = await std.env.arg(env_, shellEnv, { utils: false });
 	const commonArg = { bootstrap, build, env, host, sdk };
 
 	let utils = [shellArtifact, shellEnv];
@@ -122,7 +117,7 @@ export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 	// Order matters: items later in the array prepend to PATH later, so they appear first.
 	// We want coreutils first, then make. The SDK provides baseline utils (busybox/toybox) at lowest precedence.
 	const components: Array<tg.Unresolved<std.env.Arg>> = [
-		bootstrap.utils(host),
+		bootstrap.sdk.prepareBootstrapUtils(host),
 		makeArtifact,
 		coreutilsArtifact,
 	];

@@ -62,7 +62,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const phases = { configure };
 
 	const env: Array<tg.Unresolved<std.env.Arg>> = [];
-	env.push(bootstrap.shell(host));
+	env.push(prerequisites(build));
 	env.push({
 		CFLAGS: tg.Mutation.prefix(
 			"-Wno-implicit-function-declaration -std=gnu17",
@@ -73,7 +73,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	let output = autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),
 		bootstrap: bootstrap_,
-		env: std.env.arg(env_, ...env, prerequisites(build), { utils: false }),
+		env: std.env.arg(env_, ...env, { utils: false }),
 		phases,
 		sdk,
 		source: source_ ?? source(),
@@ -113,5 +113,18 @@ export const test = async () => {
 	// 	env: sdk,
 	// })
 	// return true;
-	return build({ host, bootstrap: true, env: sdk });
+
+	const bashDir = await build({ host, bootstrap: true, env: sdk });
+	// Inspect dependencies
+	const bashFile = await bashDir.get("bin/bash").then(tg.File.expect);
+	const deps = await bashFile.dependencies();
+	console.log("Bash file dependencies:");
+	const depsEntries = Object.entries(deps);
+	for (const [key, value] of depsEntries) {
+		console.log(`  ${key}: ${value}`);
+	}
+	const totalDeps = depsEntries.length;
+	console.log(`Total dependencies: ${totalDeps}`);
+	tg.assert(totalDeps > 0, "expected depdendencies to be set");
+	return bashDir;
 };

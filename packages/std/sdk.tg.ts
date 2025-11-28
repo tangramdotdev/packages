@@ -1254,7 +1254,7 @@ export const assertComment = async (
 		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`
 			.bootstrap(true)
 			.env(
-				std.env.arg(toolchain, bootstrap.utils(), bootstrap.shell(), {
+				std.env.arg(toolchain, bootstrap.sdk.prepareBootstrapUtils(), {
 					utils: false,
 				}),
 			)
