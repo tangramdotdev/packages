@@ -39,11 +39,11 @@ export const build = async (arg?: Arg) => {
 	const configure = { args: [`--enable-debug`, `--enable-optimize=*`] };
 
 	const install = {
-		args: [`DESTDIR="$OUTPUT"`],
+		args: [tg`DESTDIR="${tg.output}"`],
 	};
 
 	// The ld-musl symlink installed by default points to a broken absolute path that cannot be checked in. Replace with a relative symlink.
-	const fixup = `cd $OUTPUT/lib && rm ${interpreterName(
+	const fixup = tg`cd ${tg.output}/lib && rm ${interpreterName(
 		hostSystem,
 	)} && ln -s libc.so ${interpreterName(hostSystem)}`;
 

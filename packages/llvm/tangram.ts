@@ -401,7 +401,7 @@ export const test = async () => {
 			return 0;
 		}`;
 	const cOut = await $`
-		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
+		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
 	`
 		.env(directory)
 		.host(system)
@@ -436,7 +436,7 @@ export const test = async () => {
 		}
 	`;
 	const cxxOut = await $`
-		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
+		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
 	`
 		.env(directory)
 		.host(system)

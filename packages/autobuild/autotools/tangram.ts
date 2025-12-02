@@ -48,9 +48,9 @@ export const needsReconf = async (
 };
 
 export const reconfigure = async (source: tg.Unresolved<tg.Directory>) => {
-	return $`cp -R ${source} $OUTPUT
-			chmod -R u+w $OUTPUT
-			cd $OUTPUT
+	return $`cp -R ${source} ${tg.output}
+			chmod -R u+w ${tg.output}
+			cd ${tg.output}
 			autoreconf --install --verbose`
 		.env(autoconf())
 		.env(automake())

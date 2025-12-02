@@ -83,7 +83,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	};
 
 	const install = {
-		args: [`DESTDIR="$OUTPUT/${host}"`],
+		args: [tg`DESTDIR="${tg.output}/${host}"`],
 	};
 
 	const phases = {

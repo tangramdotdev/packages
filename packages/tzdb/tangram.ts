@@ -60,7 +60,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	let output = await $`
 		set -x
 		cp -R ${sourceDir}/. .
-		make TOPDIR=$OUTPUT install
+		make TOPDIR=${tg.output} install
 		`
 		.env(env)
 		.then(tg.Directory.expect);

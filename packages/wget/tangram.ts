@@ -106,10 +106,10 @@ export const test = async () => {
 
 	const result = await $`
 		echo "Checking that we can download a file."
-		mkdir -p $OUTPUT
-		wget -O $OUTPUT/example http://example.com
+		mkdir -p ${tg.output}
+		wget -O ${tg.output}/example http://example.com
 		echo "Checking that we can download via HTTPS."
-		wget -O $OUTPUT/tangram https://www.tangram.dev
+		wget -O ${tg.output}/tangram https://www.tangram.dev
 	`
 		.env(build())
 		.checksum("sha256:any")

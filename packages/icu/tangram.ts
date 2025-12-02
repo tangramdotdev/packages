@@ -103,7 +103,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		phases = {
 			...phases,
 			install: {
-				command: tg.Mutation.set(`cp -R . $OUTPUT`),
+				command: tg.Mutation.set(tg`cp -R . ${tg.output}`),
 				args: tg.Mutation.unset(),
 			},
 		};

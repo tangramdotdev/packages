@@ -106,7 +106,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 	// Combine into universal dylib.
 	const system = std.triple.archAndOs(host);
 	const injection =
-		await std.build`lipo -create ${arm64injection} ${amd64injection} -output $OUTPUT`
+		await std.build`lipo -create ${arm64injection} ${amd64injection} -output ${tg.output}`
 			.bootstrap(true)
 			.host(system)
 			.env(buildToolchain)
@@ -187,7 +187,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		{ utils: false },
 	);
 	const output =
-		std.build`${executable} -xc ${arg.source} -o $OUTPUT ${tg.Template.join(" ", ...args)}`
+		std.build`${executable} -xc ${arg.source} -o ${tg.output} ${tg.Template.join(" ", ...args)}`
 			.bootstrap(true)
 			.env(env)
 			.host(system)

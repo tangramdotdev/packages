@@ -420,7 +420,7 @@ export const testBasic = async (target?: string) => {
 	const output = await std.build`
 				set -x
 				/usr/bin/env
-				${cmd} -v -xc ${helloSource} -o $OUTPUT
+				${cmd} -v -xc ${helloSource} -o ${tg.output}
 				echo "done"`
 		.bootstrap(true)
 		.env(
@@ -475,7 +475,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 	const targetTriple = target ?? (await std.triple.host());
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
 	const cmd = target ? `cc -target ${target}` : `cc`;
-	return await std.build`set -x && mkdir -p $OUTPUT/lib && ${cmd} -v -shared -xc ${source} -o $OUTPUT/lib/${libName}.${dylibExt} ${flags} && ls -al $OUTPUT/lib`
+	return await std.build`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`
 		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
@@ -527,18 +527,18 @@ export const testSharedLibraryWithDep = async (target?: string) => {
 	const cmd = target ? `cc -target ${target}` : `cc`;
 	const output = await std.build`
 		set -x
-		mkdir -p $OUTPUT/bin
-		mkdir -p $OUTPUT/lib
-		mkdir -p $OUTPUT/include
-		cp ${sources}/*.h $OUTPUT/include
+		mkdir -p ${tg.output}/bin
+		mkdir -p ${tg.output}/lib
+		mkdir -p ${tg.output}/include
+		cp ${sources}/*.h ${tg.output}/include
 
 		${cmd} -shared -xc ${sources}/constants.c -o libconstants.${dylibExt}
-		${cmd} -shared -L. -I$OUTPUT/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
-		${cmd} -xc -L. -I$OUTPUT/include -lconstants -lprinter ${sources}/main.c -o main
+		${cmd} -shared -L. -I${tg.output}/include -lconstants -xc ${sources}/printer.c -o libprinter.${dylibExt}
+		${cmd} -xc -L. -I${tg.output}/include -lconstants -lprinter ${sources}/main.c -o main
 
-		cp libconstants.${dylibExt} $OUTPUT/lib
-		cp libprinter.${dylibExt} $OUTPUT/lib
-		cp main $OUTPUT/bin
+		cp libconstants.${dylibExt} ${tg.output}/lib
+		cp libprinter.${dylibExt} ${tg.output}/lib
+		cp main ${tg.output}/bin
 	`
 		.bootstrap(true)
 		.env(
@@ -733,7 +733,7 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 
 	// Compile the executable.
 	const output =
-		await std.build`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o $OUTPUT`
+		await std.build`cc -v -L${greetA}/lib -L${constantsA}/lib -lconstantsa -I${greetA}/include -lgreeta -I${constantsB}/include -L${constantsB}/lib -lconstantsb -I${greetB}/include -L${greetB}/lib -Wl,-rpath,${greetB}/lib ${greetB}/lib/libgreetb.${dylibExt} -lgreetb -L${uselessLibDir}/lib -xc ${mainSource} -o ${tg.output}`
 			.bootstrap(target ? false : true)
 			.env(
 				std.env.arg(
@@ -915,7 +915,7 @@ export const testSamePrefix = async (target?: string) => {
 			cd .libs
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
-			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT
+			cc -v -L../.libs -I${source} -lgreet -xc ${source}/main.c -o ${tg.output}
 			`
 		.bootstrap(target ? false : true)
 		.env(
@@ -972,7 +972,7 @@ export const testSamePrefixDirect = async (target?: string) => {
 			cd .libs
 			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o libgreet.${dylibExt}
 			cd ../.bins
-			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
+			cc -v ../.libs/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o ${tg.output}
 			`
 		.bootstrap(target ? false : true)
 		.env(
@@ -1022,8 +1022,8 @@ export const testDifferentPrefixDirect = async (target?: string) => {
 
 	const libgreetArtifact = await std.build`
 			set -x
-			mkdir -p $OUTPUT
-			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o $OUTPUT/libgreet.${dylibExt}
+			mkdir -p ${tg.output}
+			cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o ${tg.output}/libgreet.${dylibExt}
 			`
 		.bootstrap(target ? false : true)
 		.env(
@@ -1040,7 +1040,7 @@ export const testDifferentPrefixDirect = async (target?: string) => {
 
 	const output = await std.build`
 			set -x
-			cc -v ${libgreetArtifact}/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o $OUTPUT
+			cc -v ${libgreetArtifact}/libgreet.${dylibExt} -I${source} -xc ${source}/main.c -o ${tg.output}
 			`
 		.bootstrap(target ? false : true)
 		.env(
@@ -1070,7 +1070,7 @@ export const testStrip = async (target?: string) => {
 		set -x
 		cc -g -o main -xc ${inspectProcessSource}
 		strip main
-		mv main $OUTPUT`
+		mv main ${tg.output}`
 		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
@@ -1122,10 +1122,10 @@ export const testStripMultipleFiles = async () => {
 		# Try to strip all three files in one invocation.
 	  strip progA progB progC
 		# Move them to output.
-		mkdir -p $OUTPUT
-		mv progA $OUTPUT/progA
-		mv progB $OUTPUT/progB
-		mv progC $OUTPUT/progC`
+		mkdir -p ${tg.output}
+		mv progA ${tg.output}/progA
+		mv progB ${tg.output}/progB
+		mv progC ${tg.output}/progC`
 		.bootstrap(true)
 		.env(
 			std.env.arg(
@@ -1218,7 +1218,7 @@ export const testTransitiveDiscovery = async (target?: string) => {
 	// On Linux, we need -rpath-link to help the linker find transitive dependencies at link time.
 	const rpathLink = os === "linux" ? tg`-Wl,-rpath-link,${combined}/lib` : "";
 	const output =
-		await std.build`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o $OUTPUT`
+		await std.build`set -x && cc -v -L${combined}/lib ${rpathLink} -ltop -xc ${mainSource} -o ${tg.output}`
 			.bootstrap(target ? false : true)
 			.env(
 				std.env.arg(

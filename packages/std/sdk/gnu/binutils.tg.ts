@@ -57,7 +57,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 			"--disable-werror",
 			"--enable-deterministic-archives",
 			"--enable-gprofng=no",
-			"--with-sysroot=$OUTPUT",
+			tg`--with-sysroot=${tg.output}`,
 			`--build=${build}`,
 			`--host=${host}`,
 			`--target=${target}`,

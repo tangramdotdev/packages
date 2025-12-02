@@ -87,7 +87,7 @@ export const run = async (...args: std.Args<Arg>) => {
 		script = tg`${empty}
 		set -x
 		set +e
-		export LOGDIR=$OUTPUT/.tangram_logs
+		export LOGDIR=${tg.output}/.tangram_logs
 		mkdir -p "$LOGDIR"
 		export buildlog=$LOGDIR/build.log
 		start=$(date +%s)
@@ -513,12 +513,12 @@ export const test = async () => {
 };
 
 export const basic = async () => {
-	const prepare = `echo "preparing" >> $OUTPUT`;
-	const configure = `echo "configuring" >> $OUTPUT`;
-	const build_ = `echo "building" >> $OUTPUT`;
-	const check = `echo "checking" >> $OUTPUT`;
-	const install = `echo "installing" >> $OUTPUT`;
-	const fixup = `echo "fixing up" >> $OUTPUT`;
+	const prepare = tg`echo "preparing" >> ${tg.output}`;
+	const configure = tg`echo "configuring" >> ${tg.output}`;
+	const build_ = tg`echo "building" >> ${tg.output}`;
+	const check = tg`echo "checking" >> ${tg.output}`;
+	const install = tg`echo "installing" >> ${tg.output}`;
+	const fixup = tg`echo "fixing up" >> ${tg.output}`;
 
 	const phases = {
 		prepare,
@@ -542,12 +542,12 @@ export const basic = async () => {
 };
 
 export const order = async () => {
-	const prepare = `echo "preparing" >> $OUTPUT`;
-	const configure = `echo "configuring" >> $OUTPUT`;
-	const build_ = `echo "building" >> $OUTPUT`;
-	const check = `echo "checking" >> $OUTPUT`;
-	const install = `echo "installing" >> $OUTPUT`;
-	const fixup = `echo "fixing up" >> $OUTPUT`;
+	const prepare = tg`echo "preparing" >> ${tg.output}`;
+	const configure = tg`echo "configuring" >> ${tg.output}`;
+	const build_ = tg`echo "building" >> ${tg.output}`;
+	const check = tg`echo "checking" >> ${tg.output}`;
+	const install = tg`echo "installing" >> ${tg.output}`;
+	const fixup = tg`echo "fixing up" >> ${tg.output}`;
 	const order = ["fixup", "prepare", "install", "build", "configure"];
 
 	const phases = {

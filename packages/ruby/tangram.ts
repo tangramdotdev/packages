@@ -334,7 +334,7 @@ export const test = async () => {
 	};
 	await std.assert.pkg(self, spec);
 
-	const output = await $`ruby -e 'puts "Hello, tangram!"' > $OUTPUT`
+	const output = await $`ruby -e 'puts "Hello, tangram!"' > ${tg.output}`
 		.env(self())
 		.then(tg.File.expect)
 		.then((f) => f.text())

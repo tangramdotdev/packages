@@ -110,8 +110,8 @@ export const downloadMacosPrebuilt = async (build: string, host: string) => {
 			xar -xf ${packageFile}
 			gunzip -dc FoundationDB-clients.pkg/Payload | bsdcpio -i
 			gunzip -dc FoundationDB-server.pkg/Payload | bsdcpio -i
-			mkdir $OUTPUT
-			cd $OUTPUT
+			mkdir ${tg.output}
+			cd ${tg.output}
 			mkdir -p bin
 			mkdir -p etc/foundationdb
 			mkdir -p include/foundationdb

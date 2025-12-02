@@ -66,20 +66,20 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	std.assert.supportedHost(host, metadata);
 
-	const install = `
+	const install = tg`
 		set -x
-		mkdir -p $OUTPUT/bin $OUTPUT/lib/pkgconfig
+		mkdir -p ${tg.output}/bin ${tg.output}/lib/pkgconfig
 		bins="capsh getcap setcap getpcaps"
 		for bin in $bins; do
-			install -m 0755 "progs/$bin" "$OUTPUT/bin"
+			install -m 0755 "progs/$bin" "${tg.output}/bin"
 		done
-		install -d "$OUTPUT/include/sys" "$OUTPUT/include/uapi/linux"
-		install -m 0644 libcap/include/sys/*.h "$OUTPUT/include/sys"
-		install -m 0644 libcap/include/uapi/linux/*.h "$OUTPUT/include/uapi/linux"
-		install -m 0644 libcap/libcap.pc "$OUTPUT/lib/pkgconfig"
-		install -m 0644 libcap/libcap.a "$OUTPUT/lib"
-		install -m 0755 libcap/libcap.so.${metadata.version} "$OUTPUT/lib"
-		cd $OUTPUT/lib
+		install -d "${tg.output}/include/sys" "${tg.output}/include/uapi/linux"
+		install -m 0644 libcap/include/sys/*.h "${tg.output}/include/sys"
+		install -m 0644 libcap/include/uapi/linux/*.h "${tg.output}/include/uapi/linux"
+		install -m 0644 libcap/libcap.pc "${tg.output}/lib/pkgconfig"
+		install -m 0644 libcap/libcap.a "${tg.output}/lib"
+		install -m 0755 libcap/libcap.so.${metadata.version} "${tg.output}/lib"
+		cd ${tg.output}/lib
 		ln -s libcap.so.${metadata.version} libcap.so.2
 		ln -s libcap.so.2 libcap.so`;
 	const phases: std.phases.Arg = {

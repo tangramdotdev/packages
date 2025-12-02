@@ -2654,7 +2654,7 @@ export const argAndEnvDump = async (arg?: BuildAndHostArg) => {
 		{ utils: false },
 	);
 	const targetPrefix = isCross ? `${host}-` : "";
-	return await std.build`${targetPrefix}cc -xc ${inspectProcessSource} -o $OUTPUT`
+	return await std.build`${targetPrefix}cc -xc ${inspectProcessSource} -o ${tg.output}`
 		.bootstrap(true)
 		.env(sdkEnv)
 		.then(tg.File.expect);
@@ -2711,7 +2711,7 @@ export const testSingleArgObjectNoMutations = async () => {
 	tg.assert(manifest.interpreter);
 
 	// Check the output matches the expected output.
-	const output = await std.build`${wrapper} > $OUTPUT`
+	const output = await std.build`${wrapper} > ${tg.output}`
 		.bootstrap(true)
 		.then(tg.File.expect);
 	const text = await output.text();
@@ -2828,7 +2828,7 @@ export const testContentExecutable = async () => {
 	await wrapper.store();
 	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
-	const output = await std.build`set -x; ${wrapper} > $OUTPUT`
+	const output = await std.build`set -x; ${wrapper} > ${tg.output}`
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.bootstrap(true)
 		.then(tg.File.expect);
@@ -2851,7 +2851,7 @@ export const testContentExecutableVariadic = async () => {
 	await wrapper.store();
 	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
-	const output = await std.build`set -x; ${wrapper} > $OUTPUT`
+	const output = await std.build`set -x; ${wrapper} > ${tg.output}`
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.bootstrap(true)
 		.then(tg.File.expect);
@@ -2912,7 +2912,7 @@ export const testDylibPath = async () => {
 
 	// Compile the greet library
 	const sharedLibraryDir =
-		await std.build`mkdir -p $OUTPUT/lib && cc -shared -fPIC -xc -o $OUTPUT/lib/libgreet.${dylibExt} ${libGreetSource}`
+		await std.build`mkdir -p ${tg.output}/lib && cc -shared -fPIC -xc -o ${tg.output}/lib/libgreet.${dylibExt} ${libGreetSource}`
 			.bootstrap(true)
 			.env(bootstrapSdk)
 			.then(tg.Directory.expect);
@@ -2920,7 +2920,7 @@ export const testDylibPath = async () => {
 	console.log("sharedLibraryDir", sharedLibraryDir.id);
 
 	// Compile the driver.
-	const driver = await std.build`cc -xc -o $OUTPUT ${driverSource} -ldl`
+	const driver = await std.build`cc -xc -o ${tg.output} ${driverSource} -ldl`
 		.bootstrap(true)
 		.env(bootstrapSdk)
 		.then(tg.File.expect);
@@ -3027,7 +3027,7 @@ export const testInterpreterWrappingPreloads = async () => {
     }
   `);
 
-	const testExecutable = await std.build`cc -xc -o $OUTPUT ${testSource}`
+	const testExecutable = await std.build`cc -xc -o ${tg.output} ${testSource}`
 		.bootstrap(true)
 		.env(bootstrapSdk)
 		.then(tg.File.expect);
@@ -3041,7 +3041,7 @@ export const testInterpreterWrappingPreloads = async () => {
   `);
 
 	const customPreloadLib =
-		await std.build`cc -shared -fPIC -xc -o $OUTPUT ${preloadSource}`
+		await std.build`cc -shared -fPIC -xc -o ${tg.output} ${preloadSource}`
 			.bootstrap(true)
 			.env(bootstrapSdk)
 			.then(tg.File.expect);

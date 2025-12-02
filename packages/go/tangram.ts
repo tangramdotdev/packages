@@ -290,9 +290,9 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 
 		export TMPDIR=$PWD/gotmp
 		mkdir -p $TMPDIR
-		mkdir -p $OUTPUT/bin
+		mkdir -p ${tg.output}/bin
 
-		export GOPATH=$OUTPUT
+		export GOPATH=${tg.output}
 		export GOCACHE=$TMPDIR
 		export GOMODCACHE=$TMPDIR
 		export GOTMPDIR=$TMPDIR
@@ -343,11 +343,11 @@ export const vendor = async ({
 
 				# Create a writable temp dir.
 				work="$(mktemp -d)" && cp -r -T '${pruned}/' "$work" && cd "$work"
-				mkdir -p "$OUTPUT"
+				mkdir -p "${tg.output}"
 
 				${command}
 
-				mv -T ./vendor "$OUTPUT" || true
+				mv -T ./vendor "${tg.output}" || true
 			`
 		.env(self())
 		.env({ SSL_CERT_DIR: std.caCertificates() })
@@ -792,7 +792,7 @@ export const testCgo = async () => {
 	});
 
 	// Run the built binary and check output
-	const executable = tg`${artifact}/bin/testcgo > $OUTPUT 2>&1`;
+	const executable = tg`${artifact}/bin/testcgo > ${tg.output} 2>&1`;
 	const output = await $`${executable}`
 		.then(tg.File.expect)
 		.then((f) => f.text());
@@ -835,7 +835,7 @@ export const testPlain = async () => {
 	});
 
 	// Run the built binary and check output
-	const executable = tg`${artifact}/bin/testplain > $OUTPUT 2>&1`;
+	const executable = tg`${artifact}/bin/testplain > ${tg.output} 2>&1`;
 	const output = await $`${executable}`
 		.then(tg.File.expect)
 		.then((f) => f.text());
@@ -904,7 +904,7 @@ export const testNativeVendor = async () => {
 	);
 
 	// Run the binary and check output
-	const executable = tg`${artifact}/bin/testvendor > $OUTPUT 2>&1`;
+	const executable = tg`${artifact}/bin/testvendor > ${tg.output} 2>&1`;
 	const output = await $`${executable}`
 		.then(tg.File.expect)
 		.then((f) => f.text());

@@ -71,8 +71,8 @@ export const build = async (...args: std.Args<Arg>) => {
 		export GOMODCACHE=$TMPDIR
 		cd work
 		make
-		mkdir -p $OUTPUT/bin
-		cp esbuild $OUTPUT/bin
+		mkdir -p ${tg.output}/bin
+		cp esbuild ${tg.output}/bin
 	`
 		.env(env)
 		.checksum("sha256:any")

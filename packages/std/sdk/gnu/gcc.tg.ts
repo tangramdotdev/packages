@@ -61,7 +61,7 @@ export type Arg = {
 };
 
 export type Variant =
-	| "stage1_bootstrap" // C only, no libraries. Will produce an output directory with two folders, $OUTPUT/prefix with the installed compiler and $OUTPUT/build with the build artifacts.
+	| "stage1_bootstrap" // C only, no libraries. Will produce an output directory with two folders, ${tg.output}/prefix with the installed compiler and ${tg.output}/build with the build artifacts.
 	| "stage1_limited" // Produce a complete native `host === target` GCC toolchain with only C and C++ enabled and many features disabled.
 	| "stage2_full"; // Everything enabled.
 
@@ -108,7 +108,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		? sysroot
 		: sysroot.get(target).then(tg.Directory.expect);
 	const prefixSeed = tg.directory(sysrootToCopy, targetBinutils);
-	let preConfigureHook = tg`\nmkdir -p $OUTPUT\ncp -R ${prefixSeed}/* $OUTPUT\nchmod -R u+w $OUTPUT\nln -s . ${prefixSysrootPath}`;
+	let preConfigureHook = tg`\nmkdir -p ${tg.output}\ncp -R ${prefixSeed}/* ${tg.output}\nchmod -R u+w ${tg.output}\nln -s . ${prefixSysrootPath}`;
 
 	// Define args used for all variants.
 	const commonConfigureArgs = [
@@ -159,7 +159,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 					"--enable-default-ssp",
 					"--enable-initfini-array",
 					`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
-					`--with-gxx-include-dir=$OUTPUT/${target}/include/c++/${metadata.version}`,
+					tg`--with-gxx-include-dir=${tg.output}/${target}/include/c++/${metadata.version}`,
 				];
 			case "stage2_full":
 				return [
@@ -301,7 +301,7 @@ async function getGccVersion(
 		utils: false,
 	});
 	const result =
-		await std.build`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > $OUTPUT`
+		await std.build`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > ${tg.output}`
 			.bootstrap(true)
 			.env(envObject)
 			.then(tg.File.expect);

@@ -70,11 +70,11 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	};
 
 	const install = {
-		args: [`DESTDIR="$OUTPUT/${host}"`],
+		args: [tg`DESTDIR="${tg.output}/${host}"`],
 	};
 
 	// The ld-musl symlink installed by default points to a broken absolute path that cannot be checked in. Replace with a relative symlink.
-	const fixup = `cd $OUTPUT/${host}/lib && rm ${interpreterName(
+	const fixup = tg`cd ${tg.output}/${host}/lib && rm ${interpreterName(
 		host,
 	)} && ln -s libc.so ${interpreterName(host)}`;
 

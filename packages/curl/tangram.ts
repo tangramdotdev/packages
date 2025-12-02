@@ -118,10 +118,10 @@ export const test = async () => {
 	const result = await $`
 		set -x
 		echo "Checking that we can download a file."
-		mkdir -p $OUTPUT
-		curl -o $OUTPUT/example http://example.com
+		mkdir -p ${tg.output}
+		curl -o ${tg.output}/example http://example.com
 		echo "Checking that we can download via HTTPS."
-		curl -o $OUTPUT/tangram https://www.tangram.dev
+		curl -o ${tg.output}/tangram https://www.tangram.dev
 	`
 		.env(build())
 		.checksum("sha256:any")

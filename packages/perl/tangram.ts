@@ -88,7 +88,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const configure = {
 		args: [
 			"-des",
-			`-Dscriptdir=$OUTPUT/bin`,
+			tg`-Dscriptdir=${tg.output}/bin`,
 			"-Dinstallstyle=lib/perl5",
 			"-Dusethreads",
 			'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',
@@ -193,7 +193,7 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
-	const output = await $`perl -e 'print "hello\n"' > $OUTPUT`
+	const output = await $`perl -e 'print "hello\n"' > ${tg.output}`
 		.env(build())
 		.then(tg.File.expect)
 		.then((f) => f.text());

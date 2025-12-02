@@ -81,7 +81,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		args: [
 			"sudoers_uid=$(id -u)",
 			"sudoers_gid=$(id -g)",
-			"sysconfdir=$OUTPUT/etc",
+			tg`sysconfdir=${tg.output}/etc`,
 			"rundir=/tmp/dummy",
 			"vardir=/tmp/dummy",
 			"DESTDIR=/",

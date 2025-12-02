@@ -74,7 +74,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	};
 
 	const install = {
-		args: [`DESTDIR="$OUTPUT"`],
+		args: [tg`DESTDIR="${tg.output}"`],
 	};
 
 	const phases = {

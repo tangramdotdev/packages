@@ -6,14 +6,14 @@ export const metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.12.55",
-	tag: "linux/6.12.55",
+	version: "6.12.60",
+	tag: "linux/6.12.60",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:328f8f4608a653063a5fd82d29b17163faab2825fa419fa85b961740a342fb9f";
+		"sha256:a63096b2147411d683cecbf87622bb2ff4885bac2b3641d3d4f10250c89cdcf8";
 	const extension = ".tar.xz";
 	const majorVersion = version.split(".")[0];
 	const base = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x`;
@@ -69,8 +69,8 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 		post: "find usr/include -type f ! -name '*.h' -delete",
 	};
 	const install = {
-		pre: "mkdir -p $OUTPUT",
-		body: `cp -r usr/include/. $OUTPUT && mkdir -p $OUTPUT/config && echo ${metadata.version}-default > $OUTPUT/config/kernel.release`,
+		pre: tg`mkdir -p ${tg.output}`,
+		body: tg`cp -r usr/include/. ${tg.output} && mkdir -p ${tg.output}/config && echo ${metadata.version}-default > ${tg.output}/config/kernel.release`,
 	};
 	const order = ["build", "install"];
 

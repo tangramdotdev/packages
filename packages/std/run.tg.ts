@@ -272,9 +272,9 @@ export const mergeArgs = async (
 
 export const testDollar = async () => {
 	const f = tg.file`hello there!!!\n`;
-	const output = await $`cat ${f} > $OUTPUT
-		echo $NAME >> $OUTPUT
-		echo $TOOL >> $OUTPUT`
+	const output = await $`cat ${f} > ${tg.output}
+		echo $NAME >> ${tg.output}
+		echo $TOOL >> ${tg.output}`
 		.env({ NAME: "ben" })
 		.env({ TOOL: "tangram" })
 		.env({ NAME: tg.Mutation.suffix("L.", " ") })
@@ -288,9 +288,9 @@ export const testDollar = async () => {
 export const testDollarBootstrap = async () => {
 	const f = tg.file`hello there!!!\n`;
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
-	const output = await $`cat ${f} > $OUTPUT
-		echo $NAME >> $OUTPUT
-		echo $TOOL >> $OUTPUT`
+	const output = await $`cat ${f} > ${tg.output}
+		echo $NAME >> ${tg.output}
+		echo $TOOL >> ${tg.output}`
 		.bootstrap(true)
 		.env({ NAME: "ben" })
 		.env({ TOOL: "tangram" })
@@ -304,7 +304,7 @@ export const testDollarBootstrap = async () => {
 };
 
 export const testEnvClear = async () => {
-	const output = await $`/usr/bin/env > $OUTPUT`
+	const output = await $`/usr/bin/env > ${tg.output}`
 		.bootstrap(true)
 		.env({ FOO: "foo!" })
 		.env({ BAR: "bar!" })

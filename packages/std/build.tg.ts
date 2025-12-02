@@ -279,7 +279,7 @@ export const mergeArgs = async (
 
 export const testBuild = async () => {
 	const expected = tg.process.env.TANGRAM_HOST;
-	const output = await std.build`echo $TANGRAM_HOST > $OUTPUT`.then(
+	const output = await std.build`echo $TANGRAM_HOST > ${tg.output}`.then(
 		tg.File.expect,
 	);
 	const actual = (await output.text()).trim();
@@ -289,7 +289,7 @@ export const testBuild = async () => {
 
 export const testBuildBootstrap = async () => {
 	const expected = tg.process.env.TANGRAM_HOST;
-	const output = await std.build`echo $TANGRAM_HOST > $OUTPUT`
+	const output = await std.build`echo $TANGRAM_HOST > ${tg.output}`
 		.bootstrap(true)
 		.env({ SHELL: "/bin/sh" })
 		.then(tg.File.expect);

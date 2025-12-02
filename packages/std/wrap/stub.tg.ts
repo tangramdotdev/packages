@@ -36,7 +36,7 @@ export const embedWrapper = async (arg: WrapArg) => {
 	const env: Array<tg.Unresolved<std.env.Arg>> = [{ utils: false }];
 	let build = {
 		command: tg`
-			${workspace_}/wrap ${unwrapped} $OUTPUT ${workspace_}/stub.elf ${workspace_}/stub.bin ${manifest}
+			${workspace_}/wrap ${unwrapped} ${tg.output} ${workspace_}/stub.elf ${workspace_}/stub.bin ${manifest}
 		`,
 	};
 	return tg.build(std.phases.run, {
@@ -146,7 +146,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	let buildPhase = {
 		command: tg`
 			# Create output directory.
-			mkdir $OUTPUT
+			mkdir ${tg.output}
 
 			# Compile our sources
 			$CC_${tripleToEnvVar(target)}			\
@@ -167,20 +167,20 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 				-Werror								\
 				-Os									\
 				-Wl,-T${source}/stub/link.ld		\
-				-o $OUTPUT/stub.elf
+				-o ${tg.output}/stub.elf
 
 			# Compile the stub.
 			echo "compiled stub.elf"
 
 			# Extract the binary.
-			objcopy -O binary $OUTPUT/stub.elf $OUTPUT/stub.bin
+			objcopy -O binary ${tg.output}/stub.elf ${tg.output}/stub.bin
 
 			# Compile the wrap binary.
 			$CC_${tripleToEnvVar(host)}		\
 				${source}/stub/src/wrap.c	\
 				-I${source}/stub/include	\
 				-static						\
-				-o $OUTPUT/wrap ${releaseArgs} ${verboseArgs}
+				-o ${tg.output}/wrap ${releaseArgs} ${verboseArgs}
 			echo "compiled wrap"
 		`,
 	};
@@ -257,7 +257,7 @@ export const testCompile = async () => {
 		`),
 	});
 	return std.run`
-		gcc ${source}/main.c -o $OUTPUT
+		gcc ${source}/main.c -o ${tg.output}
 	`
 		.bootstrap(true)
 		.env(
@@ -290,7 +290,7 @@ export const testFull = async () => {
 		`),
 	});
 	let file = std.$`
-		gcc ${source}/main.c -o $OUTPUT
+		gcc ${source}/main.c -o ${tg.output}
 	`
 		.env(toolchain, { utils: false }, { TANGRAM_TRACING: "true" })
 		.then(tg.File.expect);

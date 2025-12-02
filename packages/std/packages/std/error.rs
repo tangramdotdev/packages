@@ -96,7 +96,7 @@ fn print_location(module: &tg::Module, range: &tg::Range) {
 			);
 			eprintln!();
 		},
-		tg::module::Item::Object(_) => {
+		tg::module::Item::Edge(_edge) => {
 			let mut title = String::new();
 			if let Some(tag) = module.referent.tag() {
 				write!(title, "{tag}").unwrap();
@@ -104,9 +104,11 @@ fn print_location(module: &tg::Module, range: &tg::Range) {
 					write!(title, ":{}", path.display()).unwrap();
 				}
 			} else if let Some(path) = module.referent.path() {
-				if path.components().next().is_some_and(|component| {
-					matches!(component, std::path::Component::Normal(_))
-				}) {
+				if path
+					.components()
+					.next()
+					.is_some_and(|component| matches!(component, std::path::Component::Normal(_)))
+				{
 					write!(title, "./").unwrap();
 				}
 				write!(title, "{}", path.display()).unwrap();

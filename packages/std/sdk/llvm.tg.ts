@@ -366,7 +366,7 @@ export const testLinuxToDarwin = async (arg?: LinuxToDarwinArg) => {
 	const f = await $`
 	set -x
 	${target}-clang --version
-	${target}-clang -v -xc ${testSource} -o $OUTPUT
+	${target}-clang -v -xc ${testSource} -o ${tg.output}
 	`
 		.env(combined)
 		.then(tg.File.expect);
@@ -605,7 +605,7 @@ export const test = async () => {
 			return 0;
 		}`;
 	const cOut = await $`
-		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o $OUTPUT
+		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
 	`
 		.env(directory)
 		.host(system)
@@ -648,7 +648,7 @@ export const test = async () => {
 		}
 	`;
 	const cxxOut = await $`
-		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o $OUTPUT
+		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
 	`
 		.env(directory)
 		.host(system)

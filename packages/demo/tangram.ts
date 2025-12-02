@@ -26,10 +26,10 @@ const packages = (arg?: Arg) => {
 	return [nodejs.toolchain(arg_), postgresql.build(arg_), ripgrep.build(arg_)];
 };
 
-export const script = `
-	echo "Node.js version: $(node --version)" | tee -a $OUTPUT
-	echo "ripgrep version: $(rg --version)" | tee -a $OUTPUT
-	echo "PostgreSQL version: $(psql --version)" | tee -a $OUTPUT
+export const script = tg`
+	echo "Node.js version: $(node --version)" | tee -a ${tg.output}
+	echo "ripgrep version: $(rg --version)" | tee -a ${tg.output}
+	echo "PostgreSQL version: $(psql --version)" | tee -a ${tg.output}
 `;
 
 export const test = async () => {

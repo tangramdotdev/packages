@@ -67,8 +67,8 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 		post: "find usr/include -type f ! -name '*.h' -delete",
 	};
 	const install = {
-		pre: "mkdir -p $OUTPUT",
-		body: `cp -r usr/include/. $OUTPUT && mkdir -p $OUTPUT/config && echo ${metadata.version}-default > $OUTPUT/config/kernel.release`,
+		pre: tg`mkdir -p ${tg.output}`,
+		body: tg`cp -r usr/include/. ${tg.output} && mkdir -p ${tg.output}/config && echo ${metadata.version}-default > ${tg.output}/config/kernel.release`,
 	};
 	const order = ["build", "install"];
 

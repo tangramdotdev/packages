@@ -49,7 +49,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const configure = {
 		args: [
 			"-des",
-			"-Dscriptdir=$OUTPUT/bin",
+			tg`-Dscriptdir=${tg.output}/bin`,
 			"-Dinstallstyle=lib/perl5",
 			"-Dusethreads",
 			'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',

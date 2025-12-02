@@ -96,7 +96,7 @@ export const test = async () => {
 	const node = self();
 	return await $`
 		set -x
-		mkdir -p $OUTPUT
+		mkdir -p ${tg.output}
 		echo "node: " ${node}
 		node --version
 		echo "Checking if we can run node scripts."
@@ -184,8 +184,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 
 	const built = await $`
-		mkdir -p $OUTPUT
-		cd $OUTPUT
+		mkdir -p ${tg.output}
+		cd ${tg.output}
 		cp -R "${source}/." .
 		ln -s "$NODE_PATH" node_modules
 		${defaultBuildCommand}

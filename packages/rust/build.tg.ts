@@ -134,7 +134,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	// Set the common rustc flags.
 	let flags: tg.Unresolved<Array<tg.Template.Arg>> = [
-		`--out-dir=$OUTPUT/${outputLocation}`,
+		tg`--out-dir=${tg.output}/${outputLocation}`,
 		`--edition=${edition}`,
 		`-C linker=${targetPrefix}cc`,
 		`--crate-name=${crateName}`,
@@ -255,7 +255,7 @@ export const testBasicExeUnproxied = async () => {
 		proxy: false,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	const basicExeOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExe)
 		.then(tg.File.expect);
 	const basicExeText = await basicExeOutput.text();
@@ -276,7 +276,7 @@ export const testBasicExeProxied = async () => {
 		source: tests.get(crateName).then(tg.Directory.expect),
 		verbose: true,
 	});
-	const basicExeOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExe)
 		.then(tg.File.expect);
 	const basicExeText = await basicExeOutput.text();
@@ -303,7 +303,7 @@ export const testBasicExeModules = async () => {
 		crateName,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	const basicExeModulesOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeModulesOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExeModules)
 		.then(tg.File.expect);
 	const basicExeModulesText = await basicExeModulesOutput.text();
@@ -325,7 +325,7 @@ export const testBasicExeWithLib = async () => {
 			},
 		],
 	});
-	const basicExeWithLibOutput = await $`${crateName} | tee $OUTPUT`
+	const basicExeWithLibOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExeWithLib)
 		.then(tg.File.expect);
 	const basicExeWithLibText = await basicExeWithLibOutput.text();
@@ -351,7 +351,7 @@ export const testExeWithCratesIoDependency = async () => {
 			},
 		],
 	});
-	const depsExeOutput = await $`${crateName} | tee $OUTPUT`
+	const depsExeOutput = await $`${crateName} | tee ${tg.output}`
 		.env(depsExe)
 		.then(tg.File.expect);
 	const depsExeText = await depsExeOutput.text();
@@ -366,7 +366,7 @@ export const testConditionalCompilation = async () => {
 		crateName: crateName,
 		source: tests.get(crateName).then(tg.Directory.expect),
 	});
-	const cfgDisabledOutput = await $`${crateName} | tee $OUTPUT`
+	const cfgDisabledOutput = await $`${crateName} | tee ${tg.output}`
 		.env(cfgDisabled)
 		.then(tg.File.expect);
 	const cfgDisabledText = await cfgDisabledOutput.text();
@@ -379,7 +379,7 @@ export const testConditionalCompilation = async () => {
 		source: tests.get(crateName).then(tg.Directory.expect),
 		verbose: true,
 	});
-	const cfgEnabledOutput = await $`${crateName} | tee $OUTPUT`
+	const cfgEnabledOutput = await $`${crateName} | tee ${tg.output}`
 		.env(cfgEnabled)
 		.then(tg.File.expect);
 	const cfgEnabledText = await cfgEnabledOutput.text();
@@ -413,7 +413,7 @@ export const testLinkReadline = async () => {
 	const runtimeLibVar =
 		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 	const exeOutput =
-		await $`export ${runtimeLibVar}=$LIBRARY_PATH\n${crateName} | tee $OUTPUT`
+		await $`export ${runtimeLibVar}=$LIBRARY_PATH\n${crateName} | tee ${tg.output}`
 			.env(std.env.arg(exe, ...deps))
 			.then(tg.File.expect);
 	const exeText = await exeOutput.text();

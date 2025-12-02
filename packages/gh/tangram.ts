@@ -54,7 +54,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			source: source_ ?? source(),
 			generate: false,
 			install: {
-				command: `make install prefix="$OUTPUT"`,
+				command: tg`make install prefix="${tg.output}"`,
 			},
 			vendor: "go",
 		},

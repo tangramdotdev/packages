@@ -37,7 +37,7 @@ export const patch = async (
 
 	// Apply the patches.
 	const allPatchFiles = tg.Template.join(" ", ...patchFiles);
-	return await $`cp -R ${source} $OUTPUT && chmod -R u+w $OUTPUT && cat ${allPatchFiles} | patch -p${stripCount} -d $OUTPUT`.then(
+	return await $`cp -R ${source} ${tg.output} && chmod -R u+w ${tg.output} && cat ${allPatchFiles} | patch -p${stripCount} -d ${tg.output}`.then(
 		tg.Directory.expect,
 	);
 };

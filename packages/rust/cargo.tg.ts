@@ -125,8 +125,8 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
 	const preparePathCommands = [
-		`mkdir -p "$OUTPUT/target"`,
-		`export TARGET_DIR="$(realpath "$OUTPUT/target")"`,
+		tg`mkdir -p "${tg.output}/target"`,
+		tg`export TARGET_DIR="$(realpath "${tg.output}/target")"`,
 		tg`mkdir -p "$PWD/.cargo"\necho '${cargoConfig}' >> "$PWD/.cargo/config.toml"\nexport CARGO_HOME=$PWD/.cargo`,
 	];
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
@@ -142,7 +142,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		"--release",
-		`--target-dir "$OUTPUT/target"`,
+		tg`--target-dir "${tg.output}/target"`,
 		`--manifest-path "$SOURCE/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
@@ -289,9 +289,9 @@ const vendoredSources = async (
 			set -x
 			SOURCE="$(realpath ${source})"
 			export CARGO_HOME=$PWD
-			mkdir -p "$OUTPUT/tg_vendor_dir"
-			cd "$OUTPUT"
-			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "$OUTPUT/config"
+			mkdir -p "${tg.output}/tg_vendor_dir"
+			cd "${tg.output}"
+			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "${tg.output}/config"
 		`;
 		const rustArtifact = self();
 		const sdk = std.sdk();
@@ -462,7 +462,7 @@ export const testUnproxiedWorkspace = async () => {
 	});
 
 	const helloOutput = await $`
-		${helloWorkspace}/bin/cli >> $OUTPUT
+		${helloWorkspace}/bin/cli >> ${tg.output}
 	`.then(tg.File.expect);
 	const helloText = await helloOutput.text();
 	tg.assert(helloText.trim() === "Hello from a workspace!");
@@ -476,7 +476,7 @@ export const testUnproxiedWorkspace = async () => {
 	});
 
 	const openSslOutput = await $`
-		${helloOpenssl}/bin/hello-openssl >> $OUTPUT
+		${helloOpenssl}/bin/hello-openssl >> ${tg.output}
 	`.then(tg.File.expect);
 	const openSslText = await openSslOutput.text();
 	tg.assert(

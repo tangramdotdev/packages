@@ -130,8 +130,8 @@ export const test = async () => {
 	const result = await $`
 		set -x
 		echo "Testing git clone with https repository."
-		mkdir -p $OUTPUT
-		cd $OUTPUT
+		mkdir -p ${tg.output}
+		cd ${tg.output}
 		git clone --depth 1 https://github.com/octocat/Hello-World.git
 		echo "Clone completed successfully."
 	`

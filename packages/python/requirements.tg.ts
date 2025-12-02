@@ -20,7 +20,7 @@ export const install = async (
 			cd work
 			mkdir tmp
 			export TMPDIR=tmp
-			mkdir -p $OUTPUT
+			mkdir -p ${tg.output}
 
 			# Set up a writable CARGO_HOME for Rust-based packages.
 			mkdir -p "$PWD/.cargo"
@@ -29,7 +29,7 @@ export const install = async (
 			# Download dependencies using the requirements.txt file.
 			pip3               \\
 				download         \\
-				-d $OUTPUT       \\
+				-d ${tg.output}       \\
 				--no-deps        \\
 				--require-hashes \\
 				--disable-pip-version-check \\
@@ -50,8 +50,8 @@ export const install = async (
 				cp "${file}" "${name}"
 				mkdir tmp
 				export TMPDIR=tmp
-				export PYTHONUSERBASE=$OUTPUT
-				mkdir -p $OUTPUT
+				export PYTHONUSERBASE=${tg.output}
+				mkdir -p ${tg.output}
 
 				# Set up a writable CARGO_HOME for Rust-based packages.
 				mkdir -p "$PWD/.cargo"

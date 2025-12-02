@@ -104,7 +104,7 @@ export const test = async () => {
 		script = tg`
         env
         log() {
-            echo "$1" | tee -a "$OUTPUT"
+            echo "$1" | tee -a "$TANGRAM_OUTPUT"
         }
         # Create original file with content
         echo "original content" > test-file.txt
@@ -133,7 +133,7 @@ export const test = async () => {
 	} else if (os === "darwin") {
 		script = tg`
         log() {
-            echo "$1" | tee -a "$OUTPUT"
+            echo "$1" | tee -a "$TANGRAM_OUTPUT"
         }
         # Create original file with content
         echo "original content" > test-file.txt

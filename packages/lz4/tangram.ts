@@ -52,7 +52,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const sourceDir = source_ ?? source();
 
 	const install = {
-		args: ["prefix=$OUTPUT"],
+		args: [tg`prefix=${tg.output}`],
 	};
 	const phases = {
 		configure: tg.Mutation.unset() as tg.Mutation<tg.Template>,

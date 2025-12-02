@@ -107,6 +107,7 @@ pub fn render_template_data(data: &tg::template::Data) -> std::io::Result<String
 						)
 					})
 			},
+			tg::template::data::Component::Placeholder(data) => Ok(data.name.clone()),
 		})
 		.collect::<std::io::Result<String>>()
 }

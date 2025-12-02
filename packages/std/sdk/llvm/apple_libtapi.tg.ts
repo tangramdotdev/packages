@@ -31,7 +31,7 @@ export const build = async () => {
 		cp -R ${source()}/* .
 		chmod -R u+w .
 
-		INSTALLPREFIX=$OUTPUT ./build.sh
+		INSTALLPREFIX=$TANGRAM_OUTPUT ./build.sh
 		./install.sh
 	`
 		.env(env)

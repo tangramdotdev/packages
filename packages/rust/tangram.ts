@@ -105,8 +105,8 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	let rustInstall = await $`
 			for package in ${packagesArtifact}/*/* ; do
 				echo "Installing $package"
-				bash "$package/install.sh" --prefix="$OUTPUT"
-				chmod -R +w "$OUTPUT"
+				bash "$package/install.sh" --prefix="${tg.output}"
+				chmod -R +w "${tg.output}"
 			done
 		`
 		.env(env)

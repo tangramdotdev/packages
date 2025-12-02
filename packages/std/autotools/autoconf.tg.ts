@@ -188,7 +188,7 @@ export const patchAutom4teCfg = async (
 	}
 
 	const patchedAutom4teCfg = await $`
-			cat <<'EOF' | tee $OUTPUT
+			cat <<'EOF' | tee ${tg.output}
 			${contents}
 		`
 		.env(arg.env)

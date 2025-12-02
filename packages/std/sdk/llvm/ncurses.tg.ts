@@ -56,7 +56,7 @@ export const ncurses = async (arg?: tg.Unresolved<Arg>) => {
 	}
 
 	// Patch curses.h to always use the wide-character ABI.
-	const fixup = `sed -e 's/^#if.*XOPEN.*$/#if 1/' -i $OUTPUT/include/ncursesw/curses.h`;
+	const fixup = tg`sed -e 's/^#if.*XOPEN.*$/#if 1/' -i ${tg.output}/include/ncursesw/curses.h`;
 
 	const phases = { configure, fixup };
 

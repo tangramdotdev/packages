@@ -393,7 +393,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?build_directory, "got build directory");
 
-	// Copy output files from $OUTPUT to the path specified.
+	// Copy output files from $TANGRAM_OUTPUT to the path specified.
 	for from in build_directory.read_dir().map_err(|e| {
 		tg::error!(
 			source = e,
@@ -517,7 +517,7 @@ const BLACKLISTED_ENV_VARS: [&str; 5] = [
 	"TANGRAM_HOST",
 	"TANGRAM_URL",
 	"HOME",
-	"OUTPUT",
+	"TANGRAM_OUTPUT",
 ];
 
 /// Given a string path, return a [`tg::Path`] pointing to a checked-in artifact. If the path is already checked in or is ".", do nothing.
@@ -567,6 +567,7 @@ async fn get_checked_in_path(
 				lock: false,
 				solve: true,
 				watch: false,
+				unsolved_dependencies: false,
 			},
 			path: path.to_path_buf(),
 			updates: vec![],

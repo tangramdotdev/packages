@@ -99,7 +99,7 @@ export type BuildArg = {
 	/** Path to use for the build directory. Default: "build". */
 	buildDir?: string;
 
-	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
+	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
 	debug?: boolean;
 
 	/** Any environment to add to the target. */
@@ -181,7 +181,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		phases: userPhaseArgs = [],
 		pkgConfig = true,
 		pipe = true,
-		prefixPath = `$OUTPUT`,
+		prefixPath = tg`${tg.output}`,
 		sdk: sdkArg,
 		source,
 		stripExecutables = true,

@@ -90,7 +90,7 @@ export const compileUtil = async (arg: UtilArg) => {
 
 	// Compile the util.
 	const util = await tg.build`
-			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o $OUTPUT ${utilSource}/${fileName}`
+			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o ${tg.output} ${utilSource}/${fileName}`
 		.env(std.env.arg(arg.env, { utils: false }))
 		.host(host)
 		.then(tg.File.expect);

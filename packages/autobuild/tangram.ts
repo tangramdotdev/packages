@@ -282,7 +282,7 @@ export const testKind = async (kind: Kind) => {
 	const buildOutput = await build({ source }).then(tg.Directory.expect);
 	console.log("buildOutput", buildOutput.id);
 	const testStdout = async (arg: TestFnArg): Promise<boolean> => {
-		const stdout = await $`${arg.testFile(buildOutput)} > $OUTPUT`
+		const stdout = await $`${arg.testFile(buildOutput)} > ${tg.output}`
 			.then(tg.File.expect)
 			.then((t) => t.text())
 			.then((t) => t.trim());

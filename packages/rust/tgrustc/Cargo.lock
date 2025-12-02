@@ -409,7 +409,7 @@ dependencies = [
 [[package]]
 name = "derive_more"
 version = "2.0.1"
-source = "git+https://github.com/jeltef/derive_more#1b5d314b8c8391e476653f32f1ca95572492b964"
+source = "git+https://github.com/jeltef/derive_more#2d3805b66f00cb31303c7e75edfef9003d48ff04"
 dependencies = [
  "derive_more-impl",
 ]
@@ -417,7 +417,7 @@ dependencies = [
 [[package]]
 name = "derive_more-impl"
 version = "2.0.1"
-source = "git+https://github.com/jeltef/derive_more#1b5d314b8c8391e476653f32f1ca95572492b964"
+source = "git+https://github.com/jeltef/derive_more#2d3805b66f00cb31303c7e75edfef9003d48ff04"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -454,6 +454,16 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "errno"
+version = "0.3.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "find-msvc-tools"
@@ -878,9 +888,15 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.177"
+version = "0.2.178"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2874a2af47a2325c2001a6e6fad9b16a53b802102b528163885171cf92b15976"
+checksum = "37c93d8daa9d8a012fd8ab92f088405fb202ea0b6ab73ee2482ae66af4f42091"
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 
 [[package]]
 name = "lock_api"
@@ -1350,6 +1366,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustix"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd15f8a2c5551a84d56efdc1cd049089e409ac19a3072d5037a17fd70719ff3e"
+dependencies = [
+ "bitflags 2.10.0",
+ "errno",
+ "libc",
+ "linux-raw-sys",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1616,7 +1645,7 @@ checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "blake3",
  "byte-unit",
@@ -1662,7 +1691,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -1671,7 +1700,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "dashmap",
  "futures",
@@ -1683,7 +1712,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "bytes",
  "derive_more",
@@ -1708,7 +1737,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "byteorder",
  "bytes",
@@ -1721,7 +1750,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1732,7 +1761,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "derive_more",
  "regex",
@@ -1743,10 +1772,11 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=d67e3a2d86d788949f0d825689eb3b9cbb29e3a0#d67e3a2d86d788949f0d825689eb3b9cbb29e3a0"
+source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
 dependencies = [
  "bytes",
  "data-encoding",
+ "derive_more",
  "fnv",
  "futures",
  "im",
@@ -1756,6 +1786,7 @@ dependencies = [
  "tangram_either",
  "tokio",
  "tracing",
+ "xattr",
 ]
 
 [[package]]
@@ -2084,9 +2115,9 @@ checksum = "1292c0d970b54115d14f2492fe0170adf21d68a1de108eebc51c1df4f346a091"
 
 [[package]]
 name = "uuid"
-version = "1.18.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
+checksum = "e2e054861b4bd027cd373e18e8d8d8e6548085000e41290d95ce0c373a654b4a"
 dependencies = [
  "getrandom 0.3.4",
  "js-sys",
@@ -2341,19 +2372,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "zerocopy"
-version = "0.8.30"
+name = "xattr"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ea879c944afe8a2b25fef16bb4ba234f47c694565e97383b36f3a878219065c"
+checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
+dependencies = [
+ "libc",
+ "rustix",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd74ec98b9250adb3ca554bdde269adf631549f51d8a8f8f0a10b50f1cb298c3"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.30"
+version = "0.8.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf955aa904d6040f70dc8e9384444cb1030aed272ba3cb09bbc4ab9e7c1f34f5"
+checksum = "d8a8d209fdf45cf5138cbb5a506f6b52522a25afccc534d1475dad8e31105c6a"
 dependencies = [
  "proc-macro2",
  "quote",

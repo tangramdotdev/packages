@@ -255,7 +255,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 	const executable = tg`${arg.directory}/bin/${name} ${tg.Template.join(
 		" ",
 		...testArgs,
-	)} > $OUTPUT 2>&1`;
+	)} > ${tg.output} 2>&1`;
 
 	const stdout = await $`${executable}`
 		.bootstrap(true)
@@ -339,7 +339,7 @@ export const headerCanBeIncluded = async (arg: HeaderArg) => {
 		}`;
 
 	// Compile the program, ensuring the env properly made the header discoverable.
-	const program = await $`cc -xc "${source}" -o $OUTPUT`
+	const program = await $`cc -xc "${source}" -o ${tg.output}`
 		.bootstrap(true)
 		.env(std.sdk(), arg.directory)
 		.then(tg.File.expect);
@@ -492,11 +492,12 @@ const getPkgConfigFlags = async (
 	env: tg.Unresolved<std.env.Arg>,
 ): Promise<string | undefined> => {
 	try {
-		const flags = await $`pkg-config --cflags --libs ${pkgConfigName} > $OUTPUT`
-			.env(env)
-			.then(tg.File.expect)
-			.then((f) => f.text())
-			.then((text) => text.trim());
+		const flags =
+			await $`pkg-config --cflags --libs ${pkgConfigName} > ${tg.output}`
+				.env(env)
+				.then(tg.File.expect)
+				.then((f) => f.text())
+				.then((text) => text.trim());
 		return flags;
 	} catch {
 		return undefined;
@@ -536,7 +537,7 @@ export const testDylib = async (arg: TestDylibArg) => {
 		const dylibPath = tg`${directory}/lib/${dylibName}`;
 
 		const symbols =
-			await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > $OUTPUT`
+			await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > ${tg.output}`
 				.env(std.sdk(arg?.sdk))
 				.then(tg.File.expect)
 				.then((f) => f.text())
@@ -607,7 +608,7 @@ export const testDylib = async (arg: TestDylibArg) => {
 
 	// Compile and link using the flags from pkg-config or fallback
 	const program =
-		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
+		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o ${tg.output}`
 			.bootstrap(true)
 			.env(compileEnv)
 			.host(arg.host)
@@ -679,7 +680,7 @@ export const testStaticlib = async (arg: TestStaticlibArg) => {
 
 	// Compile and link statically against the library
 	const program =
-		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o $OUTPUT`
+		await $`cc -xc "${source}" ${compileFlags} ${rpathLink} -o ${tg.output}`
 			.bootstrap(true)
 			.env(compileEnv)
 			.host(arg.host)
@@ -724,7 +725,7 @@ export const stdoutIncludes = async (
 	file: tg.Unresolved<tg.File>,
 	expected: string,
 ) => {
-	const stdout = await $`${file} > $OUTPUT`
+	const stdout = await $`${file} > ${tg.output}`
 		.bootstrap(true)
 		.env({
 			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",

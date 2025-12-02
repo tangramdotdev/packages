@@ -40,7 +40,7 @@ import tests from "./tests" with { type: "directory" };
 
 export const testProxyCompiles = async () => {
 	// Make sure the proxy compiles and runs.
-	const version = await $`tgrustc rustc - --version | tee $OUTPUT`
+	const version = await $`tgrustc rustc - --version | tee ${tg.output}`
 		.env(proxy())
 		.env(self())
 		.then(tg.File.expect);
@@ -62,7 +62,7 @@ export const testHello = async () => {
 	console.log("helloWorld result", helloWorld.id);
 
 	// Assert it produces the correct output.
-	const helloOutput = await $`hello-world | tee $OUTPUT`
+	const helloOutput = await $`hello-world | tee ${tg.output}`
 		.env(helloWorld)
 		.then(tg.File.expect);
 	const helloText = await helloOutput.text();
@@ -79,10 +79,10 @@ export const testPkgconfig = async () => {
 
 	// compile the dylib
 	let externalLibDir = await $`
-		mkdir -p $OUTPUT/lib
-		mkdir -p $OUTPUT/include
-		gcc -shared -fPIC ${source}/src/lib.c -o $OUTPUT/lib/libexternal.${dylibExt}
-		cp ${source}/src/lib.h $OUTPUT/include/lib.h`
+		mkdir -p ${tg.output}/lib
+		mkdir -p ${tg.output}/include
+		gcc -shared -fPIC ${source}/src/lib.c -o ${tg.output}/lib/libexternal.${dylibExt}
+		cp ${source}/src/lib.h ${tg.output}/include/lib.h`
 		.env(std.sdk())
 		.then(tg.Directory.expect);
 
@@ -115,7 +115,7 @@ export const testPkgconfig = async () => {
 	console.log("result", rustOutput.id);
 
 	// Assert it produces the correct output.
-	const testOutput = await $`myapp | tee $OUTPUT`
+	const testOutput = await $`myapp | tee ${tg.output}`
 		.env(rustOutput)
 		.then(tg.File.expect);
 	const testText = await testOutput.text();
@@ -139,7 +139,7 @@ export const testOpenSSL = async () => {
 	console.log("helloOpenssl result", helloOpenssl.id);
 
 	// Assert it produces the correct output.
-	const opensslOutput = await $`hello-openssl | tee $OUTPUT`
+	const opensslOutput = await $`hello-openssl | tee ${tg.output}`
 		.env(helloOpenssl)
 		.then(tg.File.expect);
 	const opensslText = await opensslOutput.text();
@@ -162,7 +162,7 @@ export const testWorkspace = async () => {
 	console.log("helloWorkspace result", helloWorkspace.id);
 
 	// Assert it produces the correct output.
-	const workspaceOutput = await $`cli | tee $OUTPUT`
+	const workspaceOutput = await $`cli | tee ${tg.output}`
 		.env(helloWorkspace)
 		.then(tg.File.expect);
 	const workspaceText = await workspaceOutput.text();

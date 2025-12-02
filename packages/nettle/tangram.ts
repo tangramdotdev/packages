@@ -59,7 +59,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		args: [
 			"--disable-dependency-tracking",
 			"--disable-documentation",
-			"--libdir=$OUTPUT/lib",
+			tg`--libdir=${tg.output}/lib`,
 		],
 	};
 	const phases = { configure };

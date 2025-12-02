@@ -114,8 +114,8 @@ export const build = async (args: BuildArgs) => {
 	const sdist = await $`
 		set -x
 		# Create the virtual env to install to.
-		python3 -m venv $OUTPUT --copies
-		export VIRTUAL_ENV=$OUTPUT
+		python3 -m venv ${tg.output} --copies
+		export VIRTUAL_ENV=${tg.output}
 
 		poetry install --no-interaction --only-root --directory ${source} -vvv`
 		.env(env)

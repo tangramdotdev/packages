@@ -203,9 +203,11 @@ export const rust = async (
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
 	return await std.build`
+		set -x
+		echo HI
 		for package in ${packages}/*/* ; do
-			sh $package/install.sh --prefix="$OUTPUT"
-			chmod -R +w "$OUTPUT"
+			sh $package/install.sh --prefix="${tg.output}"
+			chmod -R +w "${tg.output}"
 		done`
 		.bootstrap(true)
 		.host(hostSystem)
@@ -468,10 +470,10 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const buildType = release ? "/release" : "/debug";
 
 	const install = {
-		pre: `mkdir -p $OUTPUT/bin`,
-		body: `
+		pre: tg`mkdir -p ${tg.output}/bin`,
+		body: tg`
 			for item in tgcc tgld tgstrip wrapper ; do
-				mv $TARGET/$RUST_TARGET${buildType}/$item $OUTPUT/bin/$item
+				mv $TARGET/$RUST_TARGET${buildType}/$item ${tg.output}/bin/$item
 			done
 		`,
 	};

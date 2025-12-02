@@ -146,9 +146,9 @@ export const testBinary = async () => {
 	// Produce a library and executable.
 	const output = await std.build`
 		set -x
-		mkdir -p $OUTPUT
-		cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o $OUTPUT/libgreet.${dylibExt}
-		cc -v -L$OUTPUT -I${source} -lgreet -xc ${source}/main.c -o $OUTPUT/exe
+		mkdir -p ${tg.output}
+		cc -v -shared -xc ${source}/greet.c -Wl,-${dylibLinkerFlag},libgreet.${versionedDylibExt} -o ${tg.output}/libgreet.${dylibExt}
+		cc -v -L${tg.output} -I${source} -lgreet -xc ${source}/main.c -o ${tg.output}/exe
 	`
 		.bootstrap(true)
 		.env(

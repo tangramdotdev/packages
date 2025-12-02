@@ -780,7 +780,7 @@ export namespace sdk {
 		if (isCross) {
 			return detectedHost;
 		} else {
-			const output = await std.build`${cmd} -dumpmachine > $OUTPUT`
+			const output = await std.build`${cmd} -dumpmachine > ${tg.output}`
 				.bootstrap(true)
 				.env(env_)
 				.host(std.triple.archAndOs(detectedHost))
@@ -872,7 +872,7 @@ export namespace sdk {
 		const compiledProgram =
 			await std.build`echo "testing ${title}, proxied linker: ${proxiedLinker.toString()}"
 				set -x
-				${cmd} -v -x${langStr} ${testProgram} -o $OUTPUT`
+				${cmd} -v -x${langStr} ${testProgram} -o ${tg.output}`
 				.bootstrap(true)
 				.env(
 					std.env.arg(
@@ -927,7 +927,7 @@ export namespace sdk {
 
 		// If we are not cross-compiling, assert we can execute the program and recieve the expected result, without providing the SDK env at runtime.
 		if (!isCross && proxiedLinker) {
-			const testOutput = await std.build`${compiledProgram} > $OUTPUT`
+			const testOutput = await std.build`${compiledProgram} > ${tg.output}`
 				.bootstrap(true)
 				.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 				.host(std.triple.archAndOs(expectedHost))
@@ -1251,7 +1251,7 @@ export const assertComment = async (
 	textToMatch: string,
 ) => {
 	const elfComment =
-		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > $OUTPUT`
+		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > ${tg.output}`
 			.bootstrap(true)
 			.env(
 				std.env.arg(toolchain, bootstrap.sdk.prepareBootstrapUtils(), {

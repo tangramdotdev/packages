@@ -11,7 +11,7 @@ export type Arg = {
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
 
-	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at $OUTPUT/.tangram_logs. Default: false */
+	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
 	debug?: boolean;
 
 	/** Should we automatically add configure flags to support cross compilation when host !== target? If false, you must provide the necessary configuration manually. Default: true. */
@@ -122,7 +122,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		phases: userPhaseArgs = [],
 		pkgConfig = true,
 		prefixArg = `--prefix=`,
-		prefixPath = `$OUTPUT`,
+		prefixPath = tg`${tg.output}`,
 		removeLibtoolArchives = true,
 		sdk: sdkArg_,
 		setRuntimeLibraryPath = false,
@@ -309,15 +309,15 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	let defaultFixupCommand = tg.template();
 	if (removeLibtoolArchives) {
-		defaultFixupCommand = tg`${defaultFixupCommand}\nfind $OUTPUT -name '*.la' -delete`;
+		defaultFixupCommand = tg`${defaultFixupCommand}\nfind ${tg.output} -name '*.la' -delete`;
 	}
 
 	if (debug) {
-		defaultFixupCommand = tg`${defaultFixupCommand}\nmkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`;
+		defaultFixupCommand = tg`${defaultFixupCommand}\nmkdir -p "$LOGDIR" && cp config.log "$LOGDIR/config.log"`;
 	}
 
 	if (normalizePkgConfigPrefix) {
-		defaultFixupCommand = tg`${defaultFixupCommand}\nfind $OUTPUT -name '*.pc' -type f -exec sed -i 's|^prefix=.*|prefix=$'"{pcfiledir}"'/../..|' {} \\;`;
+		defaultFixupCommand = tg`${defaultFixupCommand}\nfind ${tg.output} -name '*.pc' -type f -exec sed -i 's|^prefix=.*|prefix=$'"{pcfiledir}"'/../..|' {} \\;`;
 	}
 
 	if (debug || removeLibtoolArchives || normalizePkgConfigPrefix) {

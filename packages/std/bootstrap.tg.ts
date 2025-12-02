@@ -133,9 +133,9 @@ export const patch = async (
 	const env = std.env.arg(utilsArtifact, shellArtifact, { utils: false });
 
 	const patchedSource = await std.build`
-		cp -R ${source} $OUTPUT
-		chmod -R +w $OUTPUT
-		cd $OUTPUT
+		cp -R ${source} ${tg.output}
+		chmod -R +w ${tg.output}
+		cd ${tg.output}
 		${patchScript}
 	`
 		.bootstrap(true)

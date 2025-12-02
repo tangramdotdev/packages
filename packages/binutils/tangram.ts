@@ -107,7 +107,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	// Collect configuration.
 	const configure = {
 		args: [
-			`--with-sysroot=$OUTPUT`,
+			tg`--with-sysroot=${tg.output}`,
 			"--disable-dependency-tracking",
 			"--disable-nls",
 			`--build=${build}`,
