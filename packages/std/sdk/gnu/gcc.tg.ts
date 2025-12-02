@@ -101,7 +101,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	// Configure sysroot.
 	const targetPrefix = isCross ? `${target}-` : "";
 	const sysrootDir = `${isCross ? `/${target}` : ""}/sysroot`;
-	const prefixSysrootPath = `$\{OUTPUT\}${sysrootDir}`;
+	const prefixSysrootPath = `$\{TANGRAM_OUTPUT\}${sysrootDir}`;
 
 	// Before configuring, copy the target binutils and sysroot into the prefix. Create a symlink in a subdirectory of the prefix to ensure the toolchain is relocatable.
 	const sysrootToCopy = isCross
@@ -159,7 +159,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 					"--enable-default-ssp",
 					"--enable-initfini-array",
 					`LDFLAGS_FOR_TARGET=-L$PWD/${target}/libgcc`,
-					tg`--with-gxx-include-dir=${tg.output}/${target}/include/c++/${metadata.version}`,
+					`--with-gxx-include-dir=$\{TANGRAM_OUTPUT\}/${target}/include/c++/${metadata.version}`,
 				];
 			case "stage2_full":
 				return [

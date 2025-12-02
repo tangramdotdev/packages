@@ -325,7 +325,11 @@ export namespace env {
 		switch (components.length) {
 			case 1: {
 				const [artifact] = components;
-				if (artifact && typeof artifact !== "string") {
+				if (
+					artifact &&
+					typeof artifact !== "string" &&
+					!(artifact instanceof tg.Placeholder)
+				) {
 					return artifact;
 				}
 			}
@@ -364,7 +368,11 @@ export namespace env {
 		switch (components.length) {
 			case 1: {
 				const [artifact] = components;
-				if (artifact && typeof artifact !== "string") {
+				if (
+					artifact &&
+					typeof artifact !== "string" &&
+					!(artifact instanceof tg.Placeholder)
+				) {
 					return artifact;
 				}
 			}

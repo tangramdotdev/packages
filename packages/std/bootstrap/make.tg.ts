@@ -38,9 +38,9 @@ export const build = async (arg?: Arg) => {
 		args: tg.Mutation.unset(),
 	};
 	const install: std.phases.PhaseArg = {
-		pre: tg`mkdir -p ${tg.output}/bin`,
+		pre: await tg`mkdir -p ${tg.output}/bin`,
 		body: {
-			command: tg`cp make ${tg.output}/bin`,
+			command: await tg`cp make ${tg.output}/bin`,
 			args: tg.Mutation.unset(),
 		},
 	};

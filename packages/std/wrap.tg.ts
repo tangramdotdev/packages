@@ -932,7 +932,8 @@ export namespace wrap {
 		export namespace Template {
 			export type Component =
 				| { kind: "string"; value: string }
-				| { kind: "artifact"; value: tg.Artifact.Id };
+				| { kind: "artifact"; value: tg.Artifact.Id }
+				| { kind: "placeholder"; value: string };
 		}
 
 		// Matches tg::mutation::Data
@@ -2402,6 +2403,8 @@ const manifestTemplateFromArg = async (
 		t.components.map(async (component) => {
 			if (typeof component === "string") {
 				return { kind: "string", value: component };
+			} else if (component instanceof tg.Placeholder) {
+				return { kind: "placeholder", value: component.name };
 			} else {
 				await component.store();
 				return { kind: "artifact", value: component.id };
