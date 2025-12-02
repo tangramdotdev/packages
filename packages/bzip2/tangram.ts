@@ -60,7 +60,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	// Define phases.
 	const buildPhase = `make CC="cc" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="cc" SHELL="$SHELL"`;
 	const install = {
-		args: [tg`PREFIX="${tg.output}" SHELL="$SHELL"`],
+		args: [await tg`PREFIX="${tg.output}" SHELL="$SHELL"`],
 	};
 	const phases: std.phases.Arg = {
 		configure: tg.Mutation.unset(),

@@ -51,7 +51,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	if (
 		os === "linux" &&
 		((await std.env.tryWhich({
-			env: std.env.arg(env_, { utils: false }),
+			env: await std.env.arg(env_, { utils: false }),
 			name: "clang",
 		})) !== undefined ||
 			sdk?.toolchain === "llvm")
