@@ -321,7 +321,7 @@ export const testBasicExeWithLib = async () => {
 		rustDependencies: [
 			{
 				name: depName,
-				artifact: await tests.get(depName).then(tg.Directory.expect),
+				artifact: tests.get(depName).then(tg.Directory.expect),
 			},
 		],
 	});
