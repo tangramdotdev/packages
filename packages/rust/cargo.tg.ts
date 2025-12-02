@@ -155,8 +155,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 
 	// Create the build script.
-	const cargoArgString = cargoArgs.join(" ");
-	const buildCommand = `cargo build ${cargoArgString}`;
+	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
+	const buildCommand = tg`cargo build ${cargoArgString}`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
