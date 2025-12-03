@@ -1,25 +1,25 @@
-import { cargo } from "rust" with { local: "../rust" };
+import * as cmake from "cmake" with { local: "../cmake" };
 import * as std from "std" with { local: "../std" };
 
 export const metadata = {
-	homepage: "https://www.nushell.sh/",
+	homepage: "https://libuv.org/",
 	license: "MIT",
-	name: "nushell",
-	repository: "https://github.com/nushell/nushell",
-	version: "0.109.1",
-	tag: "nushell/0.109.1",
+	name: "libuv",
+	repository: "https://github.com/libuv/libuv",
+	version: "1.51.0",
+	tag: "libuv/1.51.0",
 	provides: {
-		binaries: ["nu"],
+		libraries: ["uv"],
 	},
 };
 
-export const source = async () => {
-	const { name, version } = metadata;
+export const source = () => {
+	const { version } = metadata;
 	const checksum =
-		"sha256:53d4611113a17ed3a29b0c81ea981d546a40dafca77fdcd9af7a7629ceabf48f";
-	const owner = name;
-	const repo = name;
-	const tag = version;
+		"sha256:27e55cf7083913bfb6826ca78cde9de7647cded648d35f24163f2d31bb9f51cd";
+	const owner = "libuv";
+	const repo = "libuv";
+	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
 		owner,
@@ -31,7 +31,7 @@ export const source = async () => {
 
 export type Arg = {
 	build?: string;
-	cargo?: cargo.Arg;
+	cmake?: cmake.BuildArg;
 	env?: std.env.Arg;
 	host?: string;
 	sdk?: std.sdk.Arg;
@@ -40,25 +40,31 @@ export type Arg = {
 
 export const build = async (...args: std.Args<Arg>) => {
 	const {
-		build: build_,
-		cargo: cargoArg = {},
+		build,
+		cmake: cmakeArg = {},
 		env,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
+	const configure = {
+		args: [
+			"-DCMAKE_BUILD_TYPE=Release",
+			"-DCMAKE_INSTALL_LIBDIR=lib",
+			"-DBUILD_TESTING=OFF",
+		],
+	};
 
-	return cargo.build(
+	return cmake.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env,
+			phases: { configure },
 			sdk,
 			source: source_ ?? source(),
 		},
-		cargoArg,
+		cmakeArg,
 	);
 };
 

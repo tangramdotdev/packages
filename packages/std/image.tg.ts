@@ -46,6 +46,22 @@ export const testWrappedEntrypoint = async () => {
 	return imageFile;
 };
 
+export const testWrappedEntrypointWithEnv = async () => {
+	const shell = tg.File.expect(await (await bootstrap.shell()).get("bin/dash"));
+	const script = `echo "Hello, $NAME!"`;
+	const buildToolchain = await bootstrapBuildToolchain();
+	const env = { NAME: "Tangram" };
+	const exe = await std.wrap(script, {
+		buildToolchain,
+		env: std.env.arg(env),
+		interpreter: shell,
+	});
+	await exe.store();
+	console.log("exe", exe.id);
+	const imageFile = await image(exe, { buildToolchain });
+	return imageFile;
+};
+
 export const testBasicRootfs = async () => {
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const rootFs = tg.directory(utils, {

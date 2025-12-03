@@ -41,6 +41,10 @@ export type BinarySpec =
 			exitOnErr?: boolean;
 			/** The name of the binary. */
 			name: string;
+			/** A script to run before the binary. */
+			pre?: tg.Template.Arg;
+			/** Skip running the binary and only check that it exists. Default: false. */
+			skipRun?: boolean;
 			/** Arguments to pass. Defaults to `["--version"]`. */
 			testArgs?: Array<string>;
 			/** The expected output snapshot. If unspecified, defaults to checking for the package version. Whitespace is normalized before comparison. */
@@ -226,6 +230,8 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		return true;
 	}
 	let name: string | undefined;
+	let pre: tg.Template.Arg | undefined;
+	let skipRun = false;
 	let snapshot: string | undefined;
 	let testArgs = ["--version"];
 	let exitOnErr = true;
@@ -234,6 +240,12 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 	} else {
 		if (arg.binary.name) {
 			name = arg.binary.name;
+		}
+		if (arg.binary.pre) {
+			pre = arg.binary.pre;
+		}
+		if (arg.binary.skipRun) {
+			skipRun = arg.binary.skipRun;
 		}
 		if (arg.binary.testArgs) {
 			testArgs = arg.binary.testArgs;
@@ -251,8 +263,14 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		subpath: `bin/${name}`,
 	});
 
+	// If skipRun is set, only check existence.
+	if (skipRun) {
+		return true;
+	}
+
 	// Run the binary with the provided test invocation.
-	const executable = tg`${arg.directory}/bin/${name} ${tg.Template.join(
+	const preScript = pre ? tg`${pre}\n` : "";
+	const executable = tg`${preScript}${arg.directory}/bin/${name} ${tg.Template.join(
 		" ",
 		...testArgs,
 	)} > ${tg.output} 2>&1`;
@@ -749,22 +767,28 @@ export function binary(name: string): string;
 export function binary(
 	name: string,
 	overrides: {
-		testArgs?: Array<string>;
-		snapshot?: string;
 		exitOnErr?: boolean;
+		pre?: tg.Template.Arg;
+		skipRun?: boolean;
+		snapshot?: string;
+		testArgs?: Array<string>;
 	},
 ): {
 	name: string;
-	testArgs?: Array<string>;
-	snapshot?: string;
 	exitOnErr?: boolean;
+	pre?: tg.Template.Arg;
+	skipRun?: boolean;
+	snapshot?: string;
+	testArgs?: Array<string>;
 };
 export function binary(
 	name: string,
 	overrides?: {
-		testArgs?: Array<string>;
-		snapshot?: string;
 		exitOnErr?: boolean;
+		pre?: tg.Template.Arg;
+		skipRun?: boolean;
+		snapshot?: string;
+		testArgs?: Array<string>;
 	},
 ): BinarySpec {
 	if (!overrides || Object.keys(overrides).length === 0) {
@@ -782,9 +806,11 @@ export const binaries = (
 	overrides?: Record<
 		string,
 		{
-			testArgs?: Array<string>;
-			snapshot?: string;
 			exitOnErr?: boolean;
+			pre?: tg.Template.Arg;
+			skipRun?: boolean;
+			snapshot?: string;
+			testArgs?: Array<string>;
 		}
 	>,
 ): Array<BinarySpec> => {
@@ -798,9 +824,11 @@ export const binaries = (
 export const allBinaries = (
 	names: Array<string>,
 	override: {
-		testArgs?: Array<string>;
-		snapshot?: string;
 		exitOnErr?: boolean;
+		pre?: tg.Template.Arg;
+		skipRun?: boolean;
+		snapshot?: string;
+		testArgs?: Array<string>;
 	},
 ): Array<BinarySpec> => {
 	return names.map((name) => ({ name, ...override }));
