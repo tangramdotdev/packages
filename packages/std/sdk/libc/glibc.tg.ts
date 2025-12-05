@@ -130,6 +130,29 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		filePath: `${host}/lib/libm.so`,
 	});
 
+	// Wrap iconv binary with library path containing libc.so.6 and the ld-linux interpreter.
+	const iconvBinary = await result
+		.get(`${host}/bin/iconv`)
+		.then(tg.File.expect);
+	const libcSo = await result.get(`${host}/lib/libc.so.6`).then(tg.File.expect);
+	// FIXME - this is confusing to name it libc.so. Find a better solution or write a better explanation.
+	const libDir = tg.directory({ "libc.so": libcSo });
+	const ldLinux = await result
+		.get(`${host}/lib/${interpreterName(host)}`)
+		.then(tg.File.expect);
+	const wrappedIconv = await std.wrap(iconvBinary, {
+		buildToolchain: std.bootstrap.sdk(),
+		interpreter: {
+			kind: "ld-linux",
+			executable: ldLinux,
+		},
+		libraryPaths: [libDir],
+		host: std.bootstrap.toolchainTriple(host),
+	});
+	result = await tg.directory(result, {
+		[`${host}/bin/iconv`]: wrappedIconv,
+	});
+
 	return result;
 };
 

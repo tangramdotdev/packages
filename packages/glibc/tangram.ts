@@ -115,6 +115,8 @@ export const build = async (...args: std.Args<Arg>) => {
 		filePath: `${host}/lib/libm.so`,
 	});
 
+	// TODO Wrap iconv/ other bins?
+
 	return result;
 };
 

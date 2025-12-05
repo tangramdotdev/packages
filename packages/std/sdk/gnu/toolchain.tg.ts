@@ -96,6 +96,7 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 		buildToolchain: std.env.arg(bootstrapToolchain, bootstrapUtils),
 		level: "python",
 	});
+
 	const bootstrapBuildEnv = std.env.arg(
 		bootstrapUtils,
 		bootstrapBuildTools,

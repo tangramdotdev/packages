@@ -1296,8 +1296,10 @@ const interpreterFromArg = async (
 
 			// If no preload is defined, add the default injection preload.
 			if (preloads.length === 0) {
-				const arch = interpreterMetadata.arch;
-				const host = `${arch}-unknown-linux-gnu`;
+				// FIXME remove.
+				// const arch = interpreterMetadata.arch;
+				// const host = `${arch}-unknown-linux-gnu`;
+				// FIXME - is this redundant?
 				const detectedBuild = await std.triple.host();
 				const build = buildArg ?? detectedBuild;
 				const buildToolchain = await getBuildToolchain(
