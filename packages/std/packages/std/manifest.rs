@@ -248,7 +248,6 @@ impl Manifest {
 		&self,
 		tg: &impl tg::Handle,
 		file: &tg::File,
-		target: &str,
 	) -> tg::Result<tg::File> {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?self, "Embedding manifest");
@@ -339,7 +338,6 @@ impl Manifest {
 
 		// Run the command.
 		let output_ = tokio::process::Command::new(wrap)
-			.arg(target)
 			.arg(input)
 			.arg(output)
 			.arg(stub_elf)

@@ -9,13 +9,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#ifdef __aarch64__
-	#define MACHINE EM_AARCH64
-#endif
-#ifdef __x86_64__
-	#define MACHINE EM_X86_64
-#endif
-
 static bool TRACING_ENABLED = false;
 
 #define TRACE(...) if (TRACING_ENABLED) { fprintf(stderr, "wrap: "); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
@@ -80,7 +73,7 @@ void file_close (File file) {
 	close(file.fd);
 }
 
-Elf elf_read (File file, Elf64_Half machine, bool readonly) {
+Elf elf_read (File file, bool readonly) {
 	Elf elf = {0};
 	int flags = readonly ? PROT_READ : PROT_READ | PROT_WRITE;
 	elf.ehdr = (Elf64_Ehdr*) mmap (NULL, (size_t) file.sz, flags, MAP_SHARED, file.fd, 0);
@@ -94,7 +87,6 @@ Elf elf_read (File file, Elf64_Half machine, bool readonly) {
 		&& 	elf.ehdr->e_ident[EI_DATA] == ELFDATA2LSB
 		&&	elf.ehdr->e_phentsize == sizeof(Elf64_Phdr);
 	ABORT_IF(!is_elf, "not a 64 bit LE elf binary");
-	ABORT_IF(elf.ehdr->e_machine != machine, "invalid architecture");
 	ABORT_IF(elf.ehdr->e_phentsize != sizeof(Elf64_Phdr), "invalid ELF file");
 	ABORT_IF(elf.ehdr->e_shentsize != sizeof(Elf64_Shdr), "invalid ELF file");
 	elf.phdr = (Elf64_Phdr*)((char*)elf.ehdr + elf.ehdr->e_phoff);
@@ -215,24 +207,14 @@ int main (int argc, const char** argv) {
 	TRACING_ENABLED = getenv("TANGRAM_TRACING") != NULL;
 
 	// Check args.
-	ABORT_IF(argc != 7, "usage is %s <arch> <input> <output> <stub.elf> <stub.bin> <manifest>");
-
-	const char* arch = argv[0];
-	Elf64_Half machine = 0;
-	if (strcmp(arch, "aarch64") == 0) {
-		machine = EM_AARCH64;
-	} else if (strcmp(arch, "x86_64")) {
-		machine = EM_X86_64;
-	} else {
-		ABORT_IF(true, "invalid arch, expected one of: aarch64,x86_64 got: %s", arch);
-	};
+	ABORT_IF(argc != 6, "usage is %s <input> <output> <stub.elf> <stub.bin> <manifest>");
 
 	// Open input/output/stub/manifest.
-	File input	= file_open(argv[2], O_RDONLY, 0);
-	File output	= file_open(argv[3], O_RDWR, O_CREAT);
-	File stub_elf	= file_open(argv[4], O_RDONLY, 0);
-	File stub_bin	= file_open(argv[5], O_RDONLY, 0);
-	File manifest	= file_open(argv[6], O_RDONLY, 0);
+	File input	= file_open(argv[1], O_RDONLY, 0);
+	File output	= file_open(argv[2], O_RDWR, O_CREAT);
+	File stub_elf	= file_open(argv[3], O_RDONLY, 0);
+	File stub_bin	= file_open(argv[4], O_RDONLY, 0);
+	File manifest	= file_open(argv[5], O_RDONLY, 0);
 	TRACE( "input:%s,   output:%s,   stub.elf:%s,   stub.bin:%s,   manifest:%s",
 		input.path, output.path, stub_elf.path, stub_bin.path, manifest.path);
 
@@ -241,9 +223,9 @@ int main (int argc, const char** argv) {
 	TRACE("copied %s to %s", input.path, output.path);
 	
 	// Parse the elf files.
-	Elf output_exe	= elf_read(output, machine, false);
+	Elf output_exe	= elf_read(output, false);
 	TRACE("parsed %s", output.path);
-	Elf stub_exe	= elf_read(stub_elf, machine, true);
+	Elf stub_exe	= elf_read(stub_elf, true);
 	TRACE("parsed %s", stub_elf.path);
 	
 	// Scan the executable for its pt_interp and max vaddr
