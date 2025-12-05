@@ -46,7 +46,7 @@ export const source = async () => {
 	return source;
 };
 
-type Arg = {
+export type Arg = {
 	autotools?: std.autotools.Arg;
 	build?: string;
 	dependencies?: {
