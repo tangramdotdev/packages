@@ -945,7 +945,7 @@ export namespace wrap {
 				const manifestFile = await tg
 					.build({
 						executable: workspace.manifestTool({}),
-						args: ["read", tg`${file}`, "-o", tg`${tg.output}`],
+						args: ["read", tg`${file}`, "-o", tg.output],
 						env: { RUST_BACKTRACE: "full" },
 					})
 					.named("read manifest")
@@ -979,7 +979,7 @@ export namespace wrap {
 						"--manifest",
 						tg`${manifestFile}`,
 						"-o",
-						tg`${tg.output}`,
+						tg.output,
 					],
 					env: { RUST_BACKTRACE: "full" },
 				})

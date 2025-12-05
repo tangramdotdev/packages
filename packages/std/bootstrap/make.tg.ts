@@ -57,7 +57,7 @@ export const build = async (arg?: Arg) => {
 	if (embedWrapper) {
 		envArgs.push({ TGLD_EMBED_WRAPPER: true });
 	}
-	const env = std.env.arg(...envArgs, { TGLD_TRACING: "tgld=trace" });
+	const env = std.env.arg(...envArgs);
 
 	const output = await autotoolsInternal({
 		bootstrap: true,

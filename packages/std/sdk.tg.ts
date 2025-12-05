@@ -879,9 +879,6 @@ export namespace sdk {
 				.env(
 					std.env.arg(
 						arg.sdkEnv,
-						{
-							TGLD_TRACING: "tgld=trace",
-						},
 						{ utils: false },
 					),
 				)
