@@ -138,7 +138,7 @@ export const build = async (...args: std.Args<Arg>) => {
 				}
 			: undefined;
 
-	return std.autotools.build(
+	let bindArtifact = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(...env),
@@ -149,6 +149,28 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		autotools,
 	);
+
+	// On Linux, wrap all ELF binaries with the package's lib directory to ensure
+	// transitive library dependencies like libns are found at runtime.
+	if (os === "linux") {
+		const libDir = await bindArtifact.get("lib").then(tg.Directory.expect);
+		const libraryPaths = [libDir];
+		const binDir = await bindArtifact.get("bin").then(tg.Directory.expect);
+		for await (const [name, artifact] of binDir) {
+			if (artifact instanceof tg.File) {
+				const { format } = await std.file.executableMetadata(artifact);
+				if (format === "elf") {
+					const unwrapped = binDir.get(name).then(tg.File.expect);
+					const wrapped = std.wrap(unwrapped, { libraryPaths });
+					bindArtifact = await tg.directory(bindArtifact, {
+						[`bin/${name}`]: wrapped,
+					});
+				}
+			}
+		}
+	}
+
+	return bindArtifact;
 };
 
 export default build;

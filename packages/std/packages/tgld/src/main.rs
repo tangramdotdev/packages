@@ -210,6 +210,29 @@ fn read_options() -> tg::Result<Options> {
 			library_paths.push(library_arg.to_owned());
 		} else if let Some(library_path) = arg.strip_prefix("-L") {
 			library_paths.push(library_path.to_owned());
+		} else if let Some(wl_args) = arg.strip_prefix("-Wl,") {
+			// Handle -Wl,-L,/path and -Wl,-rpath-link,/path.
+			let parts: Vec<&str> = wl_args.split(',').collect();
+			for window in parts.windows(2) {
+				if window[0] == "-L" || window[0] == "-rpath-link" {
+					library_paths.extend(
+						window[1]
+							.split(':')
+							.filter(|p| !p.is_empty())
+							.map(String::from),
+					);
+				}
+			}
+			// Handle -Wl,-L=/path and -Wl,-rpath-link=/path forms.
+			for part in &parts {
+				if let Some(path) = part
+					.strip_prefix("-L=")
+					.or_else(|| part.strip_prefix("-rpath-link="))
+				{
+					library_paths
+						.extend(path.split(':').filter(|p| !p.is_empty()).map(String::from));
+				}
+			}
 		}
 
 		// Add any dynamic libraries passed directly to the linker.
