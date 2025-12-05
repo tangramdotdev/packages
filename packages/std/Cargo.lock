@@ -529,46 +529,18 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-<<<<<<< HEAD
-<<<<<<< HEAD
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10b768e943bed7bf2cab53df09f4bc34bfd217cdb57d971e769874c9a6710618"
-=======
-version = "2.0.1"
-<<<<<<< HEAD
-source = "git+https://github.com/jeltef/derive_more#2d3805b66f00cb31303c7e75edfef9003d48ff04"
-=======
-source = "git+https://github.com/jeltef/derive_more#905f5a3020cf51a82dc2d5fde6f8e5c0cb8e48f4"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-version = "2.1.0"
-source = "git+https://github.com/jeltef/derive_more#c354bad7c9707edb05a471ba35c6b059f3023e78"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "derive_more-impl",
 ]
 
 [[package]]
 name = "derive_more-impl"
-<<<<<<< HEAD
-<<<<<<< HEAD
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d286bfdaf75e988b4a78e013ecd79c581e06399ab53fbacd2d916c2f904f30b"
-=======
-version = "2.0.1"
-<<<<<<< HEAD
-source = "git+https://github.com/jeltef/derive_more#2d3805b66f00cb31303c7e75edfef9003d48ff04"
-=======
-source = "git+https://github.com/jeltef/derive_more#905f5a3020cf51a82dc2d5fde6f8e5c0cb8e48f4"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-version = "2.1.0"
-source = "git+https://github.com/jeltef/derive_more#c354bad7c9707edb05a471ba35c6b059f3023e78"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -1947,19 +1919,7 @@ checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "blake3",
  "byte-unit",
@@ -2004,19 +1964,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2025,19 +1973,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "dashmap",
  "futures",
@@ -2051,19 +1987,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "bytes",
  "derive_more",
@@ -2088,19 +2012,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "byteorder",
  "bytes",
@@ -2113,19 +2025,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -2156,19 +2056,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "derive_more",
  "percent-encoding",
@@ -2180,19 +2068,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
 source = "git+https://github.com/tangramdotdev/tangram?rev=bca40d0f7b74a7877f009265fdaf75073d022d32#bca40d0f7b74a7877f009265fdaf75073d022d32"
-=======
-<<<<<<< HEAD
-source = "git+https://github.com/tangramdotdev/tangram?rev=1721e4431ac262bd1ec233f341aed806ca307c29#1721e4431ac262bd1ec233f341aed806ca307c29"
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df#11c9ab05fdca33d7b29a622ed4e04dcb04f0f8df"
->>>>>>> 886e9e8b (match hash)
->>>>>>> 4aff5673 (match hash)
-=======
-source = "git+https://github.com/tangramdotdev/tangram?rev=e286a83e5d2b16c4de5e47f73a9e38ce243a54e8#e286a83e5d2b16c4de5e47f73a9e38ce243a54e8"
->>>>>>> 6ea7d3a0 (fix: rollup of wrapper fixes)
 dependencies = [
  "bytes",
  "data-encoding",
