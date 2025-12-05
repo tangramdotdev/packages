@@ -195,3 +195,22 @@ static void double_to_string (Arena* arena, double d, String* s) {
 
 	reverse(s);
 }
+
+static void read_all (int tracing, int fd, char* dst, size_t length, off_t offset) {
+	if (tracing) {
+		trace("read_all length:%ld offset:%ld\n", length, offset);
+	}
+	while(length) {
+		int result = pread64(fd, (void*)dst, length, offset);
+		if (tracing) {
+			trace("read_all result = %d\n", result);
+		}
+		ABORT_IF(result < 0, "failed to read from file");
+		if (result == 0) {
+			break;
+		}
+		length	-= result;
+		offset	+= result;
+		dst	+= result;
+	}
+}

@@ -99,7 +99,6 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 			interpreter: ldso,
 			host,
 		});
-
 		if (isLlvm) {
 			cc = tg.File.expect(await directory.get(`bin/clang`));
 			cxx = cc;
@@ -275,15 +274,24 @@ const ldProxy = async (arg: LdProxyArg) => {
 	const embedWrapper = arg.embedWrapper ?? std.triple.os(build) === "linux";
 
 	// Get the embedded wrapper artifacts.
-	let wrapBin = undefined;
 	let stubBin = undefined;
 	let stubElf = undefined;
-
+	let wrapBin = undefined;
+	let objcopy = undefined;
 	if (std.triple.os(build) === "linux") {
 		const stub_ = await stub.workspace(arg);
-		wrapBin = await stub_.get("wrap");
 		stubBin = await stub_.get("stub.bin");
 		stubElf = await stub_.get("stub.elf");
+		wrapBin = await stub_.get("wrap");
+
+		// Find objcopy.
+		const binDir = await buildToolchain.get("bin").then(tg.Directory.expect);
+		for (let [name, artifact] of Object.entries(await binDir.entries())) {
+			if (name.endsWith("objcopy")) {
+				objcopy = artifact;
+			}
+		}
+		tg.assert(objcopy, "failed to find objcopy binary");
 	}
 
 	// The linker proxy is built for the build machine.
@@ -298,6 +306,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 		build,
 		host,
 	});
+
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		arg.build === undefined && arg.host === undefined
@@ -307,6 +316,10 @@ const ldProxy = async (arg: LdProxyArg) => {
 					host,
 				});
 	await hostWrapper.store();
+
+	// Use the host machine's codesign binary;
+	const codesign = await tg.build(workspace.rcodesign);
+	await codesign.store();
 
 	// Define environment for the linker proxy.
 	const env = {
@@ -321,11 +334,15 @@ const ldProxy = async (arg: LdProxyArg) => {
 			arg.interpreter ?? "none",
 		),
 		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
+		TANGRAM_CODESIGN_ID: tg.Mutation.setIfUnset(codesign.id),
 		TANGRAM_STUB_BIN_ID: stubBin
 			? tg.Mutation.setIfUnset(stubBin.id)
 			: undefined,
 		TANGRAM_STUB_ELF_ID: stubElf
 			? tg.Mutation.setIfUnset(stubElf.id)
+			: undefined,
+		TANGRAM_OBJCOPY_ID: objcopy
+			? tg.Mutation.setIfUnset(objcopy.id)
 			: undefined,
 		TANGRAM_WRAP_ID: wrapBin ? tg.Mutation.setIfUnset(wrapBin.id) : undefined,
 		TGLD_EMBED_WRAPPER: embedWrapper
@@ -334,12 +351,13 @@ const ldProxy = async (arg: LdProxyArg) => {
 	};
 
 	// Create the linker proxy.
-	return std.wrap(buildLinkerProxy, {
+	const p = await std.wrap(buildLinkerProxy, {
 		buildToolchain,
 		env,
 		build,
 		host: build,
 	});
+	return p;
 };
 
 type StripProxyArg = {

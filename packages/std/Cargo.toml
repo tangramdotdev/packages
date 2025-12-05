@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "packages/manifest_tool",
   "packages/tgcc",
   "packages/tgld",
   "packages/tgstrip",
@@ -28,13 +29,16 @@ result_large_err = "allow"
 [workspace.dependencies]
 anstream = "0.6"
 bytes = { version = "1", features = ["serde"] }
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 crossterm = "0.28"
 fnv = "1"
 futures = "0.3"
 goblin = "0.9"
 itertools = "0.14"
 libc = "0.2"
+num = "0.4"
+paste = "1"
+rustix = { version = "1", features = ["all-apis"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "bca40d0f7b74a7877f009265fdaf75073d022d32" }
@@ -49,8 +53,10 @@ tokio = { version = "1", default-features = false, features = [
 tokio-stream = { version = "0.1", default-features = false, features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "parking_lot"] }
+zerocopy = { version = "0.8", features = ["derive"] }
 
 tangram_std = { path = "." }
+manifest_tool = { path = "packages/manifest_tool" }
 tgcc = { path = "packages/tgcc" }
 tgld = { path = "packages/tgld" }
 tgstrip = { path = "packages/tgstrip" }
@@ -82,7 +88,9 @@ workspace = true
 
 [dependencies]
 anstream = { workspace = true }
+manifest_tool = { workspace = true }
 bytes = { workspace = true }
+clap = { workspace = true }
 crossterm = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }

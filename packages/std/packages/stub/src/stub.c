@@ -302,7 +302,7 @@ static LoadedInterpreter load_interpreter(
 
 	// Read the e_hdr
 	Elf64_Ehdr* ehdr = ALLOC(arena, Elf64_Ehdr);
-	ABORT_IF(pread64(fd, (void*)ehdr, sizeof(Elf64_Ehdr), 0) < 0, "failed to read ehdr");
+	read_all(options->enable_tracing, fd, (char*)ehdr, sizeof(Elf64_Ehdr), 0);
 
 	// Validate
 	bool is_elf64 = (ehdr->e_ident[EI_MAG0] == ELFMAG0)
@@ -319,10 +319,7 @@ static LoadedInterpreter load_interpreter(
 
 	// Get the program header table.
 	Elf64_Phdr* phdr = ALLOC_N(arena, ehdr->e_phnum, Elf64_Phdr);
-	ABORT_IF(
-		pread64(fd, (void*)phdr, sizeof(Elf64_Phdr) * ehdr->e_phnum, ehdr->e_phoff) < 0,
-		"failed to read phdr"
-	);
+	read_all(options->enable_tracing, fd, (char*)phdr, sizeof(Elf64_Phdr) * ehdr->e_phnum, ehdr->e_phoff);
 
 	// We scan the program header table looking for the address range it should be mapped to.
 	uint64_t minvaddr = (uint64_t)-1;
@@ -543,6 +540,8 @@ static ProgramHeaders create_program_headers(
 typedef struct {
 	Elf64_Ehdr* elf_header;
 	Elf64_Phdr* program_headers;
+	Elf64_Shdr* section_headers;
+	char* section_string_table;
 	Manifest* manifest;
 	Footer* footer;
 } Executable;
@@ -601,16 +600,26 @@ static int read_executable (
 	off_t offset = 0;
 
 	// Read the elf header. We don't need to do any validation here, we assume the kernel didn't lie.
-	ABORT_IF(pread64(fd, (void*)executable->elf_header, sizeof(Elf64_Ehdr), 0) != sizeof(Elf64_Ehdr), "failed to read the ehdr");
+	read_all(options->enable_tracing, fd, (char*)executable->elf_header, sizeof(Elf64_Ehdr), 0);
 
 	// Read the program header table.
 	offset = executable->elf_header->e_phoff;
 	size_t size = executable->elf_header->e_phnum * sizeof(Elf64_Phdr);
 	executable->program_headers = ALLOC_N(arena, executable->elf_header->e_phnum, Elf64_Phdr);
-	ABORT_IF(
-		pread64(fd, (void*)executable->program_headers, size, offset) != size,
-		"failed to read program headers"
-	);
+	read_all(options->enable_tracing, fd, (char*)executable->program_headers, size, offset);
+
+	// Read the section header table.
+	offset = executable->elf_header->e_shoff;
+	size = executable->elf_header->e_shnum * sizeof(Elf64_Shdr);
+	executable->section_headers = ALLOC_N(arena, executable->elf_header->e_shnum, Elf64_Shdr);
+	read_all(options->enable_tracing, fd, (char*)executable->section_headers, size, offset);
+
+	// Read the section header string table.
+	Elf64_Shdr* section = executable->section_headers + executable->elf_header->e_shstrndx;
+	offset = section->sh_offset;
+	size = section->sh_size;
+	executable->section_string_table = ALLOC_N(arena, size, char);
+	read_all(options->enable_tracing, fd, (char*)executable->section_string_table, size, offset);
 
 	// Get the file size.
 	offset = lseek(fd, 0, SEEK_END);
@@ -621,52 +630,34 @@ static int read_executable (
 		trace("file size: %d\n", offset);
 	}
 
-	// Read the manifest footer.
-	if (pread64(fd, executable->footer, sizeof(Footer), offset - sizeof(Footer)) != sizeof(Footer)) {
-		ABORT("failed to read footer");
-	}
-	if (options->enable_tracing) {
-		trace("read footer: size=%d, version=%d\n",
-			executable->footer->size,
-			executable->footer->version);
-	}
-	// Check the magic number.
-	int matches = executable->footer->magic[0] == 't'
-		&& executable->footer->magic[1] == 'a'
-		&& executable->footer->magic[2] == 'n'
-		&& executable->footer->magic[3] == 'g'
-		&& executable->footer->magic[4] == 'r'
-		&& executable->footer->magic[5] == 'a'
-		&& executable->footer->magic[6] == 'm'
-		&& executable->footer->magic[7] == '\0';
-	if (!matches) {
+	// Look for the manifest in the executable sections.
+	char* data = NULL;
+
+	Elf64_Shdr* section_itr = executable->section_headers;
+	Elf64_Shdr* section_end = section_itr + executable->elf_header->e_shnum;
+	String TANGRAM_MANIFEST_SECTION_NAME = STRING_LITERAL(".note.tg-manifest");
+	for (; section_itr != section_end; section_itr++) {
+		String name = {0};
+		name.ptr = &executable->section_string_table[section_itr->sh_name];
+		name.len = strlen(name.ptr);
 		if (options->enable_tracing) {
-			trace("mismatched footer\n");
+			trace("found section ");
+			print_json_string(&name);
+			trace("\n");
 		}
-		close(fd);
-		return 0;
-	}
-
-	// Read the manifest data.
-	if (options->enable_tracing) {
-		trace("allocating memory for the data: %ld\n", executable->footer->size);
-	}
-
-	char* data = (char*)alloc(arena, executable->footer->size, 1);
-	size_t count = 0;
-	offset -= (sizeof(Footer) + executable->footer->size);
-
-	while (count < executable->footer->size) {
-		long amt = pread64(fd, (void*)(data + count), executable->footer->size - count, offset);
-		if (amt < 0) {
-			ABORT("failed to read");
-		}
-		if (amt == 0) {
+		if (streq(name, TANGRAM_MANIFEST_SECTION_NAME)) {
+			data	= alloc(arena, section_itr->sh_size, 1);
+			size	= section_itr->sh_size;
+			offset	= section_itr->sh_offset;
+			if (options->enable_tracing) {
+				trace("reading manifest at offset: %ld, size: %ld\n", offset, size);
+			}
+			read_all(options->enable_tracing, fd, data, size, offset);
+			memcpy((void*)executable->footer, (void*)(data + (size - sizeof(Footer))), sizeof(Footer));
 			break;
 		}
-		offset += amt;
-		count += amt;
 	}
+	ABORT_IF(!data, "failed to find manifest section");
 
 	// Close the file.
 	close(fd);
@@ -882,6 +873,8 @@ void main (void *sp) {
 		.manifest	 = ALLOC(&arena, Manifest),
 		.elf_header	 = ALLOC(&arena, Elf64_Ehdr),
 		.program_headers = NULL,
+		.section_headers = NULL,
+		.section_string_table = NULL,
 		.footer		= &footer
 	};
 	if (!read_executable(&arena, &stack, &options, &executable)) {

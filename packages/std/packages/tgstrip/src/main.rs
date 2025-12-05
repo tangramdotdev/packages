@@ -259,9 +259,9 @@ async fn run_proxy(
 			tracing::warn!(
 				"found a content executable. passing through, but this is probably an error and likely to fail"
 			);
+
 			// If the executable is content, pass through the arguments to strip unchanged.
 			run_strip(strip_program, strip_args, &[target_path])?;
-			return Ok(());
 		},
 	}
 

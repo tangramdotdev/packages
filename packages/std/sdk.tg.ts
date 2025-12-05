@@ -38,7 +38,9 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 		if (hostOs === "darwin") {
 			throw new Error(`The GCC toolchain is not available on macOS`);
 		}
-		toolchain = await tg.build(gnu.toolchain, { host, target });
+		toolchain = await tg
+			.build(gnu.toolchain, { host, target })
+			.named("gnu toolchain");
 	} else if (toolchain_ === "llvm") {
 		let arg: llvm.LLVMArg = { host, target };
 		toolchain = await tg.build(llvm.toolchain, arg);
@@ -877,9 +879,6 @@ export namespace sdk {
 				.env(
 					std.env.arg(
 						arg.sdkEnv,
-						{
-							TGLD_TRACING: "tgld=trace",
-						},
 						{ utils: false },
 					),
 				)
@@ -891,10 +890,7 @@ export namespace sdk {
 		let metadata = await std.file.executableMetadata(compiledProgram);
 		if (metadata.format === "elf") {
 			let executable = compiledProgram;
-			if (proxiedLinker) {
-				executable = tg.File.expect(await std.wrap.unwrap(compiledProgram));
-				metadata = await std.file.executableMetadata(executable);
-			}
+			metadata = await std.file.executableMetadata(executable);
 			// Assert the executable has the correct format, architecture, and dependencies.
 			tg.assert(metadata.format === "elf");
 			tg.assert(metadata.arch === expectedArch);

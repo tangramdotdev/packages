@@ -1,4 +1,5 @@
 import * as bootstrap from "./bootstrap.tg.ts";
+import * as elf from "./file/elf.tg.ts";
 import * as gnu from "./sdk/gnu.tg.ts";
 import * as std from "./tangram.ts";
 import * as injection from "./wrap/injection.tg.ts";
@@ -17,9 +18,26 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
 
 	// Check if the executable is already a wrapper and get its manifest
-	const [binary, existingManifest] = await wrap
-		.splitManifestFromExecutableArg(arg.executable)
-		.then((r) => (r ? r : [undefined, undefined]));
+	let existingManifest = undefined;
+	let binary = undefined;
+	if (
+		arg.executable instanceof tg.File ||
+		arg.executable instanceof tg.Symlink
+	) {
+		const f =
+			arg.executable instanceof tg.Symlink
+				? await arg.executable.resolve()
+				: arg.executable;
+		if (f instanceof tg.File) {
+			existingManifest = await wrap.Manifest.read(f);
+			if (
+				existingManifest &&
+				(await std.file.detectExecutableKind(f)) === "elf"
+			) {
+				binary = f;
+			}
+		}
+	}
 
 	const executable =
 		existingManifest?.executable ??
@@ -612,30 +630,6 @@ export namespace wrap {
 		}
 	};
 
-	/** Utility to split a wrapped binary into its original executable and manifest, if it exists. */
-	export const splitManifestFromExecutableArg = async (
-		executable:
-			| undefined
-			| number
-			| string
-			| tg.Template
-			| tg.File
-			| tg.Symlink,
-	): Promise<[tg.File, wrap.Manifest] | undefined> => {
-		let ret = undefined;
-
-		if (executable instanceof tg.File || executable instanceof tg.Symlink) {
-			const f =
-				executable instanceof tg.Symlink
-					? await executable.resolve()
-					: executable;
-			if (f instanceof tg.File) {
-				ret = wrap.Manifest.split(f);
-			}
-		}
-		return ret;
-	};
-
 	/** Utility to retrieve the existing manifest from an exectuable arg, if it's a wrapper. If not, returns `undefined`. */
 	export const existingManifestFromExecutableArg = async (
 		executable:
@@ -852,37 +846,6 @@ export namespace wrap {
 		return await getNeededLibraries(wrappedExecutableFile);
 	};
 
-	/** Attempt to unwrap a wrapped executable. Returns undefined if the input was not a Tangram wrapper. */
-	export const tryUnwrap = async (
-		file: tg.File,
-	): Promise<tg.Symlink | tg.File | tg.Template | undefined> => {
-		try {
-			return await unwrap(file);
-		} catch (_) {
-			return undefined;
-		}
-	};
-
-	/** Unwrap a wrapped executable. Throws an error if the input was not a Tangram executable. */
-	export const unwrap = async (
-		file: tg.File,
-	): Promise<tg.Symlink | tg.File | tg.Template> => {
-		const fileAndManifest = await wrap.Manifest.split(file);
-		if (!fileAndManifest) {
-			throw new Error(`Cannot unwrap ${file.id}: not wrapped executable.`);
-		}
-		const [bin, manifest] = fileAndManifest;
-		if (manifest.executable.kind === "content") {
-			return templateFromManifestTemplate(manifest.executable.value);
-		} else if (manifest.executable.kind == "path") {
-			return fileOrSymlinkFromManifestTemplate(manifest.executable.value);
-		} else if (manifest.executable.kind == "address") {
-			return bin;
-		} else {
-			throw new Error("could not extract original executable");
-		}
-	};
-
 	export namespace Manifest {
 		export type Interpreter =
 			| NormalInterpreter
@@ -975,120 +938,26 @@ export namespace wrap {
 		// The non-serializeable type of a normalized env.
 		export type Env = tg.Mutation<std.env.EnvObject>;
 
-		/** Split a manifest from the end of a file. */
-		export const split = async (
-			file: tg.File,
-		): Promise<[tg.File, wrap.Manifest] | undefined> => {
-			// Read the magic number.
-			const magicNumberBytes = await file.read({
-				position: `end.-8`,
-				length: 8,
-			});
-			for (let i = 0; i < MANIFEST_MAGIC_NUMBER.length; i++) {
-				if (magicNumberBytes[i] !== MANIFEST_MAGIC_NUMBER[i]) {
-					return undefined;
-				}
-			}
-
-			// Read the version.
-			const versionBytes = await file.read({
-				position: `end.-16`,
-				length: 8,
-			});
-			const version = Number(
-				new DataView(versionBytes.buffer).getBigUint64(0, true),
-			);
-
-			if (version === MANIFEST_VERSION_0) {
-				// Read the manifest length.
-				const lengthBytes = await file.read({
-					position: `end.-24`,
-					length: 8,
-				});
-				const length = Number(
-					new DataView(lengthBytes.buffer).getBigUint64(0, true),
-				);
-
-				// Read the manifest.
-				const manifestBytes = await file.read({
-					position: `end.-${length + 24}`,
-					length,
-				});
-
-				// Deserialize the manifest.
-				const manifestString = tg.encoding.utf8.decode(manifestBytes);
-				const manifest = tg.encoding.json.decode(
-					manifestString,
-				) as wrap.Manifest;
-
-				// Reconstruct the original file.
-				let bytes = (await file.bytes()).slice(
-					0,
-					(await file.length()) - (length + 24),
-				);
-				let new_file = await tg.file(bytes, {
-					executable: true,
-					dependencies: await file.dependencies(),
-				});
-
-				return [new_file, manifest];
-			} else {
-				return undefined;
-			}
-		};
-
-		/** Read a manifest from the end of a file. */
 		export const read = async (
 			file: tg.File,
 		): Promise<wrap.Manifest | undefined> => {
-			// Read the header.
-			const headerLength = MANIFEST_MAGIC_NUMBER.length + 8 + 8;
-			const headerBytes = await file.read({
-				position: `end.-${headerLength}`,
-				length: headerLength,
-			});
-			if (headerBytes.length !== headerLength) {
-				return undefined;
-			}
-			let position = headerBytes.length;
-
-			// Read and verify the magic number.
-			position -= MANIFEST_MAGIC_NUMBER.length;
-			const magicNumberBytes = headerBytes.slice(-MANIFEST_MAGIC_NUMBER.length);
-			for (let i = 0; i < MANIFEST_MAGIC_NUMBER.length; i++) {
-				if (magicNumberBytes[i] !== MANIFEST_MAGIC_NUMBER[i]) {
-					return undefined;
-				}
-			}
-
-			// Read and verify the version.
-			position -= 8;
-			const version = Number(
-				new DataView(headerBytes.buffer).getBigUint64(position, true),
-			);
-			if (version === MANIFEST_VERSION_0) {
-				// Read the manifest length.
-				position -= 8;
-				const manifestLength = Number(
-					new DataView(headerBytes.buffer).getBigUint64(position, true),
-				);
-
-				// Read the manifest.
-				const manifestBytes = await file.read({
-					position: `end.-${headerLength + manifestLength}`,
-					length: manifestLength,
-				});
-
-				// Deserialize the manifest.
+			try {
+				const manifestFile = await tg
+					.build({
+						executable: workspace.manifestTool({}),
+						args: ["read", tg`${file}`, "-o", tg.output],
+						env: { RUST_BACKTRACE: "full" },
+					})
+					.named("read manifest")
+					.then(tg.File.expect);
+				const manifestBytes = await manifestFile.bytes();
 				const manifestString = tg.encoding.utf8.decode(manifestBytes);
-				const manifest = tg.encoding.json.decode(
+				const output = tg.encoding.json.decode(
 					manifestString,
-				) as wrap.Manifest;
-				return manifest;
-			} else {
-				throw new Error(
-					`unknown manifest version number ${MANIFEST_VERSION_0}`,
-				);
+				) as workspace.ManifestToolOutput;
+				return output.manifest;
+			} catch (e) {
+				return undefined;
 			}
 		};
 
@@ -1098,42 +967,35 @@ export namespace wrap {
 			const manifestBytes = tg.encoding.utf8.encode(
 				tg.encoding.json.encode(manifest),
 			);
+			const manifestFile = tg.file(manifestBytes);
 
-			// Retrieve the file's blob.
-			const fileBlob = file.contents();
-
-			// Create a buffer for the manifest plus three 64-bit values (manifest length, version, magic number).
-			const newBytesLength = manifestBytes.length + 8 + 8 + 8;
-			let newBytesPosition = 0;
-			const littleEndian = true;
-			const newBytes = new Uint8Array(newBytesLength);
-
-			// Write the manifest.
-			newBytes.set(manifestBytes, newBytesPosition);
-			newBytesPosition += manifestBytes.length;
-
-			// Write the length of the manifest.
-			new DataView(newBytes.buffer).setBigUint64(
-				newBytesPosition,
-				BigInt(manifestBytes.length),
-				littleEndian,
-			);
-			newBytesPosition += 8;
-
-			// Write the version.
-			new DataView(newBytes.buffer).setBigUint64(
-				newBytesPosition,
-				BigInt(MANIFEST_VERSION_0),
-				littleEndian,
-			);
-			newBytesPosition += 8;
-
-			// Write the magic number.
-			newBytes.set(MANIFEST_MAGIC_NUMBER, newBytesPosition);
-			newBytesPosition += 8;
-
-			// Create the blob.
-			const contents = tg.blob(fileBlob, newBytes);
+			// Create the file with the new manifest.
+			let newFile = await tg
+				.build({
+					executable: workspace.manifestTool({}),
+					args: [
+						"write",
+						tg`${file}`,
+						"--manifest",
+						tg`${manifestFile}`,
+						"-o",
+						tg.output,
+					],
+					env: { RUST_BACKTRACE: "full" },
+				})
+				.named("write manifest")
+				.then(tg.File.expect);
+			// Codesign the new file.
+			if (await needsCodesign(newFile)) {
+				newFile = await tg
+					.build({
+						executable: workspace.rcodesign(),
+						args: ["sign", tg`${newFile}`, tg`${tg.output}`],
+						env: { RUST_BACKTRACE: "full" },
+					})
+					.named("codesign")
+					.then(tg.File.expect);
+			}
 
 			// Collect the manifest references.
 			const dependencies_ = new Set<tg.Object.Id>();
@@ -1154,16 +1016,24 @@ export namespace wrap {
 			}
 
 			// Create the file.
-			const newFile = await tg.file({
-				contents,
+			const fileWithDependencies = tg.file(newFile, {
 				dependencies,
 				executable: true,
 			});
-
-			return newFile;
+			return fileWithDependencies;
 		};
 	}
 }
+
+const needsCodesign = async (file: tg.File): Promise<boolean> => {
+	const bytes = await file.read({ length: 4 });
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const magic = view.getUint32(0, false);
+	const magicNumbers = [
+		0xbfbafeca, 0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe,
+	];
+	return magicNumbers.find((num) => num === magic) !== undefined;
+};
 
 const isArgObject = (arg: unknown): arg is wrap.ArgObject => {
 	return (
@@ -3023,12 +2893,12 @@ export const testInterpreterWrappingPreloads = async () => {
 	const bootstrapSdk = await bootstrap.sdk(host);
 
 	const testSource = tg.file(`
-    #include <stdio.h>
-    int main() {
-      printf("Hello from test executable\\n");
-      return 0;
-    }
-  `);
+		#include <stdio.h>
+		int main() {
+			printf("Hello from test executable\\n");
+			return 0;
+		}
+	`);
 
 	const testExecutable = await std.build`cc -xc -o ${tg.output} ${testSource}`
 		.bootstrap(true)
@@ -3037,11 +2907,11 @@ export const testInterpreterWrappingPreloads = async () => {
 
 	// Create a simple shared library that can be used as a preload.
 	const preloadSource = tg.file(`
-    #include <stdio.h>
-    void __attribute__((constructor)) init() {
-      fprintf(stderr, "Custom preload loaded\\n");
-    }
-  `);
+		#include <stdio.h>
+		void __attribute__((constructor)) init() {
+			fprintf(stderr, "Custom preload loaded\\n");
+		}
+	`);
 
 	const customPreloadLib =
 		await std.build`cc -shared -fPIC -xc -o ${tg.output} ${preloadSource}`

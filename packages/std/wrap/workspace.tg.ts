@@ -100,6 +100,31 @@ export const ldProxy = async (arg: tg.Unresolved<Arg>) => {
 		.then(tg.File.expect);
 };
 
+export type ManifestToolOutput = {
+	manifest?: std.wrap.Manifest | undefined;
+	location?: FileLocation | undefined;
+};
+
+export type FileLocation = {
+	offset: number;
+	length: number;
+};
+
+export const manifestTool = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		const workspace = await tg.build(defaultWorkspace);
+		return workspace.get("bin/manifest_tool").then(tg.File.expect);
+	}
+	return await tg
+		.build(workspace, arg)
+		.then((dir) => dir.get("bin/manifest_tool"))
+		.then(tg.File.expect);
+};
+
 export const stripProxy = async (arg: tg.Unresolved<Arg>) => {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
@@ -468,11 +493,11 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	};
 
 	const buildType = release ? "/release" : "/debug";
-
+	const items = ["manifest_tool", "tgcc", "tgld", "tgstrip", "wrapper"];
 	const install = {
 		pre: tg`mkdir -p ${tg.output}/bin`,
 		body: tg`
-			for item in tgcc tgld tgstrip wrapper ; do
+			for item in ${items.join(" ")} ; do
 				mv $TARGET/$RUST_TARGET${buildType}/$item ${tg.output}/bin/$item
 			done
 		`,
@@ -587,4 +612,47 @@ export const testCross = async () => {
 	tg.assert(crossMetadata.format === "elf");
 	tg.assert(crossMetadata.arch === targetArch);
 	return true;
+};
+
+export const rcodesign = async (host?: string) => {
+	const host_ = host ?? (await std.triple.host());
+	let target = undefined;
+	const checksums: Record<string, tg.Checksum> = {
+		["aarch64-apple-darwin"]:
+			"sha256:d1a532150adaf90048260d76359261aa716abafc45c53c5dc18845029184334a",
+		["aarch64-unknown-linux-musl"]:
+			"sha256:4af92c87ddf52f5f2d1258a3b4e56c7dcb8f1b2468df744976c5f139e031961f",
+		["i686-pc-windows-msvc"]:
+			"sha256:fd5aeb908f1d3be60f7e372003772f52a6ce4148106d3aaf22aec6861f5d8a5e",
+		["macos-universal.tar"]:
+			"sha256:d98372d5524226ccf9dc0eda03d4e4f5826182dabb2fc3f2bd303ed9113a748d",
+		["x86_64-apple-darwin.tar"]:
+			"sha256:14ef11bedd51a8d95eafd767939ae96d5900e5a61511bef75bb21db6e7c74140",
+		["x86_64-pc-windows-msvc"]:
+			"sha256:54bb500e2da7a8de02fcae0f331d1cac6e6d7173b4281042ff9c528ba3159aaa",
+		["x86_64-unknown-linux-musl"]:
+			"sha256:dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002",
+	};
+	if (std.triple.os(host_) == "linux") {
+		target = `${std.triple.arch(host_)}-unknown-linux-musl`;
+	} else if (std.triple.os(host_) == "darwin") {
+		target = `${std.triple.arch(host_)}-apple-darwin`;
+	}
+
+	tg.assert(target);
+	const checksum = Object.entries(checksums).find(
+		([key]) => key === target,
+	)?.[1];
+	tg.assert(checksum);
+
+	const version = "0.29.0";
+	const url = `https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${version}/apple-codesign-${version}-${target}.tar.gz`;
+	const release = await tg
+		.download(url, checksum, {
+			mode: "extract",
+		})
+		.then(tg.Directory.expect);
+	return release
+		.get(`apple-codesign-${version}-${target}/rcodesign`)
+		.then(tg.File.expect);
 };
