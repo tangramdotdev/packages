@@ -43,17 +43,14 @@ export type Arg = {
 
 export const build = async (...args: std.Args<Arg>) => {
 	const {
-		build: build_,
+		build,
 		cargo: cargoArg = {},
 		dependencies: dependencyArgs = {},
 		env: env_,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
-
-	const host = host_ ?? (await std.triple.host());
-	const build = build_ ?? host;
 
 	const env = std.env.arg(
 		std.env.envArgFromDependency(
@@ -83,22 +80,4 @@ export default build;
 export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
-
-export const cross = async () => {
-	// TODO - assert the outputs. Make sure the linux-musl ones produce a static binary.
-	return tg.directory({
-		"aarch64-unknown-linux-gnu": build({
-			host: "aarch64-unknown-linux-gnu",
-		}),
-		"aarch64-unknown-linux-musl": build({
-			host: "aarch64-unknown-linux-musl",
-		}),
-		"x86_64-unknown-linux-gnu": build({ host: "x86_64-unknown-linux-gnu" }),
-		"x86_64-unknown-linux-musl": build({
-			host: "x86_64-unknown-linux-musl",
-		}),
-		"aarch64-apple-darwin": build({ host: "aarch64-apple-darwin" }),
-		"x86_64-apple-darwin": build({ host: "x86_64-apple-darwin" }),
-	});
 };
