@@ -13,6 +13,7 @@ export const metadata = {
 	name: "bind",
 	repository: "https://gitlab.isc.org/isc-projects/bind9",
 	version: "9.20.16",
+	tag: "bind/9.20.16",
 	provides: {
 		binaries: [
 			"arpaname",
