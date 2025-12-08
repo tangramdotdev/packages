@@ -26,7 +26,7 @@ struct Write {
 	#[arg(long)]
 	manifest: PathBuf,
 
-	/// The output to write. manifest_tool will not modify files in place.
+	/// The output to write. `manifest_tool` will not modify files in place.
 	#[arg(long, short)]
 	output: PathBuf,
 
@@ -40,7 +40,7 @@ struct Read {
 	#[arg(long)]
 	format: Option<manifest_tool::Format>,
 
-	/// The output to write. manifest_tool will not modify files in place.
+	/// The output to write. `manifest_tool` will not modify files in place.
 	#[arg(long, short)]
 	output: PathBuf,
 
