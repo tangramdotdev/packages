@@ -1,7 +1,6 @@
 import * as gmp from "gmp" with { local: "../gmp" };
 import * as nettle from "nettle" with { local: "../nettle" };
 import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
 import * as zlib from "zlib" with { local: "../zlib" };
 import * as zstd from "zstd" with { local: "../zstd" };
 
@@ -105,6 +104,7 @@ export const test = async () => {
 		...std.assert.defaultSpec(metadata),
 		libraries: std.assert.allLibraries(["gnutls"], {
 			runtimeDeps: [nettle.build(), gmp.build(), zlib.build(), zstd.build()],
+			staticlib: false,
 		}),
 	};
 	return await std.assert.pkg(build, spec);

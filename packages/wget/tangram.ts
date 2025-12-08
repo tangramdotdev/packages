@@ -76,12 +76,14 @@ export const build = async (...args: std.Args<Arg>) => {
 		{ CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " ") },
 		env_,
 	];
+	const os = std.triple.os(host);
 
 	let output = await std.autotools.build(
 		{
 			...(await std.triple.rotate({ build, host })),
 			env: std.env.arg(...envs),
 			sdk,
+			setRuntimeLibraryPath: os === "linux",
 			source: source_ ?? source(),
 		},
 		autotools,
