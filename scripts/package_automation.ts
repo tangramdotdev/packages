@@ -564,18 +564,18 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	for (const [index, exportConfig] of exportMatrix.entries()) {
 		const { ref, tagPath } = exportConfig;
 
-		// Determine build source based on ref type
-		// If ref contains "/" or ".tg.ts", treat it as a path; otherwise, as an export name
-		const isPath = ref.includes("/") || ref.includes(".tg.ts");
+		// Determine build source.
+		// If ref contains "/" or ".tg.ts", it's a subpath within a directory package.
+		const isSubpath = ref.includes("/") || ref.includes(".tg.ts");
 		let buildSource: string;
 
-		if (isPath) {
-			// Path-based ref: build from local package path
+		if (isSubpath) {
+			// Subpath ref: append to package path (only valid for directory packages).
 			buildSource = `${ctx.packagePath}/${ref}`;
 		} else {
-			// Export name: build from versioned package
+			// Export name: build from local package path.
 			const exportSuffix = ref !== "default" ? `#${ref}` : "";
-			buildSource = `${versionedName}${exportSuffix}`;
+			buildSource = `${ctx.packagePath}${exportSuffix}`;
 		}
 
 		// Construct tag
