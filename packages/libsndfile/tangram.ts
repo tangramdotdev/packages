@@ -37,7 +37,7 @@ export const source = async (): Promise<tg.Directory> => {
 
 export type Arg = cmake.Arg;
 
-export const build = async (...args:std.Args<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
 	return cmake.build(
 		{ source: source() },
 		{ env: std.env.arg(flac.env()) },
@@ -48,8 +48,9 @@ export const build = async (...args:std.Args<Arg>) => {
 	);
 };
 
-export const env = () => std.env.arg({
-	PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
-});
+export const env = () =>
+	std.env.arg({
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+	});
 
 export default build;

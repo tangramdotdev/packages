@@ -32,7 +32,7 @@ export type ToolchainArg = {
 export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	const arg = await tg.resolve(unresolvedArg);
 	// Determine the list of target triples to support other than the inferred host.
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);
 	const targets = [];
 	if (arg?.target && arg.target !== host) {
@@ -271,7 +271,7 @@ export const testHostToolchain = async () => {
 
 export const testCrossToolchain = async () => {
 	// Detect the host triple.
-	const host = await std.triple.host();
+	const host = std.triple.host();
 
 	// Determine the target triple with differing architecture from the host.
 	const hostArch = std.triple.arch(host);

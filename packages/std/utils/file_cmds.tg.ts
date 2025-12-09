@@ -34,7 +34,7 @@ export type Arg = {
 /** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
 export const macOsXattrCmds = async (arg?: tg.Unresolved<Arg>) => {
 	const resolved = await tg.resolve(arg);
-	const build = resolved?.build ?? (await std.triple.host());
+	const build = resolved?.build ?? std.triple.host();
 	const os = std.triple.os(build);
 
 	// Assert that the system is macOS.
@@ -82,7 +82,7 @@ type UtilArg = Arg & {
 
 export const compileUtil = async (arg: UtilArg) => {
 	tg.assert(arg.env);
-	const build = arg.build ?? (await std.triple.host());
+	const build = arg.build ?? std.triple.host();
 	const host = build;
 
 	// Grab args.

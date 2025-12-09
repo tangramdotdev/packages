@@ -36,8 +36,9 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 };
 
-export const env = () => std.env.arg({
-	PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
-});
+export const env = () =>
+	std.env.arg({
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+	});
 
 export default build;

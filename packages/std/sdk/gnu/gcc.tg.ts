@@ -84,7 +84,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	} = await tg.resolve(arg);
 
 	// Finalize triples.
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	const target = target_ ?? host;
 	const isCross = host !== target;

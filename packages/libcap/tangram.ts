@@ -32,7 +32,7 @@ export const source = async () => {
 	const mkCapShDoc = await source.get(scriptSubpath).then(tg.File.expect);
 	const wrappedMkCapShDoc = await bash.wrapScript(
 		mkCapShDoc,
-		await std.triple.host(),
+		std.triple.host(),
 	);
 	source = await tg.directory(source, {
 		[scriptSubpath]: wrappedMkCapShDoc,
@@ -82,7 +82,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		cd ${tg.output}/lib
 		ln -s libcap.so.${metadata.version} libcap.so.2
 		ln -s libcap.so.2 libcap.so`;
-	const phases: std.phases.Arg = {
+	const phases: tg.Unresolved<std.phases.Arg> = {
 		configure: tg.Mutation.unset(),
 		install: { command: install, args: tg.Mutation.unset() },
 	};

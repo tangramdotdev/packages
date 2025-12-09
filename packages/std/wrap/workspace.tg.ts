@@ -25,7 +25,7 @@ export const workspace = async (
 		source: source_,
 		verbose = false,
 	} = await tg.resolve(arg ?? {});
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const buildTriple = build_ ?? host;
 
 	// Get the source.
@@ -53,7 +53,7 @@ const shouldUseDefaultWorkspace = async (arg: {
 	source: tg.Directory | undefined;
 	verbose: boolean;
 }): Promise<boolean> => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const host = arg.host ?? detectedHost;
 	const build = arg.build ?? host;
 
@@ -160,7 +160,7 @@ export const wrapper = async (arg: tg.Unresolved<Arg>) => {
 
 /** The default workspace built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultWorkspace = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	return tg.build(workspace, { host });
 };
 
@@ -178,7 +178,7 @@ export const rust = async (
 	arg?: tg.Unresolved<ToolchainArg>,
 ): Promise<tg.Directory> => {
 	const resolved = await tg.resolve(arg);
-	const host = standardizeTriple(await std.triple.host());
+	const host = standardizeTriple(std.triple.host());
 	const target = standardizeTriple(resolved?.target ?? host);
 	const hostSystem = std.triple.archAndOs(host);
 
@@ -295,7 +295,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const enableTracing = arg.enableTracingFeature ?? true;
 	const release = arg.release ?? true;
 	const source = arg.source;
-	let host = arg.host ?? (await std.triple.host());
+	let host = arg.host ?? std.triple.host();
 	const standardizedHost = standardizeTriple(host);
 	let target = arg.target ?? standardizedHost;
 	const standardizedTarget = standardizeTriple(target);
@@ -324,7 +324,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	if (hostOs === "linux") {
 		if (!isCross) {
 			buildToolchain = await bootstrap.sdk.env(host);
-			host = await bootstrap.toolchainTriple(host);
+			host = bootstrap.toolchainTriple(host);
 			target = host;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host);
@@ -550,7 +550,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 
 export const test = async () => {
 	// Detect the host triple.
-	const host = await bootstrap.toolchainTriple();
+	const host = bootstrap.toolchainTriple();
 
 	// Determine the target triple with differing architecture from the host.
 	const hostArch = std.triple.arch(host);
@@ -588,7 +588,7 @@ export const test = async () => {
 
 export const testCross = async () => {
 	// Detect the host triple.
-	const host = await std.triple.host();
+	const host = std.triple.host();
 
 	// Determine the target triple with differing architecture from the host.
 	const hostArch = std.triple.arch(host);
@@ -615,7 +615,7 @@ export const testCross = async () => {
 };
 
 export const rcodesign = async (host?: string) => {
-	const host_ = host ?? (await std.triple.host());
+	const host_ = host ?? std.triple.host();
 	let target = undefined;
 	const checksums: Record<string, tg.Checksum> = {
 		["aarch64-apple-darwin"]:

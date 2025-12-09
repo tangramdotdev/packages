@@ -20,7 +20,7 @@ export type ToolchainArg = {
 /** Construct a complete binutils + libc + gcc toolchain. */
 export const toolchain = async (arg: ToolchainArg) => {
 	const { host: host_, target: target_ } = arg;
-	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const target = std.sdk.canonicalTriple(target_ ?? host);
 
 	if (std.triple.os(host) === "darwin") {
@@ -81,10 +81,10 @@ type CanadianCrossArg = {
 
 export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const { host: host_, env: env_ } = arg ?? {};
-	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 
 	const target = host;
-	const build = await bootstrap.toolchainTriple(host);
+	const build = bootstrap.toolchainTriple(host);
 	const bootstrapToolchain = bootstrap.sdk(host);
 
 	// Set up build environment tools.
@@ -155,8 +155,8 @@ export const buildToHostCrossToolchain = async (
 	arg?: tg.Unresolved<CanadianCrossArg>,
 ) => {
 	const { host: host_, env } = (await tg.resolve(arg)) ?? {};
-	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
-	const build = await bootstrap.toolchainTriple(host);
+	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
+	const build = bootstrap.toolchainTriple(host);
 	const buildToolchain = bootstrap.sdk(build);
 
 	// Create cross-toolchain from build to host.
@@ -194,7 +194,7 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 		variant = "stage2_full",
 	} = await tg.resolve(arg);
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const buildTriple = build_ ?? host;
 	const target = target_ ?? host;
 
@@ -267,7 +267,7 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 		sdk,
 	} = arg ? await tg.resolve(arg) : {};
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const buildTriple = build_ ?? host;
 	const target = host;
 
@@ -324,7 +324,7 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 };
 
 export const extractSysroot = async (hostArg?: string) => {
-	const host = hostArg ?? (await std.triple.host());
+	const host = hostArg ?? std.triple.host();
 	const fullToolchain = await canadianCross({ host });
 	const include = fullToolchain.get("include").then(tg.Directory.expect);
 	const lib = fullToolchain.get("lib").then(tg.Directory.expect);
@@ -333,7 +333,7 @@ export const extractSysroot = async (hostArg?: string) => {
 };
 
 export const extractSysrootGlibc = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const triple = std.triple.normalize(
 		std.triple.create(detectedHost, { environment: "gnu" }),
 	);
@@ -341,7 +341,7 @@ export const extractSysrootGlibc = async () => {
 };
 
 export const extractSysrootMusl = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const triple = std.triple.normalize(
 		std.triple.create(detectedHost, { environment: "musl" }),
 	);
@@ -354,7 +354,7 @@ export const testCanadianCross = async () => {
 };
 
 export const testCross = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const hostArch = std.triple.arch(host);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	const target = std.triple.create(host, { arch: targetArch });
@@ -363,14 +363,14 @@ export const testCross = async () => {
 };
 
 export const testCrossMips = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const target = "mips-unknown-linux-gnu";
 	const dir = await toolchain({ host, target });
 	return dir;
 };
 
 export const testCrossRpi = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const target = "armv7l-linux-gnueabihf";
 	const dir = await toolchain({ host, target });
 	return dir;

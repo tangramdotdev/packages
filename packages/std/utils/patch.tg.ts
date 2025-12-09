@@ -51,7 +51,7 @@ export const build = async (arg?: Arg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const configure = {
@@ -91,7 +91,7 @@ export const build = async (arg?: Arg) => {
 export default build;
 
 export const test = async () => {
-	const host = await toolchainTriple(await std.triple.host());
+	const host = toolchainTriple(std.triple.host());
 	const sdk = await bootstrapSdk(host);
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);

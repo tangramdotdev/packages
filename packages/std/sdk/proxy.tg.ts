@@ -52,7 +52,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 		);
 	}
 
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const os = std.triple.os(host);
 
@@ -237,7 +237,7 @@ type CcProxyArg = {
 };
 
 const ccProxy = async (arg: CcProxyArg) => {
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const tgcc = workspace.ccProxy({
 		build,
@@ -268,7 +268,7 @@ type LdProxyArg = {
 
 const ldProxy = async (arg: LdProxyArg) => {
 	// Prepare the Tangram tools.
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const buildToolchain = arg.buildToolchain;
 	const embedWrapper = arg.embedWrapper ?? std.triple.os(build) === "linux";
@@ -371,7 +371,7 @@ type StripProxyArg = {
 export const stripProxy = async (arg: StripProxyArg) => {
 	const { build: build_, buildToolchain, host: host_, stripCommand } = arg;
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	// Use default wrapper when no custom build or host is provided.
@@ -455,7 +455,7 @@ export const testBasic = async (target?: string) => {
 		.then(tg.File.expect);
 
 	const wrapperDeps = await output.dependencies();
-	const os = std.triple.os(await std.triple.host());
+	const os = std.triple.os(std.triple.host());
 	// This file should have dependencies for the preload and the underlying executable. On Linux, it should alos have a library path for libc and an interpreter.
 	const expectedLength = os === "darwin" ? 2 : 3;
 	console.log("WRAPPER DEPS", wrapperDeps);
@@ -490,7 +490,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 		target,
 	} = await tg.resolve(arg);
 	const flags = tg.Template.join(" ", ...flagArgs);
-	const targetTriple = target ?? (await std.triple.host());
+	const targetTriple = target ?? std.triple.host();
 	const dylibExt = std.triple.os(targetTriple) === "darwin" ? "dylib" : "so";
 	const cmd = target ? `cc -target ${target}` : `cc`;
 	return await std.build`set -x && mkdir -p ${tg.output}/lib && ${cmd} -v -shared -xc ${source} -o ${tg.output}/lib/${libName}.${dylibExt} ${flags} && ls -al ${tg.output}/lib`
@@ -508,7 +508,7 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 };
 
 export const testSharedLibraryWithDep = async (target?: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
@@ -597,7 +597,7 @@ export const testTransitiveCombine = (target?: string) =>
 
 /** Test cross-compilation scenarios for LD proxy */
 export const testCrossGccLdProxy = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
 		throw new Error(`Cross-compilation is not supported on Darwin`);
@@ -611,7 +611,7 @@ export const testCrossGccLdProxy = async () => {
 };
 
 export const testDarwinToLinuxLdProxy = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		throw new Error(`This test is only valid on Darwin`);
 	}
@@ -620,7 +620,7 @@ export const testDarwinToLinuxLdProxy = async () => {
 };
 
 export const testLinuxToDarwinLdProxy = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`This test is only valid on Linux`);
 	}
@@ -631,7 +631,7 @@ export const testLinuxToDarwinLdProxy = async () => {
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
 export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 	const opt = optLevel ?? "filter";
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
@@ -897,7 +897,7 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 
 /** This test checks that the common case of linking against a library in the working directory still works post-install. */
 export const testSamePrefix = async (target?: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
@@ -955,7 +955,7 @@ export const testSamePrefix = async (target?: string) => {
 
 /** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
 export const testSamePrefixDirect = async (target?: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
@@ -1010,7 +1010,7 @@ export const testSamePrefixDirect = async (target?: string) => {
 
 /** This test checks that the less-common case of linking against a library in a different Tangram artifact by name instead of library path still works post-install. */
 export const testDifferentPrefixDirect = async (target?: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
@@ -1081,7 +1081,7 @@ import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
 };
 
 export const testStrip = async (target?: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const sdkArg = target ? { host, target } : undefined;
 	const toolchain = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
 	const output = await std.build`
@@ -1174,7 +1174,7 @@ export const testStripMultipleFiles = async () => {
 
 /** Test that TGLD discovers transitive dependencies when only the top-level library is explicitly linked. This mirrors the ncurses case where multiple libraries are in the same directory, but only one is explicitly linked. This test would catch the bug where TGLD returns early before analyzing libraries for their dependencies. */
 export const testTransitiveDiscovery = async (target?: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
 	const testSDK = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();

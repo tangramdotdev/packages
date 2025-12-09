@@ -99,7 +99,7 @@ export const pkg = async <T extends std.args.PackageArg>(
 	/** Additional arguments with their corresponding package specs to test, if any. */
 	...buildVariants: Array<[T, PackageSpec]>
 ) => {
-	const currentHost = await std.triple.host();
+	const currentHost = std.triple.host();
 
 	// Determine the set of arguments to test. Always test the command with no args against the default spec.
 	const packageArgs: Array<[T, PackageSpec]> = [[{} as T, defaultSpec]];
@@ -226,7 +226,7 @@ type RunnableBinArg = {
 
 /** Assert the directory contains a binary conforming to the provided spec. */
 export const runnableBin = async (arg: RunnableBinArg) => {
-	if (std.triple.archAndOs(await std.triple.host()) !== arg.host) {
+	if (std.triple.archAndOs(std.triple.host()) !== arg.host) {
 		return true;
 	}
 	let name: string | undefined;
@@ -418,7 +418,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 	// Collect tests.
 	const tests = [];
 
-	const hostOs = std.triple.os(await std.triple.host());
+	const hostOs = std.triple.os(std.triple.host());
 	const dylibExtension = hostOs === "darwin" ? "dylib" : "so";
 
 	const dylibName = (name: string) => `lib${name}.${dylibExtension}`;
@@ -535,7 +535,7 @@ type TestDylibArg = {
 
 /** Compile, link, and run a program against a dynamic library. */
 export const testDylib = async (arg: TestDylibArg) => {
-	if (arg.host != (await std.triple.host())) {
+	if (arg.host != std.triple.host()) {
 		throw new Error("unsupported");
 	}
 
@@ -651,7 +651,7 @@ type TestStaticlibArg = {
 
 /** Compile, link, and run a program against a static library. */
 export const testStaticlib = async (arg: TestStaticlibArg) => {
-	if (arg.host != (await std.triple.host())) {
+	if (arg.host != std.triple.host()) {
 		throw new Error("unsupported");
 	}
 

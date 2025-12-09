@@ -41,7 +41,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 		sdk: sdkArg = {},
 		source: source_,
 	} = arg ? await tg.resolve(arg) : {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const buildTriple = build_ ?? host;
 
 	const system = std.triple.archAndOs(buildTriple);
@@ -97,7 +97,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 export default kernelHeaders;
 
 export const test = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		return;
 	}

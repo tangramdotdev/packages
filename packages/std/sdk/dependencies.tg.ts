@@ -60,7 +60,7 @@ export const buildTools = async (
 	} = unresolvedArg ? await tg.resolve(unresolvedArg) : {};
 
 	// Default values
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const level = level_ ?? "extended";
 	const os = std.triple.os(host);
 
@@ -228,7 +228,7 @@ export const buildTools = async (
 
 /** The extended build tools (autotools dependencies) built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
 export const extendedBuildTools = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const sdk = await tg.build(std.sdk, { host });
 	const utils = await tg.build(std.utils.defaultEnv);
 	return tg.build(buildTools, {

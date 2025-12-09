@@ -48,7 +48,7 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		sdk: sdk_,
 	} = arg ? await tg.resolve(arg) : {};
 	const bootstrap = true;
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 
 	// If no env or SDK is provided, use bootstrap SDK as default.
 	const sdk = sdk_ ?? (env_ ? undefined : await bootstrapSdk.sdk.arg(host));
@@ -94,14 +94,14 @@ export default env;
 
 /** The standard utils built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultEnv = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const sdk = await tg.build(std.sdk, { host });
 	return tg.build(env, { host, env: sdk });
 };
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
-	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
+	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 
 	// Add GNU make.
 	const makeArtifact = await bootstrap.make.build({ host });
@@ -174,13 +174,13 @@ export const changeShebang = async (scriptFile: tg.File) => {
 };
 
 export const test = async () => {
-	const host = bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const utilsEnv = await env({ host, env: bootstrap.sdk() });
 	tg.assert(await std.env.providesUtils(utilsEnv));
 	return utilsEnv;
 };
 
 export const testPrerequisites = async () => {
-	const host = bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	return await prerequisites(host);
 };

@@ -50,7 +50,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		target: target_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
-	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const os = std.triple.os(host);
 	std.assert.supportedHost(host, metadata);
 	const build = std.sdk.canonicalTriple(build_ ?? host);
@@ -147,7 +147,7 @@ export const libgcc = async (...args: std.Args<Arg>) => {
 		target: target_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
-	const host = std.sdk.canonicalTriple(host_ ?? (await std.triple.host()));
+	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const os = std.triple.os(host);
 	if (os !== "linux") {
 		throw new Error("GCC is only supported on Linux");

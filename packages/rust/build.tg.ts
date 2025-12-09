@@ -408,7 +408,7 @@ export const testLinkReadline = async () => {
 	console.log("exe", exe.id);
 
 	// Readline transitively requires ncurses at runtime.
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const os = std.triple.os(host);
 	const runtimeLibVar =
 		os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";

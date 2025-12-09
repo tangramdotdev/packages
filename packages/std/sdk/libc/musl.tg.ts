@@ -42,7 +42,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		sdk,
 		source: source_,
 	} = resolved ?? {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const isCrossCompiling =

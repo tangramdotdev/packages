@@ -38,7 +38,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		source: source_,
 	} = arg ? await tg.resolve(arg) : {};
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	const os = std.triple.os(build);
 
@@ -90,7 +90,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries: ["python3"], metadata });

@@ -30,8 +30,9 @@ export type Arg = cmake.Arg;
 export const build = (...args: std.Args<Arg>) =>
 	cmake.build({ source: source() }, ...args).then(tg.Directory.expect);
 
-export const env = () => std.env.arg({
-	PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
-});
+export const env = () =>
+	std.env.arg({
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+	});
 
 export default build;

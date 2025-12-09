@@ -273,7 +273,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	tg.assert(source !== undefined, `source must be defined`);
 
 	// Detect the host system from the environment.
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const target = target_ ?? host;
 	const os = std.triple.os(host);
 

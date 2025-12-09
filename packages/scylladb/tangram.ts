@@ -19,7 +19,7 @@ export type Arg = {
 
 export const build = async (...args: std.Args<Arg>) => {
 	const { host: host_ } = await std.packages.applyArgs<Arg>(...args);
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	std.assert.supportedHost(host, metadata);
 	const arch = std.triple.arch(host);
 
@@ -85,7 +85,7 @@ const linuxChecksums: { [key: string]: tg.Checksum } = {
 };
 
 export const test = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const os = std.triple.os(host);
 
 	if (os !== "linux") {

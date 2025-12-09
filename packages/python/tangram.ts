@@ -414,7 +414,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		map: async (arg) => arg,
 		reduce: { source: "set" },
 	});
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const buildTriple = buildTriple_ ?? host;
 
 	tg.assert(source, "Must specify a source directory.");

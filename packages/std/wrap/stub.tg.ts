@@ -34,7 +34,7 @@ export const workspace = async (arg: WorkspaceArg) => {
 		source: source_,
 		verbose = false,
 	} = await tg.resolve(arg);
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 
 	// Ensure we're only building for Linux.
 	const target = target_ ?? host;
@@ -54,7 +54,7 @@ export const workspace = async (arg: WorkspaceArg) => {
 };
 
 export const bootstrapToolchain = async (host?: string) => {
-	let host_ = host ?? (await std.triple.host());
+	let host_ = host ?? std.triple.host();
 	return bootstrap.sdk.env(host_);
 };
 
@@ -62,7 +62,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const arg = await tg.resolve(unresolved);
 	const release = arg.release ?? true;
 	const source = arg.source;
-	let host_ = arg.host ?? (await std.triple.host());
+	let host_ = arg.host ?? std.triple.host();
 	const host = standardizeTriple(host_);
 	let target_ = arg.target ?? host;
 	const target = standardizeTriple(target_);
@@ -86,7 +86,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	if (hostOs === "linux") {
 		if (!isCross) {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			host_ = await bootstrap.toolchainTriple(host_);
+			host_ = bootstrap.toolchainTriple(host_);
 			target_ = host_;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
@@ -207,7 +207,7 @@ const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 
 export const test = async () => {
 	// Detect the host triple.
-	const host = await std.triple.host();
+	const host = std.triple.host();
 
 	// Determine the target triple with differing architecture from the host.
 	const hostArch = std.triple.arch(host);

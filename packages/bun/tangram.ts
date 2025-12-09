@@ -21,7 +21,7 @@ export const self = async (...args: std.Args<Arg>) => {
 	const { host: host_ } = await std.packages.applyArgs<Arg>(...args);
 	const { name, version } = metadata;
 	const tag = `${name}-v${version}`;
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	let arch;
 	if (std.triple.arch(host) === "aarch64") {
 		arch = "aarch64";

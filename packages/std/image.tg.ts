@@ -202,7 +202,7 @@ export const testBootstrapEnvImageOci = async () => {
 };
 
 export const testBasicEnv = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const host = bootstrap.toolchainTriple(detectedHost);
 	const utils = await std.utils.env({
 		host,

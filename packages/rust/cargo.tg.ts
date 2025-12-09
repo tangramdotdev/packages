@@ -88,7 +88,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 	tg.assert(source, "Must provide a source directory.");
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const rustHost = rustTriple(host);
 	const os = std.triple.os(rustHost);
 	const target = target_ ? rustTriple(target_) : rustHost;
@@ -278,7 +278,7 @@ const vendoredSources = async (
 		source,
 		useCargoVendor = false,
 	} = arg;
-	const rustTarget = rustTarget_ ?? (await std.triple.host());
+	const rustTarget = rustTarget_ ?? std.triple.host();
 	if (useCargoVendor) {
 		// Run cargo vendor
 		const certFile = tg`${std.caCertificates()}/cacert.pem`;

@@ -37,7 +37,7 @@ export const test = async () => {
 };
 
 export const testGccMusl = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
@@ -46,7 +46,7 @@ export const testGccMusl = async () => {
 };
 
 export const testGccMold = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
@@ -59,7 +59,7 @@ export const testLlvm = async () => {
 };
 
 export const testLlvmMusl = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
@@ -68,7 +68,7 @@ export const testLlvmMusl = async () => {
 };
 
 export const testLlvmMold = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
@@ -76,7 +76,7 @@ export const testLlvmMold = async () => {
 };
 
 export const testLinuxCross = async () => {
-	const build = await std.triple.host();
+	const build = std.triple.host();
 	if (std.triple.os(build) !== "linux") {
 		throw new Error("Linux cross-compilation is only available on Linux");
 	}
@@ -88,7 +88,7 @@ export const testLinuxCross = async () => {
 };
 
 export const testLinuxToDarwinCross = async () => {
-	const build = await std.triple.host();
+	const build = std.triple.host();
 	if (std.triple.os(build) !== "linux") {
 		throw new Error("Linux cross-compilation is only available on Linux");
 	}

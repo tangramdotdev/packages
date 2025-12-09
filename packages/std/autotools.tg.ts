@@ -132,7 +132,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	} = await mergeArgs(...args);
 
 	// Detect the host system from the environment.
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const target = target_ ?? host;
 	const isCross = host !== target;
 	const hostOs = std.triple.os(host);

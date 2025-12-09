@@ -33,7 +33,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		source: source_,
 	} = arg ? await tg.resolve(arg) : {};
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const configure = {
@@ -57,7 +57,7 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 
 export const test = async () => {
-	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk.arg(host);
 	return await build({ host, sdk });
 };

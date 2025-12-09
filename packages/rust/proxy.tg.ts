@@ -71,7 +71,7 @@ export const testHello = async () => {
 };
 
 export const testPkgconfig = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 

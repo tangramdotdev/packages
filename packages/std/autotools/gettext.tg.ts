@@ -65,7 +65,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		sdk,
 		source: source_,
 	} = arg ? await tg.resolve(arg) : {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const os = std.triple.os(host);
 
 	const envs: Array<tg.Unresolved<std.env.Arg>> = [

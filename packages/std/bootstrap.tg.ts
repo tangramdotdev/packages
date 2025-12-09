@@ -12,7 +12,7 @@ export type Arg = {
 };
 
 export const bootstrap = async (arg?: Arg) => {
-	let host = std.triple.archAndOs(arg?.host ?? (await std.triple.host()));
+	let host = std.triple.archAndOs(arg?.host ?? std.triple.host());
 	if (std.triple.os(host) === "darwin") {
 		host = "universal_darwin";
 	}
@@ -48,7 +48,7 @@ export const shell = dash;
 
 /** Retrieve just the env component. */
 export const env = async (host?: string) => {
-	const host_ = host ?? (await std.triple.host());
+	const host_ = host ?? std.triple.host();
 	if (std.triple.os(host_) !== "linux") {
 		throw new Error("the env bootstrap component is only available for Linux");
 	}
@@ -69,8 +69,8 @@ export const utils = (host?: string) => {
 export const gccVersion = "11.2.1";
 
 /** The build triple string of the bundled Linux toolchain. */
-export const toolchainTriple = async (hostArg?: string) => {
-	const host = hostArg ?? (await std.triple.host());
+export const toolchainTriple = (hostArg?: string) => {
+	const host = hostArg ?? std.triple.host();
 	const system = std.triple.archAndOs(host);
 	const arch = std.triple.arch(system);
 
@@ -85,8 +85,8 @@ export const toolchainTriple = async (hostArg?: string) => {
 };
 
 /** Get the interpreter name for a given host. */
-export const interpreterName = async (hostArg?: string) => {
-	const host = hostArg ?? (await std.triple.host());
+export const interpreterName = (hostArg?: string) => {
+	const host = hostArg ?? std.triple.host();
 	const system = std.triple.archAndOs(host);
 	switch (system) {
 		case "x86_64-linux": {
@@ -121,7 +121,7 @@ export const patch = async (
 	source: tg.Directory,
 	...patches: Array<tg.File | tg.Symlink>
 ) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 
 	const patchScript = tg.Template.join(
 		"\n",
@@ -160,7 +160,7 @@ export const remoteComponent = async (componentName: string) => {
 
 /** Enumerate the full set of components for a host. */
 export const componentList = async (arg?: Arg) => {
-	const host = arg?.host ?? (await std.triple.host());
+	const host = arg?.host ?? std.triple.host();
 
 	const linuxComponents = (hostTriple: string) => {
 		const host = hostTriple.replace("-", "_");
@@ -194,7 +194,7 @@ export const componentList = async (arg?: Arg) => {
 };
 
 export const test = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	// Assert that all expected components exist and provide a non-empty `bin/` subdirectory.
 	const components = await componentList({ host });
 	tg.assert(components);

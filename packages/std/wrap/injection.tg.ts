@@ -14,7 +14,7 @@ type Arg = {
 export const injection = async (unresolved?: tg.Unresolved<Arg>) => {
 	const arg = await tg.resolve(unresolved);
 
-	const host = arg?.host ?? (await std.triple.host());
+	const host = arg?.host ?? std.triple.host();
 	const build = arg?.build ?? host;
 	const os = std.triple.os(host);
 
@@ -64,7 +64,7 @@ type MacOsInjectionArg = {
 };
 
 export const macOsInjection = async (arg: MacOsInjectionArg) => {
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const os = std.triple.os(host);
 	if (os !== "darwin") {
 		throw new Error(`Unsupported OS ${os}`);
@@ -125,7 +125,7 @@ type DylibArg = {
 };
 
 export const dylib = async (arg: DylibArg): Promise<tg.File> => {
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
@@ -196,7 +196,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 };
 
 export const test = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const hostArch = std.triple.arch(detectedHost);
 	tg.assert(hostArch);
 	const buildToolchain = bootstrap.sdk.env(detectedHost);
@@ -236,7 +236,7 @@ export const test = async () => {
 
 /** The default injection library built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultInjection = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const buildToolchain = await bootstrap.sdk.env(host);
 	return tg.build(injection, {
 		buildToolchain,
@@ -245,7 +245,7 @@ export const defaultInjection = async () => {
 };
 
 export const testCross = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) === "darwin") {
 		console.log("Skipping cross test on darwin");
 		return true;

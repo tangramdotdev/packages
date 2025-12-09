@@ -23,7 +23,7 @@ export type ToolchainArg = {
 const source = async (): Promise<tg.Directory> => {
 	// Known versions of NodeJS.
 	const version = metadata.version;
-	const target = await std.triple.host();
+	const target = std.triple.host();
 
 	const releases: {
 		[key: string]: {

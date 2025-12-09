@@ -66,7 +66,7 @@ export default build;
 import * as bootstrap from "../../bootstrap.tg.ts";
 
 export const test = async () => {
-	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ metadata, buildFn: build, libraries: ["xcrypt"] });

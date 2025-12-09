@@ -23,7 +23,7 @@ export const source = async () => {
 };
 
 export const build = async (targetArch?: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const targetArch_ = targetArch ?? std.triple.arch(host);
 	const target = `${targetArch_}-apple-darwin`;
 	const build = host;

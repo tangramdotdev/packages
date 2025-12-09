@@ -9,14 +9,14 @@ export async function sdk(host?: string) {
 export namespace sdk {
 	/** Produce the arg object to create a bootstrap-only SDK. */
 	export const arg = async (hostArg?: string): Promise<std.sdk.Arg> => {
-		const host = await bootstrap.toolchainTriple(hostArg);
+		const host = bootstrap.toolchainTriple(hostArg);
 		const toolchain = await env(host);
 		return { host, toolchain };
 	};
 
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxies. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
 	export const env = async (hostArg: string) => {
-		const host = hostArg ?? (await std.triple.host());
+		const host = hostArg ?? std.triple.host();
 		const os = std.triple.os(host);
 		let toolchain = await bootstrap.toolchain(host);
 		if (os === "darwin") {
@@ -25,14 +25,14 @@ export namespace sdk {
 				["bin/g++"]: tg.symlink("clang++"),
 			});
 		}
-		const bootstrapHost = await bootstrap.toolchainTriple(host);
+		const bootstrapHost = bootstrap.toolchainTriple(host);
 		const utils = await prepareBootstrapUtils(bootstrapHost);
 		return await tg.directory(toolchain, utils);
 	};
 
 	/** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */
 	export const prepareBootstrapUtils = async (hostArg?: string) => {
-		const host = hostArg ?? (await std.triple.host());
+		const host = hostArg ?? std.triple.host();
 		const shell = await bootstrap.shell(host);
 		const shellFile = await shell.get("bin/dash").then(tg.File.expect);
 		const utils = bootstrap.utils(host);

@@ -45,7 +45,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		sdk,
 		source: source_,
 	} = await tg.resolve(arg);
-	const incomingHost = host_ ?? (await std.triple.host());
+	const incomingHost = host_ ?? std.triple.host();
 	const { host, version } = splitVersionFromHost(incomingHost);
 	const build = build_ ?? host;
 

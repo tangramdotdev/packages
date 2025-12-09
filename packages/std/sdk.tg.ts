@@ -145,7 +145,7 @@ export namespace sdk {
 		});
 
 		// Obtain host and targets.
-		let host = host_ ?? (await std.triple.host());
+		let host = host_ ?? std.triple.host();
 		const hostOs = std.triple.os(host);
 
 		if (hostOs === "darwin" && linker && linker !== "lld") {
@@ -205,7 +205,7 @@ export namespace sdk {
 
 		const llvm = await std.env.provides({ env, names: ["clang"] });
 
-		const host = canonicalTriple(host_ ?? (await std.triple.host()));
+		const host = canonicalTriple(host_ ?? std.triple.host());
 		const target = canonicalTriple(target_ ?? host);
 		const os = std.triple.os(target);
 		const isCross = host !== target;
@@ -259,7 +259,7 @@ export namespace sdk {
 		arg: ProvidesToolchainArg,
 	): Promise<boolean> => {
 		const { env, host: host_, target: target_ } = arg;
-		const host = canonicalTriple(host_ ?? (await std.triple.host()));
+		const host = canonicalTriple(host_ ?? std.triple.host());
 		const target = canonicalTriple(target_ ?? host);
 		const os = std.triple.os(target);
 		const isCross = host !== target;
@@ -320,7 +320,7 @@ export namespace sdk {
 		});
 		const os = std.triple.os(host);
 		const target = targetTriple ?? host;
-		const detectedHost = await std.triple.host();
+		const detectedHost = std.triple.host();
 		const host__ = host_ ?? detectedHost;
 		const standardizedHost = std.sdk.canonicalTriple(host__);
 		const isCross = isCrossCompilation(standardizedHost, target);
@@ -701,7 +701,7 @@ export namespace sdk {
 	export const supportsTarget = async (
 		arg: ToolchainEnvArg,
 	): Promise<boolean> => {
-		const detectedHost = await std.triple.host();
+		const detectedHost = std.triple.host();
 		const target = arg.target ?? detectedHost;
 		if (
 			std.triple.os(detectedHost) === "darwin" &&
@@ -719,7 +719,7 @@ export namespace sdk {
 		arg: ToolchainEnvArg,
 	): Promise<string> => {
 		const { env: env_, host: host_, target: target_ } = arg;
-		let detectedHost = host_ ?? (await std.triple.host());
+		let detectedHost = host_ ?? std.triple.host();
 		const target = target_ ?? detectedHost;
 		const isCross = detectedHost !== target;
 
@@ -814,7 +814,7 @@ export namespace sdk {
 	export const resolveHostAndTarget = async (
 		arg?: HostAndTargetsOptions,
 	): Promise<HostAndTarget> => {
-		const host = arg?.host ?? (await std.triple.host());
+		const host = arg?.host ?? std.triple.host();
 		const target = arg?.target ?? host;
 		return { host, target };
 	};
@@ -876,12 +876,7 @@ export namespace sdk {
 				set -x
 				${cmd} -v -x${langStr} ${testProgram} -o ${tg.output}`
 				.bootstrap(true)
-				.env(
-					std.env.arg(
-						arg.sdkEnv,
-						{ utils: false },
-					),
-				)
+				.env(std.env.arg(arg.sdkEnv, { utils: false }))
 				.host(std.triple.archAndOs(expectedHost))
 				.then(tg.File.expect);
 
@@ -1323,13 +1318,13 @@ type ProxyTestParameters = {
 
 export const testDefault = async () => {
 	const env = await sdk();
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	await sdk.assertValid(env, { host: detectedHost });
 	return env;
 };
 
 export const testMold = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
@@ -1344,7 +1339,7 @@ export const testMold = async () => {
 };
 
 export const testGccLld = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
@@ -1359,7 +1354,7 @@ export const testGccLld = async () => {
 };
 
 export const testMusl = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
 	}
@@ -1371,7 +1366,7 @@ export const testMusl = async () => {
 };
 
 export const testCrossGcc = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
 		throw new Error(`Cross-compilation is not supported on Darwin`);
@@ -1394,7 +1389,7 @@ export const testLLVM = async () => {
 };
 
 export const testLLVMMold = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`mold is only available on Linux`);
 	}
@@ -1414,7 +1409,7 @@ export const testLLVMMold = async () => {
 };
 
 export const testLLVMBfd = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) !== "linux") {
 		throw new Error(`bfd is only available on Linux`);
 	}
@@ -1433,7 +1428,7 @@ export const testLLVMBfd = async () => {
 };
 
 export const testExplicitGlibcVersion = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`glibc is only available on Linux`);
 	}
@@ -1448,7 +1443,7 @@ export const testExplicitGlibcVersion = async () => {
 };
 
 export const testLLVMMusl = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`musl is only available on Linux`);
 	}
@@ -1460,7 +1455,7 @@ export const testLLVMMusl = async () => {
 };
 
 export const testCrossLLVM = async () => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
 		throw new Error(`Cross-compilation is not supported on Darwin`);
@@ -1494,7 +1489,7 @@ export const testDarwinToLinux = async () => {
 };
 
 export const testDarwinToLinuxSingle = async (target: string) => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		throw new Error(`This test is only valid on Darwin`);
 	}
@@ -1506,7 +1501,7 @@ export const testDarwinToLinuxSingle = async (target: string) => {
 };
 
 export const testLinuxToDarwin = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`This test is only valid on Linux`);
 	}
@@ -1528,7 +1523,7 @@ export const testAllNativeProxied = async () => {
 };
 
 export const allNativeProxiedArgs = async (): Promise<Array<std.sdk.Arg>> => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 
 	if (detectedOs === "darwin") {
@@ -1541,7 +1536,7 @@ export const allNativeProxiedArgs = async (): Promise<Array<std.sdk.Arg>> => {
 };
 
 export const allSdkArgs = async (): Promise<Array<std.sdk.Arg>> => {
-	const detectedHost = await std.triple.host();
+	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 
 	if (detectedOs === "darwin") {

@@ -45,7 +45,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		source: source_,
 	} = arg ? await tg.resolve(arg) : {};
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const configureArgs = ["--without-bash-malloc", "--disable-nls"];
@@ -103,7 +103,7 @@ const providesNcurses = async (env: std.env.EnvObject): Promise<boolean> => {
 };
 
 export const test = async () => {
-	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	// FIXME - build assert args properly!
 	// await std.assert.pkg({

@@ -77,7 +77,7 @@ export default build;
 
 export const test = async () => {
 	let env = {};
-	if ((await std.triple.host().then(std.triple.os)) === "linux") {
+	if (std.triple.os(std.triple.host()) === "linux") {
 		env = { LD_LIBRARY_PATH: await tg`${build()}/lib` };
 	}
 	const spec: std.assert.PackageSpec = {

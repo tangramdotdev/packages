@@ -184,7 +184,7 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	const env = await std.env.arg(envArg, { utils: false });
 
 	// Fill in defaults.
-	const system = std.triple.archAndOs(system_ ?? (await std.triple.host()));
+	const system = std.triple.archAndOs(system_ ?? std.triple.host());
 	const layerCompression =
 		format === "docker" ? undefined : (layerCompression_ ?? "zst");
 

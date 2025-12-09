@@ -33,7 +33,7 @@ export type Arg = {
 };
 
 export const build = async (arg?: Arg) => {
-	const host = arg?.host ?? (await std.triple.host());
+	const host = arg?.host ?? std.triple.host();
 	const hostSystem = std.triple.archAndOs(host);
 
 	const configure = { args: [`--enable-debug`, `--enable-optimize=*`] };

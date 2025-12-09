@@ -48,7 +48,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		sdk,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	std.assert.supportedHost(host, metadata);
 	const linuxHeaders = linuxHeaders_ ?? (await linux.kernelHeaders({ host }));
@@ -138,7 +138,7 @@ export type LibCArg = {
 export const sysroot = async (unresolvedArg?: tg.Unresolved<LibCArg>) => {
 	const arg =
 		unresolvedArg !== undefined ? await tg.resolve(unresolvedArg) : {};
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const strippedHost = std.triple.stripVersions(host);
 	const linuxHeaders =
 		arg.linuxHeaders ??

@@ -85,7 +85,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
-	const os = std.triple.os(host ?? (await std.triple.host()));
+	const os = std.triple.os(host ?? std.triple.host());
 	const deps = [
 		std.env.runtimeDependency(liburcu.build, dependencyArgs.liburcu),
 		std.env.runtimeDependency(libuv.build, dependencyArgs.libuv),
@@ -177,7 +177,7 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const os = std.triple.os(await std.triple.host());
+	const os = std.triple.os(std.triple.host());
 	const runtimeDeps: Array<tg.Unresolved<tg.Directory>> = [
 		liburcu.build(),
 		libuv.build(),

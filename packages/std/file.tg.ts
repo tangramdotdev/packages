@@ -114,7 +114,7 @@ export const test = async () => {
 export const testBinary = async () => {
 	// Set up platform details.
 	const bootstrapSDK = await bootstrap.sdk();
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const os = std.triple.os(host);
 	const arch = std.triple.arch(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";

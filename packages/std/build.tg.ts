@@ -175,7 +175,7 @@ export class BuildBuilder<
 	): Promise<TResult1 | TResult2> {
 		let arg = await mergeArgs(...this.#args);
 		let envs: Array<tg.Unresolved<std.env.Arg>> = [];
-		let tangramHost = await std.triple.host();
+		let tangramHost = std.triple.host();
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}

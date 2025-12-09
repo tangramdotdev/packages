@@ -42,7 +42,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const executable =
 		existingManifest?.executable ??
 		(await manifestExecutableFromArg(arg.executable));
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	std.triple.assert(host);
 
 	const buildTriple = arg.build ?? host;
@@ -108,7 +108,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const detectedOs = std.triple.os(buildTriple);
 	const build =
 		detectedOs === "linux"
-			? await bootstrap.toolchainTriple(buildTriple)
+			? bootstrap.toolchainTriple(buildTriple)
 			: buildTriple;
 
 	// If there's an existing binary, use it.
@@ -304,7 +304,7 @@ export namespace wrap {
 		tg.assert(executable !== undefined);
 
 		// Determine the host. If it was not provided, detect the executable host if it's a file, and fall back to the detected host.
-		const detectedHost = await std.triple.host();
+		const detectedHost = std.triple.host();
 		let host = host_;
 		if (host === undefined) {
 			if (executable instanceof tg.File) {
@@ -456,7 +456,7 @@ export namespace wrap {
 			pipefail = true,
 		} = arg ?? {};
 
-		const host = host_ ?? (await std.triple.host());
+		const host = host_ ?? std.triple.host();
 		const build = build_ ?? host;
 
 		// Provide bash for the detected host system.
@@ -1248,7 +1248,7 @@ const interpreterFromArg = async (
 	buildArg?: string,
 	hostArg?: string,
 ): Promise<wrap.Interpreter> => {
-	const host = hostArg ?? (await std.triple.host());
+	const host = hostArg ?? std.triple.host();
 	const buildTriple = buildArg ?? host;
 	// If the arg is an executable, then wrap it and create a normal interpreter.
 	if (
@@ -1298,7 +1298,7 @@ const interpreterFromArg = async (
 			if (preloads.length === 0) {
 				const arch = interpreterMetadata.arch;
 				const host = `${arch}-unknown-linux-gnu`;
-				const detectedBuild = await std.triple.host();
+				const detectedBuild = std.triple.host();
 				const build = buildArg ?? detectedBuild;
 				const buildToolchain = await getBuildToolchain(
 					buildToolchainArg,
@@ -1347,7 +1347,7 @@ const interpreterFromArg = async (
 			if (preloads.length === 0) {
 				const arch = interpreterMetadata.arch;
 				const host = `${arch}-linux-musl`;
-				const detectedBuild = await std.triple.host();
+				const detectedBuild = std.triple.host();
 				const build = buildArg ?? detectedBuild;
 				const buildToolchain = await getBuildToolchain(
 					buildToolchainArg,
@@ -1376,7 +1376,7 @@ const interpreterFromArg = async (
 
 			// If no preload is defined, add the default injection preload.
 			if (preloads.length === 0) {
-				const host = await std.triple.host();
+				const host = std.triple.host();
 				// Use default injection when no custom build or buildToolchain is provided.
 				if (buildArg === undefined && buildToolchainArg === undefined) {
 					const injectionLibrary = await tg.build(injection.defaultInjection);
@@ -1461,7 +1461,7 @@ const interpreterFromExecutableArg = async (
 					preloads: [injectionDylib],
 				};
 			} else {
-				const arch = std.triple.arch(await std.triple.host());
+				const arch = std.triple.arch(std.triple.host());
 				const host = hostArg ?? std.triple.create({ os: "darwin", arch });
 				const buildTriple = buildArg ?? host;
 				const buildToolchain = await getBuildToolchain(
@@ -1483,7 +1483,7 @@ const interpreterFromExecutableArg = async (
 		}
 		case "shebang": {
 			if (metadata.interpreter === undefined) {
-				const host = hostArg ?? (await std.triple.host());
+				const host = hostArg ?? std.triple.host();
 				const buildTriple = buildArg ?? host;
 				return interpreterFromArg(
 					await wrap.defaultShell({
@@ -2510,13 +2510,13 @@ type BuildAndHostArg = {
 
 /** Basic program for testing the wrapper code. */
 export const argAndEnvDump = async (arg?: BuildAndHostArg) => {
-	const host = arg?.host ?? (await std.triple.host());
+	const host = arg?.host ?? std.triple.host();
 	const build = arg?.build ?? host;
 
 	const isCross = build !== host;
 	const buildToolchain = isCross
 		? gnu.toolchain({ host: build, target: host })
-		: bootstrap.sdk(await bootstrap.toolchainTriple(host));
+		: bootstrap.sdk(bootstrap.toolchainTriple(host));
 
 	const sdkEnv = await std.env.arg(
 		buildToolchain,
@@ -2564,7 +2564,7 @@ export const testSingleArgObjectNoMutations = async () => {
 	tg.assert(origManifest);
 	const origManifestExecutable = origManifest.executable;
 
-	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
+	const buildToolchain = await bootstrap.sdk.env(std.triple.host());
 
 	const wrapper = await wrap(executable, {
 		args: ["--arg1", "--arg2"],
@@ -2590,7 +2590,7 @@ export const testSingleArgObjectNoMutations = async () => {
 	const text = await output.text();
 	console.log("text", text);
 
-	const os = await std.triple.host().then(std.triple.os);
+	const os = std.triple.os(std.triple.host());
 
 	if (os === "linux") {
 		tg.assert(
@@ -2637,7 +2637,7 @@ export const testSingleArgObjectNoMutations = async () => {
 };
 
 export const testBasicCross = async () => {
-	const detectedBuild = await std.triple.host();
+	const detectedBuild = std.triple.host();
 	const detectedOs = std.triple.os(detectedBuild);
 	if (detectedOs === "darwin") {
 		throw new Error(`Cross-compilation is not supported on Darwin`);
@@ -2736,7 +2736,7 @@ export const testContentExecutableVariadic = async () => {
 };
 
 export const testDependencies = async () => {
-	const buildToolchain = await bootstrap.sdk.env(await std.triple.host());
+	const buildToolchain = await bootstrap.sdk.env(std.triple.host());
 	const transitiveDependency = await tg.file("I'm a transitive reference");
 	await transitiveDependency.store();
 	const transitiveDependencyId = transitiveDependency.id;
@@ -2776,7 +2776,7 @@ export const testDependencies = async () => {
 import libGreetSource from "./wrap/test/greet.c" with { type: "file" };
 import driverSource from "./wrap/test/driver.c" with { type: "file" };
 export const testDylibPath = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
@@ -2819,7 +2819,7 @@ export const testDylibPath = async () => {
 };
 
 export const testInterpreterSwappingNormal = async () => {
-	const buildToolchain = await bootstrap.sdk(await std.triple.host());
+	const buildToolchain = await bootstrap.sdk(std.triple.host());
 
 	// Create a simple bash interpreter wrapper for testing
 	const bashExecutable = await std.utils.bash
@@ -2886,7 +2886,7 @@ export const testInterpreterSwappingNormal = async () => {
 };
 
 export const testInterpreterWrappingPreloads = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const os = std.triple.os(host);
 	const expectedKind = os === "darwin" ? "dyld" : "ld-musl";
 

@@ -28,14 +28,12 @@ export const source = () => {
 export type Arg = cmake.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	return cmake.build(
-		{ source: source() },
-		...args,
-	);
+	return cmake.build({ source: source() }, ...args);
 };
 
-export const env = () => std.env.arg({
-	PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
-});
+export const env = () =>
+	std.env.arg({
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+	});
 
 export default build;

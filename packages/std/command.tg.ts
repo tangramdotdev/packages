@@ -145,7 +145,7 @@ export class CommandBuilder<
 	): Promise<TResult1 | TResult2> {
 		let arg = await mergeArgs(...this.#args);
 		let envs: Array<tg.Unresolved<std.env.Arg>> = [];
-		let tangramHost = await std.triple.host();
+		let tangramHost = std.triple.host();
 		if (arg.host === undefined) {
 			arg.host = tangramHost;
 		}
@@ -238,7 +238,7 @@ export const defaultTemplateCommandArg = (
 };
 
 export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
-	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
+	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 	// build the default args.
 	let arg: tg.Command.Arg.Object = {};
 	if (std.triple.os(host) === "linux") {
@@ -252,7 +252,7 @@ export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
 
 /** Build the default shell, returning the file directly. */
 export const buildDefaultBash = async (hostArg?: tg.Unresolved<string>) => {
-	const host = hostArg ? await tg.resolve(hostArg) : await std.triple.host();
+	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 	return await tg
 		.build(std.utils.bash.build, { host })
 		.then((dir) => dir.get("bin/bash"))

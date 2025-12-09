@@ -46,7 +46,7 @@ export const tryArchAndOs = (s: string): string | undefined => {
 };
 
 /** Retrieve the configured host for the current running process. */
-export const host = async (): Promise<string> => {
+export const host = (): string => {
 	const val = tg.process.env.TANGRAM_HOST;
 	tg.assert(
 		val !== undefined,

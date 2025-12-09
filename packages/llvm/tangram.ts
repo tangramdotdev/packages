@@ -52,7 +52,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const sourceDir = source_ ?? source();
@@ -191,7 +191,7 @@ type PrebuiltArg = {
 export const prebuilt = async (arg?: PrebuiltArg) => {
 	const { host: host_ } = arg ?? {};
 	const { version } = metadata;
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 
 	const arch = std.triple.arch(host);
 	const os = std.triple.os(host);
@@ -252,7 +252,7 @@ export const libclang = async (arg?: LLVMArg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const sourceDir = source_ ?? source();
@@ -305,7 +305,7 @@ export const lld = async (arg?: LLVMArg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const sourceDir = source_ ?? source();
@@ -382,7 +382,7 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 
 export const test = async () => {
 	// Build a triple for the detected host.
-	const host = std.sdk.canonicalTriple(await std.triple.host());
+	const host = std.sdk.canonicalTriple(std.triple.host());
 	const hostArch = std.triple.arch(host);
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);

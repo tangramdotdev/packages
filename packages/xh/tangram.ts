@@ -51,7 +51,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
 	const env: tg.Unresolved<Array<std.env.Arg>> = [env_];

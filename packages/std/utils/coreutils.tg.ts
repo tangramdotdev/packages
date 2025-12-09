@@ -57,7 +57,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		staticBuild = false,
 		usePrerequisites = true,
 	} = arg ? await tg.resolve(arg) : {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	const os = std.triple.os(host);
 
@@ -135,7 +135,7 @@ export default build;
 
 /** Obtain just the `env` binary. */
 export const gnuEnv = async () => {
-	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await tg.build(bootstrap.sdk, host);
 	const env = std.env.arg(sdk, await tg.build(bootstrap.make.build, { host }), {
 		utils: false,
@@ -153,7 +153,7 @@ export const gnuEnv = async () => {
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 
 export const test = async () => {
-	const host = await bootstrap.toolchainTriple(await std.triple.host());
+	const host = bootstrap.toolchainTriple(std.triple.host());
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
 	const sdk = await bootstrap.sdk(host);

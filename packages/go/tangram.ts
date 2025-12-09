@@ -42,7 +42,7 @@ export const self = async (
 	arg?: tg.Unresolved<ToolchainArg>,
 ): Promise<tg.Directory> => {
 	const resolved = await tg.resolve(arg);
-	const host = resolved?.host ?? (await std.triple.host());
+	const host = resolved?.host ?? std.triple.host();
 	const system = std.triple.archAndOs(host);
 	tg.assert(
 		system in RELEASES,
@@ -155,7 +155,7 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 			source: "set",
 		},
 	});
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const system = std.triple.archAndOs(host);
 	const target = target_ ?? host;
 	tg.assert(source, "Must provide a source directory.");
@@ -771,7 +771,7 @@ export const testCgo = async () => {
 		`),
 	});
 
-	const host = await std.triple.host();
+	const host = std.triple.host();
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
 

@@ -72,7 +72,7 @@ export type BuildArgs = {
 
 /** Build a poetry project. */
 export const build = async (args: BuildArgs) => {
-	const host = args.host ?? (await std.triple.host());
+	const host = args.host ?? std.triple.host();
 	const build = args.build ?? host;
 	// Construct the basic build environment.
 	const poetryArtifact = await self({

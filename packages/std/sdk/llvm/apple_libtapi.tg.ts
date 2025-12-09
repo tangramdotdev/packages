@@ -16,7 +16,7 @@ export const source = async () => {
 };
 
 export const build = async () => {
-	const host = await std.triple.host();
+	const host = std.triple.host();
 
 	const llvmSdk = std.sdk({ host, toolchain: "llvm" });
 	const cmakeArtifact = cmake({ host });

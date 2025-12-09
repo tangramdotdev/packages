@@ -64,7 +64,7 @@ export type EnvArg = {
 
 export const env = async (arg: tg.Unresolved<EnvArg>) => {
 	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
-	const host = host_ ?? (await std.triple.host());
+	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	return std.env(
 		autoconf({ build, host: build }),

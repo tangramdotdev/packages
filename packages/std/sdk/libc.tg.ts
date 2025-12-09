@@ -17,7 +17,7 @@ export type LibCArg = {
 export const libc = async (unresolvedArg: tg.Unresolved<LibCArg>) => {
 	const arg = await tg.resolve(unresolvedArg);
 
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	// Libcs are built for a single target, which is referred to as the host in this context.
 	const kind = kindFromTriple(host);
 	if (kind === "glibc") {
@@ -73,7 +73,7 @@ type LinkerFlagArg = {
 
 /** Get a template to pass linker flags that point to this libc in the given toolchain directory for the interpreter and rpath. */
 export const linkerFlags = async (arg: LinkerFlagArg) => {
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const libPath = tg`${arg.toolchain}/lib`;
 	const interpreterPath = tg`${libPath}/${interpreterName(host)}`;
 	const flags = tg`-Wl,-dynamic-linker=${interpreterPath} -Wl,-rpath,${libPath}`;
@@ -85,7 +85,7 @@ export const constructSysroot = async (
 	unresolvedArg: tg.Unresolved<LibCArg>,
 ) => {
 	const arg = await tg.resolve(unresolvedArg);
-	const host = arg.host ?? (await std.triple.host());
+	const host = arg.host ?? std.triple.host();
 	const strippedHost = std.triple.stripVersions(host);
 	const linuxHeaders =
 		arg.linuxHeaders ??
