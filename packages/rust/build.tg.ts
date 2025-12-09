@@ -388,8 +388,8 @@ export const testConditionalCompilation = async () => {
 	return true;
 };
 
-import * as ncurses from "ncurses" with { local: "../ncurses" };
-import * as readline from "readline" with { local: "../readline" };
+import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
+import * as readline from "readline" with { local: "../readline.tg.ts" };
 export const testLinkReadline = async () => {
 	const crateName = "native_exe_readline";
 

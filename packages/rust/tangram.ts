@@ -1,6 +1,6 @@
 import * as std from "std" with { local: "../std" };
 import { $ } from "std" with { local: "../std" };
-import zlib from "zlib" with { local: "../zlib" };
+import zlib from "zlib" with { local: "../zlib.tg.ts" };
 
 import * as build_ from "./build.tg.ts";
 export * as build from "./build.tg.ts";

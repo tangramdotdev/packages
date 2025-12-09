@@ -1,5 +1,5 @@
 import * as std from "std" with { local: "../../std" };
-import * as go from "go" with { local: "../../go" };
+import * as go from "go" with { local: "../../go.tg.ts" };
 
 export const metadata = {
 	name: "autobuild-go",

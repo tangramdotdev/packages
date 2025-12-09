@@ -1,5 +1,5 @@
 import * as std from "std" with { local: "../std" };
-import pkgconf from "pkgconf" with { local: "../pkgconf" };
+import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
 import { $ } from "std" with { local: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
@@ -448,8 +448,8 @@ export const test = async () => {
 	return true;
 };
 
-import pkgConfig from "pkg-config" with { local: "../pkg-config" };
-import openssl from "openssl" with { local: "../openssl" };
+import pkgConfig from "pkg-config" with { local: "../pkg-config.tg.ts" };
+import openssl from "openssl" with { local: "../openssl.tg.ts" };
 export const testUnproxiedWorkspace = async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),

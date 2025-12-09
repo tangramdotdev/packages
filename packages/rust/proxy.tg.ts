@@ -34,8 +34,8 @@ export const proxy = async (arg?: Arg) => {
 
 export default proxy;
 
-import pkgconf from "pkgconf" with { local: "../pkgconf" };
-import openssl from "openssl" with { local: "../openssl" };
+import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
+import openssl from "openssl" with { local: "../openssl.tg.ts" };
 import tests from "./tests" with { type: "directory" };
 
 export const testProxyCompiles = async () => {

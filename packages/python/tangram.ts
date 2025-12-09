@@ -2,15 +2,15 @@ import * as std from "std" with { local: "../std" };
 import { $ } from "std" with { local: "../std" };
 
 import * as bzip2 from "bzip2" with { local: "../bzip2" };
-import * as libffi from "libffi" with { local: "../libffi" };
-import * as libxcrypt from "libxcrypt" with { local: "../libxcrypt" };
-import * as mpdecimal from "mpdecimal" with { local: "../mpdecimal" };
-import * as ncurses from "ncurses" with { local: "../ncurses" };
-import * as openssl from "openssl" with { local: "../openssl" };
-import * as readline from "readline" with { local: "../readline" };
-import * as sqlite from "sqlite" with { local: "../sqlite" };
-import * as zlib from "zlib" with { local: "../zlib" };
-import * as zstd from "zstd" with { local: "../zstd" };
+import * as libffi from "libffi" with { local: "../libffi.tg.ts" };
+import * as libxcrypt from "libxcrypt" with { local: "../libxcrypt.tg.ts" };
+import * as mpdecimal from "mpdecimal" with { local: "../mpdecimal.tg.ts" };
+import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
+import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
+import * as readline from "readline" with { local: "../readline.tg.ts" };
+import * as sqlite from "sqlite" with { local: "../sqlite.tg.ts" };
+import * as zlib from "zlib" with { local: "../zlib.tg.ts" };
+import * as zstd from "zstd" with { local: "../zstd.tg.ts" };
 
 import * as requirements from "./requirements.tg.ts";
 export { requirements };

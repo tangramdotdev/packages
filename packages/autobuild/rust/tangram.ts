@@ -1,6 +1,6 @@
 import * as std from "std" with { local: "../../std" };
 import cmake from "cmake" with { local: "../../cmake" };
-import openssl from "openssl" with { local: "../../openssl" };
+import openssl from "openssl" with { local: "../../openssl.tg.ts" };
 import * as rust from "rust" with { local: "../../rust" };
 
 export const metadata = {
