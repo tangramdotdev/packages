@@ -40,34 +40,23 @@ export const source = async () => {
 	});
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		texinfo?: texinfo.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+export type Arg = std.autotools.Arg & {
 	staticBuild?: boolean;
 	target?: string;
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: { texinfo: texinfoArg = {} } = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-		staticBuild,
-		target: target_,
-		...rest
-	} = await std.packages.applyArgs<Arg>(...args);
-	const target = target_ ?? host;
+	// Extract custom options first.
+	const customOptions = await std.args.apply<Arg, Arg>({
+		args: args as std.Args<Arg>,
+		map: async (arg) => arg,
+		reduce: {},
+	});
+
+	const host = customOptions.host ?? std.triple.host();
+	const build_ = customOptions.build ?? host;
+	const target = customOptions.target ?? host;
+	const staticBuild = customOptions.staticBuild ?? false;
 
 	const buildPhase = staticBuild
 		? `make configure-host && make LDFLAGS=-all-static`
@@ -101,16 +90,13 @@ export const build = async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	const deps = [texinfo.build({ build, env: env_, host, sdk }, texinfoArg)];
-	const env = [...deps, additionalEnv, env_];
-
 	// Collect configuration.
 	const configure = {
 		args: [
 			tg`--with-sysroot=${tg.output}`,
 			"--disable-dependency-tracking",
 			"--disable-nls",
-			`--build=${build}`,
+			`--build=${build_}`,
 			`--host=${host}`,
 			`--target=${target}`,
 			...additionalArgs,
@@ -122,17 +108,17 @@ export const build = async (...args: std.Args<Arg>) => {
 		build: buildPhase,
 	};
 
-	return std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...rest,
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
+			source: source(),
+			// texinfo returns an env file, not a directory, so add it directly to env.
+			env: std.env.arg(texinfo.build({ build: build_, host }), additionalEnv),
 			phases,
-			sdk,
-			source: source_ ?? source(),
 		},
-		autotools,
+		...args,
 	);
+
+	return std.autotools.build(arg);
 };
 
 export default build;

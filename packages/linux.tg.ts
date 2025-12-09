@@ -23,13 +23,8 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
+export type Arg = std.args.BasePackageArg & {
 	phases?: std.phases.Arg;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
 };
 
 export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {

@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = (): Promise<tg.Directory> => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ae70923dba524d794451b806dbbb605684596c1b23e37cc5100daa04b984b706";
@@ -27,35 +27,10 @@ export const source = (): Promise<tg.Directory> => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	env?: std.env.Arg;
-	go?: go.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = go.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		go: goArg = {},
-		build,
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	return go.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		goArg,
-	);
-};
+export const build = (...args: std.Args<Arg>) =>
+	go.build({ source: source() }, ...args);
 
 export default build;
 

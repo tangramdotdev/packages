@@ -32,57 +32,25 @@ export const source = async () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	dependencies?: {
-		gperf?: std.args.DependencyArg<gperf.Arg>;
-	};
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	gperf: { build: gperf.build, kind: "buildtime" },
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-		...rest
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	std.assert.supportedHost(host, metadata);
-
-	const dependencies = [
-		std.env.buildDependency(gperf.build, dependencyArgs.gperf),
-	];
-
-	const env = std.env.arg(
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	);
-
-	const configure = {
-		args: ["--disable-dependency-tracking"],
-	};
-
-	return std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...rest,
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases: { configure },
-			source: source_ ?? source(),
+			source: source(),
+			deps,
+			phases: {
+				configure: { args: ["--disable-dependency-tracking"] },
+			},
 		},
-		autotools,
+		...args,
 	);
+	std.assert.supportedHost(arg.host, metadata);
+	return std.autotools.build(arg);
 };
 
 export default build;

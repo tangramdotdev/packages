@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6";
@@ -24,61 +24,42 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const scriptNames = [
+	"gunzip",
+	"gzexe",
+	"uncompress",
+	"zcat",
+	"zcmp",
+	"zdiff",
+	"zegrep",
+	"zfgrep",
+	"zforce",
+	"zgrep",
+	"zmore",
+	"znew",
+];
+
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: ["--disable-dependency-tracking"],
-	};
-
-	const env = std.env.arg(env_);
-
-	let output = await std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
-		env,
-		phases: { configure },
-		sdk,
-		source: source_ ?? source(),
-	});
-
-	const scriptNames = [
-		"gunzip",
-		"gzexe",
-		"uncompress",
-		"zcat",
-		"zcmp",
-		"zdiff",
-		"zegrep",
-		"zfgrep",
-		"zforce",
-		"zgrep",
-		"zmore",
-		"znew",
-	];
+	let output = await std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				phases: {
+					configure: { args: ["--disable-dependency-tracking"] },
+				},
+			},
+			...args,
+		),
+	);
 	for (const path of scriptNames) {
 		const file = tg.File.expect(await output.get(`bin/${path}`));
 		const wrappedFile = changeShebang(file);
 		output = await tg.directory(output, {
-			[path]: wrappedFile,
+			[`bin/${path}`]: wrappedFile,
 		});
 	}
-
 	return output;
 };
 

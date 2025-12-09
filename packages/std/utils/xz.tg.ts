@@ -50,7 +50,12 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		],
 	};
 
-	const env = std.env.arg(env_, prerequisites(build), { utils: false });
+	const env = std.env.arg(
+		env_,
+		prerequisites(build),
+		{ TGLD_TRACING: "tgld=trace" },
+		{ utils: false },
+	);
 
 	return autotoolsInternal({
 		...(await std.triple.rotate({ build, host })),

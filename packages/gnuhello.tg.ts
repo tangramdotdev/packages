@@ -1,4 +1,4 @@
-import gettext from "gettext" with { local: "./gettext.tg.ts" };
+import * as gettext from "gettext" with { local: "./gettext.tg.ts" };
 import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
 import * as std from "std" with { local: "./std" };
 
@@ -21,57 +21,30 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		libiconv?: libiconv.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	gettext: { build: gettext.build, kind: "buildtime" },
+	libiconv: {
+		build: libiconv.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "darwin",
+	},
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: { libiconv: libiconvArg = {} } = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const dependencies: Array<tg.Unresolved<std.env.Arg>> = [
-		gettext({ build, host: build }),
-	];
-
-	if (std.triple.os(host) === "darwin") {
-		dependencies.push(
-			libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
-		);
-	}
-
-	const env = std.env.arg(...dependencies, env_);
-
-	const configure = {
-		args: ["--disable-dependency-tracking"],
-	};
-	const phases = { configure };
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				phases: {
+					configure: { args: ["--disable-dependency-tracking"] },
+				},
+			},
+			...args,
+		),
 	);
-};
 
 export default build;
 

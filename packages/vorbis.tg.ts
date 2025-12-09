@@ -1,5 +1,4 @@
 import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
 import * as cmake from "cmake" with { local: "./cmake" };
 import * as ogg from "ogg" with { local: "./ogg.tg.ts" };
 
@@ -7,11 +6,11 @@ export const metadata = {
 	homepage: "https://xiph.org/vorbis",
 	name: "vorbis",
 	version: "1.3.7",
+	tag: "vorbis/1.3.7",
 	provides: {},
 };
 
 export const source = () => {
-	std.download;
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:b33cc4934322bcbf6efcbacf49e3ca01aadbea4114ec9589d1b1e9d20f72954b";
@@ -26,15 +25,14 @@ export const source = () => {
 		.then(tg.Directory.expect);
 };
 
-export type Arg = cmake.Arg;
+const deps = await std.deps({
+	ogg: ogg.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	return cmake.build(
-		{ source: source() },
-		{ env: std.env.arg(ogg.env()) },
-		...args,
-	);
-};
+export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
+
+export const build = (...args: std.Args<Arg>) =>
+	cmake.build({ source: source(), deps }, ...args);
 
 export const env = () =>
 	std.env.arg({

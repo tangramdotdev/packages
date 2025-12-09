@@ -28,30 +28,21 @@ export const source = () => {
 	});
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
+export type Arg = std.autotools.Arg & {
 	linuxHeaders?: tg.Directory;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build: build_,
-		env: env_,
-		host: host_,
-		linuxHeaders: linuxHeaders_,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
+	const arg = await std.autotools.arg({ source: source() }, ...args);
+	const { host, build } = arg;
 	std.assert.supportedHost(host, metadata);
-	const linuxHeaders = linuxHeaders_ ?? (await linux.kernelHeaders({ host }));
+	// Extract linuxHeaders from raw args since std.autotools.arg doesn't know about it.
+	const headersArg = (await Promise.all(args.map(tg.resolve))).find(
+		(a): a is { linuxHeaders?: tg.Directory } =>
+			a !== null && typeof a === "object" && "linuxHeaders" in a,
+	);
+	const linuxHeaders =
+		headersArg?.linuxHeaders ?? (await linux.kernelHeaders({ host }));
 
 	const configure = {
 		args: [
@@ -85,23 +76,20 @@ export const build = async (...args: std.Args<Arg>) => {
 			LIBRARY_PATH: tg.Mutation.unset(),
 			TGLD_PASSTHROUGH: true,
 		},
-		env_,
+		arg.env,
 	);
 
-	let result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			fortifySource: false,
-			hardeningCFlags: false,
-			opt: "3",
-			phases,
-			prefixPath: "/",
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let result = await std.autotools.build({
+		...(await std.triple.rotate({ build, host })),
+		env,
+		fortifySource: false,
+		hardeningCFlags: false,
+		opt: "3",
+		phases,
+		prefixPath: "/",
+		sdk: arg.sdk,
+		source: arg.source,
+	});
 
 	// Fix libc.so.
 	result = await applySysrootFix({

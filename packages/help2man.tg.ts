@@ -4,6 +4,12 @@ import * as std from "std" with { local: "./std" };
 import * as texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
 import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
 
+const deps = await std.deps({
+	autoconf: autoconf.build,
+	perl: { build: perl.build, kind: "buildtime" },
+	zlib: zlib.build,
+});
+
 export const metadata = {
 	homepage: "https://www.gnu.org/software/help2man/",
 	license: "GPL-3.0-or-later",
@@ -28,58 +34,39 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		autoconf?: autoconf.Arg;
-		perl?: perl.Arg;
-		texinfo?: texinfo.Arg;
-		zlib?: zlib.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: {
-			autoconf: autoconfArg = {},
-			perl: perlArg = {},
-			texinfo: texinfoArg = {},
-			zlib: zlibArg = {},
-		} = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	// Get build triple first for texinfo (buildtime only).
+	const options = await std.args.apply<Arg, Arg>({
+		args: args as std.Args<Arg>,
+		map: async (arg) => arg,
+		reduce: {},
+	});
+	const build_ = options.build ?? options.host ?? std.triple.host();
 
-	const perlArtifact = await perl.build({ build, host: build }, perlArg);
+	const arg = await std.autotools.arg(
+		{
+			source: source(),
+			deps,
+			// texinfo returns an env file, not a directory, so add it manually.
+			env: texinfo.build({ build: build_, host: build_ }),
+		},
+		...args,
+	);
+
+	const { perl: perlArtifact } = await std.deps.artifacts(deps, {
+		build: arg.build,
+		host: arg.host,
+	});
+	tg.assert(perlArtifact !== undefined);
+
 	const interpreter = tg.symlink({
 		artifact: perlArtifact,
 		path: "bin/perl",
 	});
-	const dependencies = [
-		autoconf.build({ build, env: env_, host, sdk }, autoconfArg),
-		perlArtifact,
-		texinfo.build({ build, host: build }, texinfoArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-	];
-	const env = std.env.arg(...dependencies, env_);
-	const artifact = std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+
+	const artifact = await std.autotools.build(arg);
 
 	const wrappedScript = std.wrap(
 		tg.symlink({ artifact, path: "bin/help2man" }),

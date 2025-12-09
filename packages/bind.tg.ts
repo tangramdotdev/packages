@@ -56,114 +56,92 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		libcap?: std.args.DependencyArg<libcap.Arg>;
-		libiconv?: std.args.DependencyArg<libiconv.Arg>;
-		liburcu?: std.args.DependencyArg<liburcu.Arg>;
-		libuv?: std.args.DependencyArg<libuv.Arg>;
-		libxml2?: std.args.DependencyArg<libxml2.Arg>;
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	libcap: {
+		build: libcap.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "linux",
+	},
+	libiconv: {
+		build: libiconv.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "darwin",
+	},
+	liburcu: liburcu.build,
+	libuv: libuv.build,
+	libxml2: libxml2.build,
+	openssl: openssl.build,
+	zlib: zlib.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	const arg = await std.autotools.arg(
+		{
+			source: source(),
+			deps,
+			phases: {
+				configure: {
+					args: [
+						"--disable-doh",
+						"--disable-geoip",
+						"--without-cmocka",
+						"--without-gssapi",
+						"--without-json-c",
+						"--without-libidn2",
+						"--without-libnghttp2",
+						"--without-lmdb",
+						"--without-maxminddb",
+					],
+				},
+			},
+		},
+		...args,
+	);
 
-	const os = std.triple.os(host ?? std.triple.host());
-	const deps = [
-		std.env.runtimeDependency(liburcu.build, dependencyArgs.liburcu),
-		std.env.runtimeDependency(libuv.build, dependencyArgs.libuv),
-		std.env.runtimeDependency(libxml2.build, dependencyArgs.libxml2),
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	];
-	if (os === "darwin") {
-		deps.push(
-			std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
-		);
-	} else if (os === "linux") {
-		deps.push(std.env.runtimeDependency(libcap.build, dependencyArgs.libcap));
-	}
-
-	const env: tg.Unresolved<Array<std.env.Arg>> = [
-		...deps.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	];
-
-	const configure = {
-		args: [
-			"--disable-doh",
-			"--disable-geoip",
-			"--without-cmocka",
-			"--without-gssapi",
-			"--without-json-c",
-			"--without-libidn2",
-			"--without-libnghttp2",
-			"--without-lmdb",
-			"--without-maxminddb",
-		],
-	};
+	const os = std.triple.os(arg.host);
 
 	// On Linux, the linker needs help finding sibling libraries in the build tree.
 	// We customize the build phase to pass LDFLAGS with rpath-link directly to make.
-	const buildPhase =
-		os === "linux"
-			? {
-					command: tg`
-						TOP="$(pwd)"
-						RPATH_LINK=""
-						for lib in isc dns ns isccfg isccc; do
-							RPATH_LINK="$RPATH_LINK -Wl,-rpath-link,$TOP/lib/$lib/.libs"
-						done
-						make LDFLAGS="$LDFLAGS $RPATH_LINK" -j$(nproc)
-					`,
-					args: tg.Mutation.set([]),
-				}
-			: undefined;
+	let setRuntimeLibraryPath = arg.setRuntimeLibraryPath;
+	let phases = arg.phases;
+	if (os === "linux") {
+		setRuntimeLibraryPath = true;
+		phases = await std.phases.mergePhases(phases, {
+			build: {
+				command: tg`
+					TOP="$(pwd)"
+					RPATH_LINK=""
+					for lib in isc dns ns isccfg isccc; do
+						RPATH_LINK="$RPATH_LINK -Wl,-rpath-link,$TOP/lib/$lib/.libs"
+					done
+					make LDFLAGS="$LDFLAGS $RPATH_LINK" -j$(nproc)
+				`,
+				args: tg.Mutation.set([]),
+			},
+		});
+	}
 
-	let bindArtifact = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
-			phases: { configure, build: buildPhase },
-			sdk,
-			setRuntimeLibraryPath: os === "linux",
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let output = await std.autotools.build({
+		...arg,
+		setRuntimeLibraryPath,
+		phases,
+	});
 
 	// On Linux, wrap all ELF binaries with the package's lib directory to ensure
 	// transitive library dependencies like libns are found at runtime.
 	if (os === "linux") {
-		const libDir = await bindArtifact.get("lib").then(tg.Directory.expect);
+		const libDir = await output.get("lib").then(tg.Directory.expect);
 		const libraryPaths = [libDir];
-		const binDir = await bindArtifact.get("bin").then(tg.Directory.expect);
+		const binDir = await output.get("bin").then(tg.Directory.expect);
 		for await (const [name, artifact] of binDir) {
 			if (artifact instanceof tg.File) {
 				const { format } = await std.file.executableMetadata(artifact);
 				if (format === "elf") {
 					const unwrapped = binDir.get(name).then(tg.File.expect);
 					const wrapped = std.wrap(unwrapped, { libraryPaths });
-					bindArtifact = await tg.directory(bindArtifact, {
+					output = await tg.directory(output, {
 						[`bin/${name}`]: wrapped,
 					});
 				}
@@ -171,7 +149,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		}
 	}
 
-	return bindArtifact;
+	return output;
 };
 
 export default build;

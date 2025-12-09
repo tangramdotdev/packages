@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = async (): Promise<tg.Directory> => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3799ca9924d3125038880367bf1468e53a1b7e3686a934f098b7e1d286cdb80e";
@@ -35,18 +35,17 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-export type Arg = cmake.Arg;
+const deps = await std.deps({
+	flac: flac.build,
+	ogg: ogg.build,
+	opus: opus.build,
+	vorbis: vorbis.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	return cmake.build(
-		{ source: source() },
-		{ env: std.env.arg(flac.env()) },
-		{ env: std.env.arg(ogg.env()) },
-		{ env: std.env.arg(opus.env()) },
-		{ env: std.env.arg(vorbis.env()) },
-		...args,
-	);
-};
+export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
+
+export const build = (...args: std.Args<Arg>) =>
+	cmake.build({ source: source(), deps }, ...args);
 
 export const env = () =>
 	std.env.arg({

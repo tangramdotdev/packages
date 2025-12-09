@@ -25,64 +25,47 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		zlib?: std.args.DependencyArg<zlib.Arg>;
+const deps = await std.deps({
+	zlib: zlib.build,
+});
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof deps> & {
+		proxy?: boolean;
 	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-	proxy?: boolean;
-};
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		proxy = true,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const deps = [std.env.runtimeDependency(zlib.build, dependencyArgs.zlib)];
-
-	const env = await std.env.arg(
-		...deps.map((dep: any) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
+	const arg = await std.autotools.arg(
 		{
-			CFLAGS: tg.Mutation.prefix("-Wno-int-conversion -std=gnu17", " "),
+			deps,
+			source: source(),
+			env: {
+				CFLAGS: tg.Mutation.prefix("-Wno-int-conversion -std=gnu17", " "),
+			},
+			phases: {
+				configure: {
+					args: [
+						"--with-internal-glib",
+						"--disable-dependency-tracking",
+						"--enable-define-prefix",
+					],
+				},
+			},
 		},
-		env_,
+		...args,
 	);
 
-	// Set up phases.
-	const configure = {
-		args: [
-			"--with-internal-glib",
-			"--disable-dependency-tracking",
-			"--enable-define-prefix",
-		],
-	};
+	// Extract proxy option (not part of autotools args).
+	const proxy =
+		(
+			await std.args.apply<Arg, Arg>({
+				args: args as std.Args<Arg>,
+				map: async (arg) => arg,
+				reduce: {},
+			})
+		).proxy ?? true;
 
-	const phases = { configure };
-
-	const pkgConfigBuild = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	const pkgConfigBuild = await std.autotools.build(arg);
 
 	let pkgConfig: tg.File | tg.Template = tg.File.expect(
 		await pkgConfigBuild.get("bin/pkg-config"),

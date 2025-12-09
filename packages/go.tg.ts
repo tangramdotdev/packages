@@ -79,11 +79,50 @@ export const self = async (
 export default self;
 
 export type Arg = {
+	/** The machine performing the compilation. */
+	build?: string | undefined;
+
 	/** If the build requires network access, provide a checksum or the string "sha256:any" to accept any result, or `sha256:none` to ensure a failure, displaying the computed value. */
-	checksum?: tg.Checksum;
+	checksum?: tg.Checksum | undefined;
+
+	/** Should cgo be enabled? Default: true. */
+	cgo?: boolean | undefined;
+
+	/** Dependencies configuration. */
+	deps?: std.deps.Config | undefined;
+
+	/** Any user-specified environment variables that will be set during the build. */
+	env?: std.env.Arg | undefined;
+
+	/**
+	 * Explicitly enable or disable the `go generate` phase.
+	 * - `false`, `undefined` (default): Never run `go generate`.
+	 * - `true`: Always run `go generate`.
+	 * - `{command: ...}`: Always run `go generate`, and override the specific command used.
+	 */
+	generate?: boolean | { command: tg.Template.Arg } | undefined;
+
+	/** The machine that will run the compilation. */
+	host?: string | undefined;
+
+	/**
+	 * Configure the installation phase, where binaries are built and copied to the output.
+	 *
+	 * If set, `command` will be run instead of `go install` to build the output binaries.
+	 */
+	install?: { command: tg.Template.Arg } | undefined;
+
+	/** Should this build have network access? Must set a checksum to enable. Default: false. */
+	network?: boolean | undefined;
+
+	/** Any required SDK customization. */
+	sdk?: std.sdk.Arg | undefined;
 
 	/** The source directory. */
-	source: tg.Directory;
+	source?: tg.Directory | undefined;
+
+	/** The machine the produced artifacts will run on. */
+	target?: string | undefined;
 
 	/**
 	 * Configure how we vendor dependencies:
@@ -95,70 +134,78 @@ export type Arg = {
 	 *
 	 * Native vendoring downloads modules from proxy.golang.org using checksums from go.sum.
 	 */
-	vendor?: boolean | "native" | "go" | tg.Template.Arg;
+	vendor?: boolean | "native" | "go" | tg.Template.Arg | undefined;
+};
 
-	/**
-	 * Explicitly enable or disable the `go generate` phase.
-	 * - `false`, `undefined` (default): Never run `go generate`.
-	 * - `true`: Always run `go generate`.
-	 * - `{command: ...}`: Always run `go generate`, and override the specific command used.
-	 */
-	generate?: boolean | { command: tg.Template.Arg };
+/** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */
+export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
+	build: string;
+	host: string;
+	source: tg.Directory;
+};
 
-	/**
-	 * Configure the installation phase, where binaries are built and copied to the output.
-	 *
-	 * If set, `command` will be run instead of `go install` to build the output binaries.
-	 */
-	install?: { command: tg.Template.Arg };
+/** Resolve go args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
+export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
+	const collect = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
 
-	/**
-	 * Any user-specified environment environment variables that will be set during the build.
-	 */
-	env?: std.env.Arg;
+	const {
+		build: build_,
+		deps,
+		env: userEnv,
+		host: host_,
+		source: source_,
+		...rest
+	} = collect;
 
-	/** Should cgo be enabled? Default: true. */
-	cgo?: boolean;
+	tg.assert(source_ !== undefined, "source must be defined");
+	const source = await tg.resolve(source_);
 
-	/** The machine that will run the compilation. */
-	host?: string;
+	// Determine build and host triples.
+	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
 
-	/** Should this build have network access? Must set a checksum to enable. Default: false. */
-	network?: boolean;
+	// Build dependencies and create env.
+	const depsEnv = deps
+		? await std.deps.env(deps, { build, host, sdk: rest.sdk, env: userEnv })
+		: undefined;
 
-	/** The machine the produced artifacts will run on. */
-	target?: string;
+	// Merge env: deps env → user env.
+	const env = await std.env.arg(depsEnv, userEnv);
 
-	/** Any required SDK customization. */
-	sdk?: std.sdk.Arg;
+	return {
+		build,
+		host,
+		source,
+		env,
+		...rest,
+	};
 };
 
 export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
-	let {
+	const resolved = await arg(...args);
+	const {
+		build: build_,
 		checksum,
 		cgo = true,
 		env: env_,
 		generate,
-		host: host_,
+		host,
 		install,
 		network = false,
 		sdk: sdkArg,
 		source,
 		target: target_,
 		vendor: vendor_,
-	} = await std.args.apply<Arg, Arg>({
-		args,
-		map: async (arg) => arg,
-		reduce: {
-			env: (a, b) => std.env.arg(a, b),
-			sdk: (a, b) => std.sdk.arg(a, b),
-			source: "set",
-		},
-	});
-	const host = host_ ?? std.triple.host();
+	} = resolved;
 	const system = std.triple.archAndOs(host);
 	const target = target_ ?? host;
-	tg.assert(source, "Must provide a source directory.");
 
 	const sdk = std.sdk({ host, target }, sdkArg);
 
@@ -251,7 +298,8 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 	// Come up with the right command to run in the `go install` phase.
 	let installCommand = await tg`go install -v ${buildArgs}`;
 	if (install) {
-		installCommand = await tg.template(install.command);
+		const cmd = await tg.resolve(install.command);
+		installCommand = await tg.template(cmd);
 	}
 
 	const arch = std.triple.arch(target);

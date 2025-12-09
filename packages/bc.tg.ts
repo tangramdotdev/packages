@@ -12,14 +12,14 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:91eb74caed0ee6655b669711a4f350c25579778694df248e28363318e03c7fc4";
 	const tag = version;
 	const owner = "gavinhoward";
 	const repo = name;
-	return await std.download
+	return std.download
 		.fromGithub({
 			checksum,
 			compression: "xz",
@@ -32,57 +32,28 @@ export const source = async () => {
 		.then(tg.Directory.expect);
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const sourceDir = source_ ?? source();
-
-	// Define phases
-	const configure = {
-		args: ["--disable-nls", "--opt=3"],
-	};
-
-	// Define environment.
-	const ccCommand =
-		std.triple.os(build) == "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
-	const env = std.env.arg(
+	const arg = await std.autotools.arg(
 		{
-			CC: tg.Mutation.setIfUnset(ccCommand),
-			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
-		},
-		env_,
-	);
-
-	const output = std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
+			source: source(),
 			buildInTree: true,
-			env,
 			opt: "3",
-			phases: { configure },
-			sdk,
-			source: sourceDir,
+			env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+			phases: {
+				configure: { args: ["--disable-nls", "--opt=3"] },
+			},
 		},
-		autotools,
+		...args,
 	);
-
-	return output;
+	// On Darwin, add _DARWIN_C_SOURCE define.
+	const ccCommand =
+		std.triple.os(arg.build) === "darwin" ? "cc -D_DARWIN_C_SOURCE" : "cc";
+	const env = std.env.arg(arg.env, {
+		CC: tg.Mutation.setIfUnset(ccCommand),
+	});
+	return std.autotools.build({ ...arg, env });
 };
 
 export default build;

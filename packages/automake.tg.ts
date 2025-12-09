@@ -4,6 +4,13 @@ import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
 import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
 
+const deps = await std.deps({
+	autoconf: autoconf.build,
+	help2man: { build: help2man.build, kind: "buildtime" },
+	perl: perl.build,
+	zlib: zlib.build,
+});
+
 export const metadata = {
 	homepage: "https://www.gnu.org/software/automake/",
 	license: "GPL-2.0-or-later",
@@ -28,41 +35,21 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		autoconf?: autoconf.Arg;
-		help2man?: help2man.Arg;
-		perl?: perl.Arg;
-		zlib?: zlib.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: {
-			autoconf: autoconfArg = {},
-			help2man: help2manArg = {},
-			perl: perlArg = {},
-			zlib: zlibArg = {},
-		} = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const perlArtifact = await perl.build(
-		{ build, env: env_, host, sdk },
-		perlArg,
+	const arg = await std.autotools.arg(
+		{
+			source: source(),
+			deps,
+		},
+		...args,
 	);
+
+	const { autoconf: autoconfArtifact, perl: perlArtifact } =
+		await std.deps.artifacts(deps, { build: arg.build, host: arg.host });
+	tg.assert(perlArtifact !== undefined);
+	tg.assert(autoconfArtifact !== undefined);
 
 	const perlInterpreter = await tg.symlink({
 		artifact: perlArtifact,
@@ -72,28 +59,8 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const { version } = metadata;
 	let binDirectory = tg.directory({});
-	const autoconfArtifact = autoconf.build(
-		{ build, env: env_, host, sdk },
-		autoconfArg,
-	);
-	const dependencies = [
-		autoconfArtifact,
-		help2man.build({ build, env: env_, host, sdk }, help2manArg),
-		perlArtifact,
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-	];
 
-	const env = std.env.arg(env_, ...dependencies);
-
-	const automake = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	const automake = await std.autotools.build(arg);
 
 	for (const script of scripts) {
 		const executable = tg.File.expect(

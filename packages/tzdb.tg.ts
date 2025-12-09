@@ -1,5 +1,4 @@
 import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
 import * as bash from "bash" with { local: "./bash.tg.ts" };
 
 export const metadata = {
@@ -31,44 +30,31 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		build,
-		env: env_,
-		host,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const sourceDir = source_ ?? source();
-
-	const env = std.env.arg(
-		std.sdk(std.triple.rotate({ build, host })),
+	const arg = await std.autotools.arg(
 		{
-			CC: "cc",
-			CFLAGS: tg.Mutation.suffix("-O2", " "),
+			source: source(),
+			env: {
+				CC: "cc",
+				CFLAGS: tg.Mutation.suffix("-O2", " "),
+			},
+			phases: {
+				configure: tg.Mutation.unset(),
+				build: tg.Mutation.unset(),
+				install: `make TOPDIR="$OUTPUT" install`,
+			},
 		},
-		env_,
+		...args,
 	);
 
-	let output = await $`
-		set -x
-		cp -R ${sourceDir}/. .
-		make TOPDIR=${tg.output} install
-		`
-		.env(env)
-		.then(tg.Directory.expect);
+	let output = await std.autotools.build(arg);
 
 	// tzselect is a shell script, wrap it.
 	const unwrapped = await output.get("usr/bin/tzselect").then(tg.File.expect);
 	output = await tg.directory(output, {
-		["usr/bin/tzselect"]: bash.wrapScript(unwrapped, host),
+		["usr/bin/tzselect"]: bash.wrapScript(unwrapped, arg.host),
 	});
 
 	// Add toplevel binary symlinks.

@@ -1,6 +1,5 @@
+import * as nasm from "nasm" with { local: "./nasm.tg.ts" };
 import * as std from "std" with { local: "./std" };
-import nasm from "nasm" with { local: "./nasm.tg.ts" };
-import { $ } from "std" with { local: "./std" };
 
 export const metadata = {
 	homepage: "https://www.ffmpeg.org/",
@@ -38,41 +37,24 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	nasm: { build: nasm.build, kind: "buildtime" },
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const configure = {
-		args: ["--disable-stripping"],
-	};
-	const phases = { configure };
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env, nasm()),
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				phases: {
+					configure: { args: ["--disable-stripping"] },
+				},
+			},
+			...args,
+		),
 	);
-};
 
 export default build;

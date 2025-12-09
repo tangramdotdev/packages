@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ec5496cdffbc2a4adb59317fd2bf0e582bf0e6acd8f4aae7e97bc723ddba7233";
@@ -39,54 +39,16 @@ export const source = () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		ncurses?: std.args.OptionalDependencyArg<ncurses.Arg>;
-		readline?: std.args.OptionalDependencyArg<readline.Arg>;
-		zlib?: std.args.OptionalDependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	ncurses: ncurses.build,
+	readline: readline.build,
+	zlib: zlib.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const dependencies = [
-		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
-		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	];
-
-	const env = std.env.arg(
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-};
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build({ source: source(), deps }, ...args);
 
 export default build;
 

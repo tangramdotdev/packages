@@ -20,10 +20,7 @@ export const metadata = {
 	},
 };
 
-export type Arg = {
-	build?: string;
-	host?: string;
-};
+export type Arg = std.args.BasePackageArg;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const { build, host } = await std.packages.applyArgs<Arg>(...args);

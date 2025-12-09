@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2";
@@ -26,49 +26,26 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const resolved = await std.packages.applyArgs<Arg>(...args);
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = resolved;
-
-	const env = std.env.arg(env_);
-
-	// Set up phases.
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-rpath",
-			"--enable-relocatable",
-		],
-	};
-	const phases = { configure };
-
 	let output = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+		std.autotools.arg(
+			{
+				source: source(),
+				phases: {
+					configure: {
+						args: [
+							"--disable-dependency-tracking",
+							"--disable-rpath",
+							"--enable-relocatable",
+						],
+					},
+				},
+			},
+			...args,
+		),
 	);
-
 	// Wrap with BISON_PKGDATADIR to locate m4 support files.
 	const bins = ["bison", "yacc"];
 	const datadir = await output.get("share/bison").then(tg.Directory.expect);
@@ -80,7 +57,6 @@ export const build = async (...args: std.Args<Arg>) => {
 			}),
 		});
 	}
-
 	return output;
 };
 

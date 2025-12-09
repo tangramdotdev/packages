@@ -21,14 +21,14 @@ export const metadata = {
 // NOTE - patches lifted from MacPorts and combined: https://github.com/macports/macports-ports/tree/master/archivers/xar/files
 import patches from "./patches" with { type: "directory" };
 
-export const source = async (): Promise<tg.Directory> => {
+const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9cee4f80b96cf592ccc545a4fdd51e4da4a5bd3b4734901637d67b043eff3c75";
 	const owner = "apple-oss-distributions";
 	const repo = name;
 	const tag = `${name}-${version}`;
-	return await std.download
+	return std.download
 		.fromGithub({
 			checksum,
 			owner,
@@ -41,75 +41,35 @@ export const source = async (): Promise<tg.Directory> => {
 		.then((d) => std.patch(d, patches));
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		libiconv?: std.args.DependencyArg<libiconv.Arg>;
-		libxml2?: std.args.DependencyArg<libxml2.Arg>;
-		xz?: std.args.DependencyArg<xz.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	libiconv: libiconv.build,
+	libxml2: { build: libxml2.build, kind: "full" },
+	openssl: openssl.build,
+	xz: xz.build,
+	zlib: zlib.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	std.assert.supportedHost(host, metadata);
-
-	const processDependency = (dep: any) =>
-		std.env.envArgFromDependency(build, env_, host, sdk, dep);
-
-	const deps = [
-		std.env.buildDependency(libxml2.build, dependencyArgs.libxml2),
-		std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
-		std.env.runtimeDependency(libxml2.build, dependencyArgs.libxml2),
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-		std.env.runtimeDependency(xz.build, dependencyArgs.xz),
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	];
-
-	const envs = [
-		...deps.map(processDependency),
+	const arg = await std.autotools.arg(
 		{
-			// NOTE - this define is included in libxml/encoding.h but not expanding.
-			CFLAGS: tg.Mutation.suffix("-DUTF8Toisolat1=xmlUTF8ToIsolat1", " "),
-		},
-		env_,
-	];
-	const env = std.env.arg(...envs);
-
-	const configure = {
-		pre: "./autogen.sh",
-	};
-	const phases = { configure };
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
+			source: source(),
+			deps,
 			buildInTree: true,
 			developmentTools: true,
-			env,
-			phases,
-			sdk,
-			// setRuntimeLibraryPath: true,
-			source: source_ ?? source(),
+			// NOTE - this define is included in libxml/encoding.h but not expanding.
+			env: {
+				CFLAGS: tg.Mutation.suffix("-DUTF8Toisolat1=xmlUTF8ToIsolat1", " "),
+			},
+			phases: {
+				configure: { pre: "./autogen.sh" },
+			},
 		},
-		autotools,
+		...args,
 	);
+	std.assert.supportedHost(arg.host, metadata);
+	return std.autotools.build(arg);
 };
 
 export default build;

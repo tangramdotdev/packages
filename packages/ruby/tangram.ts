@@ -51,8 +51,7 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
+export type Arg = std.autotools.Arg & {
 	dependencies?: {
 		gmp?: gmp.Arg;
 		libffi?: libffi.Arg;
@@ -62,15 +61,11 @@ export type Arg = {
 		readline?: readline.Arg;
 		zlib?: zlib.Arg;
 	};
-	env?: std.env.Arg;
-	source?: tg.Directory;
-	build?: string;
-	host?: string;
 };
 
 export const self = async (...args: std.Args<Arg>) => {
+	// Extract custom dependency options.
 	const {
-		autotools = {},
 		dependencies: {
 			gmp: gmpArg = {},
 			libffi: libffiArg = {},
@@ -80,21 +75,29 @@ export const self = async (...args: std.Args<Arg>) => {
 			readline: readlineArg = {},
 			zlib: zlibArg = {},
 		} = {},
-		env: env_,
-		source: source_,
-		build,
-		host,
-	} = await std.packages.applyArgs<Arg>(...args);
+	} = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {},
+	});
 
-	// Get the source code.
-	let sourceDir = source_ ?? (await source());
+	// Resolve autotools args to get build/host.
+	const arg = await std.autotools.arg(
+		{
+			source: source(),
+		},
+		...args,
+	);
+
+	const { build, host } = arg;
 
 	// We need to skip the makefile step that attempts to update any .gem files in the bundle and replace them with the .gems we download ourself.
-	sourceDir = await std.patch(sourceDir, skipUpdateGems);
+	const sourceDir = await std.patch(arg.source, skipUpdateGems);
 
+	// Build dependencies.
 	const gmpArtifact = gmp.build({ build, host }, gmpArg);
 	const libYamlArtifact = libyaml.build({ build, host }, libyamlArg);
-	const deps = [
+	const depsEnv = [
 		gmpArtifact,
 		libffi.build({ build, host }, libffiArg),
 		libYamlArtifact,
@@ -108,26 +111,23 @@ export const self = async (...args: std.Args<Arg>) => {
 	];
 
 	// Build ruby.
-	const ruby = await std.autotools.build(
-		{
-			source: sourceDir,
-			env: std.env.arg(...deps, env_),
-			phases: {
-				configure: {
-					args: [
-						// Skip documentation.
-						"--disable-install-doc",
-						// Enable optimized bignum.
-						tg`--with-gmp-dir=${gmpArtifact}`,
-						// Required for `psych` to work with rdoc.
-						tg`--with-opt-dir=${libYamlArtifact}`,
-					],
-				},
+	const ruby = await std.autotools.build({
+		...arg,
+		source: sourceDir,
+		env: std.env.arg(arg.env, ...depsEnv),
+		phases: {
+			configure: {
+				args: [
+					// Skip documentation.
+					"--disable-install-doc",
+					// Enable optimized bignum.
+					tg`--with-gmp-dir=${gmpArtifact}`,
+					// Required for `psych` to work with rdoc.
+					tg`--with-opt-dir=${libYamlArtifact}`,
+				],
 			},
-			...(await std.triple.rotate({ build, host })),
 		},
-		autotools,
-	);
+	});
 
 	// Create the RUBYLIB environment variable.
 	let { arch: hostArch, os: hostOs } = std.triple.components(host);

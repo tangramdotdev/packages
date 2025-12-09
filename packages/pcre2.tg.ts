@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:c08ae2388ef333e8403e670ad70c0a11f1eed021fd88308d7e02f596fcd9dc16";
@@ -29,48 +29,29 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	let configureArgs = [
-		"--disable-dependency-tracking",
-		"--enable-fast-install=no",
-	];
-	if (build !== host) {
-		configureArgs = configureArgs.concat([
-			`--build=${build}`,
-			`--host=${host}`,
-		]);
-	}
-	const configure = { args: configureArgs };
-	const phases = { configure };
-
-	return std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			phases: {
+				configure: {
+					args: ["--disable-dependency-tracking", "--enable-fast-install=no"],
+				},
+			},
 		},
-		autotools,
+		...args,
 	);
+	let phases = arg.phases;
+	if (arg.build !== arg.host) {
+		phases = await std.phases.mergePhases(phases, {
+			configure: {
+				args: [`--build=${arg.build}`, `--host=${arg.host}`],
+			},
+		});
+	}
+	return std.autotools.build({ ...arg, phases });
 };
 
 export default build;

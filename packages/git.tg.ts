@@ -31,91 +31,53 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		curl?: std.args.DependencyArg<curl.Arg>;
-		libiconv?: std.args.DependencyArg<libiconv.Arg>;
-		libpsl?: std.args.DependencyArg<libpsl.Arg>;
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-		zstd?: std.args.DependencyArg<zstd.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+// Define dependencies - libiconv is only needed on darwin.
+const deps = await std.deps({
+	curl: curl.build,
+	libpsl: libpsl.build,
+	libiconv: {
+		build: libiconv.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "darwin",
+	},
+	openssl: openssl.build,
+	zlib: zlib.build,
+	zstd: zstd.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const os = std.triple.os(host);
-
-	const sourceDir = source_ ?? source();
-
-	const configure = {
-		args: ["--without-tcltk"],
-	};
-
-	const phases = {
-		configure,
-	};
-
-	const dependencies = [
-		std.env.runtimeDependency(curl.build, dependencyArgs.curl),
-		std.env.runtimeDependency(libpsl.build, dependencyArgs.libpsl),
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
-	];
-
-	if (os === "darwin") {
-		dependencies.push(
-			std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
-		);
-	}
-
-	const env = std.env.arg(
-		...dependencies.map((dep: any) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	);
-
-	let gitArtifact = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
+			source: source(),
+			deps,
 			buildInTree: true,
-			env,
-			phases,
-			sdk,
-			setRuntimeLibraryPath: os === "linux",
-			source: sourceDir,
+			phases: {
+				configure: { args: ["--without-tcltk"] },
+			},
 		},
-		autotools,
+		...args,
 	);
+
+	const setRuntimeLibraryPath =
+		std.triple.os(arg.host) === "linux" ? true : arg.setRuntimeLibraryPath;
+
+	const output = await std.autotools.build({
+		...arg,
+		setRuntimeLibraryPath,
+	});
 
 	// Wrap the git binary with GIT_EXEC_PATH so it can find its helper programs.
 	const wrappedGit = await std.wrap(
-		tg.symlink({ artifact: gitArtifact, path: "bin/git" }),
+		tg.symlink({ artifact: output, path: "bin/git" }),
 		{
 			env: {
-				GIT_EXEC_PATH: tg`${gitArtifact}/libexec/git-core`,
+				GIT_EXEC_PATH: tg`${output}/libexec/git-core`,
 			},
 		},
 	);
-
-	return tg.directory(gitArtifact, {
+	return tg.directory(output, {
 		["bin/git"]: wrappedGit,
 	});
 };

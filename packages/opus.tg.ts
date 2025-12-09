@@ -1,5 +1,4 @@
 import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
 import * as cmake from "cmake" with { local: "./cmake" };
 
 export const metadata = {
@@ -10,7 +9,6 @@ export const metadata = {
 };
 
 export const source = () => {
-	std.download;
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1";
@@ -27,9 +25,8 @@ export const source = () => {
 
 export type Arg = cmake.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	return cmake.build({ source: source() }, ...args);
-};
+export const build = (...args: std.Args<Arg>) =>
+	cmake.build({ source: source() }, ...args);
 
 export const env = () =>
 	std.env.arg({

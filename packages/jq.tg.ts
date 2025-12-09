@@ -24,49 +24,23 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: ["--without-oniguruma", "--disable-maintainer-mode"],
-	};
-
-	const phases = { configure };
-
-	const env = std.env.arg(
-		{
-			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
-		},
-		env_,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+				phases: {
+					configure: {
+						args: ["--without-oniguruma", "--disable-maintainer-mode"],
+					},
+				},
+			},
+			...args,
+		),
 	);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-};
 
 export default build;
 

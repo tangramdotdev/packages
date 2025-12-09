@@ -31,78 +31,46 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		ncurses?: std.args.DependencyArg<ncurses.Arg>;
-		readline?: std.args.DependencyArg<readline.Arg>;
-		xz?: std.args.DependencyArg<xz.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	ncurses: ncurses.build,
+	python: { build: python.self, kind: "buildtime" },
+	readline: readline.build,
+	xz: xz.build,
+	zlib: zlib.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--enable-static",
-			"--enable-shared",
-			"--with-history",
-		],
-	};
-
-	const phases = { configure };
-
-	const processDependency = (dep: any) =>
-		std.env.envArgFromDependency(build, env_, host, sdk, dep);
-
-	const pythonArtifact = processDependency(
-		std.env.buildDependency(python.self),
-	);
-	const deps = [
-		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
-		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
-		std.env.runtimeDependency(xz.build, dependencyArgs.xz),
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	];
-	const env = [
-		...deps.map(processDependency),
-		pythonArtifact,
+	const arg = await std.autotools.arg(
 		{
-			CPATH: tg.Mutation.suffix(
-				tg`${pythonArtifact}/include/python${python.versionString()}`,
-				":",
-			),
-		},
-		env_,
-	];
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
-			phases,
-			sdk,
+			source: source(),
+			deps,
 			setRuntimeLibraryPath: true,
-			source: source_ ?? source(),
+			phases: {
+				configure: {
+					args: [
+						"--disable-dependency-tracking",
+						"--enable-static",
+						"--enable-shared",
+						"--with-history",
+					],
+				},
+			},
 		},
-		autotools,
+		...args,
 	);
+
+	// Get the python artifact for CPATH setup.
+	const { python: pythonArtifact } = await std.deps.artifacts(deps, arg);
+	const env = std.env.arg(arg.env, {
+		CPATH: tg.Mutation.suffix(
+			tg`${pythonArtifact}/include/python${python.versionString()}`,
+			":",
+		),
+	});
+
+	return std.autotools.build({ ...arg, env });
 };
 
 export default build;

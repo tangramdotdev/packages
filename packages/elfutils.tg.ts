@@ -27,88 +27,48 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		bzip2?: bzip2.Arg;
-		libarchive?: libarchive.Arg;
-		openssl?: openssl.Arg;
-		xz?: xz.Arg;
-		zlib?: zlib.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	bzip2: bzip2.build,
+	libarchive: libarchive.build,
+	openssl: openssl.build,
+	xz: xz.build,
+	zlib: zlib.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: {
-			bzip2: bzip2Arg = {},
-			libarchive: libarchiveArg = {},
-			openssl: opensslArg = {},
-			xz: xzArg = {},
-			zlib: zlibArg = {},
-		} = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const configure = {
-		args: [
-			"--enable-deterministic-archives",
-			"--program-prefix=eu-",
-			"--disable-nls",
-			"--disable-rpath",
-			"--enable-install-elfh",
-			"--without-libiconv-prefix",
-			"--without-libintl-prefix",
-			// FIXME - figure out how to get debuginfod to build
-			"--disable-debuginfod",
-			"--enable-libdebuginfod=dummy",
-		],
-	};
-
-	if (build !== host) {
-		configure.args.push(`--host=${host}`);
-	}
-
-	const phases = { configure };
-
-	const env = [
-		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
-		libarchive.build({ build, env: env_, host, sdk }, libarchiveArg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		xz.build({ build, env: env_, host, sdk }, xzArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-		{
-			CFLAGS: tg.Mutation.suffix(
-				"-Wno-format-nonliteral -lz -lbz2 -llzma",
-				" ",
-			),
-		},
-		env_,
-	];
-
-	const result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				env: {
+					CFLAGS: tg.Mutation.suffix(
+						"-Wno-format-nonliteral -lz -lbz2 -llzma",
+						" ",
+					),
+				},
+				phases: {
+					configure: {
+						args: [
+							"--enable-deterministic-archives",
+							"--program-prefix=eu-",
+							"--disable-nls",
+							"--disable-rpath",
+							"--enable-install-elfh",
+							"--without-libiconv-prefix",
+							"--without-libintl-prefix",
+							// FIXME - figure out how to get debuginfod to build.
+							"--disable-debuginfod",
+							"--enable-libdebuginfod=dummy",
+						],
+					},
+				},
+			},
+			...args,
+		),
 	);
-
-	return result;
-};
 
 export default build;
 

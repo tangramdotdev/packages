@@ -5,8 +5,17 @@ import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
 
 export type Arg = {
+	/** The machine performing the compilation. */
+	build?: string;
+
 	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
+
+	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
+	deps?: std.deps.Config | undefined;
+
+	/** Dependency argument overrides. Keys must match deps config keys. */
+	dependencies?: std.packages.ResolvedDependencyArgs | undefined;
 
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
@@ -35,7 +44,7 @@ export type Arg = {
 	/** Should the build environment include pkg-config? Default: true. */
 	pkgConfig?: boolean;
 
-	/** Additional script to run prior to the build */
+	/** Additional script to run prior to the build. */
 	pre?: tg.Template.Arg;
 
 	/** Whether to use the tangram_rustc proxy. */
@@ -45,7 +54,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 
 	/** Source directory. */
-	source: tg.Directory;
+	source?: tg.Directory;
 
 	/** Target triple for the build. */
 	target?: string;
@@ -57,14 +66,63 @@ export type Arg = {
 	verbose?: boolean;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+/** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */
+export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
+	build: string;
+	host: string;
+	source: tg.Directory;
+};
+
+/** Resolve cargo args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
+export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
+	const collect = await std.args.apply<Arg, Arg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			features: "append",
+			sdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
+
+	const { build: build_, host: host_, source, ...rest } = collect;
+
+	tg.assert(source !== undefined, "source must be defined");
+
+	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
+
+	return {
+		build,
+		host,
+		source,
+		...rest,
+	};
+};
+
+export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
+	const resolved = await arg(...args);
+
+	// If deps were provided, resolve them to env.
+	let depsEnv = resolved.env;
+	if (resolved.deps) {
+		depsEnv = await std.deps.env(resolved.deps, {
+			build: resolved.build,
+			host: resolved.host,
+			sdk: resolved.sdk,
+			dependencies: resolved.dependencies,
+			env: depsEnv,
+		});
+	}
+
 	const {
+		build: build_,
 		buildInTree = false,
 		checksum,
 		disableDefaultFeatures = false,
 		env: env_,
 		features = [],
-		host: host_,
+		host,
 		manifestSubdir,
 		network = false,
 		parallelJobs,
@@ -76,19 +134,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		target: target_,
 		useCargoVendor = false,
 		verbose = false,
-	} = await std.args.apply<Arg, Arg>({
-		args,
-		map: async (arg) => arg,
-		reduce: {
-			env: (a, b) => std.env.arg(a, b),
-			features: "append",
-			sdk: (a, b) => std.sdk.arg(a, b),
-			source: "set",
-		},
-	});
-	tg.assert(source, "Must provide a source directory.");
-
-	const host = host_ ?? std.triple.host();
+	} = { ...resolved, env: depsEnv };
 	const rustHost = rustTriple(host);
 	const os = std.triple.os(rustHost);
 	const target = target_ ? rustTriple(target_) : rustHost;
@@ -260,7 +306,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory({
 		["bin"]: binDir,
 	});
-};
+}
 
 export type VendoredSourcesArg = {
 	rustTarget?: string;

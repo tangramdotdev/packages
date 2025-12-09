@@ -91,9 +91,9 @@ export type Metadata = {
 };
 
 /** Assert a package contains the specified contents in the conventional locations.  As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
-export const pkg = async <T extends std.args.PackageArg>(
-	/** The function that builds the package directory. */
-	buildCmd: std.packages.BuildCommand<T>,
+export const pkg = async <T extends std.packages.MinimalPackageArg>(
+	/** The function or command that builds the package directory. */
+	buildCmd: std.packages.BuildFn<T> | std.packages.BuildCommand<T>,
 	/** The spec for the package produced when run with no arguments. */
 	defaultSpec: PackageSpec,
 	/** Additional arguments with their corresponding package specs to test, if any. */
@@ -1036,7 +1036,7 @@ type GenerateArgsOptions = {
 };
 
 /** Generate all permutations of package arg. */
-const generatePackageArgs = <T extends std.args.PackageArg>(
+const generatePackageArgs = <T extends std.packages.MinimalPackageArg>(
 	metadata: std.assert.Metadata,
 	options?: GenerateArgsOptions,
 ): Array<T> => {

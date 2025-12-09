@@ -126,7 +126,7 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 
 	// Create a native toolchain (host to host).
 	const nativeBinutils = await binutils({
-		autotools: { fortifySource: false },
+		fortifySource: false,
 		bootstrap: true,
 		env: stage1HostSdk,
 		build: host,

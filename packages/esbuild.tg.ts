@@ -29,14 +29,11 @@ export const source = async () => {
 	});
 };
 
-export type Arg = {
+export type Arg = std.args.BasePackageArg & {
 	dependencies?: {
-		go?: go.Arg;
-		nodejs?: nodejs.Arg;
+		go?: Omit<go.Arg, "deps">;
+		nodejs?: Omit<nodejs.Arg, "deps">;
 	};
-	env?: std.env.Arg;
-	host?: string;
-	source?: tg.Directory;
 };
 
 export const build = async (...args: std.Args<Arg>) => {

@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:6145f48cbefbb2bd1aa97ebcc8528d15ada1303e6e80fdd6a4637014f0f1df1c";
@@ -30,52 +30,46 @@ export const source = async () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	cargo?: cargo.Arg;
-	env?: std.env.Arg;
-	host?: string;
+export type Arg = Omit<cargo.Arg, "deps"> & {
 	nativeTls?: boolean;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		build: build_,
-		cargo: cargoArg = {},
-		env: env_,
-		host: host_,
-		nativeTls = true,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
-
-	const env: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	// Extract custom options first.
+	type CustomOptions = { nativeTls?: boolean; host?: string };
+	const customOptions = await std.args.apply<CustomOptions, CustomOptions>({
+		args: args as std.Args<CustomOptions>,
+		map: async (arg) => arg,
+		reduce: {},
+	});
+	const nativeTls = customOptions.nativeTls ?? true;
 
 	let disableDefaultFeatures = false;
-	const features = [];
+	const features: Array<string> = [];
+	// Only include openssl deps if nativeTls is enabled.
+	const deps = nativeTls
+		? await std.deps({
+				openssl: {
+					build: openssl,
+					kind: "runtime",
+					when: (ctx) => std.triple.os(ctx.host) === "linux",
+				},
+			})
+		: undefined;
+
 	if (nativeTls) {
 		disableDefaultFeatures = true;
 		features.push("native-tls");
-		if (std.triple.os(host) === "linux") {
-			env.push(openssl({ build, host }));
-		}
 	}
 
 	return cargo.build(
 		{
-			...(await std.triple.rotate({ build, host })),
+			source: source(),
+			...(deps !== undefined && { deps }),
 			disableDefaultFeatures,
-			env: std.env.arg(...env),
 			features,
-			sdk,
-			source: source_ ?? source(),
 		},
-		cargoArg,
+		...args,
 	);
 };
 

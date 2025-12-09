@@ -44,71 +44,42 @@ export const source = async () => {
 		.then((source) => std.patch(source, patches));
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		curl?: std.args.DependencyArg<curl.Arg>;
-		libpsl?: std.args.DependencyArg<libpsl.Arg>;
-		ncurses?: std.args.DependencyArg<ncurses.Arg>;
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-		zstd?: std.args.DependencyArg<zstd.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	curl: curl.build,
+	libiconv: {
+		build: libiconv.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "darwin",
+	},
+	libpsl: libpsl.build,
+	ncurses: ncurses.build,
+	openssl: openssl.build,
+	zlib: zlib.build,
+	zstd: zstd.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 /** Build `cmake`. */
 export const self = async (...args: std.Args<Arg>) => {
-	const {
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-	const sourceDir = source_ ?? source();
+	const arg = await std.autotools.arg(
+		{ source: source(), deps, setRuntimeLibraryPath: true },
+		...args,
+	);
+	const { build: build_, host, source: sourceDir } = arg;
 	const os = std.triple.os(host);
 
-	const processDependency = (dep: any) =>
-		std.env.envArgFromDependency(build, env_, host, sdk, dep);
+	// Get individual artifacts for env and libraryPaths wrapping.
+	const artifacts = await std.deps.artifacts(deps, {
+		build: build_,
+		host,
+		sdk: arg.sdk,
+	});
+	const artifactList = Object.values(artifacts).filter(
+		(v): v is tg.Directory => v !== undefined,
+	);
 
-	const curlRoot = processDependency(
-		std.env.runtimeDependency(curl.build, dependencyArgs.curl),
-	);
-	const ncursesRoot = processDependency(
-		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
-	);
-	const libpslRoot = processDependency(
-		std.env.runtimeDependency(libpsl.build, dependencyArgs.libpsl),
-	);
-	const opensslRoot = processDependency(
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-	);
-	const zlibRoot = processDependency(
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	);
-	const zstdRoot = processDependency(
-		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
-	);
-	const deps = [
-		curlRoot,
-		ncursesRoot,
-		libpslRoot,
-		opensslRoot,
-		zlibRoot,
-		zstdRoot,
-	];
-
-	if (os === "darwin") {
-		deps.push(processDependency(std.env.runtimeDependency(libiconv.build)));
-	}
-
-	let configureArgs = [
+	const configureArgs = [
 		"--parallel=$(nproc)",
 		"--system-curl",
 		"--",
@@ -122,25 +93,21 @@ export const self = async (...args: std.Args<Arg>) => {
 		command: tg`${sourceDir}/bootstrap`,
 		args: configureArgs,
 	};
-	const phases = { prepare, configure };
 
-	const env = await std.env.arg(...deps, env_);
+	const env = await std.env.arg(...artifactList, arg.env);
 
 	let result = await std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		...arg,
 		env,
-		phases,
-		setRuntimeLibraryPath: true,
-		sdk,
-		source: sourceDir,
+		phases: { prepare, configure },
 	});
 
 	if (os === "linux") {
-		const libraryPaths = (await Promise.all(deps))
-			.filter((v) => v !== undefined)
-			.map((dir) => dir.get("lib").then(tg.Directory.expect));
+		const libraryPaths = artifactList.map((dir) =>
+			dir.get("lib").then(tg.Directory.expect),
+		);
 		const binDir = await result.get("bin").then(tg.Directory.expect);
-		for await (let [name, artifact] of binDir) {
+		for await (const [name, artifact] of binDir) {
 			const file = tg.File.expect(artifact);
 			const wrappedFile = await std.wrap(file, { libraryPaths });
 			result = await tg.directory(result, { [`bin/${name}`]: wrappedFile });
@@ -153,108 +120,103 @@ export const self = async (...args: std.Args<Arg>) => {
 export default self;
 
 export type BuildArg = {
-	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explitily provided via `env`. Default: false. */
-	bootstrap?: boolean;
+	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
+	bootstrap?: boolean | undefined;
+
+	/** The machine performing the compilation. */
+	build?: string | undefined;
 
 	/** Path to use for the build directory. Default: "build". */
-	buildDir?: string;
+	buildDir?: string | undefined;
 
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
-	checksum?: tg.Checksum;
+	checksum?: tg.Checksum | undefined;
 
-	/** Debug mode will enable additional log output, allow failiures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
-	debug?: boolean;
+	/** Debug mode will enable additional log output, allow failures in subprocesses, and include a folder of logs at ${tg.output}/.tangram_logs. Default: false */
+	debug?: boolean | undefined;
+
+	/** Dependencies configuration. */
+	deps?: std.deps.Config | undefined;
 
 	/** Any environment to add to the target. */
-	env?: std.env.Arg;
+	env?: std.env.Arg | undefined;
 
 	/** Should the build environment include `m4`, `bison`, `perl`, and `gettext`? Default: true. */
-	extended?: boolean;
+	extended?: boolean | undefined;
 
-	/** Should the flags include FORTIFY_SORUCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 3.  */
-	fortifySource?: boolean | number;
+	/** Should the flags include FORTIFY_SOURCE? `false` will disable, `true` will default to 3, values less than 0 or greater than 3 will throw an error. Default: 3. */
+	fortifySource?: boolean | number | undefined;
 
-	/** Use full RELRO? Will use partial if disabled.  May cause long start-up times in large programs. Default: true. */
-	fullRelro?: boolean;
+	/** Use full RELRO? Will use partial if disabled. May cause long start-up times in large programs. Default: true. */
+	fullRelro?: boolean | undefined;
 
 	/** Which generator to use. Default: "Ninja" */
-	generator?: "Ninja" | "Unix Makefiles";
+	generator?: "Ninja" | "Unix Makefiles" | undefined;
 
-	/** Should we add the extra set of harderning CFLAGS? Default: true*/
-	hardeningCFlags?: boolean;
+	/** Should we add the extra set of hardening CFLAGS? Default: true */
+	hardeningCFlags?: boolean | undefined;
 
 	/** The computer this build should get compiled on. */
-	host?: string;
+	host?: string | undefined;
 
 	/** The value to pass to `-march` in the default CFLAGS. Default: undefined. */
-	march?: string;
+	march?: string | undefined;
 
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
-	mtune?: string;
+	mtune?: string | undefined;
 
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
-	network?: boolean;
+	network?: boolean | undefined;
 
 	/** The optlevel to pass. Defaults to "2" */
-	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
+	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
 
 	/** Should make jobs run in parallel? Default: false until new branch. */
-	parallel?: boolean | number;
-
-	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of tempory files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
-	pipe?: boolean;
+	parallel?: boolean | number | undefined;
 
 	/** Override the phases. */
-	phases?: std.phases.Arg;
+	phases?: std.phases.Arg | std.phases.Arg[] | undefined;
+
+	/** Compile with `-pipe`? This option allows the compiler to use pipes instead of temporary files internally, speeding up compilation at the cost of increased memory. Disable if compiling in low-memory environments. This has no effect on the output. Default: true. */
+	pipe?: boolean | undefined;
 
 	/** Should the build environment include pkg-config? Default: true */
-	pkgConfig?: boolean;
+	pkgConfig?: boolean | undefined;
 
 	/** The filepath to use as the installation prefix. Usually the default is what you want here. */
-	prefixPath?: tg.Template.Arg;
+	prefixPath?: tg.Template.Arg | undefined;
 
 	/** Arguments to use for the SDK. */
-	sdk?: std.sdk.Arg;
+	sdk?: std.sdk.Arg | undefined;
 
-	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
-	source?: tg.Template.Arg;
+	/** The source to build. Can be a Directory or a template path that resolves to a directory. */
+	source?: tg.Directory | tg.Template | undefined;
 
 	/** Should executables be stripped? Default is true. */
-	stripExecutables?: boolean;
+	stripExecutables?: boolean | undefined;
 
 	/** The computer this build produces executables for. */
-	target?: string;
+	target?: string | undefined;
 };
 
-/** Construct a cmake package build target. */
-export const build = async (...args: std.Args<BuildArg>) => {
+/** The result of arg() - a BuildArg with build, host, and source guaranteed to be resolved. */
+export type ResolvedArg = Omit<
+	BuildArg,
+	"build" | "host" | "source" | "phases"
+> & {
+	build: string;
+	host: string;
+	source: tg.Directory | tg.Template;
+	/** User phases - either a single Arg or array of Args. Array form preserves mutations until merged with defaults. */
+	phases?: std.phases.Arg | Array<std.phases.Arg>;
+};
+
+/** Resolve cmake args to a mutable arg object. Returns a BuildArg with build, host, and source guaranteed to be resolved. */
+export const arg = async (
+	...args: std.Args<BuildArg>
+): Promise<ResolvedArg> => {
 	type Collect = std.args.MakeArrayKeys<BuildArg, "phases">;
-	const {
-		bootstrap = false,
-		buildDir = "build",
-		checksum,
-		debug = false,
-		env: userEnv,
-		extended = true,
-		fortifySource: fortifySource_ = 2,
-		fullRelro = true,
-		generator = "Ninja",
-		hardeningCFlags = true,
-		host: host_,
-		march,
-		mtune = "generic",
-		network,
-		opt = "2",
-		parallel = true,
-		phases: userPhaseArgs = [],
-		pkgConfig = true,
-		pipe = true,
-		prefixPath = tg`${tg.output}`,
-		sdk: sdkArg,
-		source,
-		stripExecutables = true,
-		target: target_,
-	} = await std.args.apply<BuildArg, Collect>({
+	const collect = await std.args.apply<BuildArg, Collect>({
 		args,
 		map: async (arg) => {
 			return {
@@ -269,11 +231,75 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		},
 	});
 
-	// Make sure the the arguments provided a source.
-	tg.assert(source !== undefined, `source must be defined`);
+	const {
+		build: build_,
+		deps,
+		env: userEnv,
+		host: host_,
+		phases: userPhaseArgs = [],
+		source: source_,
+		...rest
+	} = collect;
 
-	// Detect the host system from the environment.
+	tg.assert(source_ !== undefined, "source must be defined");
+	const source = await tg.resolve(source_);
+
+	// Determine build and host triples.
 	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
+
+	// Build dependencies and create env.
+	const depsEnv = deps
+		? await std.deps.env(deps, { build, host, sdk: rest.sdk, env: userEnv })
+		: undefined;
+
+	// Merge phases.
+	const mergedPhases = await std.phases.mergePhases(...userPhaseArgs);
+
+	// Merge env: deps env → user env.
+	const env = await std.env.arg(depsEnv, userEnv);
+
+	return {
+		build,
+		host,
+		source,
+		env,
+		phases: mergedPhases,
+		...rest,
+	};
+};
+
+/** Construct a cmake package build target. */
+export const build = async (...args: std.Args<BuildArg>) => {
+	const resolved = await arg(...args);
+	const {
+		build: build_,
+		bootstrap = false,
+		buildDir = "build",
+		checksum,
+		debug = false,
+		env: userEnv,
+		extended = true,
+		fortifySource: fortifySource_ = 2,
+		fullRelro = true,
+		generator = "Ninja",
+		hardeningCFlags = true,
+		host,
+		march,
+		mtune = "generic",
+		network,
+		opt = "2",
+		parallel = true,
+		phases: userPhaseArgs,
+		pkgConfig = true,
+		pipe = true,
+		prefixPath = tg`${tg.output}`,
+		sdk: sdkArg,
+		source,
+		stripExecutables = true,
+		target: target_,
+	} = resolved;
+
 	const target = target_ ?? host;
 	const os = std.triple.os(host);
 
@@ -359,18 +385,18 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		// Set up the SDK, add it to the environment.
 		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let level: std.dependencies.Level | undefined = undefined;
+		let preset: std.dependencies.Preset | undefined = undefined;
 		if (pkgConfig) {
-			level = "pkgconfig";
+			preset = "minimal";
 		}
 		if (extended) {
-			level = "extended";
+			preset = "autotools";
 		}
-		if (level !== undefined) {
+		if (preset !== undefined) {
 			const buildToolsEnv = await tg.build(std.dependencies.buildTools, {
 				host,
 				buildToolchain: await tg.build(std.sdk, { host }),
-				level,
+				preset,
 			});
 			envs.push(sdk, buildToolsEnv);
 		}
@@ -432,7 +458,8 @@ export const build = async (...args: std.Args<BuildArg>) => {
 				checksum,
 				network,
 			} as std.phases.Arg,
-			...userPhaseArgs,
+			// biome-ignore lint/suspicious/noExplicitAny: phases type is complex union.
+			{ phases: userPhaseArgs } as any,
 		)
 		.then(tg.Directory.expect);
 };

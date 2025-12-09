@@ -114,23 +114,94 @@ type PackageJson = {
 export default self;
 
 export type Arg = {
+	/** The machine performing the compilation. */
 	build?: string;
+
+	/** If the build requires network access, provide a checksum or the string "sha256:any" to accept any result. */
 	checksum?: tg.Checksum;
+
+	/** Dependencies configuration. */
+	deps?: std.deps.Config;
+
+	/** Environment variables to set during the build. */
 	env?: std.env.Arg;
+
+	/** The machine that will run the compilation. */
 	host?: string;
+
+	/** Optional package-lock.json file. */
 	packageLock?: tg.File;
-	source: tg.Directory;
+
+	/** SDK configuration to use during the build. */
+	sdk?: std.sdk.Arg;
+
+	/** Source directory. */
+	source?: tg.Directory;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+/** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */
+export type ResolvedArg = Omit<Arg, "deps" | "env"> & {
+	build: string;
+	host: string;
+	source: tg.Directory;
+	env?: tg.Unresolved<std.env.Arg>;
+};
+
+/** Resolve nodejs args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
+// biome-ignore lint/suspicious/noExplicitAny: Args are contravariant, requiring type erasure here.
+export const arg = async (...args: std.Args<any>): Promise<ResolvedArg> => {
+	// biome-ignore lint/suspicious/noExplicitAny: Arg contains non-Value types (deps).
+	const collect = await std.args.apply<any, any>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
+
+	const {
+		build: build_,
+		deps,
+		env: userEnv,
+		host: host_,
+		source,
+		...rest
+	} = collect;
+
+	tg.assert(source !== undefined, "source must be defined");
+
+	// Determine build and host triples.
+	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
+
+	// Build dependencies and create env.
+	const depsEnv = deps
+		? await std.deps.env(deps, { build, host, sdk: rest.sdk, env: userEnv })
+		: undefined;
+
+	// Merge env: deps env → user env.
+	const env = await std.env.arg(depsEnv, userEnv);
+
+	return {
+		build,
+		host,
+		source,
+		env,
+		...rest,
+	};
+};
+
+// biome-ignore lint/suspicious/noExplicitAny: Args are contravariant, requiring type erasure here.
+export const build = async (...args: std.Args<any>) => {
+	const resolved = await arg(...args);
 	const {
 		build,
 		env: env_,
 		host,
 		packageLock: packageLockArg,
 		source,
-	} = await std.packages.applyArgs<Arg>(...args);
-	tg.assert(source, "Must provide a source");
+	} = resolved;
 
 	const node = await tg.build(self, std.triple.rotate({ build, host }));
 	const interpreter = await node.get("bin/node").then(tg.File.expect);

@@ -31,93 +31,57 @@ export const source = async () => {
 		.then((source) => std.patch(source, patches));
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		libffi?: boolean | std.args.DependencyArg<libffi.Arg>;
-		zlib?: boolean | std.args.DependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	libffi: libffi.build,
+	zlib: zlib.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const defaultDependencies = {
-		libffi: true,
-		zlib: true,
-	};
+	// Build configure args, including OS-specific flags.
+	const host =
+		(
+			await std.args.apply<Arg, Arg>({
+				args: args as std.Args<Arg>,
+				map: async (arg) => arg,
+				reduce: {},
+			})
+		).host ?? std.triple.host();
 
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(
-		{ dependencies: defaultDependencies },
-		...args,
-	);
-
-	const sourceDir = source_ ?? source();
-
-	const dependencies = [];
-	if (dependencyArgs.libffi !== undefined) {
-		dependencies.push(
-			std.env.runtimeDependency(libffi.build, dependencyArgs.libffi),
-		);
-	}
-	if (dependencyArgs.zlib !== undefined) {
-		dependencies.push(
-			std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-		);
-	}
-
-	// Resolve env.
-	const env = std.env.arg(
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	);
-
-	const configure = {
-		args: [
-			"-des",
-			tg`-Dscriptdir=${tg.output}/bin`,
-			"-Dinstallstyle=lib/perl5",
-			"-Dusethreads",
-			'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',
-		],
-		command: "$SHELL Configure",
-	};
+	const configureArgs: Array<tg.Template.Arg> = [
+		"-des",
+		await tg`-Dscriptdir=${tg.output}/bin`,
+		"-Dinstallstyle=lib/perl5",
+		"-Dusethreads",
+		'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',
+	];
 
 	// On Linux non-musl hosts, specify that LC_ALL uses name/value pairs.
 	if (
 		std.triple.os(host) === "linux" &&
 		std.triple.environment(host) !== "musl"
 	) {
-		configure.args.push("-Accflags=-DPERL_LC_ALL_USES_NAME_VALUE_PAIRS");
+		configureArgs.push("-Accflags=-DPERL_LC_ALL_USES_NAME_VALUE_PAIRS");
 	}
 
-	const phases = { configure };
-
-	let perlArtifact = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
+			deps,
+			source: source(),
 			buildInTree: true,
-			env,
-			phases,
 			prefixArg: "-Dprefix=",
-			sdk,
-			source: sourceDir,
+			phases: {
+				configure: {
+					args: configureArgs,
+					command: "$SHELL Configure",
+				},
+			},
 		},
-		autotools,
+		...args,
 	);
+
+	let perlArtifact = await std.autotools.build(arg);
 
 	const wrappedPerl = await std.wrap(
 		tg.symlink({ artifact: perlArtifact, path: "bin/perl" }),

@@ -27,35 +27,18 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const env = std.env.arg(env_);
-	let output = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
 		},
-		autotools,
+		...args,
 	);
+
+	let output = await std.autotools.build(arg);
+	const host = arg.host;
 	// Add a symlink to the m4 macros.
 	output = await tg.directory(output, {
 		[`share/libtool/m4`]: tg.symlink("../aclocal"),

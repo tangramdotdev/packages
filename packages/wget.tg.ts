@@ -28,76 +28,47 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		gmp?: std.args.DependencyArg<gmp.Arg>;
-		gnutls?: std.args.DependencyArg<gnutls.Arg>;
-		libiconv?: std.args.DependencyArg<libiconv.Arg>;
-		libpsl?: std.args.DependencyArg<libpsl.Arg>;
-		nettle?: std.args.DependencyArg<nettle.Arg>;
-		pcre2?: std.args.DependencyArg<pcre2.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-		zstd?: std.args.DependencyArg<zstd.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	gmp: gmp.build,
+	gnutls: gnutls.build,
+	libiconv: libiconv.build,
+	libpsl: libpsl.build,
+	nettle: nettle.build,
+	pcre2: pcre2.build,
+	zlib: zlib.build,
+	zstd: zstd.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: depedencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const dependencies = [
-		std.env.runtimeDependency(gmp.build, depedencyArgs.gmp),
-		std.env.runtimeDependency(gnutls.build, depedencyArgs.gnutls),
-		std.env.runtimeDependency(nettle.build, depedencyArgs.nettle),
-		std.env.runtimeDependency(libiconv.build, depedencyArgs.libiconv),
-		std.env.runtimeDependency(libpsl.build, depedencyArgs.libpsl),
-		std.env.runtimeDependency(pcre2.build, depedencyArgs.pcre2),
-		std.env.runtimeDependency(zlib.build, depedencyArgs.zlib),
-		std.env.runtimeDependency(zstd.build, depedencyArgs.zstd),
-	];
-
-	const envs: tg.Unresolved<Array<std.env.Arg>> = [
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		{ CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " ") },
-		env_,
-	];
-	const os = std.triple.os(host);
-
-	let output = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...envs),
-			sdk,
-			setRuntimeLibraryPath: os === "linux",
-			source: source_ ?? source(),
+			source: source(),
+			deps,
+			env: {
+				CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
+			},
 		},
-		autotools,
+		...args,
 	);
+
+	const setRuntimeLibraryPath =
+		std.triple.os(arg.host) === "linux" ? true : arg.setRuntimeLibraryPath;
+
+	const output = await std.autotools.build({
+		...arg,
+		setRuntimeLibraryPath,
+	});
 
 	// Wrap the binary to include the CA certificates.
 	const wgetFile = tg.File.expect(await output.get("bin/wget"));
 	const wrappedWget = std.wrap(wgetFile, {
 		args: [tg`--ca-certificate=${std.caCertificates()}/cacert.pem`],
 	});
-	output = await tg.directory(output, {
+	return tg.directory(output, {
 		["bin/wget"]: wrappedWget,
 	});
-	return output;
 };
 
 export default build;

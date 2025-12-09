@@ -29,51 +29,14 @@ export const source = async () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	cargo?: cargo.Arg;
-	dependencies?: {
-		pcre2?: std.args.DependencyArg<pcre2.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	pcre2: pcre2.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		build,
-		cargo: cargoArg = {},
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = cargo.Arg & std.deps.Arg<typeof deps>;
 
-	const env = std.env.arg(
-		std.env.envArgFromDependency(
-			build,
-			env_,
-			host,
-			sdk,
-			std.env.runtimeDependency(pcre2.build, dependencyArgs.pcre2),
-		),
-		env_,
-	);
-
-	return cargo.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			features: ["pcre2"],
-			sdk,
-			source: source_ ?? source(),
-		},
-		cargoArg,
-	);
-};
+export const build = async (...args: std.Args<Arg>) =>
+	cargo.build({ deps, source: source(), features: ["pcre2"] }, ...args);
 
 export default build;
 

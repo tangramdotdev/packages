@@ -23,64 +23,34 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	const arg = await std.autotools.arg(
+		{ source: source(), defaultCrossArgs: false, defaultCrossEnv: false },
+		...args,
+	);
 
-	const os = std.triple.os(host);
+	const os = std.triple.os(arg.host);
 
-	const env: Array<tg.Unresolved<std.env.Arg>> = [];
+	// Build package-specific env defaults (lower precedence than user env).
+	const packageEnv: std.env.Arg = {};
 
 	// On Linux with LLVM, we need to add -Wl,-undefined-version to CFLAGS to build the shared library.
 	// https://github.com/zlib-ng/zlib-ng/issues/1427
-	if (
-		os === "linux" &&
-		((await std.env.tryWhich({
-			env: std.env.arg(env_, { utils: false }),
-			name: "clang",
-		})) !== undefined ||
-			sdk?.toolchain === "llvm")
-	) {
-		env.push({
-			CFLAGS: tg.Mutation.prefix("-Wl,-undefined-version", " "),
-		});
+	if (os === "linux" && arg.sdk?.toolchain === "llvm") {
+		packageEnv.CFLAGS = await tg.Mutation.prefix("-Wl,-undefined-version", " ");
 	}
 
-	// Zlib doesn't pick up the cross toolchain automatically, set CC.
-	if (os === "linux" && build !== host) {
-		env.push({
-			CC: `${host}-cc`,
-		});
+	// Zlib does not pick up the cross toolchain automatically, set CC.
+	if (os === "linux" && arg.build !== arg.host) {
+		packageEnv.CC = `${arg.host}-cc`;
 	}
 
-	env.push(env_);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			defaultCrossArgs: false,
-			defaultCrossEnv: false,
-			env: std.env.arg(...env),
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	return std.autotools.build({
+		...arg,
+		env: std.env.arg(packageEnv, arg.env),
+	});
 };
 
 export default build;

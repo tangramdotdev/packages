@@ -7,27 +7,8 @@ export const metadata = {
 	version: "6.5",
 	tag: "ncurses/6.5",
 	provides: {
-		// FIXME all of this is broken.
-		// binaries: [
-		// "clear",
-		// "infocmp",
-		// "ncursesw6-config",
-		// "tabs",
-		// "tic",
-		// "toe",
-		// "tput",
-		// "tset",
-		// ],
 		headers: [
 			"ncursesw/curses.h",
-			// FIXME C++ headers excluded from testing (require -xc++ compilation):
-			// "ncursesw/cursesapp.h",
-			// "ncursesw/cursesf.h",
-			// "ncursesw/cursesm.h",
-			// "ncursesw/cursesp.h",
-			// "ncursesw/cursslk.h",
-			// "ncursesw/etip.h",
-			// "ncursesw/cursesw.h" includes etip.h
 			"ncursesw/eti.h",
 			"ncursesw/form.h",
 			"ncursesw/menu.h",
@@ -38,7 +19,6 @@ export const metadata = {
 			"ncursesw/termcap.h",
 			"ncursesw/unctrl.h",
 		],
-		// FIXME ncurses++w
 		libraries: ["formw", "menuw", "ncursesw", "panelw"],
 	},
 };
@@ -50,82 +30,66 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	const arg = await std.autotools.arg(
+		{
+			source: source(),
+			env: {
+				CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
+				// We rename the shared objects after the build, let the LD proxy ignore missing libraries.
+				TGLD_ALLOW_MISSING_LIBRARIES: true,
+			},
+			phases: {
+				configure: {
+					args: [
+						"--with-shared",
+						"--with-cxx-shared",
+						"--enable-widec",
+						"--without-debug",
+						"--enable-pc-files",
+						tg`--with-pkg-config-libdir="${tg.output}/lib/pkgconfig"`,
+						"--enable-symlinks",
+						"--disable-home-terminfo",
+						"--disable-rpath-hack",
+						"--without-manpages",
+					],
+				},
+				// Patch curses.h to always use the wide-character ABI.
+				fixup: tg`sed -e 's/^#if.*XOPEN.*$/#if 1/' -i ${tg.output}/include/ncursesw/curses.h`,
+			},
+		},
+		...args,
+	);
 
-	const os = std.triple.os(host);
+	const os = std.triple.os(arg.host);
+	const configureArgs: Array<string> = [];
 
-	const configure = {
-		args: [
-			"--with-shared",
-			"--with-cxx-shared",
-			"--enable-widec",
-			"--without-debug",
-			"--enable-pc-files",
-			tg`--with-pkg-config-libdir="${tg.output}/lib/pkgconfig"`,
-			"--enable-symlinks",
-			"--disable-home-terminfo",
-			"--disable-rpath-hack",
-			"--without-manpages",
-		],
-	};
 	if (os === "darwin") {
-		configure.args.push("--disable-stripping"); // prevent calling xcrun. compiling -with `-Wl,-s` makes this unnecessary anyway.
+		// Prevent calling xcrun. Compiling with `-Wl,-s` makes this unnecessary anyway.
+		configureArgs.push("--disable-stripping");
 	}
-
-	if (build !== host) {
+	if (arg.build !== arg.host) {
 		// When cross-compiling, we cannot use the just-compiled `tic` executable built for the host to generate the database on the build machine.
-		configure.args.push("--disable-database", "--with-fallbacks");
+		configureArgs.push("--disable-database", "--with-fallbacks");
 	}
 
-	// Patch curses.h to always use the wide-character ABI.
-	const fixup = tg`sed -e 's/^#if.*XOPEN.*$/#if 1/' -i ${tg.output}/include/ncursesw/curses.h`;
+	let phases = arg.phases;
+	if (configureArgs.length > 0) {
+		phases = await std.phases.mergePhases(phases, {
+			configure: { args: configureArgs },
+		});
+	}
 
-	const phases = { configure, fixup };
+	let output = await std.autotools.build({ ...arg, phases });
 
-	const env = std.env.arg(
-		{
-			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
-			// We rename the shared objects after the build, let the LD proxy ignore missing libraries.
-			TGLD_ALLOW_MISSING_LIBRARIES: true,
-		},
-		env_,
-	);
-
-	let result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-
-	// Set libraries to post-process.
+	// Postprocess: create widechar symlinks and fix pkgconfig files.
 	const libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];
 	const dylibExt = os === "darwin" ? "dylib" : "so";
 
-	// Create widechar symlinks and fix pkgconfig files.
-	for await (const libName of libNames) {
-		const pc = tg.File.expect(await result.get(`lib/pkgconfig/${libName}w.pc`));
+	for (const libName of libNames) {
+		const pc = tg.File.expect(await output.get(`lib/pkgconfig/${libName}w.pc`));
 		const content = await pc.text();
 		let lines = content.split("\n");
 		lines = lines.map((line) => {
@@ -144,7 +108,7 @@ export const build = async (...args: std.Args<Arg>) => {
 				return line;
 			}
 		});
-		result = await tg.directory(result, {
+		output = await tg.directory(output, {
 			[`lib/lib${libName}.${dylibExt}`]: tg.symlink(
 				`lib${libName}w.${dylibExt}`,
 			),
@@ -154,12 +118,12 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 
 	// Add links from curses to ncurses.
-	result = await tg.directory(result, {
+	output = await tg.directory(output, {
 		[`lib/libcurses.${dylibExt}`]: tg.symlink(`libncurses.${dylibExt}`),
 		[`lib/pkgconfig/curses.pc`]: tg.symlink(`ncurses.pc`),
 	});
 
-	return result;
+	return output;
 };
 
 export default build;
