@@ -67,7 +67,7 @@ class TangramClient {
 		target: string,
 		options: { tag?: string } = {},
 	): Promise<{ id: string; token?: string }> {
-		const args = [target, "--retry", "-d"];
+		const args = [target, "-d"];
 		if (options.tag) {
 			args.push(`--tag=${options.tag}`);
 		}
@@ -151,14 +151,19 @@ function resolvePackages(filter: PackageFilter): string[] {
 		const entries = fs.readdirSync(packagesPath(), { withFileTypes: true });
 
 		for (const entry of entries) {
-			if (blacklist.has(entry.name)) continue;
-
-			const fullPath = path.join(packagesPath(), entry.name);
-			if (
-				entry.isDirectory() &&
-				fs.existsSync(path.join(fullPath, "tangram.ts"))
-			) {
-				packages.push(entry.name);
+			// Handle directory packages (with tangram.ts inside)
+			if (entry.isDirectory()) {
+				if (blacklist.has(entry.name)) continue;
+				const fullPath = path.join(packagesPath(), entry.name);
+				if (fs.existsSync(path.join(fullPath, "tangram.ts"))) {
+					packages.push(entry.name);
+				}
+			}
+			// Handle single-file packages (.tg.ts files)
+			else if (entry.isFile() && entry.name.endsWith(".tg.ts")) {
+				const packageName = entry.name.replace(/\.tg\.ts$/, "");
+				if (blacklist.has(packageName)) continue;
+				packages.push(packageName);
 			}
 		}
 	}
@@ -350,8 +355,8 @@ function parseFromArgs(): Configuration {
 
 	// Process positional arguments (package names)
 	const includePackages = positionals.filter((pkg) => {
-		if (!fs.existsSync(path.join(packagesPath(), pkg))) {
-			throw new Error(`No such package directory: ${pkg}`);
+		if (getPackagePath(pkg) === null) {
+			throw new Error(`No such package: ${pkg}`);
 		}
 		return true;
 	});
@@ -690,7 +695,7 @@ const ACTION_ORDER = ["format", "check", "build", "test", "publish", "release"];
 const ACTION_DEPENDENCIES: Record<string, string[]> = {
 	format: [],
 	check: [],
-	build: ["check"],
+	build: [],
 	test: ["build"],
 	publish: [],
 	release: ["build", "publish"],
@@ -746,6 +751,10 @@ class PackageExecutor {
 
 		const processPackage = async (packageName: string) => {
 			const packagePath = getPackagePath(packageName);
+			if (packagePath === null) {
+				results.logFailure(packageName, "resolve", "Package not found");
+				return;
+			}
 
 			log(`Processing package: ${packageName}`);
 
@@ -857,7 +866,21 @@ class ProcessTracker {
 
 const packagesPath = () => path.join(path.dirname(import.meta.dir), "packages");
 
-export const getPackagePath = (name: string) => path.join(packagesPath(), name);
+/** Returns the package path, or null if the package does not exist */
+export const getPackagePath = (name: string): string | null => {
+	const pkgPath = packagesPath();
+	// Check for single-file package
+	const filePath = path.join(pkgPath, `${name}.tg.ts`);
+	if (fs.existsSync(filePath)) {
+		return filePath;
+	}
+	// Check for directory package
+	const dirPath = path.join(pkgPath, name);
+	if (fs.existsSync(path.join(dirPath, "tangram.ts"))) {
+		return dirPath;
+	}
+	return null;
+};
 
 if (import.meta.main) {
 	entrypoint().catch((error) => {
