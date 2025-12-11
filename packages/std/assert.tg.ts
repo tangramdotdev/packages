@@ -596,7 +596,7 @@ export const testDylib = async (arg: TestDylibArg) => {
 
 	// Set up environment with pkg-config and all directories
 	const sdkEnv = std.sdk(arg?.sdk);
-	const pkgConfigEnv = buildTools({ level: "pkgconfig" });
+	const pkgConfigEnv = buildTools({ preset: "minimal" });
 	const allEnvDirs = [directory, ...arg.runtimeDepDirs];
 	const compileEnv = std.env.arg(sdkEnv, pkgConfigEnv, ...allEnvDirs, arg.env, {
 		utils: false,
@@ -666,7 +666,7 @@ export const testStaticlib = async (arg: TestStaticlibArg) => {
 
 	// Set up environment with pkg-config and all directories
 	const sdkEnv = std.sdk(arg?.sdk);
-	const pkgConfigEnv = buildTools({ level: "pkgconfig" });
+	const pkgConfigEnv = buildTools({ preset: "minimal" });
 	const runtimeDepDirs = arg.runtimeDepDirs ?? [];
 	const allEnvDirs = [arg.directory, ...runtimeDepDirs];
 	const compileEnv = std.env.arg(sdkEnv, pkgConfigEnv, ...allEnvDirs, arg.env, {

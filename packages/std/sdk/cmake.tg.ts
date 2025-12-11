@@ -1,7 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import ninja from "./ninja.tg.ts";
-import { buildTools, type Level } from "./dependencies.tg.ts";
+import { buildTools, type Preset } from "./dependencies.tg.ts";
 
 export const metadata = {
 	homepage: "https://cmake.org/",
@@ -292,18 +292,18 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		// Set up the SDK, add it to the environment.
 		const sdk = await tg.build(std.sdk, sdkArg);
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let level: Level | undefined = undefined;
+		let preset: Preset | undefined = undefined;
 		if (pkgConfig) {
-			level = "pkgconfig";
+			preset = "minimal";
 		}
 		if (extended) {
-			level = "extended";
+			preset = "autotools";
 		}
-		if (level !== undefined) {
+		if (preset !== undefined) {
 			const buildToolsEnv = await tg.build(buildTools, {
 				host,
 				buildToolchain: await tg.build(std.sdk, { host }),
-				level,
+				preset,
 			});
 			envs.push(sdk, buildToolsEnv);
 		}

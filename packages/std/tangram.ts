@@ -51,7 +51,7 @@ export const metadata = {
 
 /** The default SDK for the detected host. */
 export const default_ = async () => {
-	return await stdEnv(sdk.sdk(), dependencies.extendedBuildTools());
+	return await stdEnv(sdk.sdk(), dependencies.autotoolsBuildTools());
 };
 
 export default default_;

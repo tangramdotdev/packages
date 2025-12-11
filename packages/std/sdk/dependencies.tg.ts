@@ -43,25 +43,135 @@ export * as zstd from "./dependencies/zstd.tg.ts";
 export type BuildToolsArg = {
 	host?: string;
 	buildToolchain?: std.env.Arg;
-	level?: Level;
+	pkgConfig?: boolean;
+	m4?: boolean;
+	bison?: boolean;
+	flex?: boolean;
+	gettext?: boolean;
+	perl?: boolean;
+	python?: boolean;
+	libtool?: boolean;
+	texinfo?: boolean;
+	autoconf?: boolean;
+	help2man?: boolean;
+	automake?: boolean;
+	// Preset configurations - applied first, then individual flags override.
+	preset?: Preset;
 };
 
-// This level thing doesn't make sense. Theser are bools, you need better logic for them.
-export type Level = "pkgconfig" | "extended" | "python" | "devtools";
+/**
+ * Preset configurations for common use cases:
+ * - "minimal": Only pkg-config
+ * - "toolchain": Tools needed for compiler bootstrap (m4, bison, flex, perl, python) - NO gettext
+ * - "autotools": Tools for building autotools packages (m4, bison, flex, perl, gettext)
+ * - "autotools-dev": Full autotools development (includes autoconf, automake, libtool, etc.)
+ */
+export type Preset = "minimal" | "toolchain" | "autotools" | "autotools-dev";
 
-/** An env containing the standard utils plus additional build-time tools needed for toolchain components: m4, bison, perl, python */
+/** Resolved configuration after applying preset and individual overrides */
+type ResolvedConfig = {
+	pkgConfig: boolean;
+	m4: boolean;
+	bison: boolean;
+	flex: boolean;
+	gettext: boolean;
+	perl: boolean;
+	python: boolean;
+	libtool: boolean;
+	texinfo: boolean;
+	autoconf: boolean;
+	help2man: boolean;
+	automake: boolean;
+};
+
+/** Apply preset defaults, then override with individual flags */
+const resolveConfig = (arg: BuildToolsArg): ResolvedConfig => {
+	// Base defaults - everything off except pkgConfig
+	let config: ResolvedConfig = {
+		pkgConfig: true,
+		m4: false,
+		bison: false,
+		flex: false,
+		gettext: false,
+		perl: false,
+		python: false,
+		libtool: false,
+		texinfo: false,
+		autoconf: false,
+		help2man: false,
+		automake: false,
+	};
+
+	// Apply preset
+	switch (arg.preset) {
+		case "minimal":
+			break;
+		case "toolchain":
+			config = {
+				...config,
+				m4: true,
+				bison: true,
+				flex: true,
+				perl: true,
+				python: true,
+			};
+			break;
+		case "autotools":
+			config = {
+				...config,
+				m4: true,
+				bison: true,
+				flex: true,
+				perl: true,
+				gettext: true,
+			};
+			break;
+		case "autotools-dev":
+			config = {
+				...config,
+				m4: true,
+				bison: true,
+				flex: true,
+				perl: true,
+				gettext: true,
+				libtool: true,
+				texinfo: true,
+				autoconf: true,
+				help2man: true,
+				automake: true,
+			};
+			break;
+	}
+
+	// Apply individual overrides
+	if (arg.pkgConfig !== undefined) config.pkgConfig = arg.pkgConfig;
+	if (arg.m4 !== undefined) config.m4 = arg.m4;
+	if (arg.bison !== undefined) config.bison = arg.bison;
+	if (arg.flex !== undefined) config.flex = arg.flex;
+	if (arg.gettext !== undefined) config.gettext = arg.gettext;
+	if (arg.perl !== undefined) config.perl = arg.perl;
+	if (arg.python !== undefined) config.python = arg.python;
+	if (arg.libtool !== undefined) config.libtool = arg.libtool;
+	if (arg.texinfo !== undefined) config.texinfo = arg.texinfo;
+	if (arg.autoconf !== undefined) config.autoconf = arg.autoconf;
+	if (arg.help2man !== undefined) config.help2man = arg.help2man;
+	if (arg.automake !== undefined) config.automake = arg.automake;
+
+	return config;
+};
+
+/** An env containing build-time tools. Use presets or individual flags to control which tools are included. */
 export const buildTools = async (
 	unresolvedArg?: tg.Unresolved<BuildToolsArg>,
 ) => {
-	const {
-		host: host_,
-		level: level_,
-		buildToolchain: buildToolchain_,
-	} = unresolvedArg ? await tg.resolve(unresolvedArg) : {};
+	const resolved = unresolvedArg ? await tg.resolve(unresolvedArg) : {};
+	const { host: host_, buildToolchain: buildToolchain_ } = resolved;
+
+	// Resolve configuration from preset + individual overrides
+	const config = resolveConfig(resolved);
 
 	// Default values
 	const host = host_ ?? std.triple.host();
-	const level = level_ ?? "extended";
 	const os = std.triple.os(host);
 
 	// If no buildToolchain is provided, use SDK + utils as default.
@@ -76,165 +186,236 @@ export const buildTools = async (
 		);
 	}
 
-	// This list collects artifacts to return. It does not include the build toolchain or standard utils..
+	// This list collects artifacts to return. It does not include the build toolchain or standard utils.
 	const retEnvs: tg.Unresolved<Array<std.env.Arg>> = [{ utils: false }];
 
 	// A running modified build env including pieces we build along the way.
 	let buildEnv = await std.env.arg(buildToolchain);
 
+	// Track built artifacts that may be needed as dependencies for later tools
+	let m4Artifact: tg.Directory | undefined;
+	let perlArtifact: tg.Directory | undefined;
+	let grepArtifact: tg.Directory | undefined;
+	let autoconfArtifact: tg.Directory | undefined;
+
+	// Get bash for tools that need it
 	const bashExe = await std.env
 		.getArtifactByKey({ env: buildEnv, key: "SHELL" })
 		.then(tg.File.expect);
-	const pkgConfigArtifact = await pkgConfig({
-		bashExe,
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	retEnvs.push(pkgConfigArtifact);
-	buildEnv = await std.env.arg(buildEnv, pkgConfigArtifact, { utils: false });
-	if (level === "pkgconfig") {
-		return std.env.arg(...retEnvs);
+
+	// pkg-config
+	if (config.pkgConfig) {
+		const artifact = await pkgConfig({
+			bashExe,
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		retEnvs.push(artifact);
+		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
 	}
 
-	// Some dependencies depend on previous builds, so they are manually ordered here.
-	const m4Artifact = await m4({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	buildEnv = await std.env.arg(buildEnv, m4Artifact, { utils: false });
+	// m4 - required by bison, flex, autoconf.
+	if (config.m4 || config.bison || config.flex || config.autoconf) {
+		m4Artifact = await m4({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		if (config.m4) {
+			retEnvs.push(m4Artifact);
+		}
+		buildEnv = await std.env.arg(buildEnv, m4Artifact, { utils: false });
+	}
 
-	const bisonArtifact = await bison({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	buildEnv = await std.env.arg(buildEnv, bisonArtifact, { utils: false });
+	// bison - uses m4.
+	if (config.bison) {
+		const artifact = await bison({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		retEnvs.push(artifact);
+		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+	}
 
-	if (os === "darwin") {
-		const libiconvArtifact = await libiconv({
+	// libiconv - Darwin only, needed for gettext.
+	if (os === "darwin" && config.gettext) {
+		const artifact = await libiconv({
 			host,
 			bootstrap: true,
 			env: buildToolchain,
 		});
-		retEnvs.push(libiconvArtifact);
-		buildEnv = await std.env.arg(buildEnv, libiconvArtifact, { utils: false });
+		retEnvs.push(artifact);
+		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
 	}
 
-	const gettextArtifact = await gettext({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	retEnvs.push(m4Artifact, bisonArtifact, gettextArtifact);
-	buildEnv = await std.env.arg(buildEnv, gettextArtifact, { utils: false });
-
-	const flexArtifact = await flex({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	buildEnv = await std.env.arg(buildEnv, flexArtifact, { utils: false });
-
-	const perlArtifact = await perl({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	retEnvs.push(perlArtifact);
-	if (level === "extended") {
-		return std.env.arg(...retEnvs);
-	}
-	buildEnv = await std.env.arg(buildEnv, perlArtifact, { utils: false });
-
-	const libxcryptArtifact = await libxcrypt({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	buildEnv = await std.env.arg(buildEnv, libxcryptArtifact, { utils: false });
-	const pythonArtifact = await tg.build(python, {
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	retEnvs.push(pythonArtifact);
-	buildEnv = await std.env.arg(buildEnv, pythonArtifact, { utils: false });
-	if (level === "python") {
-		return std.env.arg(...retEnvs);
+	// gettext - i18n support for autotools packages.
+	if (config.gettext) {
+		const artifact = await gettext({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		retEnvs.push(artifact);
+		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
 	}
 
-	const grepArtifact = await grep({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	const grepExe = await grepArtifact.get("bin/grep").then(tg.File.expect);
-	const sedArtifact = await sed({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	const sedExe = await sedArtifact.get("bin/sed").then(tg.File.expect);
-	const libtoolArtifact = await libtool({
-		bashExe,
-		grepExe,
-		sedExe,
-		host,
-		bootstrap: true,
-		env: buildEnv,
-	});
-	const texinfoArtifact = await texinfo({
-		host,
-		bootstrap: true,
-		env: buildEnv,
-		perlArtifact,
-	});
-	buildEnv = await std.env.arg(buildEnv, texinfoArtifact, { utils: false });
-	const autoconfArtifact = await tg.build(autoconf, {
-		host,
-		bootstrap: true,
-		env: buildEnv,
-		grepArtifact,
-		m4Artifact,
-		perlArtifact,
-	});
-	buildEnv = await std.env.arg(buildEnv, autoconfArtifact, { utils: false });
-	const help2manArifact = await tg.build(help2man, {
-		host,
-		bootstrap: true,
-		env: buildEnv,
-		perlArtifact,
-	});
-	buildEnv = await std.env.arg(buildEnv, help2manArifact, { utils: false });
-	const automakeArtifact = await tg.build(automake, {
-		host,
-		bootstrap: true,
-		env: buildEnv,
-		autoconfArtifact,
-		perlArtifact,
-	});
-	retEnvs.push(
-		libtoolArtifact,
-		texinfoArtifact,
-		autoconfArtifact,
-		help2manArifact,
-		automakeArtifact,
-	);
+	// flex - uses m4.
+	if (config.flex) {
+		const artifact = await flex({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		retEnvs.push(artifact);
+		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+	}
+
+	// perl - required by autoconf, automake, texinfo, help2man.
+	if (
+		config.perl ||
+		config.autoconf ||
+		config.automake ||
+		config.texinfo ||
+		config.help2man
+	) {
+		perlArtifact = await perl({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		if (config.perl) {
+			retEnvs.push(perlArtifact);
+		}
+		buildEnv = await std.env.arg(buildEnv, perlArtifact, { utils: false });
+	}
+
+	// python - requires libxcrypt.
+	if (config.python) {
+		const libxcryptArtifact = await libxcrypt({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		buildEnv = await std.env.arg(buildEnv, libxcryptArtifact, { utils: false });
+
+		const artifact = await tg.build(python, {
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		retEnvs.push(artifact);
+		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+	}
+
+	// Development tools - these require perl and m4 to already be built.
+	const needsDevTools =
+		config.libtool ||
+		config.texinfo ||
+		config.autoconf ||
+		config.help2man ||
+		config.automake;
+
+	if (needsDevTools) {
+		// grep and sed are needed by libtool and autoconf.
+		grepArtifact = await grep({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+		const sedArtifact = await sed({
+			host,
+			bootstrap: true,
+			env: buildEnv,
+		});
+
+		if (config.libtool) {
+			const grepExe = await grepArtifact.get("bin/grep").then(tg.File.expect);
+			const sedExe = await sedArtifact.get("bin/sed").then(tg.File.expect);
+			const artifact = await libtool({
+				bashExe,
+				grepExe,
+				sedExe,
+				host,
+				bootstrap: true,
+				env: buildEnv,
+			});
+			retEnvs.push(artifact);
+			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		}
+
+		if (config.texinfo) {
+			tg.assert(perlArtifact, "texinfo requires perl");
+			const artifact = await texinfo({
+				host,
+				bootstrap: true,
+				env: buildEnv,
+				perlArtifact,
+			});
+			retEnvs.push(artifact);
+			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		}
+
+		if (config.autoconf || config.automake) {
+			tg.assert(m4Artifact, "autoconf requires m4");
+			tg.assert(perlArtifact, "autoconf requires perl");
+			tg.assert(grepArtifact, "autoconf requires grep");
+			autoconfArtifact = await tg.build(autoconf, {
+				host,
+				bootstrap: true,
+				env: buildEnv,
+				grepArtifact,
+				m4Artifact,
+				perlArtifact,
+			});
+			if (config.autoconf) {
+				retEnvs.push(autoconfArtifact);
+			}
+			buildEnv = await std.env.arg(buildEnv, autoconfArtifact, {
+				utils: false,
+			});
+		}
+
+		if (config.help2man) {
+			tg.assert(perlArtifact, "help2man requires perl");
+			const artifact = await tg.build(help2man, {
+				host,
+				bootstrap: true,
+				env: buildEnv,
+				perlArtifact,
+			});
+			retEnvs.push(artifact);
+			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		}
+
+		if (config.automake) {
+			tg.assert(autoconfArtifact, "automake requires autoconf");
+			tg.assert(perlArtifact, "automake requires perl");
+			const artifact = await tg.build(automake, {
+				host,
+				bootstrap: true,
+				env: buildEnv,
+				autoconfArtifact,
+				perlArtifact,
+			});
+			retEnvs.push(artifact);
+			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
+		}
+	}
 
 	return std.env.arg(...retEnvs);
 };
 
-/** The extended build tools (autotools dependencies) built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
-export const extendedBuildTools = async () => {
+/** The autotools build tools built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
+export const autotoolsBuildTools = async () => {
 	const host = std.triple.host();
 	const sdk = await tg.build(std.sdk, { host });
 	const utils = await tg.build(std.utils.defaultEnv);
 	return tg.build(buildTools, {
 		host,
 		buildToolchain: std.env.arg(sdk, utils),
-		level: "extended",
+		preset: "autotools",
 	});
 };
 

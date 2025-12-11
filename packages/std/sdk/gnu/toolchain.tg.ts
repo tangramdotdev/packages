@@ -58,7 +58,7 @@ export const toolchain = async (arg: ToolchainArg) => {
 	const nativeBuildTools = await tg.build(dependencies.buildTools, {
 		host,
 		buildToolchain: std.env.arg(proxiedNativeToolchain, nativeUtils),
-		level: "python",
+		preset: "toolchain",
 	});
 	const nativeBuildEnv = std.env.arg(nativeUtils, nativeBuildTools);
 
@@ -94,7 +94,7 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const bootstrapBuildTools = await tg.build(dependencies.buildTools, {
 		host: build,
 		buildToolchain: std.env.arg(bootstrapToolchain, bootstrapUtils),
-		level: "python",
+		preset: "toolchain",
 	});
 	const bootstrapBuildEnv = std.env.arg(
 		bootstrapUtils,

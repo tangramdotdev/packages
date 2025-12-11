@@ -1,5 +1,5 @@
 import * as std from "./tangram.ts";
-import { buildTools, type Level } from "./sdk/dependencies.tg.ts";
+import { buildTools, type Preset } from "./sdk/dependencies.tg.ts";
 
 export type Arg = {
 	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explitily provided via `env`. Default: false. */
@@ -212,27 +212,27 @@ export const build = async (...args: std.Args<Arg>) => {
 		// Set up the host SDK, add it to the environment.
 		const sdk = await tg.build(std.sdk, sdkArg_, { host });
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let level: Level | undefined = undefined;
+		let preset: Preset | undefined = undefined;
 		if (pkgConfig) {
-			level = "pkgconfig";
+			preset = "minimal";
 		}
 		if (extended) {
-			level = "extended";
+			preset = "autotools";
 		}
 		if (developmentTools) {
-			level = "devtools";
+			preset = "autotools-dev";
 		}
-		if (level !== undefined) {
+		if (preset !== undefined) {
 			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
-			// Use the pre-built extendedBuildTools for the "extended" level to ensure cache hits.
-			if (level === "extended") {
-				buildToolsEnv = await tg.build(std.dependencies.extendedBuildTools);
+			// Use the pre-built autotoolsBuildTools for the "autotools" preset to ensure cache hits.
+			if (preset === "autotools") {
+				buildToolsEnv = await tg.build(std.dependencies.autotoolsBuildTools);
 			} else {
-				// For other levels, build with the appropriate level parameter.
+				// For other presets, build with the appropriate preset parameter.
 				buildToolsEnv = await tg.build(buildTools, {
 					host,
 					buildToolchain: await tg.build(std.sdk, { host }),
-					level,
+					preset,
 				});
 			}
 			envs.push(sdk, buildToolsEnv);

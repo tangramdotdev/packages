@@ -281,7 +281,7 @@ export const buildLld = async (arg?: LLVMArg) => {
 	const buildTools = await tg.build(dependencies.buildTools, {
 		host: build,
 		buildToolchain,
-		level: "python",
+		preset: "toolchain",
 	});
 	const zlibArtifact = await dependencies.zlib.build({
 		env: buildToolchain,

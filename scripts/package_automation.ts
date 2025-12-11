@@ -466,8 +466,8 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 			tagPath: "wrap/defaultWrapper",
 		},
 		{
-			ref: "sdk/dependencies.tg.ts#extendedBuildTools",
-			tagPath: "dependencies/buildTools/extended",
+			ref: "sdk/dependencies.tg.ts#autotoolsBuildTools",
+			tagPath: "dependencies/buildTools/autotools",
 		},
 	],
 };
