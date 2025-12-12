@@ -56,7 +56,8 @@ export const git = async (arg?: Arg) => {
 	const env = std.env.arg(env_, zlib({ build, host }));
 
 	const result = std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
 		buildInTree: true,
 		env,
 		phases,

@@ -38,7 +38,8 @@ export const workspace = async (
 			});
 
 	return await tg.build(build, {
-		...(await std.triple.rotate({ build: buildTriple, host })),
+		host: buildTriple,
+		target: host,
 		release,
 		source,
 		verbose,

@@ -79,7 +79,8 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 	const env = std.env.arg(...envs, env_, { utils: false });
 
 	const result = std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
 		bootstrap: true,
 		buildInTree: true,
 		env,

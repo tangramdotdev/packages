@@ -198,7 +198,8 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
-		...(await std.triple.rotate({ build, host })),
+		host: build,
+		target: host,
 		env: std.env.arg(...env, { utils: false }),
 		phases,
 		sdk,
@@ -305,7 +306,8 @@ export const buildLld = async (arg?: LLVMArg) => {
 	const phases = { configure };
 
 	let output = await cmake.build({
-		...(await std.triple.rotate({ build, host })),
+		host: build,
+		target: host,
 		bootstrap: true,
 		env,
 		phases,

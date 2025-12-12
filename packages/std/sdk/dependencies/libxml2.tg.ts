@@ -58,7 +58,8 @@ export const build = async (...args: std.Args<Arg>) => {
 	const env = [env_];
 
 	return std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
 		bootstrap: bootstrap_,
 		env: std.env.arg(...env),
 		phases,

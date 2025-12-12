@@ -63,7 +63,8 @@ export const mold = async (arg?: Arg) => {
 	const env = await std.env.arg(zstd({ build, host }), env_, { utils: false });
 
 	const result = cmake.build({
-		...(await std.triple.rotate({ build, host })),
+		host: build,
+		target: host,
 		env,
 		phases: { configure },
 		sdk,

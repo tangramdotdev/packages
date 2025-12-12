@@ -62,7 +62,8 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		"bin/texindex",
 	];
 	const output = await std.utils.autotoolsInternal({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
 		bootstrap,
 		env,
 		sdk,

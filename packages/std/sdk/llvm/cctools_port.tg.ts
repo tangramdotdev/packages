@@ -34,7 +34,8 @@ export const build = async (targetArch?: string) => {
 	const phases = { configure };
 
 	return await std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
 		env: std.env.arg(libDispatch(), libTapi()),
 		phases,
 		sdk: { toolchain: "llvm" },

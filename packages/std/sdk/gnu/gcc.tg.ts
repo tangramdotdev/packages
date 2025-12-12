@@ -207,7 +207,8 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	const shouldFortify = variant !== "stage2_full" && host === target;
 
 	let result = await std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
 		...autotoolsRest,
 		bootstrap: bootstrap_,
 		defaultCrossArgs: false,

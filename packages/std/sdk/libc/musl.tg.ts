@@ -92,7 +92,8 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
 		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,

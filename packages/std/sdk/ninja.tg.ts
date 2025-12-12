@@ -46,7 +46,8 @@ export const ninja = async (arg?: tg.Unresolved<Arg>) => {
 	};
 
 	const result = cmake.build({
-		...(await std.triple.rotate({ build, host })),
+		host: build,
+		target: host,
 		generator: "Unix Makefiles",
 		phases: { configure },
 		sdk,
