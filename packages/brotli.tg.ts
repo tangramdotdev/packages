@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = async (): Promise<tg.Directory> => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec";
@@ -30,38 +30,19 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	cmake?: cmake.BuildArg;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = cmake.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		build,
-		cmake: cmakeArg = {},
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: ["-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_LIBDIR=lib"],
-	};
-
 	let output = await cmake.build(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			phases: {
+				configure: {
+					args: ["-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_LIBDIR=lib"],
+				},
+			},
 		},
-		cmakeArg,
+		...args,
 	);
 
 	const exe = await output.get("bin/brotli").then(tg.File.expect);

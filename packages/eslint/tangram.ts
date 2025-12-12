@@ -34,7 +34,7 @@ export const source = async () => {
 export type Arg = {
 	env?: std.env.Arg;
 	host?: string;
-	nodejs?: node.Arg;
+	nodejs?: Omit<node.Arg, "deps">;
 	source?: tg.Directory;
 };
 

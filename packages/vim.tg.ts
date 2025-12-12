@@ -30,47 +30,16 @@ export const source = () => {
 	});
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		ncurses?: ncurses.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	ncurses: ncurses.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: { ncurses: ncursesArg = {} } = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const dependencies = [
-		ncurses.build({ build, env: env_, host, sdk }, ncursesArg),
-	];
-	const env = [...dependencies, env_];
-
-	const output = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
-			buildInTree: true,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg({ source: source(), deps, buildInTree: true }, ...args),
 	);
-
-	return output;
-};
 
 export default build;
 

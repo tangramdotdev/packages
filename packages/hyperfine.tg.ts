@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:fea7b92922117ed04b9c84bb9998026264346768804f66baa40743c5528bed6b";
@@ -29,35 +29,10 @@ export const source = async () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	cargo?: cargo.Arg;
-	env?: std.env.Arg;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-	host?: string;
-};
+export type Arg = cargo.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		build,
-		cargo: cargoArgs = {},
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	return cargo.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		cargoArgs,
-	);
-};
+export const build = (...args: std.Args<Arg>) =>
+	cargo.build({ source: source() }, ...args);
 
 export default build;
 

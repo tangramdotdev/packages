@@ -10,134 +10,38 @@ export const metadata = {
 	version: "5.2.37",
 	tag: "bash/5.2.37",
 	provides: {
-		// FIXME bashbug
-		// binaries: ["bash", "bashbug"],
 		binaries: ["bash"],
-		// headers: [
-		// 	"bash/alias.h",
-		// 	"bash/array.h",
-		// 	"bash/arrayfunc.h",
-		// 	"bash/assoc.h",
-		// 	"bash/bashansi.h",
-		// 	"bash/bashintl.h",
-		// 	"bash/bashjmp.h",
-		// 	"bash/bashtypes.h",
-		// 	"bash/builtins/bashgetopt.h",
-		// 	"bash/builtins/builtext.h",
-		// 	"bash/builtins/common.h",
-		// 	"bash/builtins/getopt.h",
-		// 	"bash/builtins.h",
-		// 	"bash/command.h",
-		// 	"bash/config-bot.h",
-		// 	"bash/config-top.h",
-		// 	"bash/config.h",
-		// 	"bash/conftypes.h",
-		// 	"bash/dispose_cmd.h",
-		// 	"bash/error.h",
-		// 	"bash/execute_cmd.h",
-		// 	"bash/externs.h",
-		// 	"bash/general.h",
-		// 	"bash/hashlib.h",
-		// 	"bash/include/ansi_stdlib.h",
-		// 	"bash/include/chartypes.h",
-		// 	"bash/include/filecntl.h",
-		// 	"bash/include/gettext.h",
-		// 	"bash/include/maxpath.h",
-		// 	"bash/include/memalloc.h",
-		// 	"bash/include/ocache.h",
-		// 	"bash/include/posixdir.h",
-		// 	"bash/include/posixjmp.h",
-		// 	"bash/include/posixstat.h",
-		// 	"bash/include/posixtime.h",
-		// 	"bash/include/posixwait.h",
-		// 	"bash/include/shmbchar.h",
-		// 	"bash/include/shmbutil.h",
-		// 	"bash/include/shtty.h",
-		// 	"bash/include/stat-time.h",
-		// 	"bash/include/stdc.h",
-		// 	"bash/include/systimes.h",
-		// 	"bash/include/typemax.h",
-		// 	"bash/include/unionwait.h",
-		// 	"bash/jobs.h",
-		// 	"bash/make_cmd.h",
-		// 	"bash/pathnames.h",
-		// 	"bash/quit.h",
-		// 	"bash/shell.h",
-		// 	"bash/sig.h",
-		// 	"bash/siglist.h",
-		// 	"bash/signames.h",
-		// 	"bash/subst.h",
-		// 	"bash/syntax.h",
-		// 	"bash/unwind_prot.h",
-		// 	"bash/variables.h",
-		// 	"bash/version.h",
-		// 	"bash/xmalloc.h",
-		// 	"bash/y.tab.h",
-		// ],
 	},
 };
 
-export const source = async () => {
+export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9599b22ecd1d5787ad7d3b7bf0c59f312b3396d1e281175dd1f8a4014da621ff";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		libiconv?: std.args.DependencyArg<libiconv.Arg>;
-		ncurses?: std.args.DependencyArg<ncurses.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	libiconv: libiconv.build,
+	ncurses: ncurses.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const dependencies = [
-		std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
-		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
-	];
-
-	// Resolve env.
-	const env = std.env.arg(
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+export const build = async (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				deps,
+				source: source(),
+				env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+				phases: {
+					configure: { args: ["--without-bash-malloc", "--with-curses"] },
+				},
+			},
+			...args,
 		),
-		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
-		env_,
 	);
-
-	const configure = {
-		args: ["--without-bash-malloc", "--with-curses"],
-	};
-	const phases = { configure };
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-};
 
 export default build;
 

@@ -1,16 +1,15 @@
 import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
 import * as cmake from "cmake" with { local: "./cmake" };
 
 export const metadata = {
 	homepage: "https://xiph.org/ogg",
 	name: "ogg",
 	version: "1.3.6",
+	tag: "ogg/1.3.6",
 	provides: {},
 };
 
 export const source = () => {
-	std.download;
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:5c8253428e181840cd20d41f3ca16557a9cc04bad4a3d04cce84808677fa1061";
@@ -28,7 +27,7 @@ export const source = () => {
 export type Arg = cmake.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
-	cmake.build({ source: source() }, ...args).then(tg.Directory.expect);
+	cmake.build({ source: source() }, ...args);
 
 export const env = () =>
 	std.env.arg({

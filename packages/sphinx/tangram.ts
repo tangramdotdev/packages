@@ -38,32 +38,23 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	python?: python.Arg;
-	host?: string;
-	source?: tg.Directory;
-};
+export type Arg = std.args.BasePackageArg;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const {
 		build,
-		python: pythonArg = {},
 		host,
 		source: source_,
 	} = await std.packages.applyArgs<Arg>(...args);
 
 	const sourceArtifact = source_ ?? (await source());
 
-	return python.build(
-		{
-			build,
-			host,
-			source: sourceArtifact,
-			python: { requirements },
-		},
-		pythonArg,
-	);
+	return python.build({
+		build,
+		host,
+		source: sourceArtifact,
+		python: { requirements },
+	});
 };
 
 export default build;

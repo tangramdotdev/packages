@@ -1,5 +1,4 @@
 import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
 import * as cmake from "cmake" with { local: "./cmake" };
 import * as ogg from "ogg" with { local: "./ogg.tg.ts" };
 
@@ -11,7 +10,6 @@ export const metadata = {
 };
 
 export const source = () => {
-	std.download;
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f2c1c76592a82ffff8413ba3c4a1299b6c7ab06c734dee03fd88630485c2b920";
@@ -26,15 +24,14 @@ export const source = () => {
 		.then(tg.Directory.expect);
 };
 
-export type Arg = cmake.Arg;
+const deps = await std.deps({
+	ogg: ogg.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	return cmake.build(
-		{ source: source() },
-		{ env: std.env.arg(ogg.env()) },
-		...args,
-	);
-};
+export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
+
+export const build = (...args: std.Args<Arg>) =>
+	cmake.build({ source: source(), deps }, ...args);
 
 export const env = () =>
 	std.env.arg({

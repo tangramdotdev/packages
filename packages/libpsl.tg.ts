@@ -1,5 +1,5 @@
+import * as python from "python" with { local: "./python" };
 import * as std from "std" with { local: "./std" };
-import python from "python" with { local: "./python" };
 
 export const metadata = {
 	homepage: "https://rockdaboot.github.io/libpsl/",
@@ -30,42 +30,31 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	python: { build: python.self, kind: "buildtime" },
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const configure = {
-		args: ["--disable-dependency-tracking", "--disable-nls", "--disable-rpath"],
-	};
-
-	const env = std.env.arg(python({ host: build }), env_);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				phases: {
+					configure: {
+						args: [
+							"--disable-dependency-tracking",
+							"--disable-nls",
+							"--disable-rpath",
+						],
+					},
+				},
+			},
+			...args,
+		),
 	);
-};
 
 export default build;
 

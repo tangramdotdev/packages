@@ -22,31 +22,37 @@ export const source = async (build: string) => {
 	});
 };
 
-export type Arg = {
+export type Arg = Omit<std.autotools.Arg, "deps"> & {
 	bootstrap?: boolean;
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
 	target?: string;
 };
 
 /** Obtain the GNU binutils. */
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export const build = async (...args: std.Args<Arg>) => {
+	// First collect args to extract target before passing to autotools.arg.
+	// biome-ignore lint/suspicious/noExplicitAny: Arg contains fields not in autotools.Arg.
+	const collected = await std.args.apply<any, any>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
+	const { target: target_, ...rest } = collected;
+
+	const arg = await std.autotools.arg(
+		{ source: source(std.triple.host()) },
+		rest,
+	);
 	const {
-		autotools = {},
 		bootstrap: bootstrap_ = false,
-		build: build_,
+		build,
 		env: env_,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
-		target: target_,
-	} = arg ? await tg.resolve(arg) : {};
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
+	} = arg;
 	const target = target_ ?? host;
 
 	// Collect configuration.
@@ -81,21 +87,17 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 	const env = std.env.arg(...envs, env_);
 
-	const output = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			bootstrap: bootstrap_,
-			defaultCrossArgs: false,
-			defaultCrossEnv: false,
-			fortifySource: host === target,
-			env,
-			opt: "3",
-			phases,
-			sdk,
-			source: source_ ?? source(build),
-		},
-		autotools,
-	);
+	const output = await std.autotools.build({
+		...arg,
+		bootstrap: bootstrap_,
+		defaultCrossArgs: false,
+		defaultCrossEnv: false,
+		fortifySource: host === target,
+		env,
+		opt: "3",
+		phases,
+		source: source_,
+	});
 
 	return output;
 };

@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
@@ -30,54 +30,34 @@ export const source = async () => {
 		.then((source) => std.patch(source, patches));
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	std.assert.supportedHost(host, metadata);
-
-	const configure = {
-		args: ["--disable-dependency-tracking", "--disable-rpath", "--with-pic"],
-	};
-	const phases = { configure };
-
-	return std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			phases,
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			phases: {
+				configure: {
+					args: [
+						"--disable-dependency-tracking",
+						"--disable-rpath",
+						"--with-pic",
+					],
+				},
+			},
 		},
-		autotools,
+		...args,
 	);
+	std.assert.supportedHost(arg.host, metadata);
+	return std.autotools.build(arg);
 };
 
 export default build;
 
-const provides = {
-	binaries: ["attr", "getfattr", "setfattr"],
-	headers: ["attr/attributes.h", "attr/error_context.h", "attr/libattr.h"],
-	libraries: ["attr"],
-};
-
 export const test = async () => {
 	const spec = {
-		...provides,
-		binaries: std.assert.allBinaries(provides.binaries, {
+		...metadata.provides,
+		binaries: std.assert.allBinaries(metadata.provides.binaries, {
 			testArgs: [],
 			snapshot: "Usage:",
 		}),

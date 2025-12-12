@@ -35,69 +35,37 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		libpsl?: std.args.DependencyArg<libpsl.Arg>;
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-		zstd?: std.args.DependencyArg<zstd.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	libpsl: libpsl.build,
+	openssl: openssl.build,
+	zlib: zlib.build,
+	zstd: zstd.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-silent-rules",
-			"--enable-optimize",
-			"--with-openssl",
-			tg`--with-ca-bundle=${std.caCertificates()}/ca-bundle.crt`,
-		],
-	};
-	const phases = { configure };
-
-	const deps = [
-		std.env.runtimeDependency(libpsl.build, dependencyArgs.libpsl),
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
-	];
-
-	const env = [
-		...deps.map((dep: any) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				deps,
+				source: source(),
+				phases: {
+					configure: {
+						args: [
+							"--disable-dependency-tracking",
+							"--disable-silent-rules",
+							"--enable-optimize",
+							"--with-openssl",
+							tg`--with-ca-bundle=${std.caCertificates()}/ca-bundle.crt`,
+						],
+					},
+				},
+				setRuntimeLibraryPath: true,
+			},
+			...args,
 		),
-		env_,
-	];
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
-			phases,
-			sdk,
-			setRuntimeLibraryPath: true,
-			source: source_ ?? source(),
-		},
-		autotools,
 	);
-};
 
 export default build;
 

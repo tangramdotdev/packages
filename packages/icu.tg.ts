@@ -41,44 +41,26 @@ export const source = async () => {
 	return std.directory.unwrap(outer);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		python?: std.args.DependencyArg<python.Arg>;
+const deps = await std.deps({
+	python: { build: python.self, kind: "buildtime" },
+});
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof deps> & {
+		/* Instead of producing an install directory, the output will be the in-tree build directory. Used for cross-compilation. */
+		skipInstall?: boolean;
 	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	/* Instead of producing an install directory, the output will be the in-tree build directory. Used for cross-compilation. */
-	skipInstall?: boolean;
-	source?: tg.Directory;
-};
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build: build_,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		skipInstall = false,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	// Extract custom options first.
+	const customOptions = await std.args.apply<Arg, Arg>({
+		args: args as std.Args<Arg>,
+		map: async (arg) => arg,
+		reduce: {},
+	});
+	const skipInstall = customOptions.skipInstall ?? false;
 
-	const sourceDir = source_ ?? source();
-
-	const dependencies = [
-		std.env.envArgFromDependency(
-			build_,
-			env_,
-			host,
-			sdk,
-			std.env.buildDependency(python.self, dependencyArgs.python),
-		),
-	];
-	const env = [...dependencies, env_];
+	const sourceDir = await tg.resolve(customOptions.source ?? source());
 
 	const prepare = { command: tg.Mutation.prefix("mkdir work && cd work") };
 	const configureArgs: tg.Unresolved<Array<tg.Template.Arg>> = [
@@ -86,9 +68,15 @@ export const build = async (...args: std.Args<Arg>) => {
 	];
 
 	// If cross-compiling, we first need to provide a native installation for the build machine.
+	const build_ = customOptions.build ?? customOptions.host ?? std.triple.host();
+	const host = customOptions.host ?? std.triple.host();
 	const isCross = build_ !== host;
 	if (isCross) {
-		const buildIcu = build({ build: build_, host: build_, skipInstall: true });
+		const buildIcu = build({
+			build: build_,
+			host: build_,
+			skipInstall: true,
+		});
 		configureArgs.push(tg`--with-cross-build=${buildIcu}`);
 		// FIXME - fix the failing configure check, this is a hack.
 		configureArgs.push("ac_cv_c_bigendian=no");
@@ -109,17 +97,17 @@ export const build = async (...args: std.Args<Arg>) => {
 		};
 	}
 
-	return std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build: build_, host })),
-			buildInTree: !skipInstall,
-			env: std.env.arg(...env),
-			phases,
-			sdk,
 			source: sourceDir,
+			deps,
+			buildInTree: !skipInstall,
+			phases,
 		},
-		autotools,
+		...args,
 	);
+
+	return std.autotools.build(arg);
 };
 
 export default build;

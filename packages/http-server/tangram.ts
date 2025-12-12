@@ -32,11 +32,8 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	host?: string;
-	nodejs?: nodejs.Arg;
-	source?: tg.Directory;
+export type Arg = std.args.BasePackageArg & {
+	nodejs?: Omit<nodejs.Arg, "deps">;
 };
 
 export const build = async (...args: std.Args<Arg>) => {

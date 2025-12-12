@@ -26,41 +26,21 @@ export const source = () => {
 	});
 };
 
-type Arg = {
-	build?: string;
-	env?: std.env.Arg;
-	go?: go.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = go.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		go: goArg = {},
-		build,
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-	return go.build(
+export const build = (...args: std.Args<Arg>) =>
+	go.build(
 		{
-			...(await std.triple.rotate({ build, host })),
-
+			source: source(),
 			cgo: false,
-			env,
-			sdk,
-			source: source_ ?? source(),
 			generate: false,
 			install: {
 				command: tg`make install prefix="${tg.output}"`,
 			},
 			vendor: "go",
 		},
-		goArg,
+		...args,
 	);
-};
 
 export default build;
 

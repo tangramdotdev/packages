@@ -12,52 +12,28 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:6ac4fc31ce440debe63987c2ebbf9d7b6634e67a7c3279257dc7361de8bdb3ef";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: ["--disable-dependency-tracking"],
-	};
-
-	const env = std.env.arg(
-		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
-		env_,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+				phases: {
+					configure: { args: ["--disable-dependency-tracking"] },
+				},
+			},
+			...args,
+		),
 	);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-};
 
 export default build;
 

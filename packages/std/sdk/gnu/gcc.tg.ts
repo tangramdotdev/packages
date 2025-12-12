@@ -40,17 +40,11 @@ export const source = (bundledSources?: boolean) => {
 	return sourceDir;
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	bootstrap?: boolean;
-	build?: string;
+export type Arg = Omit<std.autotools.Arg, "deps" | "source"> & {
 	/** If this is true, add the gmp, mpfr, mpc, and isl source directories to the GCC source and build them all together. If false, these libraries must be available for the host in the env. */
 	bundledSources?: boolean;
 	/** This is used in the canadian cross case to allow the target libraries to build in the final compiler before we have a chance to proxy the linker. It is not necessary when building a cross-compiler. */
 	crossNative?: boolean;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
 	source?: tg.Directory;
 	/**  This directory must contain a directory structure with a single toplevel directory named for the target triple, containing include/lib directories contains a libc matching the target triple and a set of Linux headers. They will be copied into the output. */
 	sysroot: tg.Directory;
@@ -68,7 +62,6 @@ export type Variant =
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
 export const build = async (arg: tg.Unresolved<Arg>) => {
 	const {
-		autotools = {},
 		bootstrap: bootstrap_ = false,
 		build: build_,
 		bundledSources = false,
@@ -81,6 +74,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		target: target_,
 		targetBinutils,
 		variant,
+		...autotoolsRest
 	} = await tg.resolve(arg);
 
 	// Finalize triples.
@@ -212,21 +206,19 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 
 	const shouldFortify = variant !== "stage2_full" && host === target;
 
-	let result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			bootstrap: bootstrap_,
-			defaultCrossArgs: false,
-			defaultCrossEnv: false,
-			env,
-			fortifySource: shouldFortify,
-			phases,
-			opt: "3",
-			sdk,
-			source: source_ ?? source(bundledSources),
-		},
-		autotools,
-	);
+	let result = await std.autotools.build({
+		...(await std.triple.rotate({ build, host })),
+		...autotoolsRest,
+		bootstrap: bootstrap_,
+		defaultCrossArgs: false,
+		defaultCrossEnv: false,
+		env,
+		fortifySource: shouldFortify,
+		phases,
+		opt: "3",
+		sdk,
+		source: source_ ?? source(bundledSources),
+	});
 
 	result = await mergeLibDirs(result);
 

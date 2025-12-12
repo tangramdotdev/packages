@@ -64,71 +64,54 @@ export const source = async (
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	/** Optional autotools configuration. */
-	autotools?: std.autotools.Arg;
+const deps = await std.deps({
+	bzip2: bzip2.build,
+	libffi: libffi.build,
+	libxcrypt: libxcrypt.build,
+	mpdecimal: mpdecimal.build,
+	ncurses: ncurses.build,
+	openssl: openssl.build,
+	readline: readline.build,
+	sqlite: sqlite.build,
+	zlib: zlib.build,
+	zstd: zstd.build,
+});
 
-	/** Args for dependencies. */
-	dependencies?: {
-		bzip2?: std.args.DependencyArg<bzip2.Arg>;
-		libffi?: std.args.DependencyArg<libffi.Arg>;
-		libxcrypt?: std.args.DependencyArg<libxcrypt.Arg>;
-		mpdecimal?: std.args.DependencyArg<mpdecimal.Arg>;
-		ncurses?: std.args.DependencyArg<ncurses.Arg>;
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		readline?: std.args.DependencyArg<readline.Arg>;
-		sqlite?: std.args.DependencyArg<sqlite.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-		zstd?: std.args.DependencyArg<zstd.Arg>;
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof deps> & {
+		/** Optional set of requirements, either as a requirements.txt file or as a string passed to pip install.
+		 *
+		 * Hashes are required!
+		 */
+		requirements?: requirements.Arg;
+
+		/** The Python version to build. Defaults to the latest version. */
+		pythonVersion?: keyof typeof versions;
+
+		/** Build with --enable-optimizations? Not supported on macOS at the moment, enabled by default on Linux. */
+		enableOptimizations?: boolean;
 	};
-
-	/** Optional environment variables to set. */
-	env?: std.env.Arg;
-
-	/** Optional set of requirements, either as a requirements.txt file or as a string passed to pip install.
-	 *
-	 * Hashes are required!
-	 */
-	requirements?: requirements.Arg;
-
-	/** The Python version to build. Defaults to the latest version. */
-	pythonVersion?: keyof typeof versions;
-
-	/** The system to build python upon. */
-	build?: string;
-
-	/** Build with --enable-optimizations? Not supported on macOS at the moment, enabled by default on Linux. */
-	enableOptimizations?: boolean;
-
-	/** The system to use python. Currently must be the same as build. */
-	host?: string;
-
-	/** Optional sdk args to use. */
-	sdk?: std.sdk.Arg;
-
-	/** Optional python source override. */
-	source?: tg.Directory;
-};
 
 /** Build and create a python environment. */
 export const self = async (...args: std.Args<Arg>) => {
+	// Extract custom options first.
+	const customOptions = await std.args.apply<Arg, Arg>({
+		args: args as std.Args<Arg>,
+		map: async (arg) => arg,
+		reduce: {},
+	});
 	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
 		enableOptimizations: enableOptimizations_,
-		env: env_,
-		host,
 		pythonVersion,
 		requirements: requirementsArg,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	} = customOptions;
 
 	// Determine the Python version to use.
 	const versionKey = pythonVersion ?? defaultVersion;
 	const pythonVersionString = versions[versionKey].version;
 
+	const host = customOptions.host ?? std.triple.host();
+	const build = customOptions.build ?? host;
 	const os = std.triple.os(host);
 
 	if (os === "darwin" && enableOptimizations_ === true) {
@@ -136,54 +119,23 @@ export const self = async (...args: std.Args<Arg>) => {
 	}
 	const enableOptimizations = enableOptimizations_ ?? false;
 
-	const processDependency = (dep: any) =>
-		std.env.envArgFromDependency(build, env_, host, sdk, dep);
+	// Get individual artifacts for libraryPaths wrapping.
+	const artifacts = await std.deps.artifacts(deps, {
+		build,
+		host,
+		sdk: customOptions.sdk,
+	});
 
-	const dependencies = [
-		std.env.runtimeDependency(bzip2.build, dependencyArgs.bzip2),
-		std.env.runtimeDependency(libxcrypt.build, dependencyArgs.libxcrypt),
-		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
-		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
-		std.env.runtimeDependency(sqlite.build, dependencyArgs.sqlite),
-	];
-
-	// Set up additional runtime dependencies that will end up in the wrapper.
-	const libffiForHost = await processDependency(
-		std.env.runtimeDependency(libffi.build, dependencyArgs.libffi),
-	);
-	const mpdecimalForHost = await processDependency(
-		std.env.runtimeDependency(mpdecimal.build, dependencyArgs.mpdecimal),
-	);
-	const opensslForHost = await processDependency(
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-	);
-	const zlibForHost = await processDependency(
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	);
-	const zstdForHost = await processDependency(
-		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
-	);
-	let hostLibDirs = [
-		libffiForHost,
-		mpdecimalForHost,
-		opensslForHost,
-		zlibForHost,
-		zstdForHost,
-	];
-
-	// Resolve env.
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [
-		...dependencies.map(processDependency),
-		...hostLibDirs,
-	];
-	const configureArgs = [];
+	// Build configure args.
+	const configureArgs: Array<string> = [];
 	if (enableOptimizations) {
 		configureArgs.push("--enable-optimizations");
 	}
 
-	const makeArgs = [];
+	const makeArgs: Array<string> = [];
+	const envAdditions: std.env.EnvObject = {};
 	if (os === "darwin") {
-		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
+		envAdditions.MACOSX_DEPLOYMENT_TARGET = "15.2";
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 			"ax_cv_c_float_words_bigendian=no",
@@ -192,35 +144,34 @@ export const self = async (...args: std.Args<Arg>) => {
 			"RUNSHARED=DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 		);
 	}
-	const env = std.env.arg(...envs, env_);
 
-	const configure = { args: configureArgs };
-	const buildPhase = { args: makeArgs };
-	const install = { args: makeArgs };
-	const phases = { configure, build: buildPhase, install };
-
-	const output = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
+			source: await source(versionKey),
+			deps,
+			env: envAdditions,
 			opt: "3",
-			sdk,
 			setRuntimeLibraryPath: true,
-			source: source_ ?? (await source(versionKey)),
+			phases: {
+				configure: { args: configureArgs },
+				build: { args: makeArgs },
+				install: { args: makeArgs },
+			},
 		},
-		autotools,
+		...args,
 	);
+
+	const output = await std.autotools.build(arg);
 
 	// The python interpreter does not itself depend on these libraries, but submodules do. As a result, they were not automatically added during compilation. Explicitly add all the required library paths to the interpreter wrapper.
 	const libraryPaths = [
-		libffiForHost,
-		mpdecimalForHost,
-		opensslForHost,
-		zlibForHost,
-		zstdForHost,
+		artifacts.libffi,
+		artifacts.mpdecimal,
+		artifacts.openssl,
+		artifacts.zlib,
+		artifacts.zstd,
 	]
-		.filter((v) => v !== undefined)
+		.filter((v): v is tg.Directory => v !== undefined)
 		.map((dir) => dir.get("lib").then(tg.Directory.expect));
 
 	const pythonInterpreter = await std.wrap(

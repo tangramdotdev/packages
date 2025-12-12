@@ -6,6 +6,7 @@ export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
 export { command } from "./command.tg.ts";
 export * as dependencies from "./sdk/dependencies.tg.ts";
+export { deps } from "./packages.tg.ts";
 export { image } from "./image.tg.ts";
 export * as directory from "./directory.tg.ts";
 export { download } from "./download.tg.ts";

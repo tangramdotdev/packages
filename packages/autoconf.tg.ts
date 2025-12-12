@@ -37,53 +37,29 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		perl?: std.args.DependencyArg<perl.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	perl: { build: perl.build, kind: "buildtime" },
+	zlib: zlib.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const arg = await std.packages.applyArgs<Arg>(...args);
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = arg;
-
-	const envArgFromDependency = <T extends std.args.PackageArg>(
-		dep: std.env.Dependency<T>,
-	) => std.env.envArgFromDependency(build, env_, host, sdk, dep);
-
-	const perlArtifact = await envArgFromDependency(
-		std.env.buildDependency(perl.build, dependencyArgs.perl),
-	);
-	tg.assert(perlArtifact !== undefined);
-	const dependencies = [
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	].map(envArgFromDependency);
-	const env = std.env.arg(...dependencies, perlArtifact, env_);
-
-	let autoconf = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			deps,
 		},
-		autotools,
+		...args,
 	);
+
+	const ctx = { build: arg.build, host: arg.host, sdk: arg.sdk };
+
+	// Get the perl artifact for wrapping scripts later.
+	const { perl: perlArtifact } = await std.deps.artifacts(deps, ctx);
+	tg.assert(perlArtifact !== undefined);
+
+	let autoconf = await std.autotools.build(arg);
 
 	// Patch the autom4te.cfg file.
 	autoconf = await patchAutom4teCfg(autoconf, arg);
@@ -116,13 +92,17 @@ export const build = async (...args: std.Args<Arg>) => {
 		{
 			interpreter,
 			args: ["-B", await tg`${shareDirectory}/autoconf`],
-			env: std.env.arg(grep({ build, host }), m4.build({ build, host }), {
-				autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
-				AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-				M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-				PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
-				AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
-			}),
+			env: std.env.arg(
+				grep({ build: ctx.build, host: ctx.host }),
+				m4.build({ build: ctx.build, host: ctx.host }),
+				{
+					autom4te_perllibdir: tg`${shareDirectory}/autoconf`,
+					AC_MACRODIR: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					M4PATH: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					PERL5LIB: tg.Mutation.suffix(tg`${shareDirectory}/autoconf`, ":"),
+					AUTOM4TE_CFG: tg`${shareDirectory}/autoconf/autom4te.cfg`,
+				},
+			),
 		},
 	);
 
@@ -182,7 +162,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 export const patchAutom4teCfg = async (
 	autoconf: tg.Directory,
-	arg?: Arg,
+	arg?: { env?: tg.Unresolved<std.env.Arg>; sdk?: std.sdk.Arg },
 ): Promise<tg.Directory> => {
 	const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
 	tg.assert(autom4teCfg instanceof tg.File);

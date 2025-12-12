@@ -28,60 +28,33 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		libseccomp?: std.args.DependencyArg<libseccomp.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	libseccomp: {
+		build: libseccomp.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "linux",
+	},
+	zlib: zlib.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: ["--disable-dependency-tracking", "--disable-silent-rules"],
-	};
-	const dependencies = [
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	];
-	if (std.triple.os(host) === "linux") {
-		dependencies.push(
-			std.env.runtimeDependency(libseccomp.build, dependencyArgs.libseccomp),
-		);
-	}
-	const env = std.env.arg(
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	);
-
 	const output = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			hardeningCFlags: false,
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				hardeningCFlags: false,
+				phases: {
+					configure: {
+						args: ["--disable-dependency-tracking", "--disable-silent-rules"],
+					},
+				},
+			},
+			...args,
+		),
 	);
-
 	// Always set MAGIC when using `file`.
 	const magic = tg.directory({
 		"magic.mgc": tg.File.expect(await output.get("share/misc/magic.mgc")),

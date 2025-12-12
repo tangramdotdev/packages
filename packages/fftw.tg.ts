@@ -26,61 +26,37 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	const arg = await std.autotools.arg({ source: source() }, ...args);
 
-	const os = std.triple.os(host);
-
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--enable-shared",
-			"--enable-static",
-			"--enable-threads",
-		],
-	};
+	// Configure args based on OS.
+	const os = std.triple.os(arg.host);
+	const configureArgs = [
+		"--disable-dependency-tracking",
+		"--enable-shared",
+		"--enable-static",
+		"--enable-threads",
+	];
 	if (os === "linux") {
-		configure.args.push("--enable-openmp");
+		configureArgs.push("--enable-openmp");
 	}
 
-	let output = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	const output = await std.autotools.build({
+		...arg,
+		phases: { configure: { args: configureArgs } },
+	});
 
 	// fftw-wisdom-to-conf expects coreutils like `cat` available in the env.
-	const coreutilsArtifact = coreutils({ host });
+	const coreutilsArtifact = coreutils({ host: arg.host });
 	const unwrapped = await output
 		.get("bin/fftw-wisdom-to-conf")
 		.then(tg.File.expect);
 	const wrapped = await std.wrap(unwrapped, {
 		env: std.env.arg(coreutilsArtifact),
 	});
-	output = await tg.directory(output, { ["bin/fftw-wisdom-to-conf"]: wrapped });
-
-	return output;
+	return tg.directory(output, { ["bin/fftw-wisdom-to-conf"]: wrapped });
 };
 
 export default build;

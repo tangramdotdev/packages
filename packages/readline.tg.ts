@@ -20,64 +20,40 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		ncurses?: ncurses.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	ncurses: ncurses.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const dependencies = [
-		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
-	];
-
-	const envs = [
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
+	const arg = await std.autotools.arg(
 		{
-			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
+			deps,
+			source: source(),
+			env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+			phases: {
+				configure: {
+					args: [
+						"--with-curses",
+						"--disable-install-examples",
+						"--enable-multibyte",
+					],
+				},
+			},
 		},
-		env_,
-	];
-
-	const env = std.env.arg(...envs);
-
-	const configure = {
-		args: ["--with-curses", "--disable-install-examples", "--enable-multibyte"],
-	};
-	if (build === host) {
-		// FIXME - how do i use this flag with cross compilation.
-		configure.args.push("--with-shared-termcap-library");
-	}
-	const phases = { configure };
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+		...args,
 	);
+
+	// FIXME - how do I use this flag with cross compilation?
+	let phases = arg.phases;
+	if (arg.build === arg.host) {
+		phases = await std.phases.mergePhases(phases, {
+			configure: { args: ["--with-shared-termcap-library"] },
+		});
+	}
+
+	return std.autotools.build({ ...arg, phases });
 };
 
 export default build;

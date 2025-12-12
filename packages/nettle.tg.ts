@@ -20,60 +20,31 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		gmp?: std.args.DependencyArg<gmp.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	gmp: gmp.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const envs: tg.Unresolved<Array<std.env.Arg>> = [
-		std.env.envArgFromDependency(
-			build,
-			env_,
-			host,
-			sdk,
-			std.env.runtimeDependency(gmp.build, dependencyArgs.gmp),
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				phases: {
+					configure: {
+						args: [
+							"--disable-dependency-tracking",
+							"--disable-documentation",
+							tg`--libdir=${tg.output}/lib`,
+						],
+					},
+				},
+			},
+			...args,
 		),
-		env_,
-	];
-
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-documentation",
-			tg`--libdir=${tg.output}/lib`,
-		],
-	};
-	const phases = { configure };
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...envs),
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
 	);
-};
 
 export default build;
 

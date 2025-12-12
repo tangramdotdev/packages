@@ -29,44 +29,24 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	cmake?: cmake.BuildArg;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = cmake.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		build,
-		cmake: cmakeArg = {},
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: [
-			"-DCMAKE_BUILD_TYPE=Release",
-			"-DCMAKE_INSTALL_LIBDIR=lib",
-			"-DBUILD_TESTING=OFF",
-		],
-	};
-
-	return cmake.build(
+export const build = (...args: std.Args<Arg>) =>
+	cmake.build(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			phases: {
+				configure: {
+					args: [
+						"-DCMAKE_BUILD_TYPE=Release",
+						"-DCMAKE_INSTALL_LIBDIR=lib",
+						"-DBUILD_TESTING=OFF",
+					],
+				},
+			},
 		},
-		cmakeArg,
+		...args,
 	);
-};
 
 export default build;
 

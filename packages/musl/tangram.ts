@@ -15,104 +15,83 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
 	const base = `https://musl.libc.org/releases`;
-	return await std.download
+	return std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => std.patch(source, muslPermissionPatch));
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	/* Optionally point to a specific implementation of libcc. */
-	libcc?: tg.File;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
-
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env: env_,
-		host,
-		libcc = false,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	std.assert.supportedHost(host, metadata);
-
-	const isCrossCompiling = build !== host;
-
-	const commonFlags = [
-		`--enable-debug`,
-		`--enable-optimize=*`,
-		`--build=${build}`,
-		`--host=${host}`,
-	];
-
-	const additionalFlags: Array<string | tg.Template> = isCrossCompiling
-		? [`CROSS_COMPILE="${host}-"`, `CC="${host}-gcc"`, "--disable-gcc-wrapper"]
-		: [];
-
-	if (libcc) {
-		additionalFlags.push(await tg`LIBCC="${libcc}"`);
-	}
-
-	const configure = {
-		args: [...commonFlags, ...additionalFlags],
-	};
-
-	const install = {
-		args: [tg`DESTDIR="${tg.output}"`],
-	};
-
-	const phases = {
-		configure,
-		install,
-	};
-
-	const envs: tg.Unresolved<Array<std.env.Arg>> = [
-		{ CPATH: tg.Mutation.unset() },
-		env_,
-	];
-
-	let result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...envs, { utils: false }),
-			phases,
-			prefixPath: "/",
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-
-	// Add an ld.so file, which in musl is just a symlink to libc.so.
-	result = await tg.directory(result, {
-		[`lib/${interpreterName(host)}`]: tg.symlink("libc.so"),
-	});
-
-	return result;
-};
-
-export default build;
-
 export const interpreterName = (triple: string) => {
 	const arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;
 };
+
+export type Arg = std.autotools.Arg & {
+	/** Optionally point to a specific implementation of libcc. */
+	libcc?: tg.File;
+};
+
+export const build = async (...args: std.Args<Arg>) => {
+	// Extract libcc from raw args since std.autotools.arg doesn't know about it.
+	const libccArg = (await Promise.all(args.map(tg.resolve))).find(
+		(a): a is { libcc?: tg.File } =>
+			a !== null && typeof a === "object" && "libcc" in a,
+	);
+	const libcc = libccArg?.libcc;
+
+	const arg = await std.autotools.arg(
+		{
+			source: source(),
+			prefixPath: "/",
+			env: { CPATH: tg.Mutation.unset() },
+			phases: {
+				configure: { args: ["--enable-debug", "--enable-optimize=*"] },
+				install: { args: [tg`DESTDIR="${tg.output}"`] },
+			},
+		},
+		...args,
+	);
+
+	std.assert.supportedHost(arg.host, metadata);
+
+	const isCrossCompiling = arg.build !== arg.host;
+	const configureArgs: Array<string | tg.Template> = [
+		`--build=${arg.build}`,
+		`--host=${arg.host}`,
+	];
+
+	if (isCrossCompiling) {
+		configureArgs.push(
+			`CROSS_COMPILE="${arg.host}-"`,
+			`CC="${arg.host}-gcc"`,
+			"--disable-gcc-wrapper",
+		);
+	}
+
+	if (libcc) {
+		configureArgs.push(await tg`LIBCC="${libcc}"`);
+	}
+
+	const phases = await std.phases.mergePhases(arg.phases, {
+		configure: { args: configureArgs },
+	});
+
+	const output = await std.autotools.build({ ...arg, phases });
+
+	// Add an ld.so file, which in musl is just a symlink to libc.so.
+	return tg.directory(output, {
+		[`lib/${interpreterName(arg.host)}`]: tg.symlink("libc.so"),
+	});
+};
+
+export default build;
 
 export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);

@@ -4,6 +4,12 @@ import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
 import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
 
+const deps = await std.deps({
+	ncurses: ncurses.build,
+	perl: { build: perl.build, kind: "full" },
+	zlib: zlib.build,
+});
+
 export const metadata = {
 	homepage: "https://www.gnu.org/software/texinfo/",
 	license: "GPL-3.0-or-later",
@@ -37,56 +43,26 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		ncurses?: ncurses.Arg;
-		perl?: perl.Arg;
-		zlib?: zlib.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: {
-			ncurses: ncursesArg = {},
-			perl: perlArg = {},
-			zlib: zlibArg = {},
-		} = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const perlArtifact = await perl.build({ build, host }, perlArg);
-	const dependencies = [
-		ncurses.build({ build, host }, ncursesArg),
-		perlArtifact,
-		zlib.build({ build, host }, zlibArg),
-	];
-	const env = [
-		...dependencies,
-		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
-		env_,
-	];
-
-	const output = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			deps,
+			env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
 		},
-		autotools,
+		...args,
 	);
+
+	const output = await std.autotools.build(arg);
+	const host = arg.host;
+
+	const { perl: perlArtifact } = await std.deps.artifacts(deps, {
+		build: arg.build,
+		host,
+	});
+	tg.assert(perlArtifact !== undefined);
 
 	const interpreter = tg.File.expect(await perlArtifact.get("bin/perl"));
 

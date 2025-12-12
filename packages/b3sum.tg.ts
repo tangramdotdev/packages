@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export const source = () => {
 	const { version } = metadata;
 	const checksum =
 		"sha256:6b51aefe515969785da02e87befafc7fdc7a065cd3458cf1141f29267749e81f";
@@ -28,34 +28,10 @@ export const source = async () => {
 	});
 };
 
-type Arg = {
-	build?: string;
-	cargo?: cargo.Arg;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = cargo.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		build,
-		host,
-		cargo: cargoArgs = {},
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	return cargo.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			manifestSubdir: "b3sum",
-			sdk,
-			source: source_ ?? source(),
-		},
-		cargoArgs,
-	);
-};
+export const build = (...args: std.Args<Arg>) =>
+	cargo.build({ source: source(), manifestSubdir: "b3sum" }, ...args);
 
 export default build;
 

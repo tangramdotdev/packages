@@ -74,79 +74,43 @@ export const source = async () => {
 	return await std.patch(output, patches);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		icu?: std.args.DependencyArg<icu.Arg>;
-		lz4?: std.args.DependencyArg<lz4.Arg>;
-		ncurses?: std.args.DependencyArg<ncurses.Arg>;
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		readline?: std.args.DependencyArg<readline.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-		zstd?: std.args.DependencyArg<zstd.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	flex: { build: flex.build, kind: "buildtime" },
+	icu: icu.build,
+	lz4: lz4.build,
+	ncurses: ncurses.build,
+	openssl: openssl.build,
+	readline: readline.build,
+	zlib: zlib.build,
+	zstd: zstd.build,
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const os = std.triple.os(host);
-
-	const processDependency = (dep: any) =>
-		std.env.envArgFromDependency(build, env_, host, sdk, dep);
-
-	const icuArtifact = await processDependency(
-		std.env.runtimeDependency(icu.build, dependencyArgs.icu),
-	);
-	const opensslArtifact = await processDependency(
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-	);
-	const lz4Artifact = await processDependency(
-		std.env.runtimeDependency(lz4.build, dependencyArgs.lz4),
-	);
-	const ncursesArtifact = await processDependency(
-		std.env.runtimeDependency(ncurses.build, dependencyArgs.ncurses),
-	);
-	const readlineArtifact = await processDependency(
-		std.env.runtimeDependency(readline.build, dependencyArgs.readline),
-	);
-	const zlibArtifact = await processDependency(
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	);
-	const zstdArtifact = await processDependency(
-		std.env.runtimeDependency(zstd.build, dependencyArgs.zstd),
+	const arg = await std.autotools.arg(
+		{
+			source: source(),
+			deps,
+		},
+		...args,
 	);
 
-	const flexArtifact = await processDependency(
-		std.env.buildDependency(flex.build),
-	);
+	const os = std.triple.os(arg.host);
 
-	const env: tg.Unresolved<Array<std.env.Arg>> = [
-		icuArtifact,
-		lz4Artifact,
-		ncursesArtifact,
-		opensslArtifact,
-		flexArtifact,
-		readlineArtifact,
-		zlibArtifact,
-		zstdArtifact,
-		env_,
-	];
+	// Get individual artifacts for cross-compilation library paths.
+	const artifacts = await std.deps.artifacts(deps, arg);
+	const runtimeArtifacts = [
+		artifacts.icu,
+		artifacts.lz4,
+		artifacts.ncurses,
+		artifacts.openssl,
+		artifacts.readline,
+		artifacts.zlib,
+		artifacts.zstd,
+	].filter((v): v is tg.Directory => v !== undefined);
 
-	const sourceDir = source_ ?? source();
+	const additionalEnv: tg.Unresolved<Array<std.env.Arg>> = [];
 
 	const configureArgs: tg.Unresolved<Array<tg.Template.Arg>> = [
 		"--disable-rpath",
@@ -158,7 +122,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 		);
-		env.push({
+		additionalEnv.push({
 			LDFLAGS_SL: tg.Mutation.suffix("-Wl,-undefined,dynamic_lookup", " "),
 		});
 	}
@@ -168,30 +132,19 @@ export const build = async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure };
 
-	let libraryDirs = [
-		icuArtifact,
-		ncursesArtifact,
-		opensslArtifact,
-		readlineArtifact,
-		lz4Artifact,
-		zlibArtifact,
-		zstdArtifact,
-	];
-
-	let libraryLibDirs = libraryDirs
-		.filter((v) => v !== undefined)
-		.map((dir) => dir.get("lib").then(tg.Directory.expect));
-	let libraryIncludeDirs = libraryDirs
-		.filter((v) => v !== undefined)
-		.map((dir) => dir.get("include").then(tg.Directory.expect));
-
-	if (build !== host) {
+	if (arg.build !== arg.host) {
 		// For cross, the library directories must be explicitly enumerated.
-		let libDirTemplate = libraryLibDirs.reduce(
+		const libraryLibDirs = runtimeArtifacts.map((dir) =>
+			dir.get("lib").then(tg.Directory.expect),
+		);
+		const libraryIncludeDirs = runtimeArtifacts.map((dir) =>
+			dir.get("include").then(tg.Directory.expect),
+		);
+		const libDirTemplate = libraryLibDirs.reduce(
 			(acc, el) => tg.Template.join(":", acc, el),
 			tg``,
 		);
-		let includeDirTemplate = libraryIncludeDirs.reduce(
+		const includeDirTemplate = libraryIncludeDirs.reduce(
 			(acc, el) => tg.Template.join(":", acc, el),
 			tg``,
 		);
@@ -201,24 +154,22 @@ export const build = async (...args: std.Args<Arg>) => {
 			"--without-icu",
 		);
 		// For cross builds, we must provide `zic` for the build machine.
-		const tzdbArtifact = tzdb.build({ build, host: build });
-		env.push(tzdbArtifact);
+		const tzdbArtifact = tzdb.build({
+			build: arg.build,
+			host: arg.build,
+		});
+		additionalEnv.push(tzdbArtifact);
 	}
 
-	let parallel = os !== "darwin";
+	const parallel = os !== "darwin";
 
-	return await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...env),
-			parallel,
-			phases,
-			sdk,
-			setRuntimeLibraryPath: true,
-			source: sourceDir,
-		},
-		autotools,
-	);
+	return await std.autotools.build({
+		...arg,
+		env: std.env.arg(arg.env, ...additionalEnv),
+		parallel,
+		phases,
+		setRuntimeLibraryPath: true,
+	});
 };
 
 export default build;

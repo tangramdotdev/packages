@@ -29,32 +29,23 @@ export const source = () =>
 		mpc: mpcSource(),
 	});
 
-type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+export type Arg = std.autotools.Arg & {
 	target?: string;
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build: build_,
-		env: env_,
-		host: host_,
-		sdk,
-		source: source_,
-		target: target_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	const arg = await std.autotools.arg({ source: source() }, ...args);
 
-	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
+	const host = std.sdk.canonicalTriple(arg.host);
 	const os = std.triple.os(host);
 	std.assert.supportedHost(host, metadata);
-	const build = std.sdk.canonicalTriple(build_ ?? host);
-	const target = std.sdk.canonicalTriple(target_ ?? host);
+	const build = std.sdk.canonicalTriple(arg.build);
+	// Extract target from raw args since std.autotools.arg doesn't know about it.
+	const targetArg = (await Promise.all(args.map(tg.resolve))).find(
+		(a): a is { target?: string } =>
+			a !== null && typeof a === "object" && "target" in a,
+	);
+	const target = std.sdk.canonicalTriple(targetArg?.target ?? host);
 
 	const deps = [
 		binutils({ build, host: build, target: build }),
@@ -102,19 +93,16 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const phases = { configure };
 
-	const env = std.env.arg(additionalEnv, ...deps, env_);
+	const env = std.env.arg(additionalEnv, ...deps, arg.env);
 
-	let result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			opt: "2",
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let result = await std.autotools.build({
+		...(await std.triple.rotate({ build, host })),
+		env,
+		phases,
+		opt: "2",
+		sdk: arg.sdk,
+		source: arg.source,
+	});
 
 	result = await mergeLibDirs(result);
 
@@ -137,23 +125,20 @@ export default build;
 
 export const libgcc = async (...args: std.Args<Arg>) => {
 	// FIXME - write in terms of gcc above, pass phases down.
-	const {
-		autotools = {},
-		build: build_,
-		env: env_,
-		host: host_,
-		sdk,
-		source: source_,
-		target: target_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	const arg = await std.autotools.arg({ source: source() }, ...args);
 
-	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
+	const host = std.sdk.canonicalTriple(arg.host);
 	const os = std.triple.os(host);
 	if (os !== "linux") {
 		throw new Error("GCC is only supported on Linux");
 	}
-	const build = std.sdk.canonicalTriple(build_ ?? host);
-	const target = std.sdk.canonicalTriple(target_ ?? host);
+	const build = std.sdk.canonicalTriple(arg.build);
+	// Extract target from raw args since std.autotools.arg doesn't know about it.
+	const targetArg = (await Promise.all(args.map(tg.resolve))).find(
+		(a): a is { target?: string } =>
+			a !== null && typeof a === "object" && "target" in a,
+	);
+	const target = std.sdk.canonicalTriple(targetArg?.target ?? host);
 
 	const deps = [
 		binutils({ build, host: build, target: build }),
@@ -209,23 +194,20 @@ export const libgcc = async (...args: std.Args<Arg>) => {
 
 	const phases = { configure, build: buildPhase, install };
 
-	const env = std.env.arg(additionalEnv, ...deps, env_);
+	const env = std.env.arg(additionalEnv, ...deps, arg.env);
 
-	const result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			opt: "2",
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	const result = await std.autotools.build({
+		...(await std.triple.rotate({ build, host })),
+		env,
+		phases,
+		opt: "2",
+		sdk: arg.sdk,
+		source: arg.source,
+	});
 
-	const libgcc = tg.File.expect(await result.get("lib/libgcc_s.so"));
+	const libgccFile = tg.File.expect(await result.get("lib/libgcc_s.so"));
 
-	return libgcc;
+	return libgccFile;
 };
 
 export const gccSource = async () => {

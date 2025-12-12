@@ -14,40 +14,17 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-};
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build({ source: source() }, ...args);
 
 export default build;
 

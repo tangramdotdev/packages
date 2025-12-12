@@ -41,73 +41,44 @@ export const source = async () => {
 	return source;
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		attr?: std.args.DependencyArg<attr.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	attr: attr.build,
+});
+
+const install = tg`
+	set -x
+	mkdir -p ${tg.output}/bin ${tg.output}/lib/pkgconfig
+	bins="capsh getcap setcap getpcaps"
+	for bin in $bins; do
+		install -m 0755 "progs/$bin" "${tg.output}/bin"
+	done
+	install -d "${tg.output}/include/sys" "${tg.output}/include/uapi/linux"
+	install -m 0644 libcap/include/sys/*.h "${tg.output}/include/sys"
+	install -m 0644 libcap/include/uapi/linux/*.h "${tg.output}/include/uapi/linux"
+	install -m 0644 libcap/libcap.pc "${tg.output}/lib/pkgconfig"
+	install -m 0644 libcap/libcap.a "${tg.output}/lib"
+	install -m 0755 libcap/libcap.so.${metadata.version} "${tg.output}/lib"
+	cd ${tg.output}/lib
+	ln -s libcap.so.${metadata.version} libcap.so.2
+	ln -s libcap.so.2 libcap.so`;
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	std.assert.supportedHost(host, metadata);
-
-	const install = tg`
-		set -x
-		mkdir -p ${tg.output}/bin ${tg.output}/lib/pkgconfig
-		bins="capsh getcap setcap getpcaps"
-		for bin in $bins; do
-			install -m 0755 "progs/$bin" "${tg.output}/bin"
-		done
-		install -d "${tg.output}/include/sys" "${tg.output}/include/uapi/linux"
-		install -m 0644 libcap/include/sys/*.h "${tg.output}/include/sys"
-		install -m 0644 libcap/include/uapi/linux/*.h "${tg.output}/include/uapi/linux"
-		install -m 0644 libcap/libcap.pc "${tg.output}/lib/pkgconfig"
-		install -m 0644 libcap/libcap.a "${tg.output}/lib"
-		install -m 0755 libcap/libcap.so.${metadata.version} "${tg.output}/lib"
-		cd ${tg.output}/lib
-		ln -s libcap.so.${metadata.version} libcap.so.2
-		ln -s libcap.so.2 libcap.so`;
-	const phases: tg.Unresolved<std.phases.Arg> = {
-		configure: tg.Mutation.unset(),
-		install: { command: install, args: tg.Mutation.unset() },
-	};
-
-	const attrArtifact = await std.env.envArgFromDependency(
-		build,
-		env_,
-		host,
-		sdk,
-		std.env.runtimeDependency(attr.build, dependencyArgs.attr),
-	);
-	const dependencies = [attrArtifact];
-	const env = std.env.arg(...dependencies, env_);
-
-	return std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
+			source: source(),
+			deps,
 			buildInTree: true,
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
+			phases: {
+				configure: tg.Mutation.unset(),
+				install: { command: install, args: tg.Mutation.unset() },
+			},
 		},
-		autotools,
+		...args,
 	);
+	std.assert.supportedHost(arg.host, metadata);
+	return std.autotools.build(arg);
 };
 
 export default build;

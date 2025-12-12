@@ -4,20 +4,26 @@ export type Args<T extends tg.Value = tg.Value> = Array<
 	tg.Unresolved<tg.ValueOrMaybeMutationMap<T>>
 >;
 
-/** Standard values that packages pass to their dependencies */
-export type PackageArg = { [key: string]: tg.Value } & {
+/** Base argument type for packages to extend. Add build-system-specific options (autotools, cmake, cargo, etc.) and package-specific dependencies by intersection. */
+export type BasePackageArg = {
 	build?: string | undefined;
 	dependencies?: DependencyArgs | undefined;
 	env?: std.env.Arg;
 	host?: string | undefined;
+	/** Top-level phases that merge with builder-specific phases. */
+	phases?: std.phases.Arg;
 	sdk?: std.sdk.Arg | undefined;
+	source?: tg.Directory | undefined;
 };
 
-export type DependencyArg<T extends PackageArg> =
+/** Internal constraint type for package arguments. Includes index signature for type system compatibility. */
+export type PackageArg = { [key: string]: tg.Value } & BasePackageArg;
+
+export type DependencyArg<T extends BasePackageArg> =
 	| Omit<T, "build" | "host">
 	| true;
 
-export type OptionalDependencyArg<T extends PackageArg> =
+export type OptionalDependencyArg<T extends BasePackageArg> =
 	| Omit<T, "build" | "host">
 	| boolean;
 

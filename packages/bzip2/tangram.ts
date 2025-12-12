@@ -15,11 +15,12 @@ export const metadata = {
 	tag: "bzip2/1.0.8",
 	provides: {
 		binaries: ["bzip2"],
+		// FIXME - there is a dylib, but no pkgconfig.
 		libraries: [{ name: "bz2", staticlib: true, dylib: false }],
 	},
 };
 
-export const source = async () => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:db106b740252669664fd8f3a1c69fe7f689d5cd4b132f82ba82b9afba27627df";
@@ -36,60 +37,32 @@ export const source = async () => {
 	return std.patch(source, dylibDetectOsPatch);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const sourceDir = source_ ?? source();
-
-	// Define phases.
-	const buildPhase = `make CC="cc" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="cc" SHELL="$SHELL"`;
-	const install = {
-		args: [tg`PREFIX="${tg.output}" SHELL="$SHELL"`],
-	};
-	const phases: tg.Unresolved<std.phases.Arg> = {
-		configure: tg.Mutation.unset(),
-		build: buildPhase,
-		install,
-	};
-
-	let output = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
+			source: source(),
 			buildInTree: true,
-			env,
-			sdk,
-			source: sourceDir,
-			phases,
+			phases: {
+				configure: tg.Mutation.unset(),
+				build: `make CC="cc" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="cc" SHELL="$SHELL"`,
+				install: { args: [tg`PREFIX="${tg.output}" SHELL="$SHELL"`] },
+			},
 		},
-		autotools,
+		...args,
 	);
 
-	// Wrap installed scripts.
-	const bashScripts = ["bzdiff", "bzgrep", "bzmore"];
+	let output = await std.autotools.build(arg);
 
+	// Wrap installed bash scripts with proper interpreter.
+	const bashScripts = ["bzdiff", "bzgrep", "bzmore"];
 	for (const script of bashScripts) {
 		const file = tg.File.expect(await output.get(`bin/${script}`));
 		output = await tg.directory(output, {
-			[`bin/${script}`]: bash.wrapScript(file, host),
+			[`bin/${script}`]: bash.wrapScript(file, arg.host),
 		});
 	}
-
 	return output;
 };
 

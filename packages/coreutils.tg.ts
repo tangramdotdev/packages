@@ -46,66 +46,42 @@ export const source = async () => {
 	return source;
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		acl?: std.args.OptionalDependencyArg<acl.Arg>;
-		attr?: std.args.OptionalDependencyArg<attr.Arg>;
-		libcap?: std.args.OptionalDependencyArg<libcap.Arg>;
-		libiconv?: std.args.DependencyArg<libiconv.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	acl: {
+		build: acl.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "linux",
+	},
+	attr: {
+		build: attr.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "linux",
+	},
+	libcap: {
+		build: libcap.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "linux",
+	},
+	libiconv: {
+		build: libiconv.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "darwin",
+	},
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	let dependencies = [];
-
-	if (std.triple.os(host) === "linux") {
-		dependencies.push(
-			std.env.runtimeDependency(acl.build, dependencyArgs.acl),
-			std.env.runtimeDependency(attr.build, dependencyArgs.attr),
-			std.env.runtimeDependency(libcap.build, dependencyArgs.libcap),
-		);
-	}
-
-	if (std.triple.os(host) === "darwin") {
-		dependencies.push(
-			std.env.runtimeDependency(libiconv.build, dependencyArgs.libiconv),
-		);
-	}
-
-	const envs: tg.Unresolved<Array<std.env.Arg>> = [
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				env: { FORCE_UNSAFE_CONFIGURE: true },
+			},
+			...args,
 		),
-		{ FORCE_UNSAFE_CONFIGURE: true },
-		env_,
-	];
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(...envs),
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
 	);
-};
 
 export default build;
 

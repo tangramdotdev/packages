@@ -15,28 +15,21 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-type Arg = {
-	autotools?: std.autotools.Arg;
+type Arg = Omit<std.autotools.Arg, "deps"> & {
 	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
 };
 
-export const ncurses = async (arg?: tg.Unresolved<Arg>) => {
+export const ncurses = async (...args: std.Args<Arg>) => {
+	const arg = await std.autotools.arg({ source: source() }, ...args);
 	const {
-		autotools = {},
 		bootstrap = false,
-		build: build_,
+		build,
 		env,
-		host: host_,
+		host,
 		sdk,
 		source: source_,
-	} = arg ? await tg.resolve(arg) : {};
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
+		...autotoolsRest
+	} = arg;
 	const os = std.triple.os(host);
 
 	const configure = {
@@ -60,17 +53,14 @@ export const ncurses = async (arg?: tg.Unresolved<Arg>) => {
 
 	const phases = { configure, fixup };
 
-	let result = await std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			bootstrap,
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	let result = await std.autotools.build({
+		...arg,
+		...autotoolsRest,
+		bootstrap,
+		env,
+		phases,
+		source: source_,
+	});
 
 	// Set libraries to post-process.
 	const libNames = ["form", "menu", "ncurses", "ncurses++", "panel"];

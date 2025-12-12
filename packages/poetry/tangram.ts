@@ -35,9 +35,7 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	host?: string;
+export type Arg = std.args.BasePackageArg & {
 	requirements?: tg.File;
 };
 

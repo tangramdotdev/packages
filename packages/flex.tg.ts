@@ -31,45 +31,23 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		help2man?: help2man.Arg;
-		texinfo?: texinfo.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	help2man: { build: help2man.build, kind: "buildtime" },
+});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: { help2man: help2manArg = {}, texinfo: texinfoArg = {} } = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const dependencies = [
-		help2man.build({ build, env: env_, host, sdk }, help2manArg),
-		texinfo.build({ build, env: env_, host, sdk }, texinfoArg),
-	];
-	const env = std.env.arg(...dependencies, env_);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
+	const arg = await std.autotools.arg({ source: source(), deps }, ...args);
+	// texinfo.build returns a file, not a directory, so add it to env directly.
+	const texinfoEnv = texinfo.build({
+		build: arg.build,
+		host: arg.build,
+	});
+	return std.autotools.build({
+		...arg,
+		env: std.env.arg(arg.env, texinfoEnv),
+	});
 };
 
 export default build;

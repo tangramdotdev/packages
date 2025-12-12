@@ -20,7 +20,7 @@ export const metadata = {
 	},
 };
 
-export const source = async (): Promise<tg.Directory> => {
+const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:bc9842a18898bfacb0ed1252c4febcc7e78fa139fd27fdc7a3e30d9d9356119b";
@@ -37,42 +37,26 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-multi-os-directory",
-			"--enable-portable-binary",
-		],
-	};
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				phases: {
+					configure: {
+						args: [
+							"--disable-dependency-tracking",
+							"--disable-multi-os-directory",
+							"--enable-portable-binary",
+						],
+					},
+				},
+			},
+			...args,
+		),
 	);
-};
 
 export default build;
 

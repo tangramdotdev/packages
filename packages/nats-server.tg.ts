@@ -29,36 +29,10 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	build?: string;
-	env?: std.env.Arg;
-	go?: go.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = go.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		go: goArg = {},
-		build,
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	return go.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			cgo: false,
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		goArg,
-	);
-};
+export const build = (...args: std.Args<Arg>) =>
+	go.build({ source: source(), cgo: false }, ...args);
 
 export default build;
 
@@ -66,16 +40,3 @@ export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
 };
-
-export const llvm = () => build({ sdk: { toolchain: "llvm" } });
-export const crossGcc = () =>
-	build({
-		build: "aarch64-unknown-linux-gnu",
-		host: "x86_64-unknown-linux-gnu",
-	});
-export const crossLlvm = () =>
-	build({
-		build: "aarch64-unknown-linux-gnu",
-		host: "x86_64-unknown-linux-gnu",
-		sdk: { toolchain: "llvm" },
-	});

@@ -2,7 +2,6 @@ import * as bzip2 from "bzip2" with { local: "./bzip2" };
 import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
 import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
 import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
 import * as xz from "xz" with { local: "./xz.tg.ts" };
 import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
 
@@ -31,69 +30,35 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		bzip2?: bzip2.Arg;
-		libiconv?: libiconv.Arg;
-		openssl?: openssl.Arg;
-		xz?: xz.Arg;
-		zlib?: zlib.Arg;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	bzip2: bzip2.build,
+	libiconv: libiconv.build,
+	openssl: openssl.build,
+	xz: xz.build,
+	zlib: zlib.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: {
-			bzip2: bzip2Arg = {},
-			libiconv: libiconvArg = {},
-			openssl: opensslArg = {},
-			xz: xzArg = {},
-			zlib: zlibArg = {},
-		} = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	const configure = {
-		args: ["--disable-dependency-tracking", "--disable-rpath", "--with-pic"],
-	};
-
-	if (build !== host) {
-		configure.args.push(`--host=${host}`);
-	}
-
-	const phases = { configure };
-
-	const env = std.env.arg(
-		bzip2.build({ build, env: env_, host, sdk }, bzip2Arg),
-		libiconv.build({ build, env: env_, host, sdk }, libiconvArg),
-		openssl.build({ build, env: env_, host, sdk }, opensslArg),
-		xz.build({ build, env: env_, host, sdk }, xzArg),
-		zlib.build({ build, env: env_, host, sdk }, zlibArg),
-		env_,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{
+				source: source(),
+				deps,
+				phases: {
+					configure: {
+						args: [
+							"--disable-dependency-tracking",
+							"--disable-rpath",
+							"--with-pic",
+						],
+					},
+				},
+			},
+			...args,
+		),
 	);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			source: source_ ?? source(),
-			sdk,
-		},
-		autotools,
-	);
-};
 
 export default build;
 

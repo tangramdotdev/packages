@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export let source = async () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9954cb54c4f548198a7cbebad248bdc87dd64bd26185708a294b2b50771e3769";
@@ -32,51 +32,15 @@ export let source = async () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {
-		openssl?: std.args.DependencyArg<openssl.Arg>;
-		zlib?: std.args.DependencyArg<zlib.Arg>;
-	};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	openssl: openssl.build,
+	zlib: zlib.build,
+});
 
-export const build = async (...args: std.Args<Arg>) => {
-	let {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-	let dependencies = [
-		std.env.runtimeDependency(openssl.build, dependencyArgs.openssl),
-		std.env.runtimeDependency(zlib.build, dependencyArgs.zlib),
-	];
-	let env = std.env.arg(
-		...dependencies.map((dep) =>
-			std.env.envArgFromDependency(build, env_, host, sdk, dep),
-		),
-		env_,
-	);
-
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			sdk,
-			source: source_ ?? source(),
-		},
-		autotools,
-	);
-};
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build({ source: source(), deps }, ...args);
 
 export default build;
 

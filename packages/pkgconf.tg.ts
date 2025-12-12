@@ -24,42 +24,34 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
+export type Arg = std.autotools.Arg & {
 	proxy?: boolean;
 };
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env,
-		host,
-		proxy = true,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: ["--disable-dependency-tracking"],
-	};
-	const phases = { configure };
-
-	const output = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases,
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			phases: {
+				configure: {
+					args: ["--disable-dependency-tracking"],
+				},
+			},
 		},
-		autotools,
+		...args,
 	);
+
+	// Extract proxy option (not part of autotools args).
+	const proxy =
+		(
+			await std.args.apply<Arg, Arg>({
+				args: args as std.Args<Arg>,
+				map: async (a) => a,
+				reduce: {},
+			})
+		).proxy ?? true;
+
+	const output = await std.autotools.build(arg);
 
 	let pkgconf: tg.File | tg.Template = tg.File.expect(
 		await output.get("bin/pkgconf"),

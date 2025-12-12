@@ -31,41 +31,21 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const sourceDir = source_ ?? source();
-
-	const install = tg`make install PREFIX=${tg.output}`;
-	const phases = { install };
-
-	return std.autotools.build(
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
 		{
-			...(await std.triple.rotate({ build, host })),
+			source: source(),
 			buildInTree: true,
-			phases: { phases, order: ["prepare", "build", "install"] },
 			prefixArg: "none",
-			sdk,
-			source: sourceDir,
+			phases: {
+				order: ["prepare", "build", "install"],
+				phases: { install: tg`make install PREFIX=${tg.output}` },
+			},
 		},
-		autotools,
+		...args,
 	);
-};
 
 export default build;
 

@@ -1,5 +1,4 @@
 import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
 
 export const metadata = {
 	homepage: "https://www.nasm.us/",
@@ -12,7 +11,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export const source = async () => {
 	std.download;
 	const { name, version } = metadata;
 	const checksum =
@@ -30,42 +29,14 @@ export const source = () => {
 		.then(tg.Directory.expect);
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	dependencies?: {};
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		dependencies: dependencyArgs = {},
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-	const phases = {
-		configure: {
-			args: [],
-		},
-	};
-	return std.autotools.build(
-		{
-			...(await std.triple.rotate({ build, host })),
-			env: std.env.arg(env),
-			phases,
-			sdk,
-			setRuntimeLibraryPath: true,
-			source: source_ ?? source(),
-		},
-		autotools,
+export const build = (...args: std.Args<Arg>) =>
+	std.autotools.build(
+		std.autotools.arg(
+			{ source: source(), setRuntimeLibraryPath: true },
+			...args,
+		),
 	);
-};
 
 export default build;

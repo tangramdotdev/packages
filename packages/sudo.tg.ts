@@ -2,6 +2,11 @@ import * as std from "std" with { local: "./std" };
 import * as coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
 import * as tzdb from "tzdb" with { local: "./tzdb.tg.ts" };
 
+const deps = await std.deps({
+	coreutils: { build: coreutils.build, kind: "buildtime" },
+	tzdb: tzdb.build,
+});
+
 export const metadata = {
 	homepage: "https://www.sudo.ws/",
 	license: "https://github.com/sudo-project/sudo/blob/main/LICENSE.md",
@@ -28,33 +33,31 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-export type Arg = {
-	autotools?: std.autotools.Arg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	keepPath?: boolean;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof deps> & {
+		keepPath?: boolean;
+	};
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		autotools = {},
-		build,
-		env,
-		keepPath = true,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
+	// Extract custom options first.
+	const customOptions = await std.args.apply<Arg, Arg>({
+		args: args as std.Args<Arg>,
+		map: async (arg) => arg,
+		reduce: {},
+	});
+	const keepPath = customOptions.keepPath ?? true;
+	const build_ = customOptions.build ?? customOptions.host ?? std.triple.host();
+	const host = customOptions.host ?? std.triple.host();
 
-	const tzdbArtifact = await tzdb.build({ build, host });
+	const { tzdb: tzdbArtifact, coreutils: coreutilsArtifact } =
+		await std.deps.artifacts(deps, { build: build_, host });
+	tg.assert(tzdbArtifact !== undefined);
+	tg.assert(coreutilsArtifact !== undefined);
+
 	const tzDir = await tzdbArtifact
 		.get("usr/share/zoneinfo")
 		.then(tg.Directory.expect);
 
-	const coreutilsArtifact = await coreutils.build({ build, host: build });
 	const configure = {
 		body: {
 			args: [
@@ -89,16 +92,16 @@ export const build = async (...args: std.Args<Arg>) => {
 	};
 	const phases = { configure, build: buildPhase, install };
 
-	let output = await std.autotools.build(
+	const arg = await std.autotools.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
+			source: source(),
+			deps,
 			phases,
-			sdk,
-			source: source_ ?? source(),
 		},
-		autotools,
+		...args,
 	);
+
+	let output = await std.autotools.build(arg);
 
 	// Add wheel and path configuration.
 	if (keepPath) {

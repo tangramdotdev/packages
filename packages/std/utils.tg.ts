@@ -125,7 +125,7 @@ export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 	return std.env.arg(...components, { utils: false });
 };
 
-export type BuildUtilArg = std.autotools.Arg & {
+export type BuildUtilArg = Omit<std.autotools.Arg, "deps"> & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
 	wrapBashScriptPaths?: Array<string> | undefined;
 };

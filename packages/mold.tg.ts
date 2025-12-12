@@ -31,46 +31,32 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	cmake?: cmake.BuildArg;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+const deps = await std.deps({
+	zstd: {
+		build: zstd.build,
+		kind: "runtime",
+		when: (ctx) => std.triple.os(ctx.host) === "linux",
+	},
+});
+
+export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		cmake: cmake_ = {},
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	std.assert.supportedHost(host, metadata);
-
-	const configure = {
-		args: ["-DCMAKE_BUILD_TYPE=Release"],
-	};
-
-	const deps = [zstd.build({ build, host })];
-	const env = std.env.arg(...deps, env_);
-
-	const result = cmake.build(
+	const resolved = await cmake.arg(
 		{
-			...(await std.triple.rotate({ build, host })),
-			env,
-			phases: { configure },
-			sdk,
-			source: source_ ?? source(),
+			source: source(),
+			deps,
+			phases: {
+				configure: {
+					args: ["-DCMAKE_BUILD_TYPE=Release"],
+				},
+			},
 		},
-		cmake_,
+		...args,
 	);
+	std.assert.supportedHost(resolved.host, metadata);
 
-	return result;
+	return cmake.build(resolved);
 };
 
 export default build;
