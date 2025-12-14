@@ -134,26 +134,36 @@ export const mergeMutations = async (
 ): Promise<Array<tg.Mutation>> => {
 	if (a.inner.kind === "unset" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "set") {
+	}
+	if (a.inner.kind === "unset" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "set_if_unset") {
+	}
+	if (a.inner.kind === "unset" && b.inner.kind === "set_if_unset") {
 		const val = b.inner.value;
 		return [await tg.Mutation.set<tg.Value>(val)];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "prefix") {
+	}
+	if (a.inner.kind === "unset" && b.inner.kind === "prefix") {
 		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "suffix") {
+	}
+	if (a.inner.kind === "unset" && b.inner.kind === "suffix") {
 		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "append") {
+	}
+	if (a.inner.kind === "unset" && b.inner.kind === "append") {
 		return [b];
-	} else if (a.inner.kind === "unset" && b.inner.kind === "prepend") {
+	}
+	if (a.inner.kind === "unset" && b.inner.kind === "prepend") {
 		return [b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "unset") {
+	}
+	if (a.inner.kind === "set" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "set") {
+	}
+	if (a.inner.kind === "set" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "set_if_unset") {
+	}
+	if (a.inner.kind === "set" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.inner.kind === "set" && b.inner.kind === "prefix") {
+	}
+	if (a.inner.kind === "set" && b.inner.kind === "prefix") {
 		const setVal = a.inner.value;
 		if (isTemplateArg(setVal)) {
 			return [
@@ -165,10 +175,10 @@ export const mergeMutations = async (
 					),
 				),
 			];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "set" && b.inner.kind === "suffix") {
+		return [a, b];
+	}
+	if (a.inner.kind === "set" && b.inner.kind === "suffix") {
 		const setVal = a.inner.value;
 		if (isTemplateArg(setVal)) {
 			return [
@@ -180,37 +190,46 @@ export const mergeMutations = async (
 					),
 				),
 			];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "set" && b.inner.kind === "append") {
 		return [a, b];
-	} else if (a.inner.kind === "set" && b.inner.kind === "prepend") {
+	}
+	if (a.inner.kind === "set" && b.inner.kind === "append") {
 		return [a, b];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "unset") {
+	}
+	if (a.inner.kind === "set" && b.inner.kind === "prepend") {
+		return [a, b];
+	}
+	if (a.inner.kind === "set_if_unset" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "set") {
+	}
+	if (a.inner.kind === "set_if_unset" && b.inner.kind === "set") {
 		return [b];
-	} else if (
-		a.inner.kind === "set_if_unset" &&
-		b.inner.kind === "set_if_unset"
-	) {
+	}
+	if (a.inner.kind === "set_if_unset" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "prefix") {
+	}
+	if (a.inner.kind === "set_if_unset" && b.inner.kind === "prefix") {
 		return [a, b];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "suffix") {
+	}
+	if (a.inner.kind === "set_if_unset" && b.inner.kind === "suffix") {
 		return [a, b];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "append") {
+	}
+	if (a.inner.kind === "set_if_unset" && b.inner.kind === "append") {
 		return [a, b];
-	} else if (a.inner.kind === "set_if_unset" && b.inner.kind === "prepend") {
+	}
+	if (a.inner.kind === "set_if_unset" && b.inner.kind === "prepend") {
 		return [a, b];
-	} else if (a.inner.kind === "prefix" && b.inner.kind === "unset") {
+	}
+	if (a.inner.kind === "prefix" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.inner.kind === "prefix" && b.inner.kind === "set") {
+	}
+	if (a.inner.kind === "prefix" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.inner.kind === "prefix" && b.inner.kind === "set_if_unset") {
+	}
+	if (a.inner.kind === "prefix" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.inner.kind === "prefix" && b.inner.kind === "prefix") {
+	}
+	if (a.inner.kind === "prefix" && b.inner.kind === "prefix") {
 		if (a.inner.separator === b.inner.separator || aggressive) {
 			return [
 				await tg.Mutation.prefix(
@@ -222,10 +241,10 @@ export const mergeMutations = async (
 					a.inner.separator,
 				),
 			];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "prefix" && b.inner.kind === "suffix") {
+		return [a, b];
+	}
+	if (a.inner.kind === "prefix" && b.inner.kind === "suffix") {
 		if (aggressive) {
 			return [
 				await tg.Mutation.prefix(
@@ -237,20 +256,25 @@ export const mergeMutations = async (
 					a.inner.separator,
 				),
 			];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "prefix" && b.inner.kind === "append") {
 		return [a, b];
-	} else if (a.inner.kind === "prefix" && b.inner.kind === "prepend") {
+	}
+	if (a.inner.kind === "prefix" && b.inner.kind === "append") {
 		return [a, b];
-	} else if (a.inner.kind === "suffix" && b.inner.kind === "unset") {
+	}
+	if (a.inner.kind === "prefix" && b.inner.kind === "prepend") {
+		return [a, b];
+	}
+	if (a.inner.kind === "suffix" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.inner.kind === "suffix" && b.inner.kind === "set") {
+	}
+	if (a.inner.kind === "suffix" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.inner.kind === "suffix" && b.inner.kind === "set_if_unset") {
+	}
+	if (a.inner.kind === "suffix" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.inner.kind === "suffix" && b.inner.kind === "prefix") {
+	}
+	if (a.inner.kind === "suffix" && b.inner.kind === "prefix") {
 		if (aggressive) {
 			return [
 				await tg.Mutation.suffix(
@@ -262,10 +286,10 @@ export const mergeMutations = async (
 					a.inner.separator,
 				),
 			];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "suffix" && b.inner.kind === "suffix") {
+		return [a, b];
+	}
+	if (a.inner.kind === "suffix" && b.inner.kind === "suffix") {
 		if (a.inner.separator === b.inner.separator || aggressive) {
 			return [
 				await tg.Mutation.suffix(
@@ -277,52 +301,65 @@ export const mergeMutations = async (
 					a.inner.separator,
 				),
 			];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "suffix" && b.inner.kind === "append") {
 		return [a, b];
-	} else if (a.inner.kind === "suffix" && b.inner.kind === "prepend") {
+	}
+	if (a.inner.kind === "suffix" && b.inner.kind === "append") {
 		return [a, b];
-	} else if (a.inner.kind === "append" && b.inner.kind === "unset") {
+	}
+	if (a.inner.kind === "suffix" && b.inner.kind === "prepend") {
+		return [a, b];
+	}
+	if (a.inner.kind === "append" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.inner.kind === "append" && b.inner.kind === "set") {
+	}
+	if (a.inner.kind === "append" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.inner.kind === "append" && b.inner.kind === "set_if_unset") {
+	}
+	if (a.inner.kind === "append" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.inner.kind === "append" && b.inner.kind === "append") {
+	}
+	if (a.inner.kind === "append" && b.inner.kind === "append") {
 		return [await tg.Mutation.append(a.inner.values.concat(b.inner.values))];
-	} else if (a.inner.kind === "append" && b.inner.kind === "prepend") {
+	}
+	if (a.inner.kind === "append" && b.inner.kind === "prepend") {
 		if (aggressive) {
 			return [await tg.Mutation.append(b.inner.values.concat(a.inner.values))];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "append" && b.inner.kind === "suffix") {
 		return [a, b];
-	} else if (a.inner.kind === "append" && b.inner.kind === "prefix") {
+	}
+	if (a.inner.kind === "append" && b.inner.kind === "suffix") {
 		return [a, b];
-	} else if (a.inner.kind === "prepend" && b.inner.kind === "unset") {
+	}
+	if (a.inner.kind === "append" && b.inner.kind === "prefix") {
+		return [a, b];
+	}
+	if (a.inner.kind === "prepend" && b.inner.kind === "unset") {
 		return [b];
-	} else if (a.inner.kind === "prepend" && b.inner.kind === "set") {
+	}
+	if (a.inner.kind === "prepend" && b.inner.kind === "set") {
 		return [b];
-	} else if (a.inner.kind === "prepend" && b.inner.kind === "set_if_unset") {
+	}
+	if (a.inner.kind === "prepend" && b.inner.kind === "set_if_unset") {
 		return [a];
-	} else if (a.inner.kind === "prepend" && b.inner.kind === "append") {
+	}
+	if (a.inner.kind === "prepend" && b.inner.kind === "append") {
 		if (aggressive) {
 			return [await tg.Mutation.prepend(a.inner.values.concat(b.inner.values))];
-		} else {
-			return [a, b];
 		}
-	} else if (a.inner.kind === "prepend" && b.inner.kind === "prepend") {
-		return [await tg.Mutation.prepend(b.inner.values.concat(a.inner.values))];
-	} else if (a.inner.kind === "prepend" && b.inner.kind === "suffix") {
 		return [a, b];
-	} else if (a.inner.kind === "prepend" && b.inner.kind === "prefix") {
-		return [a, b];
-	} else if (a.inner.kind === "merge" || b.inner.kind === "merge") {
-		return [a, b];
-	} else {
-		return tg.unreachable();
 	}
+	if (a.inner.kind === "prepend" && b.inner.kind === "prepend") {
+		return [await tg.Mutation.prepend(b.inner.values.concat(a.inner.values))];
+	}
+	if (a.inner.kind === "prepend" && b.inner.kind === "suffix") {
+		return [a, b];
+	}
+	if (a.inner.kind === "prepend" && b.inner.kind === "prefix") {
+		return [a, b];
+	}
+	if (a.inner.kind === "merge" || b.inner.kind === "merge") {
+		return [a, b];
+	}
+	return tg.unreachable();
 };
