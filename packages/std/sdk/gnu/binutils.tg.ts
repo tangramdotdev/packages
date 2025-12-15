@@ -39,7 +39,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			sdk: (a, b) => std.sdk.arg(a, b),
 		},
 	});
-	const { target: target_, ...rest } = collected;
+	const { target: target_, fortifySource: fortifySource_, ...rest } = collected;
 
 	const arg = await std.autotools.arg(
 		{ source: source(std.triple.host()) },
@@ -54,6 +54,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = arg;
 	const target = target_ ?? host;
+	const fortifySource = fortifySource_ ?? (host === target);
 
 	// Collect configuration.
 	const configure = {
@@ -88,14 +89,16 @@ export const build = async (...args: std.Args<Arg>) => {
 	const env = std.env.arg(...envs, env_);
 
 	const output = await std.autotools.build({
-		...arg,
+		build,
+		host,
 		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		defaultCrossEnv: false,
-		fortifySource: host === target,
+		fortifySource,
 		env,
 		opt: "3",
 		phases,
+		sdk,
 		source: source_,
 	});
 
