@@ -36,6 +36,7 @@ import { env as stdEnv } from "./env.tg.ts";
 import * as file from "./file.tg.ts";
 import * as image from "./image.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
+import * as packages from "./packages_test.tg.ts";
 import * as phases from "./phases.tg.ts";
 import * as run from "./run.tg.ts";
 import * as sdk from "./sdk.tg.ts";
@@ -64,6 +65,7 @@ const testActions = (): Record<string, () => any> => {
 		triple: triple.test,
 		download: download.test,
 		phases: phases.test,
+		packages: packages.test,
 		certificates: caCertificates,
 		bootstrapShell: bootstrap.shell,
 		bootstrapUtils: bootstrap.utils,
@@ -189,6 +191,7 @@ const testActions = (): Record<string, () => any> => {
 const defaultTests = [
 	"hostSystem",
 	"triple",
+	"packages",
 	"certificates",
 	"proxy",
 	"file",
