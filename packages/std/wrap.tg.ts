@@ -4,9 +4,7 @@ import * as gnu from "./sdk/gnu.tg.ts";
 import * as std from "./tangram.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
-import inspectProcessSource from "./wrap/test/inspectProcess.c" with {
-	type: "file",
-};
+import inspectProcessSource from "./wrap/test/inspectProcess.c" with { type: "file" };
 
 export { ccProxy, ldProxy, wrapper } from "./wrap/workspace.tg.ts";
 

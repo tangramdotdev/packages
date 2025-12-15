@@ -244,11 +244,7 @@ impl Manifest {
 	}
 
 	#[allow(clippy::too_many_lines)]
-	pub async fn embed(
-		&self,
-		tg: &impl tg::Handle,
-		file: &tg::File,
-	) -> tg::Result<tg::File> {
+	pub async fn embed(&self, tg: &impl tg::Handle, file: &tg::File) -> tg::Result<tg::File> {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?self, "Embedding manifest");
 
@@ -503,7 +499,7 @@ impl Manifest {
 
 	/// Collect the dependencies from a manifest.
 	#[must_use]
-	pub fn dependencies(&self) -> BTreeMap<tg::Reference, Option<tg::Referent<tg::Object>>> {
+	pub fn dependencies(&self) -> BTreeMap<tg::Reference, Option<tg::file::Dependency>> {
 		let mut dependencies = BTreeMap::default();
 
 		// Collect the references from the interpreter.
@@ -579,15 +575,12 @@ impl Manifest {
 		}
 
 		dependencies
-			.into_iter()
-			.map(|(reference, referent)| (reference, Some(referent)))
-			.collect()
 	}
 }
 
 pub fn collect_dependencies_from_value_data(
 	value: &tg::value::Data,
-	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
+	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
 	match value {
 		tg::value::Data::Object(id) => match id {
@@ -636,7 +629,7 @@ pub fn collect_dependencies_from_value_data(
 
 pub fn collect_dependencies_from_template_data(
 	value: &tg::template::Data,
-	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
+	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
 	for component in &value.components {
 		if let tg::template::data::Component::Artifact(id) = component {
@@ -651,7 +644,7 @@ pub fn collect_dependencies_from_template_data(
 
 pub fn collect_dependencies_from_mutation_data(
 	value: &tg::mutation::Data,
-	dependencies: &mut BTreeMap<tg::Reference, tg::Referent<tg::Object>>,
+	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
 	match value {
 		tg::mutation::Data::Unset => {},
@@ -675,8 +668,11 @@ pub fn collect_dependencies_from_mutation_data(
 	}
 }
 
-fn dependency_from_object_id(id: &tg::object::Id) -> tg::Referent<tg::Object> {
-	tg::Referent::with_item(tg::Object::with_id(id.clone()))
+#[allow(clippy::unnecessary_wraps)]
+fn dependency_from_object_id(id: &tg::object::Id) -> Option<tg::file::Dependency> {
+	Some(tg::file::Dependency(tg::Referent::with_item(Some(
+		tg::Object::with_id(id.clone()),
+	))))
 }
 
 /// The compiled `tangram_wrapper` file this process should append manifests to.

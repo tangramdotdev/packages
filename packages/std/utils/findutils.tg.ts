@@ -1,9 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
-import disableLocatePatch from "./findutils-disable-locate.diff" with {
-	type: "file",
-};
+import disableLocatePatch from "./findutils-disable-locate.diff" with { type: "file" };
 
 export const metadata = {
 	name: "findutils",

@@ -1,12 +1,8 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
-import guardedGettextPatch from "./bash-use-guarded-gettext-header.patch" with {
-	type: "file",
-};
-import envRestorePatch from "./patch-bash-env-restore.patch" with {
-	type: "file",
-};
+import guardedGettextPatch from "./bash-use-guarded-gettext-header.patch" with { type: "file" };
+import envRestorePatch from "./patch-bash-env-restore.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/bash/",

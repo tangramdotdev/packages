@@ -2,9 +2,7 @@ import * as std from "../tangram.ts";
 import * as cmake from "./cmake.tg.ts";
 import zstd from "./dependencies/zstd.tg.ts";
 
-import blake3DisableNeonFlag from "./mold_blake3_disable_neon_flag.patch" with {
-	type: "file",
-};
+import blake3DisableNeonFlag from "./mold_blake3_disable_neon_flag.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://github.com/rui314/mold",

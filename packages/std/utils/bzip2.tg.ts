@@ -1,9 +1,7 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
-import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
-	type: "file",
-};
+import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with { type: "file" };
 
 export const metadata = {
 	name: "bzip2",

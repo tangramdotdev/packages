@@ -559,15 +559,10 @@ async fn get_checked_in_path(
 		tg,
 		tg::checkin::Arg {
 			options: tg::checkin::Options {
-				destructive: false,
 				deterministic: true,
 				ignore: false,
-				local_dependencies: true,
-				locked: false,
 				lock: false,
-				solve: true,
-				watch: false,
-				unsolved_dependencies: false,
+				..Default::default()
 			},
 			path: path.to_path_buf(),
 			updates: vec![],

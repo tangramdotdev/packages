@@ -12,9 +12,7 @@ import * as zlib from "zlib" with { local: "../zlib.tg.ts" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
 
-import skipUpdateGems from "./0001-skip-update-gems.patch" with {
-	type: "file",
-};
+import skipUpdateGems from "./0001-skip-update-gems.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://www.ruby-lang.org/",

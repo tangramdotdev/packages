@@ -4,9 +4,7 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import { macOsXattrCmds } from "./file_cmds.tg.ts";
 import libiconv from "./libiconv.tg.ts";
-import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch" with {
-	type: "file",
-};
+import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch" with { type: "file" };
 
 export const metadata = {
 	name: "coreutils",

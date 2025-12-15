@@ -1,9 +1,7 @@
 import * as bash from "bash" with { local: "../bash.tg.ts" };
 import * as std from "std" with { local: "../std" };
 
-import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with {
-	type: "file",
-};
+import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/bzip2/",

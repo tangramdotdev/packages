@@ -492,32 +492,30 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 
 		// Create a file with the new blob and references.
 		Some(new_wrapper)
-	} else {
+	} else if let Some(library_paths) = library_paths {
 		// If the linker generated a library, then add the library paths to its references.
-		if library_paths.is_some() {
-			let dependencies = BTreeMap::from_iter(
-				futures::future::try_join_all(library_paths.unwrap().into_iter().map(
-					|dir_with_subpath| async {
-						let key = tg::Reference::with_object(dir_with_subpath.id.clone().into());
-						let item = tg::Directory::with_id(dir_with_subpath.id).into();
-						let value = tg::Referent::with_item(item);
-						Ok::<_, tg::Error>((key, Some(value)))
-					},
-				))
-				.await?,
-			);
-			let output_file_contents = output_file.contents(&tg).await?;
-			// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
-			let output_file_executable = output_file.executable(&tg).await?;
-			Some(
-				tg::File::builder(output_file_contents)
-					.executable(output_file_executable)
-					.dependencies(dependencies)
-					.build(),
-			)
-		} else {
-			None
-		}
+		let dependencies = BTreeMap::from_iter(
+			futures::future::try_join_all(library_paths.into_iter().map(
+				|dir_with_subpath| async {
+					let key = tg::Reference::with_object(dir_with_subpath.id.clone().into());
+					let item = tg::Directory::with_id(dir_with_subpath.id).into();
+					let value = tg::file::Dependency(tg::Referent::with_item(Some(item)));
+					Ok::<_, tg::Error>((key, Some(value)))
+				},
+			))
+			.await?,
+		);
+		let output_file_contents = output_file.contents(&tg).await?;
+		// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
+		let output_file_executable = output_file.executable(&tg).await?;
+		Some(
+			tg::File::builder(output_file_contents)
+				.executable(output_file_executable)
+				.dependencies(dependencies)
+				.build(),
+		)
+	} else {
+		None
 	};
 
 	if let Some(output_file) = output_file {
@@ -1136,18 +1134,18 @@ async fn resolve_directories<H: BuildHasher + Default>(
 	unresolved_paths: &HashSet<DirectoryWithSubpath, H>,
 ) -> tg::Result<HashSet<DirectoryWithSubpath, H>> {
 	let resolved_paths =
-		futures::future::try_join_all(unresolved_paths.iter().cloned().map(|dir_with_subpath| async {
-			let resolved_dir_with_subpath = if let Some(subpath) = dir_with_subpath.subpath {
+		futures::future::try_join_all(unresolved_paths.iter().map(|dir_with_subpath| async {
+			let resolved_dir_with_subpath = if let Some(subpath) = &dir_with_subpath.subpath {
 				let directory = tg::Directory::with_id(dir_with_subpath.id.clone());
-				let Some(inner) = directory.try_get(tg, &subpath).await? else {
+				let Some(inner) = directory.try_get(tg, subpath).await? else {
 					return Err(
 						tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
 					);
 				};
 				let inner = inner.try_unwrap_directory().map_err(|source| tg::error!(!source, outer =% dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
-				dir_with_subpath_from_directory( tg, &inner, None).await?
+				dir_with_subpath_from_directory(tg, &inner, None).await?
 			} else {
-				dir_with_subpath
+				dir_with_subpath.clone()
 			};
 			Ok::<_, tg::Error>(resolved_dir_with_subpath)
 		}))

@@ -54,7 +54,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: source_,
 	} = arg;
 	const target = target_ ?? host;
-	const fortifySource = fortifySource_ ?? (host === target);
+	const fortifySource = fortifySource_ ?? host === target;
 
 	// Collect configuration.
 	const configure = {

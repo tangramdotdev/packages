@@ -1076,9 +1076,7 @@ export const testDifferentPrefixDirect = async (target?: string) => {
 	return output;
 };
 
-import inspectProcessSource from "../wrap/test/inspectProcess.c" with {
-	type: "file",
-};
+import inspectProcessSource from "../wrap/test/inspectProcess.c" with { type: "file" };
 
 export const testStrip = async (target?: string) => {
 	const host = std.triple.host();

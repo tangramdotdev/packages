@@ -243,7 +243,7 @@ macro_rules! impl_elf {
 				let diff = if data.len() >= old.length {
 					isize::try_from(data.len() - old.length).unwrap()
 				} else {
-					-isize::try_from((old.length - data.len())).unwrap()
+					-isize::try_from(old.length - data.len()).unwrap()
 				};
 
 				// Get the string table and section table locations.

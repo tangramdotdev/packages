@@ -16,9 +16,7 @@ import jsNodeTest from "./tests/js-node" with { type: "directory" };
 import jsPlainTest from "./tests/js-plain" with { type: "directory" };
 import pythonTest from "./tests/python" with { type: "directory" };
 import pythonPlainTest from "./tests/python-plain" with { type: "directory" };
-import pythonPyprojectTest from "./tests/python-pyproject" with {
-	type: "directory",
-};
+import pythonPyprojectTest from "./tests/python-pyproject" with { type: "directory" };
 import rubyPlainTest from "./tests/ruby-plain" with { type: "directory" };
 import rustCargoTest from "./tests/rust-cargo" with { type: "directory" };
 import rustPlainTest from "./tests/rust-plain" with { type: "directory" };

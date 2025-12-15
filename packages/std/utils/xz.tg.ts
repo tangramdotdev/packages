@@ -50,12 +50,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		],
 	};
 
-	const env = std.env.arg(
-		env_,
-		prerequisites(build),
-		{ TGLD_TRACING: "tgld=trace" },
-		{ utils: false },
-	);
+	const env = std.env.arg(env_, prerequisites(build), { utils: false });
 
 	return autotoolsInternal({
 		build,
