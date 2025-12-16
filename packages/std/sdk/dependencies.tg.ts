@@ -179,10 +179,10 @@ export const buildTools = async (
 	if (buildToolchain_) {
 		buildToolchain = buildToolchain_;
 	} else {
-		const sdk = await tg.build(std.sdk);
+		const sdk = await tg.build(std.sdk).named("sdk");
 		buildToolchain = await std.env.arg(
 			sdk,
-			await tg.build(std.utils.env, { env: sdk, host }),
+			await tg.build(std.utils.env, { env: sdk, host }).named("utils"),
 		);
 	}
 
@@ -300,11 +300,13 @@ export const buildTools = async (
 		});
 		buildEnv = await std.env.arg(buildEnv, libxcryptArtifact, { utils: false });
 
-		const artifact = await tg.build(python, {
-			host,
-			bootstrap: true,
-			env: buildEnv,
-		});
+		const artifact = await tg
+			.build(python, {
+				host,
+				bootstrap: true,
+				env: buildEnv,
+			})
+			.named("python");
 		retEnvs.push(artifact);
 		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
 	}
@@ -361,14 +363,16 @@ export const buildTools = async (
 			tg.assert(m4Artifact, "autoconf requires m4");
 			tg.assert(perlArtifact, "autoconf requires perl");
 			tg.assert(grepArtifact, "autoconf requires grep");
-			autoconfArtifact = await tg.build(autoconf, {
-				host,
-				bootstrap: true,
-				env: buildEnv,
-				grepArtifact,
-				m4Artifact,
-				perlArtifact,
-			});
+			autoconfArtifact = await tg
+				.build(autoconf, {
+					host,
+					bootstrap: true,
+					env: buildEnv,
+					grepArtifact,
+					m4Artifact,
+					perlArtifact,
+				})
+				.named("autoconf");
 			if (config.autoconf) {
 				retEnvs.push(autoconfArtifact);
 			}
@@ -379,12 +383,14 @@ export const buildTools = async (
 
 		if (config.help2man) {
 			tg.assert(perlArtifact, "help2man requires perl");
-			const artifact = await tg.build(help2man, {
-				host,
-				bootstrap: true,
-				env: buildEnv,
-				perlArtifact,
-			});
+			const artifact = await tg
+				.build(help2man, {
+					host,
+					bootstrap: true,
+					env: buildEnv,
+					perlArtifact,
+				})
+				.named("help2man");
 			retEnvs.push(artifact);
 			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
 		}
@@ -392,13 +398,15 @@ export const buildTools = async (
 		if (config.automake) {
 			tg.assert(autoconfArtifact, "automake requires autoconf");
 			tg.assert(perlArtifact, "automake requires perl");
-			const artifact = await tg.build(automake, {
-				host,
-				bootstrap: true,
-				env: buildEnv,
-				autoconfArtifact,
-				perlArtifact,
-			});
+			const artifact = await tg
+				.build(automake, {
+					host,
+					bootstrap: true,
+					env: buildEnv,
+					autoconfArtifact,
+					perlArtifact,
+				})
+				.named("automake");
 			retEnvs.push(artifact);
 			buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
 		}
@@ -410,13 +418,15 @@ export const buildTools = async (
 /** The autotools build tools built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
 export const autotoolsBuildTools = async () => {
 	const host = std.triple.host();
-	const sdk = await tg.build(std.sdk, { host });
-	const utils = await tg.build(std.utils.defaultEnv);
-	return tg.build(buildTools, {
-		host,
-		buildToolchain: std.env.arg(sdk, utils),
-		preset: "autotools",
-	});
+	const sdk = await tg.build(std.sdk, { host }).named("sdk");
+	const utils = await tg.build(std.utils.defaultEnv).named("default utils");
+	return tg
+		.build(buildTools, {
+			host,
+			buildToolchain: std.env.arg(sdk, utils),
+			preset: "autotools",
+		})
+		.named("autotools build tools");
 };
 
 export type HostLibrariesArg = {

@@ -68,6 +68,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		buildInTree: true,
 		env,
 		phases,
+		processName: metadata.name,
 		sdk,
 		source: sourceDir,
 		wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],

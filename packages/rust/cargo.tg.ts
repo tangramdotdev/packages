@@ -44,6 +44,9 @@ export type Arg = {
 	/** Should the build environment include pkg-config? Default: true. */
 	pkgConfig?: boolean;
 
+	/** A name for the build process. */
+	processName?: string;
+
 	/** Additional script to run prior to the build. */
 	pre?: tg.Template.Arg;
 
@@ -128,6 +131,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		parallelJobs,
 		pkgConfig = true,
 		pre,
+		processName,
 		proxy = false,
 		sdk: sdk_ = {},
 		source,
@@ -275,11 +279,11 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	const env = std.env.arg(...envs, env_);
 
-	const artifact = await $`${buildScript}`
-		.checksum(checksum)
-		.network(network)
-		.env(env)
-		.then(tg.Directory.expect);
+	let builder = $`${buildScript}`.checksum(checksum).network(network).env(env);
+	if (processName !== undefined) {
+		builder = builder.named(processName);
+	}
+	const artifact = await builder.then(tg.Directory.expect);
 
 	// Store a handle to the release directory containing Tangram bundles.
 	const releaseDir = await artifact

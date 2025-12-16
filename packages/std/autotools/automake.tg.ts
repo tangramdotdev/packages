@@ -63,6 +63,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		host,
 		bootstrap,
 		env,
+		processName: metadata.name,
 		sdk,
 		source: source_ ?? source(),
 	});

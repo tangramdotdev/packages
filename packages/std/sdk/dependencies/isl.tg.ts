@@ -50,6 +50,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		bootstrap: bootstrap_,
 		env,
 		phases: { configure },
+		processName: metadata.name,
 		sdk,
 		// We need GMP to be available during the build.
 		setRuntimeLibraryPath: true,

@@ -52,14 +52,18 @@ export const toolchain = async (arg: ToolchainArg) => {
 	);
 
 	// Create a new set of build tools against the new native toolchain.
-	const nativeUtils = await tg.build(std.utils.env, {
-		env: proxiedNativeToolchain,
-	});
-	const nativeBuildTools = await tg.build(dependencies.buildTools, {
-		host,
-		buildToolchain: std.env.arg(proxiedNativeToolchain, nativeUtils),
-		preset: "toolchain",
-	});
+	const nativeUtils = await tg
+		.build(std.utils.env, {
+			env: proxiedNativeToolchain,
+		})
+		.named("native utils");
+	const nativeBuildTools = await tg
+		.build(dependencies.buildTools, {
+			host,
+			buildToolchain: std.env.arg(proxiedNativeToolchain, nativeUtils),
+			preset: "toolchain",
+		})
+		.named("native build tools");
 	const nativeBuildEnv = std.env.arg(nativeUtils, nativeBuildTools);
 
 	const { crossGcc } = await crossToolchain({
@@ -88,14 +92,18 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	const bootstrapToolchain = bootstrap.sdk(host);
 
 	// Set up build environment tools.
-	const bootstrapUtils = await tg.build(std.utils.env, {
-		env: bootstrapToolchain,
-	});
-	const bootstrapBuildTools = await tg.build(dependencies.buildTools, {
-		host: build,
-		buildToolchain: std.env.arg(bootstrapToolchain, bootstrapUtils),
-		preset: "toolchain",
-	});
+	const bootstrapUtils = await tg
+		.build(std.utils.env, {
+			env: bootstrapToolchain,
+		})
+		.named("bootstrap utils");
+	const bootstrapBuildTools = await tg
+		.build(dependencies.buildTools, {
+			host: build,
+			buildToolchain: std.env.arg(bootstrapToolchain, bootstrapUtils),
+			preset: "toolchain",
+		})
+		.named("bootstrap build tools");
 	const bootstrapBuildEnv = std.env.arg(
 		bootstrapUtils,
 		bootstrapBuildTools,
@@ -135,18 +143,20 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 	});
 
 	// Build a fully native GCC toolchain.
-	const nativeGcc = tg.build(gcc.build, {
-		bootstrap: true,
-		build: host,
-		bundledSources: true, // Build gmp/isl/mpfr/mpc inline
-		crossNative: true, // Include workaround for configuring target libraries with an unproxied compiler.
-		env: std.env.arg(stage1HostSdk),
-		host,
-		sysroot,
-		target,
-		targetBinutils: nativeBinutils,
-		variant: "stage2_full",
-	});
+	const nativeGcc = tg
+		.build(gcc.build, {
+			bootstrap: true,
+			build: host,
+			bundledSources: true, // Build gmp/isl/mpfr/mpc inline
+			crossNative: true, // Include workaround for configuring target libraries with an unproxied compiler.
+			env: std.env.arg(stage1HostSdk),
+			host,
+			sysroot,
+			target,
+			targetBinutils: nativeBinutils,
+			variant: "stage2_full",
+		})
+		.named("native gcc");
 
 	return nativeGcc;
 };
@@ -199,10 +209,12 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 	const target = target_ ?? host;
 
 	// Produce the binutils for building the cross-toolchain.
-	const hostLibraries = await tg.build(dependencies.hostLibraries, {
-		host,
-		buildToolchain: std.env.arg(buildToolchain, env_, { utils: false }),
-	});
+	const hostLibraries = await tg
+		.build(dependencies.hostLibraries, {
+			host,
+			buildToolchain: std.env.arg(buildToolchain, env_, { utils: false }),
+		})
+		.named("host libraries");
 	const buildEnv = std.env.arg(env_, buildToolchain, hostLibraries, {
 		utils: false,
 	});
@@ -229,17 +241,19 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 	});
 
 	// Produce a toolchain containing the sysroot and a cross-compiler.
-	const crossGcc = await tg.build(gcc.build, {
-		bootstrap: true,
-		build: buildTriple,
-		env: buildEnv,
-		host,
-		sdk,
-		sysroot,
-		target,
-		targetBinutils,
-		variant,
-	});
+	const crossGcc = await tg
+		.build(gcc.build, {
+			bootstrap: true,
+			build: buildTriple,
+			env: buildEnv,
+			host,
+			sdk,
+			sysroot,
+			target,
+			targetBinutils,
+			variant,
+		})
+		.named("cross gcc");
 
 	return {
 		crossGcc,
@@ -300,17 +314,19 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 	});
 
 	// Produce the initial gcc required to build the standard C library.
-	const initialGccDir = await tg.build(gcc.build, {
-		bootstrap: true,
-		build: buildTriple,
-		env: buildEnv,
-		host: buildTriple,
-		sdk,
-		sysroot,
-		target,
-		targetBinutils,
-		variant: "stage1_bootstrap",
-	});
+	const initialGccDir = await tg
+		.build(gcc.build, {
+			bootstrap: true,
+			build: buildTriple,
+			env: buildEnv,
+			host: buildTriple,
+			sdk,
+			sysroot,
+			target,
+			targetBinutils,
+			variant: "stage1_bootstrap",
+		})
+		.named("initial gcc");
 
 	// Produce a combined directory containing the correct C library for the host and the Linux headers.
 	return constructSysroot({

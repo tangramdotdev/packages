@@ -282,16 +282,16 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	}
 
 	// Add cmake to env.
-	envs.push(await tg.build(cmake, { host }));
+	envs.push(await tg.build(cmake, { host }).named("cmake"));
 
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
-		envs.push(await tg.build(ninja, { host }));
+		envs.push(await tg.build(ninja, { host }).named("ninja"));
 	}
 
 	if (!bootstrap) {
 		// Set up the SDK, add it to the environment.
-		const sdk = await tg.build(std.sdk, sdkArg);
+		const sdk = await tg.build(std.sdk, sdkArg).named("sdk");
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
 		let preset: Preset | undefined = undefined;
 		if (pkgConfig) {
@@ -301,11 +301,13 @@ export const build = async (...args: std.Args<BuildArg>) => {
 			preset = "autotools";
 		}
 		if (preset !== undefined) {
-			const buildToolsEnv = await tg.build(buildTools, {
-				host,
-				buildToolchain: await tg.build(std.sdk, { host }),
-				preset,
-			});
+			const buildToolsEnv = await tg
+				.build(buildTools, {
+					host,
+					buildToolchain: await tg.build(std.sdk, { host }).named("sdk"),
+					preset,
+				})
+				.named("build tools");
 			envs.push(sdk, buildToolsEnv);
 		}
 	}

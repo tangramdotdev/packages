@@ -81,26 +81,28 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 			typeof sdk === "boolean"
 				? { host: buildTriple, target: buildTriple }
 				: sdk;
-		envs.push(await tg.build(std.sdk, sdkArg));
+		envs.push(await tg.build(std.sdk, sdkArg).named("sdk"));
 
 		// Add the standard utils, built with the default SDK.
-		const utils = await tg.build(std.utils.defaultEnv);
+		const utils = await tg.build(std.utils.defaultEnv).named("default utils");
 		envs.push(utils);
 	}
 	const env = std.env.arg(...envs, { utils: false });
 
 	const result = tg.Directory.expect(
-		await tg.build(
-			std.phases.run,
-			{
-				bootstrap: bootstrap_,
-				env,
-				phases: { build, install },
-				order,
-				command: { host: system },
-			},
-			phasesArg,
-		),
+		await tg
+			.build(
+				std.phases.run,
+				{
+					bootstrap: bootstrap_,
+					env,
+					phases: { build, install },
+					order,
+					command: { host: system },
+				},
+				phasesArg,
+			)
+			.named("kernel headers"),
 	);
 
 	return result;

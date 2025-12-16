@@ -115,6 +115,9 @@ export type Arg = {
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
 	network?: boolean | undefined;
 
+	/** A name for the build process. */
+	processName?: string | undefined;
+
 	/** Any required SDK customization. */
 	sdk?: std.sdk.Arg | undefined;
 
@@ -199,6 +202,7 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 		host,
 		install,
 		network = false,
+		processName,
 		sdk: sdkArg,
 		source,
 		target: target_,
@@ -329,7 +333,7 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 		ln -sf ${vendorArtifact} ./work/vendor`;
 	}
 
-	const output = await $`
+	let builder = $`
 		set -x
 		cp -R ${source}/. ./work
 		chmod -R u+w ./work
@@ -350,8 +354,11 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 		.env(env)
 		.host(system)
 		.checksum(checksum)
-		.network(network)
-		.then(tg.Directory.expect);
+		.network(network);
+	if (processName !== undefined) {
+		builder = builder.named(processName);
+	}
+	const output = await builder.then(tg.Directory.expect);
 
 	// Get a list of all dynamically-linked binaries in the output.
 	let binDir = await output.get("bin").then(tg.Directory.expect);

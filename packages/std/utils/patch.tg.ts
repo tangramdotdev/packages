@@ -82,6 +82,7 @@ export const build = async (arg?: Arg) => {
 		bootstrap: bootstrap_,
 		env,
 		phases: { configure },
+		processName: metadata.name,
 		sdk,
 		source: source_ ?? source(),
 	});

@@ -66,6 +66,7 @@ export const build = async (arg?: Arg) => {
 		opt: "s",
 		phases,
 		prefixArg: "none",
+		processName: metadata.name,
 		source: source(),
 	});
 	return output;

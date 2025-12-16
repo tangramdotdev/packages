@@ -59,6 +59,9 @@ export type Arg = {
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
 	mtune?: string | undefined;
 
+	/** A name for the build process. */
+	processName?: string | undefined;
+
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
 	network?: boolean | undefined;
 
@@ -135,6 +138,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		host,
 		march,
 		mtune = "generic",
+		processName,
 		network = false,
 		normalizePkgConfigPrefix = true,
 		opt = "2",
@@ -226,7 +230,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	if (!bootstrap) {
 		// Set up the host SDK, add it to the environment.
-		const sdk = await tg.build(std.sdk, sdkArg_, { host });
+		const sdk = await tg.build(std.sdk, sdkArg_, { host }).named("sdk");
 		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
 		let preset: Preset | undefined = undefined;
 		if (pkgConfig) {
@@ -242,23 +246,29 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
 			// Use the pre-built autotoolsBuildTools for the "autotools" preset to ensure cache hits.
 			if (preset === "autotools") {
-				buildToolsEnv = await tg.build(std.dependencies.autotoolsBuildTools);
+				buildToolsEnv = await tg
+					.build(std.dependencies.autotoolsBuildTools)
+					.named("autotools build tools");
 			} else {
 				// For other presets, build with the appropriate preset parameter.
-				buildToolsEnv = await tg.build(buildTools, {
-					host,
-					buildToolchain: await tg.build(std.sdk, { host }),
-					preset,
-				});
+				buildToolsEnv = await tg
+					.build(buildTools, {
+						host,
+						buildToolchain: await tg.build(std.sdk, { host }).named("sdk"),
+						preset,
+					})
+					.named("build tools");
 			}
 			envs.push(sdk, buildToolsEnv);
 			// Add a cross SDK if necessary.
 			if (isCross) {
 				// SDK runs on `build`, produces code for `host`.
-				const crossSdk = await tg.build(std.sdk, sdkArg_, {
-					host: build,
-					target: host,
-				});
+				const crossSdk = await tg
+					.build(std.sdk, sdkArg_, {
+						host: build,
+						target: host,
+					})
+					.named("cross sdk");
 				envs.push(crossSdk);
 			}
 		}
@@ -372,22 +382,27 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		std.phases.isArgObject(p) ? p : { phases: p },
 	);
 
-	return await tg
-		.build(
-			std.phases.run,
-			{
-				bootstrap: true,
-				debug,
-				phases: defaultPhases,
-				env,
-				command: { env: { TANGRAM_HOST: system }, host: system },
-				checksum,
-				network,
-			},
-			// biome-ignore lint/suspicious/noExplicitAny: phases type is complex union.
-			...(userPhaseObjects as Array<any>),
-		)
-		.then(tg.Directory.expect);
+	let result = tg.build(
+		std.phases.run,
+		{
+			bootstrap: true,
+			debug,
+			phases: defaultPhases,
+			env,
+			command: { env: { TANGRAM_HOST: system }, host: system },
+			checksum,
+			network,
+			...(processName !== undefined
+				? { processName: `${processName} build` }
+				: {}),
+		},
+		// biome-ignore lint/suspicious/noExplicitAny: phases type is complex union.
+		...(userPhaseObjects as Array<any>),
+	);
+	if (processName !== undefined) {
+		result = result.named(processName);
+	}
+	return await result.then(tg.Directory.expect);
 }
 
 /** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */

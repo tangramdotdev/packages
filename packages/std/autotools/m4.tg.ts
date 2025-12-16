@@ -54,6 +54,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		env,
 		fortifySource: 2,
 		phases: { configure },
+		processName: metadata.name,
 		sdk,
 		source: source_ ?? source(),
 	});

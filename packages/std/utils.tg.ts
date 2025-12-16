@@ -95,8 +95,8 @@ export default env;
 /** The standard utils built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultEnv = async () => {
 	const host = std.triple.host();
-	const sdk = await tg.build(std.sdk, { host });
-	return tg.build(env, { host, env: sdk });
+	const sdk = await tg.build(std.sdk, { host }).named("sdk");
+	return tg.build(env, { host, env: sdk }).named("default utils");
 };
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/

@@ -69,6 +69,7 @@ export const build = async (arg?: Arg) => {
 		host,
 		phases,
 		prefixPath: "/",
+		processName: metadata.name,
 		source: source(),
 	});
 };

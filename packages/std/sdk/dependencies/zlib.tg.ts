@@ -54,6 +54,7 @@ export const build = async (arg?: Arg) => {
 		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		env,
+		processName: metadata.name,
 		sdk,
 		source: source_ ?? source(),
 	});

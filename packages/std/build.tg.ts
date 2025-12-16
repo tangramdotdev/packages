@@ -52,6 +52,7 @@ export class BuildBuilder<
 	#disallowUnset: boolean;
 	#exitOnErr: boolean;
 	#includeUtils: boolean;
+	#name: tg.Unresolved<string | undefined> | undefined;
 	#pipefail: boolean;
 
 	constructor(...args: std.Args<BuildArgObject>) {
@@ -61,6 +62,7 @@ export class BuildBuilder<
 		this.#disallowUnset = true;
 		this.#exitOnErr = true;
 		this.#includeUtils = true;
+		this.#name = undefined;
 		this.#pipefail = true;
 	}
 
@@ -153,6 +155,11 @@ export class BuildBuilder<
 		return this;
 	}
 
+	named(name: tg.Unresolved<string | undefined>): this {
+		this.#name = name;
+		return this;
+	}
+
 	network(network: tg.Unresolved<tg.MaybeMutation<boolean>>): this {
 		this.#args.push({ network });
 		return this;
@@ -214,16 +221,20 @@ export class BuildBuilder<
 			arg.args.unshift("-e");
 		}
 		if (std.triple.os(arg.host) === "linux" && this.#defaultMount) {
-			const linuxMount = await tg.build(linuxRootMount, arg.host);
+			const linuxMount = await tg
+				.build(linuxRootMount, arg.host)
+				.named("linux root mount");
 			if (arg.mounts === undefined) {
 				arg.mounts = [linuxMount];
 			} else {
 				arg.mounts.unshift(linuxMount);
 			}
 		}
-		return tg
-			.build(arg as tg.Process.BuildArgObject)
-			.then(onfulfilled, onrejected);
+		let builder = tg.build(arg as tg.Process.BuildArgObject);
+		if (this.#name !== undefined) {
+			builder = builder.named(this.#name);
+		}
+		return builder.then(onfulfilled, onrejected);
 	}
 }
 

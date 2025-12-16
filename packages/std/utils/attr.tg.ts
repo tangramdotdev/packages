@@ -86,6 +86,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		bootstrap: bootstrap_,
 		env: std.env.arg(...env, { utils: false }),
 		phases,
+		processName: metadata.name,
 		opt: staticBuild ? "s" : undefined,
 		sdk,
 		source: sourceDir,

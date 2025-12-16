@@ -53,6 +53,7 @@ export const build = async (arg?: Arg) => {
 		bootstrap,
 		env,
 		phases: { configure },
+		processName: metadata.name,
 		sdk,
 		source: source_ ?? source(),
 		wrapBashScriptPaths: ["bin/gawkbug"],

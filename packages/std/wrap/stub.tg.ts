@@ -90,13 +90,16 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			target_ = host_;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host_);
-			hostToolchain = await tg.build(llvm.toolchain, { host: host_, target });
+			hostToolchain = await tg
+				.build(llvm.toolchain, { host: host_, target })
+				.named("llvm toolchain");
 		}
 	} else {
 		if (isCross) {
 			buildToolchain = await bootstrap.sdk.env(host_);
 			hostToolchain = await tg
 				.build(llvm.toolchain, { host, target })
+				.named("llvm toolchain")
 				.then(tg.Directory.expect);
 			const { directory: targetDirectory } = await std.sdk.toolchainComponents({
 				env: await std.env.arg(hostToolchain, { utils: false }),
@@ -164,15 +167,17 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			echo "compiled wrap"
 		`,
 	};
-	return await tg.build(std.phases.run, {
-		bootstrap: true,
-		env: std.env.arg(...env),
-		phases: { prepare: undefined, build: buildPhase, install: undefined },
-		command: {
-			host: system,
-		},
-		network: false,
-	});
+	return await tg
+		.build(std.phases.run, {
+			bootstrap: true,
+			env: std.env.arg(...env),
+			phases: { prepare: undefined, build: buildPhase, install: undefined },
+			command: {
+				host: system,
+			},
+			network: false,
+		})
+		.named("stub build");
 };
 
 /* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */

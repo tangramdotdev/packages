@@ -43,7 +43,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 			.named("gnu toolchain");
 	} else if (toolchain_ === "llvm") {
 		let arg: llvm.LLVMArg = { host, target };
-		toolchain = await tg.build(llvm.toolchain, arg);
+		toolchain = await tg.build(llvm.toolchain, arg).named("llvm toolchain");
 	} else {
 		toolchain = toolchain_;
 	}
@@ -64,7 +64,9 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 			switch (linker) {
 				case "bfd": {
 					if (flavor === "llvm") {
-						const binutilsDir = await tg.build(binutils, { host });
+						const binutilsDir = await tg
+							.build(binutils, { host })
+							.named("binutils");
 						linkerExe = tg.File.expect(await binutilsDir.get("bin/ld"));
 					}
 					break;
@@ -76,7 +78,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 					break;
 				}
 				case "mold": {
-					const moldArtifact = await tg.build(mold, { host });
+					const moldArtifact = await tg.build(mold, { host }).named("mold");
 					linkerExe = tg.File.expect(await moldArtifact.get("bin/mold"));
 					break;
 				}
@@ -97,7 +99,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 	if (linkerExe) {
 		proxyArg = { ...proxyArg, linkerExe };
 	}
-	return await tg.build(proxy.env, proxyArg);
+	return await tg.build(proxy.env, proxyArg).named("proxy sdk");
 }
 
 export namespace sdk {

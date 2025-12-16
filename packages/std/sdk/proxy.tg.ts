@@ -301,16 +301,18 @@ const ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// The injection library and wrapper are built for the host machine.
-	const hostInjectionLibrary = await tg.build(injection, {
-		buildToolchain,
-		build,
-		host,
-	});
+	const hostInjectionLibrary = await tg
+		.build(injection, {
+			buildToolchain,
+			build,
+			host,
+		})
+		.named("injection");
 
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		arg.build === undefined && arg.host === undefined
-			? await tg.build(workspace.defaultWrapper)
+			? await tg.build(workspace.defaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,
@@ -318,7 +320,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 	await hostWrapper.store();
 
 	// Use the host machine's codesign binary;
-	const codesign = await tg.build(workspace.rcodesign);
+	const codesign = await tg.build(workspace.rcodesign).named("rcodesign");
 	await codesign.store();
 
 	// Define environment for the linker proxy.
@@ -377,7 +379,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		build_ === undefined && host_ === undefined
-			? await tg.build(workspace.defaultWrapper)
+			? await tg.build(workspace.defaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,

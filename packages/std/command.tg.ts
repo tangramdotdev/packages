@@ -184,7 +184,9 @@ export class CommandBuilder<
 			arg.args.unshift("-e");
 		}
 		if (std.triple.os(arg.host) === "linux" && this.#defaultMount) {
-			let linuxMount = await tg.build(linuxRootMount, arg.host);
+			let linuxMount = await tg
+				.build(linuxRootMount, arg.host)
+				.named("linux root mount");
 			if (arg.mounts === undefined) {
 				arg.mounts = [linuxMount];
 			} else {
@@ -242,10 +244,12 @@ export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
 	// build the default args.
 	let arg: tg.Command.Arg.Object = {};
 	if (std.triple.os(host) === "linux") {
-		let builtMount = await tg.build(linuxRootMount, host);
+		let builtMount = await tg
+			.build(linuxRootMount, host)
+			.named("linux root mount");
 		arg.mounts = [builtMount];
 	}
-	const defaultEnv = await tg.build(std.utils.env, { host });
+	const defaultEnv = await tg.build(std.utils.env, { host }).named("utils");
 	arg.env = defaultEnv;
 	return arg;
 };
@@ -255,6 +259,7 @@ export const buildDefaultBash = async (hostArg?: tg.Unresolved<string>) => {
 	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 	return await tg
 		.build(std.utils.bash.build, { host })
+		.named("bash")
 		.then((dir) => dir.get("bin/bash"))
 		.then(tg.File.expect);
 };

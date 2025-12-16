@@ -467,7 +467,11 @@ export namespace wrap {
 		if (buildToolchain_) {
 			buildArg = { ...buildArg, bootstrap: true, env: buildToolchain_ };
 		} else {
-			buildArg = { ...buildArg, bootstrap: true, env: await tg.build(std.sdk) };
+			buildArg = {
+				...buildArg,
+				bootstrap: true,
+				env: await tg.build(std.sdk).named("sdk"),
+			};
 		}
 		const shellExecutable = await std.utils.bash
 			.build(buildArg)
@@ -1124,7 +1128,9 @@ const getBuildToolchain = async (
 	}
 	return std.triple.os(host) === "linux"
 		? await std.env.arg(
-				await tg.build(gnu.toolchain, { host: build, target: host }),
+				await tg
+					.build(gnu.toolchain, { host: build, target: host })
+					.named("gnu toolchain"),
 				{ utils: false },
 			)
 		: await bootstrap.sdk.env(host);
@@ -1377,7 +1383,9 @@ const interpreterFromArg = async (
 				const host = std.triple.host();
 				// Use default injection when no custom build or buildToolchain is provided.
 				if (buildArg === undefined && buildToolchainArg === undefined) {
-					const injectionLibrary = await tg.build(injection.defaultInjection);
+					const injectionLibrary = await tg
+						.build(injection.defaultInjection)
+						.named("default injection");
 					preloads.push(injectionLibrary);
 				} else {
 					const build = buildArg ?? host;
@@ -1386,11 +1394,13 @@ const interpreterFromArg = async (
 						build,
 						host,
 					);
-					const injectionLibrary = await tg.build(injection.injection, {
-						buildToolchain,
-						build: buildArg,
-						host,
-					});
+					const injectionLibrary = await tg
+						.build(injection.injection, {
+							buildToolchain,
+							build: buildArg,
+							host,
+						})
+						.named("injection");
 					preloads.push(injectionLibrary);
 				}
 			}
@@ -1452,7 +1462,9 @@ const interpreterFromExecutableArg = async (
 				hostArg === undefined &&
 				buildToolchainArg === undefined
 			) {
-				const injectionDylib = await tg.build(injection.defaultInjection);
+				const injectionDylib = await tg
+					.build(injection.defaultInjection)
+					.named("default injection");
 				return {
 					kind: "dyld",
 					libraryPaths: undefined,
@@ -1530,18 +1542,22 @@ const interpreterFromElf = async (
 		: libc === "musl"
 			? bootstrap.sdk.env(host)
 			: await std.env.arg(
-					await tg.build(gnu.toolchain, { host: buildTriple, target: host }),
+					await tg
+						.build(gnu.toolchain, { host: buildTriple, target: host })
+						.named("gnu toolchain"),
 					{
 						utils: false,
 					},
 				);
 
 	// Obtain injection library.
-	const injectionLib = await tg.build(injection.injection, {
-		buildToolchain,
-		build: buildTriple,
-		host,
-	});
+	const injectionLib = await tg
+		.build(injection.injection, {
+			buildToolchain,
+			build: buildTriple,
+			host,
+		})
+		.named("injection");
 
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {

@@ -58,6 +58,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		bootstrap: bootstrap_,
 		env,
 		phases: { configure },
+		processName: metadata.name,
 		sdk,
 		source: source_ ?? source(),
 		wrapBashScriptPaths: ["bin/egrep", "bin/fgrep"],

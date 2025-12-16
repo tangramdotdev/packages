@@ -113,6 +113,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		bootstrap: bootstrap_,
 		env: std.env.arg(...env, { utils: false }),
 		phases: { configure },
+		processName: metadata.name,
 		opt: staticBuild ? "s" : undefined,
 		sdk,
 		source: source_ ?? source(os),
@@ -135,16 +136,22 @@ export default build;
 /** Obtain just the `env` binary. */
 export const gnuEnv = async () => {
 	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdk = await tg.build(bootstrap.sdk, host);
-	const env = std.env.arg(sdk, await tg.build(bootstrap.make.build, { host }), {
-		utils: false,
-	});
-	const directory = await tg.build(build, {
-		host,
-		env,
-		bootstrap: true,
-		usePrerequisites: false,
-	});
+	const sdk = await tg.build(bootstrap.sdk, host).named("bootstrap sdk");
+	const env = std.env.arg(
+		sdk,
+		await tg.build(bootstrap.make.build, { host }).named("bootstrap make"),
+		{
+			utils: false,
+		},
+	);
+	const directory = await tg
+		.build(build, {
+			host,
+			env,
+			bootstrap: true,
+			usePrerequisites: false,
+		})
+		.named("coreutils");
 	const exe = tg.File.expect(await directory.get("bin/env"));
 	return exe;
 };

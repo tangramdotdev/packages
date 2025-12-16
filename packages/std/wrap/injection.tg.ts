@@ -34,14 +34,16 @@ export const injection = async (unresolved?: tg.Unresolved<Arg>) => {
 		if (std.triple.os(build) === "linux") {
 			additionalArgs.push("-Wl,--no-as-needed", "-s");
 		}
-		const injection = tg.build(dylib, {
-			build,
-			buildToolchain,
-			env,
-			host,
-			source,
-			additionalArgs,
-		});
+		const injection = tg
+			.build(dylib, {
+				build,
+				buildToolchain,
+				env,
+				host,
+				source,
+				additionalArgs,
+			})
+			.named("linux injection");
 		return injection;
 	} else if (os === "darwin") {
 		const injection = macOsInjection({
@@ -87,21 +89,25 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 
 	// Compile arm64 dylib.
 	const arm64Args = additionalArgs.concat(["--target=aarch64-apple-darwin"]);
-	const arm64injection = await tg.build(dylib, {
-		buildToolchain,
-		source,
-		additionalArgs: arm64Args,
-		env,
-	});
+	const arm64injection = await tg
+		.build(dylib, {
+			buildToolchain,
+			source,
+			additionalArgs: arm64Args,
+			env,
+		})
+		.named("arm64 injection");
 
 	// Compile amd64 dylib.
 	const amd64Args = additionalArgs.concat(["--target=x86_64-apple-darwin"]);
-	const amd64injection = await tg.build(dylib, {
-		buildToolchain,
-		source,
-		additionalArgs: amd64Args,
-		env,
-	});
+	const amd64injection = await tg
+		.build(dylib, {
+			buildToolchain,
+			source,
+			additionalArgs: amd64Args,
+			env,
+		})
+		.named("amd64 injection");
 
 	// Combine into universal dylib.
 	const system = std.triple.archAndOs(host);
@@ -111,6 +117,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 			.host(system)
 			.env(buildToolchain)
 			.env(env)
+			.named("universal injection")
 			.then(tg.File.expect);
 	return injection;
 };
@@ -238,10 +245,12 @@ export const test = async () => {
 export const defaultInjection = async () => {
 	const host = std.triple.host();
 	const buildToolchain = await bootstrap.sdk.env(host);
-	return tg.build(injection, {
-		buildToolchain,
-		host,
-	});
+	return tg
+		.build(injection, {
+			buildToolchain,
+			host,
+		})
+		.named("default injection");
 };
 
 export const testCross = async () => {

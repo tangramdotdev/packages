@@ -74,6 +74,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		env,
 		phases,
 		prefixArg: "-Dprefix=",
+		processName: metadata.name,
 		sdk,
 		source: sourceDir,
 	});

@@ -10,6 +10,7 @@ export type ArgObject = {
 	env?: std.env.Arg;
 	order?: Array<string>;
 	phases?: PhasesArg;
+	processName?: string;
 	checksum?: tg.Checksum | undefined;
 	network?: boolean;
 	command?: tg.Command.Arg.Object;
@@ -21,6 +22,7 @@ export type Object = {
 	env?: std.env.Arg;
 	order?: Array<string>;
 	phases: Phases;
+	processName?: string;
 	checksum?: tg.Checksum | undefined;
 	network?: boolean;
 	command?: tg.Command.Arg.Object;
@@ -92,6 +94,7 @@ export const run = async (...args: std.Args<Arg>) => {
 		env: env_,
 		order: order_,
 		phases = {},
+		processName,
 		command: commandArg,
 	} = await arg(...args);
 
@@ -166,6 +169,9 @@ export const run = async (...args: std.Args<Arg>) => {
 	if (checksum) {
 		builder = builder.checksum(checksum);
 	}
+	if (processName !== undefined) {
+		builder = builder.named(processName);
+	}
 	if (network) {
 		builder = builder.network(network);
 	}
@@ -194,6 +200,9 @@ export const arg = async (...args: std.Args<Arg>): Promise<Object> => {
 				}
 				if ("phases" in arg) {
 					ret.phases = arg.phases;
+				}
+				if ("processName" in arg) {
+					ret.processName = arg.processName;
 				}
 				if ("checksum" in arg) {
 					ret.checksum = arg.checksum;
@@ -282,6 +291,7 @@ export const isArgObject = (arg: unknown): arg is ArgObject => {
 			"network" in arg ||
 			"order" in arg ||
 			"phases" in arg ||
+			"processName" in arg ||
 			"target" in arg)
 	);
 };

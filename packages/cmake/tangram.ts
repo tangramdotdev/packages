@@ -165,6 +165,9 @@ export type BuildArg = {
 	/** The value to pass to `-mtune` in the default CFLAGS. Default: "generic". */
 	mtune?: string | undefined;
 
+	/** A name for the build process. */
+	processName?: string | undefined;
+
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
 	network?: boolean | undefined;
 
@@ -287,6 +290,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		host,
 		march,
 		mtune = "generic",
+		processName,
 		network,
 		opt = "2",
 		parallel = true,
@@ -457,6 +461,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 				command: { env: { TANGRAM_HOST: system }, host: system },
 				checksum,
 				network,
+				...(processName !== undefined ? { processName } : {}),
 			} as std.phases.Arg,
 			// biome-ignore lint/suspicious/noExplicitAny: phases type is complex union.
 			{ phases: userPhaseArgs } as any,

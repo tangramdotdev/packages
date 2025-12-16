@@ -37,13 +37,15 @@ export const workspace = async (
 				packages: packages,
 			});
 
-	return await tg.build(build, {
-		host: buildTriple,
-		target: host,
-		release,
-		source,
-		verbose,
-	});
+	return await tg
+		.build(build, {
+			host: buildTriple,
+			target: host,
+			release,
+			source,
+			verbose,
+		})
+		.named("workspace");
 };
 
 /** Check if the resolved arguments match the defaults and should use the default workspace for cache optimization. */
@@ -74,12 +76,15 @@ export const ccProxy = async (arg: tg.Unresolved<Arg>) => {
 	if (
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
-		const workspace = await tg.build(defaultWorkspace);
+		const workspace = await tg
+			.build(defaultWorkspace)
+			.named("default workspace");
 		return workspace.get("bin/tgcc").then(tg.File.expect);
 	}
 
 	return await tg
 		.build(workspace, arg)
+		.named("workspace")
 		.then((dir) => dir.get("bin/tgcc"))
 		.then(tg.File.expect);
 };
@@ -91,12 +96,15 @@ export const ldProxy = async (arg: tg.Unresolved<Arg>) => {
 	if (
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
-		const workspace = await tg.build(defaultWorkspace);
+		const workspace = await tg
+			.build(defaultWorkspace)
+			.named("default workspace");
 		return workspace.get("bin/tgld").then(tg.File.expect);
 	}
 
 	return await tg
 		.build(workspace, arg)
+		.named("workspace")
 		.then((dir) => dir.get("bin/tgld"))
 		.then(tg.File.expect);
 };
@@ -117,11 +125,14 @@ export const manifestTool = async (arg: tg.Unresolved<Arg>) => {
 	if (
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
-		const workspace = await tg.build(defaultWorkspace);
+		const workspace = await tg
+			.build(defaultWorkspace)
+			.named("default workspace");
 		return workspace.get("bin/manifest_tool").then(tg.File.expect);
 	}
 	return await tg
 		.build(workspace, arg)
+		.named("workspace")
 		.then((dir) => dir.get("bin/manifest_tool"))
 		.then(tg.File.expect);
 };
@@ -133,12 +144,15 @@ export const stripProxy = async (arg: tg.Unresolved<Arg>) => {
 	if (
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
-		const workspace = await tg.build(defaultWorkspace);
+		const workspace = await tg
+			.build(defaultWorkspace)
+			.named("default workspace");
 		return workspace.get("bin/tgstrip").then(tg.File.expect);
 	}
 
 	return await tg
 		.build(workspace, arg)
+		.named("workspace")
 		.then((dir) => dir.get("bin/tgstrip"))
 		.then(tg.File.expect);
 };
@@ -150,11 +164,12 @@ export const wrapper = async (arg: tg.Unresolved<Arg>) => {
 	if (
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
-		return tg.build(defaultWrapper);
+		return tg.build(defaultWrapper).named("default wrapper");
 	}
 
 	return await tg
 		.build(workspace, arg)
+		.named("workspace")
 		.then((dir) => dir.get("bin/wrapper"))
 		.then(tg.File.expect);
 };
@@ -162,12 +177,12 @@ export const wrapper = async (arg: tg.Unresolved<Arg>) => {
 /** The default workspace built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultWorkspace = async () => {
 	const host = std.triple.host();
-	return tg.build(workspace, { host });
+	return tg.build(workspace, { host }).named("default workspace");
 };
 
 /** The default wrapper built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultWrapper = async () => {
-	const workspace = await tg.build(defaultWorkspace);
+	const workspace = await tg.build(defaultWorkspace).named("default workspace");
 	return workspace.get("bin/wrapper").then(tg.File.expect);
 };
 
@@ -238,6 +253,7 @@ export const rust = async (
 		.bootstrap(true)
 		.host(hostSystem)
 		.env(env)
+		.named("rust toolchain install")
 		.then(tg.Directory.expect);
 };
 
@@ -329,10 +345,12 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			target = host;
 		} else {
 			buildToolchain = await bootstrap.sdk.env(host);
-			hostToolchain = await tg.build(gnu.toolchain, {
-				host: system,
-				target: standardizedTarget,
-			});
+			hostToolchain = await tg
+				.build(gnu.toolchain, {
+					host: system,
+					target: standardizedTarget,
+				})
+				.named("gnu toolchain");
 		}
 	} else {
 		if (isCross) {
@@ -342,6 +360,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 					host: standardizedHost,
 					target: standardizedTarget,
 				})
+				.named("llvm toolchain")
 				.then(tg.Directory.expect);
 			const { directory: targetDirectory } = await std.sdk.toolchainComponents({
 				env: await std.env.arg(hostToolchain, { utils: false }),
@@ -363,7 +382,9 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	}
 
 	// Get the Rust toolchain.
-	const rustToolchain = await tg.build(rust, { target: standardizedTarget });
+	const rustToolchain = await tg
+		.build(rust, { target: standardizedTarget })
+		.named("rust toolchain");
 
 	// Set up common environemnt.
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
@@ -516,6 +537,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			checksum: "sha256:any",
 			network: true,
 		})
+		.named("workspace cargo build")
 		.then(tg.Directory.expect);
 };
 
