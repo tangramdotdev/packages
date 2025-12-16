@@ -260,7 +260,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 					ignore: false,
 					local_dependencies: true,
 					locked: true,
-					lock: false,
+					lock: Some(tg::checkin::Lock::Attr),
 					..tg::checkin::Options::default()
 				},
 				path: dependency.parse().unwrap(),
@@ -380,7 +380,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			dependencies: false,
 			force: true,
 			path: None,
-			lock: false,
+			lock: None,
 		},
 	)
 	.await?;
@@ -561,7 +561,7 @@ async fn get_checked_in_path(
 			options: tg::checkin::Options {
 				deterministic: true,
 				ignore: false,
-				lock: false,
+				lock: None,
 				..Default::default()
 			},
 			path: path.to_path_buf(),

@@ -102,14 +102,6 @@ const providesNcurses = async (env: std.env.EnvObject): Promise<boolean> => {
 export const test = async () => {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
-	// FIXME - build assert args properly!
-	// await std.assert.pkg({
-	// 	buildFn: build,
-	// 	binaries: ["bash"],
-	// 	bootstrapMode: true,
-	// 	env: sdk,
-	// })
-	// return true;
 
 	const bashDir = await build({ host, bootstrap: true, env: sdk });
 	// Inspect dependencies

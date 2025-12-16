@@ -569,7 +569,7 @@ async fn check_in_source_tree(
 							ignore: false,
 							local_dependencies: true,
 							locked: false,
-							lock: false,
+							lock: None,
 							..tg::checkin::Options::default()
 						},
 						path,

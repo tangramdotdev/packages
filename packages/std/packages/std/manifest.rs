@@ -224,7 +224,7 @@ impl Manifest {
 				artifact: file.id().into(),
 				dependencies: false,
 				force: false,
-				lock: false,
+				lock: Some(tg::checkout::Lock::Attr),
 				path: None,
 			},
 		)
@@ -399,7 +399,7 @@ impl Manifest {
 				artifact: TANGRAM_WRAPPER.id().into(),
 				dependencies: false,
 				force: false,
-				lock: false,
+				lock: Some(tg::checkout::Lock::Attr),
 				path: None,
 			},
 		)
@@ -441,7 +441,7 @@ impl Manifest {
 					artifact: TANGRAM_CODESIGN.id().into(),
 					dependencies: false,
 					force: false,
-					lock: false,
+					lock: Some(tg::checkout::Lock::Attr),
 					path: None,
 				},
 			)

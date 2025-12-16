@@ -175,7 +175,7 @@ async fn run_proxy(
 						deterministic: true,
 						ignore: false,
 						locked: false,
-						lock: false,
+						lock: Some(tg::checkin::Lock::Attr),
 						..tg::checkin::Options::default()
 					},
 					path: local_executable_path,
@@ -240,7 +240,7 @@ async fn run_proxy(
 					dependencies: false,
 					force: true,
 					path: Some(canonical_target_path),
-					lock: true,
+					lock: Some(tg::checkout::Lock::Attr),
 				},
 			)
 			.await?;
