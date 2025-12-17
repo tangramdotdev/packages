@@ -310,69 +310,24 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	// Set up env.
 	let envs: Array<tg.Unresolved<std.env.Arg>> = [];
 
-	// // C/C++ flags.
-	if (opt) {
-		const optFlag = tg.Mutation.suffix(`-O${opt}`, " ");
-		envs.push({ CFLAGS: optFlag, CXXFLAGS: optFlag });
-	}
-	if (pipe) {
-		const pipeFlag = tg.Mutation.suffix("-pipe", " ");
-		envs.push({ CFLAGS: pipeFlag, CXXFLAGS: pipeFlag });
-	}
-	if (march !== undefined) {
-		const marchFlag = tg.Mutation.suffix(`-march=${march}`, " ");
-		envs.push({ CFLAGS: marchFlag, CXXFLAGS: marchFlag });
-	}
-	if (mtune !== undefined) {
-		const mtuneFlag = tg.Mutation.suffix(`-mtune=${mtune}`, " ");
-		envs.push({ CFLAGS: mtuneFlag, CXXFLAGS: mtuneFlag });
-	}
-	let fortifySource =
-		typeof fortifySource_ === "number"
-			? fortifySource_
-			: fortifySource_
-				? 3
-				: undefined;
-	if (fortifySource !== undefined) {
-		if (fortifySource < 0 || fortifySource > 3) {
-			throw new Error(
-				`fortifySource must be between 0 and 3 inclusive, received ${fortifySource.toString()}`,
-			);
-		}
-		envs.push({
-			CPPFLAGS: tg.Mutation.suffix(
-				`-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=${fortifySource}`,
-				" ",
-			),
-		});
-	}
-
-	if (hardeningCFlags) {
-		let extraCFlags = `-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
-		if (os === "linux") {
-			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
-		}
-		const extraFlags = tg.Mutation.suffix(extraCFlags, " ");
-		envs.push({ CFLAGS: extraFlags, CXXFLAGS: extraFlags });
-	}
-
-	const environment = std.triple.environment(host);
-	if (!environment || environment === "gnu") {
-		envs.push({
-			CXXFLAGS: tg.Mutation.suffix("-Wp,-D_GLIBCXX_ASSERTIONS", " "),
-		});
-	}
-
-	// LDFLAGS
-	if (stripExecutables === true) {
-		const stripFlag = os === "darwin" ? `-Wl,-S` : `-s`;
-		envs.push({ LDFLAGS: tg.Mutation.suffix(stripFlag, " ") });
-	}
-	if (os === "linux" && hardeningCFlags) {
-		const fullRelroString = fullRelro ? ",-z,now" : "";
-		const extraLdFlags = `-Wl,-z,relro${fullRelroString} -Wl,--as-needed`;
-		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
-	}
+	// Add C/C++ compiler environment (flags, SDK, build tools).
+	const ccEnv = await std.cc.env({
+		host,
+		build: build_,
+		bootstrap,
+		extended,
+		fortifySource: fortifySource_,
+		fullRelro,
+		hardeningCFlags,
+		march,
+		mtune,
+		opt,
+		pipe,
+		pkgConfig,
+		sdk: sdkArg,
+		stripExecutables,
+	});
+	envs.push(ccEnv);
 
 	// Add cmake to env.
 	const cmakeArtifact = await tg.build(self, { host });
@@ -385,28 +340,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		envs.push(await tg.build(make.build, { host }));
 	}
 
-	if (!bootstrap) {
-		// Set up the SDK, add it to the environment.
-		const sdk = await tg.build(std.sdk, sdkArg);
-		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let preset: std.dependencies.Preset | undefined = undefined;
-		if (pkgConfig) {
-			preset = "minimal";
-		}
-		if (extended) {
-			preset = "autotools";
-		}
-		if (preset !== undefined) {
-			const buildToolsEnv = await tg.build(std.dependencies.buildTools, {
-				host,
-				buildToolchain: await tg.build(std.sdk, { host }),
-				preset,
-			});
-			envs.push(sdk, buildToolsEnv);
-		}
-	}
-
-	// Include any user-defined env with higher precedence than the SDK and autotools settings.
+	// Include any user-defined env with higher precedence than the SDK and cmake settings.
 	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.

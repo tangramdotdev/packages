@@ -1,7 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import ninja from "./ninja.tg.ts";
-import { buildTools, type Preset } from "./dependencies.tg.ts";
 
 export const metadata = {
 	homepage: "https://cmake.org/",
@@ -211,75 +210,29 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	const os = std.triple.os(host);
 
 	// Set up env.
-	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
+	let envs: Array<tg.Unresolved<std.env.Arg>> = [];
 	if (bootstrap) {
 		// Prevent automatically adding the utils to the env.
 		envs.push({ utils: false });
 	}
 
-	// // C/C++ flags.
-	if (opt) {
-		const optFlag = tg.Mutation.suffix(`-O${opt}`, " ");
-		envs.push({ CFLAGS: optFlag, CXXFLAGS: optFlag });
-	}
-	if (pipe) {
-		const pipeFlag = tg.Mutation.suffix("-pipe", " ");
-		envs.push({ CFLAGS: pipeFlag, CXXFLAGS: pipeFlag });
-	}
-	if (march !== undefined) {
-		const marchFlag = tg.Mutation.suffix(`-march=${march}`, " ");
-		envs.push({ CFLAGS: marchFlag, CXXFLAGS: marchFlag });
-	}
-	if (mtune !== undefined) {
-		const mtuneFlag = tg.Mutation.suffix(`-mtune=${mtune}`, " ");
-		envs.push({ CFLAGS: mtuneFlag, CXXFLAGS: mtuneFlag });
-	}
-	let fortifySource =
-		typeof fortifySource_ === "number"
-			? fortifySource_
-			: fortifySource_
-				? 3
-				: undefined;
-	if (fortifySource !== undefined) {
-		if (fortifySource < 0 || fortifySource > 3) {
-			throw new Error(
-				`fortifySource must be between 0 and 3 inclusive, received ${fortifySource.toString()}`,
-			);
-		}
-		envs.push({
-			CPPFLAGS: tg.Mutation.suffix(
-				`-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=${fortifySource}`,
-				" ",
-			),
-		});
-	}
-
-	if (hardeningCFlags) {
-		let extraCFlags = `-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
-		if (os === "linux") {
-			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
-		}
-		const extraFlags = tg.Mutation.suffix(extraCFlags, " ");
-		envs.push({ CFLAGS: extraFlags, CXXFLAGS: extraFlags });
-	}
-
-	const environment = std.triple.environment(host);
-	if (!environment || environment === "gnu") {
-		envs.push({
-			CXXFLAGS: tg.Mutation.suffix("-Wp,-D_GLIBCXX_ASSERTIONS", " "),
-		});
-	}
-
-	// LDFLAGS
-	if (stripExecutables === true) {
-		const stripFlag = os === "darwin" ? `-Wl,-S` : `-s`;
-		envs.push({ LDFLAGS: tg.Mutation.suffix(stripFlag, " ") });
-	}
-	if (os === "linux" && hardeningCFlags) {
-		const fullRelroString = fullRelro ? ",-z,now" : "";
-		const extraLdFlags = `-Wl,-z,relro${fullRelroString} -Wl,--as-needed`;
-		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
-	}
+	// Add C/C++ compiler environment (flags, SDK, build tools).
+	const ccEnv = await std.cc.env({
+		host,
+		bootstrap,
+		extended,
+		fortifySource: fortifySource_,
+		fullRelro,
+		hardeningCFlags,
+		march,
+		mtune,
+		opt,
+		pipe,
+		pkgConfig,
+		sdk: sdkArg,
+		stripExecutables,
+	});
+	envs.push(ccEnv);
 
 	// Add cmake to env.
 	envs.push(await tg.build(cmake, { host }).named("cmake"));
@@ -287,29 +240,6 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	// If the generator is ninja, add ninja to env.
 	if (generator === "Ninja") {
 		envs.push(await tg.build(ninja, { host }).named("ninja"));
-	}
-
-	if (!bootstrap) {
-		// Set up the SDK, add it to the environment.
-		const sdk = await tg.build(std.sdk, sdkArg).named("sdk");
-		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let preset: Preset | undefined = undefined;
-		if (pkgConfig) {
-			preset = "minimal";
-		}
-		if (extended) {
-			preset = "autotools";
-		}
-		if (preset !== undefined) {
-			const buildToolsEnv = await tg
-				.build(buildTools, {
-					host,
-					buildToolchain: await tg.build(std.sdk, { host }).named("sdk"),
-					preset,
-				})
-				.named("build tools");
-			envs.push(sdk, buildToolsEnv);
-		}
 	}
 
 	// If cross compiling, override CC/CXX to point to the correct compiler.
@@ -320,7 +250,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		});
 	}
 
-	// Include any user-defined env with higher precedence than the SDK and autotools settings.
+	// Include any user-defined env with higher precedence than the SDK and cmake settings.
 	const env = await std.env.arg(...envs, userEnv);
 
 	// Define default phases.

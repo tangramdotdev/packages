@@ -1,5 +1,4 @@
 import * as std from "./tangram.ts";
-import { buildTools, type Preset } from "./sdk/dependencies.tg.ts";
 
 export type Arg = {
 	/** Bootstrap mode will disable adding any implicit package builds like the SDK and standard utils. All dependencies must be explicitly provided via `env`. Default: false. */
@@ -164,115 +163,25 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		envs.push({ utils: false });
 	}
 
-	// // C/C++ flags.
-	if (opt) {
-		const optFlag = tg.Mutation.suffix(`-O${opt}`, " ");
-		envs.push({ CFLAGS: optFlag, CXXFLAGS: optFlag });
-	}
-	if (pipe) {
-		const pipeFlag = tg.Mutation.suffix("-pipe", " ");
-		envs.push({ CFLAGS: pipeFlag, CXXFLAGS: pipeFlag });
-	}
-	if (march !== undefined) {
-		const marchFlag = tg.Mutation.suffix(`-march=${march}`, " ");
-		envs.push({ CFLAGS: marchFlag, CXXFLAGS: marchFlag });
-	}
-	if (mtune !== undefined) {
-		const mtuneFlag = tg.Mutation.suffix(`-mtune=${mtune}`, " ");
-		envs.push({ CFLAGS: mtuneFlag, CXXFLAGS: mtuneFlag });
-	}
-	let fortifySource =
-		typeof fortifySource_ === "number"
-			? fortifySource_
-			: fortifySource_
-				? 3
-				: undefined;
-	if (fortifySource !== undefined) {
-		if (fortifySource < 0 || fortifySource > 3) {
-			throw new Error(
-				`fortifySource must be between 0 and 3 inclusive, received ${fortifySource.toString()}`,
-			);
-		}
-		envs.push({
-			CPPFLAGS: tg.Mutation.suffix(
-				`-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=${fortifySource}`,
-				" ",
-			),
-		});
-	}
-
-	if (hardeningCFlags) {
-		let extraCFlags = `-fasynchronous-unwind-tables -fexceptions -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong`;
-		if (hostOs === "linux") {
-			extraCFlags = `${extraCFlags} -fstack-clash-protection`;
-		}
-		const extraFlags = tg.Mutation.suffix(extraCFlags, " ");
-		envs.push({ CFLAGS: extraFlags, CXXFLAGS: extraFlags });
-	}
-
-	const environment = std.triple.environment(host);
-	if (!environment || environment === "gnu") {
-		envs.push({
-			CXXFLAGS: tg.Mutation.suffix("-Wp,-D_GLIBCXX_ASSERTIONS", " "),
-		});
-	}
-
-	// LDFLAGS
-	if (stripExecutables === true) {
-		const stripFlag = hostOs === "darwin" ? `-Wl,-S` : `-s`;
-		envs.push({ LDFLAGS: tg.Mutation.suffix(stripFlag, " ") });
-	}
-	if (hostOs === "linux" && hardeningCFlags) {
-		const fullRelroString = fullRelro ? ",-z,now" : "";
-		const extraLdFlags = `-Wl,-z,relro${fullRelroString} -Wl,--as-needed`;
-		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
-	}
-
-	if (!bootstrap) {
-		// Set up the host SDK, add it to the environment.
-		const sdk = await tg.build(std.sdk, sdkArg_, { host }).named("sdk");
-		// Add the requested set of utils for the host, compiled with the default SDK to improve cache hits.
-		let preset: Preset | undefined = undefined;
-		if (pkgConfig) {
-			preset = "minimal";
-		}
-		if (extended) {
-			preset = "autotools";
-		}
-		if (developmentTools) {
-			preset = "autotools-dev";
-		}
-		if (preset !== undefined) {
-			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
-			// Use the pre-built autotoolsBuildTools for the "autotools" preset to ensure cache hits.
-			if (preset === "autotools") {
-				buildToolsEnv = await tg
-					.build(std.dependencies.autotoolsBuildTools)
-					.named("autotools build tools");
-			} else {
-				// For other presets, build with the appropriate preset parameter.
-				buildToolsEnv = await tg
-					.build(buildTools, {
-						host,
-						buildToolchain: await tg.build(std.sdk, { host }).named("sdk"),
-						preset,
-					})
-					.named("build tools");
-			}
-			envs.push(sdk, buildToolsEnv);
-			// Add a cross SDK if necessary.
-			if (isCross) {
-				// SDK runs on `build`, produces code for `host`.
-				const crossSdk = await tg
-					.build(std.sdk, sdkArg_, {
-						host: build,
-						target: host,
-					})
-					.named("cross sdk");
-				envs.push(crossSdk);
-			}
-		}
-	}
+	// Add C/C++ compiler environment (flags, SDK, build tools).
+	const ccEnv = await std.cc.env({
+		host,
+		build,
+		bootstrap,
+		developmentTools,
+		extended,
+		fortifySource: fortifySource_,
+		fullRelro,
+		hardeningCFlags,
+		march,
+		mtune,
+		opt,
+		pipe,
+		pkgConfig,
+		sdk: sdkArg_,
+		stripExecutables,
+	});
+	envs.push(ccEnv);
 
 	// Include any user-defined env with higher precedence than the SDK and autotools settings.
 	const env = await std.env.arg(...envs, userEnv);
