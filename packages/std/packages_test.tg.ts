@@ -474,10 +474,7 @@ const testPhaseMerge = async () => {
 	const defaults: std.phases.PhasesArg = {
 		configure: { command: "./configure", args: ["--prefix=/usr"] },
 	};
-	const merged = await std.phases.mergePhases(
-		defaults,
-		await std.phases.mergePhases(argsOnly),
-	);
+	const merged = await std.phases.arg(defaults, await std.phases.arg(argsOnly));
 	const configure = assertPhase(merged.configure, "merge");
 	const body = configure.body as std.phases.CommandBody;
 	tg.assert(templateText(body.command) === "./configure", "command preserved");
@@ -488,7 +485,7 @@ const testPhaseMerge = async () => {
 		configure: tg.Mutation.unset(),
 		build: await tg`make`,
 	};
-	const final = await std.phases.mergePhases(defaults, userPhases);
+	const final = await std.phases.arg(defaults, userPhases);
 	tg.assert(final.configure === undefined, "unset propagates");
 	tg.assert(final.build !== undefined, "build exists");
 
@@ -502,8 +499,8 @@ const testPhaseMerge = async () => {
 	const builderDefaults: std.phases.PhasesArg = {
 		configure: { command: "./configure", args: ["--host=aarch64"] },
 	};
-	const preMerged = await std.phases.mergePhases(specPhases, topLevelPhases);
-	const threeWay = await std.phases.mergePhases(builderDefaults, preMerged);
+	const preMerged = await std.phases.arg(specPhases, topLevelPhases);
+	const threeWay = await std.phases.arg(builderDefaults, preMerged);
 	const threeWayConfigure = assertPhase(threeWay.configure, "three-way");
 	tg.assert(threeWayConfigure.pre !== undefined, "pre hook preserved");
 	const threeWayBody = threeWayConfigure.body as std.phases.CommandBody;

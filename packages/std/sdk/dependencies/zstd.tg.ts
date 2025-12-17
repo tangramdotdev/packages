@@ -58,7 +58,8 @@ export const build = async (arg?: Arg) => {
 		buildInTree: true,
 		defaultCrossArgs: false,
 		env,
-		phases: { phases, order: ["prepare", "build", "install"] },
+		order: ["prepare", "build", "install"],
+		phases,
 		prefixArg: "none",
 		sdk,
 		source: sourceDir,
@@ -66,13 +67,3 @@ export const build = async (arg?: Arg) => {
 };
 
 export default build;
-
-import * as bootstrap from "../../bootstrap.tg.ts";
-
-export const test = async () => {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ metadata, buildFn: build, libraries: ["zstd"] });
-	return true;
-};

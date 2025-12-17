@@ -14,6 +14,10 @@ export type BasePackageArg = {
 	phases?: std.phases.Arg;
 	sdk?: std.sdk.Arg | undefined;
 	source?: tg.Directory | undefined;
+	/** Environment to propagate to all dependencies in the subtree. */
+	subtreeEnv?: std.env.Arg;
+	/** SDK configuration to propagate to all dependencies in the subtree. */
+	subtreeSdk?: std.sdk.Arg | undefined;
 };
 
 /** Internal constraint type for package arguments. Includes index signature for type system compatibility. */

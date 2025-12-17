@@ -33,16 +33,10 @@ export const build = async (arg?: Arg) => {
 	const configure = {
 		args: ["--disable-dependency-tracking"],
 	};
-	const build: std.phases.CommandArg = {
-		command: "./build.sh",
-		args: tg.Mutation.unset(),
-	};
+	const build = "./build.sh";
 	const install: std.phases.PhaseArg = {
 		pre: await tg`mkdir -p ${tg.output}/bin`,
-		body: {
-			command: await tg`cp make ${tg.output}/bin`,
-			args: tg.Mutation.unset(),
-		},
+		body: await tg`cp make ${tg.output}/bin`,
 	};
 	const phases: std.phases.Arg = {
 		configure,

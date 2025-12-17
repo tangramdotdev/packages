@@ -70,6 +70,9 @@ export type Arg = {
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
 
+	/** Override the default phase order. Default: ["prepare", "configure", "build", "check", "install", "fixup"]. */
+	order?: Array<string> | undefined;
+
 	/** Should make jobs run in parallel? Default: false until new branch. */
 	parallel?: boolean | number | undefined;
 
@@ -97,6 +100,12 @@ export type Arg = {
 	/** Should we mirror the contents `LIBRARY_PATH` in `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`? Default: false */
 	setRuntimeLibraryPath?: boolean | undefined;
 
+	/** Environment to propagate to all dependencies in the subtree. */
+	subtreeEnv?: std.env.Arg;
+
+	/** SDK configuration to propagate to all dependencies in the subtree. */
+	subtreeSdk?: std.sdk.Arg | undefined;
+
 	/** The source to build, which must be an autotools binary distribution bundle. This means there must be a configure script in the root of the source code. If necessary, autoreconf must be run before calling this function. */
 	source?: tg.Directory | undefined;
 
@@ -116,8 +125,13 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 			sdk: resolved.sdk,
 			dependencies: resolved.dependencies,
 			env: depsEnv,
+			subtreeEnv: resolved.subtreeEnv,
+			subtreeSdk: resolved.subtreeSdk,
 		});
 	}
+
+	// For top-level package, merge subtreeSdk with sdk (sdk takes precedence).
+	const effectiveSdk = await std.sdk.arg(resolved.subtreeSdk, resolved.sdk);
 
 	const {
 		bootstrap = false,
@@ -141,6 +155,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		network = false,
 		normalizePkgConfigPrefix = true,
 		opt = "2",
+		order,
 		parallel = true,
 		pipe = true,
 		phases: userPhaseArgs,
@@ -148,11 +163,12 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		prefixArg = `--prefix=`,
 		prefixPath = tg`${tg.output}`,
 		removeLibtoolArchives = true,
-		sdk: sdkArg_,
 		setRuntimeLibraryPath = false,
 		source,
 		stripExecutables = true,
 	} = { ...resolved, env: depsEnv };
+	// Use the effective SDK that merges subtreeSdk with sdk.
+	const sdkArg_ = effectiveSdk;
 	const isCross = build !== host;
 	const hostOs = std.triple.os(host);
 
@@ -215,12 +231,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		args: [`install`],
 	};
 
-	const defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
-		configure: defaultConfigure,
-		build: defaultBuild,
-		install: defaultInstall,
-	};
-
+	// Build prepare phase command if needed.
 	let defaultPrepareCommand = tg.template();
 	if (buildInTree) {
 		defaultPrepareCommand = tg`${defaultPrepareCommand}\nmkdir work\ncp -R ${source}/. ./work && chmod -R u+w work\ncd work`;
@@ -231,83 +242,64 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 			os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport ${runtimeLibEnvVar}=$LIBRARY_PATH`;
 	}
-
-	if (defaultCrossEnv) {
-		if (isCross) {
-			// Toolchain prefix is the host triple (where output runs).
-			const hostPrefix = `${host}-`;
-			defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport CC=${hostPrefix}cc && export CXX=${hostPrefix}c++ && export AR=${hostPrefix}ar`;
-		}
+	if (defaultCrossEnv && isCross) {
+		// Toolchain prefix is the host triple (where output runs).
+		const hostPrefix = `${host}-`;
+		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport CC=${hostPrefix}cc && export CXX=${hostPrefix}c++ && export AR=${hostPrefix}ar`;
 	}
+	const needsPrepare = buildInTree || setRuntimeLibraryPath || defaultCrossEnv;
 
-	if (buildInTree || setRuntimeLibraryPath || defaultCrossEnv) {
-		const defaultPrepare = {
-			command: defaultPrepareCommand,
-		};
-		defaultPhases.prepare = defaultPrepare;
-	}
-
+	// Build fixup phase command if needed.
 	let defaultFixupCommand = tg.template();
 	if (removeLibtoolArchives) {
 		defaultFixupCommand = tg`${defaultFixupCommand}\nfind ${tg.output} -name '*.la' -delete`;
 	}
-
 	if (debug) {
 		defaultFixupCommand = tg`${defaultFixupCommand}\nmkdir -p "$LOGDIR" && cp config.log "$LOGDIR/config.log"`;
 	}
-
 	if (normalizePkgConfigPrefix) {
 		defaultFixupCommand = tg`${defaultFixupCommand}\nfind ${tg.output} -name '*.pc' -type f -exec sed -i 's|^prefix=.*|prefix=$'"{pcfiledir}"'/../..|' {} \\;`;
 	}
+	const needsFixup = debug || removeLibtoolArchives || normalizePkgConfigPrefix;
 
-	if (debug || removeLibtoolArchives || normalizePkgConfigPrefix) {
-		const defaultFixup = {
-			command: defaultFixupCommand,
-		};
-		defaultPhases.fixup = defaultFixup;
-	}
-
-	if (doCheck) {
-		const defaultCheck = {
-			command: `make`,
-			args: [`check`, jobsArg],
-		};
-		defaultPhases.check = defaultCheck;
-	}
+	// Assemble default phases.
+	const defaultPhases = {
+		configure: defaultConfigure,
+		build: defaultBuild,
+		install: defaultInstall,
+		...(needsPrepare ? { prepare: { command: defaultPrepareCommand } } : {}),
+		...(needsFixup ? { fixup: { command: defaultFixupCommand } } : {}),
+		...(doCheck
+			? { check: { command: `make`, args: [`check`, jobsArg] } }
+			: {}),
+	};
 
 	// The build runs on the `build` machine.
 	const system = std.triple.archAndOs(build);
 
-	// Normalize user phases to array and spread after defaults so mutations are applied correctly.
-	// This supports both single Arg (from external arg() call) and Array<Arg> (from internal collection).
+	// Normalize user phases to array for merging.
 	const userPhasesArray = Array.isArray(userPhaseArgs)
 		? userPhaseArgs
 		: userPhaseArgs !== undefined
 			? [userPhaseArgs]
 			: [];
-	// If the user phase is already an ArgObject (has order, env, etc.), pass it directly.
-	// Otherwise wrap it as { phases: p } to indicate it provides phase definitions.
-	const userPhaseObjects = userPhasesArray.map((p) =>
-		std.phases.isArgObject(p) ? p : { phases: p },
-	);
 
-	let result = tg.build(
-		std.phases.run,
-		{
-			bootstrap: true,
-			debug,
-			phases: defaultPhases,
-			env,
-			command: { env: { TANGRAM_HOST: system }, host: system },
-			checksum,
-			network,
-			...(processName !== undefined
-				? { processName: `${processName} build` }
-				: {}),
-		},
-		// biome-ignore lint/suspicious/noExplicitAny: phases type is complex union.
-		...(userPhaseObjects as Array<any>),
-	);
+	// Merge default phases with user phases.
+	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhasesArray);
+
+	let result = tg.build(std.phases.run, {
+		bootstrap: true,
+		debug,
+		phases: mergedPhases,
+		env,
+		command: { env: { TANGRAM_HOST: system }, host: system },
+		checksum,
+		network,
+		...(order !== undefined ? { order } : {}),
+		...(processName !== undefined
+			? { processName: `${processName} build` }
+			: {}),
+	});
 	if (processName !== undefined) {
 		result = result.named(processName);
 	}
@@ -344,6 +336,8 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 			env: (a, b) => std.env.arg(a, b, { utils: false }),
 			phases: "append",
 			sdk: (a, b) => std.sdk.arg(a, b),
+			subtreeEnv: (a, b) => std.env.arg(a, b, { utils: false }),
+			subtreeSdk: (a, b) => std.sdk.arg(a, b),
 		},
 	});
 
@@ -351,12 +345,11 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 		build: build_,
 		host: host_,
 		phases: phaseArgs = [],
-		source: source_,
+		source,
 		...rest
 	} = collect;
 
-	tg.assert(source_ !== undefined, `source must be defined`);
-	const source = await source_;
+	tg.assert(source !== undefined, `source must be defined`);
 
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;

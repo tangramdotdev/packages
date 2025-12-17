@@ -113,7 +113,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		// Allow the build process to locate libraries from the compile-time library path.
 		configureArgs.push("DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH");
 	}
-	const phases = std.phases.mergePhases(arg.phases, {
+	const phases = std.phases.arg(arg.phases, {
 		configure: { args: configureArgs },
 	});
 

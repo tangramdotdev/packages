@@ -74,6 +74,8 @@ export const self = async (...args: std.Args<Arg>) => {
 		build: build_,
 		host,
 		sdk: arg.sdk,
+		subtreeEnv: arg.subtreeEnv,
+		subtreeSdk: arg.subtreeSdk,
 	});
 	const artifactList = Object.values(artifacts).filter(
 		(v): v is tg.Directory => v !== undefined,
@@ -174,6 +176,9 @@ export type BuildArg = {
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast" | undefined;
 
+	/** Override the default phase order. Default: ["configure", "build", "install"]. */
+	order?: Array<string> | undefined;
+
 	/** Should make jobs run in parallel? Default: false until new branch. */
 	parallel?: boolean | number | undefined;
 
@@ -194,6 +199,12 @@ export type BuildArg = {
 
 	/** The source to build. Can be a Directory or a template path that resolves to a directory. */
 	source?: tg.Directory | tg.Template | undefined;
+
+	/** Environment to propagate to all dependencies in the subtree. */
+	subtreeEnv?: std.env.Arg;
+
+	/** SDK configuration to propagate to all dependencies in the subtree. */
+	subtreeSdk?: std.sdk.Arg | undefined;
 
 	/** Should executables be stripped? Default is true. */
 	stripExecutables?: boolean | undefined;
@@ -231,6 +242,8 @@ export const arg = async (
 			env: (a, b) => std.env.arg(a, b),
 			phases: "append",
 			sdk: (a, b) => std.sdk.arg(a, b),
+			subtreeEnv: (a, b) => std.env.arg(a, b),
+			subtreeSdk: (a, b) => std.sdk.arg(a, b),
 		},
 	});
 
@@ -253,11 +266,18 @@ export const arg = async (
 
 	// Build dependencies and create env.
 	const depsEnv = deps
-		? await std.deps.env(deps, { build, host, sdk: rest.sdk, env: userEnv })
+		? await std.deps.env(deps, {
+				build,
+				host,
+				sdk: rest.sdk,
+				env: userEnv,
+				subtreeEnv: rest.subtreeEnv,
+				subtreeSdk: rest.subtreeSdk,
+			})
 		: undefined;
 
 	// Merge phases.
-	const mergedPhases = await std.phases.mergePhases(...userPhaseArgs);
+	const mergedPhases = await std.phases.arg(...userPhaseArgs);
 
 	// Merge env: deps env → user env.
 	const env = await std.env.arg(depsEnv, userEnv);
@@ -293,6 +313,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		processName,
 		network,
 		opt = "2",
+		order,
 		parallel = true,
 		phases: userPhaseArgs,
 		pkgConfig = true,
@@ -370,36 +391,42 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		args: [`--build`, buildDir, `--target`, `install`],
 	};
 
-	const defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
+	const defaultPhases = {
 		configure: defaultConfigure,
 		build: defaultBuild,
 		install: defaultInstall,
+		...(debug
+			? {
+					fixup: {
+						command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
+					},
+				}
+			: {}),
 	};
 
-	if (debug) {
-		const defaultFixup = {
-			command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
-		};
-		defaultPhases.fixup = defaultFixup;
-	}
+	// Normalize user phases to array for merging.
+	const userPhasesArray = Array.isArray(userPhaseArgs)
+		? userPhaseArgs
+		: userPhaseArgs !== undefined
+			? [userPhaseArgs]
+			: [];
+
+	// Merge default phases with user phases.
+	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhasesArray);
 
 	const system = std.triple.archAndOs(host);
 	return await tg
-		.build(
-			std.phases.run,
-			{
-				bootstrap: true,
-				debug,
-				phases: defaultPhases,
-				env,
-				command: { env: { TANGRAM_HOST: system }, host: system },
-				checksum,
-				network,
-				...(processName !== undefined ? { processName } : {}),
-			} as std.phases.Arg,
-			// biome-ignore lint/suspicious/noExplicitAny: phases type is complex union.
-			{ phases: userPhaseArgs } as any,
-		)
+		.build(std.phases.run, {
+			bootstrap: true,
+			debug,
+			phases: mergedPhases,
+			env,
+			command: { env: { TANGRAM_HOST: system }, host: system },
+			checksum,
+			network,
+			...(order !== undefined ? { order } : {}),
+			...(processName !== undefined ? { processName } : {}),
+		})
 		.then(tg.Directory.expect);
 };
 

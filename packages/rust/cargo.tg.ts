@@ -59,6 +59,12 @@ export type Arg = {
 	/** Source directory. */
 	source?: tg.Directory;
 
+	/** Environment to propagate to all dependencies in the subtree. */
+	subtreeEnv?: std.env.Arg;
+
+	/** SDK configuration to propagate to all dependencies in the subtree. */
+	subtreeSdk?: std.sdk.Arg;
+
 	/** Target triple for the build. */
 	target?: string;
 
@@ -85,6 +91,8 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 			env: (a, b) => std.env.arg(a, b),
 			features: "append",
 			sdk: (a, b) => std.sdk.arg(a, b),
+			subtreeEnv: (a, b) => std.env.arg(a, b),
+			subtreeSdk: (a, b) => std.sdk.arg(a, b),
 		},
 	});
 
@@ -115,6 +123,8 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 			sdk: resolved.sdk,
 			dependencies: resolved.dependencies,
 			env: depsEnv,
+			subtreeEnv: resolved.subtreeEnv,
+			subtreeSdk: resolved.subtreeSdk,
 		});
 	}
 

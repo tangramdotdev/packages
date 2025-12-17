@@ -108,18 +108,15 @@ export const build = async (...args: std.Args<Arg>) => {
 	let phases = arg.phases;
 	if (os === "linux") {
 		setRuntimeLibraryPath = true;
-		phases = await std.phases.mergePhases(phases, {
-			build: {
-				command: tg`
-					TOP="$(pwd)"
-					RPATH_LINK=""
-					for lib in isc dns ns isccfg isccc; do
-						RPATH_LINK="$RPATH_LINK -Wl,-rpath-link,$TOP/lib/$lib/.libs"
-					done
-					make LDFLAGS="$LDFLAGS $RPATH_LINK" -j$(nproc)
-				`,
-				args: tg.Mutation.set([]),
-			},
+		phases = await std.phases.arg(phases, {
+			build: tg`
+				TOP="$(pwd)"
+				RPATH_LINK=""
+				for lib in isc dns ns isccfg isccc; do
+					RPATH_LINK="$RPATH_LINK -Wl,-rpath-link,$TOP/lib/$lib/.libs"
+				done
+				make LDFLAGS="$LDFLAGS $RPATH_LINK" -j$(nproc)
+			`,
 		});
 	}
 

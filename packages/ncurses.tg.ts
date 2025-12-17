@@ -77,7 +77,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	let phases = arg.phases;
 	if (configureArgs.length > 0) {
-		phases = await std.phases.mergePhases(phases, {
+		phases = await std.phases.arg(phases, {
 			configure: { args: configureArgs },
 		});
 	}

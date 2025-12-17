@@ -137,6 +137,12 @@ export type Arg = {
 
 	/** Source directory. */
 	source?: tg.Directory;
+
+	/** Environment to propagate to all dependencies in the subtree. */
+	subtreeEnv?: std.env.Arg;
+
+	/** SDK configuration to propagate to all dependencies in the subtree. */
+	subtreeSdk?: std.sdk.Arg;
 };
 
 /** The result of arg() - an Arg with build, host, and source guaranteed to be resolved. */
@@ -157,6 +163,8 @@ export const arg = async (...args: std.Args<any>): Promise<ResolvedArg> => {
 		reduce: {
 			env: (a, b) => std.env.arg(a, b),
 			sdk: (a, b) => std.sdk.arg(a, b),
+			subtreeEnv: (a, b) => std.env.arg(a, b),
+			subtreeSdk: (a, b) => std.sdk.arg(a, b),
 		},
 	});
 
@@ -177,7 +185,14 @@ export const arg = async (...args: std.Args<any>): Promise<ResolvedArg> => {
 
 	// Build dependencies and create env.
 	const depsEnv = deps
-		? await std.deps.env(deps, { build, host, sdk: rest.sdk, env: userEnv })
+		? await std.deps.env(deps, {
+				build,
+				host,
+				sdk: rest.sdk,
+				env: userEnv,
+				subtreeEnv: rest.subtreeEnv,
+				subtreeSdk: rest.subtreeSdk,
+			})
 		: undefined;
 
 	// Merge env: deps env → user env.

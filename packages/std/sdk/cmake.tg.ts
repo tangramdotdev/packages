@@ -132,6 +132,9 @@ export type BuildArg = {
 	/** The optlevel to pass. Defaults to "2" */
 	opt?: "1" | "2" | "3" | "s" | "z" | "fast";
 
+	/** Override the default phase order. Default: ["configure", "build", "install"]. */
+	order?: Array<string>;
+
 	/** Should make jobs run in parallel? Default: false until new branch. */
 	parallel?: boolean | number;
 
@@ -177,6 +180,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		march,
 		mtune = "generic",
 		opt = "2",
+		order,
 		parallel = true,
 		phases: userPhaseArgs = [],
 		pkgConfig = true,
@@ -280,32 +284,32 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		args: [`--build`, buildDir, `--target`, `install`],
 	};
 
-	const defaultPhases: tg.Unresolved<std.phases.PhasesArg> = {
+	const defaultPhases = {
 		configure: defaultConfigure,
 		build: defaultBuild,
 		install: defaultInstall,
+		...(debug
+			? {
+					fixup: {
+						command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
+					},
+				}
+			: {}),
 	};
 
-	if (debug) {
-		const defaultFixup = {
-			command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
-		};
-		defaultPhases.fixup = defaultFixup;
-	}
+	// Merge default phases with user phases.
+	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhaseArgs);
 
 	const system = std.triple.archAndOs(host);
 	return await tg
-		.build(
-			std.phases.run,
-			{
-				bootstrap: true,
-				debug,
-				phases: defaultPhases,
-				env,
-				command: { env: { TANGRAM_HOST: system }, host: system },
-			},
-			...userPhaseArgs,
-		)
+		.build(std.phases.run, {
+			bootstrap: true,
+			debug,
+			phases: mergedPhases,
+			env,
+			command: { env: { TANGRAM_HOST: system }, host: system },
+			...(order !== undefined ? { order } : {}),
+		})
 		.then(tg.Directory.expect);
 };
 

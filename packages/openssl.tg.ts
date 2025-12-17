@@ -58,7 +58,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		configureArgs.push(`--cross-compile-prefix=${arg.host}-`);
 	}
 
-	let phases = std.phases.mergePhases(arg.phases, {
+	let phases = std.phases.arg(arg.phases, {
 		configure: {
 			command: tg`perl ./Configure ${osCompiler}`,
 			args: configureArgs,

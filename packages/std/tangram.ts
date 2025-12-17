@@ -192,6 +192,7 @@ const testActions = (): Record<string, () => any> => {
 const defaultTests = [
 	"hostSystem",
 	"triple",
+	"phases",
 	"packages",
 	"certificates",
 	"proxy",

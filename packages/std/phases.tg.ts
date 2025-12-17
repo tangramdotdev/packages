@@ -2,30 +2,20 @@ import * as std from "./tangram.ts";
 
 /** Helper for constructing multi-phase build targets. */
 
-export type Arg = ArgObject | PhasesArg | undefined;
+/** Argument type for arg() - purely phases. Symmetric with std.sdk.Arg, std.env.Arg, etc. */
+export type Arg = PhasesArg;
 
-export type ArgObject = {
-	bootstrap?: boolean;
-	debug?: boolean;
-	env?: std.env.Arg;
-	order?: Array<string>;
-	phases?: PhasesArg;
-	processName?: string;
+/** Argument type for run() - execution metadata plus phases. */
+export type RunArg = {
+	bootstrap?: boolean | undefined;
+	debug?: boolean | undefined;
+	env?: std.env.Arg | undefined;
+	order?: Array<string> | undefined;
+	phases?: PhasesArg | undefined;
+	processName?: string | undefined;
 	checksum?: tg.Checksum | undefined;
-	network?: boolean;
-	command?: tg.Command.Arg.Object;
-};
-
-export type Object = {
-	bootstrap?: boolean;
-	debug?: boolean;
-	env?: std.env.Arg;
-	order?: Array<string>;
-	phases: Phases;
-	processName?: string;
-	checksum?: tg.Checksum | undefined;
-	network?: boolean;
-	command?: tg.Command.Arg.Object;
+	network?: boolean | undefined;
+	command?: tg.Command.Arg.Object | undefined;
 };
 
 /** Resolved phases after merging. */
@@ -85,7 +75,19 @@ export type PhaseArgObject = {
 	post?: BodyArg;
 };
 
-export const run = async (...args: std.Args<Arg>) => {
+/** Construct a script and run it. */
+export const run = async (...args: std.Args<RunArg>) => {
+	// Merge execution metadata. The reducer for phases calls arg() which returns Phases.
+	const runArg = await std.args.apply<RunArg, RunArg>({
+		args,
+		map: async (a) => a ?? {},
+		reduce: {
+			command: "merge",
+			env: (a, b) => std.env.arg(a, b, { utils: false }),
+			phases: (a, b) => arg(a, b),
+		},
+	});
+
 	const {
 		bootstrap = false,
 		checksum,
@@ -93,10 +95,13 @@ export const run = async (...args: std.Args<Arg>) => {
 		debug,
 		env: env_,
 		order: order_,
-		phases = {},
 		processName,
 		command: commandArg,
-	} = await arg(...args);
+	} = runArg;
+
+	// The reducer for phases calls arg() which returns Phases.
+	// TypeScript doesn't track this, so we need a helper to safely convert.
+	const phases = resolvePhases(runArg.phases);
 
 	// Construct the phases in order.
 	// FIXME: This is a hack to avoid the 0: Bad file descriptor in configure scripts on Linux.`
@@ -178,54 +183,99 @@ export const run = async (...args: std.Args<Arg>) => {
 	return await builder;
 };
 
-export const arg = async (...args: std.Args<Arg>): Promise<Object> => {
-	const argObject = await std.args.apply<Arg, ArgObject>({
-		args,
-		map: async (arg) => {
-			if (arg === undefined) {
-				return {};
-			} else if (isArgObject(arg)) {
-				const ret: ArgObject = {};
-				if ("bootstrap" in arg) {
-					ret.bootstrap = arg.bootstrap;
-				}
-				if ("debug" in arg) {
-					ret.debug = arg.debug;
-				}
-				if ("env" in arg) {
-					ret.env = arg.env;
-				}
-				if ("order" in arg) {
-					ret.order = arg.order;
-				}
-				if ("phases" in arg) {
-					ret.phases = arg.phases;
-				}
-				if ("processName" in arg) {
-					ret.processName = arg.processName;
-				}
-				if ("checksum" in arg) {
-					ret.checksum = arg.checksum;
-				}
-				if ("network" in arg) {
-					ret.network = arg.network;
-				}
-				if ("command" in arg) {
-					ret.command = arg.command;
-				}
-				return ret;
+/**
+ * Type guard to check if a value is a resolved Phase.
+ * A Phase has a body field that is a Template (ScriptBody) or has a command field (CommandBody).
+ */
+const isPhase = (value: unknown): value is Phase => {
+	if (typeof value !== "object" || value === null) return false;
+	if (!("body" in value)) return false;
+	const valueWithBody = value;
+	const body = valueWithBody.body;
+	// ScriptBody is a Template, CommandBody has a command field that is a Template.
+	if (body instanceof tg.Template) return true;
+	if (typeof body !== "object" || body === null) return false;
+	if (!("command" in body)) return false;
+	const bodyWithCommand = body;
+	return bodyWithCommand.command instanceof tg.Template;
+};
+
+/**
+ * Convert PhasesArg to Phases.
+ * After std.args.apply with the phases reducer, the phases field contains resolved Phases,
+ * but TypeScript still types it as PhasesArg. This helper safely converts the type.
+ */
+const resolvePhases = (phasesArg: PhasesArg | undefined): Phases => {
+	if (phasesArg === undefined) return {};
+	const phases: Phases = {};
+	for (const key of Object.keys(phasesArg)) {
+		const value = phasesArg[key];
+		if (isPhase(value)) {
+			phases[key] = value;
+		}
+	}
+	return phases;
+};
+
+/**
+ * Type predicate to validate a value is a PhaseArg.
+ * This is needed because tg.resolve() doesn't fully narrow types.
+ */
+const isPhaseArg = (value: unknown): value is PhaseArg => {
+	if (value === undefined) return false;
+	// Mutation is a valid PhaseArg.
+	if (value instanceof tg.Mutation) return true;
+	// Template (ScriptBodyArg/ScriptBody) is valid.
+	if (value instanceof tg.Template) return true;
+	// Artifact is valid (part of ScriptBodyArg).
+	if (tg.Artifact.is(value)) return true;
+	// String is valid (part of ScriptBodyArg).
+	if (typeof value === "string") return true;
+	// Object with command/args (CommandBodyArg/CommandBody) is valid.
+	if (typeof value === "object" && value !== null) {
+		if ("command" in value || "args" in value) return true;
+		// Object with body/pre/post (PhaseArgObject) is valid.
+		if ("body" in value || "pre" in value || "post" in value) return true;
+	}
+	return false;
+};
+
+/** Merge phase arguments. Symmetric with std.sdk.arg, std.env.arg, etc. */
+export const arg = async (
+	...args: Array<tg.Unresolved<Arg | Array<Arg>>>
+): Promise<Phases> => {
+	const phases: Phases = {};
+
+	// Process a single PhasesArg, merging its phases into the accumulated result.
+	const processPhasesArg = async (phasesArg: PhasesArg) => {
+		if (phasesArg === undefined) return;
+		// Iterate over the phases and merge each one.
+		for (const key of Object.keys(phasesArg)) {
+			const rawValue = phasesArg[key];
+			// Validate the value is a PhaseArg (needed because tg.resolve types are wide).
+			if (!isPhaseArg(rawValue)) continue;
+			const existing = phases[key];
+			const mergedPhase = await mergePhaseArgs(existing, rawValue);
+			if (mergedPhase !== undefined) {
+				phases[key] = mergedPhase;
 			} else {
-				return { phases: arg } as ArgObject;
+				delete phases[key];
 			}
-		},
-		reduce: {
-			command: "merge",
-			env: (a, b) => std.env.arg(a, b, { utils: false }),
-			phases: (a, b) => mergePhases(a, b),
-		},
-	});
-	tg.assert(argObject.phases !== undefined, "expected phases to be defined");
-	return argObject as Object;
+		}
+	};
+
+	for (const unresolvedArg of args) {
+		const resolved = await tg.resolve(unresolvedArg);
+		// Handle arrays by processing each element in order.
+		if (Array.isArray(resolved)) {
+			for (const element of resolved) {
+				await processPhasesArg(element);
+			}
+		} else {
+			await processPhasesArg(resolved);
+		}
+	}
+	return phases;
 };
 
 export const defaultOrder = () => [
@@ -278,24 +328,6 @@ export const isPhaseArgObject = (arg: unknown): arg is PhaseArgObject => {
 	);
 };
 
-export const isArgObject = (arg: unknown): arg is ArgObject => {
-	return (
-		arg !== undefined &&
-		typeof arg === "object" &&
-		arg !== null &&
-		("bootstrap" in arg ||
-			"checksum" in arg ||
-			"command" in arg ||
-			"debug" in arg ||
-			"env" in arg ||
-			"network" in arg ||
-			"order" in arg ||
-			"phases" in arg ||
-			"processName" in arg ||
-			"target" in arg)
-	);
-};
-
 /** Check if a resolved body is a script (template). */
 export const isScriptBody = (
 	body: ScriptBody | CommandBody,
@@ -316,52 +348,67 @@ export const isCommandBody = (
 	);
 };
 
-export const mergePhases = async (
-	...args: Array<tg.Unresolved<Arg | Phases | Array<Arg>>>
-): Promise<Phases> => {
-	const phases: Phases = {};
-
-	// Process a single arg, merging its phases into the accumulated result.
-	const processArg = async (arg: Arg | Phases | undefined) => {
-		if (arg === undefined) {
-			return;
-		}
-		// Extract phases from ArgObject if present, otherwise use directly.
-		const phasesArg = isArgObject(arg) ? arg.phases : arg;
-		if (phasesArg === undefined) {
-			return;
-		}
-		for (const [key, value] of Object.entries(phasesArg)) {
-			const existing = phases[key];
-			const mergedPhase = await mergePhaseArgs(existing, value);
-			if (mergedPhase !== undefined) {
-				phases[key] = mergedPhase;
-			} else {
-				// Phase was unset - delete the key.
-				delete phases[key];
-			}
-		}
-	};
-
-	for (const unresolvedArg of args) {
-		const arg = await tg.resolve(unresolvedArg);
-		// Handle arrays by processing each element in order.
-		if (Array.isArray(arg)) {
-			for (const element of arg) {
-				await processArg(element);
-			}
-		} else {
-			await processArg(arg);
-		}
-	}
-	return phases;
-};
-
 /** Internal type for phase arg processing. */
 type PhaseArgIntermediate = {
 	body?: BodyArg;
 	pre?: BodyArg;
 	post?: BodyArg;
+};
+
+/** Convert a PhaseArg to PhaseArgIntermediate. */
+const toPhaseArgIntermediate = (
+	arg: PhaseArg | undefined,
+): PhaseArgIntermediate | "unset" | "set_if_unset" => {
+	if (arg === undefined) {
+		return {};
+	} else if (arg instanceof tg.Mutation) {
+		if (arg.inner.kind === "unset") {
+			return "unset";
+		} else if (arg.inner.kind === "set") {
+			// Unwrap the set mutation and process the inner value.
+			const inner = arg.inner.value;
+			if (inner === undefined) {
+				return {};
+			} else if (isPhaseArgObject(inner)) {
+				return inner;
+			} else if (isBodyArg(inner)) {
+				return { body: inner };
+			} else {
+				throw new Error(`Unexpected value in set mutation: ${inner}`);
+			}
+		} else if (arg.inner.kind === "set_if_unset") {
+			// Return marker so we can handle set_if_unset at the phase level.
+			return "set_if_unset";
+		} else if (arg.inner.kind === "prefix" || arg.inner.kind === "suffix") {
+			// prefix/suffix mutations apply to the body.
+			return { body: arg as tg.Mutation<tg.Template.Arg> };
+		} else {
+			throw new Error(`Unexpected mutation kind for phase: ${arg.inner.kind}`);
+		}
+	} else if (isPhaseArgObject(arg)) {
+		return arg;
+	} else if (isBodyArg(arg)) {
+		return { body: arg };
+	} else {
+		throw new Error(`Unexpected phase arg type: ${arg}`);
+	}
+};
+
+/** Extract the inner value from a set_if_unset mutation. */
+const extractSetIfUnsetValue = (arg: PhaseArg): PhaseArgIntermediate => {
+	if (!(arg instanceof tg.Mutation) || arg.inner.kind !== "set_if_unset") {
+		throw new Error("Expected set_if_unset mutation");
+	}
+	const inner = arg.inner.value;
+	if (inner === undefined) {
+		return {};
+	} else if (isPhaseArgObject(inner)) {
+		return inner;
+	} else if (isBodyArg(inner)) {
+		return { body: inner };
+	} else {
+		throw new Error(`Unexpected value in set_if_unset mutation: ${inner}`);
+	}
 };
 
 /** Merge phase args into a resolved Phase. */
@@ -370,67 +417,51 @@ export const mergePhaseArgs = async (
 ): Promise<Phase | undefined> => {
 	const resolved = await Promise.all(args.map(tg.resolve));
 
-	// Convert each arg to a PhaseArgIntermediate for uniform handling.
-	const objectArgs: Array<PhaseArgIntermediate | "unset"> = await Promise.all(
-		resolved.map(async (arg) => {
-			if (arg === undefined) {
-				return {};
-			} else if (arg instanceof tg.Mutation) {
-				if (arg.inner.kind === "unset") {
-					return "unset";
-				} else if (
-					arg.inner.kind === "set" ||
-					arg.inner.kind === "set_if_unset"
-				) {
-					// Unwrap the set mutation and process the inner value.
-					const inner = arg.inner.value;
-					if (inner === undefined) {
-						return {};
-					} else if (isPhaseArgObject(inner)) {
-						return inner;
-					} else if (isBodyArg(inner)) {
-						return { body: inner };
-					} else {
-						throw new Error(`Unexpected value in set mutation: ${inner}`);
-					}
-				} else if (arg.inner.kind === "prefix" || arg.inner.kind === "suffix") {
-					// prefix/suffix mutations apply to the body.
-					return { body: arg as tg.Mutation<tg.Template.Arg> };
-				} else {
-					throw new Error(
-						`Unexpected mutation kind for phase: ${arg.inner.kind}`,
-					);
-				}
-			} else if (isPhaseArgObject(arg)) {
-				return arg;
-			} else if (isBodyArg(arg)) {
-				return { body: arg };
-			} else {
-				throw new Error(`Unexpected phase arg type: ${arg}`);
-			}
-		}),
-	);
-
-	// Check if any arg is "unset" - if so, the phase is removed.
-	if (objectArgs.some((arg) => arg === "unset")) {
-		return undefined;
-	}
-
-	// Merge the phase arg objects.
+	// Merge the phase arg objects, tracking state for set_if_unset.
 	let body: ScriptBody | CommandBody | undefined;
 	let pre: ScriptBody | CommandBody | undefined;
 	let post: ScriptBody | CommandBody | undefined;
+	let hasContent = false;
 
-	for (const obj of objectArgs) {
-		if (obj === "unset") continue;
-		if (obj.body !== undefined) {
-			body = await mergeBodyArgs(body, obj.body);
-		}
-		if (obj.pre !== undefined) {
-			pre = await mergeBodyArgs(pre, obj.pre);
-		}
-		if (obj.post !== undefined) {
-			post = await mergeBodyArgs(post, obj.post);
+	for (let i = 0; i < resolved.length; i++) {
+		const arg = resolved[i];
+		const intermediate = toPhaseArgIntermediate(arg);
+
+		if (intermediate === "unset") {
+			// Unset clears the phase entirely.
+			return undefined;
+		} else if (intermediate === "set_if_unset") {
+			// Only apply if no content has been set yet.
+			if (!hasContent) {
+				const value = extractSetIfUnsetValue(arg as PhaseArg);
+				if (value.body !== undefined) {
+					body = await mergeBodyArgs(body, value.body);
+					hasContent = true;
+				}
+				if (value.pre !== undefined) {
+					pre = await mergeBodyArgs(pre, value.pre);
+					hasContent = true;
+				}
+				if (value.post !== undefined) {
+					post = await mergeBodyArgs(post, value.post);
+					hasContent = true;
+				}
+			}
+			// If hasContent is true, skip the set_if_unset.
+		} else {
+			// Regular phase arg - merge it.
+			if (intermediate.body !== undefined) {
+				body = await mergeBodyArgs(body, intermediate.body);
+				hasContent = true;
+			}
+			if (intermediate.pre !== undefined) {
+				pre = await mergeBodyArgs(pre, intermediate.pre);
+				hasContent = true;
+			}
+			if (intermediate.post !== undefined) {
+				post = await mergeBodyArgs(post, intermediate.post);
+				hasContent = true;
+			}
 		}
 	}
 
@@ -443,6 +474,75 @@ export const mergePhaseArgs = async (
 	// The builder will replace this with its default when merging.
 	const finalBody = body ?? (await tg.template(""));
 	return { body: finalBody, pre, post };
+};
+
+/** Handle prefix mutation on a body. */
+const handlePrefix = async (
+	existing: ScriptBody | CommandBody | undefined,
+	template: tg.Template,
+	separator: string,
+): Promise<ScriptBody> => {
+	if (existing === undefined) {
+		return template;
+	} else if (isScriptBody(existing)) {
+		return tg.Template.join(separator, template, existing);
+	} else {
+		// Convert command to script, then prefix.
+		const script = await constructBodyTemplate(existing);
+		return tg.Template.join(separator, template, script);
+	}
+};
+
+/** Handle suffix mutation on a body. */
+const handleSuffix = async (
+	existing: ScriptBody | CommandBody | undefined,
+	template: tg.Template,
+	separator: string,
+): Promise<ScriptBody> => {
+	if (existing === undefined) {
+		return template;
+	} else if (isScriptBody(existing)) {
+		return tg.Template.join(separator, existing, template);
+	} else {
+		// Convert command to script, then suffix.
+		const script = await constructBodyTemplate(existing);
+		return tg.Template.join(separator, script, template);
+	}
+};
+
+/** Merge two command bodies. */
+const mergeCommandBodies = async (
+	existing: CommandBody,
+	arg: CommandBodyArg,
+): Promise<CommandBody> => {
+	const result: CommandBody = { command: existing.command };
+	if (existing.args !== undefined) {
+		result.args = [...existing.args];
+	}
+
+	// Command: resolve with existing for mutation support.
+	if (arg.command !== undefined) {
+		result.command = await resolveCommandField(arg.command, existing.command);
+	}
+
+	// Args: handle mutation or append.
+	if (arg.args !== undefined) {
+		if (arg.args instanceof tg.Mutation) {
+			// Apply mutation to args.
+			if (arg.args.inner.kind === "unset") {
+				result.args = undefined;
+			} else {
+				throw new Error(
+					`Unexpected mutation kind for args: ${arg.args.inner.kind}`,
+				);
+			}
+		} else {
+			const newArgs = await Promise.all(arg.args.map((a) => tg.template(a)));
+			result.args = result.args ? [...result.args, ...newArgs] : newArgs;
+		}
+	}
+
+	return result;
 };
 
 /**
@@ -465,40 +565,24 @@ export const mergeBodyArgs = async (
 				"Use tg.Mutation.unset() at the phase level, not body level.",
 			);
 		} else if (arg.inner.kind === "set") {
-			// Replace entirely.
-			const value = arg.inner.value;
-			return resolveBodyArg(value);
+			return resolveBodyArg(arg.inner.value);
 		} else if (arg.inner.kind === "set_if_unset") {
 			if (existing !== undefined) {
 				return existing;
 			}
 			return resolveBodyArg(arg.inner.value);
 		} else if (arg.inner.kind === "prefix") {
-			// Prefix applies to script bodies.
-			const template = arg.inner.template;
-			const separator = arg.inner.separator ?? "";
-			if (existing === undefined) {
-				return template;
-			} else if (isScriptBody(existing)) {
-				return tg.Template.join(separator, template, existing);
-			} else {
-				// Convert command to script, then prefix.
-				const script = await constructBodyTemplate(existing);
-				return tg.Template.join(separator, template, script);
-			}
+			return handlePrefix(
+				existing,
+				arg.inner.template,
+				arg.inner.separator ?? "",
+			);
 		} else if (arg.inner.kind === "suffix") {
-			// Suffix applies to script bodies.
-			const template = arg.inner.template;
-			const separator = arg.inner.separator ?? "";
-			if (existing === undefined) {
-				return template;
-			} else if (isScriptBody(existing)) {
-				return tg.Template.join(separator, existing, template);
-			} else {
-				// Convert command to script, then suffix.
-				const script = await constructBodyTemplate(existing);
-				return tg.Template.join(separator, script, template);
-			}
+			return handleSuffix(
+				existing,
+				arg.inner.template,
+				arg.inner.separator ?? "",
+			);
 		} else {
 			throw new Error(`Unexpected mutation kind for body: ${arg.inner.kind}`);
 		}
@@ -506,61 +590,23 @@ export const mergeBodyArgs = async (
 
 	// Handle script body arg (template-like).
 	if (isScriptBodyArg(arg)) {
-		// Script replaces any existing body.
 		return tg.template(arg);
 	}
 
 	// Handle command body arg.
 	if (isCommandBodyArg(arg)) {
 		if (existing === undefined) {
-			// No existing body, create new command body.
 			return resolveCommandBodyArg(arg);
 		} else if (isScriptBody(existing)) {
-			// Script + command args: if only args provided, this is likely an error.
-			// If command provided, replace with command body.
+			// Script + command: if command provided, replace. Otherwise convert script to command with args.
 			if (arg.command !== undefined) {
 				return resolveCommandBodyArg(arg);
 			} else {
-				// Only args provided to a script body - convert to command body with args.
-				// Use the existing script as the command.
 				const resolvedArgs = await resolveArgsField(arg.args);
 				return { command: existing, args: resolvedArgs };
 			}
 		} else {
-			// Command + command: merge.
-			const result: CommandBody = { command: existing.command };
-			if (existing.args !== undefined) {
-				result.args = [...existing.args];
-			}
-
-			// Command: resolve with existing for mutation support.
-			if (arg.command !== undefined) {
-				result.command = await resolveCommandField(
-					arg.command,
-					existing.command,
-				);
-			}
-
-			// Args: handle mutation or append.
-			if (arg.args !== undefined) {
-				if (arg.args instanceof tg.Mutation) {
-					// Apply mutation to args.
-					if (arg.args.inner.kind === "unset") {
-						result.args = undefined;
-					} else {
-						throw new Error(
-							`Unexpected mutation kind for args: ${arg.args.inner.kind}`,
-						);
-					}
-				} else {
-					const newArgs = await Promise.all(
-						arg.args.map((a) => tg.template(a)),
-					);
-					result.args = result.args ? [...result.args, ...newArgs] : newArgs;
-				}
-			}
-
-			return result;
+			return mergeCommandBodies(existing, arg);
 		}
 	}
 
@@ -616,7 +662,11 @@ const resolveCommandField = async (
 		} else if (command.inner.kind === "set") {
 			return tg.template(command.inner.value);
 		} else if (command.inner.kind === "set_if_unset") {
-			return existing ?? tg.template(command.inner.value);
+			// Treat empty template as unset for set_if_unset.
+			if (existing === undefined || isEmptyTemplate(existing)) {
+				return tg.template(command.inner.value);
+			}
+			return existing;
 		} else if (command.inner.kind === "prefix" && existing !== undefined) {
 			return tg.Template.join(
 				command.inner.separator ?? "",
@@ -751,7 +801,18 @@ export const maybeMutationToTemplate = async (
 };
 
 export const test = async () => {
-	await Promise.all([basic(), order(), override()]);
+	await Promise.all([
+		basic(),
+		order(),
+		override(),
+		testPrefixSuffix(),
+		testSetIfUnset(),
+		testScriptToCommand(),
+		testPrePostHooks(),
+		testMultipleArgs(),
+		testArrayInput(),
+		testCommandMutations(),
+	]);
 	return true;
 };
 
@@ -854,11 +915,11 @@ export const override = async () => {
 		check: tg.Mutation.unset(),
 	};
 
-	// Merge the phases using arg() to get the resolved phases object.
-	const resolved = await arg(defaultPhases, overrides, { bootstrap: true });
+	// Merge the phases using arg() to get the resolved Phases directly.
+	const resolved = await arg(defaultPhases, overrides);
 
 	// Assert configure phase: command unchanged, args appended.
-	const configurePhase = resolved.phases.configure;
+	const configurePhase = resolved.configure;
 	tg.assert(configurePhase !== undefined, "configure phase should exist");
 	tg.assert(
 		isCommandBody(configurePhase.body),
@@ -871,7 +932,7 @@ export const override = async () => {
 	);
 
 	// Assert build phase: command replaced, args removed.
-	const buildPhase = resolved.phases.build;
+	const buildPhase = resolved.build;
 	tg.assert(buildPhase !== undefined, "build phase should exist");
 	tg.assert(isCommandBody(buildPhase.body), "build body should be a command");
 	const buildBody = buildPhase.body as CommandBody;
@@ -890,22 +951,274 @@ export const override = async () => {
 
 	// Assert check phase: deleted by Mutation.unset().
 	tg.assert(
-		resolved.phases.check === undefined,
+		resolved.check === undefined,
 		"check phase should be undefined (unset by Mutation.unset())",
 	);
 
 	// Assert prepare, install, fixup phases: unchanged.
-	tg.assert(
-		resolved.phases.prepare !== undefined,
-		"prepare phase should exist",
-	);
-	tg.assert(
-		resolved.phases.install !== undefined,
-		"install phase should exist",
-	);
-	tg.assert(resolved.phases.fixup !== undefined, "fixup phase should exist");
+	tg.assert(resolved.prepare !== undefined, "prepare phase should exist");
+	tg.assert(resolved.install !== undefined, "install phase should exist");
+	tg.assert(resolved.fixup !== undefined, "fixup phase should exist");
 
-	// Also verify the full run still works.
-	await run(defaultPhases, overrides, { bootstrap: true });
+	// Also verify the full run still works using the merged phases.
+	await run({ phases: resolved, bootstrap: true });
+	return true;
+};
+
+/** Test prefix and suffix mutations on phase bodies. */
+export const testPrefixSuffix = async () => {
+	const basePhases = {
+		build: tg`echo "building"`,
+	};
+
+	// Test prefix mutation.
+	const withPrefix = await arg(basePhases, {
+		build: tg.Mutation.prefix(tg`echo "before" && `, ""),
+	});
+	tg.assert(withPrefix.build !== undefined, "build phase should exist");
+	tg.assert(isScriptBody(withPrefix.build.body), "body should be a script");
+	const prefixText = (withPrefix.build.body as tg.Template).components
+		.filter((c): c is string => typeof c === "string")
+		.join("");
+	tg.assert(
+		prefixText.includes("before") && prefixText.includes("building"),
+		`prefix should prepend content, got: ${prefixText}`,
+	);
+
+	// Test suffix mutation.
+	const withSuffix = await arg(basePhases, {
+		build: tg.Mutation.suffix(tg` && echo "after"`, ""),
+	});
+	tg.assert(withSuffix.build !== undefined, "build phase should exist");
+	tg.assert(isScriptBody(withSuffix.build.body), "body should be a script");
+	const suffixText = (withSuffix.build.body as tg.Template).components
+		.filter((c): c is string => typeof c === "string")
+		.join("");
+	tg.assert(
+		suffixText.includes("building") && suffixText.includes("after"),
+		`suffix should append content, got: ${suffixText}`,
+	);
+
+	// Test prefix on command body (converts to script).
+	const commandPhases = {
+		build: { command: "make", args: ["-j4"] },
+	};
+	const commandWithPrefix = await arg(commandPhases, {
+		build: tg.Mutation.prefix(tg`cd src && `, ""),
+	});
+	tg.assert(
+		commandWithPrefix.build !== undefined,
+		"build phase should exist after prefix",
+	);
+	tg.assert(
+		isScriptBody(commandWithPrefix.build.body),
+		"command with prefix should become script",
+	);
+
+	return true;
+};
+
+/** Test set_if_unset mutation. */
+export const testSetIfUnset = async () => {
+	// When phase exists, set_if_unset should not override.
+	const existing = { build: tg`echo "existing"` };
+	const withSetIfUnset = await arg(existing, {
+		build: tg.Mutation.setIfUnset(tg`echo "fallback"`),
+	});
+	tg.assert(
+		withSetIfUnset.build !== undefined,
+		"build phase should exist after set_if_unset",
+	);
+	const existingText = (withSetIfUnset.build.body as tg.Template).components
+		.filter((c): c is string => typeof c === "string")
+		.join("");
+	tg.assert(
+		existingText.includes("existing"),
+		`set_if_unset should not override existing, got: ${existingText}`,
+	);
+
+	// When phase does not exist, set_if_unset should set it.
+	const empty: PhasesArg = {};
+	const withFallback = await arg(empty, {
+		build: tg.Mutation.setIfUnset(tg`echo "fallback"`),
+	});
+	tg.assert(withFallback.build !== undefined, "build phase should be set");
+	const fallbackText = (withFallback.build.body as tg.Template).components
+		.filter((c): c is string => typeof c === "string")
+		.join("");
+	tg.assert(
+		fallbackText.includes("fallback"),
+		`set_if_unset should set when empty, got: ${fallbackText}`,
+	);
+
+	return true;
+};
+
+/** Test script body converting to command when args-only override is applied. */
+export const testScriptToCommand = async () => {
+	// Script body + args-only override = command body with script as command.
+	const scriptPhases = {
+		configure: tg`./configure`,
+	};
+	const withArgs = await arg(scriptPhases, {
+		configure: { args: ["--prefix=/usr", "--enable-shared"] },
+	});
+
+	tg.assert(withArgs.configure !== undefined, "configure phase should exist");
+	tg.assert(
+		isCommandBody(withArgs.configure.body),
+		"script + args should become command body",
+	);
+	const body = withArgs.configure.body as CommandBody;
+	tg.assert(
+		body.args !== undefined && body.args.length === 2,
+		`should have 2 args, got ${body.args?.length}`,
+	);
+
+	return true;
+};
+
+/** Test pre and post hooks on phases. */
+export const testPrePostHooks = async () => {
+	const phasesWithHooks = {
+		build: {
+			pre: tg`echo "pre-build" >> ${tg.output}`,
+			body: tg`echo "building" >> ${tg.output}`,
+			post: tg`echo "post-build" >> ${tg.output}`,
+		},
+	};
+
+	const resolved = await arg(phasesWithHooks);
+	tg.assert(resolved.build !== undefined, "build phase should exist");
+	tg.assert(resolved.build.pre !== undefined, "pre hook should exist");
+	tg.assert(resolved.build.post !== undefined, "post hook should exist");
+
+	// Run and verify output order.
+	const output = await run({
+		phases: resolved,
+		order: ["build"],
+		bootstrap: true,
+	}).then(tg.File.expect);
+	const text = await output.text();
+	tg.assert(
+		text.includes("pre-build") &&
+			text.includes("building") &&
+			text.includes("post-build"),
+		`output should contain all three parts, got: ${text}`,
+	);
+	// Verify order: pre comes before body, body comes before post.
+	const preIdx = text.indexOf("pre-build");
+	const bodyIdx = text.indexOf("building");
+	const postIdx = text.indexOf("post-build");
+	tg.assert(
+		preIdx < bodyIdx && bodyIdx < postIdx,
+		`hooks should execute in order: pre(${preIdx}) < body(${bodyIdx}) < post(${postIdx})`,
+	);
+
+	return true;
+};
+
+/** Test merging multiple phase args. */
+export const testMultipleArgs = async () => {
+	const base = {
+		configure: { command: "./configure", args: ["--base"] },
+	};
+	const override1 = {
+		configure: { args: ["--opt1"] },
+	};
+	const override2 = {
+		configure: { args: ["--opt2"] },
+	};
+	const override3 = {
+		build: tg`make`,
+	};
+
+	// Merge all at once.
+	const merged = await arg(base, override1, override2, override3);
+
+	// Configure should have all args appended.
+	tg.assert(merged.configure !== undefined, "configure should exist");
+	const configBody = merged.configure.body as CommandBody;
+	tg.assert(
+		configBody.args !== undefined && configBody.args.length === 3,
+		`configure should have 3 args, got ${configBody.args?.length}`,
+	);
+
+	// Build should exist from override3.
+	tg.assert(merged.build !== undefined, "build should exist");
+
+	return true;
+};
+
+/** Test array input to arg(). */
+export const testArrayInput = async () => {
+	const phases1 = { configure: tg`./configure` };
+	const phases2 = { build: tg`make` };
+	const phases3 = { install: tg`make install` };
+
+	// Pass array of phases.
+	const merged = await arg([phases1, phases2], phases3);
+
+	tg.assert(merged.configure !== undefined, "configure should exist");
+	tg.assert(merged.build !== undefined, "build should exist");
+	tg.assert(merged.install !== undefined, "install should exist");
+
+	return true;
+};
+
+/** Test mutations on command field within command body. */
+export const testCommandMutations = async () => {
+	const base = {
+		build: { command: "make", args: ["-j4"] },
+	};
+
+	// Test command prefix mutation.
+	const withPrefix = await arg(base, {
+		build: { command: tg.Mutation.prefix("nice ", "") },
+	});
+	tg.assert(withPrefix.build !== undefined, "build should exist after prefix");
+	const prefixBody = withPrefix.build.body as CommandBody;
+	const prefixText = prefixBody.command.components
+		.filter((c): c is string => typeof c === "string")
+		.join("");
+	tg.assert(
+		prefixText.includes("nice") && prefixText.includes("make"),
+		`command prefix should work, got: ${prefixText}`,
+	);
+
+	// Test command suffix mutation.
+	const withSuffix = await arg(base, {
+		build: { command: tg.Mutation.suffix(" all", "") },
+	});
+	tg.assert(withSuffix.build !== undefined, "build should exist after suffix");
+	const suffixBody = withSuffix.build.body as CommandBody;
+	const suffixText = suffixBody.command.components
+		.filter((c): c is string => typeof c === "string")
+		.join("");
+	tg.assert(
+		suffixText.includes("make") && suffixText.includes("all"),
+		`command suffix should work, got: ${suffixText}`,
+	);
+
+	// Test set_if_unset on command field.
+	const noCommand = {
+		build: { args: ["-j4"] },
+	};
+	const withSetIfUnset = await arg(noCommand, {
+		build: { command: tg.Mutation.setIfUnset("make") },
+	});
+	tg.assert(
+		withSetIfUnset.build !== undefined,
+		"build should exist after set_if_unset",
+	);
+	const setBody = withSetIfUnset.build.body as CommandBody;
+	const setText = setBody.command.components
+		.filter((c): c is string => typeof c === "string")
+		.join("");
+	tg.assert(
+		setText.includes("make"),
+		`set_if_unset should set command, got: ${setText}`,
+	);
+
 	return true;
 };

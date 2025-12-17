@@ -72,7 +72,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			buildInTree: true,
 			phases: {
 				configure: tg.Mutation.unset(),
-				install: { command: install, args: tg.Mutation.unset() },
+				install,
 			},
 		},
 		...args,

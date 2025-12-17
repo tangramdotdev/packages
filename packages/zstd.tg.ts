@@ -39,10 +39,8 @@ export const build = (...args: std.Args<Arg>) =>
 			source: source(),
 			buildInTree: true,
 			prefixArg: "none",
-			phases: {
-				order: ["prepare", "build", "install"],
-				phases: { install: tg`make install PREFIX=${tg.output}` },
-			},
+			order: ["prepare", "build", "install"],
+			phases: { install: tg`make install PREFIX=${tg.output}` },
 		},
 		...args,
 	);

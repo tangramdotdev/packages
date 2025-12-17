@@ -90,10 +90,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	if (skipInstall) {
 		phases = {
 			...phases,
-			install: {
-				command: tg.Mutation.set(tg`cp -R . ${tg.output}`),
-				args: tg.Mutation.unset(),
-			},
+			install: tg`cp -R . ${tg.output}`,
 		};
 	}
 

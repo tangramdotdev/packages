@@ -48,7 +48,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	// FIXME - how do I use this flag with cross compilation?
 	let phases = arg.phases;
 	if (arg.build === arg.host) {
-		phases = await std.phases.mergePhases(phases, {
+		phases = await std.phases.arg(phases, {
 			configure: { args: ["--with-shared-termcap-library"] },
 		});
 	}

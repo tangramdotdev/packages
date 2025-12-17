@@ -37,13 +37,21 @@ export const buildCommandOutput = async <T extends MinimalPackageArg>(
 /** After application, the resulting type always has concrete values for build, host, and sdk. */
 export type ResolvedPackageArg<T extends BasePackageArg> = Omit<
 	T,
-	"build" | "env" | "host" | "sdk" | "dependencies"
+	| "build"
+	| "env"
+	| "host"
+	| "sdk"
+	| "dependencies"
+	| "subtreeEnv"
+	| "subtreeSdk"
 > & {
 	build: string;
 	dependencies?: ResolvedDependencyArgs;
 	env?: std.env.Arg;
 	host: string;
 	sdk: std.sdk.Arg;
+	subtreeEnv?: std.env.Arg;
+	subtreeSdk?: std.sdk.Arg;
 };
 
 export type ResolvedDependencyArgs = {
@@ -68,8 +76,12 @@ export const applyArgs = async <T extends PackageArg>(
 			env: (a: std.env.Arg | undefined, b: std.env.Arg) =>
 				std.env.arg(a, b, { utils: false }),
 			phases: (a: std.phases.PhasesArg, b: std.phases.PhasesArg) =>
-				std.phases.mergePhases(a, b),
+				std.phases.arg(a, b),
 			sdk: (a: std.sdk.Arg | undefined, b: std.sdk.Arg) => std.sdk.arg(a, b),
+			subtreeEnv: (a: std.env.Arg | undefined, b: std.env.Arg) =>
+				std.env.arg(a, b, { utils: false }),
+			subtreeSdk: (a: std.sdk.Arg | undefined, b: std.sdk.Arg) =>
+				std.sdk.arg(a, b),
 		} as any,
 	});
 
@@ -79,6 +91,8 @@ export const applyArgs = async <T extends PackageArg>(
 
 	const env = arg.env;
 	const sdk = arg.sdk;
+	const subtreeEnv = arg.subtreeEnv;
+	const subtreeSdk = arg.subtreeSdk;
 
 	// Process dependency args.
 	const dependencyArgs = arg.dependencies ?? [];
@@ -161,6 +175,8 @@ export const applyArgs = async <T extends PackageArg>(
 		env,
 		host,
 		sdk,
+		subtreeEnv,
+		subtreeSdk,
 	} as ResolvedPackageArg<T>;
 };
 
@@ -270,6 +286,10 @@ export namespace deps {
 		/** Dependency argument overrides from user input. build/host are added automatically. */
 		dependencies?: std.args.DependencyArgs | undefined;
 		env?: tg.Unresolved<std.env.Arg>;
+		/** Environment to propagate to all dependencies in the subtree. */
+		subtreeEnv?: tg.Unresolved<std.env.Arg>;
+		/** SDK configuration to propagate to all dependencies in the subtree. */
+		subtreeSdk?: std.sdk.Arg;
 	};
 
 	/** Resolve a deps config to a combined env. */
@@ -289,7 +309,7 @@ export namespace deps {
 		config: T,
 		ctx: Context,
 	): Promise<ArtifactsFrom<T>> => {
-		const { build, host, sdk, dependencies = {} } = ctx;
+		const { build, host, dependencies = {}, subtreeEnv, subtreeSdk } = ctx;
 		const artifactMap: Record<string, tg.Directory | undefined> = {};
 
 		for (const [key, spec_] of Object.entries(config)) {
@@ -304,7 +324,6 @@ export namespace deps {
 
 			// Determine build parameters based on kind.
 			const setHostToBuild = spec.kind === "buildtime";
-			const inheritSdk = spec.kind === "runtime";
 			const subdirs =
 				spec.kind === "buildtime"
 					? ["bin"]
@@ -313,14 +332,33 @@ export namespace deps {
 						: undefined;
 
 			// Prepare build argument.
+			// Dependencies receive subtreeSdk as their sdk, and subtree* propagate down.
+			// Plain sdk/env do NOT inherit to dependencies.
 			const host_ = setHostToBuild ? build : host;
-			let buildArg: Record<string, unknown> =
-				arg === true || arg === undefined
-					? { build, host: host_, sdk: {} }
-					: { ...arg, build, host: host_ };
-
-			if (inheritSdk) {
-				buildArg = { ...buildArg, sdk };
+			let buildArg: Record<string, unknown>;
+			if (arg === true || arg === undefined) {
+				buildArg = {
+					build,
+					host: host_,
+					sdk: subtreeSdk ?? {},
+					subtreeSdk,
+					subtreeEnv,
+				};
+			} else {
+				// When user provides custom sdk for a dependency, merge with subtreeSdk.
+				const argSdk = arg.sdk as std.sdk.Arg | undefined;
+				const mergedSdk = argSdk
+					? await std.sdk.arg(subtreeSdk, argSdk)
+					: (subtreeSdk ?? {});
+				buildArg = {
+					...arg,
+					build,
+					host: host_,
+					sdk: mergedSdk,
+					// Allow dependency to override subtree values, otherwise propagate.
+					subtreeSdk: (arg as Record<string, unknown>).subtreeSdk ?? subtreeSdk,
+					subtreeEnv: (arg as Record<string, unknown>).subtreeEnv ?? subtreeEnv,
+				};
 			}
 
 			// Build the dependency.
