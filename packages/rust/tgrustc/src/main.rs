@@ -1,11 +1,5 @@
 use itertools::Itertools;
-use std::{
-	collections::BTreeMap,
-	os::unix::process::CommandExt,
-	path::{Path, PathBuf},
-	str::FromStr,
-	sync::LazyLock,
-};
+use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf, str::FromStr};
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
@@ -28,7 +22,7 @@ struct Args {
 	rustc_output_directory: Option<String>,
 
 	// The rest of the arguments passed to rustc.
-	rustc_args: Vec<String>,
+	remaining: Vec<String>,
 
 	// For cargo builds, this is found via CARGO_MANIFEST_DIRECTORY set by cargo. For plain rustc invocations, it is the parent of the source file.
 	source_directory: String,
@@ -48,19 +42,18 @@ impl Args {
 		let mut dependencies = Vec::new();
 		let mut externs = Vec::new();
 		let mut rustc_output_directory = None;
-		let mut rustc_args = Vec::new();
+		let mut remaining = Vec::new();
 		let cargo_out_directory = std::env::var("OUT_DIR").ok();
 
 		// TODO: sort the arguments into a canonical order to maximize cache hits.
-		let mut args = std::env::args().skip(2).peekable();
-		while let Some(arg) = args.next() {
+		let mut arg_iter = std::env::args().skip(2).peekable();
+		while let Some(arg) = arg_iter.next() {
 			let value = if ARGS_WITH_VALUES.contains(&arg.as_str())
-				&& args
+				&& arg_iter
 					.peek()
-					.map(|arg| !arg.starts_with('-'))
-					.unwrap_or(false)
+					.is_some_and(|a| !a.starts_with('-'))
 			{
-				args.next()
+				arg_iter.next()
 			} else {
 				None
 			};
@@ -90,14 +83,14 @@ impl Args {
 				},
 				("-", None) => {
 					stdin = true;
-					rustc_args.push("-".into());
+					remaining.push("-".into());
 				},
 				(_, None) => {
-					rustc_args.push(arg);
+					remaining.push(arg);
 				},
 				(_, Some(value)) => {
-					rustc_args.push(arg);
-					rustc_args.push(value);
+					remaining.push(arg);
+					remaining.push(value);
 				},
 			}
 		}
@@ -110,10 +103,13 @@ impl Args {
 			// If cargo set CARGO_MANIFEST_DIR, it's that directory.
 			dir
 		} else {
-			// Otherwise, it's the only argument left in the rustc_args with a ".rs" extension.
+			// Otherwise, it's the only argument left in remaining with a ".rs" extension.
 			let mut source_directory = None;
-			for arg in &rustc_args {
-				if arg.ends_with(".rs") {
+			for arg in &remaining {
+				if std::path::Path::new(arg)
+					.extension()
+					.is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+				{
 					let path = std::path::Path::new(arg);
 					let parent = path.parent();
 					if let Some(parent) = parent
@@ -134,9 +130,9 @@ impl Args {
 			dependencies,
 			externs,
 			rustc_output_directory,
+			remaining,
 			source_directory,
 			cargo_out_directory,
-			rustc_args,
 		})
 	}
 }
@@ -144,10 +140,11 @@ impl Args {
 fn main() {
 	// Setup tracing.
 	#[cfg(feature = "tracing")]
-	setup_tracing("TGRUSTC_TRACING");
+	tangram_std::tracing::setup("TGRUSTC_TRACING");
 
 	if let Err(e) = main_inner() {
-		eprintln!("rustc proxy failed: {e}");
+		eprintln!("rustc proxy failed:");
+		tangram_std::error::print_error(e);
 		std::process::exit(1);
 	}
 }
@@ -158,7 +155,7 @@ fn main_inner() -> tg::Result<()> {
 	tracing::info!(?args, "parsed arguments");
 
 	// If cargo expects to pipe into stdin or contains only a single arg, we immediately invoke rustc without doing anything.
-	if args.stdin || args.rustc_args.len() < 2 {
+	if args.stdin || args.remaining.len() < 2 {
 		#[cfg(feature = "tracing")]
 		tracing::info!("invoking rustc without tangram");
 		let error = std::process::Command::new(std::env::args().nth(1).unwrap())
@@ -177,6 +174,7 @@ fn main_inner() -> tg::Result<()> {
 }
 
 /// Run the proxy.
+#[allow(clippy::too_many_lines)]
 async fn run_proxy(args: Args) -> tg::Result<()> {
 	// Create a client.
 	let tg = tg::Client::with_env()?;
@@ -187,26 +185,30 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?source_directory_path, "checking in source directory");
 	let source_directory = get_checked_in_path(tg, &source_directory_path).await?;
-	let out_dir = if let Some(path) = &args.cargo_out_directory {
+	let out_dir: tg::Value = if let Some(path) = &args.cargo_out_directory {
 		let out_dir_path = std::path::PathBuf::from_str(path)
 			.map_err(|source| tg::error!(!source, %path,  "unable to construct path"))?;
 		#[cfg(feature = "tracing")]
 		tracing::info!(?out_dir_path, "checking in output directory");
 		get_checked_in_path(tg, &out_dir_path).await?
 	} else {
-		tg::Directory::with_entries(BTreeMap::new()).into()
+		// Create an empty directory, store it, and wrap it in a template so it renders as a path.
+		let empty_dir = tg::Directory::with_entries(BTreeMap::new());
+		empty_dir.store(tg).await?;
+		tangram_std::template_from_artifact(empty_dir.into()).into()
 	};
 
 	// Create the executable file.
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH).await?;
-	let executable = true;
+	let is_executable = true;
 	let dependencies = BTreeMap::new();
 	let object = tg::file::Object::Node(tg::file::object::Node {
 		contents,
 		dependencies,
-		executable,
+		executable: is_executable,
 	});
-	let executable = Some(tg::File::with_object(object).into());
+	let driver_file = tg::File::with_object(object);
+	let executable: tg::command::Executable = driver_file.into();
 
 	// Unrender the environment.
 	let mut env = BTreeMap::new();
@@ -223,13 +225,15 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			value
 		};
 
-		let value = unrender(&value)?;
+		let value = tangram_std::unrender(&value)?;
 		env.insert(name, value.into());
 	}
 
 	// Create/Unrender the arguments passed to driver.sh.
-	let rustc = unrender(&args.rustc)?;
+	let rustc = tangram_std::unrender(&args.rustc)?;
 	let name = "tgrustc".to_string().into();
+	#[cfg(feature = "tracing")]
+	tracing::info!(?source_directory, "source_directory value for inner build");
 	let mut command_args: Vec<tg::Value> = vec![
 		name,
 		"--rustc".to_owned().into(),
@@ -241,8 +245,8 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		"--".to_owned().into(),
 	];
 
-	for arg in &args.rustc_args {
-		let template = unrender(arg)?;
+	for arg in &args.remaining {
+		let template = tangram_std::unrender(arg)?;
 		command_args.push(template.into());
 	}
 
@@ -278,7 +282,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			.filter_map(|(name, path)| {
 				let template = if path.is_empty() {
 					tg::Template {
-						components: vec![name.to_string().into()],
+						components: vec![name.clone().into()],
 					}
 				} else {
 					let subpath = path.strip_prefix(dependency)?;
@@ -307,7 +311,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	command_args.extend(unhandled_externs.flat_map(|(name, path)| {
 		let template = if path.is_empty() {
 			tg::Template {
-				components: vec![name.to_string().into()],
+				components: vec![name.clone().into()],
 			}
 		} else {
 			tg::Template {
@@ -319,18 +323,46 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Create the process.
 	let host = host().to_string();
-	let run_arg = tg::run::Arg {
-		args: command_args,
-		env,
-		executable,
-		host: Some(host),
-		name: Some("rustc".into()),
-		network: Some(false),
-		..Default::default()
-	};
+	#[cfg(feature = "tracing")]
+	tracing::info!(?host, "creating inner process");
 
-	// Get the process output.
-	let output = tg::run::run(tg, run_arg).await?;
+	// Log args for debugging before they are moved.
+	#[cfg(feature = "tracing")]
+	tracing::info!(?command_args, "full command args for inner process");
+
+	// Build a command for the process.
+	let mut command_builder = tg::Command::builder(host, executable);
+	command_builder = command_builder.args(command_args);
+	command_builder = command_builder.env(env);
+	let command = command_builder.build();
+	let command_id = command.store(tg).await?;
+	let mut command_ref = tg::Referent::with_item(command_id);
+	command_ref.options.name.replace("rustc".into());
+
+	// Spawn the process.
+	let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
+	spawn_arg.network = false;
+
+	#[cfg(feature = "tracing")]
+	tracing::info!("spawning inner process");
+
+	let process = tg::Process::spawn(tg, spawn_arg).await?;
+	let process_id = process.id().clone();
+
+	#[cfg(feature = "tracing")]
+	tracing::info!(?process_id, "spawned inner process");
+
+	// Wait for the process output.
+	let output = match process.output(tg).await {
+		Ok(output) => output,
+		Err(e) => {
+			// Now we have the process ID, so the user can run `tangram log <process_id>` to see the actual error.
+			eprintln!("Inner process failed. View logs with: tangram log {process_id}");
+			#[cfg(feature = "tracing")]
+			tracing::error!(?e, ?process_id, "inner process error details");
+			return Err(e);
+		},
+	};
 	let output = output
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
@@ -534,27 +566,31 @@ async fn get_checked_in_path(
 	}
 
 	// Unrender the string.
-	let symlink_data = template_data_to_symlink_data(unrender(path_str)?.to_data())?;
+	let symlink_data = tangram_std::template_data_to_symlink_data(tangram_std::unrender(path_str)?.to_data())?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?symlink_data, "unrendered symlink data");
 
-	// If the symlink data has an artifact, check it out and return it.
-	if let tg::symlink::Data::Node(tg::symlink::data::Node { artifact, path: _ }) = symlink_data {
+	// If the symlink data has an artifact, return a template that preserves the artifact reference.
+	// This is necessary because inside a Tangram sandbox, raw filesystem paths to artifacts
+	// are not accessible - the artifact must be passed as a reference in the process arguments.
+	if let tg::symlink::Data::Node(tg::symlink::data::Node {
+		artifact: Some(_),
+		path: _,
+	}) = symlink_data
+	{
+		let root_dir = find_root_manifest_dir(&path_str);
+		let root_dir_str = root_dir.display().to_string();
 		#[cfg(feature = "tracing")]
-		tracing::info!(
-			?artifact,
-			"found artifact in symlink data, returning original value"
-		);
-		let root_dir = find_root_manifest_dir(&path_str).display().to_string();
-		#[cfg(feature = "tracing")]
-		tracing::info!(?root_dir, "found root directory");
-		return Ok(root_dir.into());
+		tracing::info!(?root_dir_str, "found root directory, re-unrendering to preserve artifact reference");
+		// Re-unrender the root directory path to get a template that includes the artifact reference.
+		let template = tangram_std::unrender(&root_dir_str)?;
+		return Ok(template.into());
 	}
 
 	#[cfg(feature = "tracing")]
 	tracing::info!(?path, "no artifact found in symlink data, checking in");
 
-	// Otherwise, check in the path.
+	// Otherwise, check in the path and wrap in a template so it renders as a path.
 	let artifact = tg::checkin(
 		tg,
 		tg::checkin::Arg {
@@ -570,31 +606,8 @@ async fn get_checked_in_path(
 	)
 	.await?;
 
-	Ok(artifact.into())
-}
-
-#[cfg(feature = "tracing")]
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
-
-/// Initialize tracing.
-pub fn setup_tracing(var_name: &str) {
-	// Create the env layer.
-	let targets_layer = std::env::var(var_name)
-		.ok()
-		.and_then(|filter| filter.parse::<tracing_subscriber::filter::Targets>().ok());
-
-	// If tracing is enabled, create and initialize the subscriber.
-	if let Some(targets_layer) = targets_layer {
-		let format_layer = tracing_subscriber::fmt::layer()
-			.compact()
-			.with_ansi(false)
-			.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW)
-			.with_writer(std::io::stderr);
-		let subscriber = tracing_subscriber::registry()
-			.with(targets_layer)
-			.with(format_layer);
-		subscriber.init();
-	}
+	// Wrap in a template so it renders as a path, not just the artifact ID.
+	Ok(tangram_std::template_from_artifact(artifact).into())
 }
 
 /// Get the host string for the current target.
@@ -618,70 +631,3 @@ pub fn host() -> &'static str {
 	}
 }
 
-/// Convert a [`tg::template::Data`] to its corresponding [`tg::symlink::Data`] object.
-pub fn template_data_to_symlink_data(
-	template: tg::template::Data,
-) -> tg::Result<tg::symlink::Data> {
-	let components = template.components;
-	match components.as_slice() {
-		[tg::template::data::Component::String(s)] => {
-			Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-				artifact: None,
-				path: Some(s.into()),
-			}))
-		},
-		[tg::template::data::Component::Artifact(id)]
-		| [
-			tg::template::data::Component::String(_),
-			tg::template::data::Component::Artifact(id),
-		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-			artifact: Some(tg::graph::data::Edge::Object(id.clone())),
-			path: None,
-		})),
-		[
-			tg::template::data::Component::Artifact(artifact_id),
-			tg::template::data::Component::String(s),
-		]
-		| [
-			tg::template::data::Component::String(_),
-			tg::template::data::Component::Artifact(artifact_id),
-			tg::template::data::Component::String(s),
-		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-			artifact: Some(tg::graph::data::Edge::Object(artifact_id.clone())),
-			path: Some(s.chars().skip(1).collect::<String>().into()),
-		})),
-		_ => Err(tg::error!(
-			"expected a template with 1-3 components, got {:?}",
-			components
-		)),
-	}
-}
-
-/// Compute the closest located artifact path for the current running process, reusing the result for subsequent lookups.
-pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
-	let mut closest_artifact_path = None;
-	let cwd = std::env::current_dir().expect("Failed to get the current directory");
-	let paths = if cwd == Path::new("/") {
-		vec![cwd.as_path()]
-	} else {
-		vec![]
-	};
-	for path in paths.into_iter().chain(cwd.ancestors().skip(1)) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
-			closest_artifact_path = Some(
-				directory
-					.to_str()
-					.expect("artifacts directory should be valid UTF-8")
-					.to_string(),
-			);
-			break;
-		}
-	}
-	closest_artifact_path.expect("Failed to find the closest artifact path")
-});
-
-/// Unrender a template string to a [`tangram_client::Template`] using the closest located artifact path.
-pub fn unrender(string: &str) -> tg::Result<tg::Template> {
-	tg::Template::unrender(&CLOSEST_ARTIFACT_PATH, string)
-}

@@ -46,7 +46,7 @@ done
 
 # Validate required arguments
 if [ -z "${RUSTC-}" ] || [ -z "${SOURCE-}" ] || [ -z "${OUT_DIR-}" ] || [ -z "${TANGRAM_OUTPUT-}" ]; then
-	die "Missing required argument or environment variable"
+	die "Missing required argument or environment variable. RUSTC=${RUSTC-unset}, SOURCE=${SOURCE-unset}, OUT_DIR=${OUT_DIR-unset}, TANGRAM_OUTPUT=${TANGRAM_OUTPUT-unset}"
 fi
 
 # Create output directories
@@ -58,10 +58,15 @@ cd "$SOURCE" || die "Failed to change to source directory: $SOURCE"
 # Copy over the OUT_DIR contents.
 cp -R "$OUT_DIR/." "$TANGRAM_OUTPUT/out" || die "Failed to copy $OUT_DIR to $TANGRAM_OUTPUT/out"
 
-# Invoke the compiler
+# Invoke the compiler, capturing output to files but also printing stderr on failure.
 if ! OUT_DIR="$TANGRAM_OUTPUT/out" "$RUSTC" "$@" --out-dir "$TANGRAM_OUTPUT/build" \
 		 > "$TANGRAM_OUTPUT/log/stdout" 2> "$TANGRAM_OUTPUT/log/stderr"; then
-	log "rustc failed. Error output:"
-	cat "$TANGRAM_OUTPUT/log/stderr"
+	log "=== rustc failed with exit code $? ==="
+	log "=== RUSTC: $RUSTC ==="
+	log "=== SOURCE: $SOURCE ==="
+	log "=== Arguments: $@ ==="
+	log "=== Stderr output: ==="
+	cat "$TANGRAM_OUTPUT/log/stderr" >&2
+	log "=== End stderr output ==="
 	exit 1
 fi

@@ -7,30 +7,36 @@ import cargoToml from "./tgrustc/Cargo.toml" with { type: "file" };
 import cargoLock from "./tgrustc/Cargo.lock" with { type: "file" };
 import src from "./tgrustc/src" with { type: "directory" };
 
+// Create a source directory structure where `../../std` from tgrustc's Cargo.toml
+// resolves to the std Rust workspace. The structure is:
+//   rust/tgrustc/Cargo.toml (contains `tangram_std = { path = "../../std" }`)
+//   rust/tgrustc/Cargo.lock
+//   rust/tgrustc/src/
+//   std/ (the std Rust workspace)
 export let source = async () => {
 	return tg.directory({
-		"Cargo.toml": cargoToml,
-		"Cargo.lock": cargoLock,
-		src,
+		"rust/tgrustc": {
+			"Cargo.toml": cargoToml,
+			"Cargo.lock": cargoLock,
+			src,
+		},
+		std: std.rustSource,
 	});
 };
 
-export type Arg = {
-	buildToolchain: std.env.Arg;
-	build?: string;
-	host?: string;
-	release?: boolean;
-	source?: tg.Directory;
-};
+export type Arg = cargo.Arg;
 
-export const proxy = async (arg?: Arg) => {
-	return cargo.build({
-		source: source(),
-		features: ["tracing"],
-		proxy: false,
-		useCargoVendor: true,
-	});
-};
+export const proxy = async (...args: std.Args<Arg>) =>
+	cargo.build(
+		{
+			source: source(),
+			manifestSubdir: "rust/tgrustc",
+			features: ["tracing"],
+			proxy: false,
+			useCargoVendor: true,
+		},
+		...args,
+	);
 
 export default proxy;
 

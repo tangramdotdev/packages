@@ -25,6 +25,16 @@ export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
 export * as bootstrap from "./bootstrap.tg.ts";
 
+// Export the Rust workspace source directory for use by other packages that depend on tangram_std.
+import rustCargoToml from "./Cargo.toml" with { type: "file" };
+import rustCargoLock from "./Cargo.lock" with { type: "file" };
+import rustPackages from "./packages" with { type: "directory" };
+export const rustSource = tg.directory({
+	"Cargo.toml": rustCargoToml,
+	"Cargo.lock": rustCargoLock,
+	packages: rustPackages,
+});
+
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as build from "./build.tg.ts";

@@ -13,13 +13,21 @@ version = "0.0.0"
 [features]
 tracing = ["dep:tracing", "dep:tracing-subscriber"]
 
+[lints.clippy]
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+missing_safety_doc = "allow"
+pedantic = { level = "warn", priority = -1 }
+result_large_err = "allow"
+
 [dependencies]
 fnv = "1"
 futures = "0.3"
 itertools = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "43429e6b386c038b8fbd99cdf42fef33b9499d1d" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "805ba5c5b4435e2066814d9a9f2d9014b2958764" }
+tangram_std = { path = "../../std" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "fs",
