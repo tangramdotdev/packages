@@ -347,6 +347,7 @@ const vendoredSources = async (
 			: `"Cargo.toml"`;
 		const vendorScript = tg`
 			set -x
+			export HOME=$PWD
 			SOURCE="$(realpath ${source})"
 			export CARGO_HOME=$PWD
 			mkdir -p "${tg.output}/tg_vendor_dir"
