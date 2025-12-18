@@ -1,0 +1,10 @@
+[package]
+name = "parallel-deps"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Both aho-corasick and regex-syntax depend on memchr
+# This creates a diamond: parallel-deps -> {aho-corasick, regex-syntax} -> memchr
+aho-corasick = "1.1.3"
+regex-syntax = "0.8.5"

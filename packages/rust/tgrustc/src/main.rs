@@ -404,12 +404,14 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
 	// Ensure the result is available with an internal checkout.
+	// Dependencies must be checked out so that wrapped binaries (like build scripts)
+	// can access their artifact references (interpreter, libraries, etc.) when run.
 	let artifact = tg::Artifact::from(output.clone()).id();
 	let path = tg::checkout(
 		tg,
 		tg::checkout::Arg {
 			artifact,
-			dependencies: false,
+			dependencies: true,
 			force: true,
 			path: None,
 			lock: None,

@@ -177,6 +177,28 @@ export const testWorkspace = async () => {
 	return true;
 };
 
+export const testParallelDeps = async () => {
+	// Build a project with dependencies that trigger parallel compilation.
+	// This tests the race condition where multiple proxies check in the deps
+	// directory simultaneously.
+	const parallelDeps = await cargo.build({
+		source: tests.get("parallel-deps").then(tg.Directory.expect),
+		proxy: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=trace",
+		},
+	});
+	console.log("parallelDeps result", parallelDeps.id);
+
+	// Assert it produces the correct output.
+	const output = await $`parallel-deps | tee ${tg.output}`
+		.env(parallelDeps)
+		.then(tg.File.expect);
+	const text = await output.text();
+	tg.assert(text.includes("Found 2 matches"));
+	return true;
+};
+
 export const test = async () => {
 	tg.assert(await testProxyCompiles());
 	tg.assert(await testHello());
