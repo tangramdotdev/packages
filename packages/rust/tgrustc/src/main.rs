@@ -260,9 +260,13 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	// Now we check in each --extern file individually, which is atomic and race-free.
 	// We wrap each file in a directory with the correct filename to preserve the .rlib extension
 	// that rustc requires.
+	// We also collect these directories to add as -L dependency paths, so rustc can find
+	// transitive dependencies (e.g., if crate A depends on B, and B depends on C, rustc needs
+	// to be able to find C when compiling A even if A doesn't directly depend on C).
 	// Sort externs by name for deterministic cache hits.
 	let mut sorted_externs = args.externs.clone();
 	sorted_externs.sort_by(|a, b| a.0.cmp(&b.0));
+	let mut extern_dirs: Vec<tg::Directory> = Vec::new();
 	for (name, path) in &sorted_externs {
 		if path.is_empty() {
 			// No explicit path - just pass the name for rustc to search.
@@ -309,6 +313,9 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				tg::Directory::with_entries([(filename.clone(), file_artifact.into())].into());
 			wrapped_dir.store(tg).await?;
 
+			// Track this directory for adding to -L paths later.
+			extern_dirs.push(wrapped_dir.clone());
+
 			// Build --extern name=<wrapped_dir>/<filename>
 			let template = tg::Template {
 				components: vec![
@@ -321,21 +328,88 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		}
 	}
 
-	// Add -L dependency paths. These are still needed for rustc to search for
-	// dependencies, but we've already checked in the specific files above.
-	// Note: with explicit --extern paths, -L is mostly redundant, but we keep it
-	// for compatibility in case rustc needs to resolve transitive dependencies.
-	// Sort dependencies for deterministic cache hits.
+	// Add -L dependency paths. These are needed for rustc to search for transitive dependencies.
+	// For example, if crate A depends on B, and B depends on C, rustc needs to find C when
+	// compiling A even if A doesn't directly depend on C.
+	//
+	// The challenge is that the deps directory is a shared mutable directory that multiple
+	// parallel rustc invocations write to. Checking it in as-is would be racy.
+	//
+	// To solve this, we check in ALL files from the deps directories that exist at this moment,
+	// merging them into a single artifact directory. This creates a deterministic snapshot
+	// without race conditions because we check in each file individually (atomic operations).
+	// We perform all checkins concurrently for better performance.
+	//
+	// Sort for deterministic cache hits.
 	let mut sorted_deps = args.dependencies.clone();
 	sorted_deps.sort();
+
+	// Collect all files to check in.
+	let mut files_to_checkin: Vec<(String, PathBuf)> = Vec::new();
 	for dependency in &sorted_deps {
 		#[cfg(feature = "tracing")]
-		tracing::info!(?dependency, "adding -L dependency path");
-		let unrendered = tangram_std::unrender(dependency)?;
-		// Build template by prepending "dependency=" to the unrendered path components.
-		let mut components = vec!["dependency=".to_owned().into()];
-		components.extend(unrendered.components);
-		let template = tg::Template { components };
+		tracing::info!(?dependency, "scanning dependency directory for files");
+		let dep_path = std::path::Path::new(dependency);
+		if dep_path.is_dir() {
+			if let Ok(entries) = std::fs::read_dir(dep_path) {
+				for entry in entries.flatten() {
+					let file_path = entry.path();
+					if file_path.is_file() {
+						if let Some(filename) = file_path.file_name().and_then(|s| s.to_str()) {
+							files_to_checkin.push((filename.to_owned(), file_path));
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Sort and deduplicate by filename for determinism.
+	files_to_checkin.sort_by(|a, b| a.0.cmp(&b.0));
+	files_to_checkin.dedup_by(|a, b| a.0 == b.0);
+
+	// Check in all files concurrently.
+	let checkin_futures = files_to_checkin.iter().map(|(filename, file_path)| {
+		let filename = filename.clone();
+		let file_path_str = file_path.to_str().unwrap_or_default().to_owned();
+		async move {
+			let result = tg::checkin(
+				tg,
+				tg::checkin::Arg {
+					options: tg::checkin::Options {
+						destructive: false,
+						deterministic: true,
+						ignore: false,
+						local_dependencies: true,
+						locked: true,
+						lock: Some(tg::checkin::Lock::Attr),
+						..tg::checkin::Options::default()
+					},
+					path: file_path_str.parse().ok()?,
+					updates: vec![],
+				},
+			)
+			.await
+			.ok()?;
+			Some((filename, result))
+		}
+	});
+	let checkin_results: Vec<Option<(String, tg::Artifact)>> =
+		futures::future::join_all(checkin_futures).await;
+
+	// Collect successful checkins into a merged directory.
+	let merged_entries: BTreeMap<String, tg::Artifact> = checkin_results
+		.into_iter()
+		.flatten()
+		.collect();
+
+	// Create a merged directory containing all the dependency files.
+	if !merged_entries.is_empty() {
+		let merged_dir = tg::Directory::with_entries(merged_entries);
+		merged_dir.store(tg).await?;
+		let template = tg::Template {
+			components: vec!["dependency=".to_owned().into(), merged_dir.into()],
+		};
 		command_args.extend(["-L".to_owned().into(), template.into()]);
 	}
 
