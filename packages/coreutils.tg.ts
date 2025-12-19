@@ -73,14 +73,12 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				deps,
-				env: { FORCE_UNSAFE_CONFIGURE: true },
-			},
-			...args,
-		),
+		{
+			source: source(),
+			deps,
+			env: { FORCE_UNSAFE_CONFIGURE: true },
+		},
+		...args,
 	);
 
 export default build;

@@ -23,16 +23,14 @@ export type Arg = std.autotools.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
-				phases: {
-					configure: { args: ["--disable-dependency-tracking"] },
-				},
+		{
+			source: source(),
+			env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+			phases: {
+				configure: { args: ["--disable-dependency-tracking"] },
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

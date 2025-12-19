@@ -33,10 +33,8 @@ export type Arg = std.autotools.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{ source: source(), setRuntimeLibraryPath: true },
-			...args,
-		),
+		{ source: source(), setRuntimeLibraryPath: true },
+		...args,
 	);
 
 export default build;

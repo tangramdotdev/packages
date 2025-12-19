@@ -43,15 +43,13 @@ export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
 	let output = await std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				phases: {
-					configure: { args: ["--disable-dependency-tracking"] },
-				},
+		{
+			source: source(),
+			phases: {
+				configure: { args: ["--disable-dependency-tracking"] },
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 	for (const path of scriptNames) {
 		const file = tg.File.expect(await output.get(`bin/${path}`));

@@ -30,21 +30,19 @@ export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
 	let output = await std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				phases: {
-					configure: {
-						args: [
-							"--disable-dependency-tracking",
-							"--disable-rpath",
-							"--enable-relocatable",
-						],
-					},
+		{
+			source: source(),
+			phases: {
+				configure: {
+					args: [
+						"--disable-dependency-tracking",
+						"--disable-rpath",
+						"--enable-relocatable",
+					],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 	// Wrap with BISON_PKGDATADIR to locate m4 support files.
 	const bins = ["bison", "yacc"];

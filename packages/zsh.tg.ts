@@ -34,26 +34,24 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				deps,
-				env: {
-					// Necessary to get the `boolcodes` configure test to pass, preventing a build failure in the termcap module later when it attempts to use a conflicting type.
-					CFLAGS: tg.Mutation.prefix(`-Wno-incompatible-pointer-types`, " "),
-				},
-				phases: {
-					configure: {
-						args: [
-							"--enable-pcre",
-							"--enable-multibyte",
-							`--with-term-lib="tinfow ncursesw"`,
-						],
-					},
+		{
+			source: source(),
+			deps,
+			env: {
+				// Necessary to get the `boolcodes` configure test to pass, preventing a build failure in the termcap module later when it attempts to use a conflicting type.
+				CFLAGS: tg.Mutation.prefix(`-Wno-incompatible-pointer-types`, " "),
+			},
+			phases: {
+				configure: {
+					args: [
+						"--enable-pcre",
+						"--enable-multibyte",
+						`--with-term-lib="tinfow ncursesw"`,
+					],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

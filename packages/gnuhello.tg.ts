@@ -34,16 +34,14 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				deps,
-				phases: {
-					configure: { args: ["--disable-dependency-tracking"] },
-				},
+		{
+			source: source(),
+			deps,
+			phases: {
+				configure: { args: ["--disable-dependency-tracking"] },
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

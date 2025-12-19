@@ -46,25 +46,23 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				deps,
-				source: source(),
-				phases: {
-					configure: {
-						args: [
-							"--disable-dependency-tracking",
-							"--disable-silent-rules",
-							"--enable-optimize",
-							"--with-openssl",
-							tg`--with-ca-bundle=${std.caCertificates()}/ca-bundle.crt`,
-						],
-					},
+		{
+			deps,
+			source: source(),
+			phases: {
+				configure: {
+					args: [
+						"--disable-dependency-tracking",
+						"--disable-silent-rules",
+						"--enable-optimize",
+						"--with-openssl",
+						tg`--with-ca-bundle=${std.caCertificates()}/ca-bundle.crt`,
+					],
 				},
-				setRuntimeLibraryPath: true,
 			},
-			...args,
-		),
+			setRuntimeLibraryPath: true,
+		},
+		...args,
 	);
 
 export default build;

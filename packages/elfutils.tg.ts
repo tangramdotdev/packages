@@ -39,35 +39,33 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				deps,
-				env: {
-					CFLAGS: tg.Mutation.suffix(
-						"-Wno-format-nonliteral -lz -lbz2 -llzma",
-						" ",
-					),
-				},
-				phases: {
-					configure: {
-						args: [
-							"--enable-deterministic-archives",
-							"--program-prefix=eu-",
-							"--disable-nls",
-							"--disable-rpath",
-							"--enable-install-elfh",
-							"--without-libiconv-prefix",
-							"--without-libintl-prefix",
-							// FIXME - figure out how to get debuginfod to build.
-							"--disable-debuginfod",
-							"--enable-libdebuginfod=dummy",
-						],
-					},
+		{
+			source: source(),
+			deps,
+			env: {
+				CFLAGS: tg.Mutation.suffix(
+					"-Wno-format-nonliteral -lz -lbz2 -llzma",
+					" ",
+				),
+			},
+			phases: {
+				configure: {
+					args: [
+						"--enable-deterministic-archives",
+						"--program-prefix=eu-",
+						"--disable-nls",
+						"--disable-rpath",
+						"--enable-install-elfh",
+						"--without-libiconv-prefix",
+						"--without-libintl-prefix",
+						// FIXME - figure out how to get debuginfod to build.
+						"--disable-debuginfod",
+						"--enable-libdebuginfod=dummy",
+					],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

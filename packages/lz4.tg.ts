@@ -35,19 +35,17 @@ export type Arg = std.autotools.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				buildInTree: true,
-				phases: {
-					configure: tg.Mutation.unset(),
-					install: {
-						args: [tg`prefix=${tg.output}`],
-					},
+		{
+			source: source(),
+			buildInTree: true,
+			phases: {
+				configure: tg.Mutation.unset(),
+				install: {
+					args: [tg`prefix=${tg.output}`],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

@@ -54,22 +54,20 @@ export type Arg = std.autotools.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				phases: {
-					configure: {
-						args: [
-							"--disable-debug",
-							"--disable-dependency-tracking",
-							"--disable-nls",
-							"--disable-silent-rules",
-						],
-					},
+		{
+			source: source(),
+			phases: {
+				configure: {
+					args: [
+						"--disable-debug",
+						"--disable-dependency-tracking",
+						"--disable-nls",
+						"--disable-silent-rules",
+					],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

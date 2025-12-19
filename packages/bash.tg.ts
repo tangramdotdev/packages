@@ -30,17 +30,15 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				deps,
-				source: source(),
-				env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
-				phases: {
-					configure: { args: ["--without-bash-malloc", "--with-curses"] },
-				},
+		{
+			deps,
+			source: source(),
+			env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+			phases: {
+				configure: { args: ["--without-bash-malloc", "--with-curses"] },
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

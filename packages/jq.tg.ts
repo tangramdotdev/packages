@@ -28,18 +28,16 @@ export type Arg = std.autotools.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
-				phases: {
-					configure: {
-						args: ["--without-oniguruma", "--disable-maintainer-mode"],
-					},
+		{
+			source: source(),
+			env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
+			phases: {
+				configure: {
+					args: ["--without-oniguruma", "--disable-maintainer-mode"],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

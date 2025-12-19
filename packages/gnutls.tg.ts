@@ -39,29 +39,27 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				deps,
-				env: {
-					CFLAGS: tg.Mutation.prefix(
-						"-Wno-implicit-int -Wno-deprecated-non-prototype",
-						" ",
-					),
-				},
-				phases: {
-					configure: {
-						args: [
-							"--disable-doc",
-							"--with-included-libtasn1",
-							"--with-included-unistring",
-							"--without-p11-kit",
-						],
-					},
+		{
+			source: source(),
+			deps,
+			env: {
+				CFLAGS: tg.Mutation.prefix(
+					"-Wno-implicit-int -Wno-deprecated-non-prototype",
+					" ",
+				),
+			},
+			phases: {
+				configure: {
+					args: [
+						"--disable-doc",
+						"--with-included-libtasn1",
+						"--with-included-unistring",
+						"--without-p11-kit",
+					],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 
 export default build;

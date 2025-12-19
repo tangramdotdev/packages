@@ -41,19 +41,17 @@ export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const output = await std.autotools.build(
-		std.autotools.arg(
-			{
-				source: source(),
-				deps,
-				hardeningCFlags: false,
-				phases: {
-					configure: {
-						args: ["--disable-dependency-tracking", "--disable-silent-rules"],
-					},
+		{
+			source: source(),
+			deps,
+			hardeningCFlags: false,
+			phases: {
+				configure: {
+					args: ["--disable-dependency-tracking", "--disable-silent-rules"],
 				},
 			},
-			...args,
-		),
+		},
+		...args,
 	);
 	// Always set MAGIC when using `file`.
 	const magic = tg.directory({
