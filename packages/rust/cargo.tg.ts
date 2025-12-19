@@ -1,6 +1,6 @@
 import * as std from "std" with { local: "../std" };
 import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
-import { $, linuxRootMount } from "std" with { local: "../std" };
+import { $ } from "std" with { local: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
 
@@ -266,9 +266,20 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	}
 
 	if (proxy) {
-		const proxyEnv = {
+		const proxyEnv: Record<string, tg.Unresolved<tg.Template.Arg>> = {
 			RUSTC_WRAPPER: tg`${proxy_.proxy()}/bin/tgrustc`,
 		};
+		// On Linux, pass a minimal root mount directory so tgrustc can provide /bin/sh to inner builds.
+		if (os === "linux") {
+			const shellExe = await std.bootstrap
+				.shell(host)
+				.then((d) => d.get("bin/sh"))
+				.then(tg.File.expect);
+			const minimalRoot = await tg.directory({
+				"bin/sh": shellExe,
+			});
+			proxyEnv["TGRUSTC_LINUX_MOUNT"] = minimalRoot;
+		}
 		envs.push(proxyEnv);
 	}
 

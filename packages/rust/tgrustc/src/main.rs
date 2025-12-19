@@ -273,11 +273,9 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			command_args.extend(["--extern".to_owned().into(), name.clone().into()]);
 		} else {
 			// The extern path might be a symlink (from our symlink-based output handling).
-			// If so, follow it to get the real file path before checking in.
-			// This avoids creating a path-only symlink artifact that can't be resolved.
+			// If so, follow it to get the real file path.
 			let file_path = PathBuf::from(path);
-			let checkin_path = if file_path.is_symlink() {
-				// Read the symlink target and use that for checkin.
+			let target_path = if file_path.is_symlink() {
 				let target = std::fs::read_link(&file_path).map_err(|e| {
 					tg::error!(source = e, "failed to read symlink target for {path}")
 				})?;
@@ -288,28 +286,56 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				path.clone()
 			};
 
-			// Check in this specific file (atomic, no race condition).
-			#[cfg(feature = "tracing")]
-			tracing::info!(?name, ?checkin_path, "checking in extern file");
-			let file_artifact = tg::checkin(
-				tg,
-				tg::checkin::Arg {
-					options: tg::checkin::Options {
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						local_dependencies: true,
-						locked: true,
-						lock: Some(tg::checkin::Lock::Attr),
-						..tg::checkin::Options::default()
+			// If the path is an artifact path, unrender it to get the artifact directly.
+			// Otherwise, check it in.
+			let file_artifact = if target_path.contains("/.tangram/artifacts/") {
+				#[cfg(feature = "tracing")]
+				tracing::info!(?target_path, "unrendering artifact path for extern");
+				let template = tangram_std::unrender(&target_path)?;
+				// The template may have an artifact and a subpath (e.g., dir + "/build/libitoa.rlib").
+				// We need to navigate to get the actual file.
+				let mut components = template.components.into_iter();
+				let artifact = components
+					.next()
+					.and_then(|c| c.try_unwrap_artifact().ok())
+					.ok_or_else(|| tg::error!("expected artifact in extern path"))?;
+				// If there's a subpath, navigate to get the file.
+				if let Some(component) = components.next() {
+					let subpath = component
+						.try_unwrap_string()
+						.map_err(|_| tg::error!("expected string subpath in extern path"))?;
+					// Strip leading slash for get() call.
+					let subpath = subpath.trim_start_matches('/');
+					let dir = artifact
+						.try_unwrap_directory()
+						.map_err(|_| tg::error!("expected directory artifact for subpath"))?;
+					dir.get(tg, subpath).await?
+				} else {
+					artifact
+				}
+			} else {
+				#[cfg(feature = "tracing")]
+				tracing::info!(?name, ?target_path, "checking in extern file");
+				tg::checkin(
+					tg,
+					tg::checkin::Arg {
+						options: tg::checkin::Options {
+							destructive: false,
+							deterministic: true,
+							ignore: false,
+							local_dependencies: true,
+							locked: true,
+							lock: Some(tg::checkin::Lock::Attr),
+							..tg::checkin::Options::default()
+						},
+						path: target_path.parse().map_err(|e| {
+							tg::error!("failed to parse extern path {target_path}: {e}")
+						})?,
+						updates: vec![],
 					},
-					path: checkin_path.parse().map_err(|e| {
-						tg::error!("failed to parse extern path {checkin_path}: {e}")
-					})?,
-					updates: vec![],
-				},
-			)
-			.await?;
+				)
+				.await?
+			};
 
 			// Get the filename from the original path (e.g., "libitoa-e86ecba5fb8ffb12.rlib").
 			// Rustc requires the file to have a .rlib or .dylib extension.
@@ -454,6 +480,28 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	let mut command_builder = tg::Command::builder(host, executable);
 	command_builder = command_builder.args(command_args);
 	command_builder = command_builder.env(env);
+
+	// On Linux, add a mount for /bin/sh so driver.sh can execute.
+	if let Ok(linux_mount_path) = std::env::var("TGRUSTC_LINUX_MOUNT") {
+		// Unrender to get the artifact.
+		let template = tangram_std::unrender(&linux_mount_path)?;
+		let component = template
+			.components
+			.into_iter()
+			.next()
+			.ok_or_else(|| tg::error!("expected TGRUSTC_LINUX_MOUNT to have a component"))?;
+		let artifact = component
+			.try_unwrap_artifact()
+			.map_err(|_| tg::error!("expected TGRUSTC_LINUX_MOUNT to be an artifact"))?;
+		let mount = tg::command::Mount {
+			source: artifact,
+			target: PathBuf::from("/"),
+		};
+		command_builder = command_builder.mount(mount);
+		#[cfg(feature = "tracing")]
+		tracing::info!(?linux_mount_path, "added Linux root mount for /bin/sh");
+	}
+
 	let command = command_builder.build();
 	let command_id = command.store(tg).await?;
 	let mut command_ref = tg::Referent::with_item(command_id);
@@ -516,23 +564,14 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.bytes(tg)
 		.await?;
 
-	// Ensure the result is available with an internal checkout.
-	// Dependencies must be checked out so that wrapped binaries (like build scripts)
+	// Get the sandbox-visible path for the output artifact.
+	// Use CLOSEST_ARTIFACT_PATH to find the artifacts directory (works on both Linux and macOS).
+	// Dependencies must be available so that wrapped binaries (like build scripts)
 	// can access their artifact references (interpreter, libraries, etc.) when run.
-	let artifact = tg::Artifact::from(output.clone()).id();
-	let path = tg::checkout(
-		tg,
-		tg::checkout::Arg {
-			artifact,
-			dependencies: true,
-			force: true,
-			path: None,
-			lock: None,
-		},
-	)
-	.await?;
+	let artifact_id = tg::Artifact::from(output.clone()).id();
+	let path = PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact_id.to_string());
 	#[cfg(feature = "tracing")]
-	tracing::info!(?path, "checked out result artifact");
+	tracing::info!(?path, "using sandbox artifact path");
 
 	// Get the output directory.
 	let build_directory = path.join("build");
@@ -540,11 +579,9 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?build_directory, "got build directory");
 
-	// Create symlinks from target/deps/ to the Tangram artifact outputs.
-	// Using symlinks instead of copying is faster and solves race conditions:
-	// - Symlink creation is atomic (either exists pointing to valid content, or doesn't)
-	// - The symlink target (Tangram artifact) is immutable
-	// - Cached builds just need symlink creation, no file copying
+	// Copy or symlink outputs from the Tangram artifact to cargo's output directory.
+	// - Dependencies (.rlib, .rmeta, .d) use symlinks for speed and atomicity
+	// - Final binaries are copied so they appear as real files in the output
 	for from in build_directory.read_dir().map_err(|e| {
 		tg::error!(
 			source = e,
@@ -573,15 +610,31 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			if to.exists() || to.is_symlink() {
 				tokio::fs::remove_file(&to).await.ok();
 			}
-			// Create symlink: to -> from (where from is inside Tangram artifact).
-			tokio::fs::symlink(&from, &to).await.map_err(|error| {
-				tg::error!(
-					source = error,
-					"failed to create symlink from {} to {}",
-					to.display(),
-					from.display()
-				)
-			})?;
+			// Check if this is a dependency file (symlink) or a final binary (copy).
+			let is_dependency = filename.ends_with(".rlib")
+				|| filename.ends_with(".rmeta")
+				|| filename.ends_with(".d");
+			if is_dependency {
+				// Create symlink for dependencies.
+				tokio::fs::symlink(&from, &to).await.map_err(|error| {
+					tg::error!(
+						source = error,
+						"failed to create symlink from {} to {}",
+						to.display(),
+						from.display()
+					)
+				})?;
+			} else {
+				// Copy final binaries.
+				tokio::fs::copy(&from, &to).await.map_err(|error| {
+					tg::error!(
+						source = error,
+						"failed to copy from {} to {}",
+						from.display(),
+						to.display()
+					)
+				})?;
+			}
 		}
 	}
 
