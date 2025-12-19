@@ -45,7 +45,6 @@ impl Args {
 		let mut remaining = Vec::new();
 		let cargo_out_directory = std::env::var("OUT_DIR").ok();
 
-		// TODO: sort the arguments into a canonical order to maximize cache hits.
 		let mut arg_iter = std::env::args().skip(2).peekable();
 		while let Some(arg) = arg_iter.next() {
 			let value = if ARGS_WITH_VALUES.contains(&arg.as_str())
@@ -245,81 +244,76 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		"--".to_owned().into(),
 	];
 
+	// Add remaining args (rustc flags, source files, etc).
+	// NOTE: We do NOT sort these because they contain positional arguments
+	// and flags with values (like "-C opt-level=3") that must stay in order.
+	// Determinism comes from sorting externs and dependencies below.
 	for arg in &args.remaining {
 		let template = tangram_std::unrender(arg)?;
 		command_args.push(template.into());
 	}
 
-	// Check in any -L dependency=PATH directories, and splice any matching --extern name=PATH args.
-	let mut used_externs = fnv::FnvHashSet::default();
-	for dependency in &args.dependencies {
-		#[cfg(feature = "tracing")]
-		tracing::info!(?dependency, "checking in dependency");
-		let directory = tg::checkin(
-			tg,
-			tg::checkin::Arg {
-				options: tg::checkin::Options {
-					destructive: false,
-					deterministic: true,
-					ignore: false,
-					local_dependencies: true,
-					locked: true,
-					lock: Some(tg::checkin::Lock::Attr),
-					..tg::checkin::Options::default()
+	// Check in each extern file individually to avoid race conditions.
+	// Previously, we checked in the entire deps directory, but this is racy when multiple
+	// rustc proxies run in parallel - one might be writing to the directory while another
+	// checks it in, leading to missing files in the captured artifact.
+	// Now we check in each --extern file individually, which is atomic and race-free.
+	// Sort externs by name for deterministic cache hits.
+	let mut sorted_externs = args.externs.clone();
+	sorted_externs.sort_by(|a, b| a.0.cmp(&b.0));
+	for (name, path) in &sorted_externs {
+		if path.is_empty() {
+			// No explicit path - just pass the name for rustc to search.
+			command_args.extend(["--extern".to_owned().into(), name.clone().into()]);
+		} else {
+			// Check in this specific file (atomic, no race condition).
+			#[cfg(feature = "tracing")]
+			tracing::info!(?name, ?path, "checking in extern file");
+			let file_artifact = tg::checkin(
+				tg,
+				tg::checkin::Arg {
+					options: tg::checkin::Options {
+						destructive: false,
+						deterministic: true,
+						ignore: false,
+						local_dependencies: true,
+						locked: true,
+						lock: Some(tg::checkin::Lock::Attr),
+						..tg::checkin::Options::default()
+					},
+					path: path.parse().map_err(|e| {
+						tg::error!("failed to parse extern path {path}: {e}")
+					})?,
+					updates: vec![],
 				},
-				path: dependency.parse().unwrap(),
-				updates: vec![],
-			},
-		)
-		.await?;
-		let template = tg::Template {
-			components: vec!["dependency=".to_owned().into(), directory.clone().into()],
-		};
-		command_args.extend(["-L".to_owned().into(), template.into()]);
-		let externs = args
-			.externs
-			.iter()
-			.filter_map(|(name, path)| {
-				let template = if path.is_empty() {
-					tg::Template {
-						components: vec![name.clone().into()],
-					}
-				} else {
-					let subpath = path.strip_prefix(dependency)?;
-					tg::Template {
-						components: vec![
-							format!("{name}=").into(),
-							directory.clone().into(),
-							subpath.to_owned().into(),
-						],
-					}
-				};
-				used_externs.insert(name);
-				Some(["--extern".to_owned().into(), template.into()])
-			})
-			.flatten();
-		command_args.extend(externs);
+			)
+			.await?;
+
+			// Build --extern name=<file_artifact>
+			let template = tg::Template {
+				components: vec![format!("{name}=").into(), file_artifact.into()],
+			};
+			command_args.extend(["--extern".to_owned().into(), template.into()]);
+		}
 	}
 
-	// Add any externs that were not already handled.
-	let unhandled_externs = args
-		.externs
-		.iter()
-		.filter(|(name, _)| !used_externs.contains(name));
-	#[cfg(feature = "tracing")]
-	tracing::info!(?unhandled_externs, "adding unhandled externs");
-	command_args.extend(unhandled_externs.flat_map(|(name, path)| {
-		let template = if path.is_empty() {
-			tg::Template {
-				components: vec![name.clone().into()],
-			}
-		} else {
-			tg::Template {
-				components: vec![format!("{name}=").into(), path.to_owned().into()],
-			}
-		};
-		["--extern".to_owned().into(), template.into()]
-	}));
+	// Add -L dependency paths. These are still needed for rustc to search for
+	// dependencies, but we've already checked in the specific files above.
+	// Note: with explicit --extern paths, -L is mostly redundant, but we keep it
+	// for compatibility in case rustc needs to resolve transitive dependencies.
+	// Sort dependencies for deterministic cache hits.
+	let mut sorted_deps = args.dependencies.clone();
+	sorted_deps.sort();
+	for dependency in &sorted_deps {
+		#[cfg(feature = "tracing")]
+		tracing::info!(?dependency, "adding -L dependency path");
+		let unrendered = tangram_std::unrender(dependency)?;
+		// Build template by prepending "dependency=" to the unrendered path components.
+		let mut components = vec!["dependency=".to_owned().into()];
+		components.extend(unrendered.components);
+		let template = tg::Template { components };
+		command_args.extend(["-L".to_owned().into(), template.into()]);
+	}
 
 	// Create the process.
 	let host = host().to_string();
@@ -427,39 +421,66 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?build_directory, "got build directory");
 
-	// Copy output files from $TANGRAM_OUTPUT to the path specified.
-	for from in build_directory.read_dir().map_err(|e| {
+	// Symlink output files from $TANGRAM_OUTPUT to the path specified.
+	// Using symlinks instead of copies provides:
+	// 1. Zero-copy overhead - instant operation regardless of file size.
+	// 2. No disk space duplication - artifacts remain in Tangram's cache.
+	// 3. No race conditions - symlinks are atomic.
+	let to_parent = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
+	// Create the parent directory if it does not exist.
+	if !to_parent.exists() {
+		tokio::fs::create_dir_all(&to_parent)
+			.await
+			.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to create output directory {}",
+					to_parent.display()
+				)
+			})?;
+	}
+
+	for entry in build_directory.read_dir().map_err(|e| {
 		tg::error!(
 			source = e,
 			"could not read output directory {}",
 			build_directory.display()
 		)
 	})? {
-		let filename = from.unwrap().file_name().into_string().unwrap();
+		let entry = entry.map_err(|e| {
+			tg::error!(source = e, "failed to read directory entry")
+		})?;
+		let filename = entry.file_name().into_string().map_err(|_| {
+			tg::error!("failed to convert filename to string")
+		})?;
 		let from = build_directory.join(&filename);
-		let to_parent = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
-		// Create the parent directory if it doesn't exist.
-		if !to_parent.exists() {
-			tokio::fs::create_dir_all(&to_parent)
-				.await
-				.map_err(|error| {
+		let to = to_parent.join(&filename);
+
+		if from.exists() && from.is_file() {
+			// Remove existing file/symlink if it exists (might be stale).
+			if to.exists() || to.is_symlink() {
+				tokio::fs::remove_file(&to).await.map_err(|error| {
 					tg::error!(
 						source = error,
-						"failed to create output directory {}",
-						to_parent.display()
+						"failed to remove existing file {}",
+						to.display()
 					)
 				})?;
-		}
-		let to = to_parent.join(filename);
-		if from.exists() && from.is_file() {
-			tokio::fs::copy(&from, &to).await.map_err(|error| {
+			}
+
+			// Create symlink: to -> from (where from is in Tangram's artifact cache).
+			#[cfg(unix)]
+			tokio::fs::symlink(&from, &to).await.map_err(|error| {
 				tg::error!(
 					source = error,
-					"failed to copy output directory from {} to {}",
-					from.display(),
-					to.display()
+					"failed to create symlink from {} to {}",
+					to.display(),
+					from.display()
 				)
 			})?;
+
+			#[cfg(feature = "tracing")]
+			tracing::info!(?from, ?to, "created symlink for output file");
 		}
 	}
 	Ok(())
