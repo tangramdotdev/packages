@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::{collections::BTreeMap, os::unix::process::CommandExt, path::PathBuf, str::FromStr};
+use std::{collections::BTreeMap, os::unix::{fs::PermissionsExt, process::CommandExt}, path::PathBuf, str::FromStr};
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
@@ -564,77 +564,83 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.bytes(tg)
 		.await?;
 
-	// Get the sandbox-visible path for the output artifact.
-	// Use CLOSEST_ARTIFACT_PATH to find the artifacts directory (works on both Linux and macOS).
-	// Dependencies must be available so that wrapped binaries (like build scripts)
-	// can access their artifact references (interpreter, libraries, etc.) when run.
-	let artifact_id = tg::Artifact::from(output.clone()).id();
-	let path = PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact_id.to_string());
+	// Get the build directory from the output artifact using the Tangram API.
+	let build_dir = output
+		.get(tg, "build")
+		.await?
+		.try_unwrap_directory()
+		.map_err(|_| tg::error!("expected build directory in output"))?;
 	#[cfg(feature = "tracing")]
-	tracing::info!(?path, "using sandbox artifact path");
+	{
+		let build_dir_id = build_dir.id();
+		tracing::info!(?build_dir_id, "got build directory");
+	}
 
-	// Get the output directory.
-	let build_directory = path.join("build");
-	let build_directory = build_directory.as_path();
-	#[cfg(feature = "tracing")]
-	tracing::info!(?build_directory, "got build directory");
+	// Get the cargo output directory.
+	let to_parent = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
+	// Create the parent directory if it does not exist.
+	if !to_parent.exists() {
+		tokio::fs::create_dir_all(&to_parent)
+			.await
+			.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to create output directory {}",
+					to_parent.display()
+				)
+			})?;
+	}
 
 	// Copy or symlink outputs from the Tangram artifact to cargo's output directory.
 	// - Dependencies (.rlib, .rmeta, .d) use symlinks for speed and atomicity
 	// - Final binaries are copied so they appear as real files in the output
-	for from in build_directory.read_dir().map_err(|e| {
-		tg::error!(
-			source = e,
-			"could not read output directory {}",
-			build_directory.display()
-		)
-	})? {
-		let filename = from.unwrap().file_name().into_string().unwrap();
-		let from = build_directory.join(&filename);
-		let to_parent = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
-		// Create the parent directory if it does not exist.
-		if !to_parent.exists() {
-			tokio::fs::create_dir_all(&to_parent)
-				.await
-				.map_err(|error| {
-					tg::error!(
-						source = error,
-						"failed to create output directory {}",
-						to_parent.display()
-					)
-				})?;
-		}
+	for (filename, artifact) in build_dir.entries(tg).await? {
 		let to = to_parent.join(&filename);
-		if from.exists() && from.is_file() {
-			// Remove existing file/symlink if present.
-			if to.exists() || to.is_symlink() {
-				tokio::fs::remove_file(&to).await.ok();
-			}
-			// Check if this is a dependency file (symlink) or a final binary (copy).
-			let is_dependency = filename.ends_with(".rlib")
-				|| filename.ends_with(".rmeta")
-				|| filename.ends_with(".d");
-			if is_dependency {
-				// Create symlink for dependencies.
-				tokio::fs::symlink(&from, &to).await.map_err(|error| {
-					tg::error!(
-						source = error,
-						"failed to create symlink from {} to {}",
-						to.display(),
-						from.display()
-					)
-				})?;
-			} else {
-				// Copy final binaries.
-				tokio::fs::copy(&from, &to).await.map_err(|error| {
-					tg::error!(
-						source = error,
-						"failed to copy from {} to {}",
-						from.display(),
-						to.display()
-					)
-				})?;
-			}
+
+		// Remove existing file/symlink if present.
+		if to.exists() || to.is_symlink() {
+			tokio::fs::remove_file(&to).await.ok();
+		}
+
+		// Check if this is a dependency file (symlink) or a final binary (copy).
+		let is_dependency = filename.ends_with(".rlib")
+			|| filename.ends_with(".rmeta")
+			|| filename.ends_with(".d");
+
+		if is_dependency {
+			// Create symlink for dependencies using CLOSEST_ARTIFACT_PATH.
+			let artifact_id = artifact.id();
+			let from = PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact_id.to_string());
+			tokio::fs::symlink(&from, &to).await.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to create symlink from {} to {}",
+					to.display(),
+					from.display()
+				)
+			})?;
+		} else {
+			// Copy final binaries by reading bytes from the artifact.
+			let file = artifact
+				.try_unwrap_file()
+				.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
+			let bytes = file.bytes(tg).await?;
+			tokio::fs::write(&to, &bytes).await.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to write file {}",
+					to.display()
+				)
+			})?;
+			// Make the file executable.
+			let permissions = std::fs::Permissions::from_mode(0o755);
+			tokio::fs::set_permissions(&to, permissions).await.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to set permissions on {}",
+					to.display()
+				)
+			})?;
 		}
 	}
 
