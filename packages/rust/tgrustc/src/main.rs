@@ -258,6 +258,8 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	// rustc proxies run in parallel - one might be writing to the directory while another
 	// checks it in, leading to missing files in the captured artifact.
 	// Now we check in each --extern file individually, which is atomic and race-free.
+	// We wrap each file in a directory with the correct filename to preserve the .rlib extension
+	// that rustc requires.
 	// Sort externs by name for deterministic cache hits.
 	let mut sorted_externs = args.externs.clone();
 	sorted_externs.sort_by(|a, b| a.0.cmp(&b.0));
@@ -289,9 +291,31 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			)
 			.await?;
 
-			// Build --extern name=<file_artifact>
+			// Get the filename from the original path (e.g., "libitoa-e86ecba5fb8ffb12.rlib").
+			// Rustc requires the file to have a .rlib or .dylib extension.
+			let file_path = PathBuf::from(path);
+			let filename = file_path
+				.file_name()
+				.and_then(|s| s.to_str())
+				.ok_or_else(|| tg::error!("extern path has no filename: {path}"))?
+				.to_owned();
+
+			// Wrap the file in a directory with the correct filename.
+			// This ensures rustc sees a path like <dir>/libitoa.rlib instead of just fil_xxx.
+			let file_artifact = file_artifact
+				.try_unwrap_file()
+				.map_err(|e| tg::error!("expected extern checkin to produce a file: {e:?}"))?;
+			let wrapped_dir =
+				tg::Directory::with_entries([(filename.clone(), file_artifact.into())].into());
+			wrapped_dir.store(tg).await?;
+
+			// Build --extern name=<wrapped_dir>/<filename>
 			let template = tg::Template {
-				components: vec![format!("{name}=").into(), file_artifact.into()],
+				components: vec![
+					format!("{name}=").into(),
+					wrapped_dir.into(),
+					format!("/{filename}").into(),
+				],
 			};
 			command_args.extend(["--extern".to_owned().into(), template.into()]);
 		}
@@ -421,66 +445,39 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?build_directory, "got build directory");
 
-	// Symlink output files from $TANGRAM_OUTPUT to the path specified.
-	// Using symlinks instead of copies provides:
-	// 1. Zero-copy overhead - instant operation regardless of file size.
-	// 2. No disk space duplication - artifacts remain in Tangram's cache.
-	// 3. No race conditions - symlinks are atomic.
-	let to_parent = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
-	// Create the parent directory if it does not exist.
-	if !to_parent.exists() {
-		tokio::fs::create_dir_all(&to_parent)
-			.await
-			.map_err(|error| {
-				tg::error!(
-					source = error,
-					"failed to create output directory {}",
-					to_parent.display()
-				)
-			})?;
-	}
-
-	for entry in build_directory.read_dir().map_err(|e| {
+	// Copy output files from $TANGRAM_OUTPUT to the path specified.
+	for from in build_directory.read_dir().map_err(|e| {
 		tg::error!(
 			source = e,
 			"could not read output directory {}",
 			build_directory.display()
 		)
 	})? {
-		let entry = entry.map_err(|e| {
-			tg::error!(source = e, "failed to read directory entry")
-		})?;
-		let filename = entry.file_name().into_string().map_err(|_| {
-			tg::error!("failed to convert filename to string")
-		})?;
+		let filename = from.unwrap().file_name().into_string().unwrap();
 		let from = build_directory.join(&filename);
-		let to = to_parent.join(&filename);
-
-		if from.exists() && from.is_file() {
-			// Remove existing file/symlink if it exists (might be stale).
-			if to.exists() || to.is_symlink() {
-				tokio::fs::remove_file(&to).await.map_err(|error| {
+		let to_parent = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
+		// Create the parent directory if it does not exist.
+		if !to_parent.exists() {
+			tokio::fs::create_dir_all(&to_parent)
+				.await
+				.map_err(|error| {
 					tg::error!(
 						source = error,
-						"failed to remove existing file {}",
-						to.display()
+						"failed to create output directory {}",
+						to_parent.display()
 					)
 				})?;
-			}
-
-			// Create symlink: to -> from (where from is in Tangram's artifact cache).
-			#[cfg(unix)]
-			tokio::fs::symlink(&from, &to).await.map_err(|error| {
+		}
+		let to = to_parent.join(filename);
+		if from.exists() && from.is_file() {
+			tokio::fs::copy(&from, &to).await.map_err(|error| {
 				tg::error!(
 					source = error,
-					"failed to create symlink from {} to {}",
-					to.display(),
-					from.display()
+					"failed to copy output file from {} to {}",
+					from.display(),
+					to.display()
 				)
 			})?;
-
-			#[cfg(feature = "tracing")]
-			tracing::info!(?from, ?to, "created symlink for output file");
 		}
 	}
 	Ok(())
