@@ -1,5 +1,10 @@
 use itertools::Itertools;
-use std::{collections::BTreeMap, os::unix::{fs::PermissionsExt, process::CommandExt}, path::PathBuf, str::FromStr};
+use std::{
+	collections::BTreeMap,
+	os::unix::{fs::PermissionsExt, process::CommandExt},
+	path::PathBuf,
+	str::FromStr,
+};
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
@@ -48,9 +53,7 @@ impl Args {
 		let mut arg_iter = std::env::args().skip(2).peekable();
 		while let Some(arg) = arg_iter.next() {
 			let value = if ARGS_WITH_VALUES.contains(&arg.as_str())
-				&& arg_iter
-					.peek()
-					.is_some_and(|a| !a.starts_with('-'))
+				&& arg_iter.peek().is_some_and(|a| !a.starts_with('-'))
 			{
 				arg_iter.next()
 			} else {
@@ -387,75 +390,102 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	let mut sorted_deps = args.dependencies.clone();
 	sorted_deps.sort();
 
-	// Collect all files to check in.
-	// If a file is a symlink, follow it to get the real path before checking in.
-	// This avoids creating path-only symlink artifacts that can't be resolved.
-	let mut files_to_checkin: Vec<(String, PathBuf)> = Vec::new();
+	// Collect all files to process.
+	// If a file is a symlink, follow it to get the real path.
+	// If the target is an artifact path, unrender it directly. Otherwise, check it in.
+	let mut files_to_process: Vec<(String, String)> = Vec::new();
 	for dependency in &sorted_deps {
 		#[cfg(feature = "tracing")]
 		tracing::info!(?dependency, "scanning dependency directory for files");
 		let dep_path = std::path::Path::new(dependency);
-		if dep_path.is_dir() && let Ok(entries) = std::fs::read_dir(dep_path) {
+		if dep_path.is_dir()
+			&& let Ok(entries) = std::fs::read_dir(dep_path)
+		{
 			for entry in entries.flatten() {
 				let file_path = entry.path();
-				// is_file() follows symlinks, so this is true for both files and symlinks to files.
-				if file_path.is_file()
-					&& let Some(filename) = file_path.file_name().and_then(|s| s.to_str())
-				{
-					// Follow symlinks to get the real file path.
-					let checkin_path = if file_path.is_symlink() {
-						if let Ok(target) = std::fs::read_link(&file_path) {
-							target
-						} else {
-							file_path.clone()
-						}
+				let Some(filename) = file_path.file_name().and_then(|s| s.to_str()) else {
+					continue;
+				};
+				// Handle symlinks first (like extern handling does), then regular files.
+				// Don't use is_file() alone as it follows symlinks and fails if target doesn't exist.
+				let target_path = if file_path.is_symlink() {
+					// Read the symlink target directly without checking if target exists.
+					if let Ok(target) = std::fs::read_link(&file_path) {
+						#[cfg(feature = "tracing")]
+						tracing::info!(?file_path, ?target, "found symlink in deps directory");
+						target.to_str().unwrap_or_default().to_owned()
 					} else {
-						file_path.clone()
-					};
-					files_to_checkin.push((filename.to_owned(), checkin_path));
-				}
+						continue;
+					}
+				} else if file_path.is_file() {
+					// Regular file - use its path directly.
+					file_path.to_str().unwrap_or_default().to_owned()
+				} else {
+					// Skip directories and other non-file entries.
+					continue;
+				};
+				files_to_process.push((filename.to_owned(), target_path));
 			}
 		}
 	}
 
 	// Sort and deduplicate by filename for determinism.
-	files_to_checkin.sort_by(|a, b| a.0.cmp(&b.0));
-	files_to_checkin.dedup_by(|a, b| a.0 == b.0);
+	files_to_process.sort_by(|a, b| a.0.cmp(&b.0));
+	files_to_process.dedup_by(|a, b| a.0 == b.0);
 
-	// Check in all files concurrently.
-	let checkin_futures = files_to_checkin.iter().map(|(filename, file_path)| {
+	// Process all files: unrender artifact paths directly, check in regular files.
+	let process_futures = files_to_process.iter().map(|(filename, target_path)| {
 		let filename = filename.clone();
-		let file_path_str = file_path.to_str().unwrap_or_default().to_owned();
+		let target_path = target_path.clone();
 		async move {
-			let result = tg::checkin(
-				tg,
-				tg::checkin::Arg {
-					options: tg::checkin::Options {
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						local_dependencies: true,
-						locked: true,
-						lock: Some(tg::checkin::Lock::Attr),
-						..tg::checkin::Options::default()
+			// If the path is an artifact path, unrender it to get the artifact directly.
+			let artifact = if target_path.contains("/.tangram/artifacts/") {
+				#[cfg(feature = "tracing")]
+				tracing::info!(?target_path, "unrendering artifact path for dependency");
+				let template = tangram_std::unrender(&target_path).ok()?;
+				let mut components = template.components.into_iter();
+				let artifact = components
+					.next()
+					.and_then(|c| c.try_unwrap_artifact().ok())?;
+				// If there's a subpath, navigate to get the file.
+				if let Some(component) = components.next() {
+					let subpath = component.try_unwrap_string().ok()?;
+					let subpath = subpath.trim_start_matches('/');
+					let dir = artifact.try_unwrap_directory().ok()?;
+					dir.get(tg, subpath).await.ok()
+				} else {
+					Some(artifact)
+				}
+			} else {
+				// Regular file - check it in.
+				tg::checkin(
+					tg,
+					tg::checkin::Arg {
+						options: tg::checkin::Options {
+							destructive: false,
+							deterministic: true,
+							ignore: false,
+							local_dependencies: true,
+							locked: true,
+							lock: Some(tg::checkin::Lock::Attr),
+							..tg::checkin::Options::default()
+						},
+						path: target_path.parse().ok()?,
+						updates: vec![],
 					},
-					path: file_path_str.parse().ok()?,
-					updates: vec![],
-				},
-			)
-			.await
-			.ok()?;
-			Some((filename, result))
+				)
+				.await
+				.ok()
+			};
+			artifact.map(|a| (filename, a))
 		}
 	});
-	let checkin_results: Vec<Option<(String, tg::Artifact)>> =
-		futures::future::join_all(checkin_futures).await;
+	let process_results: Vec<Option<(String, tg::Artifact)>> =
+		futures::future::join_all(process_futures).await;
 
-	// Collect successful checkins into a merged directory.
-	let merged_entries: BTreeMap<String, tg::Artifact> = checkin_results
-		.into_iter()
-		.flatten()
-		.collect();
+	// Collect successful results into a merged directory.
+	let merged_entries: BTreeMap<String, tg::Artifact> =
+		process_results.into_iter().flatten().collect();
 
 	// Create a merged directory containing all the dependency files.
 	if !merged_entries.is_empty() {
@@ -603,14 +633,14 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		}
 
 		// Check if this is a dependency file (symlink) or a final binary (copy).
-		let is_dependency = filename.ends_with(".rlib")
-			|| filename.ends_with(".rmeta")
-			|| filename.ends_with(".d");
+		let is_dependency =
+			filename.ends_with(".rlib") || filename.ends_with(".rmeta") || filename.ends_with(".d");
 
 		if is_dependency {
 			// Create symlink for dependencies using CLOSEST_ARTIFACT_PATH.
 			let artifact_id = artifact.id();
-			let from = PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact_id.to_string());
+			let from =
+				PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact_id.to_string());
 			tokio::fs::symlink(&from, &to).await.map_err(|error| {
 				tg::error!(
 					source = error,
@@ -626,21 +656,19 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
 			let bytes = file.bytes(tg).await?;
 			tokio::fs::write(&to, &bytes).await.map_err(|error| {
-				tg::error!(
-					source = error,
-					"failed to write file {}",
-					to.display()
-				)
+				tg::error!(source = error, "failed to write file {}", to.display())
 			})?;
 			// Make the file executable.
 			let permissions = std::fs::Permissions::from_mode(0o755);
-			tokio::fs::set_permissions(&to, permissions).await.map_err(|error| {
-				tg::error!(
-					source = error,
-					"failed to set permissions on {}",
-					to.display()
-				)
-			})?;
+			tokio::fs::set_permissions(&to, permissions)
+				.await
+				.map_err(|error| {
+					tg::error!(
+						source = error,
+						"failed to set permissions on {}",
+						to.display()
+					)
+				})?;
 		}
 	}
 
@@ -762,7 +790,8 @@ async fn get_checked_in_path(
 	}
 
 	// Unrender the string.
-	let symlink_data = tangram_std::template_data_to_symlink_data(tangram_std::unrender(path_str)?.to_data())?;
+	let symlink_data =
+		tangram_std::template_data_to_symlink_data(tangram_std::unrender(path_str)?.to_data())?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?symlink_data, "unrendered symlink data");
 
@@ -777,7 +806,10 @@ async fn get_checked_in_path(
 		let root_dir = find_root_manifest_dir(&path_str);
 		let root_dir_str = root_dir.display().to_string();
 		#[cfg(feature = "tracing")]
-		tracing::info!(?root_dir_str, "found root directory, re-unrendering to preserve artifact reference");
+		tracing::info!(
+			?root_dir_str,
+			"found root directory, re-unrendering to preserve artifact reference"
+		);
 		// Re-unrender the root directory path to get a template that includes the artifact reference.
 		let template = tangram_std::unrender(&root_dir_str)?;
 		return Ok(template.into());
@@ -826,4 +858,3 @@ pub fn host() -> &'static str {
 		"x86_64-linux"
 	}
 }
-
