@@ -5,7 +5,7 @@ export * as autotools from "./autotools.tg.ts";
 export * as cc from "./cc.tg.ts";
 export { build } from "./build.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
-export { command } from "./command.tg.ts";
+export { command, linuxRootMount } from "./command.tg.ts";
 export * as dependencies from "./sdk/dependencies.tg.ts";
 export { deps } from "./packages.tg.ts";
 export { image } from "./image.tg.ts";

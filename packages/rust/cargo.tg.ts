@@ -1,6 +1,6 @@
 import * as std from "std" with { local: "../std" };
 import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
-import { $ } from "std" with { local: "../std" };
+import { $, linuxRootMount } from "std" with { local: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
 
