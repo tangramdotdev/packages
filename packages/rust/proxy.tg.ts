@@ -205,5 +205,6 @@ export const test = async () => {
 	tg.assert(await testPkgconfig());
 	tg.assert(await testOpenSSL());
 	tg.assert(await testWorkspace());
+	tg.assert(await testParallelDeps());
 	return true;
 };

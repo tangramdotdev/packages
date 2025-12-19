@@ -272,9 +272,25 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			// No explicit path - just pass the name for rustc to search.
 			command_args.extend(["--extern".to_owned().into(), name.clone().into()]);
 		} else {
+			// The extern path might be a symlink (from our symlink-based output handling).
+			// If so, follow it to get the real file path before checking in.
+			// This avoids creating a path-only symlink artifact that can't be resolved.
+			let file_path = PathBuf::from(path);
+			let checkin_path = if file_path.is_symlink() {
+				// Read the symlink target and use that for checkin.
+				let target = std::fs::read_link(&file_path).map_err(|e| {
+					tg::error!(source = e, "failed to read symlink target for {path}")
+				})?;
+				#[cfg(feature = "tracing")]
+				tracing::info!(?path, ?target, "following symlink to real file");
+				target.to_str().unwrap_or(path).to_owned()
+			} else {
+				path.clone()
+			};
+
 			// Check in this specific file (atomic, no race condition).
 			#[cfg(feature = "tracing")]
-			tracing::info!(?name, ?path, "checking in extern file");
+			tracing::info!(?name, ?checkin_path, "checking in extern file");
 			let file_artifact = tg::checkin(
 				tg,
 				tg::checkin::Arg {
@@ -287,8 +303,8 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 						lock: Some(tg::checkin::Lock::Attr),
 						..tg::checkin::Options::default()
 					},
-					path: path.parse().map_err(|e| {
-						tg::error!("failed to parse extern path {path}: {e}")
+					path: checkin_path.parse().map_err(|e| {
+						tg::error!("failed to parse extern path {checkin_path}: {e}")
 					})?,
 					updates: vec![],
 				},
@@ -306,6 +322,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 
 			// Wrap the file in a directory with the correct filename.
 			// This ensures rustc sees a path like <dir>/libitoa.rlib instead of just fil_xxx.
+			// Since we follow symlinks before checkin, this should always be a File.
 			let file_artifact = file_artifact
 				.try_unwrap_file()
 				.map_err(|e| tg::error!("expected extern checkin to produce a file: {e:?}"))?;
@@ -345,20 +362,31 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	sorted_deps.sort();
 
 	// Collect all files to check in.
+	// If a file is a symlink, follow it to get the real path before checking in.
+	// This avoids creating path-only symlink artifacts that can't be resolved.
 	let mut files_to_checkin: Vec<(String, PathBuf)> = Vec::new();
 	for dependency in &sorted_deps {
 		#[cfg(feature = "tracing")]
 		tracing::info!(?dependency, "scanning dependency directory for files");
 		let dep_path = std::path::Path::new(dependency);
-		if dep_path.is_dir() {
-			if let Ok(entries) = std::fs::read_dir(dep_path) {
-				for entry in entries.flatten() {
-					let file_path = entry.path();
-					if file_path.is_file() {
-						if let Some(filename) = file_path.file_name().and_then(|s| s.to_str()) {
-							files_to_checkin.push((filename.to_owned(), file_path));
+		if dep_path.is_dir() && let Ok(entries) = std::fs::read_dir(dep_path) {
+			for entry in entries.flatten() {
+				let file_path = entry.path();
+				// is_file() follows symlinks, so this is true for both files and symlinks to files.
+				if file_path.is_file()
+					&& let Some(filename) = file_path.file_name().and_then(|s| s.to_str())
+				{
+					// Follow symlinks to get the real file path.
+					let checkin_path = if file_path.is_symlink() {
+						if let Ok(target) = std::fs::read_link(&file_path) {
+							target
+						} else {
+							file_path.clone()
 						}
-					}
+					} else {
+						file_path.clone()
+					};
+					files_to_checkin.push((filename.to_owned(), checkin_path));
 				}
 			}
 		}
@@ -467,7 +495,8 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		tracing::info!(?output_id, "got output");
 	}
 
-	// Get stdout/stderr from the build and forward it to our stdout/stderr.
+	// Get stdout/stderr from the build. We'll forward them AFTER creating symlinks
+	// to ensure cargo doesn't start dependent crates before our outputs are ready.
 	let stdout = output
 		.get(tg, &"log/stdout")
 		.await?
@@ -477,10 +506,6 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.await?
 		.bytes(tg)
 		.await?;
-	tokio::io::stdout()
-		.write_all(&stdout)
-		.await
-		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 	let stderr = output
 		.get(tg, &"log/stderr")
 		.await?
@@ -490,10 +515,6 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.await?
 		.bytes(tg)
 		.await?;
-	tokio::io::stderr()
-		.write_all(&stderr)
-		.await
-		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
 	// Ensure the result is available with an internal checkout.
 	// Dependencies must be checked out so that wrapped binaries (like build scripts)
@@ -519,7 +540,11 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?build_directory, "got build directory");
 
-	// Copy output files from $TANGRAM_OUTPUT to the path specified.
+	// Create symlinks from target/deps/ to the Tangram artifact outputs.
+	// Using symlinks instead of copying is faster and solves race conditions:
+	// - Symlink creation is atomic (either exists pointing to valid content, or doesn't)
+	// - The symlink target (Tangram artifact) is immutable
+	// - Cached builds just need symlink creation, no file copying
 	for from in build_directory.read_dir().map_err(|e| {
 		tg::error!(
 			source = e,
@@ -542,18 +567,36 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 					)
 				})?;
 		}
-		let to = to_parent.join(filename);
+		let to = to_parent.join(&filename);
 		if from.exists() && from.is_file() {
-			tokio::fs::copy(&from, &to).await.map_err(|error| {
+			// Remove existing file/symlink if present.
+			if to.exists() || to.is_symlink() {
+				tokio::fs::remove_file(&to).await.ok();
+			}
+			// Create symlink: to -> from (where from is inside Tangram artifact).
+			tokio::fs::symlink(&from, &to).await.map_err(|error| {
 				tg::error!(
 					source = error,
-					"failed to copy output file from {} to {}",
-					from.display(),
-					to.display()
+					"failed to create symlink from {} to {}",
+					to.display(),
+					from.display()
 				)
 			})?;
 		}
 	}
+
+	// Now that symlinks are created, forward stdout/stderr.
+	// This ensures cargo doesn't start dependent crates until our outputs are ready.
+	// Cargo watches for JSON output indicating the .rmeta file is ready.
+	tokio::io::stdout()
+		.write_all(&stdout)
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to write stdout"))?;
+	tokio::io::stderr()
+		.write_all(&stderr)
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
+
 	Ok(())
 }
 
