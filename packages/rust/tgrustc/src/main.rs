@@ -116,11 +116,11 @@ impl Args {
 				if arg.ends_with(".rs") {
 					let path = std::path::Path::new(arg);
 					let parent = path.parent();
-					if let Some(parent) = parent {
-						if let Some(parent_str) = parent.to_str() {
-							source_directory = Some(parent_str.to_owned());
-							break;
-						}
+					if let Some(parent) = parent
+						&& let Some(parent_str) = parent.to_str()
+					{
+						source_directory = Some(parent_str.to_owned());
+						break;
 					}
 				}
 			}
