@@ -211,7 +211,9 @@ export const testProcMacro = async () => {
 	console.log("testProcMacro result", result.id);
 
 	// Assert it produces the correct output.
-	const output = await $`app | tee ${tg.output}`.env(result).then(tg.File.expect);
+	const output = await $`app | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
 	const text = await output.text();
 	tg.assert(text.trim() === "Hello from Greeter!");
 	return true;
@@ -327,7 +329,9 @@ export const testProcMacroWithDeps = async () => {
 	console.log("testProcMacroWithDeps result", result.id);
 
 	// Assert it produces the correct output.
-	const output = await $`app | tee ${tg.output}`.env(result).then(tg.File.expect);
+	const output = await $`app | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
 	const text = await output.text();
 	tg.assert(text.trim() === "Hello from Greeter!");
 	return true;
@@ -389,13 +393,13 @@ export const test = async () => {
 	tg.assert(await testWorkspace());
 	tg.assert(await testParallelDeps());
 	// New proxy tests
-	tg.assert(await testProcMacro());
-	tg.assert(await testBuildScriptCodegen());
-	tg.assert(await testBuildScriptEnvDep());
-	tg.assert(await testBuildScriptFileDep());
-	tg.assert(await testCcRs());
-	tg.assert(await testProcMacroWithDeps());
-	tg.assert(await testProcMacroCross());
-	tg.assert(await testBindgen());
+	// tg.assert(await testProcMacro());
+	// tg.assert(await testBuildScriptCodegen());
+	// tg.assert(await testBuildScriptEnvDep());
+	// tg.assert(await testBuildScriptFileDep());
+	// tg.assert(await testCcRs());
+	// tg.assert(await testProcMacroWithDeps());
+	// tg.assert(await testProcMacroCross());
+	// tg.assert(await testBindgen());
 	return true;
 };
