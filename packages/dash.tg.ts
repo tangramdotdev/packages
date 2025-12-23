@@ -6,6 +6,7 @@ export const metadata = {
 	name: "dash",
 	repository: "https://git.kernel.org/pub/scm/utils/dash/dash.git",
 	version: "0.5.13",
+	tag: "dash/0.5.13",
 	provides: {
 		binaries: ["dash"],
 	},
