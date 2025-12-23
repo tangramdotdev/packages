@@ -9,8 +9,8 @@ export const metadata = {
 	provides: {},
 };
 
-export const source = () => {
-	const { name, version } = metadata;
+export const source = async () => {
+	const { version } = metadata;
 	const checksum =
 		"sha256:5c8253428e181840cd20d41f3ca16557a9cc04bad4a3d04cce84808677fa1061";
 	return std
@@ -20,8 +20,7 @@ export const source = () => {
 			mode: "extract",
 		})
 		.then(tg.Directory.expect)
-		.then((d) => d.get(`lib${name}-${version}`))
-		.then(tg.Directory.expect);
+		.then(std.directory.unwrap);
 };
 
 export type Arg = cmake.Arg;

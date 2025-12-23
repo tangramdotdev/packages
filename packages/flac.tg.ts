@@ -6,6 +6,7 @@ export const metadata = {
 	homepage: "https://xiph.org/flac",
 	name: "flac",
 	version: "1.5.0",
+	tag: "flac/1.5.0",
 	provides: {},
 };
 
@@ -20,8 +21,7 @@ export const source = () => {
 			mode: "extract",
 		})
 		.then(tg.Directory.expect)
-		.then((directory) => directory.get(`${name}-${version}`))
-		.then(tg.Directory.expect);
+		.then(std.directory.unwrap);
 };
 
 const deps = await std.deps({
