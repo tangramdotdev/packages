@@ -394,10 +394,10 @@ async function getPackageVersion(ctx: Context): Promise<Result<string>> {
 		const process = await ctx.tangram.build(`${ctx.packagePath}#metadata`);
 		const metadataJson = await ctx.tangram.processOutput(process.id);
 		const metadata = JSON.parse(metadataJson);
-		if (!metadata.version) {
+		if (!metadata.value?.version) {
 			throw new Error(`no version found in metadata for ${ctx.packagePath}`);
 		}
-		return { ok: true, value: metadata.version };
+		return { ok: true, value: metadata.value.version };
 	} catch (err) {
 		return { ok: false, error: extractErrorMessage(err) };
 	}
