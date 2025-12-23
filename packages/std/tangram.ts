@@ -45,6 +45,7 @@ import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
 import * as wrap from "./wrap.tg.ts";
+import { gnuEnv as directGnuEnv } from "./utils/coreutils.tg.ts";
 
 export const metadata = {
 	name: "std",
@@ -58,6 +59,26 @@ export const default_ = async () => {
 };
 
 export default default_;
+
+/** Test that Command IDs match between direct imports and namespace re-exports. */
+export const testGnuEnvCommandId = async () => {
+	const directCmd = await tg.command(directGnuEnv);
+	const namespaceCmd = await tg.command(utils.coreutils.gnuEnv);
+
+	const directId = await directCmd.id;
+	const namespaceId = await namespaceCmd.id;
+
+	console.log("Direct import Command ID:", directId);
+	console.log("Namespace re-export Command ID:", namespaceId);
+	console.log("Match:", directId === namespaceId);
+
+	tg.assert(
+		directId === namespaceId,
+		`Command IDs differ - cache misses will occur. Direct: ${directId}, Namespace: ${namespaceId}`,
+	);
+
+	return { directId, namespaceId, match: directId === namespaceId };
+};
 
 /** Mapping of strings to pass to "test" to the test targets they run. */
 const testActions = (): Record<string, () => any> => {
@@ -185,6 +206,7 @@ const testActions = (): Record<string, () => any> => {
 		dollar: run.testDollar,
 		dollarBootstrap: run.testDollarBootstrap,
 		dollarEnvClear: run.testEnvClear,
+		gnuEnvCommandId: testGnuEnvCommandId,
 	};
 };
 
