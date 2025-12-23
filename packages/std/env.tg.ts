@@ -1,5 +1,6 @@
 import * as std from "./tangram.ts";
 import { gnuEnv } from "./utils/coreutils.tg.ts";
+import { defaultEnv } from "./utils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: std.Args<env.Arg>) {
@@ -48,10 +49,7 @@ export namespace env {
 		);
 		const originalEnv = await env.mergeArgObjects(...envObjects);
 		if (includeUtils && !(await env.providesUtils(originalEnv))) {
-			return await env.mergeArgObjects(
-				originalEnv,
-				await tg.build(std.utils.defaultEnv).named("default utils"),
-			);
+			return await env.mergeArgObjects(originalEnv, await tg.build(defaultEnv));
 		} else {
 			return originalEnv;
 		}

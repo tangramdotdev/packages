@@ -243,6 +243,8 @@ export const rust = async (
 
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
+	const shell = await bootstrap.shell(host);
+	const shellExecutable = await shell.get("bin/dash").then(tg.File.expect);
 	return await std.build`
 		set -x
 		echo HI
@@ -251,6 +253,7 @@ export const rust = async (
 			chmod -R +w "${tg.output}"
 		done`
 		.bootstrap(true)
+		.executable(shellExecutable)
 		.host(hostSystem)
 		.env(env)
 		.named("rust toolchain install")
