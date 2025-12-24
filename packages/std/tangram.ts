@@ -25,6 +25,15 @@ export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
 export * as bootstrap from "./bootstrap.tg.ts";
 
+// Direct exports for release consistency.
+// These allow building from the tag (e.g., std/0.0.0#gnuEnv) instead of subpaths.
+export { gnuEnv } from "./utils/coreutils.tg.ts";
+export { defaultEnv } from "./utils.tg.ts";
+export { injection as wrapInjection } from "./wrap/injection.tg.ts";
+export { workspace as wrapWorkspace } from "./wrap/workspace.tg.ts";
+export { defaultWrapper as wrapDefaultWrapper } from "./wrap/workspace.tg.ts";
+export { autotoolsBuildTools } from "./sdk/dependencies.tg.ts";
+
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as build from "./build.tg.ts";

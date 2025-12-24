@@ -451,24 +451,22 @@ type ExportConfig = {
 
 type ExportMatrix = ExportConfig[];
 
-/** Package-specific export matrices for release action */
+/** Package-specific export matrices for release action.
+ * For std, we use direct exports from the root tangram.ts to ensure cache hits.
+ * The release builds from the tag (e.g., std/0.0.0#gnuEnv) so consumers
+ * importing via tag get the same command IDs.
+ */
 const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 	std: [
 		{ ref: "default", tagPath: "default" },
 		{ ref: "default_", tagPath: "default_" },
-		{ ref: "sdk.tg.ts#sdk", tagPath: "sdk" },
-		{ ref: "utils.tg.ts#defaultEnv", tagPath: "utils/env" },
-		{ ref: "utils/coreutils.tg.ts#gnuEnv", tagPath: "utils/gnuEnv" },
-		{ ref: "wrap/injection.tg.ts#injection", tagPath: "wrap/injection" },
-		{ ref: "wrap/workspace.tg.ts#workspace", tagPath: "wrap/workspace" },
-		{
-			ref: "wrap/workspace.tg.ts#defaultWrapper",
-			tagPath: "wrap/defaultWrapper",
-		},
-		{
-			ref: "sdk/dependencies.tg.ts#autotoolsBuildTools",
-			tagPath: "dependencies/buildTools/autotools",
-		},
+		{ ref: "sdk", tagPath: "sdk" },
+		{ ref: "defaultEnv", tagPath: "utils/env" },
+		{ ref: "gnuEnv", tagPath: "utils/gnuEnv" },
+		{ ref: "wrapInjection", tagPath: "wrap/injection" },
+		{ ref: "wrapWorkspace", tagPath: "wrap/workspace" },
+		{ ref: "wrapDefaultWrapper", tagPath: "wrap/defaultWrapper" },
+		{ ref: "autotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
 	],
 };
 
@@ -564,19 +562,12 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	for (const [index, exportConfig] of exportMatrix.entries()) {
 		const { ref, tagPath } = exportConfig;
 
-		// Determine build source.
-		// If ref contains "/" or ".tg.ts", it's a subpath within a directory package.
-		const isSubpath = ref.includes("/") || ref.includes(".tg.ts");
-		let buildSource: string;
-
-		if (isSubpath) {
-			// Subpath ref: append to package path (only valid for directory packages).
-			buildSource = `${ctx.packagePath}/${ref}`;
-		} else {
-			// Export name: build from local package path.
-			const exportSuffix = ref !== "default" ? `#${ref}` : "";
-			buildSource = `${ctx.packagePath}${exportSuffix}`;
-		}
+		// Build from the published tag to ensure cache hits for consumers.
+		// When consumers import via tag and call functions like std.env(),
+		// the command IDs will match these releases because they use the
+		// same resolution path (tag-based module referents).
+		const exportSuffix = ref !== "default" ? `#${ref}` : "";
+		const buildSource = `${versionedName}${exportSuffix}`;
 
 		// Construct tag
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
