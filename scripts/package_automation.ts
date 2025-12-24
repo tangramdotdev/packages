@@ -90,10 +90,16 @@ class TangramClient {
 			.then((t) => t.trim());
 	}
 
-	async push(target: string, options: { lazy?: boolean } = {}): Promise<void> {
+	async push(
+		target: string,
+		options: { lazy?: boolean; commands?: boolean } = {},
+	): Promise<void> {
 		const args = [target];
 		if (options.lazy ?? true) {
 			args.push("--lazy");
+		}
+		if (options.commands) {
+			args.push("--commands");
 		}
 		await $`${this.exe} push ${args}`.quiet();
 	}
@@ -409,7 +415,7 @@ async function executeBuild(
 	actionName: string,
 	buildPath: string,
 	options: { tag?: string } = {},
-): Promise<Result<void>> {
+): Promise<Result<string>> {
 	let processId: string | undefined;
 	try {
 		const process = await ctx.tangram.build(buildPath, options);
@@ -429,7 +435,7 @@ async function executeBuild(
 			);
 		}
 
-		return { ok: true, value: undefined };
+		return { ok: true, value: processId };
 	} catch (err) {
 		if (isUnsupportedHostError(err)) {
 			return { ok: false, error: "unsupported host", skipped: true };
@@ -583,8 +589,24 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 			log(`[release] Skipping ${ref}: ${result.error}`);
 			continue;
 		}
+		const processId = result.value;
 
-		// Push the build
+		// Push the process with commands to ensure cache hits for consumers.
+		// When consumers call functions like std.env() which internally use
+		// tg.build(std.gnuEnv), they need the command to be available.
+		log(
+			`[release] Pushing process ${processId} with commands${ctx.lazy ? " (lazy)" : ""}`,
+		);
+		try {
+			await ctx.tangram.push(processId, { lazy: ctx.lazy, commands: true });
+			log(`[release] Pushed process ${processId}`);
+		} catch (err) {
+			const errorMessage = extractErrorMessage(err);
+			log(`[release] Failed to push process ${processId}: ${errorMessage}`);
+			pushErrors.push(`process ${processId}: ${errorMessage}`);
+		}
+
+		// Also push the tag (artifact) for consumers who want to download the output.
 		log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
 		try {
 			await ctx.tangram.push(tag, { lazy: ctx.lazy });
@@ -677,7 +699,11 @@ class Results {
 async function testAction(ctx: Context): Promise<Result<void>> {
 	const buildPath = `${ctx.packagePath}#test`;
 
-	return await executeBuild(ctx, "test", buildPath);
+	const result = await executeBuild(ctx, "test", buildPath);
+	if (!result.ok) {
+		return result;
+	}
+	return { ok: true, value: undefined };
 }
 
 /** Ordered actions - dependencies implicit in order */
