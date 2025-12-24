@@ -580,15 +580,18 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	for (const [index, exportConfig] of exportMatrix.entries()) {
 		const { ref, tagPath } = exportConfig;
 
-		// Build from the published tag to ensure cache hits for consumers.
-		// File path refs (containing '/') produce referents matching what consumers
-		// get when calling tg.build(module.export). Root refs use #export syntax.
+		// Build source depends on ref type:
+		// - Root exports (default, sdk): build from tag (std/0.0.0 or std/0.0.0#export)
+		// - File path refs: build from local path (./packages/std/path/file.tg.ts#export)
+		//   to produce referents matching what consumers get when calling tg.build(fn).
 		let buildSource: string;
 		if (ref === "default") {
 			buildSource = versionedName;
-		} else if (ref.includes("/") || ref.includes(".tg.ts")) {
-			// File path ref: std/0.0.0/path/to/file.tg.ts#export
-			buildSource = `${versionedName}/${ref}`;
+		} else if (ref.includes(".tg.ts")) {
+			// File path ref: build from local package path to match consumer referents.
+			// Consumers do tg.build(module.export), which produces a referent to the
+			// source file. Building from the local path produces the same referent.
+			buildSource = `${ctx.packagePath}/${ref}`;
 		} else {
 			// Root export ref: std/0.0.0#export
 			buildSource = `${versionedName}#${ref}`;
