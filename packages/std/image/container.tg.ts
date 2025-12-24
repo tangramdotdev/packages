@@ -1,4 +1,5 @@
 import * as std from "../tangram.ts";
+import { gnuEnv } from "../utils/coreutils.tg.ts";
 
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
@@ -228,7 +229,10 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	}
 	if (!envApplied) {
 		envApplied = true;
-		let envEntrypoint = await std.wrap(std.gnuEnv(), { buildToolchain, env });
+		let envEntrypoint = await std.wrap(
+			await tg.build(gnuEnv).named("gnu env"),
+			{ buildToolchain, env },
+		);
 		layers.push(
 			await layer(
 				await tg.directory({ entrypoint: envEntrypoint }),

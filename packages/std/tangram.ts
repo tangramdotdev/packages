@@ -25,15 +25,6 @@ export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
 export * as bootstrap from "./bootstrap.tg.ts";
 
-// Direct exports for release consistency.
-// Consumers access these via std namespace (e.g., std.gnuEnv) to ensure
-// module referents match the tagged releases.
-export { gnuEnv } from "./utils/coreutils.tg.ts";
-export { defaultEnv } from "./utils.tg.ts";
-export { injection as wrapInjection, defaultInjection as wrapDefaultInjection } from "./wrap/injection.tg.ts";
-export { workspace as wrapWorkspace, defaultWrapper as wrapDefaultWrapper } from "./wrap/workspace.tg.ts";
-export { autotoolsBuildTools } from "./sdk/dependencies.tg.ts";
-
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as build from "./build.tg.ts";
@@ -54,7 +45,6 @@ import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
 import * as wrap from "./wrap.tg.ts";
-import { gnuEnv as directGnuEnv } from "./utils/coreutils.tg.ts";
 
 export const metadata = {
 	name: "std",
@@ -68,26 +58,6 @@ export const default_ = async () => {
 };
 
 export default default_;
-
-/** Test that Command IDs match between direct imports and namespace re-exports. */
-export const testGnuEnvCommandId = async () => {
-	const directCmd = await tg.command(directGnuEnv);
-	const namespaceCmd = await tg.command(utils.coreutils.gnuEnv);
-
-	const directId = await directCmd.id;
-	const namespaceId = await namespaceCmd.id;
-
-	console.log("Direct import Command ID:", directId);
-	console.log("Namespace re-export Command ID:", namespaceId);
-	console.log("Match:", directId === namespaceId);
-
-	tg.assert(
-		directId === namespaceId,
-		`Command IDs differ - cache misses will occur. Direct: ${directId}, Namespace: ${namespaceId}`,
-	);
-
-	return { directId, namespaceId, match: directId === namespaceId };
-};
 
 /** Mapping of strings to pass to "test" to the test targets they run. */
 const testActions = (): Record<string, () => any> => {
@@ -215,7 +185,6 @@ const testActions = (): Record<string, () => any> => {
 		dollar: run.testDollar,
 		dollarBootstrap: run.testDollarBootstrap,
 		dollarEnvClear: run.testEnvClear,
-		gnuEnvCommandId: testGnuEnvCommandId,
 	};
 };
 
