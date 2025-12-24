@@ -464,6 +464,7 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 		{ ref: "defaultEnv", tagPath: "utils/env" },
 		{ ref: "gnuEnv", tagPath: "utils/gnuEnv" },
 		{ ref: "wrapInjection", tagPath: "wrap/injection" },
+		{ ref: "wrapDefaultInjection", tagPath: "wrap/defaultInjection" },
 		{ ref: "wrapWorkspace", tagPath: "wrap/workspace" },
 		{ ref: "wrapDefaultWrapper", tagPath: "wrap/defaultWrapper" },
 		{ ref: "autotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
