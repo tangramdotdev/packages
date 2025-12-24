@@ -458,22 +458,21 @@ type ExportConfig = {
 type ExportMatrix = ExportConfig[];
 
 /** Package-specific export matrices for release action.
- * For std, we use file paths to the actual source files to ensure cache hits.
- * The release builds from the local path (e.g., ./packages/std/utils/coreutils.tg.ts#gnuEnv)
- * so the command referents match when internal std code imports from the same files.
+ * For std, we build from tag exports (e.g., std/0.0.0#gnuEnv) to ensure cache hits.
+ * Internal std code accesses these via std namespace (e.g., std.gnuEnv), producing
+ * the same graph+index referent as the tag build.
  */
 const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 	std: [
 		{ ref: "default", tagPath: "default" },
 		{ ref: "default_", tagPath: "default_" },
-		{ ref: "sdk.tg.ts#sdk", tagPath: "sdk" },
-		{ ref: "utils.tg.ts#defaultEnv", tagPath: "utils/env" },
-		{ ref: "utils/coreutils.tg.ts#gnuEnv", tagPath: "utils/gnuEnv" },
-		{ ref: "wrap/injection.tg.ts#injection", tagPath: "wrap/injection" },
-		{ ref: "wrap/injection.tg.ts#defaultInjection", tagPath: "wrap/defaultInjection" },
-		{ ref: "wrap/workspace.tg.ts#workspace", tagPath: "wrap/workspace" },
-		{ ref: "wrap/workspace.tg.ts#defaultWrapper", tagPath: "wrap/defaultWrapper" },
-		{ ref: "sdk/dependencies.tg.ts#autotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
+		{ ref: "sdk", tagPath: "sdk" },
+		{ ref: "defaultEnv", tagPath: "utils/env" },
+		{ ref: "gnuEnv", tagPath: "utils/gnuEnv" },
+		{ ref: "wrapInjection", tagPath: "wrap/injection" },
+		{ ref: "wrapDefaultInjection", tagPath: "wrap/defaultInjection" },
+		{ ref: "wrapDefaultWrapper", tagPath: "wrap/defaultWrapper" },
+		{ ref: "autotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
 	],
 };
 
@@ -569,21 +568,11 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	for (const [index, exportConfig] of exportMatrix.entries()) {
 		const { ref, tagPath } = exportConfig;
 
-		// Build from the local path to ensure cache hits for consumers.
-		// When internal std code imports from source files (e.g., import { gnuEnv }
-		// from "./utils/coreutils.tg.ts"), the command referents will match these
-		// releases because they build from the same file paths.
-		let buildSource: string;
-		if (ref.includes("#")) {
-			// File path + export name (e.g., "utils/coreutils.tg.ts#gnuEnv")
-			buildSource = `${ctx.packagePath}/${ref}`;
-		} else if (ref === "default") {
-			// Default export from tangram.ts
-			buildSource = ctx.packagePath;
-		} else {
-			// Named export from tangram.ts (e.g., "default_")
-			buildSource = `${ctx.packagePath}#${ref}`;
-		}
+		// Build from the published tag to ensure cache hits for consumers.
+		// Internal std code accesses exports via std namespace (e.g., std.gnuEnv),
+		// producing the same graph+index referent as building from the tag.
+		const exportSuffix = ref !== "default" ? `#${ref}` : "";
+		const buildSource = `${versionedName}${exportSuffix}`;
 
 		// Construct tag
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;

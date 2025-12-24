@@ -120,7 +120,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		// Use default wrapper when no custom build or host is provided.
 		let wrapper =
 			arg.build === undefined && arg.host === undefined
-				? await tg.build(workspace.defaultWrapper).named("default wrapper")
+				? await tg.build(std.wrapDefaultWrapper).named("default wrapper")
 				: await workspace.wrapper({
 						build,
 						host,
@@ -1310,7 +1310,7 @@ const interpreterFromArg = async (
 					host,
 				);
 				const injectionLibrary = await tg
-					.build(injection.injection, {
+					.build(std.wrapInjection, {
 						buildToolchain,
 						build,
 						host,
@@ -1361,7 +1361,7 @@ const interpreterFromArg = async (
 					host,
 				);
 				const injectionLibrary = await tg
-					.build(injection.injection, {
+					.build(std.wrapInjection, {
 						buildToolchain,
 						build,
 						host,
@@ -1388,7 +1388,7 @@ const interpreterFromArg = async (
 				// Use default injection when no custom build or buildToolchain is provided.
 				if (buildArg === undefined && buildToolchainArg === undefined) {
 					const injectionLibrary = await tg
-						.build(injection.defaultInjection)
+						.build(std.wrapDefaultInjection)
 						.named("default injection");
 					preloads.push(injectionLibrary);
 				} else {
@@ -1399,7 +1399,7 @@ const interpreterFromArg = async (
 						host,
 					);
 					const injectionLibrary = await tg
-						.build(injection.injection, {
+						.build(std.wrapInjection, {
 							buildToolchain,
 							build: buildArg,
 							host,
@@ -1467,7 +1467,7 @@ const interpreterFromExecutableArg = async (
 				buildToolchainArg === undefined
 			) {
 				const injectionDylib = await tg
-					.build(injection.defaultInjection)
+					.build(std.wrapDefaultInjection)
 					.named("default injection");
 				return {
 					kind: "dyld",
@@ -1484,7 +1484,7 @@ const interpreterFromExecutableArg = async (
 					host,
 				);
 				const injectionDylib = await tg
-					.build(injection.injection, {
+					.build(std.wrapInjection, {
 						buildToolchain,
 						build: buildTriple,
 						host,
@@ -1558,7 +1558,7 @@ const interpreterFromElf = async (
 
 	// Obtain injection library.
 	const injectionLib = await tg
-		.build(injection.injection, {
+		.build(std.wrapInjection, {
 			buildToolchain,
 			build: buildTriple,
 			host,
