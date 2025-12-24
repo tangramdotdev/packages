@@ -1,6 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
-import { defaultEnv } from "../utils.tg.ts";
+import { defaultEnv } from "../internal/release.tg.ts";
 
 export const metadata = {
 	homepage: "https://www.kernel.org",

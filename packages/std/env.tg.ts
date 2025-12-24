@@ -1,6 +1,5 @@
 import * as std from "./tangram.ts";
-import { gnuEnv } from "./utils/coreutils.tg.ts";
-import { defaultEnv } from "./utils.tg.ts";
+import { gnuEnv, defaultEnv } from "./internal/release.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: env.ArgsInput) {

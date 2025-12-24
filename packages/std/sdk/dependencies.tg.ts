@@ -1,7 +1,7 @@
 /** Bootstrapping the compiler toolchain requires these dependencies in addition to `std.utils`. */
 
 import * as std from "../tangram.ts";
-import { defaultEnv } from "../utils.tg.ts";
+import { defaultEnv } from "../internal/release.tg.ts";
 
 import bison from "./dependencies/bison.tg.ts";
 import flex from "./dependencies/flex.tg.ts";

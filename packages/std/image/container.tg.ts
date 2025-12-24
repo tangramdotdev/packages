@@ -1,5 +1,5 @@
 import * as std from "../tangram.ts";
-import { gnuEnv } from "../utils/coreutils.tg.ts";
+import { gnuEnv } from "../internal/release.tg.ts";
 
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
