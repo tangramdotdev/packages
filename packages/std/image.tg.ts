@@ -1,6 +1,5 @@
 import * as container from "./image/container.tg.ts";
 import * as std from "./tangram.ts";
-import { gnuEnv } from "./internal/release.tg.ts";
 
 export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 
@@ -114,7 +113,7 @@ export const testBootstrapEnv = async () => {
 		{ NAME: "Tangram" },
 		{ utils: false },
 	);
-	const bootstrapEnv = await std.wrap(gnuEnv(), {
+	const bootstrapEnv = await std.wrap(std.gnuEnv(), {
 		buildToolchain,
 		env: bootstrapEnvArg,
 	});
@@ -214,7 +213,7 @@ export const testBasicEnv = async () => {
 		{ NAME: "Tangram" },
 		{ utils: false },
 	);
-	const basicEnv = await std.wrap(gnuEnv(), {
+	const basicEnv = await std.wrap(std.gnuEnv(), {
 		buildToolchain,
 		env: basicEnvArg,
 	});

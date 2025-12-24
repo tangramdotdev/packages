@@ -25,18 +25,14 @@ export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
 export * as bootstrap from "./bootstrap.tg.ts";
 
-// Re-export from internal/release.tg.ts for release consistency.
-// Both these exports and internal consumers (like env.tg.ts) import from
-// the same source to ensure matching module referents and cache hits.
-export {
-	gnuEnv,
-	defaultEnv,
-	wrapInjection,
-	wrapDefaultInjection,
-	wrapWorkspace,
-	wrapDefaultWrapper,
-	autotoolsBuildTools,
-} from "./internal/release.tg.ts";
+// Direct exports for release consistency.
+// Consumers access these via std namespace (e.g., std.gnuEnv) to ensure
+// module referents match the tagged releases.
+export { gnuEnv } from "./utils/coreutils.tg.ts";
+export { defaultEnv } from "./utils.tg.ts";
+export { injection as wrapInjection, defaultInjection as wrapDefaultInjection } from "./wrap/injection.tg.ts";
+export { workspace as wrapWorkspace, defaultWrapper as wrapDefaultWrapper } from "./wrap/workspace.tg.ts";
+export { autotoolsBuildTools } from "./sdk/dependencies.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";

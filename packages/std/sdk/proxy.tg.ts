@@ -3,7 +3,6 @@ import * as std from "../tangram.ts";
 import * as sdk from "../sdk.tg.ts";
 import * as stub from "../wrap/stub.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
-import { wrapDefaultWrapper, wrapInjection } from "../internal/release.tg.ts";
 import * as gnu from "./gnu.tg.ts";
 import * as llvmToolchain from "./llvm.tg.ts";
 
@@ -302,7 +301,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 
 	// The injection library and wrapper are built for the host machine.
 	const hostInjectionLibrary = await tg
-		.build(wrapInjection, {
+		.build(std.wrapInjection, {
 			buildToolchain,
 			build,
 			host,
@@ -312,7 +311,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		arg.build === undefined && arg.host === undefined
-			? await tg.build(wrapDefaultWrapper).named("default wrapper")
+			? await tg.build(std.wrapDefaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,
@@ -379,7 +378,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		build_ === undefined && host_ === undefined
-			? await tg.build(wrapDefaultWrapper).named("default wrapper")
+			? await tg.build(std.wrapDefaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,
