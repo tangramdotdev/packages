@@ -419,7 +419,7 @@ export const buildTools = async (
 export const autotoolsBuildTools = async () => {
 	const host = std.triple.host();
 	const sdk = await tg.build(std.sdk, { host }).named("sdk");
-	const utils = await tg.build(std.defaultEnv).named("default env");
+	const utils = await std.defaultEnv();
 	return tg
 		.build(buildTools, {
 			host,

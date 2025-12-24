@@ -84,7 +84,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 		envs.push(await tg.build(std.sdk, sdkArg).named("sdk"));
 
 		// Add the standard utils, built with the default SDK.
-		const utils = await tg.build(std.defaultEnv).named("default env");
+		const utils = await std.defaultEnv();
 		envs.push(utils);
 	}
 	const env = std.env.arg(...envs, { utils: false });

@@ -3,7 +3,7 @@ import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.ts";
 import injectionSource from "./injection" with { type: "directory" };
 
-type Arg = {
+export type Arg = {
 	build?: string | undefined;
 	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;

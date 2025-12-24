@@ -25,12 +25,34 @@ export { wrap } from "./wrap.tg.ts";
 export { stripProxy } from "./sdk/proxy.tg.ts";
 export * as bootstrap from "./bootstrap.tg.ts";
 
-// Re-exports for cache hits - internal code must access these via std namespace.
-export { gnuEnv } from "./utils/coreutils.tg.ts";
-export { defaultEnv } from "./utils.tg.ts";
-export { injection as wrapInjection, defaultInjection as wrapDefaultInjection } from "./wrap/injection.tg.ts";
-export { defaultWrapper as wrapDefaultWrapper } from "./wrap/workspace.tg.ts";
-export { autotoolsBuildTools } from "./sdk/dependencies.tg.ts";
+// Wrapper functions for cache hits - these call tg.build internally so both
+// release builds and internal code produce the same command IDs.
+import * as coreutils from "./utils/coreutils.tg.ts";
+import * as utilsModule from "./utils.tg.ts";
+import * as injectionModule from "./wrap/injection.tg.ts";
+import * as workspaceModule from "./wrap/workspace.tg.ts";
+import * as dependenciesModule from "./sdk/dependencies.tg.ts";
+
+export const gnuEnv = () =>
+	tg.build(coreutils.gnuEnv).named("gnu env").then(tg.File.expect);
+
+export const defaultEnv = () =>
+	tg.build(utilsModule.defaultEnv).named("default env");
+
+export type WrapInjectionArg = injectionModule.Arg;
+export const wrapInjection = (arg?: tg.Unresolved<WrapInjectionArg>) =>
+	tg.build(injectionModule.injection, arg).named("injection");
+
+export const wrapDefaultInjection = () =>
+	tg.build(injectionModule.defaultInjection).named("default injection");
+
+export const wrapDefaultWrapper = () =>
+	tg.build(workspaceModule.defaultWrapper).named("default wrapper");
+
+export const autotoolsBuildTools = () =>
+	tg
+		.build(dependenciesModule.autotoolsBuildTools)
+		.named("autotools build tools");
 
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";

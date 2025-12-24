@@ -113,7 +113,7 @@ export const testBootstrapEnv = async () => {
 		{ NAME: "Tangram" },
 		{ utils: false },
 	);
-	const bootstrapEnv = await std.wrap(await tg.build(std.gnuEnv).named("gnu env"), {
+	const bootstrapEnv = await std.wrap(await std.gnuEnv(), {
 		buildToolchain,
 		env: bootstrapEnvArg,
 	});
@@ -213,7 +213,7 @@ export const testBasicEnv = async () => {
 		{ NAME: "Tangram" },
 		{ utils: false },
 	);
-	const basicEnv = await std.wrap(await tg.build(std.gnuEnv).named("gnu env"), {
+	const basicEnv = await std.wrap(await std.gnuEnv(), {
 		buildToolchain,
 		env: basicEnvArg,
 	});
