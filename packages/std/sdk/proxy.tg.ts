@@ -301,16 +301,18 @@ const ldProxy = async (arg: LdProxyArg) => {
 	});
 
 	// The injection library and wrapper are built for the host machine.
-	const hostInjectionLibrary = await std.wrapInjection({
-		buildToolchain,
-		build,
-		host,
-	});
+	const hostInjectionLibrary = await tg
+		.build(injection.injection, {
+			buildToolchain,
+			build,
+			host,
+		})
+		.named("injection");
 
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		arg.build === undefined && arg.host === undefined
-			? await std.wrapDefaultWrapper()
+			? await tg.build(workspace.defaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,
@@ -377,7 +379,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		build_ === undefined && host_ === undefined
-			? await std.wrapDefaultWrapper()
+			? await tg.build(workspace.defaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,

@@ -120,7 +120,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		// Use default wrapper when no custom build or host is provided.
 		let wrapper =
 			arg.build === undefined && arg.host === undefined
-				? await std.wrapDefaultWrapper()
+				? await tg.build(workspace.defaultWrapper).named("default wrapper")
 				: await workspace.wrapper({
 						build,
 						host,
@@ -1309,11 +1309,13 @@ const interpreterFromArg = async (
 					build,
 					host,
 				);
-				const injectionLibrary = await std.wrapInjection({
-					buildToolchain,
-					build,
-					host,
-				});
+				const injectionLibrary = await tg
+					.build(injection.injection, {
+						buildToolchain,
+						build,
+						host,
+					})
+					.named("injection");
 
 				preloads.push(injectionLibrary);
 			}
@@ -1358,11 +1360,13 @@ const interpreterFromArg = async (
 					build,
 					host,
 				);
-				const injectionLibrary = await std.wrapInjection({
-					buildToolchain,
-					build,
-					host,
-				});
+				const injectionLibrary = await tg
+					.build(injection.injection, {
+						buildToolchain,
+						build,
+						host,
+					})
+					.named("injection");
 				preloads.push(injectionLibrary);
 			}
 
@@ -1383,7 +1387,9 @@ const interpreterFromArg = async (
 				const host = std.triple.host();
 				// Use default injection when no custom build or buildToolchain is provided.
 				if (buildArg === undefined && buildToolchainArg === undefined) {
-					const injectionLibrary = await std.wrapDefaultInjection();
+					const injectionLibrary = await tg
+						.build(injection.defaultInjection)
+						.named("default injection");
 					preloads.push(injectionLibrary);
 				} else {
 					const build = buildArg ?? host;
@@ -1392,11 +1398,13 @@ const interpreterFromArg = async (
 						build,
 						host,
 					);
-					const injectionLibrary = await std.wrapInjection({
-						buildToolchain,
-						build: buildArg,
-						host,
-					});
+					const injectionLibrary = await tg
+						.build(injection.injection, {
+							buildToolchain,
+							build: buildArg,
+							host,
+						})
+						.named("injection");
 					preloads.push(injectionLibrary);
 				}
 			}
@@ -1458,7 +1466,9 @@ const interpreterFromExecutableArg = async (
 				hostArg === undefined &&
 				buildToolchainArg === undefined
 			) {
-				const injectionDylib = await std.wrapDefaultInjection();
+				const injectionDylib = await tg
+					.build(injection.defaultInjection)
+					.named("default injection");
 				return {
 					kind: "dyld",
 					libraryPaths: undefined,
@@ -1473,11 +1483,13 @@ const interpreterFromExecutableArg = async (
 					buildTriple,
 					host,
 				);
-				const injectionDylib = await std.wrapInjection({
-					buildToolchain,
-					build: buildTriple,
-					host,
-				});
+				const injectionDylib = await tg
+					.build(injection.injection, {
+						buildToolchain,
+						build: buildTriple,
+						host,
+					})
+					.named("injection");
 				return {
 					kind: "dyld",
 					libraryPaths: undefined,
@@ -1545,11 +1557,13 @@ const interpreterFromElf = async (
 				);
 
 	// Obtain injection library.
-	const injectionLib = await std.wrapInjection({
-		buildToolchain,
-		build: buildTriple,
-		host,
-	});
+	const injectionLib = await tg
+		.build(injection.injection, {
+			buildToolchain,
+			build: buildTriple,
+			host,
+		})
+		.named("injection");
 
 	// Handle each interpreter type.
 	if (metadata.interpreter?.includes("ld-linux")) {

@@ -1,8 +1,10 @@
 import * as std from "./tangram.ts";
+import { gnuEnv } from "./utils/coreutils.tg.ts";
+import { defaultEnv } from "./utils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
 export async function env(...args: env.ArgsInput) {
-	return await std.wrap(await std.gnuEnv(), {
+	return await std.wrap(await tg.build(gnuEnv).named("gnu env"), {
 		env: std.env.arg(...args),
 	});
 }
@@ -62,7 +64,10 @@ export namespace env {
 		);
 		const originalEnv = await env.mergeArgObjects(...envObjects);
 		if (includeUtils && !(await env.providesUtils(originalEnv))) {
-			return await env.mergeArgObjects(originalEnv, await std.defaultEnv());
+			return await env.mergeArgObjects(
+				originalEnv,
+				await tg.build(defaultEnv).named("default env"),
+			);
 		} else {
 			return originalEnv;
 		}

@@ -458,21 +458,33 @@ type ExportConfig = {
 type ExportMatrix = ExportConfig[];
 
 /** Package-specific export matrices for release action.
- * For std, we build from tag exports (e.g., std/0.0.0#gnuEnv) to ensure cache hits.
- * Internal std code accesses these via std namespace (e.g., std.gnuEnv), producing
- * the same graph+index referent as the tag build.
+ * For std, we build from file paths (e.g., std/0.0.0/utils/coreutils.tg.ts#gnuEnv)
+ * to produce referents matching what consumers get when calling tg.build(module.export).
+ * This ensures cache hits when consumers import and build the same functions.
  */
 const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 	std: [
 		{ ref: "default", tagPath: "default" },
 		{ ref: "default_", tagPath: "default_" },
 		{ ref: "sdk", tagPath: "sdk" },
-		{ ref: "defaultEnv", tagPath: "utils/env" },
-		{ ref: "gnuEnv", tagPath: "utils/gnuEnv" },
-		{ ref: "wrapInjection", tagPath: "wrap/injection" },
-		{ ref: "wrapDefaultInjection", tagPath: "wrap/defaultInjection" },
-		{ ref: "wrapDefaultWrapper", tagPath: "wrap/defaultWrapper" },
-		{ ref: "autotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
+		// File path refs: build from source files to match consumer command referents.
+		// Consumers call tg.build(coreutils.gnuEnv), which produces a referent to
+		// coreutils.tg.ts. Building from the file path produces the same referent.
+		{ ref: "utils.tg.ts#defaultEnv", tagPath: "utils/env" },
+		{ ref: "utils/coreutils.tg.ts#gnuEnv", tagPath: "utils/gnuEnv" },
+		{ ref: "wrap/injection.tg.ts#injection", tagPath: "wrap/injection" },
+		{
+			ref: "wrap/injection.tg.ts#defaultInjection",
+			tagPath: "wrap/defaultInjection",
+		},
+		{
+			ref: "wrap/workspace.tg.ts#defaultWrapper",
+			tagPath: "wrap/defaultWrapper",
+		},
+		{
+			ref: "sdk/dependencies.tg.ts#autotoolsBuildTools",
+			tagPath: "dependencies/buildTools/autotools",
+		},
 	],
 };
 
@@ -569,10 +581,18 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		const { ref, tagPath } = exportConfig;
 
 		// Build from the published tag to ensure cache hits for consumers.
-		// Internal std code accesses exports via std namespace (e.g., std.gnuEnv),
-		// producing the same graph+index referent as building from the tag.
-		const exportSuffix = ref !== "default" ? `#${ref}` : "";
-		const buildSource = `${versionedName}${exportSuffix}`;
+		// File path refs (containing '/') produce referents matching what consumers
+		// get when calling tg.build(module.export). Root refs use #export syntax.
+		let buildSource: string;
+		if (ref === "default") {
+			buildSource = versionedName;
+		} else if (ref.includes("/") || ref.includes(".tg.ts")) {
+			// File path ref: std/0.0.0/path/to/file.tg.ts#export
+			buildSource = `${versionedName}/${ref}`;
+		} else {
+			// Root export ref: std/0.0.0#export
+			buildSource = `${versionedName}#${ref}`;
+		}
 
 		// Construct tag
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
