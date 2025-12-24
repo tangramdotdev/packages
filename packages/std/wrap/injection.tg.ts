@@ -253,6 +253,11 @@ export const defaultInjection = async () => {
 		.named("default injection");
 };
 
+/** Release helper - builds defaultInjection with a referent to this file for cache hits. */
+export const buildDefaultInjection = async () => {
+	return tg.build(defaultInjection).named("default injection");
+};
+
 export const testCross = async () => {
 	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) === "darwin") {

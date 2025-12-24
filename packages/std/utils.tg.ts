@@ -99,6 +99,11 @@ export const defaultEnv = async () => {
 	return tg.build(env, { host, env: sdk }).named("default utils");
 };
 
+/** Release helper - builds defaultEnv with a referent to this file for cache hits. */
+export const buildDefaultEnv = async () => {
+	return tg.build(defaultEnv).named("default env");
+};
+
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();

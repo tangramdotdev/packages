@@ -186,6 +186,11 @@ export const defaultWrapper = async () => {
 	return workspace.get("bin/wrapper").then(tg.File.expect);
 };
 
+/** Release helper - builds defaultWrapper with a referent to this file for cache hits. */
+export const buildDefaultWrapper = async () => {
+	return tg.build(defaultWrapper).named("default wrapper");
+};
+
 type ToolchainArg = {
 	target?: string;
 };

@@ -430,6 +430,11 @@ export const autotoolsBuildTools = async () => {
 		.named("autotools build tools");
 };
 
+/** Release helper - builds autotoolsBuildTools with a referent to this file for cache hits. */
+export const buildAutotoolsBuildTools = async () => {
+	return tg.build(autotoolsBuildTools).named("autotools build tools");
+};
+
 export type HostLibrariesArg = {
 	host: string;
 	buildToolchain: std.env.Arg;

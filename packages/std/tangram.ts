@@ -47,36 +47,14 @@ import * as workspace from "./wrap/workspace.tg.ts";
 import * as wrap from "./wrap.tg.ts";
 import * as coreutils from "./utils/coreutils.tg.ts";
 
-// Wrapper functions for cache hits. Release builds these from the tag, which
-// produces nested commands with graph referents matching what consumers produce
-// when they call tg.build on the same imported functions.
-export type WrapInjectionArg = injection.Arg;
-
-export const gnuEnv = async () => {
-	return tg.build(coreutils.gnuEnv).named("gnu env");
-};
-
-export const defaultEnv = async () => {
-	return tg.build(utils.defaultEnv).named("default env");
-};
-
-export const wrapInjection = async (arg: injection.Arg) => {
-	return tg.build(injection.injection, arg).named("injection");
-};
-
-export const wrapDefaultInjection = async () => {
-	return tg.build(injection.defaultInjection).named("default injection");
-};
-
-export const wrapDefaultWrapper = async () => {
-	return tg.build(workspace.defaultWrapper).named("default wrapper");
-};
-
-export const autotoolsBuildTools = async () => {
-	return tg
-		.build(dependencies.autotoolsBuildTools)
-		.named("autotools build tools");
-};
+// Re-export release helpers from source files. Building these produces commands
+// with referents to the source files, matching what consumers produce when they
+// call tg.build on the same functions.
+export { buildGnuEnv } from "./utils/coreutils.tg.ts";
+export { buildDefaultEnv } from "./utils.tg.ts";
+export { buildDefaultInjection } from "./wrap/injection.tg.ts";
+export { buildDefaultWrapper } from "./wrap/workspace.tg.ts";
+export { buildAutotoolsBuildTools } from "./sdk/dependencies.tg.ts";
 
 export const metadata = {
 	name: "std",

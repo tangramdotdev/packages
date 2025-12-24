@@ -467,13 +467,14 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 		{ ref: "default", tagPath: "default" },
 		{ ref: "default_", tagPath: "default_" },
 		{ ref: "sdk", tagPath: "sdk" },
-		// Wrapper exports: these call tg.build on imported functions, producing
-		// nested commands with graph referents that match what consumers produce.
-		{ ref: "gnuEnv", tagPath: "utils/gnuEnv" },
-		{ ref: "defaultEnv", tagPath: "utils/env" },
-		{ ref: "wrapDefaultInjection", tagPath: "wrap/defaultInjection" },
-		{ ref: "wrapDefaultWrapper", tagPath: "wrap/defaultWrapper" },
-		{ ref: "autotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
+		// Release helpers: these are defined in the source files and call tg.build
+		// on the actual functions. Building them produces nested commands with
+		// referents to the source files, matching what consumers produce.
+		{ ref: "buildGnuEnv", tagPath: "utils/gnuEnv" },
+		{ ref: "buildDefaultEnv", tagPath: "utils/env" },
+		{ ref: "buildDefaultInjection", tagPath: "wrap/defaultInjection" },
+		{ ref: "buildDefaultWrapper", tagPath: "wrap/defaultWrapper" },
+		{ ref: "buildAutotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
 	],
 };
 
