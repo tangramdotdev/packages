@@ -43,7 +43,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			phases: {
 				configure: tg.Mutation.unset(),
 				build: tg.Mutation.unset(),
-				install: `make TOPDIR="$OUTPUT" install`,
+				install: tg`make TOPDIR="${tg.output}" install`,
 			},
 		},
 		...args,
