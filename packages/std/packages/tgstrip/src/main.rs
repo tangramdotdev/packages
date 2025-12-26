@@ -238,6 +238,7 @@ async fn run_proxy(
 				tg::checkout::Arg {
 					artifact,
 					dependencies: false,
+					extension: None,
 					force: true,
 					path: Some(canonical_target_path),
 					lock: Some(tg::checkout::Lock::Attr),

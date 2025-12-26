@@ -378,6 +378,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		tg::checkout::Arg {
 			artifact,
 			dependencies: false,
+			extension: None,
 			force: true,
 			path: None,
 			lock: None,

@@ -223,6 +223,7 @@ impl Manifest {
 			tg::checkout::Arg {
 				artifact: file.id().into(),
 				dependencies: false,
+				extension: None,
 				force: false,
 				lock: Some(tg::checkout::Lock::Attr),
 				path: None,
@@ -398,6 +399,7 @@ impl Manifest {
 			tg::checkout::Arg {
 				artifact: TANGRAM_WRAPPER.id().into(),
 				dependencies: false,
+				extension: None,
 				force: false,
 				lock: Some(tg::checkout::Lock::Attr),
 				path: None,
@@ -440,6 +442,7 @@ impl Manifest {
 				tg::checkout::Arg {
 					artifact: TANGRAM_CODESIGN.id().into(),
 					dependencies: false,
+					extension: None,
 					force: false,
 					lock: Some(tg::checkout::Lock::Attr),
 					path: None,

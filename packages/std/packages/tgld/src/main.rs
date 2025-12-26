@@ -536,6 +536,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 			tg::checkout::Arg {
 				artifact,
 				dependencies: false,
+				extension: None,
 				force: true,
 				lock: Some(tg::checkout::Lock::Attr),
 				path: Some(output_path.clone()),
