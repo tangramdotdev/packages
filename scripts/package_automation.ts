@@ -591,14 +591,14 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		}
 		const processId = result.value;
 
-		// Push the process with commands to ensure cache hits for consumers.
+		// Push the process to ensure cache hits for consumers.
 		// When consumers call functions like std.env() which internally use
-		// tg.build(std.gnuEnv), they need the command to be available.
+		// tg.build(std.gnuEnv), they need the process to be available.
 		log(
-			`[release] Pushing process ${processId} with commands${ctx.lazy ? " (lazy)" : ""}`,
+			`[release] Pushing process ${processId}${ctx.lazy ? " (lazy)" : ""}`,
 		);
 		try {
-			await ctx.tangram.push(processId, { lazy: ctx.lazy, commands: true });
+			await ctx.tangram.push(processId, { lazy: ctx.lazy });
 			log(`[release] Pushed process ${processId}`);
 		} catch (err) {
 			const errorMessage = extractErrorMessage(err);
