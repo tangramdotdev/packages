@@ -229,7 +229,13 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	}
 	if (!envApplied) {
 		envApplied = true;
-		let envEntrypoint = await std.wrap(gnuEnv(), { buildToolchain, env });
+		let envEntrypoint = await std.wrap(
+			await tg.build(gnuEnv).named("gnu env"),
+			{
+				buildToolchain,
+				env,
+			},
+		);
 		layers.push(
 			await layer(
 				await tg.directory({ entrypoint: envEntrypoint }),

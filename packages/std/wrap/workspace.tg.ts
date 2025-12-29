@@ -186,6 +186,11 @@ export const defaultWrapper = async () => {
 	return workspace.get("bin/wrapper").then(tg.File.expect);
 };
 
+/** Release helper - builds defaultWrapper with a referent to this file for cache hits. */
+export const buildDefaultWrapper = async () => {
+	return tg.build(defaultWrapper).named("default wrapper");
+};
+
 type ToolchainArg = {
 	target?: string;
 };
@@ -243,6 +248,8 @@ export const rust = async (
 
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
+	const shell = await bootstrap.shell(host);
+	const shellExecutable = await shell.get("bin/dash").then(tg.File.expect);
 	return await std.build`
 		set -x
 		echo HI
@@ -251,6 +258,7 @@ export const rust = async (
 			chmod -R +w "${tg.output}"
 		done`
 		.bootstrap(true)
+		.executable(shellExecutable)
 		.host(hostSystem)
 		.env(env)
 		.named("rust toolchain install")

@@ -120,7 +120,7 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		// Use default wrapper when no custom build or host is provided.
 		let wrapper =
 			arg.build === undefined && arg.host === undefined
-				? await tg.build(workspace.defaultWrapper)
+				? await tg.build(workspace.defaultWrapper).named("default wrapper")
 				: await workspace.wrapper({
 						build,
 						host,
@@ -1309,11 +1309,13 @@ const interpreterFromArg = async (
 					build,
 					host,
 				);
-				const injectionLibrary = await tg.build(injection.injection, {
-					buildToolchain,
-					build,
-					host,
-				});
+				const injectionLibrary = await tg
+					.build(injection.injection, {
+						buildToolchain,
+						build,
+						host,
+					})
+					.named("injection");
 
 				preloads.push(injectionLibrary);
 			}
@@ -1358,11 +1360,13 @@ const interpreterFromArg = async (
 					build,
 					host,
 				);
-				const injectionLibrary = await tg.build(injection.injection, {
-					buildToolchain,
-					build,
-					host,
-				});
+				const injectionLibrary = await tg
+					.build(injection.injection, {
+						buildToolchain,
+						build,
+						host,
+					})
+					.named("injection");
 				preloads.push(injectionLibrary);
 			}
 
@@ -1479,11 +1483,13 @@ const interpreterFromExecutableArg = async (
 					buildTriple,
 					host,
 				);
-				const injectionDylib = await tg.build(injection.injection, {
-					buildToolchain,
-					build: buildTriple,
-					host,
-				});
+				const injectionDylib = await tg
+					.build(injection.injection, {
+						buildToolchain,
+						build: buildTriple,
+						host,
+					})
+					.named("injection");
 				return {
 					kind: "dyld",
 					libraryPaths: undefined,
@@ -2131,19 +2137,22 @@ export const fileOrSymlinkFromManifestTemplate = async (
 const templateFromManifestTemplate = (
 	manifestTemplate: wrap.Manifest.Template,
 ): Promise<tg.Template> =>
-	manifestTemplate.components.reduce((result, component) => {
-		switch (component.kind) {
-			case "artifact": {
-				return tg`${result}${tg.Artifact.withId(component.value)}`;
+	manifestTemplate.components.reduce(
+		(result, component) => {
+			switch (component.kind) {
+				case "artifact": {
+					return tg`${result}${tg.Artifact.withId(component.value)}`;
+				}
+				case "string": {
+					return tg`${result}${component.value}`;
+				}
+				default: {
+					return tg.unreachable();
+				}
 			}
-			case "string": {
-				return tg`${result}${component.value}`;
-			}
-			default: {
-				return tg.unreachable();
-			}
-		}
-	}, tg``);
+		},
+		tg``,
+	);
 
 const mutationFromManifestMutation = (
 	manifestMutation: wrap.Manifest.Mutation,

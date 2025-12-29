@@ -1,8 +1,9 @@
 import * as std from "./tangram.ts";
 import { gnuEnv } from "./utils/coreutils.tg.ts";
+import { defaultEnv } from "./utils.tg.ts";
 import { wrap } from "./wrap.tg.ts";
 
-export async function env(...args: std.Args<env.Arg>) {
+export async function env(...args: env.ArgsInput) {
 	return await std.wrap(await tg.build(gnuEnv).named("gnu env"), {
 		env: std.env.arg(...args),
 	});
@@ -26,12 +27,27 @@ export namespace env {
 	/** An object containing only a `utils` boolean field and no other members. */
 	export type UtilsToggle = { utils: boolean } & Record<string, never>;
 
+	/** Args for `std.env.arg` that also accepts `PromiseLike<tg.Artifact>` (e.g., `tg.build(ripgrep)`). */
+	export type ArgsInput = Array<
+		std.Args<Arg>[number] | PromiseLike<tg.Artifact>
+	>;
+
+	/** Resolve an env arg, handling both standard args and PromiseLike<Artifact>. */
+	const resolveArg = async (arg: ArgsInput[number]): Promise<Arg> => {
+		// Await handles both Promise and PromiseLike.
+		const awaited = await arg;
+		// Artifacts from PromiseLike<Artifact> are already resolved.
+		if (tg.Artifact.is(awaited)) {
+			return awaited;
+		}
+		// Other values came from std.Args<Arg> and may have nested unresolved values.
+		return tg.resolve(awaited as tg.Unresolved<Arg>);
+	};
+
 	/** Produce a single env object from one or more env args. */
-	export const arg = async (
-		...args: std.Args<Arg>
-	): Promise<std.env.EnvObject> => {
+	export const arg = async (...args: ArgsInput): Promise<std.env.EnvObject> => {
 		let includeUtils = true;
-		const resolved = await Promise.all(args.map(tg.resolve));
+		const resolved = await Promise.all(args.map(resolveArg));
 		const envObjects = await Promise.all(
 			resolved.map(async (arg) => {
 				if (arg === undefined) {
@@ -50,7 +66,7 @@ export namespace env {
 		if (includeUtils && !(await env.providesUtils(originalEnv))) {
 			return await env.mergeArgObjects(
 				originalEnv,
-				await tg.build(std.utils.defaultEnv).named("default utils"),
+				await tg.build(defaultEnv).named("default env"),
 			);
 		} else {
 			return originalEnv;

@@ -1,6 +1,7 @@
 /** Bootstrapping the compiler toolchain requires these dependencies in addition to `std.utils`. */
 
 import * as std from "../tangram.ts";
+import { defaultEnv } from "../utils.tg.ts";
 
 import bison from "./dependencies/bison.tg.ts";
 import flex from "./dependencies/flex.tg.ts";
@@ -419,7 +420,7 @@ export const buildTools = async (
 export const autotoolsBuildTools = async () => {
 	const host = std.triple.host();
 	const sdk = await tg.build(std.sdk, { host }).named("sdk");
-	const utils = await tg.build(std.utils.defaultEnv).named("default utils");
+	const utils = await tg.build(defaultEnv).named("default env");
 	return tg
 		.build(buildTools, {
 			host,
@@ -427,6 +428,11 @@ export const autotoolsBuildTools = async () => {
 			preset: "autotools",
 		})
 		.named("autotools build tools");
+};
+
+/** Release helper - builds autotoolsBuildTools with a referent to this file for cache hits. */
+export const buildAutotoolsBuildTools = async () => {
+	return tg.build(autotoolsBuildTools).named("autotools build tools");
 };
 
 export type HostLibrariesArg = {

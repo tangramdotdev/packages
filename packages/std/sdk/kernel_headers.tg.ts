@@ -1,5 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
+import { defaultEnv } from "../utils.tg.ts";
 
 export const metadata = {
 	homepage: "https://www.kernel.org",
@@ -84,7 +85,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 		envs.push(await tg.build(std.sdk, sdkArg).named("sdk"));
 
 		// Add the standard utils, built with the default SDK.
-		const utils = await tg.build(std.utils.defaultEnv).named("default utils");
+		const utils = await tg.build(defaultEnv).named("default env");
 		envs.push(utils);
 	}
 	const env = std.env.arg(...envs, { utils: false });

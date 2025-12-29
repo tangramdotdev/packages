@@ -90,10 +90,16 @@ class TangramClient {
 			.then((t) => t.trim());
 	}
 
-	async push(target: string, options: { lazy?: boolean } = {}): Promise<void> {
+	async push(
+		target: string,
+		options: { lazy?: boolean; commands?: boolean } = {},
+	): Promise<void> {
 		const args = [target];
 		if (options.lazy ?? true) {
 			args.push("--lazy");
+		}
+		if (options.commands) {
+			args.push("--commands");
 		}
 		await $`${this.exe} push ${args}`.quiet();
 	}
@@ -409,7 +415,7 @@ async function executeBuild(
 	actionName: string,
 	buildPath: string,
 	options: { tag?: string } = {},
-): Promise<Result<void>> {
+): Promise<Result<string>> {
 	let processId: string | undefined;
 	try {
 		const process = await ctx.tangram.build(buildPath, options);
@@ -429,7 +435,7 @@ async function executeBuild(
 			);
 		}
 
-		return { ok: true, value: undefined };
+		return { ok: true, value: processId };
 	} catch (err) {
 		if (isUnsupportedHostError(err)) {
 			return { ok: false, error: "unsupported host", skipped: true };
@@ -444,30 +450,49 @@ async function executeBuild(
 
 /** Export configuration for release action */
 type ExportConfig = {
-	ref: string; // Export name ("default", "build") or path ("sdk.tg.ts#sdk")
+	ref: string; // Export name ("default", "build")
 	tagPath: string; // Tag path segment (e.g., "sdk" → "pkg/builds/1.0.0/sdk/platform")
+	path?: string; // Optional path to file within package (e.g., "utils/coreutils.tg.ts")
 	args?: Record<string, unknown>; // Optional build arguments
 };
 
 type ExportMatrix = ExportConfig[];
 
-/** Package-specific export matrices for release action */
+/** Package-specific export matrices for release action.
+ * For std, we build wrapper exports from their source files. The `path` field
+ * specifies which file contains the export within the package.
+ */
 const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 	std: [
 		{ ref: "default", tagPath: "default" },
 		{ ref: "default_", tagPath: "default_" },
-		{ ref: "sdk.tg.ts#sdk", tagPath: "sdk" },
-		{ ref: "utils.tg.ts#defaultEnv", tagPath: "utils/env" },
-		{ ref: "utils/coreutils.tg.ts#gnuEnv", tagPath: "utils/gnuEnv" },
-		{ ref: "wrap/injection.tg.ts#injection", tagPath: "wrap/injection" },
-		{ ref: "wrap/workspace.tg.ts#workspace", tagPath: "wrap/workspace" },
+		{ ref: "sdk", tagPath: "sdk" },
+		// Release helpers: build from source files to produce commands with
+		// correct referents matching what consumers produce.
 		{
-			ref: "wrap/workspace.tg.ts#defaultWrapper",
-			tagPath: "wrap/defaultWrapper",
+			ref: "buildGnuEnv",
+			tagPath: "utils/gnuEnv",
+			path: "utils/coreutils.tg.ts",
 		},
 		{
-			ref: "sdk/dependencies.tg.ts#autotoolsBuildTools",
+			ref: "buildDefaultEnv",
+			tagPath: "utils/env",
+			path: "utils.tg.ts",
+		},
+		{
+			ref: "buildDefaultInjection",
+			tagPath: "wrap/defaultInjection",
+			path: "wrap/injection.tg.ts",
+		},
+		{
+			ref: "buildDefaultWrapper",
+			tagPath: "wrap/defaultWrapper",
+			path: "wrap/workspace.tg.ts",
+		},
+		{
+			ref: "buildAutotoolsBuildTools",
 			tagPath: "dependencies/buildTools/autotools",
+			path: "sdk/dependencies.tg.ts",
 		},
 	],
 };
@@ -562,20 +587,19 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	const exportMatrix = getExportMatrix(ctx.packageName);
 
 	for (const [index, exportConfig] of exportMatrix.entries()) {
-		const { ref, tagPath } = exportConfig;
+		const { ref, tagPath, path } = exportConfig;
 
-		// Determine build source.
-		// If ref contains "/" or ".tg.ts", it's a subpath within a directory package.
-		const isSubpath = ref.includes("/") || ref.includes(".tg.ts");
+		// Build from local file paths to ensure correct module resolution.
+		// The `local` import attribute in packages only works with filesystem paths.
 		let buildSource: string;
-
-		if (isSubpath) {
-			// Subpath ref: append to package path (only valid for directory packages).
-			buildSource = `${ctx.packagePath}/${ref}`;
+		if (ref === "default") {
+			buildSource = ctx.packagePath;
+		} else if (path) {
+			// Build from specific file: ./packages/std/utils/coreutils.tg.ts#export
+			buildSource = `${ctx.packagePath}/${path}#${ref}`;
 		} else {
-			// Export name: build from local package path.
-			const exportSuffix = ref !== "default" ? `#${ref}` : "";
-			buildSource = `${ctx.packagePath}${exportSuffix}`;
+			// Build from package root: ./packages/rust#export
+			buildSource = `${ctx.packagePath}#${ref}`;
 		}
 
 		// Construct tag
@@ -591,8 +615,24 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 			log(`[release] Skipping ${ref}: ${result.error}`);
 			continue;
 		}
+		const processId = result.value;
 
-		// Push the build
+		// Push the process to ensure cache hits for consumers.
+		// When consumers call functions like std.env() which internally use
+		// tg.build(std.gnuEnv), they need the process to be available.
+		log(
+			`[release] Pushing process ${processId}${ctx.lazy ? " (lazy)" : ""}`,
+		);
+		try {
+			await ctx.tangram.push(processId, { lazy: ctx.lazy });
+			log(`[release] Pushed process ${processId}`);
+		} catch (err) {
+			const errorMessage = extractErrorMessage(err);
+			log(`[release] Failed to push process ${processId}: ${errorMessage}`);
+			pushErrors.push(`process ${processId}: ${errorMessage}`);
+		}
+
+		// Also push the tag (artifact) for consumers who want to download the output.
 		log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
 		try {
 			await ctx.tangram.push(tag, { lazy: ctx.lazy });
@@ -685,7 +725,11 @@ class Results {
 async function testAction(ctx: Context): Promise<Result<void>> {
 	const buildPath = `${ctx.packagePath}#test`;
 
-	return await executeBuild(ctx, "test", buildPath);
+	const result = await executeBuild(ctx, "test", buildPath);
+	if (!result.ok) {
+		return result;
+	}
+	return { ok: true, value: undefined };
 }
 
 /** Ordered actions - dependencies implicit in order */

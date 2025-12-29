@@ -3,7 +3,7 @@ import * as gnu from "../sdk/gnu.tg.ts";
 import * as std from "../tangram.ts";
 import injectionSource from "./injection" with { type: "directory" };
 
-type Arg = {
+export type Arg = {
 	build?: string | undefined;
 	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;
@@ -251,6 +251,11 @@ export const defaultInjection = async () => {
 			host,
 		})
 		.named("default injection");
+};
+
+/** Release helper - builds defaultInjection with a referent to this file for cache hits. */
+export const buildDefaultInjection = async () => {
+	return tg.build(defaultInjection).named("default injection");
 };
 
 export const testCross = async () => {

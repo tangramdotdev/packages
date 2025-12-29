@@ -1,8 +1,8 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import * as sdk from "../sdk.tg.ts";
-import { injection } from "../wrap/injection.tg.ts";
 import * as stub from "../wrap/stub.tg.ts";
+import * as injection from "../wrap/injection.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
 import * as llvmToolchain from "./llvm.tg.ts";
@@ -302,7 +302,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 
 	// The injection library and wrapper are built for the host machine.
 	const hostInjectionLibrary = await tg
-		.build(injection, {
+		.build(injection.injection, {
 			buildToolchain,
 			build,
 			host,

@@ -88,10 +88,16 @@ export const compileUtil = async (arg: UtilArg) => {
 	// Grab args.
 	const { destDir, extraArgs = [], fileName, utilName, utilSource } = arg;
 
-	// Compile the util.
-	const util = await tg.build`
+	// Get the shell from the bootstrap directly.
+	const shell = await bootstrap.shell(build);
+	const shellExecutable = await shell.get("bin/dash").then(tg.File.expect);
+
+	// Compile the util using std.build with bootstrap mode.
+	const util = await std.build`
 			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o ${tg.output} ${utilSource}/${fileName}`
-		.env(std.env.arg(arg.env, { utils: false }))
+		.bootstrap(true)
+		.executable(shellExecutable)
+		.env(arg.env)
 		.host(host)
 		.then(tg.File.expect);
 

@@ -53,7 +53,6 @@ export const testHello = async () => {
 	// Build the basic proxy test.
 	const helloWorld = await cargo.build({
 		source: tests.get("hello-world").then(tg.Directory.expect),
-		pre: "echo WATERMARK 1",
 		proxy: true,
 		env: {
 			TGRUSTC_TRACING: "tgrustc=trace",
@@ -104,7 +103,7 @@ export const testPkgconfig = async () => {
 	// compile the rust.
 	const rustOutput = await cargo.build({
 		source,
-		pre: tg`set -x && echo WATERMARK 10`,
+		pre: "set -x",
 		env: std.env.arg(pkgconf(), externalLibDir, {
 			TGRUSTC_TRACING: "tgrustc=trace",
 		}),
@@ -128,7 +127,6 @@ export const testOpenSSL = async () => {
 	// Build the openssl proxy test.
 	const helloOpenssl = await cargo.build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
-		pre: "echo WATERMARK 10",
 		env: std.env.arg(openssl(), pkgconf(), {
 			TGRUSTC_TRACING: "tgrustc=trace",
 		}),
