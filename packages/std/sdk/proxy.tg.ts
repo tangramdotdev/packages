@@ -312,7 +312,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		arg.build === undefined && arg.host === undefined
-			? await tg.build(workspace.defaultWrapper).named("default wrapper")
+			? await tg.build(std.buildDefaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,
@@ -379,7 +379,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 	// Use default wrapper when no custom build or host is provided.
 	const hostWrapper =
 		build_ === undefined && host_ === undefined
-			? await tg.build(workspace.defaultWrapper).named("default wrapper")
+			? await tg.build(std.buildDefaultWrapper).named("default wrapper")
 			: await workspace.wrapper({
 					build,
 					host,

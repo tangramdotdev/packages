@@ -45,6 +45,7 @@ import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
 import * as wrap from "./wrap.tg.ts";
+import * as coreutils from "./utils/coreutils.tg.ts";
 
 export const metadata = {
 	name: "std",
@@ -54,7 +55,10 @@ export const metadata = {
 
 /** The default SDK for the detected host. */
 export const default_ = async () => {
-	return await stdEnv(sdk.sdk(), dependencies.autotoolsBuildTools());
+	return await stdEnv(
+		sdk.sdk(),
+		await tg.build(buildAutotoolsBuildTools).named("autotools build tools"),
+	);
 };
 
 export default default_;
@@ -234,4 +238,28 @@ const validateTestNames = (...testNames: Array<string>) => {
 		throw new Error(`unrecognized test names: ${invalidTests.join(", ")}`);
 	}
 	return [...uniqueTests];
+};
+
+export const buildGnuEnv = async () => {
+	return coreutils.gnuEnv();
+};
+
+export const buildDefaultEnv = async () => {
+	return utils.defaultEnv();
+};
+
+export const buildDefaultInjection = async () => {
+	return injection.defaultInjection();
+};
+
+export const buildDefaultWorkspace = async () => {
+	return workspace.defaultWorkspace();
+};
+
+export const buildDefaultWrapper = async () => {
+	return workspace.defaultWrapper();
+};
+
+export const buildAutotoolsBuildTools = async () => {
+	return dependencies.autotoolsBuildTools();
 };

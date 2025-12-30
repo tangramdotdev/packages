@@ -77,7 +77,7 @@ export const ccProxy = async (arg: tg.Unresolved<Arg>) => {
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
 		const workspace = await tg
-			.build(defaultWorkspace)
+			.build(std.buildDefaultWorkspace)
 			.named("default workspace");
 		return workspace.get("bin/tgcc").then(tg.File.expect);
 	}
@@ -97,7 +97,7 @@ export const ldProxy = async (arg: tg.Unresolved<Arg>) => {
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
 		const workspace = await tg
-			.build(defaultWorkspace)
+			.build(std.buildDefaultWorkspace)
 			.named("default workspace");
 		return workspace.get("bin/tgld").then(tg.File.expect);
 	}
@@ -126,7 +126,7 @@ export const manifestTool = async (arg: tg.Unresolved<Arg>) => {
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
 		const workspace = await tg
-			.build(defaultWorkspace)
+			.build(std.buildDefaultWorkspace)
 			.named("default workspace");
 		return workspace.get("bin/manifest_tool").then(tg.File.expect);
 	}
@@ -145,7 +145,7 @@ export const stripProxy = async (arg: tg.Unresolved<Arg>) => {
 		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
 	) {
 		const workspace = await tg
-			.build(defaultWorkspace)
+			.build(std.buildDefaultWorkspace)
 			.named("default workspace");
 		return workspace.get("bin/tgstrip").then(tg.File.expect);
 	}
@@ -182,7 +182,9 @@ export const defaultWorkspace = async () => {
 
 /** The default wrapper built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultWrapper = async () => {
-	const workspace = await tg.build(defaultWorkspace).named("default workspace");
+	const workspace = await tg
+		.build(std.buildDefaultWorkspace)
+		.named("default workspace");
 	return workspace.get("bin/wrapper").then(tg.File.expect);
 };
 

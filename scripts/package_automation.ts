@@ -450,50 +450,64 @@ async function executeBuild(
 
 /** Export configuration for release action */
 type ExportConfig = {
-	ref: string; // Export name ("default", "build")
+	ref: string; // Export name ("default", "build") or path ("sdk.tg.ts#sdk")
 	tagPath: string; // Tag path segment (e.g., "sdk" → "pkg/builds/1.0.0/sdk/platform")
-	path?: string; // Optional path to file within package (e.g., "utils/coreutils.tg.ts")
 	args?: Record<string, unknown>; // Optional build arguments
 };
 
 type ExportMatrix = ExportConfig[];
 
 /** Package-specific export matrices for release action.
- * For std, we build wrapper exports from their source files. The `path` field
- * specifies which file contains the export within the package.
+ * For std, we build wrapper exports that call tg.build on imported functions.
+ * This produces nested commands with graph referents matching what consumers
+ * get when they call tg.build on the same imported functions.
  */
 const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 	std: [
 		{ ref: "default", tagPath: "default" },
 		{ ref: "default_", tagPath: "default_" },
 		{ ref: "sdk", tagPath: "sdk" },
-		// Release helpers: build from source files to produce commands with
-		// correct referents matching what consumers produce.
-		{
-			ref: "buildGnuEnv",
-			tagPath: "utils/gnuEnv",
-			path: "utils/coreutils.tg.ts",
-		},
-		{
-			ref: "buildDefaultEnv",
-			tagPath: "utils/env",
-			path: "utils.tg.ts",
-		},
-		{
-			ref: "buildDefaultInjection",
-			tagPath: "wrap/defaultInjection",
-			path: "wrap/injection.tg.ts",
-		},
-		{
-			ref: "buildDefaultWrapper",
-			tagPath: "wrap/defaultWrapper",
-			path: "wrap/workspace.tg.ts",
-		},
-		{
-			ref: "buildAutotoolsBuildTools",
-			tagPath: "dependencies/buildTools/autotools",
-			path: "sdk/dependencies.tg.ts",
-		},
+		// Release helpers: these are defined in the source files and call tg.build
+		// on the actual functions. Building them produces nested commands with
+		// referents to the source files, matching what consumers produce.
+		{ ref: "buildGnuEnv", tagPath: "utils/gnuEnv" },
+		{ ref: "buildDefaultEnv", tagPath: "utils/env" },
+		{ ref: "buildDefaultInjection", tagPath: "wrap/defaultInjection" },
+		{ ref: "buildDefaultWorkspace", tagPath: "wrap/defaultWorkspace" },
+		{ ref: "buildDefaultWrapper", tagPath: "wrap/defaultWrapper" },
+		{ ref: "buildAutotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
+	],
+	rust: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
+	],
+	ruby: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
+	],
+	go: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
+	],
+	nodejs: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
+	],
+	python: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
+	],
+	bun: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
+	],
+	cmake: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
+	],
+	poetry: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "self", tagPath: "self" },
 	],
 };
 
@@ -587,20 +601,11 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	const exportMatrix = getExportMatrix(ctx.packageName);
 
 	for (const [index, exportConfig] of exportMatrix.entries()) {
-		const { ref, tagPath, path } = exportConfig;
+		const { ref, tagPath } = exportConfig;
 
-		// Build from local file paths to ensure correct module resolution.
-		// The `local` import attribute in packages only works with filesystem paths.
-		let buildSource: string;
-		if (ref === "default") {
-			buildSource = ctx.packagePath;
-		} else if (path) {
-			// Build from specific file: ./packages/std/utils/coreutils.tg.ts#export
-			buildSource = `${ctx.packagePath}/${path}#${ref}`;
-		} else {
-			// Build from package root: ./packages/rust#export
-			buildSource = `${ctx.packagePath}#${ref}`;
-		}
+		// Build the source.
+		const buildSource =
+			ref === "default" ? ctx.packagePath : `${ctx.packagePath}#${ref}`;
 
 		// Construct tag
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
@@ -617,30 +622,15 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		}
 		const processId = result.value;
 
-		// Push the process to ensure cache hits for consumers.
-		// When consumers call functions like std.env() which internally use
-		// tg.build(std.gnuEnv), they need the process to be available.
-		log(
-			`[release] Pushing process ${processId}${ctx.lazy ? " (lazy)" : ""}`,
-		);
+		// Push the process.
 		try {
+			log(`[release] Pushing ${processId}${ctx.lazy ? " (lazy)" : ""}`);
 			await ctx.tangram.push(processId, { lazy: ctx.lazy });
-			log(`[release] Pushed process ${processId}`);
-		} catch (err) {
-			const errorMessage = extractErrorMessage(err);
-			log(`[release] Failed to push process ${processId}: ${errorMessage}`);
-			pushErrors.push(`process ${processId}: ${errorMessage}`);
-		}
-
-		// Also push the tag (artifact) for consumers who want to download the output.
-		log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
-		try {
-			await ctx.tangram.push(tag, { lazy: ctx.lazy });
 			log(`[release] Pushed ${tag}`);
 			uploadedTags.push(tag);
 		} catch (err) {
 			const errorMessage = extractErrorMessage(err);
-			log(`[release] Failed to push ${tag}: ${errorMessage}`);
+			log(`[release] Failed to push: ${errorMessage}`);
 			pushErrors.push(`${tag}: ${errorMessage}`);
 		}
 	}

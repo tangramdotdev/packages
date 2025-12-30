@@ -229,7 +229,7 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 			// Use the pre-built autotoolsBuildTools for the "autotools" preset to ensure cache hits.
 			if (preset === "autotools") {
 				buildToolsEnv = await tg
-					.build(std.dependencies.autotoolsBuildTools)
+					.build(std.buildAutotoolsBuildTools)
 					.named("autotools build tools");
 			} else {
 				// For other presets, build with the appropriate preset parameter.
