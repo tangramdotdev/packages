@@ -13,7 +13,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:a63096b2147411d683cecbf87622bb2ff4885bac2b3641d3d4f10250c89cdcf8";
+		"sha256:9502c5ffe4b894383c97abfccf74430a84732f04ee476b9c0d87635b29df7db3";
 	const extension = ".tar.xz";
 	const majorVersion = version.split(".")[0];
 	const base = `https://cdn.kernel.org/pub/linux/kernel/v${majorVersion}.x`;
