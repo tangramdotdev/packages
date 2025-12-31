@@ -32,7 +32,7 @@ export const source = async () => {
 };
 
 // Define dependencies - libiconv is only needed on darwin.
-const deps = await std.deps({
+const deps = std.deps({
 	curl: curl.build,
 	libpsl: libpsl.build,
 	libiconv: {

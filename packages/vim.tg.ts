@@ -30,7 +30,7 @@ export const source = () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	ncurses: ncurses.build,
 });
 

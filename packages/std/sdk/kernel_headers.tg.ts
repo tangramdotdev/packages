@@ -6,8 +6,8 @@ export const metadata = {
 	license: "GPLv2",
 	name: "linux",
 	repository: "https://git.kernel.org",
-	version: "6.12.60",
-	tag: "linux/6.12.60",
+	version: "6.12.63",
+	tag: "linux/6.12.63",
 };
 
 export const source = async () => {
@@ -74,7 +74,7 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 	};
 	const order = ["build", "install"];
 
-	const envs: tg.Unresolved<Array<std.env.Arg>> = [env_];
+	const envs: std.Args<std.env.Arg> = [env_];
 	if (!bootstrap_) {
 		// Add the toolchain.
 		const sdkArg =

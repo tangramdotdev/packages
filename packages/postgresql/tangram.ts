@@ -74,7 +74,7 @@ export const source = async () => {
 	return await std.patch(output, patches);
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	flex: { build: flex.build, kind: "buildtime" },
 	icu: icu.build,
 	lz4: lz4.build,

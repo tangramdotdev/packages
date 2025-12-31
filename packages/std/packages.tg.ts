@@ -181,23 +181,21 @@ export const applyArgs = async <T extends PackageArg>(
 };
 
 /**
- * Wrap build functions as BuildCommands to create a deps Config.
+ * Create a deps Config from build functions.
  * Accepts either plain build functions or full specs with kind option.
+ * Functions are stored directly and resolved lazily at build time via buildCommandOutput().
+ * The type system treats them as BuildCommand for tg.Value compatibility.
  */
-export async function deps<T extends deps.Input>(
-	input: T,
-): Promise<deps.Output<T>> {
+export function deps<T extends deps.Input>(input: T): deps.Output<T> {
 	const result: Record<string, deps.Spec> = {};
 	for (const [key, spec] of Object.entries(input)) {
 		if (typeof spec === "function") {
-			// Simple case: just a build function
-			const cmd = await tg.command(spec);
-			result[key] = cmd as BuildCommand;
+			// Store function directly - buildCommandOutput handles both functions and commands.
+			result[key] = spec as unknown as BuildCommand;
 		} else {
-			// Full spec with options
-			const cmd = await tg.command(spec.build);
+			// Full spec with options.
 			result[key] = {
-				build: cmd as BuildCommand,
+				build: spec.build as unknown as BuildCommand,
 				kind: spec.kind ?? "runtime",
 			};
 		}
@@ -227,13 +225,6 @@ export namespace deps {
 	// biome-ignore lint/suspicious/noExplicitAny: Package commands are contravariant, requiring type erasure here.
 	export type Spec = BuildCommand<any> | FullSpec;
 
-	/**
-	 * Internal full spec that includes condition (not stored in Config, used during resolution).
-	 */
-	export type FullSpecWithCondition = FullSpec & {
-		when?: Condition;
-	};
-
 	/** Normalize a Spec to a FullSpec. */
 	export const normalizeSpec = (spec: Spec): FullSpec => {
 		// A FullSpec has a 'kind' property; a plain BuildCommand does not.
@@ -252,22 +243,18 @@ export namespace deps {
 		[key: string]: Spec;
 	};
 
-	/** Extract the Arg type from a BuildCommand. */
-	type ExtractPackageArg<T> = T extends BuildCommand<infer A> ? A : never;
-
-	/** Extract the BuildCommand from a Spec. */
-	type ExtractBuild<T extends Spec> = T extends FullSpec
-		? T["build"]
-		: // biome-ignore lint/suspicious/noExplicitAny: Package commands are contravariant, requiring type erasure here.
-			T extends BuildCommand<any>
-			? T
+	/** Extract the package arg type from a Spec (either plain BuildCommand or FullSpec). */
+	type ArgFromSpec<T extends Spec> = T extends FullSpec
+		? T["build"] extends BuildCommand<infer A>
+			? A
+			: never
+		: T extends BuildCommand<infer A>
+			? A
 			: never;
 
 	/** Generate a dependencies type from a Config. */
 	export type ArgsFrom<T extends Config> = {
-		[K in keyof T]?: std.args.OptionalDependencyArg<
-			ExtractPackageArg<ExtractBuild<T[K]>>
-		>;
+		[K in keyof T]?: std.args.OptionalDependencyArg<ArgFromSpec<T[K]>>;
 	};
 
 	/** Generate an artifacts map type from a Config. */
@@ -390,20 +377,18 @@ export namespace deps {
 		[key: string]: InputSpec<any>;
 	};
 
-	/** Extract the build function from an InputSpec. */
-	type ExtractInputBuildFn<T> =
+	/** Extract the package arg type directly from an InputSpec. */
+	type ExtractArgFromInput<T> =
 		T extends BuildFn<infer A>
-			? BuildFn<A>
+			? A
 			: T extends { build: BuildFn<infer A> }
-				? BuildFn<A>
+				? A
 				: never;
 
 	/** Output type for deps() - maps each key to the appropriate Spec preserving arg types. */
 	export type Output<T extends Input> = {
-		[K in keyof T]: ExtractInputBuildFn<T[K]> extends BuildFn<infer A>
-			? T[K] extends { kind: Kind }
-				? FullSpec & { build: BuildCommand<A> }
-				: BuildCommand<A>
-			: never;
+		[K in keyof T]: T[K] extends { kind: Kind }
+			? FullSpec & { build: BuildCommand<ExtractArgFromInput<T[K]>> }
+			: BuildCommand<ExtractArgFromInput<T[K]>>;
 	};
 }

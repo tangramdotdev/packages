@@ -355,7 +355,7 @@ export namespace wrap {
 		// Determine whether to try to merge this wrapper with an existing one. If the user specified `true`, only honor if an existing manifest was found.
 		const merge = merge_ && existingManifest !== undefined;
 
-		const envs: tg.Unresolved<Array<std.env.Arg>> = [];
+		const envs: std.Args<std.env.Arg> = [];
 
 		// If the executable is a file and the behavior is merge, try to read the manifest from it.
 		if (merge) {

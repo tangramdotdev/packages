@@ -31,7 +31,7 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	ncurses: ncurses.build,
 	python: { build: python.self, kind: "buildtime" },
 	readline: readline.build,

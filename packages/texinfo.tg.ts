@@ -4,7 +4,7 @@ import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
 import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
 
-const deps = await std.deps({
+const deps = std.deps({
 	ncurses: ncurses.build,
 	perl: { build: perl.build, kind: "full" },
 	zlib: zlib.build,
@@ -98,7 +98,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	return std.env(binDir, {
 		PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
-		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
+		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset<tg.Template.Arg>(
 			tg`${output}/share/texinfo/texindex.awk`,
 		),
 	});

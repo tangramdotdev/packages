@@ -35,7 +35,7 @@ export const source = () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	flac: flac.build,
 	ogg: ogg.build,
 	opus: opus.build,

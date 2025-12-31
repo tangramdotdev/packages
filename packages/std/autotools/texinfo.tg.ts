@@ -101,7 +101,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		binDir,
 		{
 			PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
-			TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
+			TEXINDEX_SCRIPT: tg.Mutation.setIfUnset<tg.Template>(
 				tg`${output}/share/texinfo/texindex.awk`,
 			),
 		},

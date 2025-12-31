@@ -31,7 +31,7 @@ export const source = () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	help2man: { build: help2man.build, kind: "buildtime" },
 });
 

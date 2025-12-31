@@ -29,7 +29,7 @@ export const source = async () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	pcre2: pcre2.build,
 });
 

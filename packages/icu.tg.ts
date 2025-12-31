@@ -41,7 +41,7 @@ export const source = async () => {
 	return std.directory.unwrap(outer);
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	python: { build: python.self, kind: "buildtime" },
 });
 

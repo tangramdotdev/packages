@@ -58,9 +58,7 @@ export const build = async (arg?: Arg) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const dependencies: Array<tg.Unresolved<std.env.Arg>> = [
-		prerequisites(build),
-	];
+	const dependencies: std.Args<std.env.Arg> = [prerequisites(build)];
 	if (std.triple.os(host) === "linux") {
 		dependencies.push(
 			attr({

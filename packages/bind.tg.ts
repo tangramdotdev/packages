@@ -56,7 +56,7 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	libcap: {
 		build: libcap.build,
 		kind: "runtime",

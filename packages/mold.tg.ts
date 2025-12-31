@@ -31,7 +31,7 @@ export const source = () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	zstd: {
 		build: zstd.build,
 		kind: "runtime",

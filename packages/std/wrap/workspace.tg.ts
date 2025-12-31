@@ -399,7 +399,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	// Set up common environemnt.
 	const certFile = tg`${std.caCertificates()}/cacert.pem`;
 
-	const env: Array<tg.Unresolved<std.env.Arg>> = [
+	const env: std.Args<std.env.Arg> = [
 		{ utils: false },
 		buildToolchain,
 		hostToolchain ?? {},

@@ -68,7 +68,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const host = host_ ?? std.triple.host();
 	const os = std.triple.os(host);
 
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [
+	const envs: std.Args<std.env.Arg> = [
 		{
 			CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
 		},

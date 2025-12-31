@@ -30,7 +30,7 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	bzip2: bzip2.build,
 	libiconv: libiconv.build,
 	openssl: openssl.build,

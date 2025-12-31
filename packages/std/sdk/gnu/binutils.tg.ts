@@ -82,7 +82,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		install: makeinfoOverride,
 	};
 
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+	const envs: std.Args<std.env.Arg> = [];
 	envs.push({
 		CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
 	});

@@ -4,7 +4,7 @@ import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
 import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
 
-const deps = await std.deps({
+const deps = std.deps({
 	autoconf: autoconf.build,
 	help2man: { build: help2man.build, kind: "buildtime" },
 	perl: perl.build,
@@ -69,7 +69,9 @@ export const build = async (...args: std.Args<Arg>) => {
 		const wrappedScript = std.wrap(executable, {
 			interpreter: perlInterpreter,
 			env: {
-				AUTOCONF: tg.Mutation.setIfUnset(tg`${autoconfArtifact}/bin/autoconf`),
+				AUTOCONF: tg.Mutation.setIfUnset<tg.Template.Arg>(
+					tg`${autoconfArtifact}/bin/autoconf`,
+				),
 				PERL5LIB: tg.Mutation.suffix(
 					tg`${automake}/share/automake-${version}`,
 					":",

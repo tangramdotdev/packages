@@ -390,15 +390,15 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
 
-	let clangArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
-	let clangxxArgs: tg.Unresolved<Array<tg.Template.Arg>> = [];
+	let clangArgs: std.Args<tg.Template.Arg> = [];
+	let clangxxArgs: std.Args<tg.Template.Arg> = [];
 	let env = {};
 	if (std.triple.os(host) === "darwin") {
 		const targetOs = std.triple.os(target);
 		if (targetOs === "darwin") {
 			// If the target is darwin, use the macOS SDK for the SDKROOT.
 			env = {
-				SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
+				SDKROOT: tg.Mutation.setIfUnset<tg.Template.Arg>(bootstrap.macOsSdk()),
 			};
 		} else if (targetOs === "linux") {
 			// If the target is linux, unset any existing SDKROOT and instead use the Linux sysroot.

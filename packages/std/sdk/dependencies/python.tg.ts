@@ -50,7 +50,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	];
 	const makeArgs = [];
 
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+	const envs: std.Args<std.env.Arg> = [];
 	if (os === "darwin") {
 		envs.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
 		configureArgs.push(

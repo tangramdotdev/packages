@@ -37,7 +37,7 @@ export const source = () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	perl: { build: perl.build, kind: "buildtime" },
 	zlib: zlib.build,
 });
@@ -114,7 +114,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			tg.File.expect(await autoconf.get(`bin/${script}`)),
 			{
 				env: {
-					trailer_m4: tg.Mutation.setIfUnset(
+					trailer_m4: tg.Mutation.setIfUnset<tg.Template.Arg>(
 						tg`${shareDirectory}/autoconf/autoconf/trailer.m4`,
 					),
 					AUTOCONF: tg`${binDirectory}/autoconf`,

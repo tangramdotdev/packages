@@ -59,7 +59,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const build = build_ ?? host;
 	const os = std.triple.os(host);
 
-	const dependencies: Array<tg.Unresolved<std.env.Arg>> = [];
+	const dependencies: std.Args<std.env.Arg> = [];
 
 	if (usePrerequisites) {
 		dependencies.push(prerequisites(build));

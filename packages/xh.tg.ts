@@ -48,7 +48,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const features: Array<string> = [];
 	// Only include openssl deps if nativeTls is enabled.
 	const deps = nativeTls
-		? await std.deps({
+		? std.deps({
 				openssl: {
 					build: openssl,
 					kind: "runtime",

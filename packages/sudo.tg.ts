@@ -2,7 +2,7 @@ import * as std from "std" with { local: "./std" };
 import * as coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
 import * as tzdb from "tzdb" with { local: "./tzdb.tg.ts" };
 
-const deps = await std.deps({
+const deps = std.deps({
 	coreutils: { build: coreutils.build, kind: "buildtime" },
 	tzdb: tzdb.build,
 });

@@ -62,7 +62,7 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 	const phases = { prepare, configure };
 
 	const bootstrapSdk = await std.sdk(bootstrap.sdk.arg(host));
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [
+	const envs: std.Args<std.env.Arg> = [
 		bootstrapSdk,
 		bootstrap.make.build({ host }),
 		{
@@ -214,7 +214,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	const os = std.triple.os(host);
 
 	// Set up env.
-	let envs: Array<tg.Unresolved<std.env.Arg>> = [];
+	let envs: std.Args<std.env.Arg> = [];
 	if (bootstrap) {
 		// Prevent automatically adding the utils to the env.
 		envs.push({ utils: false });

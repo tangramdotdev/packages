@@ -42,7 +42,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const env: Array<tg.Unresolved<std.env.Arg>> = [];
+	const env: std.Args<std.env.Arg> = [];
 
 	const envArg = usePrerequisites
 		? std.env.arg(env_, ...env, prerequisites(build), { utils: false })

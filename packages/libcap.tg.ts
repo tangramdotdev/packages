@@ -41,7 +41,7 @@ export const source = async () => {
 	return source;
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	attr: attr.build,
 });
 

@@ -4,7 +4,7 @@ import * as std from "std" with { local: "./std" };
 import * as texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
 import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
 
-const deps = await std.deps({
+const deps = std.deps({
 	autoconf: autoconf.build,
 	perl: { build: perl.build, kind: "buildtime" },
 	zlib: zlib.build,

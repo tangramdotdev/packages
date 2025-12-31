@@ -28,7 +28,7 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	attr: attr.build,
 });
 

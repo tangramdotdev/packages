@@ -173,7 +173,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const hostOs = std.triple.os(host);
 
 	// Set up env.
-	let envs: tg.Unresolved<Array<std.env.Arg>> = [];
+	let envs: std.Args<std.env.Arg> = [];
 	if (bootstrap) {
 		// Prevent automatically adding the utils to the env.
 		envs.push({ utils: false });

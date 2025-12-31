@@ -187,7 +187,7 @@ export const buildTools = async (
 	}
 
 	// This list collects artifacts to return. It does not include the build toolchain or standard utils.
-	const retEnvs: tg.Unresolved<Array<std.env.Arg>> = [{ utils: false }];
+	const retEnvs: std.Args<std.env.Arg> = [{ utils: false }];
 
 	// A running modified build env including pieces we build along the way.
 	let buildEnv = await std.env.arg(buildToolchain);

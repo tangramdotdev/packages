@@ -30,7 +30,7 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	python: { build: python.self, kind: "buildtime" },
 });
 

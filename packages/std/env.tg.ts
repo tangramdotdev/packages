@@ -1,7 +1,7 @@
 import * as std from "./tangram.ts";
 import { wrap } from "./wrap.tg.ts";
 
-export async function env(...args: env.ArgsInput) {
+export async function env(...args: std.Args<env.Arg>) {
 	return await std.wrap(await tg.build(std.buildGnuEnv).named("gnu env"), {
 		env: std.env.arg(...args),
 	});
@@ -25,27 +25,12 @@ export namespace env {
 	/** An object containing only a `utils` boolean field and no other members. */
 	export type UtilsToggle = { utils: boolean } & Record<string, never>;
 
-	/** Args for `std.env.arg` that also accepts `PromiseLike<tg.Artifact>` (e.g., `tg.build(ripgrep)`). */
-	export type ArgsInput = Array<
-		std.Args<Arg>[number] | PromiseLike<tg.Artifact>
-	>;
-
-	/** Resolve an env arg, handling both standard args and PromiseLike<Artifact>. */
-	const resolveArg = async (arg: ArgsInput[number]): Promise<Arg> => {
-		// Await handles both Promise and PromiseLike.
-		const awaited = await arg;
-		// Artifacts from PromiseLike<Artifact> are already resolved.
-		if (tg.Artifact.is(awaited)) {
-			return awaited;
-		}
-		// Other values came from std.Args<Arg> and may have nested unresolved values.
-		return tg.resolve(awaited as tg.Unresolved<Arg>);
-	};
-
 	/** Produce a single env object from one or more env args. */
-	export const arg = async (...args: ArgsInput): Promise<std.env.EnvObject> => {
+	export const arg = async (
+		...args: std.Args<env.Arg>
+	): Promise<std.env.EnvObject> => {
 		let includeUtils = true;
-		const resolved = await Promise.all(args.map(resolveArg));
+		const resolved = await Promise.all(args.map(tg.resolve));
 		const envObjects = await Promise.all(
 			resolved.map(async (arg) => {
 				if (arg === undefined) {
@@ -143,7 +128,7 @@ export namespace env {
 					// Merge it with the current value.
 					current = await env.mergeTemplateMaybeMutations(
 						current,
-						await tg.Mutation.set(templateFromArg(val)),
+						await tg.Mutation.set<tg.Template>(templateFromArg(val)),
 					);
 				}
 
@@ -171,9 +156,11 @@ export namespace env {
 			if (orig.inner.kind === "unset") {
 				return Promise.resolve(orig) as Promise<tg.Mutation<tg.Template>>;
 			} else if (orig.inner.kind === "set") {
-				return tg.Mutation.set(templateFromArg(orig.inner.value));
+				return tg.Mutation.set<tg.Template>(templateFromArg(orig.inner.value));
 			} else if (orig.inner.kind === "set_if_unset") {
-				return tg.Mutation.setIfUnset(templateFromArg(orig.inner.value));
+				return tg.Mutation.setIfUnset<tg.Template>(
+					templateFromArg(orig.inner.value),
+				);
 			} else if (orig.inner.kind === "prefix") {
 				return tg.Mutation.prefix(
 					templateFromArg(orig.inner.template),

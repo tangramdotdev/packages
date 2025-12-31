@@ -24,7 +24,7 @@ export const source = () => {
 		.then(tg.Directory.expect);
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	ogg: ogg.build,
 });
 

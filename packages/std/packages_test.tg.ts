@@ -91,7 +91,7 @@ export const fullDepBuild = async (
 };
 
 // Deps: distinct packages with shared builder pattern, plus kind testing.
-const mockDeps = await std.deps({
+const mockDeps = std.deps({
 	pkgA: pkgABuild,
 	pkgB: pkgBBuild,
 	runtimeDep: fullDepBuild,
@@ -102,7 +102,7 @@ const mockDeps = await std.deps({
 type MockDepsArg = std.args.BasePackageArg & std.deps.Arg<typeof mockDeps>;
 
 // Parent/leaf for transitive dependency testing.
-const leafDeps = await std.deps({ leaf: pkgABuild });
+const leafDeps = std.deps({ leaf: pkgABuild });
 
 export type ParentArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof leafDeps> & { parentOption?: string };
@@ -126,7 +126,7 @@ export const parentBuild = async (
 	return tg.directory({ lib: tg.directory(libFiles) });
 };
 
-const transitiveDeps = await std.deps({ parent: parentBuild });
+const transitiveDeps = std.deps({ parent: parentBuild });
 
 type TransitiveArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof transitiveDeps>;

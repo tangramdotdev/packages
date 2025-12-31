@@ -111,7 +111,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			buildToolchain = await bootstrap.sdk.env(host_);
 		}
 	}
-	const env: Array<tg.Unresolved<std.env.Arg>> = [
+	const env: std.Args<std.env.Arg> = [
 		{ utils: false },
 		buildToolchain,
 		hostToolchain,

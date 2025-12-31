@@ -41,7 +41,7 @@ const source = async () => {
 		.then((d) => std.patch(d, patches));
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	libiconv: libiconv.build,
 	libxml2: { build: libxml2.build, kind: "full" },
 	openssl: openssl.build,

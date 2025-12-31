@@ -57,7 +57,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	};
 	const phases = { configure };
 
-	const env: Array<tg.Unresolved<std.env.Arg>> = [];
+	const env: std.Args<std.env.Arg> = [];
 	env.push(prerequisites(build));
 	env.push({
 		CFLAGS: tg.Mutation.prefix(

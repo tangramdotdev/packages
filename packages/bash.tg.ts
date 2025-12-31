@@ -21,7 +21,7 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	libiconv: libiconv.build,
 	ncurses: ncurses.build,
 });

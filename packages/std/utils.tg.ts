@@ -121,7 +121,7 @@ export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 
 	// Order matters: items later in the array prepend to PATH later, so they appear first.
 	// We want coreutils first, then make. The SDK provides baseline utils (busybox/toybox) at lowest precedence.
-	const components: Array<tg.Unresolved<std.env.Arg>> = [
+	const components: std.Args<std.env.Arg> = [
 		bootstrap.sdk.prepareBootstrapUtils(host),
 		makeArtifact,
 		coreutilsArtifact,

@@ -62,7 +62,7 @@ export const source = () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	acl: {
 		build: acl.build,
 		kind: "runtime",

@@ -46,10 +46,7 @@ export type FlagsArg = {
  * - Strip flags for smaller binaries
  * - RELRO for GOT protection on Linux
  */
-export const flags = (
-	arg: FlagsArg,
-	envs: Array<tg.Unresolved<std.env.Arg>>,
-): void => {
+export const flags = (arg: FlagsArg, envs: std.Args<std.env.Arg>): void => {
 	const {
 		host,
 		fortifySource: fortifySource_ = 2,
@@ -190,7 +187,7 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 
 	const build = build_ ?? host;
 	const isCross = build !== host;
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+	const envs: std.Args<std.env.Arg> = [];
 
 	// Add compiler flags.
 	flags(

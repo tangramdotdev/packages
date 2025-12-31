@@ -37,7 +37,7 @@ export const source = () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	nasm: { build: nasm.build, kind: "buildtime" },
 });
 

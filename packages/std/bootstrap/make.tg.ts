@@ -44,10 +44,7 @@ export const build = async (arg?: Arg) => {
 		install,
 	};
 
-	let envArgs: Array<tg.Unresolved<std.env.Arg>> = [
-		sdk(host),
-		{ utils: false },
-	];
+	let envArgs: std.Args<std.env.Arg> = [sdk(host), { utils: false }];
 	if (embedWrapper) {
 		envArgs.push({ TGLD_EMBED_WRAPPER: true });
 	}

@@ -139,7 +139,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
 	// On macOS builds, the compiler is clang, so no triple prefix.
 	const useTriplePrefix = std.triple.os(build) === "linux" && build !== host;
-	let args: Array<tg.Unresolved<tg.Template.Arg>> = [
+	let args: std.Args<tg.Template.Arg> = [
 		"-shared",
 		"-fPIC",
 		"-ldl",

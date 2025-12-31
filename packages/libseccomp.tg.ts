@@ -32,7 +32,7 @@ export const source = async () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	gperf: { build: gperf.build, kind: "buildtime" },
 });
 

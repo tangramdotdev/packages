@@ -32,7 +32,7 @@ export const source = async () => {
 	});
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	openssl: openssl.build,
 	zlib: zlib.build,
 });

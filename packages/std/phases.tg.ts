@@ -1023,7 +1023,7 @@ export const testSetIfUnset = async () => {
 	// When phase exists, set_if_unset should not override.
 	const existing = { build: tg`echo "existing"` };
 	const withSetIfUnset = await arg(existing, {
-		build: tg.Mutation.setIfUnset(tg`echo "fallback"`),
+		build: await tg.Mutation.setIfUnset<tg.Template.Arg>(tg`echo "fallback"`),
 	});
 	tg.assert(
 		withSetIfUnset.build !== undefined,
@@ -1040,7 +1040,7 @@ export const testSetIfUnset = async () => {
 	// When phase does not exist, set_if_unset should set it.
 	const empty: PhasesArg = {};
 	const withFallback = await arg(empty, {
-		build: tg.Mutation.setIfUnset(tg`echo "fallback"`),
+		build: tg.Mutation.setIfUnset<tg.Template.Arg>(tg`echo "fallback"`),
 	});
 	tg.assert(withFallback.build !== undefined, "build phase should be set");
 	const fallbackText = (withFallback.build.body as tg.Template).components

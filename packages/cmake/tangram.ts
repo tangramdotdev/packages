@@ -44,7 +44,7 @@ export const source = async () => {
 		.then((source) => std.patch(source, patches));
 };
 
-const deps = await std.deps({
+const deps = std.deps({
 	curl: curl.build,
 	libiconv: {
 		build: libiconv.build,
