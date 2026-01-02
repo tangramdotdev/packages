@@ -3,7 +3,7 @@ import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
 import * as python from "python" with { local: "./python" };
 import * as readline from "readline" with { local: "./readline.tg.ts" };
 import * as xz from "xz" with { local: "./xz.tg.ts" };
-import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://gitlab.gnome.org/GNOME/libxml2/-/wikis/home",

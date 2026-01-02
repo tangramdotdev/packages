@@ -1,6 +1,6 @@
 import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
 import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://libssh2.org",

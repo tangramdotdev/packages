@@ -1,6 +1,6 @@
 import * as libseccomp from "libseccomp" with { local: "./libseccomp.tg.ts" };
 import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.darwinsys.com/file/",

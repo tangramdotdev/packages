@@ -8,7 +8,7 @@ import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
 import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
 import * as readline from "readline" with { local: "../readline.tg.ts" };
 import * as rust from "rust" with { local: "../rust" };
-import * as zlib from "zlib" with { local: "../zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
 

@@ -5,7 +5,7 @@ import * as libuv from "libuv" with { local: "./libuv.tg.ts" };
 import * as libxml2 from "libxml2" with { local: "./libxml2.tg.ts" };
 import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
 import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.isc.org/bind/",
