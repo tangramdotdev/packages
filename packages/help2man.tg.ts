@@ -2,7 +2,7 @@ import * as autoconf from "autoconf" with { local: "./autoconf.tg.ts" };
 import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
 import * as texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
-import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 const deps = std.deps({
 	autoconf: autoconf.build,

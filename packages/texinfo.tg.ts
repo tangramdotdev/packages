@@ -2,7 +2,7 @@ import * as bash from "bash" with { local: "./bash.tg.ts" };
 import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
 import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 const deps = std.deps({
 	ncurses: ncurses.build,

@@ -9,7 +9,7 @@ import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
 import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
 import * as readline from "readline" with { local: "../readline.tg.ts" };
 import * as sqlite from "sqlite" with { local: "../sqlite.tg.ts" };
-import * as zlib from "zlib" with { local: "../zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
 import * as zstd from "zstd" with { local: "../zstd.tg.ts" };
 
 import * as requirements from "./requirements.tg.ts";

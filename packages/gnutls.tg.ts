@@ -1,7 +1,7 @@
 import * as gmp from "gmp" with { local: "./gmp" };
 import * as nettle from "nettle" with { local: "./nettle.tg.ts" };
 import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib" with { local: "./zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 import * as zstd from "zstd" with { local: "./zstd.tg.ts" };
 
 export const metadata = {

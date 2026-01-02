@@ -3,7 +3,7 @@ import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
 import * as libiconv from "libiconv" with { local: "../libiconv.tg.ts" };
 import * as libxml2 from "libxml2" with { local: "../libxml2.tg.ts" };
 import * as xz from "xz" with { local: "../xz.tg.ts" };
-import * as zlib from "zlib" with { local: "../zlib.tg.ts" };
+import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://github.com/apple-oss-distributions/xar",
