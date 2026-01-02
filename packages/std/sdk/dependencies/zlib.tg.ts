@@ -1,21 +1,25 @@
 import * as std from "../../tangram.ts";
 
 export const metadata = {
-	name: "zlib",
-	version: "1.3.1",
-	tag: "zlib/1.3.1",
+	name: "zlib-ng",
+	version: "2.3.2",
+	tag: "zlib-ng/2.3.2",
 };
 
-export const source = async () => {
-	const { name, version } = metadata;
-	const extension = ".tar.xz";
+export const source = () => {
+	const { version } = metadata;
 	const checksum =
-		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
-	const base = `https://zlib.net/`;
-	return await std.download
-		.extractArchive({ base, checksum, name, version, extension })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
+		"sha256:6a0561b50b8f5f6434a6a9e667a67026f2b2064a1ffa959c6b2dae320161c2a8";
+	const owner = "zlib-ng";
+	const repo = "zlib-ng";
+	const tag = version;
+	return std.download.fromGithub({
+		checksum,
+		owner,
+		repo,
+		source: "tag",
+		tag,
+	});
 };
 
 export type Arg = {
@@ -54,6 +58,11 @@ export const build = async (arg?: Arg) => {
 		bootstrap: bootstrap_,
 		defaultCrossArgs: false,
 		env,
+		phases: {
+			configure: {
+				args: ["--zlib-compat"],
+			},
+		},
 		processName: metadata.name,
 		sdk,
 		source: source_ ?? source(),
@@ -63,13 +72,3 @@ export const build = async (arg?: Arg) => {
 };
 
 export default build;
-
-import * as bootstrap from "../../bootstrap.tg.ts";
-
-export const test = async () => {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, libraries: ["z"] });
-	return true;
-};
