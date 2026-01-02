@@ -70,13 +70,11 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	for (const script of bashScripts) {
 		const file = tg.File.expect(await output.get(`bin/${script}`));
 		const scriptEnv = {
-			["_lt_pkgdatadir"]: tg.Mutation.setIfUnset<tg.Template.Arg>(
-				tg`${output}/share/libtool`,
-			),
-			EGREP: tg.Mutation.setIfUnset<tg.Template.Arg>(tg`${grepExe} -E`),
-			FGREP: tg.Mutation.setIfUnset<tg.Template.Arg>(tg`${grepExe} -F`),
-			GREP: tg.Mutation.setIfUnset<tg.Template.Arg>(grepExe),
-			SED: tg.Mutation.setIfUnset<tg.Template.Arg>(sedExe),
+			["_lt_pkgdatadir"]: tg.Mutation.setIfUnset(tg`${output}/share/libtool`),
+			EGREP: tg.Mutation.setIfUnset(tg`${grepExe} -E`),
+			FGREP: tg.Mutation.setIfUnset(tg`${grepExe} -F`),
+			GREP: tg.Mutation.setIfUnset(grepExe),
+			SED: tg.Mutation.setIfUnset(sedExe),
 		};
 		output = await tg.directory(output, {
 			[`bin/${script}`]: std.wrap({

@@ -328,31 +328,27 @@ const ldProxy = async (arg: LdProxyArg) => {
 		TGLD_COMMAND_PATH: tg.Mutation.setIfUnset<
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
-		TGLD_INJECTION_PATH: tg.Mutation.setIfUnset<tg.File>(hostInjectionLibrary),
+		TGLD_INJECTION_PATH: tg.Mutation.setIfUnset(hostInjectionLibrary),
 		TGLD_INTERPRETER_ARGS: arg.interpreterArgs
-			? tg.Mutation.setIfUnset<tg.Template>(
-					tg.Template.join(" ", ...arg.interpreterArgs),
-				)
+			? tg.Mutation.setIfUnset(tg.Template.join(" ", ...arg.interpreterArgs))
 			: undefined,
 		TGLD_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
 		),
-		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset<string>(hostWrapper.id),
-		TANGRAM_CODESIGN_ID: tg.Mutation.setIfUnset<string>(codesign.id),
+		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
+		TANGRAM_CODESIGN_ID: tg.Mutation.setIfUnset(codesign.id),
 		TANGRAM_STUB_BIN_ID: stubBin
-			? tg.Mutation.setIfUnset<string>(stubBin.id)
+			? tg.Mutation.setIfUnset(stubBin.id)
 			: undefined,
 		TANGRAM_STUB_ELF_ID: stubElf
-			? tg.Mutation.setIfUnset<string>(stubElf.id)
+			? tg.Mutation.setIfUnset(stubElf.id)
 			: undefined,
 		TANGRAM_OBJCOPY_ID: objcopy
-			? tg.Mutation.setIfUnset<string>(objcopy.id)
+			? tg.Mutation.setIfUnset(objcopy.id)
 			: undefined,
-		TANGRAM_WRAP_ID: wrapBin
-			? tg.Mutation.setIfUnset<string>(wrapBin.id)
-			: undefined,
+		TANGRAM_WRAP_ID: wrapBin ? tg.Mutation.setIfUnset(wrapBin.id) : undefined,
 		TGLD_EMBED_WRAPPER: embedWrapper
-			? tg.Mutation.setIfUnset<string>("true")
+			? tg.Mutation.setIfUnset("true")
 			: undefined,
 	};
 
@@ -400,7 +396,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 			TGSTRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
-			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset<string>(hostWrapper.id),
+			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
 		},
 	];
 	if (arg.runtimeLibraryPath !== undefined) {

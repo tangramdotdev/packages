@@ -125,7 +125,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 			tg.File.expect(await autoconf.get(`bin/${script}`)),
 			{
 				env: {
-					trailer_m4: tg.Mutation.setIfUnset<tg.Template>(
+					trailer_m4: tg.Mutation.setIfUnset(
 						tg`${shareDirectory}/autoconf/autoconf/trailer.m4`,
 					),
 					AUTOCONF: tg`${binDirectory}/autoconf`,

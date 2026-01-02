@@ -52,13 +52,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		let sedArtifact = await sed.build({ host });
 		let sedExe = await sedArtifact.get("bin/sed").then(tg.File.expect);
 		const scriptEnv = {
-			["_lt_pkgdatadir"]: tg.Mutation.setIfUnset<tg.Template.Arg>(
-				tg`${output}/share/libtool`,
-			),
-			EGREP: tg.Mutation.setIfUnset<tg.Template.Arg>(tg`${grepExe} -E`),
-			FGREP: tg.Mutation.setIfUnset<tg.Template.Arg>(tg`${grepExe} -F`),
-			GREP: tg.Mutation.setIfUnset<tg.Template.Arg>(grepExe),
-			SED: tg.Mutation.setIfUnset<tg.Template.Arg>(sedExe),
+			["_lt_pkgdatadir"]: tg.Mutation.setIfUnset(tg`${output}/share/libtool`),
+			EGREP: tg.Mutation.setIfUnset(tg`${grepExe} -E`),
+			FGREP: tg.Mutation.setIfUnset(tg`${grepExe} -F`),
+			GREP: tg.Mutation.setIfUnset(grepExe),
+			SED: tg.Mutation.setIfUnset(sedExe),
 		};
 		output = await tg.directory(output, {
 			[`bin/${script}`]: bash.wrapScript(file, host, scriptEnv),

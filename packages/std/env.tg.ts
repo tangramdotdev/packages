@@ -128,7 +128,7 @@ export namespace env {
 					// Merge it with the current value.
 					current = await env.mergeTemplateMaybeMutations(
 						current,
-						await tg.Mutation.set<tg.Template>(templateFromArg(val)),
+						await tg.Mutation.set(templateFromArg(val)),
 					);
 				}
 
@@ -156,11 +156,9 @@ export namespace env {
 			if (orig.inner.kind === "unset") {
 				return Promise.resolve(orig) as Promise<tg.Mutation<tg.Template>>;
 			} else if (orig.inner.kind === "set") {
-				return tg.Mutation.set<tg.Template>(templateFromArg(orig.inner.value));
+				return tg.Mutation.set(templateFromArg(orig.inner.value));
 			} else if (orig.inner.kind === "set_if_unset") {
-				return tg.Mutation.setIfUnset<tg.Template>(
-					templateFromArg(orig.inner.value),
-				);
+				return tg.Mutation.setIfUnset(templateFromArg(orig.inner.value));
 			} else if (orig.inner.kind === "prefix") {
 				return tg.Mutation.prefix(
 					templateFromArg(orig.inner.template),
@@ -209,10 +207,10 @@ export namespace env {
 
 		// Wrap the values in mutations if they are not already.
 		if (!(a instanceof tg.Mutation)) {
-			a = await tg.Mutation.set<tg.Template.Arg>(templateFromArg(a));
+			a = await tg.Mutation.set(templateFromArg(a));
 		}
 		if (!(b instanceof tg.Mutation)) {
-			b = await tg.Mutation.set<tg.Template.Arg>(templateFromArg(b));
+			b = await tg.Mutation.set(templateFromArg(b));
 		}
 
 		// Merge the mutations.

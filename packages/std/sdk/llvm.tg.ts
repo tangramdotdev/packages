@@ -398,7 +398,7 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 		if (targetOs === "darwin") {
 			// If the target is darwin, use the macOS SDK for the SDKROOT.
 			env = {
-				SDKROOT: tg.Mutation.setIfUnset<tg.Template.Arg>(bootstrap.macOsSdk()),
+				SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
 			};
 		} else if (targetOs === "linux") {
 			// If the target is linux, unset any existing SDKROOT and instead use the Linux sysroot.

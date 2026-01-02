@@ -45,8 +45,8 @@ export const toolchain = async (arg: ToolchainArg) => {
 		nativeToolchain,
 		nativeProxyEnv,
 		{
-			CC: tg.Mutation.setIfUnset<tg.Template.Arg>("gcc"),
-			CXX: tg.Mutation.setIfUnset<tg.Template.Arg>("g++"),
+			CC: tg.Mutation.setIfUnset("gcc"),
+			CXX: tg.Mutation.setIfUnset("g++"),
 		},
 		{ utils: false },
 	);

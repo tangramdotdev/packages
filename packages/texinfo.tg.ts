@@ -98,7 +98,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	return std.env(binDir, {
 		PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
-		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset<tg.Template.Arg>(
+		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
 			tg`${output}/share/texinfo/texindex.awk`,
 		),
 	});

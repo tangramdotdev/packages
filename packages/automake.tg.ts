@@ -69,9 +69,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		const wrappedScript = std.wrap(executable, {
 			interpreter: perlInterpreter,
 			env: {
-				AUTOCONF: tg.Mutation.setIfUnset<tg.Template.Arg>(
-					tg`${autoconfArtifact}/bin/autoconf`,
-				),
+				AUTOCONF: tg.Mutation.setIfUnset(tg`${autoconfArtifact}/bin/autoconf`),
 				PERL5LIB: tg.Mutation.suffix(
 					tg`${automake}/share/automake-${version}`,
 					":",

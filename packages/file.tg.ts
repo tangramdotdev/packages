@@ -60,7 +60,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const rawFile = tg.File.expect(await output.get("bin/file"));
 	const wrappedFile = std.wrap(rawFile, {
 		env: {
-			MAGIC: tg.Mutation.setIfUnset<tg.Template.Arg>(tg`${magic}/magic.mgc`),
+			MAGIC: tg.Mutation.setIfUnset(tg`${magic}/magic.mgc`),
 		},
 		libraryPaths: [tg.Directory.expect(await output.get("lib"))],
 	});
