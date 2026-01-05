@@ -329,6 +329,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 			contents,
 			executable: true,
 			dependencies: BTreeMap::new(),
+			module: None,
 		}))
 		.into(),
 	);

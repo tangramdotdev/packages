@@ -205,6 +205,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		contents,
 		dependencies,
 		executable,
+		module: None,
 	});
 	let executable = Some(tg::File::with_object(object).into());
 
