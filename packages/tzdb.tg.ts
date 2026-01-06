@@ -6,18 +6,20 @@ export const metadata = {
 	name: "tzdb",
 	license: "https://github.com/eggert/tz/blob/main/LICENSE",
 	repository: "https://github.com/eggert/tz",
-	version: "2025b",
-	tag: "tzdb/2025b",
+	version: "2025c",
+	tag: "tzdb/2025c",
 	provides: {
 		binaries: ["zdump", "zic"],
-		libraries: [{ name: "tz", dylib: false, staticlib: true }],
+		libraries: [
+			{ name: "tz", dylib: false, staticlib: true, pkgConfigName: false },
+		],
 	},
 };
 
 export const source = async (): Promise<tg.Directory> => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:7e281b316b85e20c9a67289805aa2a2ee041b5a41ccf5d096af3386ba76cf9d5";
+		"sha256:d970fb6753529583226fb1bb9df6237e5e968ea7d70a8bd0df2f3394c86f7ac4";
 	const owner = "eggert";
 	const repo = "tz";
 	const tag = `${version}`;
@@ -36,9 +38,9 @@ export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
+			buildInTree: true,
 			env: {
 				CC: "cc",
-				CFLAGS: tg.Mutation.suffix("-O2", " "),
 			},
 			phases: {
 				configure: tg.Mutation.unset(),
@@ -48,6 +50,14 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
+
+	// On macOS, disable gettext to avoid libintl dependency.
+	const os = std.triple.os(arg.host);
+	if (os === "darwin") {
+		arg.env = await std.env.arg(arg.env, {
+			CFLAGS: tg.Mutation.suffix("-DHAVE_GETTEXT=0", " "),
+		});
+	}
 
 	let output = await std.autotools.build(arg);
 
