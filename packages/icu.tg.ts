@@ -94,17 +94,17 @@ export const build = async (...args: std.Args<Arg>) => {
 		};
 	}
 
-	const arg = await std.autotools.arg(
+	return std.autotools.build(
 		{
-			source: sourceDir,
-			deps,
+			build: build_,
 			buildInTree: !skipInstall,
+			deps,
+			host,
 			phases,
+			source: sourceDir,
 		},
 		...args,
 	);
-
-	return std.autotools.build(arg);
 };
 
 export default build;
