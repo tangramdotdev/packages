@@ -153,8 +153,6 @@ const testActions = (): Record<string, () => any> => {
 		sdkDepsLibxcrypt: sdk.dependencies.libxcrypt.test,
 		sdkDepsPerl: sdk.dependencies.perl.test,
 		sdkDepsPython: sdk.dependencies.python.test,
-		sdkDepsZlib: sdk.dependencies.zlib.test,
-		sdkDepsZstd: sdk.dependencies.zlib.test,
 		sdkDepsCmake: sdk.cmake.test,
 		sdkDepsNinja: sdk.ninja.test,
 		sdkDepsMoldSource: sdk.mold.source,
