@@ -52,7 +52,22 @@ export const build = async (...args: std.Args<Arg>) => {
 		...args,
 	);
 	std.assert.supportedHost(arg.host, metadata);
-	return std.autotools.build(arg);
+
+	const isCross = arg.build !== arg.host;
+	let env = arg.env;
+	if (isCross) {
+		const attrArtifact = await std.deps.artifacts(deps, {
+			build: arg.build,
+			host: arg.host,
+		});
+		if (attrArtifact.attr) {
+			env = await std.env.arg(env, {
+				LDFLAGS: tg.Mutation.prefix(tg`-L${attrArtifact.attr}/lib`, " "),
+			});
+		}
+	}
+
+	return std.autotools.build({ ...arg, env });
 };
 
 export default build;

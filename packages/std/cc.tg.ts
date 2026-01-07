@@ -187,6 +187,8 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 
 	const build = build_ ?? host;
 	const isCross = build !== host;
+	const detectedHost = std.triple.host();
+	const canUsePrebuiltBuildTools = build === detectedHost;
 	const envs: std.Args<std.env.Arg> = [];
 
 	// Add compiler flags.
@@ -206,9 +208,6 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 	);
 
 	if (!bootstrap) {
-		// Set up the host SDK.
-		const sdk = await tg.build(std.sdk, sdkArg, { host }).named("sdk");
-
 		// Determine preset based on flags.
 		let preset: Preset | undefined = undefined;
 		if (pkgConfig) {
@@ -222,18 +221,23 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 		}
 
 		if (preset !== undefined) {
+			// Set up the native SDK for the build machine.
+			const sdk = canUsePrebuiltBuildTools
+				? await tg.build(std.sdk, sdkArg, { host: detectedHost }).named("sdk")
+				: await tg.build(std.sdk, sdkArg, { host: build }).named("sdk");
+
 			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
-			// Use the pre-built autotoolsBuildTools for the "autotools" preset to ensure cache hits.
-			if (preset === "autotools") {
+			// Use the pre-built std.buildAutotoolsBuildTools for the "autotools" preset.
+			if (preset === "autotools" && canUsePrebuiltBuildTools) {
 				buildToolsEnv = await tg
 					.build(std.buildAutotoolsBuildTools)
 					.named("autotools build tools");
 			} else {
-				// For other presets, build with the appropriate preset parameter.
+				// For other presets or when build machine differs, build with explicit parameters.
 				buildToolsEnv = await tg
 					.build(buildTools, {
-						host,
-						buildToolchain: await tg.build(std.sdk, { host }).named("sdk"),
+						host: build,
+						buildToolchain: sdk,
 						preset,
 					})
 					.named("build tools");

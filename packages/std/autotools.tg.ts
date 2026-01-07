@@ -243,8 +243,9 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport ${runtimeLibEnvVar}=$LIBRARY_PATH`;
 	}
 	if (defaultCrossEnv && isCross) {
-		// Toolchain prefix is the host triple (where output runs).
-		const hostPrefix = `${host}-`;
+		// Toolchain prefix is the canonical host triple (where output runs).
+		const canonicalHost = std.sdkModule.sdk.canonicalTriple(host);
+		const hostPrefix = `${canonicalHost}-`;
 		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport CC=${hostPrefix}cc && export CXX=${hostPrefix}c++ && export AR=${hostPrefix}ar`;
 	}
 	const needsPrepare = buildInTree || setRuntimeLibraryPath || defaultCrossEnv;

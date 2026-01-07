@@ -732,8 +732,12 @@ export const tryBaseName = (lib: string): string | undefined => {
 /** Ensure the given host is supported according to the metadata. */
 export const supportedHost = (currentHost: string, metadata?: Metadata) => {
 	const supportedHosts = metadata?.hostPlatforms ?? std.triple.allHosts;
+	const currentArchOs = std.triple.archAndOs(currentHost);
+	const isSupported = supportedHosts.some(
+		(h) => std.triple.archAndOs(h) === currentArchOs,
+	);
 	tg.assert(
-		supportedHosts.includes(currentHost),
+		isSupported,
 		`current host ${currentHost} not found in supported hosts: ${supportedHosts}.`,
 	);
 };
