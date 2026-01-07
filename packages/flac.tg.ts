@@ -6,10 +6,11 @@ export const metadata = {
 	homepage: "https://xiph.org/flac",
 	name: "flac",
 	version: "1.5.0",
+	tag: "flac/1.5.0",
 	provides: {},
 };
 
-export const source = () => {
+export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f2c1c76592a82ffff8413ba3c4a1299b6c7ab06c734dee03fd88630485c2b920";
@@ -20,8 +21,7 @@ export const source = () => {
 			mode: "extract",
 		})
 		.then(tg.Directory.expect)
-		.then((directory) => directory.get(`${name}-${version}`))
-		.then(tg.Directory.expect);
+		.then(std.directory.unwrap);
 };
 
 const deps = std.deps({

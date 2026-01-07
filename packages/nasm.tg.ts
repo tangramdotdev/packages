@@ -5,7 +5,7 @@ export const metadata = {
 	name: "nasm",
 	repository: "https://github.com/netwide-assembler/nasm",
 	version: "3.01",
-	tag: "nasm-3.01",
+	tag: "nasm/3.01",
 	provides: {
 		binaries: ["nasm", "ndisasm"],
 	},
@@ -16,8 +16,6 @@ export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:aea120d4adb0241f08ae24d6add09e4a993bc1c4d9f754dbfc8020d6916c9be1";
-	const owner = "netwide-assembler";
-	const repo = name;
 	return std
 		.download({
 			url: `https://www.nasm.us/pub/${name}/releasebuilds/${version}/nasm-${version}.tar.gz`,
@@ -25,8 +23,7 @@ export const source = async () => {
 			mode: "extract",
 		})
 		.then(tg.Directory.expect)
-		.then((directory) => directory.get(`${name}-${version}`))
-		.then(tg.Directory.expect);
+		.then(std.directory.unwrap);
 };
 
 export type Arg = std.autotools.Arg;

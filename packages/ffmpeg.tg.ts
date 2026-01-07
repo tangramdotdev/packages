@@ -6,7 +6,7 @@ export const metadata = {
 	name: "FFmpeg",
 	repository: "https://github.com/FFmpeg/FFmpeg",
 	version: "7.1.2",
-	tag: "n7.1.2",
+	tag: "ffmpeg/7.1.2",
 	provides: {
 		binaries: ["ffmpeg", "ffprobe"],
 		libraries: [
