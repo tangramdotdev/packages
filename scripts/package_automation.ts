@@ -603,9 +603,9 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 	for (const [index, exportConfig] of exportMatrix.entries()) {
 		const { ref, tagPath } = exportConfig;
 
-		// Build the source.
+		// Build from the published tag.
 		const buildSource =
-			ref === "default" ? ctx.packagePath : `${ctx.packagePath}#${ref}`;
+			ref === "default" ? versionedName : `${versionedName}#${ref}`;
 
 		// Construct tag
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
