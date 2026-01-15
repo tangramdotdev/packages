@@ -114,22 +114,24 @@ export namespace download {
 		version: string;
 	};
 
-	/** Download and extract a source package hosted in the GNU FTP repository. */
+	const gnuHosts = ["ftpmirror.gnu.org", "ftp.gnu.org"];
+
+	/** Download and extract a source package hosted in the GNU FTP repository. Tries ftpmirror.gnu.org first, then falls back to ftp.gnu.org. */
 	export const fromGnu = async (arg: FromGnuArg) => {
 		const { checksum, compression = "gz", name, version } = arg;
 		const archiveFormat = "tar" as tg.ArchiveFormat;
 		const extension = `.${archiveFormat}.${compression}`;
 		const archive = packageArchive({ extension, name, version });
-		const url = gnuUrl(name, archive);
+		const gnuUrl = (host: string) => `http://${host}/gnu/${name}/${archive}`;
+		const primaryHost = gnuHosts[0];
+		tg.assert(primaryHost, "Expected at least one GNU host.");
+		const url = gnuUrl(primaryHost);
+		const mirrors = gnuHosts.slice(1).map(gnuUrl);
 
 		const outer = await download
-			.extractArchive({ checksum, url })
+			.extractArchive({ checksum, url, mirrors })
 			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
-	};
-
-	export const gnuUrl = (name: string, archive: string) => {
-		return `http://ftpmirror.gnu.org/gnu/${name}/${archive}`;
 	};
 
 	export type BuildUrlArg =
