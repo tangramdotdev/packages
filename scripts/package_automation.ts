@@ -67,7 +67,7 @@ class TangramClient {
 		target: string,
 		options: { tag?: string } = {},
 	): Promise<{ id: string; token?: string }> {
-		const args = [target, "-d"];
+		const args = [target, "-d", "-v"];
 		if (options.tag) {
 			args.push(`--tag=${options.tag}`);
 		}
