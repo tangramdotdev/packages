@@ -435,19 +435,21 @@ async function executeBuild(
 		});
 		processId = process.id;
 
-		// Only track and wait for processes that have a cancellation token
+		// Track processes that have a cancellation token
 		if (process.token) {
 			ctx.processTracker.add(process.id, process.token);
 			log(
 				`[${actionName}] ${buildPath}: ${processId}${options.tag ? ` (tag: ${options.tag})` : ""}`,
 			);
-			await ctx.tangram.processOutput(processId);
 		} else {
 			// No token means the build is cached/already complete
 			log(
 				`[${actionName}] ${buildPath}: ${processId} (cached)${options.tag ? ` (tag: ${options.tag})` : ""}`,
 			);
 		}
+
+		// Berify the process output to check for failures.
+		await ctx.tangram.processOutput(processId);
 
 		return { ok: true, value: processId };
 	} catch (err) {
