@@ -1,7 +1,7 @@
 import * as std from "./tangram.ts";
 
 export type Args<T extends tg.Value = tg.Value> = Array<
-	tg.Unresolved<tg.ValueOrMaybeMutationMap<T>>
+	tg.Unresolved<ValueOrMaybeMutationMap<T>>
 >;
 
 /** Base argument type for packages to extend. Add build-system-specific options (autotools, cmake, cargo, etc.) and package-specific dependencies by intersection. */
@@ -38,7 +38,7 @@ export type DependencyArgs = {
 type Input<T extends tg.Value, O extends { [key: string]: tg.Value }> = {
 	args: tg.Args<T>;
 	map: (
-		arg: tg.ValueOrMaybeMutationMap<T>,
+		arg: ValueOrMaybeMutationMap<T>,
 	) => tg.MaybePromise<tg.MaybeMutationMap<O>>;
 	reduce: {
 		[K in keyof O]:
@@ -51,6 +51,24 @@ export type MakeArrayKeys<T, K extends keyof T> = {
 	[P in keyof T]: P extends K ? Array<T[P]> : T[P];
 };
 
+type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
+	| undefined
+	| boolean
+	| number
+	| string
+	| tg.Object
+	| Uint8Array
+	| tg.Mutation
+	| tg.Template
+	| tg.Placeholder
+	| Array<infer _U extends tg.Value>
+	? T
+	: T extends { [key: string]: tg.Value }
+		? {
+				[K in keyof T]?: tg.MaybeMutation<T[K]>;
+			}
+		: never;
+
 export const apply = async <
 	T extends tg.Value,
 	O extends { [key: string]: tg.Value },
@@ -59,7 +77,7 @@ export const apply = async <
 ): Promise<O> => {
 	let { args, map, reduce } = input;
 	let resolved = (await Promise.all(args.map(tg.resolve))) as Array<
-		tg.ValueOrMaybeMutationMap<T>
+		ValueOrMaybeMutationMap<T>
 	>;
 	let output: { [key: string]: tg.Value } = {};
 	for (let arg of resolved) {

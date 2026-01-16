@@ -11,6 +11,7 @@ export namespace env {
 	export type Arg =
 		| undefined
 		| tg.Artifact
+		| tg.Command<[], tg.Artifact>
 		| UtilsToggle
 		| tg.MaybeMutation<ArgObject>;
 
@@ -38,6 +39,10 @@ export namespace env {
 				} else if (isUtilsToggle(arg)) {
 					includeUtils = arg.utils;
 					return {};
+				} else if (arg instanceof tg.Command) {
+					const artifact = await tg.build(arg);
+					tg.Artifact.assert(artifact);
+					return await envObjectFromArtifact(artifact);
 				} else if (tg.Artifact.is(arg)) {
 					return await envObjectFromArtifact(arg);
 				} else {
