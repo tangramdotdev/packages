@@ -46,36 +46,37 @@ export const source = async () => {
 	return source;
 };
 
-const deps = std.deps({
-	acl: {
-		build: acl.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-	attr: {
-		build: attr.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-	libcap: {
-		build: libcap.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-	libiconv: {
-		build: libiconv.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "darwin",
-	},
-});
+const deps = () =>
+	std.deps({
+		acl: {
+			build: acl.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+		attr: {
+			build: attr.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+		libcap: {
+			build: libcap.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+		},
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			env: { FORCE_UNSAFE_CONFIGURE: true },
 		},
 		...args,

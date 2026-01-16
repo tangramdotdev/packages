@@ -21,22 +21,23 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-const deps = std.deps({
-	gettext: { build: gettext.build, kind: "buildtime" },
-	libiconv: {
-		build: libiconv.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "darwin",
-	},
-});
+const deps = () =>
+	std.deps({
+		gettext: { build: gettext.build, kind: "buildtime" },
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+		},
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			phases: {
 				configure: { args: ["--disable-dependency-tracking"] },
 			},

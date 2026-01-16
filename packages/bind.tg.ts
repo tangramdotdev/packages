@@ -56,31 +56,32 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = std.deps({
-	libcap: {
-		build: libcap.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-	libiconv: {
-		build: libiconv.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "darwin",
-	},
-	liburcu: liburcu.build,
-	libuv: libuv.build,
-	libxml2: libxml2.build,
-	openssl: openssl.build,
-	zlib: zlib.build,
-});
+const deps = () =>
+	std.deps({
+		libcap: {
+			build: libcap.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+		},
+		liburcu: liburcu.build,
+		libuv: libuv.build,
+		libxml2: libxml2.build,
+		openssl: openssl.build,
+		zlib: zlib.build,
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			phases: {
 				configure: {
 					args: [

@@ -41,9 +41,10 @@ export const source = async () => {
 	return source;
 };
 
-const deps = std.deps({
-	attr: attr.build,
-});
+const deps = () =>
+	std.deps({
+		attr: attr.build,
+	});
 
 const install = tg`
 	set -x
@@ -62,13 +63,13 @@ const install = tg`
 	ln -s libcap.so.${metadata.version} libcap.so.2
 	ln -s libcap.so.2 libcap.so`;
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			buildInTree: true,
 			phases: {
 				configure: tg.Mutation.unset(),

@@ -35,19 +35,20 @@ export const source = () => {
 	});
 };
 
-const deps = std.deps({
-	libpsl: libpsl.build,
-	openssl: openssl.build,
-	zlib: zlib.build,
-	zstd: zstd.build,
-});
+const deps = () =>
+	std.deps({
+		libpsl: libpsl.build,
+		openssl: openssl.build,
+		zlib: zlib.build,
+		zstd: zstd.build,
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
-			deps,
+			deps: deps(),
 			source: source(),
 			phases: {
 				configure: {

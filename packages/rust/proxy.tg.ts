@@ -35,6 +35,7 @@ export const proxy = async (...args: std.Args<Arg>) =>
 
 export default proxy;
 
+import { libclang } from "llvm" with { local: "../llvm" };
 import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
 import openssl from "openssl" with { local: "../openssl.tg.ts" };
 import tests from "./tests" with { type: "directory" };
@@ -333,7 +334,7 @@ export const testProcMacroWithDeps = async () => {
 export const testProcMacroCross = async () => {
 	// Cross-compile a proc-macro workspace.
 	// Proc macros must compile for the host, while the app compiles for the target.
-	const hostTriple = await std.triple.host();
+	const hostTriple = std.triple.host();
 	const hostArch = std.triple.arch(hostTriple);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	const targetTriple = std.triple.create(hostTriple, { arch: targetArch });
@@ -358,8 +359,6 @@ export const testProcMacroCross = async () => {
 export const testBindgen = async () => {
 	// Build a project with a build script that uses bindgen.
 	// Bindgen requires libclang, so we need to provide LLVM.
-	// Import llvm lazily to avoid circular dependency: rust -> llvm -> python -> rust
-	const { libclang } = await import("../llvm");
 	const result = await cargo.build({
 		source: tests.get("hello-bindgen").then(tg.Directory.expect),
 		proxy: true,

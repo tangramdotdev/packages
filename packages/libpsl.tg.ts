@@ -30,17 +30,18 @@ export const source = async (): Promise<tg.Directory> => {
 	});
 };
 
-const deps = std.deps({
-	python: { build: python.self, kind: "buildtime" },
-});
+const deps = () =>
+	std.deps({
+		python: { build: python.self, kind: "buildtime" },
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			phases: {
 				configure: {
 					args: [

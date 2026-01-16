@@ -24,11 +24,12 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = std.deps({
-	ogg: ogg.build,
-});
+const deps = () =>
+	std.deps({
+		ogg: ogg.build,
+	});
 
-export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
+export type Arg = cmake.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = (...args: std.Args<Arg>) =>
 	cmake.build({ source: source(), deps }, ...args);

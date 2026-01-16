@@ -29,9 +29,6 @@ export const source = async () => {
 export type Arg = std.autotools.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
-		{ source: source(), setRuntimeLibraryPath: true },
-		...args,
-	);
+	std.autotools.build({ source: source() }, ...args);
 
 export default build;

@@ -31,21 +31,22 @@ export const source = () => {
 	});
 };
 
-const deps = std.deps({
-	zstd: {
-		build: zstd.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-});
+const deps = () =>
+	std.deps({
+		zstd: {
+			build: zstd.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+	});
 
-export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
+export type Arg = cmake.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const resolved = await cmake.arg(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			phases: {
 				configure: {
 					args: ["-DCMAKE_BUILD_TYPE=Release"],

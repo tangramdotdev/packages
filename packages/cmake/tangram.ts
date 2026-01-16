@@ -44,33 +44,34 @@ export const source = async () => {
 		.then((source) => std.patch(source, patches));
 };
 
-const deps = std.deps({
-	curl: curl.build,
-	libiconv: {
-		build: libiconv.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "darwin",
-	},
-	libpsl: libpsl.build,
-	ncurses: ncurses.build,
-	openssl: openssl.build,
-	zlib: zlib.build,
-	zstd: zstd.build,
-});
+const deps = () =>
+	std.deps({
+		curl: curl.build,
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+		},
+		libpsl: libpsl.build,
+		ncurses: ncurses.build,
+		openssl: openssl.build,
+		zlib: zlib.build,
+		zstd: zstd.build,
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 /** Build `cmake`. */
 export const self = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
-		{ source: source(), deps, setRuntimeLibraryPath: true },
+		{ source: source(), deps: deps(), setRuntimeLibraryPath: true },
 		...args,
 	);
 	const { build: build_, host, source: sourceDir } = arg;
 	const os = std.triple.os(host);
 
 	// Get individual artifacts for env and libraryPaths wrapping.
-	const artifacts = await std.deps.artifacts(deps, {
+	const artifacts = await std.deps.artifacts(deps(), {
 		build: build_,
 		host,
 		sdk: arg.sdk,

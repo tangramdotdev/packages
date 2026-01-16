@@ -28,20 +28,21 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = std.deps({
-	gmp: gmp.build,
-	nettle: nettle.build,
-	zlib: zlib.build,
-	zstd: zstd.build,
-});
+const deps = () =>
+	std.deps({
+		gmp: gmp.build,
+		nettle: nettle.build,
+		zlib: zlib.build,
+		zstd: zstd.build,
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			env: {
 				CFLAGS: tg.Mutation.prefix(
 					"-Wno-implicit-int -Wno-deprecated-non-prototype",

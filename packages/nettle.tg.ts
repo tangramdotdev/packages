@@ -20,17 +20,18 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-const deps = std.deps({
-	gmp: gmp.build,
-});
+const deps = () =>
+	std.deps({
+		gmp: gmp.build,
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			phases: {
 				configure: {
 					args: [

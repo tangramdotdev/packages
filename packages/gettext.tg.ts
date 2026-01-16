@@ -62,33 +62,34 @@ export const source = () => {
 	});
 };
 
-const deps = std.deps({
-	acl: {
-		build: acl.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-	attr: {
-		build: attr.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-	libiconv: {
-		build: libiconv.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "darwin",
-	},
-	ncurses: ncurses.build,
-	xz: { build: xz.build, kind: "buildtime" },
-});
+const deps = () =>
+	std.deps({
+		acl: {
+			build: acl.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+		attr: {
+			build: attr.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+		libiconv: {
+			build: libiconv.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "darwin",
+		},
+		ncurses: ncurses.build,
+		xz: { build: xz.build, kind: "buildtime" },
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			env: {
 				CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
 			},

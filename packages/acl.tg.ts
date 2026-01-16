@@ -28,17 +28,18 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = std.deps({
-	attr: attr.build,
-});
+const deps = () =>
+	std.deps({
+		attr: attr.build,
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			phases: {
 				configure: {
 					args: [
@@ -56,7 +57,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const isCross = arg.build !== arg.host;
 	let env = arg.env;
 	if (isCross) {
-		const attrArtifact = await std.deps.artifacts(deps, {
+		const attrArtifact = await std.deps.artifacts(deps(), {
 			build: arg.build,
 			host: arg.host,
 		});

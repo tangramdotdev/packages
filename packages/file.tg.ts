@@ -28,22 +28,23 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = std.deps({
-	libseccomp: {
-		build: libseccomp.build,
-		kind: "runtime",
-		when: (ctx) => std.triple.os(ctx.host) === "linux",
-	},
-	zlib: zlib.build,
-});
+const deps = () =>
+	std.deps({
+		libseccomp: {
+			build: libseccomp.build,
+			kind: "runtime",
+			when: (ctx) => std.triple.os(ctx.host) === "linux",
+		},
+		zlib: zlib.build,
+	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
+export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const output = await std.autotools.build(
 		{
 			source: source(),
-			deps,
+			deps: deps(),
 			hardeningCFlags: false,
 			phases: {
 				configure: {
