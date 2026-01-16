@@ -65,11 +65,14 @@ class TangramClient {
 
 	async build(
 		target: string,
-		options: { tag?: string } = {},
+		options: { tag?: string; retry?: boolean } = {},
 	): Promise<{ id: string; token?: string }> {
 		const args = [target, "-d", "-v"];
 		if (options.tag) {
 			args.push(`--tag=${options.tag}`);
+		}
+		if (options.retry) {
+			args.push("--retry");
 		}
 
 		const output = await $`${this.exe} build ${args}`
@@ -203,6 +206,7 @@ class Configuration {
 	readonly exports: string[];
 	readonly verbose: boolean;
 	readonly lazy: boolean;
+	readonly retry: boolean;
 
 	constructor(options: {
 		packages?: PackageFilter;
@@ -213,6 +217,7 @@ class Configuration {
 		verbose?: boolean;
 		platform?: string;
 		lazy?: boolean;
+		retry?: boolean;
 	}) {
 		this.packages = options.packages || {};
 		this.actions = options.actions || [];
@@ -222,6 +227,7 @@ class Configuration {
 		this.exports = options.exports || ["default"];
 		this.verbose = options.verbose ?? false;
 		this.lazy = options.lazy ?? true;
+		this.retry = options.retry ?? false;
 	}
 
 	private detectTangramExe(): string {
@@ -260,7 +266,8 @@ class Configuration {
 		const tangram = `Tangram: ${this.tangram}`;
 		const platform = `Platform: ${this.currentPlatform}`;
 		const lazy = `Lazy Push: ${this.lazy}`;
-		return [actions, packages, exports, config, tangram, platform, lazy].join(
+		const retry = `Retry: ${this.retry}`;
+		return [actions, packages, exports, config, tangram, platform, lazy, retry].join(
 			"\n",
 		);
 	}
@@ -297,6 +304,7 @@ Flags:
       --parallel        Run packages in parallel (default: sequential)
       --platform=PLAT   Override target platform
       --eager           Disable lazy push (lazy push is enabled by default)
+      --retry           Add --retry to build commands
 
 Action Dependencies:
   Actions have the following dependencies:
@@ -326,6 +334,7 @@ function parseFromArgs(): Configuration {
 			verbose: { type: "boolean", default: false },
 			parallel: { type: "boolean", default: false },
 			eager: { type: "boolean", default: false },
+			retry: { type: "boolean", default: false },
 			export: { type: "string", multiple: true },
 			exclude: { type: "string", multiple: true },
 			platform: { type: "string" },
@@ -379,6 +388,7 @@ function parseFromArgs(): Configuration {
 		tangram: values.tangram,
 		platform: values.platform,
 		lazy: !values.eager,
+		retry: values.retry ?? false,
 	});
 }
 
@@ -392,6 +402,7 @@ interface Context {
 	processTracker: ProcessTracker;
 	verbose: boolean;
 	lazy: boolean;
+	retry: boolean;
 }
 
 /** Helper to get version from package metadata */
@@ -418,7 +429,10 @@ async function executeBuild(
 ): Promise<Result<string>> {
 	let processId: string | undefined;
 	try {
-		const process = await ctx.tangram.build(buildPath, options);
+		const process = await ctx.tangram.build(buildPath, {
+			...options,
+			retry: ctx.retry,
+		});
 		processId = process.id;
 
 		// Only track and wait for processes that have a cancellation token
@@ -801,6 +815,7 @@ class PackageExecutor {
 				processTracker: this.processTracker,
 				verbose: this.config.verbose,
 				lazy: this.config.lazy,
+				retry: this.config.retry,
 			};
 
 			let packageSuccess = true;
