@@ -1,8 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
-import * as gnu from "../sdk/gnu.tg.ts";
 import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
-import * as ogWorkspace from "./workspace.tg.ts";
 import packages from "../packages" with { type: "directory" };
 
 type WorkspaceArg = {
@@ -19,11 +17,6 @@ type BuildArg = {
 	source: tg.Directory;
 	target?: string;
 	verbose?: boolean;
-};
-
-type WrapArg = {
-	workspace?: WorkspaceArg;
-	executable: tg.File;
 };
 
 export const workspace = async (arg: WorkspaceArg) => {
@@ -50,6 +43,7 @@ export const workspace = async (arg: WorkspaceArg) => {
 		verbose,
 		target,
 		source,
+		release,
 	}).then(tg.Directory.expect);
 };
 
@@ -126,47 +120,45 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	const arch = std.triple.arch(target_);
 	const releaseArgs = release ? "-Os" : "";
 	const verboseArgs = verbose ? "-v" : "";
-	let buildPhase = {
-		command: tg`
-			# Create output directory.
-			mkdir ${tg.output}
+	let buildPhase = tg`
+		# Create output directory.
+		mkdir ${tg.output}
 
-			# Compile our sources
-			$CC_${tripleToEnvVar(target)}			\
-				${source}/stub/src/${arch}/start.s	\
-				${source}/stub/src/stub.c			\
-				${source}/stub/src/manifest.c		\
-				${source}/stub/src/manifest/json.c	\
-				${source}/stub/src/util.c			\
-				-I${source}/stub/include			\
-				-nostdlib							\
-				-nolibc								\
-				-ffreestanding						\
-				-fno-stack-protector				\
-				-static								\
-				-static-libgcc						\
-				-fno-asynchronous-unwind-tables		\
-				-fPIC								\
-				-Werror								\
-				-Os									\
-				-Wl,-T${source}/stub/link.ld		\
-				-o ${tg.output}/stub.elf
+		# Compile our sources
+		$CC_${tripleToEnvVar(target)}			\
+			${source}/stub/src/${arch}/start.s	\
+			${source}/stub/src/stub.c			\
+			${source}/stub/src/manifest.c		\
+			${source}/stub/src/manifest/json.c	\
+			${source}/stub/src/util.c			\
+			-I${source}/stub/include			\
+			-nostdlib							\
+			-nolibc								\
+			-ffreestanding						\
+			-fno-stack-protector				\
+			-static								\
+			-static-libgcc						\
+			-fno-asynchronous-unwind-tables		\
+			-fPIC								\
+			-Werror								\
+			-Os									\
+			-Wl,-T${source}/stub/link.ld		\
+			-o ${tg.output}/stub.elf
 
-			# Compile the stub.
-			echo "compiled stub.elf"
+		# Compile the stub.
+		echo "compiled stub.elf"
 
-			# Extract the binary.
-			objcopy -O binary ${tg.output}/stub.elf ${tg.output}/stub.bin
+		# Extract the binary.
+		objcopy -O binary ${tg.output}/stub.elf ${tg.output}/stub.bin
 
-			# Compile the wrap binary.
-			$CC_${tripleToEnvVar(host)}		\
-				${source}/stub/src/wrap.c	\
-				-I${source}/stub/include	\
-				-static						\
-				-o ${tg.output}/wrap ${releaseArgs} ${verboseArgs}
-			echo "compiled wrap"
-		`,
-	};
+		# Compile the wrap binary.
+		$CC_${tripleToEnvVar(host)}		\
+			${source}/stub/src/wrap.c	\
+			-I${source}/stub/include	\
+			-static						\
+			-o ${tg.output}/wrap ${releaseArgs} ${verboseArgs}
+		echo "compiled wrap"
+	`;
 	return await tg
 		.build(std.phases.run, {
 			bootstrap: true,

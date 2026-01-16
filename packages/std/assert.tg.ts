@@ -359,7 +359,7 @@ export const headerCanBeIncluded = async (arg: HeaderArg) => {
 	// Compile the program, ensuring the env properly made the header discoverable.
 	const program = await $`cc -xc "${source}" -o ${tg.output}`
 		.bootstrap(true)
-		.env(std.sdk(), arg.directory)
+		.env(std.sdk(), arg.directory) // FIXME - tg.build the default sdk here too.
 		.then(tg.File.expect);
 
 	// Run the program.

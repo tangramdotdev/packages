@@ -36,7 +36,10 @@ const deps = std.deps({
 export type Arg = cargo.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) =>
-	cargo.build({ deps, source: source(), features: ["pcre2"] }, ...args);
+	cargo.build(
+		{ deps, source: source(), features: ["pcre2"], proxy: true },
+		...args,
+	);
 
 export default build;
 

@@ -56,12 +56,22 @@ export const metadata = {
 /** The default SDK for the detected host. */
 export const default_ = async () => {
 	return await stdEnv(
-		sdk.sdk(),
+		sdk.sdk(), // FIXME - defaultEnv?
 		await tg.build(buildAutotoolsBuildTools).named("autotools build tools"),
 	);
 };
 
 export default default_;
+
+// Export the Rust workspace source directory for use by other packages that depend on tangram_std.
+import rustCargoToml from "./Cargo.toml" with { type: "file" };
+import rustCargoLock from "./Cargo.lock" with { type: "file" };
+import rustPackages from "./packages" with { type: "directory" };
+export const rustSource = tg.directory({
+	"Cargo.toml": rustCargoToml,
+	"Cargo.lock": rustCargoLock,
+	packages: rustPackages,
+});
 
 /** Mapping of strings to pass to "test" to the test targets they run. */
 const testActions = (): Record<string, () => any> => {

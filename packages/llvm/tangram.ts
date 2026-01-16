@@ -14,14 +14,14 @@ export const metadata = {
 	license:
 		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.8",
-	tag: "llvm/20.1.8",
+	version: "21.1.8",
+	tag: "llvm/21.1.8",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d";
+		"sha256:4633a23617fa31a3ea51242586ea7fb1da7140e426bd62fc164261fe036aa142";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -275,15 +275,9 @@ export const libclang = async (arg?: LLVMArg) => {
 	};
 	const buildPhase = {
 		pre: "cd /build",
-		body: {
-			command: "ninja",
-			args: tg.Mutation.set(["libclang"]),
-		},
+		body: "ninja libclang",
 	};
-	const install = {
-		command: "ninja",
-		args: tg.Mutation.set(["install-libclang"]),
-	};
+	const install = "ninja install-libclang";
 	const phases = { configure, build: buildPhase, install };
 
 	return await cmake.build({

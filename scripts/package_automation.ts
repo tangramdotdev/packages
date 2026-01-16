@@ -267,9 +267,16 @@ class Configuration {
 		const platform = `Platform: ${this.currentPlatform}`;
 		const lazy = `Lazy Push: ${this.lazy}`;
 		const retry = `Retry: ${this.retry}`;
-		return [actions, packages, exports, config, tangram, platform, lazy, retry].join(
-			"\n",
-		);
+		return [
+			actions,
+			packages,
+			exports,
+			config,
+			tangram,
+			platform,
+			lazy,
+			retry,
+		].join("\n");
 	}
 }
 
@@ -491,7 +498,10 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 		{ ref: "buildDefaultInjection", tagPath: "wrap/defaultInjection" },
 		{ ref: "buildDefaultWorkspace", tagPath: "wrap/defaultWorkspace" },
 		{ ref: "buildDefaultWrapper", tagPath: "wrap/defaultWrapper" },
-		{ ref: "buildAutotoolsBuildTools", tagPath: "dependencies/buildTools/autotools" },
+		{
+			ref: "buildAutotoolsBuildTools",
+			tagPath: "dependencies/buildTools/autotools",
+		},
 	],
 	rust: [
 		{ ref: "default", tagPath: "default" },

@@ -470,7 +470,7 @@ export namespace wrap {
 			buildArg = {
 				...buildArg,
 				bootstrap: true,
-				env: await tg.build(std.sdk).named("sdk"),
+				env: await tg.build(std.sdk).named("sdk"), // FIXME - common export.
 			};
 		}
 		const shellExecutable = await std.utils.bash

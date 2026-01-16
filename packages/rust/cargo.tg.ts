@@ -129,7 +129,6 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	}
 
 	const {
-		build: build_,
 		buildInTree = false,
 		checksum,
 		disableDefaultFeatures = false,
@@ -166,7 +165,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		sdkArgs.push({ toolchain: "gnu" });
 	}
 
-	const envs: Array<tg.Unresolved<std.env.Arg>> = [];
+	const envs: std.Args<std.env.Arg> = [];
 
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
@@ -176,12 +175,30 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		envs.push(await tg.build(pkgconf, { host }));
 	}
 
-	// Download the dependencies using the cargo vendor.
-	const cargoConfig = vendoredSources({
-		manifestSubdir,
-		source,
-		useCargoVendor,
-	});
+	// Download the dependencies using vendoring.
+	// Extract only manifest files first so that only changes to dependencies
+	// (not source code) trigger re-vendoring.
+	let cargoConfig: tg.Template;
+	if (useCargoVendor) {
+		const manifests = await tg.build(extractCargoManifests, source);
+		cargoConfig = await tg.build(vendoredSources, {
+			manifestSubdir,
+			source: manifests,
+			useCargoVendor: true,
+		});
+	} else {
+		const sourcePath = manifestSubdir
+			? await source.get(manifestSubdir).then(tg.Directory.expect)
+			: source;
+		const cargoLock = await sourcePath.get("Cargo.lock").then(tg.File.expect);
+		const vendoredDir = await tg.build(vendorDependencies, cargoLock);
+		cargoConfig = await tg`
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "${vendoredDir}"`;
+	}
 
 	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
 	const preparePathCommands = [
@@ -266,8 +283,19 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	}
 
 	if (proxy) {
-		const proxyEnv = {
-			RUSTC_WRAPPER: tg`${proxy_.proxy()}/bin/tgrustc`,
+		// Enable the tgrustc proxy for Tangram-cached Rust compilation.
+		// The proxy uses a self-as-driver pattern, running tgrustc itself as
+		// the inner executable, eliminating the need for a shell.
+		const proxyDir = proxy_.proxy();
+		const proxyBin = proxyDir
+			.then((d) => d.get("bin/tgrustc"))
+			.then(tg.File.expect);
+		const proxyEnv: tg.Unresolved<std.env.Arg> = {
+			RUSTC_WRAPPER: tg`${proxyDir}/bin/tgrustc`,
+			// Pass the source artifact so the proxy does not need to check it in on each rustc invocation.
+			TGRUSTC_WORKSPACE_SOURCE: source,
+			// Pass the tgrustc binary artifact so the proxy does not need to check itself in on each invocation.
+			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
 		};
 		envs.push(proxyEnv);
 	}
@@ -329,51 +357,23 @@ export type VendoredSourcesArg = {
 	useCargoVendor?: boolean;
 };
 
-const vendoredSources = async (
+export const vendoredSources = async (
 	arg: VendoredSourcesArg,
 ): Promise<tg.Template> => {
-	const {
-		rustTarget: rustTarget_,
-		manifestSubdir,
-		source,
-		useCargoVendor = false,
-	} = arg;
-	const rustTarget = rustTarget_ ?? std.triple.host();
+	const { rustTarget, manifestSubdir, source, useCargoVendor = false } = arg;
 	if (useCargoVendor) {
-		// Run cargo vendor
-		const certFile = tg`${std.caCertificates()}/cacert.pem`;
-		const manifestPathArg = manifestSubdir
-			? `${manifestSubdir}/Cargo.toml`
-			: `"Cargo.toml"`;
-		const vendorScript = tg`
-			set -x
-			export HOME=$PWD
-			SOURCE="$(realpath ${source})"
-			export CARGO_HOME=$PWD
-			mkdir -p "${tg.output}/tg_vendor_dir"
-			cd "${tg.output}"
-			cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "${tg.output}/config"
-		`;
-		const rustArtifact = self();
-		const sdk = std.sdk();
-		const result = await $`${vendorScript}`
-			.checksum("sha256:any")
-			.network(true)
-			.env(sdk)
-			.env(rustArtifact)
-			.env({
-				CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-				CARGO_HTTP_CAINFO: certFile,
-				RUST_TARGET: rustTarget,
-				SSL_CERT_FILE: certFile,
-			})
-			.then(tg.Directory.expect);
-
-		// Get the output.
-		const vendoredSources = await result
+		const cargoVendorArg: CargoVendorArg = { source };
+		if (rustTarget !== undefined) {
+			cargoVendorArg.rustTarget = rustTarget;
+		}
+		if (manifestSubdir !== undefined) {
+			cargoVendorArg.manifestSubdir = manifestSubdir;
+		}
+		const vendorResult = await tg.build(cargoVendor, cargoVendorArg);
+		const vendoredSources = await vendorResult
 			.get("tg_vendor_dir")
 			.then(tg.Directory.expect);
-		const config = await result.get("config").then(tg.File.expect);
+		const config = await vendorResult.get("config").then(tg.File.expect);
 
 		const text = await config.text();
 		const match = /tg_vendor_dir/g.exec(text);
@@ -387,7 +387,7 @@ const vendoredSources = async (
 			? await source.get(manifestSubdir).then(tg.Directory.expect)
 			: source;
 		const cargoLock = sourcePath.get("Cargo.lock").then(tg.File.expect);
-		const vendoredSources = vendorDependencies(cargoLock);
+		const vendoredSources = await tg.build(vendorDependencies, cargoLock);
 		return tg`
 [source.crates-io]
 replace-with = "vendored-sources"
@@ -395,6 +395,110 @@ replace-with = "vendored-sources"
 [source.vendored-sources]
 directory = "${vendoredSources}"`;
 	}
+};
+
+export type CargoVendorArg = {
+	rustTarget?: string;
+	manifestSubdir?: string | undefined;
+	source: tg.Directory;
+};
+
+/** Extract only Cargo manifest files (Cargo.toml and Cargo.lock) from a source directory.
+ * This allows vendoring to depend only on dependency declarations, not source code.
+ * Also creates placeholder source files to satisfy cargo's manifest validation.
+ * Note: Extracts from the entire source tree since path dependencies may reference
+ * directories outside the manifestSubdir. */
+export const extractCargoManifests = async (
+	source: tg.Directory,
+): Promise<tg.Directory> => {
+	// Placeholder content for source files that satisfies cargo's validation.
+	const placeholderFile = tg.file(
+		"// Placeholder for cargo manifest validation\n",
+	);
+
+	// Recursively find all Cargo.toml files and build a directory with just manifests.
+	// Also create placeholder source files to satisfy cargo's target validation.
+	const extractManifests = async (
+		dir: tg.Directory,
+		path: string,
+	): Promise<tg.Directory> => {
+		let result = await tg.directory();
+		let hasCargoToml = false;
+
+		for await (const [name, artifact] of dir) {
+			const fullPath = path ? `${path}/${name}` : name;
+			if (artifact instanceof tg.Directory) {
+				// Recurse into subdirectories.
+				const subManifests = await extractManifests(artifact, fullPath);
+				// Only include if it has content.
+				const entries = await subManifests.entries();
+				if (Object.keys(entries).length > 0) {
+					result = await tg.directory(result, { [name]: subManifests });
+				}
+			} else if (
+				artifact instanceof tg.File &&
+				(name === "Cargo.toml" || name === "Cargo.lock")
+			) {
+				result = await tg.directory(result, { [name]: artifact });
+				if (name === "Cargo.toml") {
+					hasCargoToml = true;
+				}
+			}
+		}
+
+		// If this directory has a Cargo.toml, create placeholder source files
+		// to satisfy cargo's manifest validation. Cargo expects at least one of
+		// src/lib.rs, src/main.rs, or explicit target definitions.
+		if (hasCargoToml) {
+			result = await tg.directory(result, {
+				src: {
+					"lib.rs": placeholderFile,
+					"main.rs": placeholderFile,
+				},
+			});
+		}
+
+		return result;
+	};
+
+	return extractManifests(source, "");
+};
+
+/** Run `cargo vendor` to download dependencies. */
+export const cargoVendor = async (
+	unresolvedArg: tg.Unresolved<CargoVendorArg>,
+): Promise<tg.Directory> => {
+	const arg = await tg.resolve(unresolvedArg);
+	const { rustTarget: rustTarget_, manifestSubdir, source } = arg;
+	const rustTarget = rustTarget_ ?? std.triple.host();
+
+	const certFile = tg`${std.caCertificates()}/cacert.pem`;
+	const manifestPathArg = manifestSubdir
+		? `${manifestSubdir}/Cargo.toml`
+		: `"Cargo.toml"`;
+	const vendorScript = tg`
+		set -x
+		export HOME=$PWD
+		SOURCE="$(realpath ${source})"
+		export CARGO_HOME=$PWD
+		mkdir -p "${tg.output}/tg_vendor_dir"
+		cd "${tg.output}"
+		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "${tg.output}/config"
+	`;
+	const rustArtifact = self();
+	const sdk = std.sdk();
+	return $`${vendorScript}`
+		.checksum("sha256:any")
+		.network(true)
+		.env(sdk)
+		.env(rustArtifact)
+		.env({
+			CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+			CARGO_HTTP_CAINFO: certFile,
+			RUST_TARGET: rustTarget,
+			SSL_CERT_FILE: certFile,
+		})
+		.then(tg.Directory.expect);
 };
 
 // Implementation of `cargo vendor` in tg typescript.
