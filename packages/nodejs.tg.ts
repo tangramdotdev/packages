@@ -121,7 +121,7 @@ export type Arg = {
 	checksum?: tg.Checksum;
 
 	/** Dependencies configuration. */
-	deps?: std.deps.Config;
+	deps?: std.deps.ConfigArg;
 
 	/** Environment variables to set during the build. */
 	env?: std.env.Arg;
@@ -184,8 +184,9 @@ export const arg = async (...args: std.Args<any>): Promise<ResolvedArg> => {
 	const build = build_ ?? host;
 
 	// Build dependencies and create env.
-	const depsEnv = deps
-		? await std.deps.env(deps, {
+	const depsConfig = await std.deps.resolveConfig(deps);
+	const depsEnv = depsConfig
+		? await std.deps.env(depsConfig, {
 				build,
 				host,
 				sdk: rest.sdk,

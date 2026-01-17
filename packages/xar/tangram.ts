@@ -41,7 +41,7 @@ const source = async () => {
 		.then((d) => std.patch(d, patches));
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		libiconv: libiconv.build,
 		libxml2: { build: libxml2.build, kind: "full" },
@@ -50,13 +50,13 @@ const deps = () =>
 		zlib: zlib.build,
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 			buildInTree: true,
 			developmentTools: true,
 			// NOTE - this define is included in libxml/encoding.h but not expanding.

@@ -29,16 +29,16 @@ export const source = async () => {
 	});
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		pcre2: pcre2.build,
 	});
 
-export type Arg = cargo.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = cargo.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) =>
 	cargo.build(
-		{ deps: deps(), source: source(), features: ["pcre2"], proxy: true },
+		{ deps, source: source(), features: ["pcre2"], proxy: true },
 		...args,
 	);
 

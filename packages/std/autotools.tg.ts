@@ -8,7 +8,7 @@ export type Arg = {
 	build?: string | undefined;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
-	deps?: std.deps.Config | undefined;
+	deps?: std.deps.ConfigArg | undefined;
 
 	/** Dependency argument overrides. Keys must match deps config keys. */
 	dependencies?: std.args.DependencyArgs | undefined;
@@ -118,8 +118,9 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	// If deps were provided, resolve them to env.
 	let depsEnv = resolved.env;
-	if (resolved.deps) {
-		depsEnv = await std.deps.env(resolved.deps, {
+	const depsConfig = await std.deps.resolveConfig(resolved.deps);
+	if (depsConfig) {
+		depsEnv = await std.deps.env(depsConfig, {
 			build: resolved.build,
 			host: resolved.host,
 			sdk: resolved.sdk,

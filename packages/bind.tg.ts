@@ -56,7 +56,7 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		libcap: {
 			build: libcap.build,
@@ -75,13 +75,13 @@ const deps = () =>
 		zlib: zlib.build,
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 			phases: {
 				configure: {
 					args: [

@@ -44,7 +44,7 @@ export const source = async () => {
 		.then((source) => std.patch(source, patches));
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		curl: curl.build,
 		libiconv: {
@@ -59,19 +59,19 @@ const deps = () =>
 		zstd: zstd.build,
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 /** Build `cmake`. */
 export const self = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
-		{ source: source(), deps: deps(), setRuntimeLibraryPath: true },
+		{ source: source(), deps, setRuntimeLibraryPath: true },
 		...args,
 	);
 	const { build: build_, host, source: sourceDir } = arg;
 	const os = std.triple.os(host);
 
 	// Get individual artifacts for env and libraryPaths wrapping.
-	const artifacts = await std.deps.artifacts(deps(), {
+	const artifacts = await std.deps.artifacts(deps, {
 		build: build_,
 		host,
 		sdk: arg.sdk,
@@ -139,7 +139,7 @@ export type BuildArg = {
 	debug?: boolean | undefined;
 
 	/** Dependencies configuration. */
-	deps?: std.deps.Config | undefined;
+	deps?: std.deps.ConfigArg | undefined;
 
 	/** Any environment to add to the target. */
 	env?: std.env.Arg | undefined;
@@ -266,8 +266,9 @@ export const arg = async (
 	const build = build_ ?? host;
 
 	// Build dependencies and create env.
-	const depsEnv = deps
-		? await std.deps.env(deps, {
+	const depsConfig = await std.deps.resolveConfig(deps);
+	const depsEnv = depsConfig
+		? await std.deps.env(depsConfig, {
 				build,
 				host,
 				sdk: rest.sdk,

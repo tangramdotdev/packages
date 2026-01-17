@@ -30,7 +30,7 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		bzip2: bzip2.build,
 		libiconv: libiconv.build,
@@ -39,13 +39,13 @@ const deps = () =>
 		zlib: zlib.build,
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 			phases: {
 				configure: {
 					args: [

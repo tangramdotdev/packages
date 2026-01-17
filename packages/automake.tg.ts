@@ -4,7 +4,7 @@ import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
 import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		autoconf: autoconf.build,
 		help2man: { build: help2man.build, kind: "buildtime" },
@@ -36,19 +36,19 @@ export const source = () => {
 	});
 };
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 		},
 		...args,
 	);
 
 	const { autoconf: autoconfArtifact, perl: perlArtifact } =
-		await std.deps.artifacts(deps(), { build: arg.build, host: arg.host });
+		await std.deps.artifacts(deps, { build: arg.build, host: arg.host });
 	tg.assert(perlArtifact !== undefined);
 	tg.assert(autoconfArtifact !== undefined);
 

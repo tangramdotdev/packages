@@ -2,7 +2,7 @@ import * as std from "std" with { local: "./std" };
 import * as coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
 import * as tzdb from "tzdb" with { local: "./tzdb.tg.ts" };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		coreutils: { build: coreutils.build, kind: "buildtime" },
 		tzdb: tzdb.build,
@@ -35,7 +35,7 @@ export const source = async (): Promise<tg.Directory> => {
 };
 
 export type Arg = std.autotools.Arg &
-	std.deps.Arg<ReturnType<typeof deps>> & {
+	std.deps.Arg<typeof deps> & {
 		keepPath?: boolean;
 	};
 
@@ -51,7 +51,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const host = customOptions.host ?? std.triple.host();
 
 	const { tzdb: tzdbArtifact, coreutils: coreutilsArtifact } =
-		await std.deps.artifacts(deps(), { build: build_, host });
+		await std.deps.artifacts(deps, { build: build_, host });
 	tg.assert(tzdbArtifact !== undefined);
 	tg.assert(coreutilsArtifact !== undefined);
 
@@ -96,7 +96,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 			phases,
 		},
 		...args,

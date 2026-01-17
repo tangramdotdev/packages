@@ -74,7 +74,7 @@ export const source = async () => {
 	return await std.patch(output, patches);
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		flex: { build: flex.build, kind: "buildtime" },
 		icu: icu.build,
@@ -86,13 +86,13 @@ const deps = () =>
 		zstd: zstd.build,
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 		},
 		...args,
 	);
@@ -100,7 +100,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const os = std.triple.os(arg.host);
 
 	// Get individual artifacts for cross-compilation library paths.
-	const artifacts = await std.deps.artifacts(deps(), arg);
+	const artifacts = await std.deps.artifacts(deps, arg);
 	const runtimeArtifacts = [
 		artifacts.icu,
 		artifacts.lz4,

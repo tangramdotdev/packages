@@ -30,18 +30,15 @@ export const source = () => {
 	});
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		ncurses: ncurses.build,
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
-		{ source: source(), deps: deps(), buildInTree: true },
-		...args,
-	);
+	std.autotools.build({ source: source(), deps, buildInTree: true }, ...args);
 
 export default build;
 

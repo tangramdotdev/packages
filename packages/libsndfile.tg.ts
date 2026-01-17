@@ -35,7 +35,7 @@ export const source = () => {
 	});
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		flac: flac.build,
 		ogg: ogg.build,
@@ -43,7 +43,7 @@ const deps = () =>
 		vorbis: vorbis.build,
 	});
 
-export type Arg = cmake.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	cmake.build({ source: source(), deps }, ...args);

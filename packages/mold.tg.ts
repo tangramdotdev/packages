@@ -31,7 +31,7 @@ export const source = () => {
 	});
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		zstd: {
 			build: zstd.build,
@@ -40,13 +40,13 @@ const deps = () =>
 		},
 	});
 
-export type Arg = cmake.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const resolved = await cmake.arg(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 			phases: {
 				configure: {
 					args: ["-DCMAKE_BUILD_TYPE=Release"],

@@ -41,13 +41,13 @@ export const source = async () => {
 	return std.directory.unwrap(outer);
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		python: { build: python.self, kind: "buildtime" },
 	});
 
 export type Arg = std.autotools.Arg &
-	std.deps.Arg<ReturnType<typeof deps>> & {
+	std.deps.Arg<typeof deps> & {
 		/* Instead of producing an install directory, the output will be the in-tree build directory. Used for cross-compilation. */
 		skipInstall?: boolean;
 	};
@@ -99,7 +99,7 @@ export const build = async (...args: std.Args<Arg>) => {
 		{
 			build: build_,
 			buildInTree: !skipInstall,
-			deps: deps(),
+			deps,
 			host,
 			phases,
 			source: sourceDir,

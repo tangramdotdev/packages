@@ -21,18 +21,18 @@ export const source = () => {
 	return std.download.fromGnu({ name, version, checksum });
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		libiconv: libiconv.build,
 		ncurses: ncurses.build,
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
-			deps: deps(),
+			deps,
 			source: source(),
 			env: { CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
 			phases: {

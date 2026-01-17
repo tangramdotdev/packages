@@ -234,14 +234,21 @@ export namespace deps {
 		return { build: spec as BuildCommand, kind: "runtime" };
 	};
 
-	/**
-	 * A mapping of dependency names to their specifications.
-	 * Since BuildCommand is tg.Command (tg.Object -> tg.Value), this type IS tg.Value
-	 * and can be included directly in Arg types.
-	 */
+	/** A mapping of dependency names to their specifications. */
 	export type Config = {
 		[key: string]: Spec;
 	};
+
+	/** Type for deps property in builder Args. */
+	export type ConfigArg = Config | tg.Command<[], Config>;
+
+	/** Type constraint for deps.Arg type parameter. */
+	export type ConfigLike = Config | (() => Config);
+
+	/** Extract the underlying Config from a ConfigLike (unwraps function types). */
+	export type ExtractConfig<T extends ConfigLike> = T extends () => infer R
+		? R
+		: T;
 
 	/** Extract the package arg type from a Spec (either plain BuildCommand or FullSpec). */
 	type ArgFromSpec<T extends Spec> = T extends FullSpec
@@ -263,7 +270,9 @@ export namespace deps {
 	};
 
 	/** Extract the dependencies Arg type from a deps Config. */
-	export type Arg<T extends Config> = { dependencies?: ArgsFrom<T> };
+	export type Arg<T extends ConfigLike> = {
+		dependencies?: ArgsFrom<ExtractConfig<T> & Config>;
+	};
 
 	/** Context required for deps resolution. */
 	export type Context = {
@@ -279,11 +288,29 @@ export namespace deps {
 		subtreeSdk?: std.sdk.Arg;
 	};
 
+	/** Resolve a ConfigArg to a Config. */
+	export const resolveConfig = async (
+		configArg: tg.Unresolved<ConfigArg> | undefined,
+	): Promise<Config | undefined> => {
+		if (configArg === undefined) {
+			return undefined;
+		}
+		const resolved = await tg.resolve(configArg);
+		if (resolved instanceof tg.Command) {
+			return (await resolved.build()) as Config;
+		}
+		return resolved as Config;
+	};
+
 	/** Resolve a deps config to a combined env. */
 	export const env = async (
-		config: Config,
+		configArg: tg.Unresolved<ConfigArg>,
 		ctx: Context,
 	): Promise<std.env.EnvObject> => {
+		const config = await resolveConfig(configArg);
+		if (!config) {
+			return std.env.arg(ctx.env);
+		}
 		const artifactMap = await artifacts(config, ctx);
 		const artifactList = Object.values(artifactMap).filter(
 			(v): v is tg.Directory => v !== undefined,
@@ -293,9 +320,15 @@ export namespace deps {
 
 	/** Resolve a deps config to individual artifacts by name. */
 	export const artifacts = async <T extends Config>(
-		config: T,
+		configArg: tg.Unresolved<T | ConfigArg>,
 		ctx: Context,
 	): Promise<ArtifactsFrom<T>> => {
+		const config = (await resolveConfig(
+			configArg as tg.Unresolved<ConfigArg>,
+		)) as T;
+		if (!config) {
+			return {} as ArtifactsFrom<T>;
+		}
 		const { build, host, dependencies = {}, subtreeEnv, subtreeSdk } = ctx;
 		const artifactMap: Record<string, tg.Directory | undefined> = {};
 

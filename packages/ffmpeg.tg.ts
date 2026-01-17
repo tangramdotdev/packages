@@ -37,18 +37,18 @@ export const source = () => {
 	});
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		nasm: { build: nasm.build, kind: "buildtime" },
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 			phases: {
 				configure: { args: ["--disable-stripping"] },
 			},

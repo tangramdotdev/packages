@@ -62,7 +62,7 @@ export const source = () => {
 	});
 };
 
-const deps = () =>
+export const deps = () =>
 	std.deps({
 		acl: {
 			build: acl.build,
@@ -83,13 +83,13 @@ const deps = () =>
 		xz: { build: xz.build, kind: "buildtime" },
 	});
 
-export type Arg = std.autotools.Arg & std.deps.Arg<ReturnType<typeof deps>>;
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = async (...args: std.Args<Arg>) => {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
-			deps: deps(),
+			deps,
 			env: {
 				CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
 			},

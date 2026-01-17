@@ -89,7 +89,7 @@ export type Arg = {
 	cgo?: boolean | undefined;
 
 	/** Dependencies configuration. */
-	deps?: std.deps.Config | undefined;
+	deps?: std.deps.ConfigArg | undefined;
 
 	/** Any user-specified environment variables that will be set during the build. */
 	env?: std.env.Arg | undefined;
@@ -183,8 +183,9 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 	const build = build_ ?? host;
 
 	// Build dependencies and create env.
-	const depsEnv = deps
-		? await std.deps.env(deps, {
+	const depsConfig = await std.deps.resolveConfig(deps);
+	const depsEnv = depsConfig
+		? await std.deps.env(depsConfig, {
 				build,
 				host,
 				sdk: rest.sdk,
