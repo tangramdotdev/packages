@@ -104,48 +104,15 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const sourceDir = source_ ?? source();
 
 	// Define build environment.
-	const buildTools = std.env.arg(
-		std.sdk(),
-		tg
-			.build(dependencies.buildTools, {
-				host,
-				preset: "toolchain",
-				python: true,
-			})
-			.named("build tools"),
-	);
-
-	// Build host libraries (zlib and ncurses for LLVM).
-	const hostLibraries = tg
-		.build(dependencies.hostLibraries, {
+	const buildTools = tg
+		.build(dependencies.buildTools, {
 			host,
-			buildToolchain: buildTools,
-			preset: "llvm",
+			preset: "toolchain",
 		})
-		.named("host libraries");
-
-	// Build ncurses and zlib separately for cmake configuration and library paths.
-	const ncursesArtifact = dependencies.ncurses.build({
-		host,
-		env: buildTools,
-		bootstrap: true,
-	});
-	const zlibArtifact = dependencies.zlib.build({
-		host,
-		env: buildTools,
-		bootstrap: true,
-	});
-	const gitArtifact = git({
-		host,
-		env: buildTools,
-	});
-
-	// Combine into build environment.
-	const env = [buildTools, hostLibraries, gitArtifact, env_];
+		.named("build tools");
 
 	// Obtain a sysroot for the requested host.
 	const sysroot = await constructSysroot({
-		bootstrap: true,
 		env: buildTools,
 		host,
 	})
@@ -189,7 +156,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Add the cmake cache file last.
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
-	const buildPhase = "cd build && ninja stage2-distribution";
+	const buildPhase = "ninja stage2-distribution";
 	const install = "ninja stage3-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
