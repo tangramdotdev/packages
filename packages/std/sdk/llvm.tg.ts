@@ -104,12 +104,16 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const sourceDir = source_ ?? source();
 
 	// Define build environment.
-	const buildTools = tg
-		.build(dependencies.buildTools, {
-			host,
-			preset: "toolchain",
-		})
-		.named("build tools");
+	const buildTools = std.env.arg(
+		std.sdk(),
+		tg
+			.build(dependencies.buildTools, {
+				host,
+				preset: "toolchain",
+				python: true,
+			})
+			.named("build tools"),
+	);
 
 	// Build host libraries (zlib and ncurses for LLVM).
 	const hostLibraries = tg
@@ -131,12 +135,17 @@ export const toolchain = async (arg?: LLVMArg) => {
 		env: buildTools,
 		bootstrap: true,
 	});
+	const gitArtifact = git({
+		host,
+		env: buildTools,
+	});
 
 	// Combine into build environment.
-	const env = [buildTools, hostLibraries, env_];
+	const env = [buildTools, hostLibraries, gitArtifact, env_];
 
 	// Obtain a sysroot for the requested host.
 	const sysroot = await constructSysroot({
+		bootstrap: true,
 		env: buildTools,
 		host,
 	})
@@ -148,7 +157,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We will wrap them afterwards.
-	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
+	const prepare = tg`export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
 
 	// Define default flags.
 	const configure = {
@@ -180,7 +189,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Add the cmake cache file last.
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
-	const buildPhase = "ninja stage2-distribution";
+	const buildPhase = "cd build && ninja stage2-distribution";
 	const install = "ninja stage3-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
