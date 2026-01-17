@@ -111,6 +111,30 @@ export const toolchain = async (arg?: LLVMArg) => {
 		})
 		.named("build tools");
 
+	// Build host libraries (zlib and ncurses for LLVM).
+	const hostLibraries = tg
+		.build(dependencies.hostLibraries, {
+			host,
+			buildToolchain: buildTools,
+			preset: "llvm",
+		})
+		.named("host libraries");
+
+	// Build ncurses and zlib separately for cmake configuration and library paths.
+	const ncursesArtifact = dependencies.ncurses.build({
+		host,
+		env: buildTools,
+		bootstrap: true,
+	});
+	const zlibArtifact = dependencies.zlib.build({
+		host,
+		env: buildTools,
+		bootstrap: true,
+	});
+
+	// Combine into build environment.
+	const env = [buildTools, hostLibraries, env_];
+
 	// Obtain a sysroot for the requested host.
 	const sysroot = await constructSysroot({
 		env: buildTools,
@@ -124,7 +148,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We will wrap them afterwards.
-	const prepare = tg`export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
+	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
 
 	// Define default flags.
 	const configure = {
