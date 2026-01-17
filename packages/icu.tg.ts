@@ -6,8 +6,8 @@ export const metadata = {
 	name: "icu",
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
-	version: "78.2",
-	tag: "icu/78.2",
+	version: "78.1",
+	tag: "icu/78.1",
 	provides: {
 		binaries: [
 			"derb",
@@ -31,7 +31,7 @@ export const source = async () => {
 	const repo = name;
 	const tag = `release-${version}`;
 	const checksum =
-		"sha256:3e99687b5c435d4b209630e2d2ebb79906c984685e78635078b672e03c89df35";
+		"sha256:6217f58ca39b23127605cfc6c7e0d3475fe4b0d63157011383d716cb41617886";
 	const pkgName = `icu4c-${version}-sources`;
 	const url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${pkgName}.tgz`;
 	return std.download
