@@ -1,25 +1,13 @@
-name: Build Packages
+name: Release
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: ["main"]
+    branches: [main]
 
 jobs:
-  test:
-    if: github.event_name == 'pull_request'
-    runs-on: ${{ matrix.runner }}
-    environment: test
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: [self-hosted, macOS, ARM64]
-            enabled: true
-          - runner: [self-hosted, Linux, X64]
-            enabled: true
-
+  publish:
+    runs-on: [self-hosted, macOS, ARM64]
+    environment: release
     steps:
       - name: Check out packages repository
         uses: actions/checkout@v4
@@ -43,25 +31,18 @@ jobs:
           EOF
           chmod +x "$TANGRAM_CI_DIR/bin/tangram"
 
-      - name: Test packages
-        if: matrix.enabled
-        shell: bash
-        run: |
-          bun run auto --test --sequential
+      - name: Publish packages
+        run: bun run auto --publish --no-deps --sequential
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [publish]
     runs-on: ${{ matrix.runner }}
-    environment: release
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: [self-hosted, macOS, ARM64]
-            enabled: true
           - runner: [self-hosted, Linux, X64]
-            enabled: true
-
     steps:
       - name: Check out packages repository
         uses: actions/checkout@v4
@@ -86,7 +67,4 @@ jobs:
           chmod +x "$TANGRAM_CI_DIR/bin/tangram"
 
       - name: Release packages
-        if: matrix.enabled
-        shell: bash
-        run: |
-          bun run auto --release --sequential
+        run: bun run auto --release --no-deps --sequential

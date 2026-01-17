@@ -207,6 +207,7 @@ class Configuration {
 	readonly verbose: boolean;
 	readonly lazy: boolean;
 	readonly retry: boolean;
+	readonly noDeps: boolean;
 
 	constructor(options: {
 		packages?: PackageFilter;
@@ -218,6 +219,7 @@ class Configuration {
 		platform?: string;
 		lazy?: boolean;
 		retry?: boolean;
+		noDeps?: boolean;
 	}) {
 		this.packages = options.packages || {};
 		this.actions = options.actions || [];
@@ -228,6 +230,7 @@ class Configuration {
 		this.verbose = options.verbose ?? false;
 		this.lazy = options.lazy ?? true;
 		this.retry = options.retry ?? false;
+		this.noDeps = options.noDeps ?? false;
 	}
 
 	private detectTangramExe(): string {
@@ -312,6 +315,7 @@ Flags:
       --platform=PLAT   Override target platform
       --eager           Disable lazy push (lazy push is enabled by default)
       --retry           Add --retry to build commands
+      --no-deps         Skip automatic dependency resolution for actions
 
 Action Dependencies:
   Actions have the following dependencies:
@@ -342,6 +346,7 @@ function parseFromArgs(): Configuration {
 			parallel: { type: "boolean", default: false },
 			eager: { type: "boolean", default: false },
 			retry: { type: "boolean", default: false },
+			"no-deps": { type: "boolean", default: false },
 			export: { type: "string", multiple: true },
 			exclude: { type: "string", multiple: true },
 			platform: { type: "string" },
@@ -396,6 +401,7 @@ function parseFromArgs(): Configuration {
 		platform: values.platform,
 		lazy: !values.eager,
 		retry: values.retry ?? false,
+		noDeps: values["no-deps"] ?? false,
 	});
 }
 
@@ -789,14 +795,17 @@ class PackageExecutor {
 		const packages = resolvePackages(this.config.packages);
 
 		// Build set of actions to run, including all dependencies (transitively)
+		// unless --no-deps is specified
 		const actionsToRun = new Set<string>();
 
 		const addActionWithDeps = (action: string) => {
 			if (actionsToRun.has(action)) return;
 			actionsToRun.add(action);
-			const deps = ACTION_DEPENDENCIES[action] || [];
-			for (const dep of deps) {
-				addActionWithDeps(dep);
+			if (!this.config.noDeps) {
+				const deps = ACTION_DEPENDENCIES[action] || [];
+				for (const dep of deps) {
+					addActionWithDeps(dep);
+				}
 			}
 		};
 

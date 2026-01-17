@@ -1,0 +1,139 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  format:
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - name: Check out packages repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "TANGRAM_CI_DIR=$HOME/.tangram-ci" >> $GITHUB_ENV
+          echo "TG_EXE=$HOME/.tangram-ci/bin/tangram" >> $GITHUB_ENV
+
+      - name: Configure Tangram
+        run: |
+          mkdir -p "$TANGRAM_CI_DIR/bin"
+          cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
+          {
+            "remotes": []
+          }
+          EOF
+          cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
+          #!/bin/sh
+          exec tangram --directory "$TANGRAM_CI_DIR/.tangram" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          EOF
+          chmod +x "$TANGRAM_CI_DIR/bin/tangram"
+
+      - name: Format packages
+        run: bun run auto --format --no-deps --sequential
+
+  check:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: [self-hosted, macOS, ARM64]
+          - runner: [self-hosted, Linux, X64]
+    steps:
+      - name: Check out packages repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "TANGRAM_CI_DIR=$HOME/.tangram-ci" >> $GITHUB_ENV
+          echo "TG_EXE=$HOME/.tangram-ci/bin/tangram" >> $GITHUB_ENV
+
+      - name: Configure Tangram
+        run: |
+          mkdir -p "$TANGRAM_CI_DIR/bin"
+          cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
+          {
+            "remotes": []
+          }
+          EOF
+          cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
+          #!/bin/sh
+          exec tangram --directory "$TANGRAM_CI_DIR/.tangram" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          EOF
+          chmod +x "$TANGRAM_CI_DIR/bin/tangram"
+
+      - name: Check packages
+        run: bun run auto --check --no-deps --sequential
+
+  build:
+    needs: [format, check]
+    environment: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: [self-hosted, macOS, ARM64]
+          - runner: [self-hosted, Linux, X64]
+    steps:
+      - name: Check out packages repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "TANGRAM_CI_DIR=$HOME/.tangram-ci" >> $GITHUB_ENV
+          echo "TG_EXE=$HOME/.tangram-ci/bin/tangram" >> $GITHUB_ENV
+
+      - name: Configure Tangram
+        run: |
+          mkdir -p "$TANGRAM_CI_DIR/bin"
+          cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
+          {
+            "remotes": []
+          }
+          EOF
+          cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
+          #!/bin/sh
+          exec tangram --directory "$TANGRAM_CI_DIR/.tangram" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          EOF
+          chmod +x "$TANGRAM_CI_DIR/bin/tangram"
+
+      - name: Build packages
+        run: bun run auto --build --no-deps --sequential
+
+  test:
+    needs: [build]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: [self-hosted, macOS, ARM64]
+          - runner: [self-hosted, Linux, X64]
+    steps:
+      - name: Check out packages repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "TANGRAM_CI_DIR=$HOME/.tangram-ci" >> $GITHUB_ENV
+          echo "TG_EXE=$HOME/.tangram-ci/bin/tangram" >> $GITHUB_ENV
+
+      - name: Configure Tangram
+        run: |
+          mkdir -p "$TANGRAM_CI_DIR/bin"
+          cat > "$TANGRAM_CI_DIR/config.json" << 'EOF'
+          {
+            "remotes": []
+          }
+          EOF
+          cat > "$TANGRAM_CI_DIR/bin/tangram" << 'EOF'
+          #!/bin/sh
+          exec tangram --directory "$TANGRAM_CI_DIR/.tangram" --config "$TANGRAM_CI_DIR/config.json" "$@"
+          EOF
+          chmod +x "$TANGRAM_CI_DIR/bin/tangram"
+
+      - name: Test packages
+        run: bun run auto --test --no-deps --sequential
