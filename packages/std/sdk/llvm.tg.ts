@@ -7,7 +7,6 @@ import * as dependencies from "./dependencies.tg.ts";
 import * as utils from "../utils.tg.ts";
 import git from "./llvm/git.tg.ts";
 import * as libc from "./libc.tg.ts";
-import ncurses from "./llvm/ncurses.tg.ts";
 import cctools from "./llvm/cctools_port.tg.ts";
 import { constructSysroot } from "./libc.tg.ts";
 import cmakeCacheDir from "./llvm/cmake" with { type: "directory" };
@@ -18,22 +17,21 @@ export * as libBsd from "./llvm/libbsd.tg.ts";
 export * as libMd from "./llvm/libmd.tg.ts";
 export * as cctools from "./llvm/cctools_port.tg.ts";
 export * as git from "./llvm/git.tg.ts";
-export * as ncurses from "./llvm/ncurses.tg.ts";
 
 export const metadata = {
 	homepage: "https://llvm.org/",
 	name: "llvm",
 	license:
-		"https://github.com/llvm/llvm-project/blob/991cfd1379f7d5184a3f6306ac10cabec742bbd2/LICENSE.TXT",
+		"https://github.com/llvm/llvm-project/blob/llvmorg-21.1.8/LICENSE.TXT",
 	repository: "https://github.com/llvm/llvm-project/",
-	version: "20.1.8",
-	tag: "llvm/20.1.8",
+	version: "21.1.8",
+	tag: "llvm/21.1.8",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d";
+		"sha256:4633a23617fa31a3ea51242586ea7fb1da7140e426bd62fc164261fe036aa142";
 	const owner = name;
 	const repo = "llvm-project";
 	const tag = `llvmorg-${version}`;
@@ -63,7 +61,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 		env: env_,
 		host: host_,
 		lto = true,
-		prebuilt: prebuilt_ = true,
+		prebuilt: prebuilt_ = false,
 		sdk,
 		source: source_,
 		target: target_,
@@ -99,9 +97,6 @@ export const toolchain = async (arg?: LLVMArg) => {
 		}
 	}
 
-	if (!prebuilt_) {
-		throw new Error("only prebuilt LLVM toolchains are currently supported.");
-	}
 	if (prebuilt_) {
 		return prebuilt({ host });
 	}
@@ -109,53 +104,60 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const sourceDir = source_ ?? source();
 
 	// Define build environment.
-	const m4ForBuild = dependencies.m4.build({ build, host: build });
-	const bisonForBuild = dependencies.bison.build({
-		build,
-		host: build,
-		env: m4ForBuild,
+	const buildTools = std.env.arg(
+		std.sdk(),
+		tg
+			.build(dependencies.buildTools, {
+				host,
+				preset: "toolchain",
+				python: true,
+			})
+			.named("build tools"),
+	);
+
+	// Build host libraries (zlib and ncurses for LLVM).
+	const hostLibraries = tg
+		.build(dependencies.hostLibraries, {
+			host,
+			buildToolchain: buildTools,
+			preset: "llvm",
+		})
+		.named("host libraries");
+
+	// Build ncurses and zlib separately for cmake configuration and library paths.
+	const ncursesArtifact = dependencies.ncurses.build({
+		host,
+		env: buildTools,
+		bootstrap: true,
 	});
-	const perlForBuild = dependencies.perl.build({
-		build,
-		host: build,
-		env: std.env.arg(m4ForBuild, bisonForBuild, { utils: false }),
+	const zlibArtifact = dependencies.zlib.build({
+		host,
+		env: buildTools,
+		bootstrap: true,
 	});
-	const pythonForBuild = dependencies.python.build({
-		build,
-		host: build,
-		sdk: bootstrap.sdk.arg(build),
+	const gitArtifact = git({
+		host,
+		env: buildTools,
 	});
-	const ncursesArtifact = ncurses({ build, host });
-	const zlibArtifact = dependencies.zlib.build({ build, host });
-	const deps = [
-		git({ build, host: build }),
-		bisonForBuild,
-		m4ForBuild,
-		perlForBuild,
-		pythonForBuild,
-		ncursesArtifact,
-		zlibArtifact,
-	];
+
+	// Combine into build environment.
+	const env = [buildTools, hostLibraries, gitArtifact, env_];
 
 	// Obtain a sysroot for the requested host.
-
 	const sysroot = await constructSysroot({
-		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild, {
-			utils: false,
-		}),
+		bootstrap: true,
+		env: buildTools,
 		host,
 	})
 		.then((dir) => dir.get(host))
 		.then(tg.Directory.expect);
 
-	const env = [...deps, env_];
-
 	const ldsoName = libc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
-	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
+	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We will wrap them afterwards.
+	const prepare = tg`export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
 
 	// Define default flags.
 	const configure = {
@@ -165,7 +167,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
-			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH didn't work for Terminfo_ROOT, but this did.
+			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH did not work for Terminfo_ROOT, but this did.
 			tg`-DBOOTSTRAP_Terminfo_ROOT=${ncursesArtifact}`,
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
@@ -187,14 +189,8 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Add the cmake cache file last.
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
-	const buildPhase = {
-		command: "ninja",
-		args: tg.Mutation.set(["stage2-distribution"]),
-	};
-	const install = {
-		command: "ninja",
-		args: tg.Mutation.set(["stage2-install-distribution"]),
-	};
+	const buildPhase = "cd build && ninja stage2-distribution";
+	const install = "ninja stage3-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
@@ -226,9 +222,11 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
 	const ncursesLibDir = ncursesArtifact
+		.then(tg.Directory.expect)
 		.then((dir) => dir.get("lib"))
 		.then(tg.Directory.expect);
 	const zlibLibDir = zlibArtifact
+		.then(tg.Directory.expect)
 		.then((dir) => dir.get("lib"))
 		.then(tg.Directory.expect);
 	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
@@ -267,7 +265,7 @@ export const buildLld = async (arg?: LLVMArg) => {
 		build: build_,
 		env: env_,
 		host: host_,
-		lto = true,
+		lto = true, // FIXME - unused.
 		sdk,
 		source: source_,
 	} = arg ?? {};

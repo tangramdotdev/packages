@@ -23,9 +23,9 @@ export const versions = {
 			"sha256:ed5ef34cda36cfa2f3a340f07cac7e7814f91c7f3c411f6d3562323a866c5c66",
 	},
 	"3.14": {
-		version: "3.14.0",
+		version: "3.14.2",
 		checksum:
-			"sha256:2299dae542d395ce3883aca00d3c910307cd68e0b2f7336098c8e7b7eee9f3e9",
+			"sha256:ce543ab854bc256b61b71e9b27f831ffd1bfd60a479d639f8be7f9757cf573e9",
 	},
 } as const;
 

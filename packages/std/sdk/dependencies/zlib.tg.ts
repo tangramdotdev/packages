@@ -22,53 +22,30 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (arg?: Arg) => {
-	const {
-		bootstrap: bootstrap_ = false,
-		build: build_,
-		env: env_,
-		host: host_,
-		sdk,
-		source: source_,
-	} = arg ?? {};
+export const build = async (...args: std.Args<Arg>) => {
+	// Resolve args first to access build/host for cross-compilation.
+	const resolved = await std.autotools.arg({ source: source() }, ...args);
+	const host = resolved.host ?? std.triple.host();
+	const build = resolved.build ?? host;
 
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
-
-	const envs = [env_];
+	const envs: std.Args<std.env.Arg> = [resolved.env];
 	if (build !== host) {
-		envs.push({
-			CHOST: host,
-		});
+		envs.push({ CHOST: host });
 	}
-	const env = std.env.arg(...envs, { utils: false });
+	const env = await std.env.arg(...envs, { utils: false });
 
-	const output = std.utils.autotoolsInternal({
-		build,
-		host,
-		bootstrap: bootstrap_,
-		defaultCrossArgs: false,
+	return std.autotools.build({
+		...resolved,
 		env,
+		defaultCrossArgs: false,
 		phases: {
 			configure: {
 				args: ["--zlib-compat"],
 			},
 		},
-		processName: metadata.name,
-		sdk,
-		source: source_ ?? source(),
 	});
-
-	return output;
 };
 
 export default build;

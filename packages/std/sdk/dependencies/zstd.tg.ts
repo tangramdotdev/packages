@@ -24,46 +24,22 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (arg?: Arg) => {
-	const {
-		bootstrap: bootstrap_ = false,
-		build: build_,
-		env,
-		host: host_,
-		sdk,
-		source: source_,
-	} = arg ?? {};
-
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
-
-	const sourceDir = source_ ?? source();
-
-	const install = tg`make install PREFIX=${tg.output}`;
-	const phases = { install };
-
-	return await std.autotools.build({
-		build,
-		host,
-		bootstrap: bootstrap_,
-		buildInTree: true,
-		defaultCrossArgs: false,
-		env,
-		order: ["prepare", "build", "install"],
-		phases,
-		prefixArg: "none",
-		sdk,
-		source: sourceDir,
-	});
+export const build = async (...args: std.Args<Arg>) => {
+	return std.autotools.build(
+		{
+			source: source(),
+			buildInTree: true,
+			defaultCrossArgs: false,
+			order: ["prepare", "build", "install"],
+			phases: {
+				install: tg`make install PREFIX=${tg.output}`,
+			},
+			prefixArg: "none",
+		},
+		...args,
+	);
 };
 
 export default build;

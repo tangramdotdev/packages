@@ -145,7 +145,6 @@ const testActions = (): Record<string, () => any> => {
 		gnuCrossMips: sdk.gnu.gnuToolchain.testCrossMips,
 		gnuCrossRpi: sdk.gnu.gnuToolchain.testCrossRpi,
 		llvmGit: sdk.llvm.git.test,
-		llvmNcurses: sdk.llvm.ncurses.test,
 		llvmSource: sdk.llvm.source,
 		llvmToolchain: sdk.llvm.toolchain,
 		llvmBuildLLd: sdk.llvm.buildLld,

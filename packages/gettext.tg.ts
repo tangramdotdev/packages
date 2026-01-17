@@ -101,6 +101,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	const configureArgs = [
 		"--disable-dependency-tracking",
 		"--enable-relocatable",
+		"--enable-fast-install",
 		"--with-included-glib",
 		"--with-included-libcroco",
 		"--with-included-libunistring",

@@ -21,71 +21,51 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
-	const {
-		bootstrap: bootstrap_ = false,
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = arg ? await tg.resolve(arg) : {};
-
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--disable-nls",
-			"--disable-rpath",
-			"--enable-relocatable",
-		],
-	};
-
-	const env = await std.env.arg(env_, { utils: false });
-
-	let output = await std.utils.autotoolsInternal({
-		build,
-		host,
-		bootstrap: bootstrap_,
-		env,
-		phases: { configure },
-		processName: metadata.name,
-		sdk,
-		source: source_ ?? source(),
-		wrapBashScriptPaths: ["bin/yacc"],
-	});
+export const build = async (...args: std.Args<Arg>) => {
+	let output = await std.autotools.build(
+		{
+			source: source(),
+			phases: {
+				configure: {
+					args: [
+						"--disable-dependency-tracking",
+						"--disable-nls",
+						"--disable-rpath",
+						"--enable-relocatable",
+					],
+				},
+			},
+		},
+		...args,
+	);
 
 	// Wrap with BISON_PKGDATADIR to locate m4 support files.
-	const bins = ["bison", "yacc"];
 	const datadir = await output.get("share/bison").then(tg.Directory.expect);
-	for (const bin of bins) {
-		const unwrappedBin = await output.get(`bin/${bin}`).then(tg.File.expect);
-		output = await tg.directory(output, {
-			[`bin/${bin}`]: std.wrap(unwrappedBin, {
-				buildToolchain: env,
-				env: { BISON_PKGDATADIR: datadir },
-			}),
-		});
-	}
+
+	// Wrap bison binary.
+	const bisonBin = await output.get("bin/bison").then(tg.File.expect);
+	output = await tg.directory(output, {
+		["bin/bison"]: std.wrap(bisonBin, {
+			env: { BISON_PKGDATADIR: datadir },
+		}),
+	});
+
+	// Wrap yacc shell script with proper shebang and BISON_PKGDATADIR.
+	let yaccScript = await output.get("bin/yacc").then(tg.File.expect);
+	yaccScript = await std.utils.changeShebang(yaccScript);
+	output = await tg.directory(output, {
+		["bin/yacc"]: std.wrap(yaccScript, {
+			env: { BISON_PKGDATADIR: datadir },
+		}),
+	});
 
 	return output;
 };
 
 export default build;
-import * as bootstrap from "../../bootstrap.tg.ts";
 
 export const test = async () => {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdkArg = await bootstrap.sdk.arg(host);
-	// FIXME
-	// await std.assert.pkg({ buildFn: build, binaries: ["bison"], metadata });
-	return true;
+	return await build();
 };

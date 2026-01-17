@@ -79,6 +79,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const configure = {
 		args: [
 			"--disable-dependency-tracking",
+			"--enable-fast-install",
 			"--enable-relocatable",
 			"--with-included-glib",
 			"--with-included-libcroco",

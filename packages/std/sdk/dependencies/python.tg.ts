@@ -3,15 +3,15 @@ import * as std from "../../tangram.ts";
 
 export const metadata = {
 	name: "Python",
-	version: "3.14.0",
-	tag: "Python/3.14.0",
+	version: "3.14.2",
+	tag: "Python/3.14.2",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:2299dae542d395ce3883aca00d3c910307cd68e0b2f7336098c8e7b7eee9f3e9";
+		"sha256:ce543ab854bc256b61b71e9b27f831ffd1bfd60a479d639f8be7f9757cf573e9";
 	const base = `https://www.python.org/ftp/python/${version}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
@@ -19,27 +19,13 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
-	const {
-		bootstrap: bootstrap_ = false,
-		build: build_,
-		env: env_,
-		host: host_,
-		sdk,
-		source: source_,
-	} = arg ? await tg.resolve(arg) : {};
-
-	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
+export const build = async (...args: std.Args<Arg>) => {
+	// Resolve args first to access build/host for OS detection.
+	const resolved = await std.autotools.arg({ source: source() }, ...args);
+	const host = resolved.host ?? std.triple.host();
+	const build = resolved.build ?? host;
 	const os = std.triple.os(build);
 
 	const configureArgs = [
@@ -48,7 +34,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		"--without-c-locale-coercion",
 		"--without-readline",
 	];
-	const makeArgs = [];
+	const makeArgs: Array<string> = [];
 
 	const envs: std.Args<std.env.Arg> = [];
 	if (os === "darwin") {
@@ -62,30 +48,22 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		);
 	}
 
-	const env = await std.env.arg(...envs, env_, { utils: false });
+	const env = await std.env.arg(...envs, resolved.env, { utils: false });
 	const providedCc = await std.env.tryGetKey({ env, key: "CC" });
 	if (providedCc) {
 		configureArgs.push(`CC="$CC"`);
 	}
 
-	const configure = { args: configureArgs };
-	const buildPhase = { args: makeArgs };
-	const install = { args: makeArgs };
-	const phases = { configure, build: buildPhase, install };
-
-	// Build python.
-	const result = std.autotools.build({
-		build,
-		host,
-		bootstrap: bootstrap_,
+	return std.autotools.build({
+		...resolved,
 		env,
-		phases,
-		sdk,
+		phases: {
+			configure: { args: configureArgs },
+			build: { args: makeArgs },
+			install: { args: makeArgs },
+		},
 		setRuntimeLibraryPath: true,
-		source: source_ ?? source(),
 	});
-
-	return result;
 };
 
 export default build;

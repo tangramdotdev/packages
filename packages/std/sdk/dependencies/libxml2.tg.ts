@@ -26,47 +26,25 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = {
-	bootstrap?: boolean;
-	build?: string | undefined;
-	env?: std.env.Arg;
-	host?: string | undefined;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
 export const build = async (...args: std.Args<Arg>) => {
-	const {
-		bootstrap: bootstrap_ = false,
-		build,
-		env: env_,
-		host,
-		sdk,
-		source: source_,
-	} = await std.packages.applyArgs<Arg>(...args);
-
-	const configure = {
-		args: [
-			"--disable-dependency-tracking",
-			"--enable-static",
-			"--enable-shared",
-		],
-	};
-
-	const phases = { configure };
-
-	const env = [env_];
-
-	return std.autotools.build({
-		build,
-		host,
-		bootstrap: bootstrap_,
-		env: std.env.arg(...env),
-		phases,
-		sdk,
-		setRuntimeLibraryPath: true,
-		source: source_ ?? source(),
-	});
+	return std.autotools.build(
+		{
+			source: source(),
+			phases: {
+				configure: {
+					args: [
+						"--disable-dependency-tracking",
+						"--enable-static",
+						"--enable-shared",
+					],
+				},
+			},
+			setRuntimeLibraryPath: true,
+		},
+		...args,
+	);
 };
 
 export default build;

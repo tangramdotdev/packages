@@ -27,39 +27,20 @@ export const source = () => {
 	});
 };
 
-export type Arg = {
-	bootstrap?: boolean;
-	build?: string;
-	env?: std.env.Arg;
-	host?: string;
-	sdk?: std.sdk.Arg;
-	source?: tg.Directory;
-};
+export type Arg = std.autotools.Arg;
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
-	const {
-		bootstrap: bootstrap_ = false,
-		build,
-		env,
-		host,
-		sdk,
-		source: source_,
-	} = arg ? await tg.resolve(arg) : {};
-
-	const configure = {
-		args: ["--disable-dependency-tracking"],
-	};
-	const phases = { configure };
-
-	return std.autotools.build({
-		build,
-		host,
-		bootstrap: bootstrap_,
-		env,
-		phases,
-		sdk,
-		source: source_ ?? source(),
-	});
+export const build = async (...args: std.Args<Arg>) => {
+	return std.autotools.build(
+		{
+			source: source(),
+			phases: {
+				configure: {
+					args: ["--disable-dependency-tracking"],
+				},
+			},
+		},
+		...args,
+	);
 };
 
 export default build;

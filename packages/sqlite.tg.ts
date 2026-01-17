@@ -8,7 +8,7 @@ export const metadata = {
 	name: "sqlite",
 	license: "https://sqlite.org/src/file?name=LICENSE.md&ci=trunk",
 	repository: "https://www.sqlite.org/src/",
-	version: "3.50.3",
+	version: "3.51.2",
 	tag: "sqlite/3.50.3",
 	provides: {
 		binaries: ["sqlite3"],
@@ -20,7 +20,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ec5496cdffbc2a4adb59317fd2bf0e582bf0e6acd8f4aae7e97bc723ddba7233";
+		"sha256:fbd89f866b1403bb66a143065440089dd76100f2238314d92274a082d4f2b7bb";
 	const extension = ".tar.gz";
 
 	const produceVersion = (version: string) => {
@@ -32,7 +32,7 @@ export const source = async () => {
 	};
 
 	const packageName = `${name}-autoconf-${produceVersion(version)}`;
-	const base = `https://www.sqlite.org/2025`;
+	const base = `https://www.sqlite.org/2026`;
 	return std.download
 		.extractArchive({ checksum, base, packageName, extension })
 		.then(tg.Directory.expect)

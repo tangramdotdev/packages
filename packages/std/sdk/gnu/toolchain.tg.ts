@@ -213,6 +213,7 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 		.build(dependencies.hostLibraries, {
 			host,
 			buildToolchain: std.env.arg(buildToolchain, env_, { utils: false }),
+			preset: "gcc",
 		})
 		.named("host libraries");
 	const buildEnv = std.env.arg(env_, buildToolchain, hostLibraries, {

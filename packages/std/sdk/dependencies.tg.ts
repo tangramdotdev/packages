@@ -14,6 +14,7 @@ import perl from "../autotools/perl.tg.ts";
 import python from "./dependencies/python.tg.ts";
 import zlib from "./dependencies/zlib.tg.ts";
 import zstd from "./dependencies/zstd.tg.ts";
+import ncurses from "./dependencies/ncurses.tg.ts";
 
 import grep from "../utils/grep.tg.ts";
 import sed from "../utils/sed.tg.ts";
@@ -35,6 +36,7 @@ export * as mpc from "./dependencies/mpc.tg.ts";
 export * as mpfr from "./dependencies/mpfr.tg.ts";
 export * as libxcrypt from "./dependencies/libxcrypt.tg.ts";
 export * as libxml2 from "./dependencies/libxml2.tg.ts";
+export * as ncurses from "./dependencies/ncurses.tg.ts";
 export * as perl from "../autotools/perl.tg.ts";
 export * as python from "./dependencies/python.tg.ts";
 export * as zlib from "./dependencies/zlib.tg.ts";
@@ -437,49 +439,168 @@ export const buildAutotoolsBuildTools = async () => {
 export type HostLibrariesArg = {
 	host: string;
 	buildToolchain: std.env.Arg;
-	/** Should we include gmp/isl/mfpr/mpc? Default: true */
-	withGccLibs?: boolean;
+	// Individual library flags - override preset values.
+	zlib?: boolean;
+	zstd?: boolean;
+	ncurses?: boolean;
+	gmp?: boolean;
+	isl?: boolean;
+	mpfr?: boolean;
+	mpc?: boolean;
+	/**
+	 * Preset configurations for common use cases:
+	 * - "minimal": Only zlib
+	 * - "gcc": zlib, zstd, gmp, isl, mpfr, mpc (default, for GCC builds)
+	 * - "llvm": zlib, ncurses (for LLVM builds)
+	 */
+	preset?: HostLibrariesPreset;
 };
 
-/** An env containing libraries built for the given host: gmp, mpfr, isl, mpc, zlib, zstd. Assumes the incoming env contains a toolchain plus the build tools (m4 is required). */
+export type HostLibrariesPreset = "minimal" | "gcc" | "llvm";
+
+/** Resolved configuration after applying preset and individual overrides */
+type ResolvedHostLibrariesConfig = {
+	zlib: boolean;
+	zstd: boolean;
+	ncurses: boolean;
+	gmp: boolean;
+	isl: boolean;
+	mpfr: boolean;
+	mpc: boolean;
+};
+
+/** Apply preset defaults, then override with individual flags */
+const resolveHostLibrariesConfig = (
+	arg: HostLibrariesArg,
+): ResolvedHostLibrariesConfig => {
+	// Base defaults - only zlib.
+	let config: ResolvedHostLibrariesConfig = {
+		zlib: true,
+		zstd: false,
+		ncurses: false,
+		gmp: false,
+		isl: false,
+		mpfr: false,
+		mpc: false,
+	};
+
+	// Apply preset.
+	switch (arg.preset) {
+		case "minimal":
+			break;
+		case "gcc":
+			config = {
+				...config,
+				zstd: true,
+				gmp: true,
+				isl: true,
+				mpfr: true,
+				mpc: true,
+			};
+			break;
+		case "llvm":
+			config = {
+				...config,
+				ncurses: true,
+			};
+			break;
+		default:
+			// Default to gcc preset for backwards compatibility.
+			config = {
+				...config,
+				zstd: true,
+				gmp: true,
+				isl: true,
+				mpfr: true,
+				mpc: true,
+			};
+			break;
+	}
+
+	// Apply individual overrides.
+	if (arg.zlib !== undefined) config.zlib = arg.zlib;
+	if (arg.zstd !== undefined) config.zstd = arg.zstd;
+	if (arg.ncurses !== undefined) config.ncurses = arg.ncurses;
+	if (arg.gmp !== undefined) config.gmp = arg.gmp;
+	if (arg.isl !== undefined) config.isl = arg.isl;
+	if (arg.mpfr !== undefined) config.mpfr = arg.mpfr;
+	if (arg.mpc !== undefined) config.mpc = arg.mpc;
+
+	return config;
+};
+
+/** An env containing libraries built for the given host. Use presets or individual flags to control which libraries are included. Assumes the incoming env contains a toolchain plus the build tools (m4 is required for gmp/isl/mpfr/mpc). */
 export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
-	const { host, buildToolchain, withGccLibs = true } = await tg.resolve(arg);
+	const resolved = await tg.resolve(arg);
+	const { host, buildToolchain } = resolved;
+	const config = resolveHostLibrariesConfig(resolved);
 
-	const zlibArtifact = zlib({
-		host,
-		bootstrap: true,
-		env: buildToolchain,
-	});
-	const zstdArtifact = zstd({
-		host,
-		bootstrap: true,
-		env: buildToolchain,
-	});
-	const ret = [zlibArtifact, zstdArtifact];
+	const ret: std.Args<std.env.Arg> = [];
 
-	if (withGccLibs) {
-		// These libraries depend on m4, but no other library depends on them. Build them here and use a separate env to thread dependencies..
+	// zlib - common compression library.
+	if (config.zlib) {
+		const zlibArtifact = zlib({
+			host,
+			bootstrap: true,
+			env: buildToolchain,
+		});
+		ret.push(zlibArtifact);
+	}
+
+	// zstd - compression library used by GCC.
+	if (config.zstd) {
+		const zstdArtifact = zstd({
+			host,
+			bootstrap: true,
+			env: buildToolchain,
+		});
+		ret.push(zstdArtifact);
+	}
+
+	// ncurses - terminal library used by LLVM.
+	if (config.ncurses) {
+		const ncursesArtifact = ncurses({
+			host,
+			bootstrap: true,
+			env: buildToolchain,
+		});
+		ret.push(ncursesArtifact);
+	}
+
+	// GCC-specific libraries: gmp, isl, mpfr, mpc.
+	// These libraries depend on m4, but no other library depends on them. Build them here and use a separate env to thread dependencies.
+	if (config.gmp || config.isl || config.mpfr || config.mpc) {
 		const gmpArtifact = gmp({
 			host,
 			bootstrap: true,
 			env: buildToolchain,
 		});
-		ret.push(gmpArtifact);
+		if (config.gmp) {
+			ret.push(gmpArtifact);
+		}
 		let gmpEnv = std.env.arg(buildToolchain, gmpArtifact, { utils: false });
 
-		const islArtifact = isl({ host, bootstrap: true, env: gmpEnv });
-		ret.push(islArtifact);
+		if (config.isl) {
+			const islArtifact = isl({ host, bootstrap: true, env: gmpEnv });
+			ret.push(islArtifact);
+		}
 
-		const mpfrArtifact = mpfr({ host, bootstrap: true, env: gmpEnv });
-		ret.push(mpfrArtifact);
-		gmpEnv = std.env.arg(gmpEnv, mpfrArtifact, { utils: false });
+		if (config.mpfr || config.mpc) {
+			const mpfrArtifact = mpfr({ host, bootstrap: true, env: gmpEnv });
+			if (config.mpfr) {
+				ret.push(mpfrArtifact);
+			}
+			gmpEnv = std.env.arg(gmpEnv, mpfrArtifact, { utils: false });
 
-		const mpcArtifact = mpc({
-			host,
-			bootstrap: true,
-			env: gmpEnv,
-		});
-		ret.push(mpcArtifact);
+			if (config.mpc) {
+				const mpcArtifact = mpc({
+					host,
+					bootstrap: true,
+					env: gmpEnv,
+				});
+				ret.push(mpcArtifact);
+			}
+		}
 	}
 
 	return await std.env.arg(...ret, { utils: false });

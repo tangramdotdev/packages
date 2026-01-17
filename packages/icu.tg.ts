@@ -6,8 +6,8 @@ export const metadata = {
 	name: "icu",
 	license: "https://github.com/unicode-org/icu?tab=License-1-ov-file#readme",
 	repository: "https://github.com/unicode-org/icu",
-	version: "77.1",
-	tag: "icu/77.1",
+	version: "78.2",
+	tag: "icu/78.2",
 	provides: {
 		binaries: [
 			"derb",
@@ -29,16 +29,15 @@ export const source = async () => {
 	const { name, version } = metadata;
 	const owner = "unicode-org";
 	const repo = name;
+	const tag = `release-${version}`;
 	const checksum =
-		"sha256:588e431f77327c39031ffbb8843c0e3bc122c211374485fa87dc5f3faff24061";
-	const releaseVersion = version.replace(/\./, "-");
-	const pkgVersion = version.replace(/\./, "_");
-	const pkgName = `icu4c-${pkgVersion}-src`;
-	const url = `https://github.com/${owner}/${repo}/releases/download/release-${releaseVersion}/${pkgName}.tgz`;
-	const outer = await std.download
+		"sha256:3e99687b5c435d4b209630e2d2ebb79906c984685e78635078b672e03c89df35";
+	const pkgName = `icu4c-${version}-sources`;
+	const url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${pkgName}.tgz`;
+	return std.download
 		.extractArchive({ url, checksum })
-		.then(tg.Directory.expect);
-	return std.directory.unwrap(outer);
+		.then(tg.Directory.expect)
+		.then(std.directory.unwrap);
 };
 
 export const deps = () =>
