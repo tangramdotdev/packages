@@ -2,12 +2,6 @@ import * as std from "std" with { local: "./std" };
 import * as coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
 import * as tzdb from "tzdb" with { local: "./tzdb.tg.ts" };
 
-export const deps = () =>
-	std.deps({
-		coreutils: { build: coreutils.build, kind: "buildtime" },
-		tzdb: tzdb.build,
-	});
-
 export const metadata = {
 	homepage: "https://www.sudo.ws/",
 	license: "https://github.com/sudo-project/sudo/blob/main/LICENSE.md",
@@ -33,6 +27,12 @@ export const source = async (): Promise<tg.Directory> => {
 		version,
 	});
 };
+
+export const deps = () =>
+	std.deps({
+		coreutils: { build: coreutils.build, kind: "buildtime" },
+		tzdb: { build: tzdb.build, kind: "full" },
+	});
 
 export type Arg = std.autotools.Arg &
 	std.deps.Arg<typeof deps> & {
