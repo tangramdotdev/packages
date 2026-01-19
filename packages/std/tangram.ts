@@ -45,7 +45,6 @@ import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
 import * as workspace from "./wrap/workspace.tg.ts";
 import * as wrap from "./wrap.tg.ts";
-import * as coreutils from "./utils/coreutils.tg.ts";
 
 export const metadata = {
 	name: "std",
@@ -56,8 +55,10 @@ export const metadata = {
 /** The default SDK for the detected host. */
 export const default_ = async () => {
 	return await stdEnv(
-		sdk.sdk(), // FIXME - defaultEnv?
-		await tg.build(buildAutotoolsBuildTools).named("autotools build tools"),
+		await tg.build(sdk.sdk).named("default sdk"),
+		await tg
+			.build(dependencies.autotoolsBuildTools)
+			.named("autotools build tools"),
 	);
 };
 
@@ -144,7 +145,6 @@ const testActions = (): Record<string, () => any> => {
 		gnuSysrootMusl: sdk.gnu.gnuToolchain.extractSysrootMusl,
 		gnuCrossMips: sdk.gnu.gnuToolchain.testCrossMips,
 		gnuCrossRpi: sdk.gnu.gnuToolchain.testCrossRpi,
-		llvmGit: sdk.llvm.git.test,
 		llvmSource: sdk.llvm.source,
 		llvmToolchain: sdk.llvm.toolchain,
 		llvmBuildLLd: sdk.llvm.buildLld,
@@ -245,28 +245,4 @@ const validateTestNames = (...testNames: Array<string>) => {
 		throw new Error(`unrecognized test names: ${invalidTests.join(", ")}`);
 	}
 	return [...uniqueTests];
-};
-
-export const buildGnuEnv = async () => {
-	return coreutils.gnuEnv();
-};
-
-export const buildDefaultEnv = async () => {
-	return utils.defaultEnv();
-};
-
-export const buildDefaultInjection = async () => {
-	return injection.defaultInjection();
-};
-
-export const buildDefaultWorkspace = async () => {
-	return workspace.defaultWorkspace();
-};
-
-export const buildDefaultWrapper = async () => {
-	return workspace.defaultWrapper();
-};
-
-export const buildAutotoolsBuildTools = async () => {
-	return dependencies.autotoolsBuildTools();
 };

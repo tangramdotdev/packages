@@ -1,7 +1,11 @@
 /** C/C++ compiler environment setup utilities. */
 
 import * as std from "./tangram.ts";
-import { buildTools, type Preset } from "./sdk/dependencies.tg.ts";
+import {
+	autotoolsBuildTools,
+	buildTools,
+	type Preset,
+} from "./sdk/dependencies.tg.ts";
 
 /** Arguments for compiler flags setup. */
 export type FlagsArg = {
@@ -227,10 +231,10 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 				: await tg.build(std.sdk, sdkArg, { host: build }).named("sdk");
 
 			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
-			// Use the pre-built std.buildAutotoolsBuildTools for the "autotools" preset.
+			// Use the pre-built autotoolsBuildTools for the "autotools" preset.
 			if (preset === "autotools" && canUsePrebuiltBuildTools) {
 				buildToolsEnv = await tg
-					.build(std.buildAutotoolsBuildTools)
+					.build(autotoolsBuildTools)
 					.named("autotools build tools");
 			} else {
 				// For other presets or when build machine differs, build with explicit parameters.

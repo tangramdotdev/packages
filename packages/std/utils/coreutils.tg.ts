@@ -156,11 +156,6 @@ export const gnuEnv = async () => {
 	return exe;
 };
 
-/** Release helper - builds gnuEnv with a referent to this file for cache hits. */
-export const buildGnuEnv = async () => {
-	return tg.build(gnuEnv).named("gnu env");
-};
-
 /** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 
 export const test = async () => {

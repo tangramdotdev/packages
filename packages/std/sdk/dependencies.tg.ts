@@ -421,7 +421,7 @@ export const buildTools = async (
 export const autotoolsBuildTools = async () => {
 	const host = std.triple.host();
 	const sdk = await tg.build(std.sdk, { host }).named("sdk");
-	const utils = await tg.build(std.buildDefaultEnv).named("default env");
+	const utils = await tg.build(std.utils.defaultEnv).named("default env");
 	return tg
 		.build(buildTools, {
 			host,
@@ -429,11 +429,6 @@ export const autotoolsBuildTools = async () => {
 			preset: "autotools",
 		})
 		.named("autotools build tools");
-};
-
-/** Release helper - builds autotoolsBuildTools with a referent to this file for cache hits. */
-export const buildAutotoolsBuildTools = async () => {
-	return tg.build(autotoolsBuildTools).named("autotools build tools");
 };
 
 export type HostLibrariesArg = {
