@@ -36,6 +36,7 @@ import * as env from "./env.tg.ts";
 import { env as stdEnv } from "./env.tg.ts";
 import * as file from "./file.tg.ts";
 import * as image from "./image.tg.ts";
+import * as coreutils from "./utils/coreutils.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as packages from "./packages_test.tg.ts";
 import * as phases from "./phases.tg.ts";
@@ -246,3 +247,12 @@ const validateTestNames = (...testNames: Array<string>) => {
 	}
 	return [...uniqueTests];
 };
+
+// Re-exports for automation script builds. Building these from the published
+// package tag produces cache-hit-friendly commands matching what consumers get.
+export const gnuEnv = coreutils.gnuEnv;
+export const defaultEnv = utils.defaultEnv;
+export const defaultInjection = injection.defaultInjection;
+export const defaultWorkspace = workspace.defaultWorkspace;
+export const defaultWrapper = workspace.defaultWrapper;
+export const autotoolsBuildTools = dependencies.autotoolsBuildTools;

@@ -490,25 +490,14 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 		{ ref: "default", tagPath: "default" },
 		{ ref: "default_", tagPath: "default_" },
 		{ ref: "sdk", tagPath: "sdk" },
-		// Build exports directly from source files. The tg.build calls produce
-		// nested commands with referents to the source files, matching what
-		// consumers produce when calling tg.build on the same functions.
-		{ ref: "utils/coreutils.tg.ts#gnuEnv", tagPath: "utils/gnuEnv" },
-		{ ref: "utils.tg.ts#defaultEnv", tagPath: "utils/env" },
+		// Re-exported functions for cache-hit-friendly builds.
+		{ ref: "gnuEnv", tagPath: "utils/gnuEnv" },
+		{ ref: "defaultEnv", tagPath: "utils/env" },
+		{ ref: "defaultInjection", tagPath: "wrap/defaultInjection" },
+		{ ref: "defaultWorkspace", tagPath: "wrap/defaultWorkspace" },
+		{ ref: "defaultWrapper", tagPath: "wrap/defaultWrapper" },
 		{
-			ref: "wrap/injection.tg.ts#defaultInjection",
-			tagPath: "wrap/defaultInjection",
-		},
-		{
-			ref: "wrap/workspace.tg.ts#defaultWorkspace",
-			tagPath: "wrap/defaultWorkspace",
-		},
-		{
-			ref: "wrap/workspace.tg.ts#defaultWrapper",
-			tagPath: "wrap/defaultWrapper",
-		},
-		{
-			ref: "sdk/dependencies.tg.ts#autotoolsBuildTools",
+			ref: "autotoolsBuildTools",
 			tagPath: "dependencies/buildTools/autotools",
 		},
 	],
@@ -639,18 +628,8 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		const { ref, tagPath } = exportConfig;
 
 		// Build from the published tag.
-		// For file path refs like "path/to/file.tg.ts#export", use ?path= syntax.
-		let buildSource: string;
-		if (ref === "default") {
-			buildSource = versionedName;
-		} else if (ref.includes("#")) {
-			// File path ref: "path/to/file.tg.ts#export" -> "tag?path=path/to/file.tg.ts#export"
-			const [path, exportName] = ref.split("#");
-			buildSource = `${versionedName}?path=${path}#${exportName}`;
-		} else {
-			// Simple export name
-			buildSource = `${versionedName}#${ref}`;
-		}
+		const buildSource =
+			ref === "default" ? versionedName : `${versionedName}#${ref}`;
 
 		// Construct tag
 		const tag = `${ctx.packageName}/builds/${version}/${tagPath}/${ctx.platform}`;
