@@ -23,8 +23,8 @@ result_large_err = "allow"
 [dependencies]
 futures = "0.3"
 rustix = { version = "1", features = ["stdio"] }
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "2d557840aeec85046ef7d6f0e8ba4866153489ce" }
-tangram_futures = { git = "https://github.com/tangramdotdev/tangram", rev = "2d557840aeec85046ef7d6f0e8ba4866153489ce" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "57e0e90339edc7053cebeae37e7daa00c50ceccb" }
+tangram_futures = { git = "https://github.com/tangramdotdev/tangram", rev = "57e0e90339edc7053cebeae37e7daa00c50ceccb" }
 tangram_std = { path = "../../std" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
