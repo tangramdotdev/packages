@@ -297,6 +297,8 @@ directory = "${vendoredDir}"`;
 			TGRUSTC_WORKSPACE_SOURCE: source,
 			// Pass the tgrustc binary artifact so the proxy does not need to check itself in on each invocation.
 			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
+			// Write stats to output for performance analysis.
+			TGRUSTC_STATS_FILE: tg`${tg.output}/tgrustc-stats.jsonl`,
 		};
 		envs.push(proxyEnv);
 	}
@@ -344,6 +346,17 @@ directory = "${vendoredDir}"`;
 	for (const [name, artifact] of Object.entries(bins)) {
 		binDir = await tg.directory(binDir, {
 			[name]: artifact,
+		});
+	}
+
+	// Include stats file if it exists (from tgrustc proxy).
+	const statsFile = await artifact
+		.tryGet("tgrustc-stats.jsonl")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	if (statsFile) {
+		return tg.directory({
+			["bin"]: binDir,
+			["tgrustc-stats.jsonl"]: statsFile,
 		});
 	}
 	return tg.directory({

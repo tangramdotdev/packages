@@ -1,7 +1,8 @@
+use futures::TryStreamExt as _;
 use std::{
 	collections::BTreeMap,
-	os::unix::{fs::PermissionsExt, process::CommandExt},
-	path::PathBuf,
+	os::unix::process::CommandExt,
+	path::{Path, PathBuf},
 	pin::pin,
 	str::FromStr,
 };
@@ -9,42 +10,43 @@ use tangram_client::prelude::*;
 use tangram_futures::stream::TryExt as _;
 use tokio::io::AsyncWriteExt;
 
-// Input arguments to the rustc proxy.
+/// Stats for a single rustc invocation, written to JSONL file.
+#[cfg(feature = "tracing")]
+#[derive(serde::Serialize)]
+struct RustcStats {
+	/// The name of the crate being compiled.
+	crate_name: String,
+	/// Whether this invocation was a cache hit.
+	cached: bool,
+	/// Total elapsed time in milliseconds for the proxy invocation.
+	elapsed_ms: u128,
+	/// The process ID spawned for this invocation.
+	process_id: String,
+	/// The command ID for this invocation (determines cache key).
+	command_id: String,
+}
+
+/// Input arguments to the rustc proxy.
 #[derive(Debug)]
 struct Args {
-	// The argument used for rustc.
 	rustc: String,
-
-	// Whether the caller expects to pipe stdin into this proxy.
 	stdin: bool,
-
-	// Any -L dependency=PATH arguments.
+	crate_name: String,
 	dependencies: Vec<String>,
-
-	// Any --extern NAME=PATH arguments.
 	externs: Vec<(String, String)>,
-
-	// The --out-dir PATH if it exists.
 	rustc_output_directory: Option<String>,
-
-	// The rest of the arguments passed to rustc.
 	remaining: Vec<String>,
-
-	// For cargo builds, this is found via CARGO_MANIFEST_DIRECTORY set by cargo. For plain rustc invocations, it is the parent of the source file.
 	source_directory: String,
-
-	// The value of OUT_DIR set by cargo.
 	cargo_out_directory: Option<String>,
 }
 
 impl Args {
-	// Parse the command line arguments passed to the proxy by cargo.
 	fn parse() -> tg::Result<Self> {
-		// Parse arguments.
 		let rustc = std::env::args()
 			.nth(1)
 			.ok_or(tg::error!("missing argument for rustc"))?;
 		let mut stdin = false;
+		let mut crate_name = None;
 		let mut dependencies = Vec::new();
 		let mut externs = Vec::new();
 		let mut rustc_output_directory = None;
@@ -61,36 +63,31 @@ impl Args {
 				None
 			};
 			match (arg.as_ref(), value) {
+				("--crate-name", Some(name)) => {
+					crate_name = Some(name.clone());
+					remaining.push(arg);
+					remaining.push(name);
+				},
 				("-L", Some(value)) if value.starts_with("dependency=") => {
-					let dependency = value.strip_prefix("dependency=").unwrap().into();
-					dependencies.push(dependency);
+					dependencies.push(value.strip_prefix("dependency=").unwrap().into());
 				},
 				("--extern", Some(value)) => {
-					let components: Vec<&str> = value.split('=').collect();
-					let (name, path) = if components.len() == 1 {
-						(components[0], "")
-					} else if components.len() == 2 {
-						(components[0], components[1])
-					} else {
-						return Err(tg::error!("invalid --extern argument: {value}"));
+					let parts: Vec<&str> = value.splitn(2, '=').collect();
+					let (name, path) = match parts.len() {
+						1 => (parts[0], ""),
+						_ => (parts[0], parts[1]),
 					};
 					externs.push((name.into(), path.into()));
 				},
-				("--out-dir", Some(value)) => {
-					rustc_output_directory = Some(value);
-				},
+				("--out-dir", Some(value)) => rustc_output_directory = Some(value),
 				(arg, None) if arg.starts_with("--out-dir=") => {
-					if let Some(suffix) = arg.strip_prefix("--out-dir=") {
-						rustc_output_directory = Some(suffix.into());
-					}
+					rustc_output_directory = arg.strip_prefix("--out-dir=").map(Into::into);
 				},
 				("-", None) => {
 					stdin = true;
 					remaining.push("-".into());
 				},
-				(_, None) => {
-					remaining.push(arg);
-				},
+				(_, None) => remaining.push(arg),
 				(_, Some(value)) => {
 					remaining.push(arg);
 					remaining.push(value);
@@ -98,38 +95,28 @@ impl Args {
 			}
 		}
 
-		// Read environment variables set by cargo. CARGO_MANIFEST_DIR isn't guaranteed to be set by cargo, but we don't need to care about that case.
-		let cargo_manifest_directory = std::env::var("CARGO_MANIFEST_DIR").ok();
-
-		// Determine the directory containing the source.
-		let source_directory = if let Some(dir) = cargo_manifest_directory {
-			// If cargo set CARGO_MANIFEST_DIR, it's that directory.
-			dir
-		} else {
-			// Otherwise, it's the only argument left in remaining with a ".rs" extension.
-			let mut source_directory = None;
-			for arg in &remaining {
-				if std::path::Path::new(arg)
-					.extension()
-					.is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
-				{
-					let path = std::path::Path::new(arg);
-					let parent = path.parent();
-					if let Some(parent) = parent
-						&& let Some(parent_str) = parent.to_str()
-					{
-						source_directory = Some(parent_str.to_owned());
-						break;
-					}
-				}
-			}
-			// If we still couldn't find it, fall back to ".".
-			source_directory.unwrap_or(".".to_string())
-		};
+		// Determine source directory from CARGO_MANIFEST_DIR or .rs file path.
+		let source_directory = std::env::var("CARGO_MANIFEST_DIR").ok().unwrap_or_else(|| {
+			remaining
+				.iter()
+				.find(|arg| {
+					std::path::Path::new(arg)
+						.extension()
+						.is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+				})
+				.and_then(|arg| {
+					std::path::Path::new(arg)
+						.parent()
+						.and_then(|p| p.to_str())
+						.map(ToOwned::to_owned)
+				})
+				.unwrap_or_else(|| ".".into())
+		});
 
 		Ok(Self {
 			rustc,
 			stdin,
+			crate_name: crate_name.unwrap_or_else(|| "unknown".into()),
 			dependencies,
 			externs,
 			rustc_output_directory,
@@ -254,27 +241,31 @@ fn run_driver() -> tg::Result<()> {
 /// Run the proxy.
 #[allow(clippy::too_many_lines)]
 async fn run_proxy(args: Args) -> tg::Result<()> {
+	#[cfg(feature = "tracing")]
+	let start_time = std::time::Instant::now();
+	#[cfg(feature = "tracing")]
+	let _span = tracing::info_span!("rustc_proxy", crate = %args.crate_name).entered();
+
 	// Create a client.
 	let tg = tg::Client::with_env()?;
 	let tg = &tg;
 
-	// Get the source directory. If TGRUSTC_WORKSPACE_SOURCE is set, use it directly
-	// (it was already checked in by cargo.tg.ts). Otherwise, fall back to checking in
-	// the source directory path.
-	let source_directory: tg::Value =
-		if let Ok(workspace_source) = std::env::var("TGRUSTC_WORKSPACE_SOURCE") {
+	// Resolve the crate source directory. For fine-grained caching, we navigate into
+	// workspace subpaths to get stable artifact IDs for individual crates.
+	let (source_directory, crate_subpath): (tg::Value, Option<String>) = {
+		let manifest_dir = &args.source_directory;
+
+		if manifest_dir.contains("/.tangram/artifacts/") {
+			let (artifact, subpath) = extract_artifact_from_path(tg, manifest_dir).await?;
 			#[cfg(feature = "tracing")]
-			tracing::info!(
-				?workspace_source,
-				"using pre-checked-in workspace source from TGRUSTC_WORKSPACE_SOURCE"
-			);
-			tangram_std::unrender(&workspace_source)?.into()
+			tracing::info!(id = ?artifact.id(), ?subpath, "resolved crate source");
+			(tangram_std::template_from_artifact(artifact).into(), subpath)
+		} else if let Ok(workspace_source) = std::env::var("TGRUSTC_WORKSPACE_SOURCE") {
+			(tangram_std::unrender(&workspace_source)?.into(), None)
 		} else {
-			let source_directory_path = &args.source_directory;
-			#[cfg(feature = "tracing")]
-			tracing::info!(?source_directory_path, "checking in source directory");
-			get_checked_in_path(tg, source_directory_path).await?
-		};
+			(checkin_path(tg, manifest_dir).await?, None)
+		}
+	};
 
 	// Check in the cargo out directory (used for build script outputs like cc-rs compiled libs).
 	// We store the original path, the artifact, and the wrapped Value for different uses:
@@ -285,65 +276,55 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		Option<String>,
 		Option<tg::Artifact>,
 		tg::Value,
-	) = if let Some(path) = &args.cargo_out_directory {
-		let out_dir_path = std::path::PathBuf::from_str(path)
-			.map_err(|source| tg::error!(!source, %path,  "unable to construct path"))?;
+	) = {
 		#[cfg(feature = "tracing")]
-		tracing::info!(?out_dir_path, "checking in output directory");
-		let artifact = tg::checkin(
-			tg,
-			tg::checkin::Arg {
-				options: tg::checkin::Options {
-					deterministic: true,
-					ignore: false,
-					lock: None,
-					..Default::default()
+		let _span = tracing::info_span!("checkin_out_dir").entered();
+
+		if let Some(path) = &args.cargo_out_directory {
+			let out_dir_path = std::path::PathBuf::from_str(path)
+				.map_err(|source| tg::error!(!source, %path,  "unable to construct path"))?;
+			#[cfg(feature = "tracing")]
+			tracing::info!(?out_dir_path, "checking in output directory");
+			let artifact = tg::checkin(
+				tg,
+				tg::checkin::Arg {
+					options: tg::checkin::Options {
+						deterministic: true,
+						ignore: false,
+						lock: None,
+						..Default::default()
+					},
+					path: out_dir_path,
+					updates: vec![],
 				},
-				path: out_dir_path,
-				updates: vec![],
-			},
-		)
-		.await?;
-		let wrapped = tangram_std::template_from_artifact(artifact.clone()).into();
-		(Some(path.clone()), Some(artifact), wrapped)
-	} else {
-		// Create an empty directory, store it, and wrap it in a template so it renders as a path.
-		let empty_dir = tg::Directory::with_entries(BTreeMap::new());
-		empty_dir.store(tg).await?;
-		(
-			None,
-			None,
-			tangram_std::template_from_artifact(empty_dir.into()).into(),
-		)
+			)
+			.await?;
+			let wrapped = tangram_std::template_from_artifact(artifact.clone()).into();
+			(Some(path.clone()), Some(artifact), wrapped)
+		} else {
+			// Create an empty directory, store it, and wrap it in a template so it renders as a path.
+			let empty_dir = tg::Directory::with_entries(BTreeMap::new());
+			empty_dir.store(tg).await?;
+			(
+				None,
+				None,
+				tangram_std::template_from_artifact(empty_dir.into()).into(),
+			)
+		}
 	};
 
-	// Use the tgrustc binary itself as the inner driver executable.
-	let tgrustc_file = if let Ok(driver_exe_path) = std::env::var("TGRUSTC_DRIVER_EXECUTABLE") {
-		#[cfg(feature = "tracing")]
-		tracing::info!(
-			?driver_exe_path,
-			"using pre-passed driver executable artifact"
-		);
-		let template = tangram_std::unrender(&driver_exe_path)?;
-		let artifact = template
-			.components
-			.into_iter()
-			.next()
-			.and_then(|c| c.try_unwrap_artifact().ok())
-			.ok_or_else(|| tg::error!("expected artifact in TGRUSTC_DRIVER_EXECUTABLE"))?;
+	// Get the driver executable (tgrustc itself).
+	let executable: tg::command::Executable = if let Ok(path) = std::env::var("TGRUSTC_DRIVER_EXECUTABLE") {
+		let (artifact, _) = extract_artifact_from_path(tg, &path).await?;
 		artifact
 			.try_unwrap_file()
-			.map_err(|_| tg::error!("expected file artifact in TGRUSTC_DRIVER_EXECUTABLE"))?
+			.map_err(|_| tg::error!("expected file in TGRUSTC_DRIVER_EXECUTABLE"))?
+			.into()
 	} else {
-		// Fallback: check in current executable (for testing or direct invocation).
+		// Fallback: check in current executable for testing.
 		let self_exe = std::env::current_exe()
-			.map_err(|e| tg::error!("failed to get current executable path: {e}"))?;
-		#[cfg(feature = "tracing")]
-		tracing::info!(
-			?self_exe,
-			"checking in tgrustc binary as driver executable (fallback)"
-		);
-		let tgrustc_artifact = tg::checkin(
+			.map_err(|e| tg::error!("failed to get current executable: {e}"))?;
+		let artifact = tg::checkin(
 			tg,
 			tg::checkin::Arg {
 				options: tg::checkin::Options {
@@ -357,11 +338,11 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			},
 		)
 		.await?;
-		tgrustc_artifact
+		artifact
 			.try_unwrap_file()
-			.map_err(|_| tg::error!("expected tgrustc checkin to produce a file"))?
+			.map_err(|_| tg::error!("expected file from tgrustc checkin"))?
+			.into()
 	};
-	let executable: tg::command::Executable = tgrustc_file.into();
 
 	// Unrender the environment.
 	let mut env = BTreeMap::new();
@@ -375,6 +356,21 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 				.filter(|arg| !arg.starts_with("--jobserver"))
 				.collect::<Vec<_>>()
 				.join(" ")
+		} else if name == "DYLD_FALLBACK_LIBRARY_PATH" || name == "LD_LIBRARY_PATH" {
+			// These may contain build-specific temp paths. Keep only stable paths:
+			// - System library paths (/usr/lib, /usr/local/lib, /lib, /lib64)
+			// - Artifact paths (contain /.tangram/artifacts/)
+			// Temp build paths like /target/release/deps are redundant since we pass -L dependency=.
+			value
+				.split(':')
+				.filter(|path| {
+					path.starts_with("/usr/lib")
+						|| path.starts_with("/usr/local/lib")
+						|| path.starts_with("/lib")
+						|| path.contains("/.tangram/artifacts/")
+				})
+				.collect::<Vec<_>>()
+				.join(":")
 		} else {
 			value
 		};
@@ -390,6 +386,8 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	env.insert("TGRUSTC_RUSTC".to_owned(), rustc_template.into());
 	env.insert("TGRUSTC_SOURCE".to_owned(), source_directory.clone());
 	env.insert("TGRUSTC_OUT_DIR".to_owned(), out_dir);
+	// Set CARGO_MANIFEST_DIR for proc-macros that read Cargo.toml.
+	env.insert("CARGO_MANIFEST_DIR".to_owned(), source_directory.clone());
 	#[cfg(feature = "tracing")]
 	tracing::info!(?source_directory, "source_directory value for inner build");
 
@@ -417,16 +415,59 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			command_args.push(template.into());
 			continue;
 		}
+
+		// Rewrite source file paths to be crate-relative for cache key stability.
+		// Cargo passes paths like "packages/greeting/src/lib.rs" (relative to workspace).
+		// We rewrite these to "src/lib.rs" (relative to crate) since we set current_dir
+		// to the crate directory.
+		if let Some(ref subpath) = crate_subpath {
+			// Check if this arg is a source file within the crate subpath.
+			let is_source_file = std::path::Path::new(arg)
+				.extension()
+				.is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+				&& !arg.starts_with('-')
+				&& !arg.contains("/.tangram/");
+			if is_source_file {
+				// Try to strip the crate subpath prefix.
+				// Handle both "packages/greeting/src/lib.rs" and "packages/greeting/src/lib.rs".
+				let stripped = arg
+					.strip_prefix(subpath)
+					.or_else(|| arg.strip_prefix(&format!("{subpath}/")))
+					.map(|s| s.trim_start_matches('/'));
+
+				if let Some(relative_path) = stripped {
+					#[cfg(feature = "tracing")]
+					tracing::info!(
+						original = %arg,
+						rewritten = %relative_path,
+						"rewrote source file path to be crate-relative"
+					);
+					command_args.push(relative_path.to_owned().into());
+					continue;
+				}
+			}
+		}
+
 		let template = tangram_std::unrender(arg)?;
 		command_args.push(template.into());
 	}
 
 	// Process extern crate arguments and dependency directories concurrently.
-	let (extern_args, dep_args) = futures::future::try_join(
-		process_externs(tg, &args.externs),
-		process_dependencies(tg, &args.dependencies),
-	)
-	.await?;
+	let (extern_args, dep_args) = {
+		#[cfg(feature = "tracing")]
+		let _span = tracing::info_span!(
+			"process_deps",
+			externs = args.externs.len(),
+			deps = args.dependencies.len()
+		)
+		.entered();
+
+		futures::future::try_join(
+			process_externs(tg, &args.externs),
+			process_dependencies(tg, &args.dependencies, &args.externs),
+		)
+		.await?
+	};
 	command_args.extend(extern_args);
 	command_args.extend(dep_args);
 
@@ -445,38 +486,50 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.env(env)
 		.build();
 	let command_id = command.store(tg).await?;
-	let mut command_ref = tg::Referent::with_item(command_id);
+	let mut command_ref = tg::Referent::with_item(command_id.clone());
 	command_ref.options.name.replace("rustc".into());
 
 	// Spawn the process.
-	let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
-	spawn_arg.network = false;
+	let (process, process_id) = {
+		#[cfg(feature = "tracing")]
+		let _span = tracing::info_span!("spawn_process").entered();
 
-	#[cfg(feature = "tracing")]
-	tracing::info!("spawning inner process");
+		let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
+		spawn_arg.network = false;
 
-	let stream = tg::Process::spawn(tg, spawn_arg).await?;
-	let process = pin!(stream)
-		.try_last()
-		.await?
-		.ok_or_else(|| tg::error!("expected an event"))?
-		.try_unwrap_output()
-		.ok()
-		.ok_or_else(|| tg::error!("expected the output"))?;
-	let process_id = process.id().clone();
+		#[cfg(feature = "tracing")]
+		tracing::info!("spawning inner process");
 
-	#[cfg(feature = "tracing")]
-	tracing::info!(?process_id, "spawned inner process");
+		let stream = tg::Process::spawn(tg, spawn_arg).await?;
+		let process = pin!(stream)
+			.try_last()
+			.await?
+			.ok_or_else(|| tg::error!("expected an event"))?
+			.try_unwrap_output()
+			.ok()
+			.ok_or_else(|| tg::error!("expected the output"))?;
+		let process_id = process.id().clone();
+
+		#[cfg(feature = "tracing")]
+		tracing::info!(?process_id, "spawned inner process");
+
+		(process, process_id)
+	};
 
 	// Wait for the process output.
-	let output = match process.output(tg).await {
-		Ok(output) => output,
-		Err(e) => {
-			eprintln!("Inner process failed. View logs with: tangram log {process_id}");
-			#[cfg(feature = "tracing")]
-			tracing::error!(?e, ?process_id, "inner process error details");
-			return Err(e);
-		},
+	let output = {
+		#[cfg(feature = "tracing")]
+		let _span = tracing::info_span!("wait_output").entered();
+
+		match process.output(tg).await {
+			Ok(output) => output,
+			Err(e) => {
+				eprintln!("Inner process failed. View logs with: tangram log {process_id}");
+				#[cfg(feature = "tracing")]
+				tracing::error!(?e, ?process_id, "inner process error details");
+				return Err(e);
+			},
+		}
 	};
 	let output = output
 		.try_unwrap_object()
@@ -494,10 +547,14 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			)
 		})?;
 
+	// Cache hit = no token was assigned (process was already finished when spawned).
+	#[cfg(feature = "tracing")]
+	let cached = process.token().is_none();
+
 	#[cfg(feature = "tracing")]
 	{
 		let output_id = output.id();
-		tracing::info!(?output_id, "got output");
+		tracing::info!(?output_id, cached, "got output");
 	}
 
 	// Get stdout/stderr from the build. We'll forward them AFTER creating symlinks
@@ -536,8 +593,13 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	}
 
 	// Write outputs to cargo's output directory.
-	let output_directory = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
-	write_outputs_to_cargo(tg, &build_dir, &output_directory).await?;
+	{
+		#[cfg(feature = "tracing")]
+		let _span = tracing::info_span!("write_outputs").entered();
+
+		let output_directory = PathBuf::from(args.rustc_output_directory.as_ref().unwrap());
+		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs).await?;
+	}
 
 	// Now that symlinks are created, forward stdout/stderr.
 	// Cargo watches for JSON output indicating the .rmeta file is ready.
@@ -550,201 +612,296 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.await
 		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
 
+	#[cfg(feature = "tracing")]
+	{
+		let elapsed = start_time.elapsed();
+		tracing::info!(
+			crate_name = %args.crate_name,
+			elapsed_ms = elapsed.as_millis(),
+			cached,
+			process_id = %process_id,
+			"proxy_complete"
+		);
+		if let Ok(stats_file) = std::env::var("TGRUSTC_STATS_FILE") {
+			let stats = RustcStats {
+				crate_name: args.crate_name.clone(),
+				cached,
+				elapsed_ms: elapsed.as_millis(),
+				process_id: process_id.to_string(),
+				command_id: command_id.to_string(),
+			};
+			write_stats_line(&stats_file, &stats)?;
+		}
+	}
+
 	Ok(())
 }
 
-/// Check in extern crate dependencies.
-///
-/// Each extern file is wrapped in a directory with a symlink to preserve the filename
-/// (rustc requires .rlib/.dylib extensions). Returns command args to add.
+/// Process extern crate dependencies into command args.
 async fn process_externs(
 	tg: &impl tg::Handle,
 	externs: &[(String, String)],
 ) -> tg::Result<Vec<tg::Value>> {
-	// Sort externs by name for deterministic cache hits.
-	let mut sorted_externs = externs.to_vec();
-	sorted_externs.sort_by(|a, b| a.0.cmp(&b.0));
+	let mut sorted = externs.to_vec();
+	sorted.sort_by(|a, b| a.0.cmp(&b.0));
 
-	// Separate empty-path externs (no async work) from non-empty ones.
-	let mut empty_path_args = Vec::new();
-	let mut extern_work = Vec::new();
+	// Build futures for each extern, returning Option to distinguish empty vs non-empty paths.
+	let futures = sorted.iter().map(|(name, path)| {
+		let name = name.clone();
+		let path = path.clone();
+		async move {
+			if path.is_empty() {
+				return Ok(vec!["--extern".to_owned().into(), name.into()]);
+			}
 
-	for (name, path) in &sorted_externs {
-		if path.is_empty() {
-			empty_path_args.push((name.clone(), path.clone()));
-		} else {
-			// Follow symlink if needed (sync I/O).
-			let file_path = PathBuf::from(path);
-			let target_path = if file_path.is_symlink() {
-				let target = std::fs::read_link(&file_path).map_err(|e| {
-					tg::error!(
-						source = e,
-						"failed to read symlink target for extern crate '{name}' at path '{path}'"
-					)
-				})?;
-				#[cfg(feature = "tracing")]
-				tracing::info!(?path, ?target, "following symlink to real file");
-				target.to_str().unwrap_or(path).to_owned()
+			// Follow symlinks and resolve to artifact.
+			let file_path = PathBuf::from(&path);
+			let target = if file_path.is_symlink() {
+				std::fs::read_link(&file_path)
+					.ok()
+					.and_then(|t| t.to_str().map(ToOwned::to_owned))
+					.unwrap_or(path.clone())
 			} else {
 				path.clone()
 			};
-
-			// Extract filename (sync).
 			let filename = file_path
 				.file_name()
 				.and_then(|s| s.to_str())
-				.ok_or_else(|| {
-					tg::error!("extern path for crate '{name}' has no filename: {path}")
-				})?
+				.ok_or_else(|| tg::error!("extern path has no filename: {path}"))?
 				.to_owned();
 
-			extern_work.push((name.clone(), path.clone(), target_path, filename));
+			let artifact = resolve_path_to_artifact(tg, &target)
+				.await?
+				.try_unwrap_file()
+				.map_err(|_| tg::error!("expected file for extern crate '{name}'"))?;
+
+			// Wrap in directory to preserve filename.
+			let wrapped = tg::Directory::with_entries(
+				[(filename.clone(), tg::Symlink::with_artifact(artifact.into()).into())].into(),
+			);
+			wrapped.store(tg).await?;
+
+			let template = tg::Template {
+				components: vec![format!("{name}=").into(), wrapped.into(), format!("/{filename}").into()],
+			};
+			Ok::<_, tg::Error>(vec!["--extern".to_owned().into(), template.into()])
 		}
-	}
+	});
 
-	// Process all non-empty externs concurrently.
-	let futures = extern_work
-		.iter()
-		.map(|(name, path, target_path, filename)| {
-			let name = name.clone();
-			let path = path.clone();
-			let target_path = target_path.clone();
-			let filename = filename.clone();
-			async move {
-				// Resolve the path to an artifact.
-				let file_artifact = resolve_path_to_artifact(tg, &target_path).await?;
-
-				// Wrap the file in a directory with a symlink to the artifact.
-				let file_artifact = file_artifact.try_unwrap_file().map_err(|e| {
-					tg::error!(
-						"expected extern crate '{name}' at '{path}' to be a file, got: {e:?}"
-					)
-				})?;
-				let symlink = tg::Symlink::with_artifact(file_artifact.into());
-				let wrapped_dir =
-					tg::Directory::with_entries([(filename.clone(), symlink.into())].into());
-				wrapped_dir.store(tg).await?;
-
-				// Build --extern name=<wrapped_dir>/<filename>
-				let template = tg::Template {
-					components: vec![
-						format!("{name}=").into(),
-						wrapped_dir.into(),
-						format!("/{filename}").into(),
-					],
-				};
-				Ok::<_, tg::Error>(vec!["--extern".to_owned().into(), template.into()])
-			}
-		});
 	let results: Vec<Vec<tg::Value>> = futures::future::try_join_all(futures).await?;
-
-	// Collect all args in sorted order (empty paths first by their position, then non-empty).
-	let mut command_args = Vec::new();
-	let mut empty_iter = empty_path_args.iter().peekable();
-	let mut result_iter = results.into_iter();
-	for (name, path) in &sorted_externs {
-		if path.is_empty() {
-			if empty_iter.next().is_some() {
-				command_args.extend(["--extern".to_owned().into(), name.clone().into()]);
-			}
-		} else if let Some(args) = result_iter.next() {
-			command_args.extend(args);
-		}
-	}
-
-	Ok(command_args)
+	Ok(results.into_iter().flatten().collect())
 }
 
-/// Process dependency directories, merging all files into a single artifact directory.
+/// Extract crate name from a library or dep-info filename.
+/// Formats:
+/// - lib{crate_name}-{hash}.{rlib,rmeta,so,dylib}
+/// - {crate_name}-{hash}.d (dep-info files don't have lib prefix)
+fn extract_crate_name(filename: &str) -> Option<&str> {
+	// Strip lib prefix if present (rlib/rmeta have it, .d files don't).
+	let rest = filename.strip_prefix("lib").unwrap_or(filename);
+	// Find the last '-' followed by a hash (alphanumeric) and extension.
+	// Crate names can contain underscores and hyphens get converted to underscores.
+	let dash_pos = rest.rfind('-')?;
+	Some(&rest[..dash_pos])
+}
+
+/// Compute the transitive dependency closure starting from extern crates.
+///
+/// Uses `.externs` sidecar files written by previous tgrustc invocations to
+/// find the dependencies of each extern crate, then recursively computes the
+/// full transitive closure.
+fn compute_transitive_closure(
+	dependencies: &[String],
+	externs: &[(String, String)],
+) -> std::collections::HashSet<String> {
+	use std::collections::{HashMap, HashSet, VecDeque};
+
+	// Build a map of crate_name -> externs from .externs sidecar files.
+	let mut externs_map: HashMap<String, Vec<String>> = HashMap::new();
+	for dep_dir in dependencies {
+		let Ok(entries) = std::fs::read_dir(dep_dir) else { continue };
+		for entry in entries.flatten() {
+			let path = entry.path();
+			if path.extension().is_some_and(|ext| ext == "externs")
+				&& let Some(crate_name) = path
+					.file_stem()
+					.and_then(|s| s.to_str())
+					.and_then(extract_crate_name)
+				&& let Ok(content) = std::fs::read_to_string(&path)
+			{
+				let deps: Vec<String> = content
+					.lines()
+					.map(|s| s.trim().to_owned())
+					.filter(|s| !s.is_empty())
+					.collect();
+				externs_map.insert(crate_name.to_owned(), deps);
+			}
+		}
+	}
+
+	// BFS to compute transitive closure.
+	let mut closure: HashSet<String> = HashSet::new();
+	let mut queue: VecDeque<String> = externs.iter().map(|(name, _)| name.clone()).collect();
+
+	while let Some(crate_name) = queue.pop_front() {
+		if !closure.insert(crate_name.clone()) {
+			continue; // Already processed.
+		}
+		// Add this crate's dependencies to the queue.
+		if let Some(deps) = externs_map.get(&crate_name) {
+			for dep in deps {
+				if !closure.contains(dep) {
+					queue.push_back(dep.clone());
+				}
+			}
+		}
+	}
+
+	closure
+}
+
+/// Process dependency directories into a merged artifact directory.
+///
+/// Computes the transitive dependency closure from extern crates using `.externs`
+/// sidecar files, then includes only files for crates in that closure. This ensures
+/// deterministic cache keys regardless of cargo's parallel compilation order.
 async fn process_dependencies(
 	tg: &impl tg::Handle,
 	dependencies: &[String],
+	externs: &[(String, String)],
 ) -> tg::Result<Vec<tg::Value>> {
-	// Sort for deterministic cache hits.
-	let mut sorted_deps = dependencies.to_vec();
-	sorted_deps.sort();
+	// Compute the transitive dependency closure.
+	let needed_crates = compute_transitive_closure(dependencies, externs);
 
-	// Collect all files to process.
-	let mut files_to_process: Vec<(String, String)> = Vec::new();
-	for dependency in &sorted_deps {
-		#[cfg(feature = "tracing")]
-		tracing::info!(?dependency, "scanning dependency directory for files");
-		let dep_path = std::path::Path::new(dependency);
-		if dep_path.is_dir()
-			&& let Ok(entries) = std::fs::read_dir(dep_path)
-		{
-			for entry in entries.flatten() {
-				let file_path = entry.path();
-				let Some(filename) = file_path.file_name().and_then(|s| s.to_str()) else {
-					continue;
-				};
-				// Handle symlinks first, then regular files.
-				let target_path = if file_path.is_symlink() {
-					if let Ok(target) = std::fs::read_link(&file_path) {
-						#[cfg(feature = "tracing")]
-						tracing::info!(?file_path, ?target, "found symlink in deps directory");
-						target.to_str().unwrap_or_default().to_owned()
-					} else {
-						continue;
-					}
-				} else if file_path.is_file() {
-					file_path.to_str().unwrap_or_default().to_owned()
-				} else {
-					continue;
-				};
-				files_to_process.push((filename.to_owned(), target_path));
+	// Collect files from dependency directories, filtered to needed crates.
+	let mut files: Vec<(String, String)> = Vec::new();
+	for dep in dependencies {
+		let Ok(entries) = std::fs::read_dir(dep) else { continue };
+		for entry in entries.flatten() {
+			let path = entry.path();
+			let Some(name) = path.file_name().and_then(|s| s.to_str()) else { continue };
+			// Skip .d and .externs files.
+			let ext = path.extension();
+			if ext.is_some_and(|e| e == "d" || e == "externs") {
+				continue;
+			}
+			// Filter to crates in our transitive closure.
+			let Some(crate_name) = extract_crate_name(name) else { continue };
+			if !needed_crates.contains(crate_name) {
+				continue;
+			}
+			// Include symlinks (following to their targets) and regular files.
+			let target = if path.is_symlink() {
+				std::fs::read_link(&path)
+					.ok()
+					.and_then(|t| t.to_str().map(ToOwned::to_owned))
+			} else if path.is_file() {
+				path.to_str().map(ToOwned::to_owned)
+			} else {
+				None
+			};
+			if let Some(target) = target {
+				files.push((name.to_owned(), target));
 			}
 		}
 	}
 
-	// Sort and deduplicate by filename for determinism.
-	files_to_process.sort_by(|a, b| a.0.cmp(&b.0));
-	files_to_process.dedup_by(|a, b| a.0 == b.0);
+	// Sort and deduplicate for determinism.
+	files.sort_by(|a, b| a.0.cmp(&b.0));
+	files.dedup_by(|a, b| a.0 == b.0);
 
-	// Process all files concurrently.
-	let process_futures = files_to_process.iter().map(|(filename, target_path)| {
-		let filename = filename.clone();
-		let target_path = target_path.clone();
+	// Resolve all files to artifacts concurrently.
+	let futures = files.iter().map(|(name, path)| {
+		let name = name.clone();
+		let path = path.clone();
 		async move {
-			let artifact = resolve_path_to_artifact(tg, &target_path).await.ok()?;
-			Some((filename, artifact))
+			resolve_path_to_artifact(tg, &path)
+				.await
+				.ok()
+				.map(|a| (name, tg::Symlink::with_artifact(a)))
 		}
 	});
-	let process_results: Vec<Option<(String, tg::Artifact)>> =
-		futures::future::join_all(process_futures).await;
-
-	// Collect successful results into symlinks for a merged directory.
-	let merged_entries: BTreeMap<String, tg::Artifact> = process_results
+	let entries: BTreeMap<String, tg::Artifact> = futures::future::join_all(futures)
+		.await
 		.into_iter()
 		.flatten()
-		.map(|(name, artifact)| {
-			let symlink = tg::Symlink::with_artifact(artifact);
-			(name, symlink.into())
-		})
+		.map(|(n, s)| (n, s.into()))
 		.collect();
 
-	// Create a merged directory containing symlinks to all the dependency files.
-	let mut command_args = Vec::new();
-	if !merged_entries.is_empty() {
-		let merged_dir = tg::Directory::with_entries(merged_entries);
-		merged_dir.store(tg).await?;
-		let template = tg::Template {
-			components: vec!["dependency=".to_owned().into(), merged_dir.into()],
-		};
-		command_args.extend(["-L".to_owned().into(), template.into()]);
+	if entries.is_empty() {
+		return Ok(vec![]);
 	}
 
-	Ok(command_args)
+	let merged = tg::Directory::with_entries(entries);
+	merged.store(tg).await?;
+	let template = tg::Template {
+		components: vec!["dependency=".to_owned().into(), merged.into()],
+	};
+	Ok(vec!["-L".to_owned().into(), template.into()])
+}
+
+/// Strip the rustc metadata suffix from a filename and convert underscores to hyphens.
+///
+/// For example, `build_script_build-237322e67a6e148f` becomes `build-script-build`.
+/// Returns `None` if the filename does not have a valid metadata suffix.
+fn strip_metadata_suffix(filename: &str) -> Option<String> {
+	// Find the last hyphen, which separates the crate name from the metadata.
+	let hyphen_pos = filename.rfind('-')?;
+	let (name, suffix) = filename.split_at(hyphen_pos);
+
+	// The suffix (after the hyphen) should be a hex string (rustc metadata).
+	let metadata = &suffix[1..]; // Skip the hyphen.
+	if metadata.is_empty() || !metadata.chars().all(|c| c.is_ascii_hexdigit()) {
+		return None;
+	}
+
+	// Convert underscores to hyphens in the crate name.
+	Some(name.replace('_', "-"))
+}
+
+/// Create a symlink from `target` pointing to the artifact in the local store.
+async fn symlink_artifact(
+	tg: &impl tg::Handle,
+	artifact: &tg::Artifact,
+	target: &Path,
+) -> tg::Result<()> {
+	// Ensure the artifact is cached so it is accessible via the VFS.
+	let arg = tg::cache::Arg {
+		artifacts: vec![artifact.id()],
+	};
+	tg.cache(arg)
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to cache artifact"))?
+		.try_collect::<Vec<_>>()
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to cache artifact"))?;
+
+	let from =
+		PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact.id().to_string());
+	tokio::fs::symlink(&from, target)
+		.await
+		.map_err(|error: std::io::Error| {
+			tg::error!(
+				source = error,
+				"failed to symlink {} to {}",
+				target.display(),
+				from.display()
+			)
+		})
 }
 
 /// Write build outputs to cargo's output directory.
 ///
-/// Dependencies (.rlib, .rmeta, .d) are symlinked for speed and atomicity.
-/// Final binaries are copied so they appear as real files.
+/// All outputs are symlinked to the artifact store for speed and atomicity.
+/// For binaries with metadata suffixes, also creates convenience symlinks
+/// (e.g., `build_script_build-abc123` gets a `build-script-build` symlink).
+/// Also writes a `.externs` sidecar file listing the extern crate names for
+/// transitive dependency computation.
 async fn write_outputs_to_cargo(
 	tg: &impl tg::Handle,
 	build_dir: &tg::Directory,
 	output_directory: &PathBuf,
+	externs: &[(String, String)],
 ) -> tg::Result<()> {
 	// Create the output directory if it does not exist.
 	if !output_directory.exists() {
@@ -762,6 +919,26 @@ async fn write_outputs_to_cargo(
 	// Collect entries first, then process concurrently.
 	let entries: Vec<_> = build_dir.entries(tg).await?.into_iter().collect();
 
+	// Write .externs sidecar file for transitive dependency computation.
+	// Find the rlib in the build dir to get the filename prefix.
+	for (filename, _) in &entries {
+		let path = std::path::Path::new(filename);
+		if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("rlib")) {
+			let externs_filename = path.with_extension("externs");
+			let externs_path = output_directory.join(externs_filename.file_name().unwrap());
+			let extern_names: Vec<&str> = externs.iter().map(|(name, _)| name.as_str()).collect();
+			let content = extern_names.join("\n");
+			tokio::fs::write(&externs_path, content).await.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to write externs file {}",
+					externs_path.display()
+				)
+			})?;
+			break; // Only need one .externs file per crate.
+		}
+	}
+
 	let futures = entries.into_iter().map(|(filename, artifact)| {
 		let output_directory = output_directory.clone();
 		async move {
@@ -772,48 +949,20 @@ async fn write_outputs_to_cargo(
 				tokio::fs::remove_file(&to).await.ok();
 			}
 
-			// Check if this is a dependency file (symlink) or a final binary (copy).
-			let is_dependency = std::path::Path::new(&filename)
-				.extension()
-				.is_some_and(|ext| {
-					ext.eq_ignore_ascii_case("rlib")
-						|| ext.eq_ignore_ascii_case("rmeta")
-						|| ext.eq_ignore_ascii_case("d")
-				});
+			// Symlink all outputs to the artifact store.
+			symlink_artifact(tg, &artifact, &to).await?;
 
-			if is_dependency {
-				// Create symlink for dependencies using CLOSEST_ARTIFACT_PATH.
-				let artifact_id = artifact.id();
-				let from = PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH)
-					.join(artifact_id.to_string());
-				tokio::fs::symlink(&from, &to).await.map_err(|error| {
-					tg::error!(
-						source = error,
-						"failed to create symlink from {} to {}",
-						to.display(),
-						from.display()
-					)
-				})?;
-			} else {
-				// Copy final binaries by reading bytes from the artifact.
-				let file = artifact
-					.try_unwrap_file()
-					.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
-				let bytes = file.bytes(tg).await?;
-				tokio::fs::write(&to, &bytes).await.map_err(|error| {
-					tg::error!(source = error, "failed to write file {}", to.display())
-				})?;
-				// Make the file executable.
-				let permissions = std::fs::Permissions::from_mode(0o755);
-				tokio::fs::set_permissions(&to, permissions)
-					.await
-					.map_err(|error| {
-						tg::error!(
-							source = error,
-							"failed to set permissions on {}",
-							to.display()
-						)
-					})?;
+			// For binaries with a metadata suffix (e.g., `foo_bar-abc123`), cargo expects
+			// a convenience symlink with hyphens and no suffix (e.g., `foo-bar`).
+			let ext = std::path::Path::new(&filename).extension();
+			if ext.is_none()
+				&& let Some(convenience_name) = strip_metadata_suffix(&filename)
+			{
+				let convenience_path = output_directory.join(&convenience_name);
+				if convenience_path.exists() || convenience_path.is_symlink() {
+					tokio::fs::remove_file(&convenience_path).await.ok();
+				}
+				symlink_artifact(tg, &artifact, &convenience_path).await?;
 			}
 
 			Ok::<_, tg::Error>(())
@@ -861,53 +1010,77 @@ const ARGS_WITH_VALUES: [&str; 31] = [
 ];
 
 // Environment variables that must be filtered out before invoking the driver target.
-const BLACKLISTED_ENV_VARS: [&str; 7] = [
+// These either:
+// - Are used only by the outer proxy (not the inner driver)
+// - Vary per outer build and would pollute the inner process's cache key
+const BLACKLISTED_ENV_VARS: [&str; 15] = [
+	// Proxy-specific vars (used by outer proxy, not inner driver).
 	"TGRUSTC_TRACING",
 	"TGRUSTC_WORKSPACE_SOURCE",
 	"TGRUSTC_DRIVER_EXECUTABLE",
+	"TGRUSTC_STATS_FILE",
+	// Tangram vars.
 	"TANGRAM_HOST",
 	"TANGRAM_URL",
-	"HOME",
 	"TANGRAM_OUTPUT",
+	"TANGRAM_PROCESS",
+	// Build-specific paths that vary per cargo invocation.
+	// These are safe to remove because rustc gets explicit --out-dir and current_dir.
+	"HOME",
+	"PWD",
+	"TARGET_DIR",
+	"SOURCE",
+	// CARGO_HOME is cargo-specific; rustc doesn't use it.
+	"CARGO_HOME",
+	// CARGO_MANIFEST_DIR/PATH contain workspace root which varies.
+	// Rustc doesn't need these; we set current_dir to the crate source.
+	"CARGO_MANIFEST_DIR",
+	"CARGO_MANIFEST_PATH",
 ];
 
-/// Resolve a path to an artifact.
-///
-/// If the path contains "/.tangram/artifacts/", it is unrendered to extract the artifact
-/// directly. If the artifact has a subpath, we navigate to get the inner artifact.
-/// Otherwise, the path is checked in as a new artifact.
-///
-/// This pattern is used for both extern paths and dependency paths where files may be
-/// symlinks pointing to artifact paths from previous rustc invocations.
+/// Extract an artifact from a rendered path containing "/.tangram/artifacts/".
+/// Returns the artifact and optional subpath. Navigates into directories if there is a subpath.
+async fn extract_artifact_from_path(
+	tg: &impl tg::Handle,
+	path: &str,
+) -> tg::Result<(tg::Artifact, Option<String>)> {
+	let template = tangram_std::unrender(path)?;
+	let mut components = template.components.into_iter();
+
+	let artifact = components
+		.next()
+		.and_then(|c| c.try_unwrap_artifact().ok())
+		.ok_or_else(|| tg::error!("expected artifact in path: {path}"))?;
+
+	if let Some(component) = components.next() {
+		let subpath = component
+			.try_unwrap_string()
+			.map_err(|_| tg::error!("expected string subpath in path: {path}"))?;
+		let subpath = subpath.trim_start_matches('/');
+
+		if subpath.is_empty() {
+			return Ok((artifact, None));
+		}
+
+		let dir = artifact
+			.try_unwrap_directory()
+			.map_err(|_| tg::error!("expected directory for subpath in: {path}"))?;
+		let inner = dir.get(tg, subpath).await?;
+		Ok((inner, Some(subpath.trim_end_matches('/').to_owned())))
+	} else {
+		Ok((artifact, None))
+	}
+}
+
+/// Resolve a path to an artifact. Extracts from artifact paths or checks in regular paths.
 async fn resolve_path_to_artifact(
 	tg: &impl tg::Handle,
 	target_path: &str,
 ) -> tg::Result<tg::Artifact> {
 	if target_path.contains("/.tangram/artifacts/") {
-		#[cfg(feature = "tracing")]
-		tracing::info!(?target_path, "unrendering artifact path");
-		let template = tangram_std::unrender(target_path)?;
-		let mut components = template.components.into_iter();
-		let artifact = components
-			.next()
-			.and_then(|c| c.try_unwrap_artifact().ok())
-			.ok_or_else(|| tg::error!("expected artifact in path: {target_path}"))?;
-		// If there is a subpath, navigate to get the inner artifact.
-		if let Some(component) = components.next() {
-			let subpath = component
-				.try_unwrap_string()
-				.map_err(|_| tg::error!("expected string subpath in path: {target_path}"))?;
-			let subpath = subpath.trim_start_matches('/');
-			let dir = artifact.try_unwrap_directory().map_err(|_| {
-				tg::error!("expected directory artifact for subpath in: {target_path}")
-			})?;
-			dir.get(tg, subpath).await
-		} else {
-			Ok(artifact)
-		}
+		let (artifact, _) = extract_artifact_from_path(tg, target_path).await?;
+		Ok(artifact)
 	} else {
-		#[cfg(feature = "tracing")]
-		tracing::info!(?target_path, "checking in file");
 		tg::checkin(
 			tg,
 			tg::checkin::Arg {
@@ -930,25 +1103,11 @@ async fn resolve_path_to_artifact(
 	}
 }
 
-/// Given a string path, check it in and return a template wrapping the artifact.
-/// If the path is ".", returns "." directly.
-///
-/// Note: This function is only used for standalone rustc invocations (not cargo builds).
-/// When using cargo.tg.ts, `TGRUSTC_WORKSPACE_SOURCE` is set and this function is bypassed.
-async fn get_checked_in_path(
-	tg: &impl tg::Handle,
-	path: &impl AsRef<std::path::Path>,
-) -> tg::Result<tg::Value> {
-	let path = path.as_ref();
-	let path_str = path.to_str().unwrap();
-
-	if path_str == "." {
+/// Check in a path and return it wrapped as a template Value.
+async fn checkin_path(tg: &impl tg::Handle, path: &str) -> tg::Result<tg::Value> {
+	if path == "." {
 		return Ok(".".into());
 	}
-
-	#[cfg(feature = "tracing")]
-	tracing::info!(?path, "checking in source directory");
-
 	let artifact = tg::checkin(
 		tg,
 		tg::checkin::Arg {
@@ -958,14 +1117,34 @@ async fn get_checked_in_path(
 				lock: None,
 				..Default::default()
 			},
-			path: path.to_path_buf(),
+			path: path.into(),
 			updates: vec![],
 		},
 	)
 	.await?;
-
-	// Wrap in a template so it renders as a path, not just the artifact ID.
 	Ok(tangram_std::template_from_artifact(artifact).into())
+}
+
+/// Write a stats line to the stats file in JSONL format.
+/// Uses append mode for concurrent safety with multiple rustc invocations.
+#[cfg(feature = "tracing")]
+fn write_stats_line(path: &str, stats: &RustcStats) -> tg::Result<()> {
+	use std::io::Write;
+
+	let mut line = serde_json::to_vec(stats)
+		.map_err(|e| tg::error!("failed to serialize stats: {e}"))?;
+	line.push(b'\n');
+
+	let mut file = std::fs::OpenOptions::new()
+		.create(true)
+		.append(true)
+		.open(path)
+		.map_err(|e| tg::error!("failed to open stats file {path}: {e}"))?;
+
+	file.write_all(&line)
+		.map_err(|e| tg::error!("failed to write stats to {path}: {e}"))?;
+
+	Ok(())
 }
 
 /// Get the host string for the current target.
