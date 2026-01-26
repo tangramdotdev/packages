@@ -18,6 +18,9 @@ export * as gnu from "./sdk/gnu.tg.ts";
 export * as llvm from "./sdk/llvm.tg.ts";
 export * as proxy from "./sdk/proxy.tg.ts";
 
+/** The minimum macOS version that produced binaries should support. */
+export const macOsDeploymentTarget = "11.0";
+
 /** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
 export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 	let {

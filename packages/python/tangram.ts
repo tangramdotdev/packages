@@ -136,7 +136,7 @@ export const self = async (...args: std.Args<Arg>) => {
 	const makeArgs: Array<string> = [];
 	const envAdditions: std.env.EnvObject = {};
 	if (os === "darwin") {
-		envAdditions.MACOSX_DEPLOYMENT_TARGET = "15.2";
+		envAdditions.MACOSX_DEPLOYMENT_TARGET = std.sdk.macOsDeploymentTarget;
 		configureArgs.push(
 			"DYLD_FALLBACK_LIBRARY_PATH=$DYLD_FALLBACK_LIBRARY_PATH",
 			"ax_cv_c_float_words_bigendian=no",

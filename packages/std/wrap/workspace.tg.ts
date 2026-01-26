@@ -420,7 +420,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	];
 
 	if (hostOs === "darwin") {
-		env.push({ MACOSX_DEPLOYMENT_TARGET: "15.2" });
+		env.push({ MACOSX_DEPLOYMENT_TARGET: std.sdk.macOsDeploymentTarget });
 	}
 
 	// Set up platform-specific environment.
