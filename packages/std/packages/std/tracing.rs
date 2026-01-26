@@ -12,7 +12,10 @@ pub fn setup(var_name: &str) {
 		let format_layer = tracing_subscriber::fmt::layer()
 			.compact()
 			.with_ansi(false)
-			.with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW)
+			.with_span_events(
+				tracing_subscriber::fmt::format::FmtSpan::NEW
+					| tracing_subscriber::fmt::format::FmtSpan::CLOSE,
+			)
 			.with_writer(std::io::stderr);
 		let subscriber = tracing_subscriber::registry()
 			.with(targets_layer)
