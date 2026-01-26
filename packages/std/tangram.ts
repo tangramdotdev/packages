@@ -144,7 +144,6 @@ const testActions = (): Record<string, () => any> => {
 		gnuSysrootMusl: sdk.gnu.gnuToolchain.extractSysrootMusl,
 		gnuCrossMips: sdk.gnu.gnuToolchain.testCrossMips,
 		gnuCrossRpi: sdk.gnu.gnuToolchain.testCrossRpi,
-		llvmGit: sdk.llvm.git.test,
 		llvmSource: sdk.llvm.source,
 		llvmToolchain: sdk.llvm.toolchain,
 		llvmBuildLLd: sdk.llvm.buildLld,

@@ -8,14 +8,14 @@ import alwaysPreserveXattrsPatch from "./coreutils-always-preserve-xattrs.patch"
 
 export const metadata = {
 	name: "coreutils",
-	version: "9.8",
-	tag: "coreutils/9.8",
+	version: "9.9",
+	tag: "coreutils/9.9",
 };
 
 export const source = async (os: string) => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:e6d4fd2d852c9141a1c2a18a13d146a0cd7e45195f72293a4e4c044ec6ccca15";
+		"sha256:19bcb6ca867183c57d77155eae946c5eced88183143b45ca51ad7d26c628ca75";
 	let source = await std.download.fromGnu({
 		name,
 		version,
