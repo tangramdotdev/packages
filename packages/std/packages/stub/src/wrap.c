@@ -175,39 +175,37 @@ Analysis elf_analyze (Elf elf) {
 	return analysis;
 }
 
-// Bubble sort loadable segments. Handles non-contiguous PT_LOAD segments
-// (e.g., when other segment types like PT_GNU_RELRO are interspersed).
+// Bubble sort loadable segments. Handles non-contiguous PT_LOAD segments,
+// which occurs when we rewrite PT_INTERP to PT_LOAD for the stub.
 void elf_sort_segments (Elf64_Phdr* phdr, size_t num) {
 	TRACE("num segments = %ld", num);
 	Elf64_Addr start_addr, end_addr;
 	for(;;) {
 		bool swapped = false;
-		for (int n = 0; n < (num - 1); n++) {
+		for (int current = 0; current < (num - 1); current++) {
 			// Skip non-PT_LOAD segments
-			if (phdr[n].p_type != PT_LOAD) {
+			if (phdr[current].p_type != PT_LOAD) {
 				continue;
 			}
 			// Find the next PT_LOAD segment
-			int m = n + 1;
-			while (m < num && phdr[m].p_type != PT_LOAD) {
-				m++;
-			}
-			if (m >= num) {
+			int next = current + 1;
+			for (; next < num && phdr[next].p_type != PT_LOAD; next++) {}
+			if (next >= num) {
 				break;
 			}
-			end_addr   = phdr[n].p_vaddr + phdr[n].p_memsz;
-			start_addr = phdr[m].p_vaddr;
-			TRACE("phdr[%d].start = %lx, phdr[%d].end = %lx, phdr[%d].start = %lx", n, phdr[n].p_vaddr, n,  end_addr, m, start_addr);
-			ABORT_IF(start_addr >= phdr[n].p_vaddr && start_addr < end_addr, "invalid program headers");
+			end_addr   = phdr[current].p_vaddr + phdr[current].p_memsz;
+			start_addr = phdr[next].p_vaddr;
+			TRACE("phdr[%d].start = %lx, phdr[%d].end = %lx, phdr[%d].start = %lx", current, phdr[current].p_vaddr, current,  end_addr, next, start_addr);
+			ABORT_IF(start_addr >= phdr[current].p_vaddr && start_addr < end_addr, "invalid program headers");
 			if (end_addr > start_addr) {
-				TRACE("swap phdr[%d], phdr[%d]", n, m);
-				Elf64_Phdr tmp = phdr[n];
-				phdr[n] = phdr[m];
-				phdr[m] = tmp;
+				TRACE("swap phdr[%d], phdr[%d]", current, next);
+				Elf64_Phdr tmp = phdr[current];
+				phdr[current] = phdr[next];
+				phdr[next] = tmp;
 				swapped = true;
-				TRACE("swapped %d and %d", n, m);
+				TRACE("swapped %d and %d", current, next);
 			} else {
-				TRACE("skipping %d", n);
+				TRACE("skipping %d", current);
 			}
 		}
 		if (!swapped) {
@@ -338,7 +336,7 @@ int main (int argc, const char** argv) {
 		output_exe.ehdr->e_phnum = headers.num;
 	} else {
 		// Sort program headers. Pass the full array since PT_LOAD segments
-		// may not be contiguous (e.g., mold linker interleaves other types).
+		// may not be contiguous after rewriting PT_INTERP to PT_LOAD.
 		elf_sort_segments(output_exe.phdr, output_exe.ehdr->e_phnum);
 	}
 
