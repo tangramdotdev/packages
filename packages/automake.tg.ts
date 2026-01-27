@@ -6,9 +6,9 @@ import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 export const deps = () =>
 	std.deps({
-		autoconf: autoconf.build,
+		autoconf: { build: autoconf.build, kind: "full" },
 		help2man: { build: help2man.build, kind: "buildtime" },
-		perl: perl.build,
+		perl: { build: perl.build, kind: "full" },
 		zlib: zlib.build,
 	});
 
