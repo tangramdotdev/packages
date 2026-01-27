@@ -175,24 +175,37 @@ Analysis elf_analyze (Elf elf) {
 	return analysis;
 }
 
-// Bubble sort loadable segments
+// Bubble sort loadable segments. Handles non-contiguous PT_LOAD segments
+// (e.g., when other segment types like PT_GNU_RELRO are interspersed).
 void elf_sort_segments (Elf64_Phdr* phdr, size_t num) {
 	TRACE("num segments = %ld", num);
 	Elf64_Addr start_addr, end_addr;
 	for(;;) {
 		bool swapped = false;
 		for (int n = 0; n < (num - 1); n++) {
+			// Skip non-PT_LOAD segments
+			if (phdr[n].p_type != PT_LOAD) {
+				continue;
+			}
+			// Find the next PT_LOAD segment
+			int m = n + 1;
+			while (m < num && phdr[m].p_type != PT_LOAD) {
+				m++;
+			}
+			if (m >= num) {
+				break;
+			}
 			end_addr   = phdr[n].p_vaddr + phdr[n].p_memsz;
-			start_addr = phdr[n + 1].p_vaddr;
-			TRACE("phdr[%d].start = %lx, phdr[%d].end = %lx, phdr[%d].start = %lx", n, phdr[n].p_vaddr, n,  end_addr, n + 1, start_addr);
+			start_addr = phdr[m].p_vaddr;
+			TRACE("phdr[%d].start = %lx, phdr[%d].end = %lx, phdr[%d].start = %lx", n, phdr[n].p_vaddr, n,  end_addr, m, start_addr);
 			ABORT_IF(start_addr >= phdr[n].p_vaddr && start_addr < end_addr, "invalid program headers");
 			if (end_addr > start_addr) {
-				TRACE("swap phdr[%d], phdr[%d]", n, n+1);
+				TRACE("swap phdr[%d], phdr[%d]", n, m);
 				Elf64_Phdr tmp = phdr[n];
-				phdr[n] = phdr[n+1];
-				phdr[n + 1] = tmp;
+				phdr[n] = phdr[m];
+				phdr[m] = tmp;
 				swapped = true;
-				TRACE("swapped %d and %d", n, n + 1);
+				TRACE("swapped %d and %d", n, m);
 			} else {
 				TRACE("skipping %d", n);
 			}
@@ -324,19 +337,9 @@ int main (int argc, const char** argv) {
 		output_exe.ehdr->e_phoff = headers.offs;
 		output_exe.ehdr->e_phnum = headers.num;
 	} else {
-		// Sort program headers.
-		Elf64_Phdr* start = NULL;
-		size_t num = 0;
-		for(int i = 0; i < output_exe.ehdr->e_phnum; i++) {
-			if (output_exe.phdr[i].p_type != PT_LOAD) {
-				continue;
-			}
-			if (!start) {
-				start = &output_exe.phdr[i];
-			}
-			num++;
-		}
-		elf_sort_segments(start, num);
+		// Sort program headers. Pass the full array since PT_LOAD segments
+		// may not be contiguous (e.g., mold linker interleaves other types).
+		elf_sort_segments(output_exe.phdr, output_exe.ehdr->e_phnum);
 	}
 
 	// Close elf objects.
