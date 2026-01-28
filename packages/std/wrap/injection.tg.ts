@@ -137,8 +137,42 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
 	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
-	// On macOS builds, the compiler is clang, so no triple prefix.
-	const useTriplePrefix = std.triple.os(build) === "linux" && build !== host;
+	const toolchainEnv = await std.env.arg(buildToolchain, {
+		utils: false,
+	});
+
+	// Find the compiler. Try clang first, then cc, then prefixed cc variants.
+	let executable: string | undefined;
+	let isClang = false;
+	if (await std.env.tryWhich({ env: toolchainEnv, name: "clang" })) {
+		executable = "clang";
+		isClang = true;
+	} else if (await std.env.tryWhich({ env: toolchainEnv, name: "cc" })) {
+		executable = "cc";
+	} else {
+		// Try prefixed variants for cross-compilation or bootstrap toolchains.
+		// The bootstrap toolchain uses full canonical triples like x86_64-unknown-linux-gnu-.
+		const canonicalHost = std.sdk.canonicalTriple(host);
+		const prefixes = [
+			`${canonicalHost}-`,
+			`${host}-`,
+			`${build}-`,
+			`${std.sdk.canonicalTriple(build)}-`,
+		];
+		for (const prefix of prefixes) {
+			const name = `${prefix}cc`;
+			if (await std.env.tryWhich({ env: toolchainEnv, name })) {
+				executable = name;
+				break;
+			}
+		}
+	}
+	if (!executable) {
+		throw new Error(
+			`Could not find a C compiler in the toolchain (tried clang, cc, and prefixed variants)`,
+		);
+	}
+
 	let args: std.Args<tg.Template.Arg> = [
 		"-shared",
 		"-fPIC",
@@ -155,13 +189,10 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		args = [...args, ...arg.additionalArgs];
 	}
 	if (std.triple.os(host) === "linux") {
-		const toolchainEnv = await std.env.arg(buildToolchain, {
-			utils: false,
-		});
 		// On linux build, add these flags.
 		if (std.triple.os(build) === "linux") {
 			args.push("-fstack-clash-protection");
-			if (await std.env.tryWhich({ env: toolchainEnv, name: "clang" })) {
+			if (isClang) {
 				args.push("-fuse-ld=lld");
 			}
 		}
@@ -179,9 +210,6 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 			);
 		}
 	}
-
-	const prefix = useTriplePrefix ? `${host}-` : "";
-	const executable = `${prefix}cc`;
 
 	const system = std.triple.archAndOs(build);
 	const env = std.env.arg(
