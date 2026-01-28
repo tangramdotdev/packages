@@ -465,6 +465,7 @@ export const test = async () => {
 	const cOut = await $`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
 	`
+		.bootstrap(true)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
@@ -499,6 +500,7 @@ export const test = async () => {
 	const cxxOut = await $`
 		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
 	`
+		.bootstrap(true)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
