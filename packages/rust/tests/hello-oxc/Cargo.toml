@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-oxc_allocator = { git = "https://github.com/oxc-project/oxc" }
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", features = ["bitset"] }
 
 [profile.release]
 opt-level = 3
