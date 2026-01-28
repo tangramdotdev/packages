@@ -1,0 +1,10 @@
+[package]
+name = "hello-oxc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+oxc_allocator = { git = "https://github.com/oxc-project/oxc" }
+
+[profile.release]
+opt-level = 3
