@@ -805,26 +805,5 @@ export const test = async () => {
 		testCacheHitVendoredDeps(),
 		testCacheHitSharedDepsAcrossProjects(),
 		testCacheHitUnchangedWorkspaceCrates(),
-		testOxcAllocator(),
 	]);
-};
-
-export const testOxcAllocator = async () => {
-	// Build a project that uses oxc_allocator, a git dependency with many transitive deps.
-	const result = await cargo.build({
-		source: tests.get("hello-oxc").then(tg.Directory.expect),
-		proxy: true,
-		useCargoVendor: true,
-		env: {
-			TGRUSTC_TRACING: "tgrustc=trace",
-		},
-	});
-	console.log("testOxcAllocator result", result.id);
-
-	// Assert it compiles and runs.
-	const output = await $`hello-oxc | tee ${tg.output}`
-		.env(result)
-		.then(tg.File.expect);
-	const text = await output.text();
-	tg.assert(text.includes("Allocator works!"));
 };

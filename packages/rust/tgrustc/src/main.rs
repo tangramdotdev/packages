@@ -675,20 +675,11 @@ async fn process_externs(
 				.try_unwrap_file()
 				.map_err(|_| tg::error!("expected file for extern crate '{name}'"))?;
 
-			// Wrap in directory to preserve filename, store it, then cache so the VFS can serve it.
+			// Wrap in directory to preserve filename.
 			let wrapped = tg::Directory::with_entries(
 				[(filename.clone(), tg::Symlink::with_artifact(artifact.into()).into())].into(),
 			);
 			wrapped.store(tg).await?;
-			let arg = tg::cache::Arg {
-				artifacts: vec![wrapped.id().into()],
-			};
-			tg.cache(arg)
-				.await
-				.map_err(|error| tg::error!(source = error, "failed to cache extern directory"))?
-				.try_collect::<Vec<_>>()
-				.await
-				.map_err(|error| tg::error!(source = error, "failed to cache extern directory"))?;
 
 			let template = tg::Template {
 				components: vec![format!("{name}=").into(), wrapped.into(), format!("/{filename}").into()],
@@ -819,6 +810,7 @@ async fn process_dependencies(
 	files.sort_by(|a, b| a.0.cmp(&b.0));
 	files.dedup_by(|a, b| a.0 == b.0);
 
+	// Resolve all files to artifacts concurrently and collect them for caching.
 	// Resolve all files to artifacts concurrently.
 	let futures = files.iter().map(|(name, path)| {
 		let name = name.clone();
@@ -841,19 +833,8 @@ async fn process_dependencies(
 		return Ok(vec![]);
 	}
 
-	// Create merged directory, store it, then cache so the VFS can serve it.
 	let merged = tg::Directory::with_entries(entries);
 	merged.store(tg).await?;
-	let arg = tg::cache::Arg {
-		artifacts: vec![merged.id().into()],
-	};
-	tg.cache(arg)
-		.await
-		.map_err(|error| tg::error!(source = error, "failed to cache deps directory"))?
-		.try_collect::<Vec<_>>()
-		.await
-		.map_err(|error| tg::error!(source = error, "failed to cache deps directory"))?;
-
 	let template = tg::Template {
 		components: vec!["dependency=".to_owned().into(), merged.into()],
 	};
