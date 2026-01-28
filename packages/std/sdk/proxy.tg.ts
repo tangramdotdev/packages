@@ -284,11 +284,19 @@ const ldProxy = async (arg: LdProxyArg) => {
 		stubElf = await stub_.get("stub.elf");
 		wrapBin = await stub_.get("wrap");
 
-		// Find objcopy.
+		// Find objcopy. Resolve symlinks to get the actual file.
 		const binDir = await buildToolchain.get("bin").then(tg.Directory.expect);
 		for (let [name, artifact] of Object.entries(await binDir.entries())) {
 			if (name.endsWith("objcopy")) {
-				objcopy = artifact;
+				// If it's a symlink, resolve it to get the actual file.
+				if (artifact instanceof tg.Symlink) {
+					const resolved = await binDir.get(name);
+					if (resolved instanceof tg.File) {
+						objcopy = resolved;
+					}
+				} else if (artifact instanceof tg.File) {
+					objcopy = artifact;
+				}
 			}
 		}
 		tg.assert(objcopy, "failed to find objcopy binary");
