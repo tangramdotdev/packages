@@ -173,6 +173,20 @@ fn run_driver() -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!("running in driver mode");
 
+	// Debug: write driver mode entry to file early.
+	if let Ok(output) = std::env::var("TANGRAM_OUTPUT") {
+		let debug_path = format!("{output}/driver_debug.txt");
+		let args: Vec<String> = std::env::args().collect();
+		let debug_content = format!(
+			"driver_mode_entry\nargs: {:?}\nTGRUSTC_RUSTC: {:?}\nTGRUSTC_SOURCE: {:?}\nTGRUSTC_OUT_DIR: {:?}\n",
+			args,
+			std::env::var("TGRUSTC_RUSTC"),
+			std::env::var("TGRUSTC_SOURCE"),
+			std::env::var("TGRUSTC_OUT_DIR"),
+		);
+		let _ = std::fs::write(&debug_path, &debug_content);
+	}
+
 	// Read required environment variables.
 	let tangram_output = std::env::var("TANGRAM_OUTPUT")
 		.map_err(|_| tg::error!("TANGRAM_OUTPUT not set in driver mode"))?;
@@ -225,6 +239,12 @@ fn run_driver() -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?rustc_args, "executing rustc");
 
+	// Debug: write exec info to file before exec.
+	let exec_debug = format!(
+		"exec_rustc\nrustc_path: {rustc_path}\nsource_dir: {source_dir}\nout_path: {out_path}\nbuild_path: {build_path}\nrustc_args: {rustc_args:?}\n"
+	);
+	let _ = std::fs::write(format!("{tangram_output}/exec_debug.txt"), &exec_debug);
+
 	// Change to source directory and exec rustc.
 	let error = std::process::Command::new(&rustc_path)
 		.args(&rustc_args)
@@ -233,6 +253,12 @@ fn run_driver() -> tg::Result<()> {
 		.arg("--out-dir")
 		.arg(&build_path)
 		.exec();
+
+	// If we get here, exec failed - write error to file since stderr is redirected.
+	let _ = std::fs::write(
+		format!("{tangram_output}/exec_error.txt"),
+		format!("exec failed: {error}"),
+	);
 
 	// If we get here, exec failed.
 	Err(tg::error!("failed to exec rustc: {error}"))
@@ -480,12 +506,21 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?command_args, "full command args for inner process");
 
+	// Debug: print command args count and crate name.
+	eprintln!(
+		"DEBUG driver: crate={} host={} args_count={}",
+		args.crate_name,
+		host,
+		command_args.len()
+	);
+
 	// Build a command for the process.
 	let command = tg::Command::builder(host, executable)
 		.args(command_args)
 		.env(env)
 		.build();
 	let command_id = command.store(tg).await?;
+	eprintln!("DEBUG driver: command_id={command_id}");
 	let mut command_ref = tg::Referent::with_item(command_id.clone());
 	command_ref.options.name.replace("rustc".into());
 
@@ -509,6 +544,7 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 			.ok()
 			.ok_or_else(|| tg::error!("expected the output"))?;
 		let process_id = process.id().clone();
+		eprintln!("DEBUG driver: process_id={process_id}");
 
 		#[cfg(feature = "tracing")]
 		tracing::info!(?process_id, "spawned inner process");
@@ -524,7 +560,8 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		match process.output(tg).await {
 			Ok(output) => output,
 			Err(e) => {
-				eprintln!("Inner process failed. View logs with: tangram log {process_id}");
+				eprintln!("Inner process failed for crate '{}'. View logs with: tangram log {process_id}", args.crate_name);
+				eprintln!("DEBUG inner process error: {e:?}");
 				#[cfg(feature = "tracing")]
 				tracing::error!(?e, ?process_id, "inner process error details");
 				return Err(e);
@@ -656,6 +693,16 @@ async fn process_externs(
 
 			// Follow symlinks and resolve to artifact.
 			let file_path = PathBuf::from(&path);
+
+			// Debug: check if the file exists and its type.
+			let exists = file_path.exists();
+			let is_symlink = file_path.is_symlink();
+			let symlink_target = if is_symlink {
+				std::fs::read_link(&file_path).ok()
+			} else {
+				None
+			};
+			eprintln!("DEBUG process_externs: name={name} path={path} exists={exists} is_symlink={is_symlink} target={symlink_target:?}");
 			let target = if file_path.is_symlink() {
 				std::fs::read_link(&file_path)
 					.ok()
