@@ -311,8 +311,8 @@ impl Manifest {
 		let input = tempfile.path();
 
 		// Add sections for the stub and manifest.
+		// Note: Don't use -v flag as llvm-objcopy doesn't support it.
 		let output_ = tokio::process::Command::new(&objcopy)
-			.arg("-v")
 			.arg("--add-section")
 			.arg(".text.tangram-stub=/dev/null")
 			.arg("--add-section")

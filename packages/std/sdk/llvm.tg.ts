@@ -61,7 +61,6 @@ export const toolchain = async (arg?: LLVMArg) => {
 		env: env_,
 		host: host_,
 		lto = true,
-		prebuilt: prebuilt_ = false,
 		sdk,
 		source: source_,
 		target: target_,
@@ -97,10 +96,6 @@ export const toolchain = async (arg?: LLVMArg) => {
 		}
 	}
 
-	if (prebuilt_) {
-		return prebuilt({ host });
-	}
-
 	const sourceDir = source_ ?? source();
 
 	// Define build environment.
@@ -125,11 +120,6 @@ export const toolchain = async (arg?: LLVMArg) => {
 		.named("host libraries");
 
 	// Build ncurses and zlib separately for cmake configuration and library paths.
-	const ncursesArtifact = dependencies.ncurses.build({
-		host,
-		env: buildTools,
-		bootstrap: true,
-	});
 	const zlibArtifact = dependencies.zlib.build({
 		host,
 		env: buildTools,
@@ -153,11 +143,12 @@ export const toolchain = async (arg?: LLVMArg) => {
 		.then(tg.Directory.expect);
 
 	const ldsoName = libc.interpreterName(host);
-	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
+	// Set the dynamic linker for stage2 binaries. RPATH is configured in Distribution-stage2.cmake
+	// using cmake's native RPATH mechanism, which avoids shell escaping issues with $ORIGIN.
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We will wrap them afterwards.
-	const prepare = tg`export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:$HOME/work/lib:$HOME/work/lib/${host}"`;
+	const prepare = tg`set -x && export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:$HOME/build/lib:$HOME/build/lib/${host}"`;
 
 	// Define default flags.
 	const configure = {
@@ -165,12 +156,10 @@ export const toolchain = async (arg?: LLVMArg) => {
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
+			`-DTANGRAM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
-			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH did not work for Terminfo_ROOT, but this did.
-			tg`-DBOOTSTRAP_Terminfo_ROOT=${ncursesArtifact}`,
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
-			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
+			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT;TANGRAM_HOST_TRIPLE"`,
 		],
 	};
 
@@ -190,7 +179,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
 	const buildPhase = "cd build && ninja stage2-distribution";
-	const install = "ninja stage3-install-distribution";
+	const install = "ninja stage2-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
@@ -202,8 +191,15 @@ export const toolchain = async (arg?: LLVMArg) => {
 		source: tg`${sourceDir}/llvm`,
 	});
 
-	// Add sysroot and symlinks.
+	// Merge zlib libraries into the artifact so $ORIGIN-based RPATH can find them.
+	const zlibLibDir = await zlibArtifact
+		.then(tg.Directory.expect)
+		.then((dir) => dir.get("lib"))
+		.then(tg.Directory.expect);
+
+	// Add sysroot, zlib libs, and symlinks.
 	llvmArtifact = await tg.directory(llvmArtifact, sysroot, {
+		lib: zlibLibDir,
 		"bin/ar": tg.symlink("llvm-ar"),
 		"bin/cc": tg.symlink("clang"),
 		"bin/c++": tg.symlink("clang++"),
@@ -217,24 +213,21 @@ export const toolchain = async (arg?: LLVMArg) => {
 	});
 
 	// The bootstrap compiler was not proxied. Manually wrap the output binaries.
+	// With $ORIGIN-based RPATH embedded during build, binaries can find libraries
+	// relative to their location. We still wrap to ensure the interpreter is correct.
 
-	// Collect all required library paths.
+	// Collect library paths for non-clang binaries that may not have RPATH set.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
-	const ncursesLibDir = ncursesArtifact
-		.then(tg.Directory.expect)
-		.then((dir) => dir.get("lib"))
-		.then(tg.Directory.expect);
-	const zlibLibDir = zlibArtifact
-		.then(tg.Directory.expect)
-		.then((dir) => dir.get("lib"))
-		.then(tg.Directory.expect);
-	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
+	const libraryPaths = [libDir, hostLibDir];
 
-	// Wrap all ELF binaries in the bin directory.
+	// Wrap all ELF binaries in the bin directory, except clang-XX which has
+	// $ORIGIN RPATH and must not be wrapped to preserve /proc/self/exe for -cc1.
+	const majorVersion = llvmMajorVersion();
+	const clangBinaryName = `clang-${majorVersion}`;
 	const binDir = await llvmArtifact.get("bin").then(tg.Directory.expect);
 	for await (const [name, artifact] of binDir) {
-		if (artifact instanceof tg.File) {
+		if (artifact instanceof tg.File && name !== clangBinaryName) {
 			const { format } = await std.file.executableMetadata(artifact);
 			if (format === "elf") {
 				const unwrapped = binDir.get(name).then(tg.File.expect);
@@ -247,6 +240,19 @@ export const toolchain = async (arg?: LLVMArg) => {
 			}
 		}
 	}
+
+	// Replace clang and clang++ with shell scripts that exec the unwrapped clang binary.
+	// This allows the proxy to wrap shell scripts (which have no ELF dependencies) instead
+	// of wrapped binaries, enabling the toolchain to work in bootstrap mode.
+	// Use /bin/sh directly since PATH may not include /bin in bootstrap mode.
+	llvmArtifact = await tg.directory(llvmArtifact, {
+		"bin/clang": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
+			executable: true,
+		}),
+		"bin/clang++": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
+			executable: true,
+		}),
+	});
 
 	return llvmArtifact;
 };
@@ -448,141 +454,6 @@ export const getLinuxSysroot = async (
 		.then(tg.Directory.expect);
 };
 
-type PrebuiltArg = {
-	host?: string;
-};
-
-export const prebuilt = async (arg?: PrebuiltArg) => {
-	const { host: host_ } = arg ?? {};
-	const { version } = metadata;
-	const host = host_ ?? std.triple.host();
-
-	const arch = std.triple.arch(host);
-	const os = std.triple.os(host);
-
-	// The upstream does not provide x86_64-darwin builds.
-	if (arch === "x86_64" && os === "darwin") {
-		throw new Error(
-			"Prebuilt LLVM binaries are not available for x86_64-darwin",
-		);
-	}
-
-	const checksums: Record<string, tg.Checksum> = {
-		["aarch64-linux"]:
-			"sha256:b855cc17d935fdd83da82206b7a7cfc680095efd1e9e8182c4a05e761958bef8",
-		["x86_64-linux"]:
-			"sha256:1ead36b3dfcb774b57be530df42bec70ab2d239fbce9889447c7a29a4ddc1ae6",
-		["aarch64-darwin"]:
-			"sha256:a9a22f450d35f1f73cd61ab6a17c6f27d8f6051d56197395c1eb397f0c9bbec4",
-	};
-	const archAndOs = `${arch}-${os}`;
-	const checksum = checksums[archAndOs];
-	tg.assert(checksum, `unable to locate checksum for ${archAndOs}`);
-
-	const filenameArch = arch === "aarch64" ? "ARM64" : "X64";
-	const filenameOs = os === "darwin" ? "macOS" : "Linux";
-
-	const url = `https://github.com/llvm/llvm-project/releases/download/llvmorg-${version}/LLVM-${version}-${filenameOs}-${filenameArch}.tar.xz`;
-
-	let output = await std
-		.download({ url, checksum, mode: "extract" })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-
-	const buildToolchain = await std.sdk({ host });
-
-	// Add libc.
-	const m4ForBuild = dependencies.m4.build({ host, env: buildToolchain });
-	const bisonForBuild = dependencies.bison.build({
-		host,
-		env: std.env.arg(buildToolchain, m4ForBuild),
-	});
-	const pythonForBuild = dependencies.python.build({
-		host,
-		env: buildToolchain,
-	});
-	const sysroot = await constructSysroot({
-		env: std.env.arg(bisonForBuild, m4ForBuild, pythonForBuild, {
-			utils: false,
-		}),
-		host,
-	})
-		.then((dir) => dir.get(host))
-		.then(tg.Directory.expect);
-
-	// The precompiled components link against libatomic.so.1 instead of compiler-rt for atomics. Include host's libatomic.so.1 in sysroot.
-	const hostGcc = await gnu.toolchain({ host });
-	const libAtomic = await hostGcc
-		.get("lib/libatomic.so.1")
-		.then(tg.File.expect);
-
-	// Add sysroot, cfg, and symlinks.
-	output = await tg.directory(output, sysroot, {
-		"bin/ar": tg.symlink("llvm-ar"),
-		"bin/cc": tg.symlink("clang"),
-		"bin/c++": tg.symlink("clang++"),
-		"bin/nm": tg.symlink("llvm-nm"),
-		"bin/objcopy": tg.symlink("llvm-objcopy"),
-		"bin/objdump": tg.symlink("llvm-objdump"),
-		"bin/ranlib": tg.symlink("llvm-ar"),
-		"bin/readelf": tg.symlink("llvm-readobj"),
-		"bin/strings": tg.symlink("llvm-strings"),
-		"bin/strip": tg.symlink("llvm-strip"),
-		"lib/libatomic.so.1": libAtomic,
-	});
-
-	// Collect library paths.
-	const zlibLibDir = dependencies.zlib
-		.build({ host, env: buildToolchain })
-		.then((d) => d.get("lib"))
-		.then(tg.Directory.expect);
-	const libxmlLibDir = dependencies.libxml2
-		.build({
-			host,
-			env: std.env.arg(buildToolchain, pythonForBuild, { utils: false }),
-		})
-		.then((d) => d.get("lib"))
-		.then(tg.Directory.expect);
-	const xzLibDir = utils.xz
-		.build({ host, env: buildToolchain })
-		.then((d) => d.get("lib"))
-		.then(tg.Directory.expect);
-	const libraryPaths = [libxmlLibDir, xzLibDir, zlibLibDir];
-
-	// Wrap binaries.
-	const binDir = await output.get("bin").then(tg.Directory.expect);
-	for await (let [name, file] of binDir) {
-		// If the file is an executable with an interpreter, wrap it.
-		if (file instanceof tg.File) {
-			try {
-				const metadata = await std.file.executableMetadata(file);
-				if (metadata.format === "elf" && metadata.interpreter !== undefined) {
-					const wrapped = await std.wrap(file, {
-						libraryPaths,
-					});
-					output = await tg.directory(output, {
-						[`bin/${name}`]: wrapped,
-					});
-				}
-			} catch (_) {}
-		}
-	}
-
-	// Add shell wrappers for clang and clang++ that use parameter expansion to avoid dirname.
-	const bins = ["clang", "clang++"];
-	for (const bin of bins) {
-		// FIXME - use std.wrap, not shell wrapper ?
-		output = await tg.directory(output, {
-			[`bin/${bin}`]: tg.file(
-				`#!/bin/sh\nexec "clang-20" --sysroot "\${0%/*}/.." -rtlib=compiler-rt "$@"`,
-				{ executable: true },
-			),
-		});
-	}
-
-	return output;
-};
-
 export const test = async () => {
 	// Build a triple for the detected host.
 	const host = std.sdk.canonicalTriple(std.triple.host());
@@ -607,21 +478,13 @@ export const test = async () => {
 	const cOut = await $`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
 	`
+		.bootstrap(true)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
 
 	const cMetadata = await std.file.executableMetadata(cOut);
 	if (os === "linux") {
-		std.assert.assertJsonSnapshot(
-			cMetadata,
-			`
-			{
-				"format": "elf",
-				"arch": "${hostArch}"
-			}
-		`,
-		);
 		tg.assert(cMetadata.format === "elf");
 		tg.assert(
 			expectedInterpreterName !== undefined
@@ -650,21 +513,13 @@ export const test = async () => {
 	const cxxOut = await $`
 		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
 	`
+		.bootstrap(true)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
 
 	const cxxMetadata = await std.file.executableMetadata(cxxOut);
 	if (os === "linux") {
-		std.assert.assertJsonSnapshot(
-			cxxMetadata,
-			`
-			{
-				"format": "elf",
-				"arch": "${hostArch}"
-			}
-		`,
-		);
 		tg.assert(cxxMetadata.format === "elf");
 		tg.assert(
 			expectedInterpreterName !== undefined

@@ -940,7 +940,7 @@ export namespace sdk {
 		arg: sdk.Arg,
 	) => {
 		const expected = await resolveHostAndTarget(arg);
-		const env = await std.env.arg(toolchainDir, { utils: true });
+		const env = await std.env.arg(toolchainDir, { utils: false });
 
 		// Assert we can determine a host and it matches the expected.
 		const actualHost = await sdk.determineToolchainHost({
