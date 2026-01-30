@@ -141,6 +141,9 @@ export type BuildArg = {
 	/** Override the phases. */
 	phases?: std.phases.Arg;
 
+	/** Should we normalize the prefix written to pkg-config files? Default: true. */
+	normalizePkgConfigPrefix?: boolean;
+
 	/** Should the build environment include pkg-config? Default: true */
 	pkgConfig?: boolean;
 
@@ -179,6 +182,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		host: host_,
 		march,
 		mtune = "generic",
+		normalizePkgConfigPrefix = true,
 		opt = "2",
 		order,
 		parallel = true,
@@ -284,17 +288,22 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		args: [`--build`, buildDir, `--target`, `install`],
 	};
 
+	// Build fixup phase command if needed.
+	let defaultFixupCommand = tg.template();
+	if (debug) {
+		defaultFixupCommand = tg`${defaultFixupCommand}\nmkdir -p "$LOGDIR" && cp config.log "$LOGDIR/config.log"`;
+	}
+	if (normalizePkgConfigPrefix) {
+		const pkgconfigFixup = await std.pkgconfig.shellNormalizeCommand();
+		defaultFixupCommand = tg`${defaultFixupCommand}\n${pkgconfigFixup}`;
+	}
+	const needsFixup = debug || normalizePkgConfigPrefix;
+
 	const defaultPhases = {
 		configure: defaultConfigure,
 		build: defaultBuild,
 		install: defaultInstall,
-		...(debug
-			? {
-					fixup: {
-						command: `mkdir -p $LOGDIR && cp config.log $LOGDIR/config.log`,
-					},
-				}
-			: {}),
+		...(needsFixup ? { fixup: { command: defaultFixupCommand } } : {}),
 	};
 
 	// Merge default phases with user phases.

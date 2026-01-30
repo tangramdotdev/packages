@@ -16,6 +16,7 @@ export * as file from "./file.tg.ts";
 export { patch } from "./patch.tg.ts";
 export * as packages from "./packages.tg.ts";
 export * as phases from "./phases.tg.ts";
+export * as pkgconfig from "./pkgconfig.tg.ts";
 export { $, run } from "./run.tg.ts";
 export { sdk } from "./sdk.tg.ts";
 export * as sdkModule from "./sdk.tg.ts";
@@ -39,6 +40,7 @@ import * as image from "./image.tg.ts";
 import * as injection from "./wrap/injection.tg.ts";
 import * as packages from "./packages_test.tg.ts";
 import * as phases from "./phases.tg.ts";
+import * as pkgconfig from "./pkgconfig.tg.ts";
 import * as run from "./run.tg.ts";
 import * as sdk from "./sdk.tg.ts";
 import * as triple from "./triple.tg.ts";
@@ -80,6 +82,7 @@ const testActions = (): Record<string, () => any> => {
 		triple: triple.test,
 		download: download.test,
 		phases: phases.test,
+		pkgconfig: pkgconfig.test,
 		packages: packages.test,
 		certificates: caCertificates,
 		bootstrapShell: bootstrap.shell,

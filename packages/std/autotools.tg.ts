@@ -260,7 +260,8 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		defaultFixupCommand = tg`${defaultFixupCommand}\nmkdir -p "$LOGDIR" && cp config.log "$LOGDIR/config.log"`;
 	}
 	if (normalizePkgConfigPrefix) {
-		defaultFixupCommand = tg`${defaultFixupCommand}\nfind ${tg.output} -name '*.pc' -type f -exec sed -i 's|^prefix=.*|prefix=$'"{pcfiledir}"'/../..|' {} \\;`;
+		const pkgconfigFixup = await std.pkgconfig.shellNormalizeCommand();
+		defaultFixupCommand = tg`${defaultFixupCommand}\n${pkgconfigFixup}`;
 	}
 	const needsFixup = debug || removeLibtoolArchives || normalizePkgConfigPrefix;
 
