@@ -16,7 +16,10 @@ export const source = async () => {
 export const ruby = async (host: string) => {
 	const build = await std.autotools.build({
 		env: {
-			CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " "),
+			CFLAGS: tg.Mutation.suffix(
+				"-Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-varargs",
+				" ",
+			),
 		},
 		host,
 		source: source(),

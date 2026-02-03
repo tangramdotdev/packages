@@ -158,6 +158,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		RUBYLIB: rubylib,
 		GEM_PATH: gemPath,
 		GEM_HOME: gemPath,
+		CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
 	});
 
 	// Wrap Ruby itself.
