@@ -246,7 +246,7 @@ export const test = async () => {
 		)
 		.then(tg.File.expect);
 
-	const contents = (await output.text()).trim();
+	const contents = (await output.text).trim();
 	tg.assert(contents === expected);
 	return coreutils;
 };

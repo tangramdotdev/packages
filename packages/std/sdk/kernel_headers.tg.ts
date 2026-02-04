@@ -143,9 +143,9 @@ export const testKernelHeaders = async (host: string, target?: string) => {
 		host: target_,
 	});
 	const configFile = tg.File.expect(await headers.get("config/kernel.release"));
-	const configFileContents = (await configFile.text()).trim();
+	const configFileContents = (await configFile.text).trim();
 	tg.assert(configFileContents === `${metadata.version}-default`);
 	const kernelH = tg.File.expect(await headers.get("linux/kernel.h"));
-	const kernelHContents = await kernelH.text();
+	const kernelHContents = await kernelH.text;
 	tg.assert(kernelHContents.includes("#ifndef _LINUX_KERNEL_H"));
 };

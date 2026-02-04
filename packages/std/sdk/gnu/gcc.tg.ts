@@ -298,5 +298,5 @@ async function getGccVersion(
 			.bootstrap(true)
 			.env(envObject)
 			.then(tg.File.expect);
-	return (await result.text()).trim();
+	return (await result.text).trim();
 }

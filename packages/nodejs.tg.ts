@@ -225,13 +225,13 @@ export const build = async (...args: std.Args<any>) => {
 	// Retrieve and parse the package.json, package-lock.json files.
 	const packageJsonFile = tg.File.expect(await source.get("package.json"));
 	const packageJson = tg.encoding.json.decode(
-		await packageJsonFile.text(),
+		await packageJsonFile.text,
 	) as PackageJson;
 
 	const packageLockFile =
 		packageLockArg ?? tg.File.expect(await source.get("package-lock.json"));
 	const packageLock = tg.encoding.json.decode(
-		await packageLockFile.text(),
+		await packageLockFile.text,
 	) as PackageLockJson;
 
 	// Install the dependencies and dev dependencies.
@@ -311,7 +311,7 @@ export const install = async (
 ): Promise<[tg.Directory, tg.Directory]> => {
 	// Parse the package-lock.json.
 	const packageLock = tg.encoding.json.decode(
-		await packageLockJson.text(),
+		await packageLockJson.text,
 	) as PackageLockJson;
 
 	// Install the packages specified by the package-lock.json.

@@ -838,7 +838,7 @@ export const basic = async () => {
 	};
 
 	const output = await run(arg, { bootstrap: true }).then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	const expected =
 		"preparing\nconfiguring\nbuilding\nchecking\ninstalling\nfixing up\n";
 	tg.assert(text === expected);
@@ -869,7 +869,7 @@ export const order = async () => {
 	};
 
 	const output = await run(arg, { bootstrap: true }).then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	const expected = "fixing up\npreparing\ninstalling\nbuilding\nconfiguring\n";
 	tg.assert(text === expected);
 	return true;
@@ -1099,7 +1099,7 @@ export const testPrePostHooks = async () => {
 		order: ["build"],
 		bootstrap: true,
 	}).then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(
 		text.includes("pre-build") &&
 			text.includes("building") &&

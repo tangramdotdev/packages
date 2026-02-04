@@ -107,7 +107,7 @@ export const test = async () => {
 	const bashDir = await build({ host, bootstrap: true, env: sdk });
 	// Inspect dependencies
 	const bashFile = await bashDir.get("bin/bash").then(tg.File.expect);
-	const deps = await bashFile.dependencies();
+	const deps = await bashFile.dependencies;
 	console.log("Bash file dependencies:");
 	const depsEntries = Object.entries(deps);
 	for (const [key, value] of depsEntries) {

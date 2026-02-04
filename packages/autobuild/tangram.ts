@@ -154,13 +154,13 @@ export type Kind =
 	| "rust-plain";
 
 export const detectKind = async (source: tg.Directory): Promise<Kind> => {
-	const entries = await source.entries();
+	const entries = await source.entries;
 	const hasFile = (name: string) =>
 		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
-	const hasExecutableFile = (name: string) =>
+	const hasExecutableFile = async (name: string) =>
 		entries.hasOwnProperty(name) &&
 		entries[name] instanceof tg.File &&
-		entries[name].executable();
+		(await entries[name].executable);
 	const hasDir = (name: string) =>
 		entries.hasOwnProperty(name) && entries[name] instanceof tg.Directory;
 	const hasFileWithExtension = (ext: string) =>
@@ -170,7 +170,7 @@ export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 
 	if (hasFile("Cargo.toml")) return "rust-cargo";
 	if (hasFile("CMakeLists.txt")) return "cmake";
-	if (hasExecutableFile("configure") || hasFile("configure.ac"))
+	if ((await hasExecutableFile("configure")) || hasFile("configure.ac"))
 		return "cc-autotools";
 	if (hasFile("package.json")) return "js-node";
 	if (hasFile("pyproject.toml")) return "python-pyproject";
@@ -282,7 +282,7 @@ export const testKind = async (kind: Kind) => {
 	const testStdout = async (arg: TestFnArg): Promise<boolean> => {
 		const stdout = await $`${arg.testFile(buildOutput)} > ${tg.output}`
 			.then(tg.File.expect)
-			.then((t) => t.text())
+			.then((t) => t.text)
 			.then((t) => t.trim());
 		tg.assert(
 			stdout === arg.expectedStdout,

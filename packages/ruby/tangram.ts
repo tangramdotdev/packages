@@ -335,7 +335,7 @@ export const test = async () => {
 	const output = await $`ruby -e 'puts "Hello, tangram!"' > ${tg.output}`
 		.env(self())
 		.then(tg.File.expect)
-		.then((f) => f.text())
+		.then((f) => f.text)
 		.then((t) => t.trim());
 	tg.assert(output.includes("Hello, tangram!"));
 

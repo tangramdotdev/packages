@@ -307,7 +307,7 @@ export const dockerImageFromLayers = async (
 	// Add the config file to the image, using its checksum value as a filename.
 	const configFile = await tg.file(tg.encoding.json.encode(config));
 	const configFilename = `${(
-		await tg.checksum(await configFile.bytes(), "sha256")
+		await tg.checksum(await configFile.bytes, "sha256")
 	).slice("sha256:".length)}.json`;
 	image = tg.directory(image, {
 		[configFilename]: configFile,
@@ -316,7 +316,7 @@ export const dockerImageFromLayers = async (
 	// Add each layer file to the image directory.
 	const layerFilenames = await Promise.all(
 		layers.map(async (layer) => {
-			const bytes = await layer.tarball.bytes();
+			const bytes = await layer.tarball.bytes;
 			const size = bytes.length;
 			const checksum = await tg.checksum(bytes, "sha256");
 			const checksumValue = checksum.slice("sha256:".length);
@@ -374,7 +374,7 @@ export const ociImageFromLayers = async (
 	let blobs = tg.directory();
 
 	const addBlob = async (file: tg.File) => {
-		const bytes = await file.bytes();
+		const bytes = await file.bytes;
 		const checksum = await tg.checksum(bytes, "sha256");
 		blobs = tg.directory(blobs, {
 			[checksum.replace(":", "/")]: file,
@@ -487,7 +487,7 @@ export const layer = async (
 	await bundle.store();
 	const tarball = await createTarball(bundle, compressionFormat);
 	await tarball.store();
-	const bytes = await tarball.bytes();
+	const bytes = await tarball.bytes;
 	const diffId = await tg.checksum(bytes, "sha256");
 	return { tarball, diffId };
 };

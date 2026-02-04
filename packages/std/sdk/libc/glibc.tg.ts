@@ -151,7 +151,7 @@ export const applySysrootFix = async (arg: SysrootFixArg) => {
 		(await std.file.detectExecutableKind(linkerScript)) === "elf";
 	// If the given path points to an ELF object, don't do anything. Apply the fix if it's a text file.
 	if (!isElfObject) {
-		const scriptContents = await linkerScript.text();
+		const scriptContents = await linkerScript.text;
 		const scriptContentsFixed = scriptContents
 			.split("\n")
 			.map((line) => {

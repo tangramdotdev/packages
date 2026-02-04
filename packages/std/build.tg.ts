@@ -293,7 +293,7 @@ export const testBuild = async () => {
 	const output = await std.build`echo $TANGRAM_HOST > ${tg.output}`.then(
 		tg.File.expect,
 	);
-	const actual = (await output.text()).trim();
+	const actual = (await output.text).trim();
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;
 };
@@ -306,7 +306,7 @@ export const testBuildBootstrap = async () => {
 		.then(tg.File.expect);
 	await output.store();
 	console.log("OUTPUT", output.id);
-	const actual = (await output.text()).trim();
+	const actual = (await output.text).trim();
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;
 };

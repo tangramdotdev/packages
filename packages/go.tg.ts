@@ -440,7 +440,7 @@ type GoModule = {
 export const parseGoSum = async (
 	goSumFile: tg.File,
 ): Promise<{ checksums: Map<string, string>; modules: Array<GoModule> }> => {
-	const content = await goSumFile.text();
+	const content = await goSumFile.text;
 	const checksums = new Map<string, string>();
 	const modulesSet = new Map<string, GoModule>();
 
@@ -475,7 +475,7 @@ export const parseGoSum = async (
  * Only modules that appear ONLY in go.sum (not in go.mod) should lack the explicit marker.
  */
 export const parseGoMod = async (goModFile: tg.File): Promise<Set<string>> => {
-	const content = await goModFile.text();
+	const content = await goModFile.text;
 	const modulePaths = new Set<string>();
 	let inRequireBlock = false;
 
@@ -585,7 +585,7 @@ export const vendorDependencies = async (
 			// Keep unwrapping until we reach the actual module contents.
 			let moduleDir = archive;
 			while (true) {
-				const entries = await moduleDir.entries();
+				const entries = await moduleDir.entries;
 				const keys = Object.keys(entries);
 				if (
 					keys.length === 1 &&
@@ -666,7 +666,7 @@ export const vendorDependencies = async (
 const extractGoVersion = async (
 	goModFile: tg.File,
 ): Promise<string | undefined> => {
-	const content = await goModFile.text();
+	const content = await goModFile.text;
 	for (const line of content.split("\n")) {
 		const trimmed = line.trim();
 		if (trimmed.startsWith("go ")) {
@@ -686,7 +686,7 @@ const findGoPackages = async (
 	dir: tg.Directory,
 	prefix = "",
 ): Promise<string[]> => {
-	const entries = await dir.entries();
+	const entries = await dir.entries;
 	const packages: string[] = [];
 
 	// Check if current directory has Go files (is a package).
@@ -866,7 +866,7 @@ export const testCgo = async () => {
 	const executable = tg`${artifact}/bin/testcgo > ${tg.output} 2>&1`;
 	const output = await $`${executable}`
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 
 	tg.assert(
 		output.includes("Hello from C!"),
@@ -909,7 +909,7 @@ export const testPlain = async () => {
 	const executable = tg`${artifact}/bin/testplain > ${tg.output} 2>&1`;
 	const output = await $`${executable}`
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 
 	tg.assert(
 		output.includes("hello world"),
@@ -968,7 +968,7 @@ export const testNativeVendor = async () => {
 
 	// Verify the binary was built
 	const bin = await artifact.get("bin").then(tg.Directory.expect);
-	const entries = await bin.entries();
+	const entries = await bin.entries;
 	tg.assert(
 		"testvendor" in entries,
 		`Expected binary 'testvendor' to be built, found: ${Object.keys(entries).join(", ")}`,
@@ -978,7 +978,7 @@ export const testNativeVendor = async () => {
 	const executable = tg`${artifact}/bin/testvendor > ${tg.output} 2>&1`;
 	const output = await $`${executable}`
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 
 	tg.assert(
 		output.includes("Hello, world"),

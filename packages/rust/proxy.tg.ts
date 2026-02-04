@@ -46,7 +46,7 @@ export const testProxyCompiles = async () => {
 		.env(proxy())
 		.env(self())
 		.then(tg.File.expect);
-	const versionText = await version.text();
+	const versionText = await version.text;
 	tg.assert(versionText.trim().includes(VERSION));
 	return true;
 };
@@ -66,7 +66,7 @@ export const testHello = async () => {
 	const helloOutput = await $`hello-world | tee ${tg.output}`
 		.env(helloWorld)
 		.then(tg.File.expect);
-	const helloText = await helloOutput.text();
+	const helloText = await helloOutput.text;
 	tg.assert(helloText.trim() === "hello, proxy!\n128\nHello, build!");
 	return true;
 };
@@ -119,7 +119,7 @@ export const testPkgconfig = async () => {
 	const testOutput = await $`myapp | tee ${tg.output}`
 		.env(rustOutput)
 		.then(tg.File.expect);
-	const testText = await testOutput.text();
+	const testText = await testOutput.text;
 	tg.assert(testText.trim() === "You passed the number: 42");
 
 	return externalLibDir;
@@ -142,7 +142,7 @@ export const testOpenSSL = async () => {
 	const opensslOutput = await $`hello-openssl | tee ${tg.output}`
 		.env(helloOpenssl)
 		.then(tg.File.expect);
-	const opensslText = await opensslOutput.text();
+	const opensslText = await opensslOutput.text;
 	tg.assert(
 		opensslText.trim() === "Hello, from a crate that links against libssl!",
 	);
@@ -165,7 +165,7 @@ export const testWorkspace = async () => {
 	const workspaceOutput = await $`cli | tee ${tg.output}`
 		.env(helloWorkspace)
 		.then(tg.File.expect);
-	const workspaceText = await workspaceOutput.text();
+	const workspaceText = await workspaceOutput.text;
 	tg.assert(workspaceText.trim() === "Hello from a workspace!");
 
 	return true;
@@ -188,7 +188,7 @@ export const testParallelDeps = async () => {
 	const output = await $`parallel-deps | tee ${tg.output}`
 		.env(parallelDeps)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(text.includes("Found 2 matches"));
 	return true;
 };
@@ -208,7 +208,7 @@ export const testProcMacro = async () => {
 	const output = await $`app | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(text.trim() === "Hello from Greeter!");
 	return true;
 };
@@ -228,7 +228,7 @@ export const testBuildScriptCodegen = async () => {
 	const output = await $`hello-codegen | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(text.trim() === "generated at build time");
 	return true;
 };
@@ -248,7 +248,7 @@ export const testBuildScriptEnvDep = async () => {
 	const output1 = await $`hello-env-dep | tee ${tg.output}`
 		.env(build1)
 		.then(tg.File.expect);
-	const text1 = await output1.text();
+	const text1 = await output1.text;
 	tg.assert(text1.includes("first_value"));
 
 	// Build with MY_BUILD_VAR=second - should NOT use cache
@@ -265,7 +265,7 @@ export const testBuildScriptEnvDep = async () => {
 	const output2 = await $`hello-env-dep | tee ${tg.output}`
 		.env(build2)
 		.then(tg.File.expect);
-	const text2 = await output2.text();
+	const text2 = await output2.text;
 	tg.assert(text2.includes("second_value"));
 
 	return true;
@@ -286,7 +286,7 @@ export const testBuildScriptFileDep = async () => {
 	const output = await $`hello-file-dep | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(text.includes("hello from config file"));
 	return true;
 };
@@ -306,7 +306,7 @@ export const testCcRs = async () => {
 	const output = await $`hello-cc-rs | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(text.trim() === "10 + 32 = 42");
 	return true;
 };
@@ -326,7 +326,7 @@ export const testProcMacroWithDeps = async () => {
 	const output = await $`app | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(text.trim() === "Hello from Greeter!");
 	return true;
 };
@@ -372,7 +372,7 @@ export const testBindgen = async () => {
 	const output = await $`hello-bindgen | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	tg.assert(text.trim() === "6 * 7 = 42");
 	return true;
 };

@@ -181,7 +181,7 @@ export const test = async () => {
 		).build(),
 	);
 
-	const contents = (await output.text()).trim();
+	const contents = (await output.text).trim();
 	tg.assert(contents === expected);
 
 	return patchArtifact;

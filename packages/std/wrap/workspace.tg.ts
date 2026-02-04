@@ -215,7 +215,7 @@ export const rust = async (
 	tg.Blob.assert(manifestBlob);
 	const manifestFile = await tg.file(manifestBlob as tg.Blob);
 	const manifest = tg.encoding.toml.decode(
-		await manifestFile.text(),
+		await manifestFile.text,
 	) as RustupManifest;
 
 	// Install the full minimal profile for the host.

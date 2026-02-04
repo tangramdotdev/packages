@@ -168,7 +168,7 @@ export const test = async () => {
 		const artifact = await all.tryGet(name);
 		tg.assert(artifact, `Missing component: ${name}.`);
 		tg.Directory.assert(artifact);
-		const entries = await artifact.entries();
+		const entries = await artifact.entries;
 		tg.assert(Object.keys(entries).length > 0, `Empty component: ${name}.`);
 	}
 	return true;
