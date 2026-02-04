@@ -38,8 +38,8 @@ export const metadata = {
 	name: "python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: versions[defaultVersion].version,
-	tag: `python/${versions[defaultVersion].version}`,
+	version: "3.14.2",
+	tag: `python/3.14.2`,
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
