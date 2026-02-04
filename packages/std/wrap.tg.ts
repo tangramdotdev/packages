@@ -15,7 +15,8 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 	const arg = await wrap.arg(...args);
 	tg.assert(arg.executable !== undefined, "No executable was provided.");
 
-	// Check if the executable is already a wrapper and get its manifest
+	// Check if the executable is already a wrapper and get its manifest.
+	// Only ELF and Mach-O binaries can have embedded manifests.
 	let existingManifest = undefined;
 	let binary = undefined;
 	if (
@@ -27,12 +28,12 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 				? await arg.executable.resolve()
 				: arg.executable;
 		if (f instanceof tg.File) {
-			existingManifest = await wrap.Manifest.read(f);
-			if (
-				existingManifest &&
-				(await std.file.detectExecutableKind(f)) === "elf"
-			) {
-				binary = f;
+			const kind = await std.file.detectExecutableKind(f);
+			if (kind === "elf" || kind === "mach-o") {
+				existingManifest = await wrap.Manifest.read(f);
+				if (existingManifest && kind === "elf") {
+					binary = f;
+				}
 			}
 		}
 	}
@@ -632,7 +633,7 @@ export namespace wrap {
 		}
 	};
 
-	/** Utility to retrieve the existing manifest from an exectuable arg, if it's a wrapper. If not, returns `undefined`. */
+	/** Utility to retrieve the existing manifest from an executable arg, if it is a wrapper. If not, returns `undefined`. Only ELF and Mach-O binaries can have embedded manifests. */
 	export const existingManifestFromExecutableArg = async (
 		executable:
 			| undefined
@@ -649,9 +650,12 @@ export namespace wrap {
 					? await executable.resolve()
 					: executable;
 			if (f instanceof tg.File) {
-				const manifest = await wrap.Manifest.read(f);
-				if (manifest) {
-					ret = manifest;
+				const kind = await std.file.detectExecutableKind(f);
+				if (kind === "elf" || kind === "mach-o") {
+					const manifest = await wrap.Manifest.read(f);
+					if (manifest) {
+						ret = manifest;
+					}
 				}
 			}
 		}
@@ -814,6 +818,14 @@ export namespace wrap {
 	export const neededLibraries = async (
 		file: tg.File,
 	): Promise<Array<string>> => {
+		// Only ELF and Mach-O binaries can have embedded manifests.
+		const kind = await std.file.detectExecutableKind(file);
+		if (kind !== "elf" && kind !== "mach-o") {
+			await file.store();
+			throw new Error(
+				`Cannot determine needed libraries for ${file.id}: not a binary file (detected ${kind}).`,
+			);
+		}
 		const manifest = await wrap.Manifest.read(file);
 		if (!manifest) {
 			await file.store();

@@ -297,6 +297,12 @@ export const assertFileReferences = async (
 	file: tg.File,
 	interpreterKind: "normal" | "ld-musl" | "ld-linux",
 ) => {
+	// Only ELF and Mach-O binaries can have embedded manifests.
+	const kind = await std.file.detectExecutableKind(file);
+	tg.assert(
+		kind === "elf" || kind === "mach-o",
+		`Expected a binary file, but detected ${kind}.`,
+	);
 	// Ensure the interpreter is found in the manifest dependencies.
 	const fileManifest = await wrap.Manifest.read(file);
 	tg.assert(fileManifest);

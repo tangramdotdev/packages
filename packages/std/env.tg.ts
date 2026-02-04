@@ -667,12 +667,20 @@ export const envObjectFromArtifact = async (
 	artifact: tg.Artifact,
 ): Promise<env.ArgObject> => {
 	if (artifact instanceof tg.File) {
+		// Only ELF and Mach-O binaries can have embedded manifests.
+		const kind = await std.file.detectExecutableKind(artifact);
+		if (kind !== "elf" && kind !== "mach-o") {
+			const artifactId = artifact.id;
+			throw new Error(
+				`Could not read manifest from ${artifactId}: not a binary file (detected ${kind}).`,
+			);
+		}
 		// Attempt to read the manifest from the file.
 		const manifest = await std.wrap.Manifest.read(artifact);
 		if (!manifest) {
 			// If the file was not a wrapper, throw an error.
 			const artifactId = artifact.id;
-			throw new Error(`Could not read manifest from ${artifactId}`);
+			throw new Error(`Could not read manifest from ${artifactId}.`);
 		}
 		// If the file was a wrapper, return its env.
 		return await wrap.envObjectFromManifestEnv(manifest.env);

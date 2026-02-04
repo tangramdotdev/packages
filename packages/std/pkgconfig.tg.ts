@@ -45,15 +45,30 @@ Version: 1.0.0`;
 
 	const get = (key: string) => lines.find((l) => l.startsWith(`${key}=`));
 
-	tg.assert(get("prefix") === "prefix=${pcfiledir}/../..", `prefix mismatch: ${get("prefix")}`);
-	tg.assert(get("exec_prefix") === "exec_prefix=${prefix}", `exec_prefix mismatch: ${get("exec_prefix")}`);
-	tg.assert(get("libdir") === "libdir=${exec_prefix}/lib", `libdir mismatch: ${get("libdir")}`);
-	tg.assert(get("includedir") === "includedir=${prefix}/include", `includedir mismatch: ${get("includedir")}`);
+	tg.assert(
+		get("prefix") === "prefix=${pcfiledir}/../..",
+		`prefix mismatch: ${get("prefix")}`,
+	);
+	tg.assert(
+		get("exec_prefix") === "exec_prefix=${prefix}",
+		`exec_prefix mismatch: ${get("exec_prefix")}`,
+	);
+	tg.assert(
+		get("libdir") === "libdir=${exec_prefix}/lib",
+		`libdir mismatch: ${get("libdir")}`,
+	);
+	tg.assert(
+		get("includedir") === "includedir=${prefix}/include",
+		`includedir mismatch: ${get("includedir")}`,
+	);
 
 	// Test lib64 variant.
 	const lib64Input = `libdir=/some/path/lib64`;
 	const lib64Output = normalizeContent(lib64Input);
-	tg.assert(lib64Output === "libdir=${exec_prefix}/lib64", `lib64 mismatch: ${lib64Output}`);
+	tg.assert(
+		lib64Output === "libdir=${exec_prefix}/lib64",
+		`lib64 mismatch: ${lib64Output}`,
+	);
 
 	console.log("pkgconfig normalization tests passed");
 	return true;
