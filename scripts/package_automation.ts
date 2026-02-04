@@ -648,10 +648,10 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		}
 		const processId = result.value;
 
-		// Push the process.
+		// Push the tag (which also pushes the underlying artifact).
 		try {
-			log(`[release] Pushing ${processId}${ctx.lazy ? " (lazy)" : ""}`);
-			await ctx.tangram.push(processId, { lazy: ctx.lazy });
+			log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
+			await ctx.tangram.push(tag, { lazy: ctx.lazy });
 			log(`[release] Pushed ${tag}`);
 			uploadedTags.push(tag);
 		} catch (err) {
