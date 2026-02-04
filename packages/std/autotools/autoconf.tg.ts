@@ -178,7 +178,7 @@ export const patchAutom4teCfg = async (
 	const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
 	tg.assert(autom4teCfg instanceof tg.File);
 
-	const lines = (await autom4teCfg.text()).split("\n");
+	const lines = (await autom4teCfg.text).split("\n");
 
 	let contents = tg``;
 	for (const line of lines) {

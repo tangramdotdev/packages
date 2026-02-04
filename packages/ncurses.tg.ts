@@ -90,7 +90,7 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	for (const libName of libNames) {
 		const pc = tg.File.expect(await output.get(`lib/pkgconfig/${libName}w.pc`));
-		const content = await pc.text();
+		const content = await pc.text;
 		let lines = content.split("\n");
 		lines = lines.map((line) => {
 			if (line.startsWith("Libs:")) {

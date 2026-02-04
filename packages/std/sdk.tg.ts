@@ -792,7 +792,7 @@ export namespace sdk {
 				.env(env_)
 				.host(std.triple.archAndOs(detectedHost))
 				.then(tg.File.expect);
-			const host = (await output.text()).trim();
+			const host = (await output.text).trim();
 			std.triple.assert(host);
 			return host;
 		}
@@ -928,7 +928,7 @@ export namespace sdk {
 				.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 				.host(std.triple.archAndOs(expectedHost))
 				.then(tg.File.expect);
-			const outputText = (await testOutput.text()).trim();
+			const outputText = (await testOutput.text).trim();
 			tg.assert(outputText === expectedOutput);
 		}
 		return true;
@@ -1255,7 +1255,7 @@ export const assertComment = async (
 				}),
 			)
 			.then(tg.File.expect);
-	const text = await elfComment.text();
+	const text = await elfComment.text;
 	tg.assert(text.includes(textToMatch));
 };
 

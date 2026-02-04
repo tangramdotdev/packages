@@ -44,7 +44,7 @@ export const provides = async (
 	// Collect executables.
 	if (binDir !== undefined && binDir instanceof tg.Directory) {
 		for await (let [name, artifact] of binDir) {
-			if (artifact instanceof tg.File && (await artifact.executable())) {
+			if (artifact instanceof tg.File && (await artifact.executable)) {
 				binaries.push(name);
 			}
 		}

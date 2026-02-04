@@ -964,7 +964,7 @@ export namespace wrap {
 					})
 					.named("read manifest")
 					.then(tg.File.expect);
-				const manifestBytes = await manifestFile.bytes();
+				const manifestBytes = await manifestFile.bytes;
 				const manifestString = tg.encoding.utf8.decode(manifestBytes);
 				const output = tg.encoding.json.decode(
 					manifestString,
@@ -1016,7 +1016,7 @@ export namespace wrap {
 			for await (const dependencies of manifestDependencies(manifest)) {
 				dependencies_.add(dependencies.id);
 			}
-			const fileDependencies = await file.dependencyObjects();
+			const fileDependencies = await file.dependencyObjects;
 			await Promise.all(
 				fileDependencies.map(async (reference) => {
 					await reference.store();
@@ -1794,11 +1794,11 @@ const createLibraryPathSet = async (
 			}
 		}
 		if (path instanceof tg.Symlink) {
-			const artifact = await path.artifact();
+			const artifact = await path.artifact;
 			if (artifact !== undefined) {
 				tg.Directory.assert(artifact);
 				let ret: DirWithSubpath = { dir: artifact };
-				const subpath = await path.path();
+				const subpath = await path.path;
 				if (subpath !== undefined) {
 					ret = { ...ret, subpath };
 				}
@@ -2622,7 +2622,7 @@ export const testSingleArgObjectNoMutations = async () => {
 	const output = await std.build`${wrapper} > ${tg.output}`
 		.bootstrap(true)
 		.then(tg.File.expect);
-	const text = await output.text();
+	const text = await output.text;
 	console.log("text", text);
 
 	const os = std.triple.os(std.triple.host());
@@ -2740,7 +2740,7 @@ export const testContentExecutable = async () => {
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.bootstrap(true)
 		.then(tg.File.expect);
-	const text = await output.text().then((t) => t.trim());
+	const text = await output.text.then((t) => t.trim());
 	console.log("text", text);
 	tg.assert(text.includes("Tangram"));
 
@@ -2763,7 +2763,7 @@ export const testContentExecutableVariadic = async () => {
 		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.bootstrap(true)
 		.then(tg.File.expect);
-	const text = await output.text().then((t) => t.trim());
+	const text = await output.text.then((t) => t.trim());
 	console.log("text", text);
 	tg.assert(text.includes("Tangram"));
 
@@ -2801,7 +2801,7 @@ export const testDependencies = async () => {
 	});
 	await wrapper.store();
 	console.log("wrapper", wrapper.id);
-	const wrapperDependencies = await wrapper.dependencies();
+	const wrapperDependencies = await wrapper.dependencies;
 	console.log("wrapperDependencies", wrapperDependencies);
 
 	const bundle = tg.bundle(await tg.directory({ wrapper }));

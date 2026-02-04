@@ -180,7 +180,7 @@ const singlePackageArg = async (
 
 /** Assert the provided directory has contents. */
 export const nonEmpty = async (dir: tg.Directory) => {
-	const entries = await dir.entries();
+	const entries = await dir.entries;
 	tg.assert(Object.keys(entries).length > 0, "Directory is empty.");
 	return true;
 };
@@ -281,7 +281,7 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		.exitOnErr(exitOnErr)
 		.host(arg.host)
 		.then(tg.File.expect)
-		.then((file) => file.text());
+		.then((file) => file.text);
 	if (snapshot !== undefined) {
 		const normalizedSnapshot = normalizeSnapshot(snapshot);
 		const normalizedStdout = normalizeSnapshot(stdout);
@@ -326,7 +326,7 @@ export const assertFileReferences = async (
 	);
 
 	// Ensure the interpreter is found in the file dependencies.
-	const fileDependencies = await file.dependencyObjects();
+	const fileDependencies = await file.dependencyObjects;
 	tg.assert(
 		fileDependencies !== undefined && fileDependencies.length > 0,
 		"No file dependencies found.",
@@ -520,7 +520,7 @@ const getPkgConfigFlags = async (
 			await $`pkg-config --cflags --libs ${pkgConfigName} > ${tg.output}`
 				.env(env)
 				.then(tg.File.expect)
-				.then((f) => f.text())
+				.then((f) => f.text)
 				.then((text) => text.trim());
 		return flags;
 	} catch {
@@ -564,7 +564,7 @@ export const testDylib = async (arg: TestDylibArg) => {
 			await $`nm ${nmFlags} "${dylibPath}" | grep ' T ' | head -1 > ${tg.output}`
 				.env(std.sdk(arg?.sdk))
 				.then(tg.File.expect)
-				.then((f) => f.text())
+				.then((f) => f.text)
 				.catch(() => null);
 
 		if (symbols && symbols.trim()) {
@@ -759,7 +759,7 @@ export const stdoutIncludes = async (
 			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
 		})
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 	tg.assert(stdout.includes(expected));
 };
 

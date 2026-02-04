@@ -2,9 +2,7 @@
 export const requirements = async (lockFile: tg.File) => {
 	// Parse and validate the TOML.
 	console.log(`lockfile: ${lockFile.id}`);
-	const lockFileToml = tg.encoding.toml.decode(
-		await lockFile.text(),
-	) as LockFile;
+	const lockFileToml = tg.encoding.toml.decode(await lockFile.text) as LockFile;
 	let text = ``;
 
 	// poetry.lock files may contain multiple versions of the same package. We choose a heuristic to dedup packages with multiple versions, in this case by picking whichever appears first in the lock file..

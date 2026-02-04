@@ -56,7 +56,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 
 	// Parse the manifest.
 	const manifest = (await tg.encoding.toml.decode(
-		await manifestFile.text(),
+		await manifestFile.text,
 	)) as RustupManifestV2;
 
 	// Get all the available packages for the selected profile and target.

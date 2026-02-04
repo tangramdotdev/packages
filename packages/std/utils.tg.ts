@@ -165,7 +165,7 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	tg.assert(metadata.format === "shebang");
 
 	// Replace the first line with a new shebang.
-	const fileContents = await scriptFile.text();
+	const fileContents = await scriptFile.text;
 	const firstNewlineIndex = fileContents.indexOf("\n");
 	if (firstNewlineIndex === -1) {
 		return tg.unreachable(

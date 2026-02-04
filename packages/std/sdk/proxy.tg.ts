@@ -286,7 +286,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 
 		// Find objcopy. Resolve symlinks to get the actual file.
 		const binDir = await buildToolchain.get("bin").then(tg.Directory.expect);
-		for (let [name, artifact] of Object.entries(await binDir.entries())) {
+		for (let [name, artifact] of Object.entries(await binDir.entries)) {
 			if (name.endsWith("objcopy")) {
 				// If it's a symlink, resolve it to get the actual file.
 				if (artifact instanceof tg.Symlink) {
@@ -464,7 +464,7 @@ export const testBasic = async (target?: string) => {
 		)
 		.then(tg.File.expect);
 
-	const wrapperDeps = await output.dependencies();
+	const wrapperDeps = await output.dependencies;
 	const os = std.triple.os(std.triple.host());
 	// This file should have dependencies for the preload and the underlying executable. On Linux, it should alos have a library path for libc and an interpreter.
 	const expectedLength = os === "darwin" ? 2 : 3;
@@ -869,7 +869,7 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 			tg.assert(component.kind === "artifact");
 			tg.assert(component.value.startsWith("dir_"));
 			const combinedDir = tg.Directory.withId(component.value);
-			const entries = await combinedDir.entries();
+			const entries = await combinedDir.entries;
 
 			const expectedNumEntries = os === "linux" ? 5 : 4;
 			tg.assert(Object.keys(entries).length === expectedNumEntries);

@@ -235,7 +235,7 @@ export const wrapScripts = async (
 
 	const bin = tg.Directory.expect(await artifact.get("bin"));
 	for await (const [filename, file] of bin) {
-		if (file instanceof tg.File && (await file.executable())) {
+		if (file instanceof tg.File && (await file.executable)) {
 			const metadata = await std.file.executableMetadata(file);
 			if (isPythonScript(metadata, interpreterId, pythonVersionStr)) {
 				scripts.push(filename);
@@ -301,7 +301,7 @@ export const wrapVenv = async (
 	// Wrap all executable scripts in the venv's bin directory.
 	let wrappedBin = await tg.directory();
 	for await (const [name, artifact] of venvBin) {
-		if (artifact instanceof tg.File && (await artifact.executable())) {
+		if (artifact instanceof tg.File && (await artifact.executable)) {
 			const metadata = await std.file.executableMetadata(artifact);
 			// If it is a shebang script, wrap it with the venv's python interpreter.
 			if (metadata.format === "shebang") {
@@ -376,7 +376,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		pyprojectToml_ ?? (await source.get("pyproject.toml").then(tg.File.expect));
 	tg.assert(pyprojectTomlFile !== undefined, "could not locate pyproject.toml");
 	const pyprojectToml = tg.encoding.toml.decode(
-		await pyprojectTomlFile.text(),
+		await pyprojectTomlFile.text,
 	) as PyProjectToml;
 
 	// Add the source directory to the python environment.
@@ -520,7 +520,7 @@ const testVersion = async (pythonVersion?: keyof typeof versions) => {
 		await $`set -x && python -c 'print("Hello, world!")' > ${tg.output}`
 			.env(pythonEnv)
 			.then(tg.File.expect)
-			.then((f) => f.text())
+			.then((f) => f.text)
 			.then((t) => t.trim());
 	tg.assert(
 		helloOutput === "Hello, world!",
@@ -538,7 +538,7 @@ except ImportError as e:
 		await $`set -x && python ${testImportZlibScript} > ${tg.output}`
 			.env(pythonEnv)
 			.then(tg.File.expect)
-			.then((f) => f.text())
+			.then((f) => f.text)
 			.then((t) => t.trim());
 	tg.assert(
 		importZlibOutput.includes(zlib.metadata.version),
@@ -548,7 +548,7 @@ except ImportError as e:
 	const pipVersionOutput = await $`set -x && pip3 --version > ${tg.output}`
 		.env(pythonEnv)
 		.then(tg.File.expect)
-		.then((f) => f.text())
+		.then((f) => f.text)
 		.then((t) => t.trim());
 	tg.assert(
 		pipVersionOutput.includes("25.2"),
@@ -568,7 +568,7 @@ except ImportError as e:
 	const venvHelloOutput =
 		await $`set -x && ${venvPython} -c 'print("Hello from venv!")' > ${tg.output}`
 			.then(tg.File.expect)
-			.then((f) => f.text())
+			.then((f) => f.text)
 			.then((t) => t.trim());
 	tg.assert(
 		venvHelloOutput === "Hello from venv!",
@@ -580,7 +580,7 @@ except ImportError as e:
 	const venvPipVersionOutput =
 		await $`set -x && ${venvPip} --version > ${tg.output}`
 			.then(tg.File.expect)
-			.then((f) => f.text())
+			.then((f) => f.text)
 			.then((t) => t.trim());
 	tg.assert(
 		venvPipVersionOutput.includes("pip"),
@@ -597,7 +597,7 @@ except ImportError as e:
 	const venvImportOutput =
 		await $`set -x && ${venvPython} ${testImportScript} > ${tg.output}`
 			.then(tg.File.expect)
-			.then((f) => f.text())
+			.then((f) => f.text)
 			.then((t) => t.trim());
 	tg.assert(
 		venvImportOutput.includes("Standard library imports work!"),

@@ -93,14 +93,14 @@ export const test = async () => {
 	const exampleContents = await result
 		.get("example")
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 	tg.assert(exampleContents.length > 0);
 	tg.assert(exampleContents.startsWith("<!doctype html>"));
 
 	const tangramContents = await result
 		.get("tangram")
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 	tg.assert(tangramContents.length > 0);
 	tg.assert(tangramContents.startsWith("<!DOCTYPE html>"));
 	return true;

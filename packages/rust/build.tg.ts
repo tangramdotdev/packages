@@ -258,7 +258,7 @@ export const testBasicExeUnproxied = async () => {
 	const basicExeOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExe)
 		.then(tg.File.expect);
-	const basicExeText = await basicExeOutput.text();
+	const basicExeText = await basicExeOutput.text;
 	tg.assert(basicExeText.trim() === "Hello, native world!");
 
 	return true;
@@ -279,7 +279,7 @@ export const testBasicExeProxied = async () => {
 	const basicExeOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExe)
 		.then(tg.File.expect);
-	const basicExeText = await basicExeOutput.text();
+	const basicExeText = await basicExeOutput.text;
 	tg.assert(basicExeText.trim() === "Hello, native world!");
 
 	return true;
@@ -306,7 +306,7 @@ export const testBasicExeModules = async () => {
 	const basicExeModulesOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExeModules)
 		.then(tg.File.expect);
-	const basicExeModulesText = await basicExeModulesOutput.text();
+	const basicExeModulesText = await basicExeModulesOutput.text;
 	tg.assert(basicExeModulesText.trim() === "Hello from a module!");
 
 	return true;
@@ -328,7 +328,7 @@ export const testBasicExeWithLib = async () => {
 	const basicExeWithLibOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExeWithLib)
 		.then(tg.File.expect);
-	const basicExeWithLibText = await basicExeWithLibOutput.text();
+	const basicExeWithLibText = await basicExeWithLibOutput.text;
 	tg.assert(basicExeWithLibText.trim() === "Hello from a library!");
 
 	return true;
@@ -354,7 +354,7 @@ export const testExeWithCratesIoDependency = async () => {
 	const depsExeOutput = await $`${crateName} | tee ${tg.output}`
 		.env(depsExe)
 		.then(tg.File.expect);
-	const depsExeText = await depsExeOutput.text();
+	const depsExeText = await depsExeOutput.text;
 	tg.assert(depsExeText.trim() === 'b"Hello using the bytes crate!"');
 	return true;
 };
@@ -369,7 +369,7 @@ export const testConditionalCompilation = async () => {
 	const cfgDisabledOutput = await $`${crateName} | tee ${tg.output}`
 		.env(cfgDisabled)
 		.then(tg.File.expect);
-	const cfgDisabledText = await cfgDisabledOutput.text();
+	const cfgDisabledText = await cfgDisabledOutput.text;
 	tg.assert(cfgDisabledText.trim() === "optional feature disabled");
 
 	// Test with the optional feature.
@@ -382,7 +382,7 @@ export const testConditionalCompilation = async () => {
 	const cfgEnabledOutput = await $`${crateName} | tee ${tg.output}`
 		.env(cfgEnabled)
 		.then(tg.File.expect);
-	const cfgEnabledText = await cfgEnabledOutput.text();
+	const cfgEnabledText = await cfgEnabledOutput.text;
 	tg.assert(cfgEnabledText.trim() === "optional feature enabled");
 
 	return true;
@@ -416,7 +416,7 @@ export const testLinkReadline = async () => {
 		await $`export ${runtimeLibVar}=$LIBRARY_PATH\n${crateName} | tee ${tg.output}`
 			.env(std.env.arg(exe, ...deps))
 			.then(tg.File.expect);
-	const exeText = await exeOutput.text();
+	const exeText = await exeOutput.text;
 	tg.assert(exeText.trim().includes(readline.metadata.version));
 
 	return true;

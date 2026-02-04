@@ -15,7 +15,7 @@ const readFileText = async (
 	return dir
 		.get(path)
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 };
 
 const templateText = (template: tg.Template): string => {
@@ -120,7 +120,7 @@ export const parentBuild = async (
 		// Read pkgAOption from leaf (which uses pkgABuild).
 		const optionFile = await leafDir.tryGet("lib/pkgAOption");
 		if (optionFile) {
-			libFiles.leafOption = tg.file(await tg.File.expect(optionFile).text());
+			libFiles.leafOption = tg.file(await tg.File.expect(optionFile).text);
 		}
 	}
 	return tg.directory({ lib: tg.directory(libFiles) });

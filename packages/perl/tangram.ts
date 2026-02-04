@@ -161,7 +161,7 @@ export const test = async () => {
 	const output = await $`perl -e 'print "hello\n"' > ${tg.output}`
 		.env(build())
 		.then(tg.File.expect)
-		.then((f) => f.text());
+		.then((f) => f.text);
 	tg.assert(output === "hello\n");
 
 	return true;

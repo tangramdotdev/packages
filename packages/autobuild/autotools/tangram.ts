@@ -41,7 +41,7 @@ export const needsReconf = async (
 	sourceArg: tg.Unresolved<tg.Directory>,
 ): Promise<boolean> => {
 	const source = await tg.resolve(sourceArg);
-	const entries = await source.entries();
+	const entries = await source.entries;
 	const hasFile = (name: string) =>
 		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
 	return hasFile("configure.ac") && !hasFile("configure");

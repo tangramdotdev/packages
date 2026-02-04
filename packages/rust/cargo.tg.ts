@@ -333,7 +333,7 @@ directory = "${vendoredDir}"`;
 	const bins: Record<string, tg.Artifact> = {};
 	for await (const [name, artifact] of releaseDir) {
 		if (artifact instanceof tg.File) {
-			if (await artifact.executable()) {
+			if (await artifact.executable) {
 				bins[name] = artifact;
 			}
 		}
@@ -376,7 +376,7 @@ export const vendoredSources = async (
 			.then(tg.Directory.expect);
 		const config = await vendorResult.get("config").then(tg.File.expect);
 
-		const text = await config.text();
+		const text = await config.text;
 		const match = /tg_vendor_dir/g.exec(text);
 		tg.assert(match);
 		return tg`${text.substring(
@@ -432,7 +432,7 @@ export const extractCargoManifests = async (
 				// Recurse into subdirectories.
 				const subManifests = await extractManifests(artifact, fullPath);
 				// Only include if it has content.
-				const entries = await subManifests.entries();
+				const entries = await subManifests.entries;
 				if (Object.keys(entries).length > 0) {
 					result = await tg.directory(result, { [name]: subManifests });
 				}
@@ -518,7 +518,7 @@ export const vendorDependencies = async (
 	};
 
 	const cargoLockToml = tg.encoding.toml.decode(
-		await cargoLock.text(),
+		await cargoLock.text,
 	) as CargoLock;
 	const downloads = cargoLockToml.package
 		.filter((pkg) => {
@@ -573,12 +573,12 @@ export const vendorPackage = async (
 	const stack: Array<[string, tg.Directory]> = [["", pkg]];
 	while (!(stack.length == 0)) {
 		const [path, dir] = stack.pop() as [string, tg.Directory];
-		for (let [subpath, artifact] of Object.entries(await dir.entries())) {
+		for (let [subpath, artifact] of Object.entries(await dir.entries)) {
 			subpath = `${path}${subpath}`;
 			if (artifact instanceof tg.Directory) {
 				stack.push([`${subpath}/`, artifact]);
 			} else if (artifact instanceof tg.File) {
-				const bytes = await artifact.bytes();
+				const bytes = await artifact.bytes;
 				const checksum = await tg.checksum(bytes, "sha256");
 				cargoChecksum.files[subpath] = checksum.replace("sha256:", "");
 			} else {
@@ -630,7 +630,7 @@ export const testUnproxiedWorkspace = async () => {
 	const helloOutput = await $`
 		${helloWorkspace}/bin/cli >> ${tg.output}
 	`.then(tg.File.expect);
-	const helloText = await helloOutput.text();
+	const helloText = await helloOutput.text;
 	tg.assert(helloText.trim() === "Hello from a workspace!");
 
 	const helloOpenssl = build({
@@ -644,7 +644,7 @@ export const testUnproxiedWorkspace = async () => {
 	const openSslOutput = await $`
 		${helloOpenssl}/bin/hello-openssl >> ${tg.output}
 	`.then(tg.File.expect);
-	const openSslText = await openSslOutput.text();
+	const openSslText = await openSslOutput.text;
 	tg.assert(
 		openSslText.trim() === "Hello, from a crate that links against libssl!",
 	);

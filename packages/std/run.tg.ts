@@ -292,7 +292,7 @@ export const testDollar = async () => {
 		.env({ TOOL: "tangram" })
 		.env({ NAME: tg.Mutation.suffix("L.", " ") })
 		.then(tg.File.expect);
-	const actual = await output.text();
+	const actual = await output.text;
 	const expected = "hello there!!!\nben L.\ntangram\n";
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;
@@ -310,7 +310,7 @@ export const testDollarBootstrap = async () => {
 		.env({ NAME: tg.Mutation.suffix("L.", " ") })
 		.env(utils)
 		.then(tg.File.expect);
-	const actual = await output.text();
+	const actual = await output.text;
 	const expected = "hello there!!!\nben L.\ntangram\n";
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;
@@ -323,7 +323,7 @@ export const testEnvClear = async () => {
 		.env({ BAR: "bar!" })
 		.env(tg.Mutation.set({ BAZ: "baz!" }))
 		.then(tg.File.expect);
-	const actual = await output.text();
+	const actual = await output.text;
 	console.log("actual", actual);
 	tg.assert(actual.includes("baz!"), "expected output to contain `baz!`");
 	tg.assert(!actual.includes("foo!"), "expected output to not contain `foo!`");
