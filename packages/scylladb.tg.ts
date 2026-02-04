@@ -6,8 +6,8 @@ export const metadata = {
 	license: "AGPL-3.0",
 	name: "scylladb",
 	repository: "https://github.com/scylladb/scylladb",
-	version: "2025.3.4",
-	tag: "scylladb/2025.3.4",
+	version: "2025.4.2",
+	tag: "scylladb/2025.4.2",
 	provides: {
 		binaries: ["scylla", "iotune", "nodetool"],
 	},
@@ -24,11 +24,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	const arch = std.triple.arch(host);
 
 	const { version } = metadata;
-	const buildId = "0.20251116.898f193ef677";
+	const buildId = "0.20260116.64039588dbe6";
 	const checksum = linuxChecksums[arch];
 	tg.assert(checksum !== undefined, `no checksum available for ${arch}`);
 
-	const baseUrl = `https://downloads.scylladb.com/downloads/scylla/relocatable/scylladb-2025.3`;
+	const baseUrl = `https://downloads.scylladb.com/downloads/scylla/relocatable/scylladb-2025.4`;
 	const fileName = `scylla-${version}-${buildId}.${arch}.tar.gz`;
 	const url = `${baseUrl}/${fileName}`;
 
@@ -79,9 +79,9 @@ export default build;
 
 const linuxChecksums: { [key: string]: tg.Checksum } = {
 	x86_64:
-		"sha256:22dc64611017d16d3d99f4fee90d29d4041d1c3fdabe3b9739ec68719a12076a",
+		"sha256:9f9634584f0941d1c2fb28033710cf517721205a8f39f1f5a425e53017457c35",
 	aarch64:
-		"sha256:7042d46555411769e6ee6ca935bdfb792df7168119ca3f8d602ab2ce08f18b76",
+		"sha256:3431416c4f7d332b67dae00999a0e73f4499550b544c75f5a1ec931f0dad4c19",
 };
 
 export const test = async () => {
