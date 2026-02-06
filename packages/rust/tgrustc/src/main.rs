@@ -580,7 +580,10 @@ async fn run_proxy(args: Args) -> tg::Result<()> {
 		.build();
 	let command_id = command.store(tg).await?;
 	let mut command_ref = tg::Referent::with_item(command_id.clone());
-	command_ref.options.name.replace("rustc".into());
+	command_ref
+		.options
+		.name
+		.replace(format!("rustc {}", args.crate_name));
 
 	// Spawn the process.
 	let (process, process_id) = {
