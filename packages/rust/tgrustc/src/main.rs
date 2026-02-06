@@ -27,6 +27,21 @@ fn main_inner() -> tg::Result<()> {
 		return run_driver();
 	}
 
+	// Check if we are running in runner driver mode (build script inside sandbox).
+	if std::env::var("TGRUSTC_RUNNER_DRIVER_MODE").is_ok() {
+		return run_runner_driver();
+	}
+
+	// Runner mode: tgrustc runner <build-script-binary> [args...]
+	let first_arg = std::env::args().nth(1);
+	if first_arg.as_deref() == Some("runner") {
+		return tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.unwrap()
+			.block_on(run_runner());
+	}
+
 	let args = Args::parse()?;
 	#[cfg(feature = "tracing")]
 	tracing::info!(?args, "parsed arguments");
@@ -266,6 +281,437 @@ fn run_driver() -> tg::Result<()> {
 
 	// If we get here, exec failed.
 	Err(tg::error!("failed to exec rustc: {error}"))
+}
+
+/// Run in runner driver mode inside the Tangram sandbox, executing a build script.
+fn run_runner_driver() -> tg::Result<()> {
+	#[cfg(feature = "tracing")]
+	tracing::info!("running in runner driver mode");
+
+	let tangram_output = std::env::var("TANGRAM_OUTPUT")
+		.map_err(|_| tg::error!("TANGRAM_OUTPUT is not set in runner driver mode"))?;
+	let source_dir = std::env::var("TGRUSTC_RUNNER_SOURCE")
+		.map_err(|_| tg::error!("TGRUSTC_RUNNER_SOURCE is not set in runner driver mode"))?;
+
+	// Create output structure: out_dir/ for build script outputs, log/ for stdout/stderr.
+	let out_dir_path = format!("{tangram_output}/out_dir");
+	let log_path = format!("{tangram_output}/log");
+	std::fs::create_dir_all(&out_dir_path)
+		.map_err(|e| tg::error!("failed to create {out_dir_path}: {e}"))?;
+	std::fs::create_dir_all(&log_path)
+		.map_err(|e| tg::error!("failed to create {log_path}: {e}"))?;
+
+	// Redirect stdout/stderr to log files.
+	let stdout_file = std::fs::File::create(format!("{log_path}/stdout"))
+		.map_err(|e| tg::error!("failed to create stdout log: {e}"))?;
+	let stderr_file = std::fs::File::create(format!("{log_path}/stderr"))
+		.map_err(|e| tg::error!("failed to create stderr log: {e}"))?;
+	rustix::stdio::dup2_stdout(&stdout_file)
+		.map_err(|e| tg::error!("failed to redirect stdout: {e}"))?;
+	rustix::stdio::dup2_stderr(&stderr_file)
+		.map_err(|e| tg::error!("failed to redirect stderr: {e}"))?;
+
+	// Build script binary is argv[1] (passed as command arg from outer runner).
+	let script_binary = std::env::args()
+		.nth(1)
+		.ok_or_else(|| tg::error!("expected build script binary path as argument"))?;
+
+	#[cfg(feature = "tracing")]
+	tracing::info!(?script_binary, ?source_dir, ?out_dir_path, "executing build script");
+
+	// Exec the build script with OUT_DIR and CARGO_MANIFEST_DIR set.
+	let error = std::process::Command::new(&script_binary)
+		.current_dir(&source_dir)
+		.env("OUT_DIR", &out_dir_path)
+		.env("CARGO_MANIFEST_DIR", &source_dir)
+		.exec();
+
+	Err(tg::error!("failed to exec build script: {error}"))
+}
+
+/// Run the runner (outer half): content-address inputs, spawn a Tangram process
+/// for build script execution, then write outputs back to cargo's OUT_DIR.
+#[allow(clippy::too_many_lines)]
+async fn run_runner() -> tg::Result<()> {
+	#[cfg(feature = "tracing")]
+	let start_time = std::time::Instant::now();
+
+	// The build script binary is argv[2] (argv[0]=tgrustc, argv[1]="runner").
+	let script_binary = std::env::args()
+		.nth(2)
+		.ok_or_else(|| tg::error!("expected build script binary path after 'runner'"))?;
+
+	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
+
+	#[cfg(feature = "tracing")]
+	let _span =
+		tracing::info_span!("runner", crate = %crate_name, binary = %script_binary).entered();
+
+	// On macOS, ad-hoc sign the build script binary before content-addressing it.
+	// The Tangram sandbox requires signed binaries to exec, and the proxy-compiled
+	// build script is unsigned. Signing here means the signed binary gets cached.
+	if cfg!(target_os = "macos") {
+		if let Ok(codesign_path) = std::env::var("TGRUSTC_RUNNER_CODESIGN") {
+			let status = std::process::Command::new(&codesign_path)
+				.args(["sign", &script_binary])
+				.status()
+				.map_err(|e| tg::error!("failed to run rcodesign: {e}"))?;
+			if !status.success() {
+				return Err(tg::error!("rcodesign failed with status {status}"));
+			}
+			#[cfg(feature = "tracing")]
+			tracing::info!("signed build script binary before checkin");
+		}
+	}
+
+	// Create a client.
+	let tg = tg::Client::with_env()?;
+	let tg = &tg;
+
+	// Content-address the three inputs concurrently.
+	let script_future = async {
+		// Read the (signed) binary and create a file artifact with executable flag.
+		// Using tg::File::builder ensures the executable flag is set, which is critical
+		// for the inner sandbox to materialize the file with execute permissions.
+		let contents = tokio::fs::read(&script_binary).await
+			.map_err(|e| tg::error!("failed to read build script binary: {e}"))?;
+		let blob = tg::Blob::with_reader(tg, std::io::Cursor::new(contents)).await?;
+		let file = tg::File::builder(blob).executable(true).build();
+		let artifact: tg::Artifact = file.into();
+		Ok::<_, tg::Error>(tangram_std::template_from_artifact(artifact).into())
+	};
+
+	let source_future = async {
+		let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+			.map_err(|_| tg::error!("CARGO_MANIFEST_DIR is not set"))?;
+		content_address_path(tg, &manifest_dir).await
+	};
+
+	let executable_future = async {
+		if let Ok(path) = std::env::var("TGRUSTC_DRIVER_EXECUTABLE") {
+			let (artifact, _) = extract_artifact_from_path(tg, &path).await?;
+			Ok::<_, tg::Error>(
+				artifact
+					.try_unwrap_file()
+					.map_err(|_| tg::error!("expected file in TGRUSTC_DRIVER_EXECUTABLE"))?
+					.into(),
+			)
+		} else {
+			let self_exe = std::env::current_exe()
+				.map_err(|e| tg::error!("failed to get current executable: {e}"))?;
+			let artifact = tg::checkin(
+				tg,
+				tg::checkin::Arg {
+					options: tg::checkin::Options {
+						deterministic: true,
+						ignore: false,
+						lock: None,
+						..Default::default()
+					},
+					path: self_exe,
+					updates: vec![],
+				},
+			)
+			.await?;
+			Ok(artifact
+				.try_unwrap_file()
+				.map_err(|_| tg::error!("expected file from tgrustc checkin"))?
+				.into())
+		}
+	};
+
+	let (script_value, source_value, executable): (
+		tg::Value,
+		tg::Value,
+		tg::command::Executable,
+	) = futures::future::try_join3(script_future, source_future, executable_future).await?;
+
+	// Unrender the environment, filtering out vars that should not be part of the cache key.
+	let mut env = BTreeMap::new();
+	for (name, value) in std::env::vars().filter(|(name, _)| {
+		!RUNNER_BLACKLISTED_ENV_VARS.contains(&name.as_str())
+	}) {
+		// Filter path-like variables.
+		let value = if name == "DYLD_FALLBACK_LIBRARY_PATH" || name == "LD_LIBRARY_PATH" {
+			filter_path_var(&value, &["/usr/lib", "/usr/local/lib", "/lib"])
+		} else if name == "PATH" {
+			filter_path_var(
+				&value,
+				&["/usr/bin", "/usr/local/bin", "/bin", "/sbin", "/usr/sbin"],
+			)
+		} else {
+			value
+		};
+
+		let value = tangram_std::unrender(&value)?;
+		env.insert(name, value.into());
+	}
+
+	// Set runner driver mode environment variables.
+	env.insert(
+		"TGRUSTC_RUNNER_DRIVER_MODE".to_owned(),
+		"1".to_owned().into(),
+	);
+	env.insert("TGRUSTC_RUNNER_SOURCE".to_owned(), source_value);
+
+	// Build the command: executable is tgrustc (self-as-driver), arg is the build script binary.
+	let command_args: Vec<tg::Value> = vec![script_value];
+
+	let host_str = host().to_string();
+	let command = tg::Command::builder(host_str, executable)
+		.args(command_args)
+		.env(env)
+		.build();
+	let command_id = command.store(tg).await?;
+	let mut command_ref = tg::Referent::with_item(command_id.clone());
+	command_ref
+		.options
+		.name
+		.replace(format!("build-script {crate_name}"));
+
+	// Spawn the process.
+	let (process, process_id) = {
+		let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
+		spawn_arg.network = false;
+
+		#[cfg(feature = "tracing")]
+		tracing::info!("spawning runner process for {}", crate_name);
+
+		let stream = tg::Process::spawn(tg, spawn_arg).await?;
+		let process = pin!(stream)
+			.try_last()
+			.await?
+			.ok_or_else(|| tg::error!("expected an event"))?
+			.try_unwrap_output()
+			.ok()
+			.ok_or_else(|| tg::error!("expected the output"))?;
+		let process_id = process.id().clone();
+
+		#[cfg(feature = "tracing")]
+		tracing::info!(?process_id, "spawned runner process");
+
+		(process, process_id)
+	};
+
+	// Wait for the process output.
+	let wait = process.wait(tg, tg::process::wait::Arg::default()).await?;
+
+	if wait.exit != 0 {
+		// Try to get stderr from the output.
+		let stderr_bytes: Option<Vec<u8>> = async {
+			let output_obj = wait.output.as_ref()?.clone().try_unwrap_object().ok()?;
+			let output_dir = output_obj.try_unwrap_directory().ok()?;
+			let stderr_file = output_dir
+				.get(tg, "log/stderr")
+				.await
+				.ok()?
+				.try_unwrap_file()
+				.ok()?;
+			let bytes = stderr_file.contents(tg).await.ok()?.bytes(tg).await.ok()?;
+			Some(bytes)
+		}
+		.await;
+		if let Some(bytes) = stderr_bytes.filter(|b| !b.is_empty()) {
+			let stderr_str = String::from_utf8_lossy(&bytes);
+			eprintln!(
+				"Runner process stderr for crate '{crate_name}':\n{stderr_str}"
+			);
+		}
+		eprintln!(
+			"Runner process failed for crate '{crate_name}'. View logs with: tangram log {process_id}"
+		);
+		return Err(tg::error!("the runner process exited with code {}", wait.exit));
+	}
+
+	let output = wait.output.unwrap_or(tg::Value::Null);
+	let output = output
+		.try_unwrap_object()
+		.map_err(|source| {
+			tg::error!(
+				!source,
+				"expected runner process {process_id} to produce an object"
+			)
+		})?
+		.try_unwrap_directory()
+		.map_err(|source| {
+			tg::error!(
+				!source,
+				"expected runner process {process_id} to produce a directory"
+			)
+		})?;
+
+	#[cfg(feature = "tracing")]
+	let cached = process.token().is_none();
+
+	// Read stdout, stderr, and out_dir from the output concurrently.
+	let (stdout, stderr, out_dir) = futures::future::try_join3(
+		async {
+			output
+				.get(tg, &"log/stdout")
+				.await?
+				.try_unwrap_file()
+				.unwrap()
+				.contents(tg)
+				.await?
+				.bytes(tg)
+				.await
+		},
+		async {
+			output
+				.get(tg, &"log/stderr")
+				.await?
+				.try_unwrap_file()
+				.unwrap()
+				.contents(tg)
+				.await?
+				.bytes(tg)
+				.await
+		},
+		async {
+			output
+				.get(tg, "out_dir")
+				.await?
+				.try_unwrap_directory()
+				.map_err(|_| {
+					tg::error!(
+						"expected 'out_dir' directory in output from runner process {process_id}"
+					)
+				})
+		},
+	)
+	.await?;
+
+	// Write OUT_DIR contents to cargo's OUT_DIR path.
+	let cargo_out_dir = std::env::var("OUT_DIR")
+		.map_err(|_| tg::error!("OUT_DIR is not set in runner mode"))?;
+	write_out_dir_to_cargo(tg, &out_dir, &PathBuf::from(&cargo_out_dir)).await?;
+
+	// Replay stdout (critical: cargo reads cargo: directives from it).
+	tokio::io::stdout()
+		.write_all(&stdout)
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to write stdout"))?;
+	// Replay stderr.
+	tokio::io::stderr()
+		.write_all(&stderr)
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to write stderr"))?;
+
+	#[cfg(feature = "tracing")]
+	{
+		let elapsed = start_time.elapsed();
+		tracing::info!(
+			crate_name = %crate_name,
+			elapsed_ms = elapsed.as_millis(),
+			cached,
+			process_id = %process_id,
+			command_id = %command_id,
+			"runner_complete"
+		);
+	}
+
+	Ok(())
+}
+
+/// Write the contents of a runner output directory to cargo's OUT_DIR path.
+/// Recursively writes files and creates subdirectories.
+async fn write_out_dir_to_cargo(
+	tg: &impl tg::Handle,
+	out_dir: &tg::Directory,
+	target_path: &Path,
+) -> tg::Result<()> {
+	// Create the target directory if it does not exist.
+	if !target_path.exists() {
+		tokio::fs::create_dir_all(target_path)
+			.await
+			.map_err(|error| {
+				tg::error!(
+					source = error,
+					"failed to create directory {}",
+					target_path.display()
+				)
+			})?;
+	}
+
+	let entries: Vec<_> = out_dir.entries(tg).await?.into_iter().collect();
+
+	let futures = entries.into_iter().map(|(name, artifact)| {
+		let target_path = target_path.to_owned();
+		async move {
+			let to = target_path.join(&name);
+
+			// Remove existing file/symlink if present.
+			if to.exists() || to.is_symlink() {
+				if to.is_dir() {
+					tokio::fs::remove_dir_all(&to).await.ok();
+				} else {
+					tokio::fs::remove_file(&to).await.ok();
+				}
+			}
+
+			match artifact {
+				tg::Artifact::Directory(dir) => {
+					// Recurse into subdirectories.
+					Box::pin(write_out_dir_to_cargo(tg, &dir, &to)).await?;
+				},
+				tg::Artifact::File(file) => {
+					let bytes = file.bytes(tg).await?;
+					tokio::fs::write(&to, &bytes).await.map_err(|error| {
+						tg::error!(source = error, "failed to write file {}", to.display())
+					})?;
+					// Set appropriate permissions.
+					let is_executable = file.executable(tg).await.unwrap_or(false);
+					let mode = if is_executable {
+						0o755
+					} else {
+						0o644
+					};
+					let permissions = std::fs::Permissions::from_mode(mode);
+					tokio::fs::set_permissions(&to, permissions)
+						.await
+						.map_err(|error| {
+							tg::error!(
+								source = error,
+								"failed to set permissions on {}",
+								to.display()
+							)
+						})?;
+				},
+				tg::Artifact::Symlink(symlink) => {
+					// Resolve the symlink to its underlying artifact.
+					if let Some(resolved) = symlink.try_resolve(tg).await? {
+						match resolved {
+							tg::Artifact::File(file) => {
+								let bytes = file.bytes(tg).await?;
+								tokio::fs::write(&to, &bytes).await.map_err(|error| {
+									tg::error!(source = error, "failed to write file {}", to.display())
+								})?;
+							},
+							tg::Artifact::Directory(dir) => {
+								Box::pin(write_out_dir_to_cargo(tg, &dir, &to)).await?;
+							},
+							_ => {},
+						}
+					} else if let Some(path) = symlink.path(tg).await? {
+						// Relative path symlink without an artifact.
+						tokio::fs::symlink(&path, &to).await.map_err(|error| {
+							tg::error!(
+								source = error,
+								"failed to create symlink {}",
+								to.display()
+							)
+						})?;
+					}
+				},
+			}
+
+			Ok::<_, tg::Error>(())
+		}
+	});
+
+	futures::future::try_join_all(futures).await?;
+
+	Ok(())
 }
 
 /// Run the proxy.
@@ -794,6 +1240,44 @@ const BLACKLISTED_ENV_VARS: [&str; 17] = [
 	// Rustc doesn't need these; we set current_dir to the crate source.
 	"CARGO_MANIFEST_DIR",
 	"CARGO_MANIFEST_PATH",
+];
+
+// Environment variables that must be filtered out in runner mode.
+// These either vary per outer build or are set by the inner driver.
+const RUNNER_BLACKLISTED_ENV_VARS: [&str; 22] = [
+	// Proxy/runner-specific vars.
+	"TGRUSTC_TRACING",
+	"TGRUSTC_DRIVER_EXECUTABLE",
+	"TGRUSTC_RUNNER_DRIVER_MODE",
+	"TGRUSTC_RUNNER_SOURCE",
+	// The rcodesign binary is used by the outer runner for signing before checkin.
+	// It is not needed inside the inner process and should not affect the cache key.
+	"TGRUSTC_RUNNER_CODESIGN",
+	// Tangram vars.
+	"TANGRAM_HOST",
+	"TANGRAM_URL",
+	"TANGRAM_OUTPUT",
+	"TANGRAM_PROCESS",
+	// Build-specific paths that vary per cargo invocation.
+	"HOME",
+	"PWD",
+	"TARGET_DIR",
+	"CARGO_TARGET_DIR",
+	"SOURCE",
+	// OUT_DIR is the output, not an input. The inner driver sets it.
+	"OUT_DIR",
+	// Language-specific path vars that build scripts do not need.
+	"NODE_PATH",
+	"PYTHONPATH",
+	// CARGO_HOME is cargo-specific.
+	"CARGO_HOME",
+	// CARGO_MANIFEST_DIR varies with the build. The inner driver sets it from TGRUSTC_RUNNER_SOURCE.
+	"CARGO_MANIFEST_DIR",
+	"CARGO_MANIFEST_PATH",
+	// RUSTC_WRAPPER is used by cargo for the proxy, not relevant inside build scripts.
+	"RUSTC_WRAPPER",
+	// CARGO_MAKEFLAGS contains jobserver fds that do not work inside the Tangram sandbox.
+	"CARGO_MAKEFLAGS",
 ];
 
 /// Filter a colon-separated path variable, keeping only paths matching allowed prefixes

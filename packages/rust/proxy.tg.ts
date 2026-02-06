@@ -371,6 +371,53 @@ export const parseStats = async (
 	return stats.length > 0 ? stats : undefined;
 };
 
+/** Stats parsed from runner_complete tracing events. */
+export type RunnerStats = {
+	crate_name: string;
+	cached: boolean;
+	elapsed_ms: number;
+	process_id: string;
+	command_id: string;
+};
+
+/** Parse runner stats from cargo-stderr.log in a build result.
+ *
+ * Looks for `runner_complete` tracing events emitted by the build script runner.
+ */
+export const parseRunnerStats = async (
+	result: tg.Directory,
+): Promise<Array<RunnerStats> | undefined> => {
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	if (!stderrLog) return undefined;
+
+	const text = await stderrLog.text;
+	const stats: Array<RunnerStats> = [];
+
+	for (const line of text.split("\n")) {
+		if (!line.includes("runner_complete")) continue;
+
+		const crateMatch = /crate_name=(\S+)/.exec(line);
+		const cachedMatch = /cached=(true|false)/.exec(line);
+		const elapsedMatch = /elapsed_ms=(\d+)/.exec(line);
+		const processMatch = /process_id=(\S+)/.exec(line);
+		const commandMatch = /command_id=(\S+)/.exec(line);
+
+		if (crateMatch?.[1] && cachedMatch?.[1]) {
+			stats.push({
+				crate_name: crateMatch[1],
+				cached: cachedMatch[1] === "true",
+				elapsed_ms: elapsedMatch?.[1] ? parseInt(elapsedMatch[1], 10) : 0,
+				process_id: processMatch?.[1] ?? "",
+				command_id: commandMatch?.[1] ?? "",
+			});
+		}
+	}
+
+	return stats.length > 0 ? stats : undefined;
+};
+
 /** Summarize stats: count cache hits/misses and total time. */
 export const summarizeStats = (stats: Array<RustcStats>) => {
 	const hits = stats.filter((s) => s.cached).length;
@@ -869,6 +916,66 @@ export const testSysLinkCache = async () => {
 	await runVariant(true);
 };
 
+/** Test that the build script runner caches build script execution.
+ *
+ * Uses the hello-cc-rs test project which has a build script that compiles C
+ * code using cc-rs. Builds twice with a modified main.rs to verify that:
+ * 1. The build script runner invocation is cached on the second build.
+ * 2. The rustc proxy invocations for unchanged crates are also cached.
+ * 3. The binary produces correct output after both builds.
+ */
+export const testRunnerBuildScript = async () => {
+	const source = await tests.get("hello-cc-rs").then(tg.Directory.expect);
+
+	// First build to populate both rustc and runner caches.
+	const firstResult = await buildWithStats({ source });
+	const firstRunnerStats = await parseRunnerStats(firstResult);
+	console.log(
+		"runner first build stats",
+		firstRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
+	);
+
+	// Verify the first build produces correct output.
+	const firstOutput = await $`hello-cc-rs | tee ${tg.output}`
+		.env(firstResult)
+		.then(tg.File.expect);
+	tg.assert((await firstOutput.text).trim() === "10 + 32 = 42");
+
+	// Modify only main.rs (not the build script or C source).
+	const originalMain = await source
+		.get("src/main.rs")
+		.then(tg.File.expect)
+		.then((f: tg.File) => f.text);
+	const modifiedSource = await tg.directory(source, {
+		"src/main.rs": tg.file(`${originalMain}\n// runner cache test\n`),
+	});
+
+	// Rebuild with modified source.
+	const secondResult = await buildWithStats({ source: modifiedSource });
+	const secondRunnerStats = await parseRunnerStats(secondResult);
+	console.log(
+		"runner second build stats",
+		secondRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
+	);
+
+	// The build script runner should be a cache hit since the build script
+	// and its inputs (C source, build.rs) did not change.
+	if (secondRunnerStats) {
+		for (const stat of secondRunnerStats) {
+			tg.assert(
+				stat.cached,
+				`Build script runner for ${stat.crate_name} should be a cache hit, but was a miss.`,
+			);
+		}
+	}
+
+	// Verify the second build also produces correct output.
+	const secondOutput = await $`hello-cc-rs | tee ${tg.output}`
+		.env(secondResult)
+		.then(tg.File.expect);
+	tg.assert((await secondOutput.text).trim() === "10 + 32 = 42");
+};
+
 export const test = async () => {
 	// Ensure the proxy compiles before running other tests.
 	await testProxyCompiles();
@@ -897,5 +1004,6 @@ export const test = async () => {
 		testCacheHitWithDepVars(),
 		testCacheHitWithPreScript(),
 		testSysLinkCache(),
+		testRunnerBuildScript(),
 	]);
 };

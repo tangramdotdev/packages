@@ -1,5 +1,7 @@
 import * as std from "std" with { local: "../std" };
+import openssl from "openssl" with { local: "../openssl.tg.ts" };
 import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
+import zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
 import { $ } from "std" with { local: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
@@ -120,6 +122,76 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 	};
 };
 
+/** The pinned commit hash for the tangramdotdev/cargo fork that implements host.runner. */
+const CARGO_FORK_COMMIT = "62633a64a1463ae3785e632e06a72ee7f7f4b028";
+
+/** Build the tangramdotdev/cargo fork which supports the host.runner config option. */
+export const forkCargo = async (arg?: {
+	host?: string;
+}): Promise<tg.Directory> => {
+	const host = arg?.host ?? std.triple.host();
+	const rustHost = rustTriple(host);
+
+	// Download source archive from GitHub, pinned to the commit hash.
+	const sourceArchive = await std.download.extractArchive({
+		url: `https://github.com/tangramdotdev/cargo/archive/${CARGO_FORK_COMMIT}.tar.gz`,
+		checksum: "sha256:any",
+	});
+	const source = await std.directory.unwrap(
+		tg.Directory.expect(sourceArchive),
+	);
+
+	// Build with stable Rust (the fork's MSRV matches our stable version).
+	// Cargo requires OpenSSL for HTTP/git transport.
+	const result = await build({
+		source,
+		env: std.env.arg(openssl(), pkgconf()),
+		proxy: false,
+		useCargoVendor: true,
+	});
+
+	// Wrap the binary with zlib and rust library paths.
+	const cargoFile = await result.get("bin/cargo").then(tg.File.expect);
+	const zlibArtifact = await zlib({ host });
+	const rustArtifact = await tg.build(self, { host: rustHost });
+	let wrapped = await std.wrap(cargoFile, {
+		libraryPaths: [tg`${zlibArtifact}/lib`],
+	});
+	wrapped = await std.wrap(wrapped, {
+		libraryPaths: [tg`${rustArtifact}/lib`],
+		libraryPathStrategy: "none",
+	});
+	return tg.directory({ "bin/cargo": wrapped });
+};
+
+/** Download the rcodesign binary for ad-hoc code signing on macOS. */
+const rcodesign = async (host?: string): Promise<tg.File> => {
+	const host_ = host ?? std.triple.host();
+	let target = undefined;
+	const checksums: Record<string, tg.Checksum> = {
+		["aarch64-apple-darwin"]:
+			"sha256:d1a532150adaf90048260d76359261aa716abafc45c53c5dc18845029184334a",
+		["x86_64-apple-darwin"]:
+			"sha256:14ef11bedd51a8d95eafd767939ae96d5900e5a61511bef75bb21db6e7c74140",
+	};
+	if (std.triple.os(host_) === "darwin") {
+		target = `${std.triple.arch(host_)}-apple-darwin`;
+	}
+	tg.assert(target, "rcodesign is only available on macOS");
+	const checksum = Object.entries(checksums).find(
+		([key]) => key === target,
+	)?.[1];
+	tg.assert(checksum);
+	const version = "0.29.0";
+	const url = `https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${version}/apple-codesign-${version}-${target}.tar.gz`;
+	const release = await tg
+		.download(url, checksum, { mode: "extract" })
+		.then(tg.Directory.expect);
+	return release
+		.get(`apple-codesign-${version}-${target}/rcodesign`)
+		.then(tg.File.expect);
+};
+
 export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
 
@@ -182,7 +254,14 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
-	const rustArtifact = await tg.build(self, { host: rustHost, target });
+	let rustArtifact = await tg.build(self, { host: rustHost, target });
+	if (proxy) {
+		// When using the proxy, overlay the fork cargo which supports host.runner.
+		const fork = await forkCargo({ host: rustHost });
+		rustArtifact = await tg.directory(rustArtifact, {
+			"bin/cargo": await fork.get("bin/cargo").then(tg.File.expect),
+		});
+	}
 	envs.push(rustArtifact);
 	if (pkgConfig) {
 		envs.push(await tg.build(pkgconf, { host }));
@@ -211,6 +290,17 @@ replace-with = "vendored-sources"
 
 [source.vendored-sources]
 directory = "${vendoredDir}"`;
+	}
+
+	// When using the proxy, resolve the proxy directory once for reuse.
+	const proxyDir = proxy ? proxy_.proxy() : undefined;
+
+	// When using the proxy, add the host.runner config to wrap build script execution.
+	if (proxy && proxyDir !== undefined) {
+		cargoConfig = await tg`${cargoConfig}
+
+[host]
+runner = ["${proxyDir}/bin/tgrustc", "runner"]`;
 	}
 
 	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
@@ -249,10 +339,14 @@ directory = "${vendoredDir}"`;
 
 	// Create the build script.
 	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
+	// When using the proxy, add unstable flags for host.runner support.
+	const cargoPrefix = proxy
+		? "cargo -Zhost-config -Ztarget-applies-to-host"
+		: "cargo";
 	// Optionally capture stderr to a file (for parsing tgrustc tracing in tests).
 	const buildCommand = captureStderr
-		? tg`cargo build ${cargoArgString} 2> >(tee "${tg.output}/cargo-stderr.log" >&2)`
-		: tg`cargo build ${cargoArgString}`;
+		? tg`${cargoPrefix} build ${cargoArgString} 2> >(tee "${tg.output}/cargo-stderr.log" >&2)`
+		: tg`${cargoPrefix} build ${cargoArgString}`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
@@ -301,11 +395,10 @@ directory = "${vendoredDir}"`;
 		envs.push(crossEnv);
 	}
 
-	if (proxy) {
+	if (proxy && proxyDir !== undefined) {
 		// Enable the tgrustc proxy for Tangram-cached Rust compilation.
 		// The proxy uses a self-as-driver pattern, running tgrustc itself as
 		// the inner executable, eliminating the need for a shell.
-		const proxyDir = proxy_.proxy();
 		const proxyBin = proxyDir
 			.then((d) => d.get("bin/tgrustc"))
 			.then(tg.File.expect);
@@ -315,6 +408,15 @@ directory = "${vendoredDir}"`;
 			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
 		};
 		envs.push(proxyEnv);
+
+		// On macOS, the runner needs rcodesign to ad-hoc sign build script
+		// binaries before executing them inside the Tangram sandbox.
+		if (os === "darwin") {
+			const rcodesignBin = await rcodesign(rustHost);
+			envs.push({
+				TGRUSTC_RUNNER_CODESIGN: tg`${rcodesignBin}`,
+			});
+		}
 	}
 
 	// When using the tgrustc proxy, default to high parallelism to allow tangram to limit.
@@ -655,7 +757,6 @@ export const test = async () => {
 	return true;
 };
 
-import openssl from "openssl" with { local: "../openssl.tg.ts" };
 export const testUnproxiedWorkspace = async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
