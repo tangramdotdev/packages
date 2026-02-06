@@ -869,6 +869,55 @@ export const testSysLinkCache = async () => {
 	await runVariant(true);
 };
 
+/** Test passthrough mode: workspace crates compile directly, deps go through proxy.
+ *
+ * Sets TGRUSTC_PASSTHROUGH_PROJECT_DIR to the source directory and verifies that
+ * workspace member crates show "passthrough mode" in trace output while dependency
+ * crates go through the normal proxy path ("spawned inner process").
+ */
+export const testPassthrough = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	// Build with proxy and passthrough enabled. We use captureStderr to capture
+	// tracing output and set TGRUSTC_PASSTHROUGH_PROJECT_DIR to the source.
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}`,
+		},
+	});
+
+	// Parse the stderr log for passthrough and proxy traces.
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	tg.assert(stderrLog !== undefined, "Should have cargo-stderr.log");
+	const stderrText = await stderrLog.text;
+
+	// Workspace members should show "passthrough mode".
+	tg.assert(
+		stderrText.includes("passthrough mode"),
+		"Workspace members should trigger passthrough mode",
+	);
+
+	// Dependencies (bytes crate) should show "spawned inner process".
+	tg.assert(
+		stderrText.includes("spawned inner process"),
+		"Dependencies should go through the normal proxy path",
+	);
+
+	// Verify the build succeeded by running the binary.
+	const output = await $`${result}/bin/cli | tee ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
+
+	return result;
+};
+
 export const test = async () => {
 	// Ensure the proxy compiles before running other tests.
 	await testProxyCompiles();
@@ -897,5 +946,6 @@ export const test = async () => {
 		testCacheHitWithDepVars(),
 		testCacheHitWithPreScript(),
 		testSysLinkCache(),
+		testPassthrough(),
 	]);
 };

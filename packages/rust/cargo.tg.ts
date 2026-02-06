@@ -120,6 +120,271 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 	};
 };
 
+export type RunArg = {
+	/** The machine performing the compilation. */
+	build?: string;
+
+	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
+	deps?: std.deps.ConfigArg | undefined;
+
+	/** Dependency argument overrides. Keys must match deps config keys. */
+	dependencies?: std.packages.ResolvedDependencyArgs | undefined;
+
+	/** Environment variables to set. */
+	env?: std.env.Arg;
+
+	/** Machine that will run the compilation. */
+	host?: string;
+
+	/** Parent of the directory containing the Cargo.toml relative to the source dir if not at the expected location. */
+	manifestSubdir?: string;
+
+	/** Number of parallel jobs to use. */
+	parallelJobs?: number;
+
+	/** When proxy is true, whether workspace members should be compiled directly via passthrough. Default: true. */
+	passthrough?: boolean;
+
+	/** Should the run environment include pkg-config? Default: true. */
+	pkgConfig?: boolean;
+
+	/** Whether to use the tangram_rustc proxy. Default: false. */
+	proxy?: boolean;
+
+	/** SDK configuration to use. */
+	sdk?: std.sdk.Arg;
+
+	/** Source directory for vendoring. If provided, Cargo.lock is extracted and dependencies are vendored. */
+	source?: tg.Directory;
+
+	/** Cargo.lock file for vendoring (alternative to providing full source). */
+	cargoLock?: tg.File;
+
+	/** Environment to propagate to all dependencies in the subtree. */
+	subtreeEnv?: std.env.Arg;
+
+	/** SDK configuration to propagate to all dependencies in the subtree. */
+	subtreeSdk?: std.sdk.Arg;
+
+	/** Target triple for cross-compilation. */
+	target?: string;
+
+	/** Whether to use cargo vendor instead of Tangram-native vendoring. */
+	useCargoVendor?: boolean;
+};
+
+/** The result of runArg() - a RunArg with build and host guaranteed to be resolved. */
+export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
+	build: string;
+	host: string;
+};
+
+/** Resolve run args to a mutable arg object. Returns a RunArg with build and host guaranteed to be resolved. */
+export const runArg = async (
+	...args: std.Args<RunArg>
+): Promise<ResolvedRunArg> => {
+	const collect = await std.args.apply<RunArg, RunArg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a, b),
+			subtreeEnv: (a, b) => std.env.arg(a, b),
+			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
+
+	const { build: build_, host: host_, ...rest } = collect;
+
+	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
+
+	return {
+		build,
+		host,
+		...rest,
+	};
+};
+
+export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
+	const resolved = await runArg(...args);
+
+	// If deps were provided, resolve them to env.
+	let depsEnv = resolved.env;
+	const depsConfig = await std.deps.resolveConfig(resolved.deps);
+	if (depsConfig) {
+		depsEnv = await std.deps.env(depsConfig, {
+			build: resolved.build,
+			host: resolved.host,
+			sdk: resolved.sdk,
+			dependencies: resolved.dependencies,
+			env: depsEnv,
+			subtreeEnv: resolved.subtreeEnv,
+			subtreeSdk: resolved.subtreeSdk,
+		});
+	}
+
+	const {
+		cargoLock,
+		env: env_,
+		host,
+		manifestSubdir,
+		parallelJobs,
+		passthrough = true,
+		pkgConfig = true,
+		proxy = false,
+		sdk: sdk_ = {},
+		source,
+		target: target_,
+		useCargoVendor = false,
+	} = { ...resolved, env: depsEnv };
+	const rustHost = rustTriple(host);
+	const os = std.triple.os(rustHost);
+	const target = target_ ? rustTriple(target_) : rustHost;
+
+	// Check if we are cross-compiling.
+	const crossCompiling = target !== rustHost;
+
+	// Obtain handles to the SDK and Rust artifacts.
+	const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target }, sdk_];
+	if (
+		os === "linux" &&
+		sdkArgs.filter((arg) => arg?.toolchain === "llvm").length > 0
+	) {
+		sdkArgs.push({ toolchain: "gnu" });
+	}
+
+	const envs: std.Args<std.env.Arg> = [];
+
+	const sdk = await tg.build(std.sdk, ...sdkArgs);
+	envs.push(sdk);
+	const rustArtifact = await tg.build(self, { host: rustHost, target });
+	envs.push(rustArtifact);
+	if (pkgConfig) {
+		envs.push(await tg.build(pkgconf, { host }));
+	}
+
+	// Optionally vendor dependencies.
+	let vendorSetup: string | tg.Template = "";
+	if (source || cargoLock) {
+		let cargoConfig: tg.Template;
+		if (useCargoVendor) {
+			tg.assert(source, "source is required when useCargoVendor is true");
+			const manifests = await tg.build(extractCargoManifests, source);
+			cargoConfig = await tg.build(vendoredSources, {
+				manifestSubdir,
+				source: manifests,
+				useCargoVendor: true,
+			});
+		} else {
+			let lockFile: tg.File;
+			if (cargoLock) {
+				lockFile = cargoLock;
+			} else {
+				tg.assert(source, "source or cargoLock must be provided for vendoring");
+				const sourcePath = manifestSubdir
+					? await source.get(manifestSubdir).then(tg.Directory.expect)
+					: source;
+				lockFile = await sourcePath
+					.get("Cargo.lock")
+					.then(tg.File.expect);
+			}
+			const vendoredDir = await tg.build(vendorDependencies, lockFile);
+			cargoConfig = await tg`
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "${vendoredDir}"`;
+		}
+		vendorSetup = await tg`export CARGO_HOME="$(mktemp -d)"
+mkdir -p "$CARGO_HOME"
+cat > "$CARGO_HOME/config.toml" << 'VENDORCFG'
+${cargoConfig}
+VENDORCFG`;
+	}
+
+	// Set the toolchain environment.
+	let compilerName = "gcc";
+	if (os === "darwin") {
+		compilerName = "clang";
+	}
+	const toolchainEnv = {
+		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: compilerName,
+		RUST_TARGET: target,
+		CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
+		TANGRAM_HOST: std.triple.archAndOs(rustHost),
+	};
+	envs.push(toolchainEnv);
+
+	// If cross-compiling, set additional environment variables.
+	if (crossCompiling) {
+		const crossEnv = {
+			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]:
+				`${target}-cc`,
+			[`AR_${tripleToEnvVar(target)}`]: tg.Mutation.setIfUnset(
+				`${target}-ar`,
+			),
+			[`AR_${target}`]: tg.Mutation.setIfUnset(`${target}-ar`),
+			[`CC_${tripleToEnvVar(target)}`]: tg.Mutation.setIfUnset(
+				`${target}-cc`,
+			),
+			[`CC_${target}`]: tg.Mutation.setIfUnset(`${target}-cc`),
+			[`CXX_${tripleToEnvVar(target)}`]: tg.Mutation.setIfUnset(
+				`${target}-c++`,
+			),
+			[`CXX_${target}`]: tg.Mutation.setIfUnset(`${target}-c++`),
+		};
+		envs.push(crossEnv);
+	}
+
+	// If proxy is enabled, add proxy env vars.
+	if (proxy) {
+		const proxyDir = proxy_.proxy();
+		const proxyBin = proxyDir
+			.then((d) => d.get("bin/tgrustc"))
+			.then(tg.File.expect);
+		const proxyEnv: tg.Unresolved<std.env.Arg> = {
+			RUSTC_WRAPPER: tg`${proxyDir}/bin/tgrustc`,
+			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
+		};
+		envs.push(proxyEnv);
+	}
+
+	// When using the tgrustc proxy, default to high parallelism to allow Tangram to limit.
+	const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+	if (effectiveJobs !== undefined) {
+		envs.push({ CARGO_BUILD_JOBS: `${effectiveJobs}` });
+	}
+
+	const env = std.env.arg(...envs, env_);
+
+	// Build the wrapper script.
+	const passthroughSetup =
+		passthrough && proxy
+			? 'export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$PWD"'
+			: "";
+	const script = tg`#!/usr/bin/env bash
+set -euo pipefail
+${vendorSetup}
+${passthroughSetup}
+exec cargo "$@"
+`;
+
+	// Get the bash executable from the SDK.
+	const sdkDir = tg.Directory.expect(sdk);
+	const bashExecutable = await sdkDir
+		.get("bin/bash")
+		.then(tg.File.expect);
+
+	return tg.command({
+		args: ["-c", script, "--"],
+		env,
+		executable: bashExecutable,
+		host: rustHost,
+	});
+}
+
 export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
 
@@ -649,6 +914,8 @@ export const test = async () => {
 
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
+	tests.push(testRun());
+	tests.push(testRunWithoutProxy());
 
 	await Promise.all(tests);
 
@@ -704,6 +971,62 @@ export const testUnproxiedWorkspaceCross = async () => {
 		verbose: true,
 	});
 	return helloWorkspace;
+};
+
+export const testRun = async () => {
+	// Test that run() produces a valid command with the expected structure.
+	const command = await run({ proxy: true });
+	const env = await command.env;
+
+	// Verify the command has the expected environment variables.
+	tg.assert(env.RUST_TARGET !== undefined, "RUST_TARGET should be set");
+	tg.assert(
+		env.CARGO_REGISTRIES_CRATES_IO_PROTOCOL !== undefined,
+		"CARGO_REGISTRIES_CRATES_IO_PROTOCOL should be set",
+	);
+	tg.assert(
+		env.RUSTC_WRAPPER !== undefined,
+		"RUSTC_WRAPPER should be set when proxy is true",
+	);
+	tg.assert(
+		env.TGRUSTC_DRIVER_EXECUTABLE !== undefined,
+		"TGRUSTC_DRIVER_EXECUTABLE should be set when proxy is true",
+	);
+	tg.assert(
+		env.CARGO_BUILD_JOBS !== undefined,
+		"CARGO_BUILD_JOBS should be set when proxy is true",
+	);
+
+	// Verify the command has an executable.
+	const executable = await command.executable;
+	tg.assert(executable !== undefined, "Executable should be set");
+
+	// Verify the command has args.
+	const args = await command.args;
+	tg.assert(args.length > 0, "Args should not be empty");
+
+	return true;
+};
+
+export const testRunWithoutProxy = async () => {
+	// Test that run() works without proxy.
+	const command = await run({});
+	const env = await command.env;
+
+	// Verify proxy-specific vars are not set.
+	tg.assert(
+		env.RUSTC_WRAPPER === undefined,
+		"RUSTC_WRAPPER should not be set when proxy is false",
+	);
+	tg.assert(
+		env.TGRUSTC_DRIVER_EXECUTABLE === undefined,
+		"TGRUSTC_DRIVER_EXECUTABLE should not be set when proxy is false",
+	);
+
+	// Verify toolchain vars are set.
+	tg.assert(env.RUST_TARGET !== undefined, "RUST_TARGET should be set");
+
+	return true;
 };
 
 // Compare the results of cargo vendor and vendorDependencies.
