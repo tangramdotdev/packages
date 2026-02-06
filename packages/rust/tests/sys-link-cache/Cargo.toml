@@ -1,0 +1,17 @@
+[workspace]
+default-members = ["packages/app"]
+members = ["packages/wrapper-sys", "packages/consumer", "packages/app"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Tangram <root@tangram.dev>"]
+description = "Test -sys crate linking with OUT_DIR paths"
+edition = "2021"
+homepage = "https://www.tangram.dev"
+license = "MIT"
+publish = false
+version = "0.0.0"
+
+[workspace.dependencies]
+wrapper-sys = { path = "packages/wrapper-sys" }
+consumer = { path = "packages/consumer" }

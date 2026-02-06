@@ -1,0 +1,13 @@
+[package]
+name = "lib"
+description = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = false
+version = { workspace = true }
+
+[dependencies]
+indexmap = { workspace = true }
+once_cell = { workspace = true }
+memchr = { workspace = true }

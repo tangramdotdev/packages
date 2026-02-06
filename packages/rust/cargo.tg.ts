@@ -11,6 +11,9 @@ export type Arg = {
 	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
+	/** Capture cargo stderr to a file in the output. Useful for parsing tgrustc tracing output in tests. Default: false. */
+	captureStderr?: boolean;
+
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
 	deps?: std.deps.ConfigArg | undefined;
 
@@ -44,6 +47,9 @@ export type Arg = {
 	/** Should the build environment include pkg-config? Default: true. */
 	pkgConfig?: boolean;
 
+	/** The cargo build profile to use. Default: "release". */
+	profile?: string;
+
 	/** A name for the build process. */
 	processName?: string;
 
@@ -67,6 +73,9 @@ export type Arg = {
 
 	/** Target triple for the build. */
 	target?: string;
+
+	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
+	timings?: boolean;
 
 	/** Whether to use cargo vendor instead of the Tangram-native vendoring. */
 	useCargoVendor?: boolean;
@@ -131,6 +140,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	const {
 		buildInTree = false,
+		captureStderr = false,
 		checksum,
 		disableDefaultFeatures = false,
 		env: env_,
@@ -142,10 +152,12 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		pkgConfig = true,
 		pre,
 		processName,
+		profile = "release",
 		proxy = false,
 		sdk: sdk_ = {},
 		source,
 		target: target_,
+		timings = false,
 		useCargoVendor = false,
 		verbose = false,
 	} = { ...resolved, env: depsEnv };
@@ -219,7 +231,7 @@ directory = "${vendoredDir}"`;
 		? `${manifestSubdir}/Cargo.toml`
 		: `"Cargo.toml"`;
 	const cargoArgs = [
-		"--release",
+		`--profile ${profile}`,
 		tg`--target-dir "${tg.output}/target"`,
 		`--manifest-path "$SOURCE/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
@@ -231,10 +243,16 @@ directory = "${vendoredDir}"`;
 	if (disableDefaultFeatures) {
 		cargoArgs.push("--no-default-features");
 	}
+	if (timings) {
+		cargoArgs.push("--timings");
+	}
 
 	// Create the build script.
 	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
-	const buildCommand = tg`cargo build ${cargoArgString}`;
+	// Optionally capture stderr to a file (for parsing tgrustc tracing in tests).
+	const buildCommand = captureStderr
+		? tg`cargo build ${cargoArgString} 2> >(tee "${tg.output}/cargo-stderr.log" >&2)`
+		: tg`cargo build ${cargoArgString}`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
@@ -293,8 +311,6 @@ directory = "${vendoredDir}"`;
 			.then(tg.File.expect);
 		const proxyEnv: tg.Unresolved<std.env.Arg> = {
 			RUSTC_WRAPPER: tg`${proxyDir}/bin/tgrustc`,
-			// Pass the source artifact so the proxy does not need to check it in on each rustc invocation.
-			TGRUSTC_WORKSPACE_SOURCE: source,
 			// Pass the tgrustc binary artifact so the proxy does not need to check itself in on each invocation.
 			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
 		};
@@ -324,9 +340,12 @@ directory = "${vendoredDir}"`;
 	}
 	const artifact = await builder.then(tg.Directory.expect);
 
-	// Store a handle to the release directory containing Tangram bundles.
+	// Store a handle to the profile output directory containing Tangram bundles.
+	// Cargo maps the "dev" profile to the "debug" directory; all other profiles
+	// use the profile name as the directory name.
+	const profileDir = profile === "dev" ? "debug" : profile;
 	const releaseDir = await artifact
-		.get(`target/${target}/release`)
+		.get(`target/${target}/${profileDir}`)
 		.then(tg.Directory.expect);
 
 	// Grab the bins from the release dir.
@@ -346,9 +365,29 @@ directory = "${vendoredDir}"`;
 			[name]: artifact,
 		});
 	}
-	return tg.directory({
-		["bin"]: binDir,
-	});
+
+	// Include stderr log if captureStderr was enabled.
+	const result: Record<string, tg.Artifact> = { bin: binDir };
+	if (captureStderr) {
+		const stderrLog = await artifact
+			.tryGet("cargo-stderr.log")
+			.then((a) => (a instanceof tg.File ? a : undefined));
+		if (stderrLog) {
+			result["cargo-stderr.log"] = stderrLog;
+		}
+	}
+
+	// Include the cargo timing report if timings was enabled.
+	if (timings) {
+		const timingsDir = await artifact
+			.tryGet("target/cargo-timings")
+			.then((a) => (a instanceof tg.Directory ? a : undefined));
+		if (timingsDir) {
+			result["cargo-timings"] = timingsDir;
+		}
+	}
+
+	return tg.directory(result);
 }
 
 export type VendoredSourcesArg = {
@@ -614,7 +653,6 @@ export const test = async () => {
 	return true;
 };
 
-import pkgConfig from "pkg-config" with { local: "../pkg-config.tg.ts" };
 import openssl from "openssl" with { local: "../openssl.tg.ts" };
 export const testUnproxiedWorkspace = async () => {
 	const helloWorkspace = build({
@@ -635,7 +673,7 @@ export const testUnproxiedWorkspace = async () => {
 
 	const helloOpenssl = build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
-		env: std.env.arg(openssl(), pkgConfig(), {
+		env: std.env.arg(openssl(), pkgconf(), {
 			TGLD_TRACING: "tgld=trace",
 		}),
 		proxy: false,

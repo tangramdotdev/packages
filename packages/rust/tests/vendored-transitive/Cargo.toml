@@ -1,0 +1,14 @@
+[package]
+name = "vendored-transitive"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "vendored-transitive"
+path = "src/main.rs"
+
+[dependencies]
+# hashbrown depends on foldhash and equivalent (transitive deps)
+hashbrown = "0.16"
+# indexmap also uses hashbrown, creating multiple consumers
+indexmap = "2"

@@ -1,0 +1,14 @@
+[package]
+name = "aliased-extern-test"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# signal-hook-mio uses `mio_1_0` as an alias for `mio` version 1.0.
+# This tests that the transitive closure computation uses the actual
+# crate name from the file path, not the alias name from cargo.
+signal-hook-mio = { version = "0.2", features = ["support-v1_0"] }
+mio = { version = "1.0", features = ["os-poll", "os-ext"] }

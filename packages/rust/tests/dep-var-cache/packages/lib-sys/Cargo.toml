@@ -1,0 +1,13 @@
+[package]
+name = "lib-sys"
+description = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = false
+version = { workspace = true }
+
+# The `links` key causes cargo to set DEP_MYLIB_* env vars for dependent crates
+links = "mylib"
+
+[build-dependencies]

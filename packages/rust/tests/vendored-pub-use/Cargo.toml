@@ -1,0 +1,16 @@
+[package]
+name = "vendored-pub-use"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# async-compression uses `pub use compression_codecs as codecs;` which
+# causes the tgrustc proxy to fail when building with vendored dependencies.
+async-compression = { version = "0.4", features = ["gzip", "brotli", "zstd", "deflate", "lzma", "tokio"] }
+tokio = { version = "1", features = ["rt", "macros", "fs", "io-util"] }
+# xattr depends on rustix, which also failed in the tangram build.
+xattr = "1"
+# Add more crates to stress parallel compilation.
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

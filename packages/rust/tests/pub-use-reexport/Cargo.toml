@@ -1,0 +1,16 @@
+[workspace]
+default-members = ["packages/cli"]
+members = ["packages/inner", "packages/outer", "packages/cli"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Tangram <root@tangram.dev>"]
+description = "Test pub use reexport pattern"
+edition = "2021"
+license = "MIT"
+publish = false
+version = "0.0.0"
+
+[workspace.dependencies]
+inner = { path = "packages/inner" }
+outer = { path = "packages/outer" }

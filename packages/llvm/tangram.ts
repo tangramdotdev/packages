@@ -4,7 +4,7 @@ import * as cmake from "cmake" with { local: "../cmake" };
 import git from "git" with { local: "../git.tg.ts" };
 import ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
 import python from "python" with { local: "../python" };
-import zlib from "zlib" with { local: "../zlib.tg.ts" };
+import zlibNg from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
 import * as glibc from "glibc" with { local: "../glibc.tg.ts" };
 import cmakeCacheDir from "./cmake" with { type: "directory" };
 
@@ -60,8 +60,8 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Define build environment.
 	const pythonForBuild = await python();
 	const ncursesArtifact = await ncurses();
-	const zlibArtifact = await zlib();
-	const deps = [git(), pythonForBuild, ncursesArtifact, zlibArtifact];
+	const zlibNgArtifact = await zlibNg();
+	const deps = [git(), pythonForBuild, ncursesArtifact, zlibNgArtifact];
 
 	// Obtain a sysroot for the requested host.
 	const sysroot = await glibc
@@ -85,7 +85,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
 	// FIXME are the lib flags at the end necessary?
-	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:${ncursesArtifact}/lib:/lib:/lib/${host}:/build/lib:/build/lib/${host}" && export SYSROOT_LIBDIR="$(gcc -print-sysroot)/lib" && export HOST_GCC_TRIPLE=""$(gcc -dumpmachine)""`;
+	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibNgArtifact}/lib:${ncursesArtifact}/lib:/lib:/lib/${host}:/build/lib:/build/lib/${host}" && export SYSROOT_LIBDIR="$(gcc -print-sysroot)/lib" && export HOST_GCC_TRIPLE=""$(gcc -dumpmachine)""`;
 
 	// Define default flags.
 	const configure = {
@@ -98,7 +98,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
 			// NOTE - CLANG_BOOTSTRAP_PASSTHROUGH didn't work for Terminfo_ROOT, but this did.
 			tg`-DBOOTSTRAP_Terminfo_ROOT=${ncursesArtifact}`,
-			tg`-DZLIB_ROOT=${zlibArtifact}`,
+			tg`-DZLIB_ROOT=${zlibNgArtifact}`,
 			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
 		],
 	};
@@ -159,7 +159,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	const hostLibDir = tg.symlink(tg`${libDir}/${host}`);
 	const ncursesLibDir = ncursesArtifact.get("lib").then(tg.Directory.expect);
-	const zlibLibDir = zlibArtifact.get("lib").then(tg.Directory.expect);
+	const zlibLibDir = zlibNgArtifact.get("lib").then(tg.Directory.expect);
 	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
 
 	// Wrap all ELF binaries in the bin directory.
@@ -259,7 +259,8 @@ export const libclang = async (arg?: LLVMArg) => {
 
 	// Define build environment.
 	const pythonForBuild = await python();
-	const deps = [pythonForBuild];
+	const zlibNgArtifact = await zlibNg();
+	const deps = [git(), pythonForBuild, zlibNgArtifact];
 
 	const env = await std.env.arg(...deps, env_);
 
@@ -271,10 +272,11 @@ export const libclang = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_PROJECTS=clang",
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
+			tg`-DZLIB_ROOT=${zlibNgArtifact}`,
 		],
 	};
 	const buildPhase = {
-		pre: "cd /build",
+		pre: "cd build",
 		body: "ninja libclang",
 	};
 	const install = "ninja install-libclang";
@@ -306,8 +308,8 @@ export const lld = async (arg?: LLVMArg) => {
 
 	// Define build environment.
 	const pythonForBuild = await python();
-	const zlibArtifact = await zlib();
-	const deps = [git(), pythonForBuild, zlibArtifact];
+	const zlibNgArtifact = await zlibNg();
+	const deps = [git(), pythonForBuild, zlibNgArtifact];
 
 	const env = await std.env.arg(...deps, env_);
 
@@ -318,7 +320,7 @@ export const lld = async (arg?: LLVMArg) => {
 			"-DLLVM_ENABLE_PROJECTS=lld",
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			tg`-DZLIB_ROOT=${zlibArtifact}`,
+			tg`-DZLIB_ROOT=${zlibNgArtifact}`,
 		],
 	};
 

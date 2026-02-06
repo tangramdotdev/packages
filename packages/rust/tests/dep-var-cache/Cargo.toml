@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["packages/*"]
+
+[workspace.package]
+description = "Test DEP_* variable caching"
+edition = "2021"
+homepage = "https://tangram.dev"
+license = "MIT"
+version = "0.0.0"

@@ -3,7 +3,7 @@ import { $ } from "std" with { local: "./std" };
 import libarchive from "libarchive" with { local: "./libarchive.tg.ts" };
 import xar from "xar" with { local: "./xar" };
 import xz from "xz" with { local: "./xz.tg.ts" };
-import zlib from "zlib" with { local: "./zlib.tg.ts" };
+import zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.foundationdb.org/",
