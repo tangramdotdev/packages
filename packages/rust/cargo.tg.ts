@@ -317,9 +317,11 @@ directory = "${vendoredDir}"`;
 		envs.push(proxyEnv);
 	}
 
-	if (parallelJobs) {
+	// When using the tgrustc proxy, default to high parallelism to allow tangram to limit.
+	const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+	if (effectiveJobs !== undefined) {
 		const jobsEnv = {
-			CARGO_BUILD_JOBS: `${parallelJobs}`,
+			CARGO_BUILD_JOBS: `${effectiveJobs}`,
 		};
 		envs.push(jobsEnv);
 	}
