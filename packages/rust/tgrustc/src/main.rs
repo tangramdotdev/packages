@@ -41,6 +41,16 @@ fn main_inner() -> tg::Result<()> {
 		return Err(tg::error!("exec failed: {error}."));
 	}
 
+	// Check for passthrough mode. When TGRUSTC_PASSTHROUGH_PROJECT_DIR is set and
+	// the crate's source directory is under that path, invoke rustc directly without
+	// going through a Tangram process. This enables incremental compilation for
+	// workspace members while dependencies still get proxy caching.
+	if let Ok(project_dir) = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR") {
+		if is_workspace_member(&args.source_directory, &project_dir) {
+			return passthrough_to_rustc(&args);
+		}
+	}
+
 	tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
@@ -48,6 +58,26 @@ fn main_inner() -> tg::Result<()> {
 		.block_on(run_proxy(args))?;
 
 	Ok(())
+}
+
+/// Check whether a crate's source directory is under the project directory,
+/// indicating it is a workspace member (not an external dependency).
+fn is_workspace_member(source_directory: &str, project_dir: &str) -> bool {
+	let source = Path::new(source_directory);
+	let project = Path::new(project_dir);
+	source.starts_with(project)
+}
+
+/// Invoke rustc directly without going through a Tangram process.
+/// This enables incremental compilation for workspace members.
+fn passthrough_to_rustc(args: &Args) -> tg::Result<()> {
+	#[cfg(feature = "tracing")]
+	tracing::info!(crate_name = %args.crate_name, source_directory = %args.source_directory, "passthrough mode: calling rustc directly");
+
+	let error = std::process::Command::new(&args.rustc)
+		.args(std::env::args().skip(2))
+		.exec();
+	Err(tg::error!("exec failed: {error}."))
 }
 
 /// Input arguments to the rustc proxy.
