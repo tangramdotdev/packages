@@ -1,16 +1,16 @@
 diff -Naur a/src/cp.c b/src/cp.c
---- a/src/cp.c	2023-08-29 07:39:27
-+++ b/src/cp.c	2023-08-31 09:11:12
+--- a/src/cp.c
++++ b/src/cp.c
 @@ -842,12 +842,12 @@
    x->preserve_security_context = false; /* -a or --preserve=context.  */
    x->require_preserve_context = false;  /* --preserve=context.  */
-   x->set_security_context = nullptr;       /* -Z, set sys default context. */
+   x->set_security_context = NULL;       /* -Z, set sys default context. */
 -  x->preserve_xattr = false;
 +  x->preserve_xattr = true;
    x->reduce_diagnostics = false;
 -  x->require_preserve_xattr = false;
 +  x->require_preserve_xattr = true;
- 
+
    x->data_copy_required = true;
 -  x->require_preserve = false;
 +  x->require_preserve = true;
@@ -18,8 +18,8 @@ diff -Naur a/src/cp.c b/src/cp.c
    x->sparse_mode = SPARSE_AUTO;
    x->symbolic_link = false;
 diff -Naur a/src/install.c b/src/install.c
---- a/src/install.c	2023-07-05 07:09:55
-+++ b/src/install.c	2023-08-31 09:10:35
+--- a/src/install.c
++++ b/src/install.c
 @@ -276,7 +276,7 @@
    x->reduce_diagnostics=false;
    x->data_copy_required = true;
@@ -32,9 +32,9 @@ diff -Naur a/src/install.c b/src/install.c
 @@ -294,7 +294,7 @@
    x->require_preserve_context = false;  /* Not used by install currently.  */
    x->preserve_security_context = false; /* Whether to copy context from src.  */
-   x->set_security_context = nullptr; /* Whether to set sys default context.  */
+   x->set_security_context = NULL; /* Whether to set sys default context.  */
 -  x->preserve_xattr = false;
 +  x->preserve_xattr = true;
    x->verbose = false;
-   x->dest_info = nullptr;
-   x->src_info = nullptr;
+   x->dest_info = NULL;
+   x->src_info = NULL;
