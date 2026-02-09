@@ -9,8 +9,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "coreutils",
 	repository: "http://git.savannah.gnu.org/gitweb/?p=coreutils.git",
-	version: "9.9",
-	tag: "coreutils/9.9",
+	version: "9.10",
+	tag: "coreutils/9.10",
 	provides: {
 		binaries: [
 			"cp",
@@ -35,7 +35,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:19bcb6ca867183c57d77155eae946c5eced88183143b45ca51ad7d26c628ca75";
+		"sha256:16535a9adf0b10037364e2d612aad3d9f4eca3a344949ced74d12faf4bd51d25";
 	const source = await std.download.fromGnu({
 		name,
 		version,
