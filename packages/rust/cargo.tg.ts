@@ -470,6 +470,8 @@ export const extractCargoManifests = async (
 		for await (const [name, artifact] of dir) {
 			const fullPath = path ? `${path}/${name}` : name;
 			if (artifact instanceof tg.Directory) {
+				// Skip node_modules directories. They never contain Cargo manifests and can be very large.
+				if (name === "node_modules") continue;
 				// Recurse into subdirectories.
 				const subManifests = await extractManifests(artifact, fullPath);
 				// Only include if it has content.
