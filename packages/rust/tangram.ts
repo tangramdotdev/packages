@@ -24,6 +24,8 @@ const PROFILE = "minimal" as const;
 export const VERSION = "1.93.1" as const;
 
 export type ToolchainArg = {
+	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD" for pinned nightly. */
+	channel?: "stable" | "nightly" | string;
 	host?: string;
 	target?: string;
 	targets?: Array<string>;
@@ -34,6 +36,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	// Determine the list of target triples to support other than the inferred host.
 	const detectedHost = std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);
+	const channel = arg?.channel ?? "stable";
 	const targets = [];
 	if (arg?.target && arg.target !== host) {
 		targets.push(arg.target);
@@ -46,11 +49,28 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 		}
 	}
 
-	// Download the Rust manifest for the selected version.
+	// Download the Rust manifest for the selected channel.
+	let manifestUrl: string;
+	let manifestChecksum: tg.Checksum;
+	if (channel === "stable" || channel === undefined) {
+		manifestUrl = `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`;
+		manifestChecksum =
+			"sha256:4812a3c610bacc74eed12c89c312e540722dccccd867bd55096402da13b3a516";
+	} else if (channel === "nightly") {
+		manifestUrl = "https://static.rust-lang.org/dist/channel-rust-nightly.toml";
+		manifestChecksum = "sha256:any";
+	} else if (channel.startsWith("nightly-")) {
+		// Pinned nightly: "nightly-YYYY-MM-DD".
+		const date = channel.slice("nightly-".length);
+		manifestUrl = `https://static.rust-lang.org/dist/${date}/channel-rust-nightly.toml`;
+		manifestChecksum = "sha256:any";
+	} else {
+		throw new Error(`Unsupported toolchain channel: ${channel}`);
+	}
+
 	const manifestBlob = await std.download({
-		url: `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`,
-		checksum:
-			"sha256:4812a3c610bacc74eed12c89c312e540722dccccd867bd55096402da13b3a516",
+		url: manifestUrl,
+		checksum: manifestChecksum,
 	});
 	const manifestFile = await tg.file(manifestBlob as tg.Blob);
 

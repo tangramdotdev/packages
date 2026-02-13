@@ -1,0 +1,5 @@
+[package]
+name = "lib"
+version = "0.0.0"
+edition.workspace = true
+build = "build.rs"

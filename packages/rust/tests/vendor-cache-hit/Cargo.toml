@@ -5,7 +5,7 @@ resolver = "2"
 
 [workspace.package]
 authors = ["Tangram <root@tangram.dev>"]
-description = "Test vendored crate caching with buildInTree + useCargoVendor"
+description = "Test vendored crate caching with useCargoVendor"
 edition = "2021"
 homepage = "https://www.tangram.dev"
 license = "MIT"

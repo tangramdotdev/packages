@@ -1,0 +1,9 @@
+[workspace]
+members = ["packages/lib", "packages/app"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+
+[profile.release]
+strip = "debuginfo"

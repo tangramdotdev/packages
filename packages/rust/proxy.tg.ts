@@ -1,5 +1,6 @@
 import * as std from "std" with { local: "../std" };
 import { $ } from "std" with { local: "../std" };
+import dash from "dash" with { local: "../dash.tg.ts" };
 
 import { cargo, self, VERSION } from "./tangram.ts";
 
@@ -332,11 +333,12 @@ export type RustcStats = {
 
 /** Parse tgrustc stats from cargo-stderr.log in a build result.
  *
- * Looks for `proxy_complete` tracing events in the format:
- * `proxy_complete crate_name=<name> elapsed_ms=<ms> cached=<true|false> process_id=<id> command_id=<id>`
+ * Looks for tracing events matching `eventName` in the format:
+ * `<eventName> crate_name=<name> elapsed_ms=<ms> cached=<true|false> process_id=<id> command_id=<id>`
  */
 export const parseStats = async (
 	result: tg.Directory,
+	eventName: string = "proxy_complete",
 ): Promise<Array<RustcStats> | undefined> => {
 	const stderrLog = await result
 		.tryGet("cargo-stderr.log")
@@ -346,10 +348,8 @@ export const parseStats = async (
 	const text = await stderrLog.text;
 	const stats: Array<RustcStats> = [];
 
-	// Parse proxy_complete lines from tracing output.
-	// Format: ... proxy_complete crate_name=<name> elapsed_ms=<ms> cached=<bool> process_id=<id> command_id=<id> ...
 	for (const line of text.split("\n")) {
-		if (!line.includes("proxy_complete")) continue;
+		if (!line.includes(eventName)) continue;
 
 		const crateMatch = /crate_name=(\S+)/.exec(line);
 		const cachedMatch = /cached=(true|false)/.exec(line);
@@ -380,12 +380,11 @@ export const summarizeStats = (stats: Array<RustcStats>) => {
 };
 
 /** Build with proxy and stats capture enabled. */
-export const buildWithStats = (args: cargo.Arg) =>
-	cargo.build({
-		...args,
+export const buildWithStats = (...args: std.Args<cargo.Arg>) =>
+	cargo.build(...args, {
 		proxy: true,
 		captureStderr: true,
-		env: std.env.arg(args.env, { TGRUSTC_TRACING: "tgrustc=info" }),
+		env: { TGRUSTC_TRACING: "tgrustc=info" },
 	});
 
 /** Look up a crate's stats by name. */
@@ -397,18 +396,24 @@ type CacheTestConfig = {
 	source: tg.Directory;
 	modifyPath: string;
 	expectations: Record<string, boolean>;
-	buildArgs?: Partial<cargo.Arg>;
+	buildArgs?: std.Args<cargo.Arg>;
 	tag?: string;
+};
+
+/** The common cargo.build args used by cache tests. */
+const cacheTestArgs: cargo.Arg = {
+	proxy: true,
+	captureStderr: true,
+	env: { TGRUSTC_TRACING: "tgrustc=info" },
 };
 
 /** Build, modify a file, rebuild, and assert cache hit/miss expectations.
  *
  * 1. Builds once to populate cache.
  * 2. Reads modifyPath from source, appends a unique comment.
- * 3. Rebuilds with buildWithStats.
- * 4. Parses stats from both builds.
- * 5. Asserts each crate in expectations matches its expected hit/miss.
- * 6. Returns both stat arrays and the second result directory.
+ * 3. Rebuilds and parses stats from both builds.
+ * 4. Asserts each crate in expectations matches its expected hit/miss.
+ * 5. Returns both stat arrays and the second result directory.
  */
 const assertCacheHit = async (
 	config: CacheTestConfig,
@@ -417,11 +422,15 @@ const assertCacheHit = async (
 	second: Array<RustcStats>;
 	secondResult: tg.Directory;
 }> => {
-	const { source, modifyPath, expectations, buildArgs, tag } = config;
-	const comment = tag ?? "cache test modification";
+	const { source, modifyPath, expectations, buildArgs = [], tag } = config;
+	const comment = `${tag ?? "cache test modification"} ${Date.now()}`;
 
 	// First build to populate cache.
-	const firstResult = await buildWithStats({ source, ...buildArgs });
+	const firstResult = await cargo.build(
+		{ source },
+		...buildArgs,
+		cacheTestArgs,
+	);
 	const firstStats = await parseStats(firstResult);
 
 	// Modify the specified file.
@@ -429,15 +438,16 @@ const assertCacheHit = async (
 		.get(modifyPath)
 		.then(tg.File.expect)
 		.then((f: tg.File) => f.text);
-	const modifiedSource = await tg.directory(source, {
+	const modifiedSource = tg.directory(source, {
 		[modifyPath]: tg.file(`${originalText}\n// ${comment}\n`),
 	});
 
 	// Rebuild with modified source.
-	const secondResult = await buildWithStats({
-		source: modifiedSource,
+	const secondResult = await cargo.build(
+		{ source: modifiedSource },
 		...buildArgs,
-	});
+		cacheTestArgs,
+	);
 	const secondStats = await parseStats(secondResult);
 
 	if (!secondStats) {
@@ -494,13 +504,20 @@ export const testCacheHitVendoredDeps = async () => {
 export const testCacheHitSharedDepsAcrossProjects = async () => {
 	// Build project 1 to populate cache for shared deps.
 	await buildWithStats({
-		source: await tests.get("parallel-deps").then(tg.Directory.expect),
+		source: tests.get("parallel-deps").then(tg.Directory.expect),
+	});
+
+	// Make project 2 source unique per invocation so the project_two crate is
+	// never cached from a previous test run.
+	const baseSource = await tests.get("project-two").then(tg.Directory.expect);
+	const mainRs = await baseSource.get("src/main.rs").then(tg.File.expect);
+	const mainRsText = await mainRs.text;
+	const source = tg.directory(baseSource, {
+		src: { "main.rs": `${mainRsText}\n// ${Date.now()}\n` },
 	});
 
 	// Build project 2 - deps should be cached from project 1.
-	const result = await buildWithStats({
-		source: await tests.get("project-two").then(tg.Directory.expect),
-	});
+	const result = await buildWithStats({ source });
 	const stats = await parseStats(result);
 	if (!stats) {
 		throw new Error("Project 2 build should have stats.");
@@ -530,38 +547,25 @@ export const testCacheHitSharedDepsAcrossProjects = async () => {
 	tg.assert((await output.text).includes("project 2"));
 };
 
-/** Test that unchanged workspace crates cache hit when a sibling is modified.
- *
- * Runs with both buildInTree: false and buildInTree: true to cover both code paths.
- */
+/** Test that unchanged workspace crates cache hit when a sibling is modified. */
 export const testCacheHitUnchangedWorkspaceCrates = async () => {
-	const workspaceExpectations = {
-		cli: false,
-		greeting: true,
-		bytes: true,
-	};
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+	const { second, secondResult } = await assertCacheHit({
+		source,
+		modifyPath: "packages/cli/src/main.rs",
+		expectations: {
+			cli: false,
+			greeting: true,
+			bytes: true,
+		},
+	});
+	tg.assert(summarizeStats(second).hits >= 2);
 
-	const runVariant = async (buildInTree: boolean) => {
-		const tag = buildInTree ? "workspace buildInTree" : "workspace default";
-		const source = await tests.get("hello-workspace").then(tg.Directory.expect);
-		const { second, secondResult } = await assertCacheHit({
-			source,
-			modifyPath: "packages/cli/src/main.rs",
-			expectations: workspaceExpectations,
-			buildArgs: { buildInTree },
-			tag,
-		});
-		tg.assert(summarizeStats(second).hits >= 2);
-
-		// Verify rebuilt binary works.
-		const output = await $`cli | tee ${tg.output}`
-			.env(secondResult)
-			.then(tg.File.expect);
-		tg.assert((await output.text).trim() === "Hello from a workspace!");
-	};
-
-	await runVariant(false);
-	await runVariant(true);
+	// Verify rebuilt binary works.
+	const output = await $`cli | tee ${tg.output}`
+		.env(secondResult)
+		.then(tg.File.expect);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
 };
 
 /** Test proxy with crossterm crate which uses proc-macros that read Cargo.toml.
@@ -727,23 +731,12 @@ export const testVendoredPubUse = async () => {
 	return result;
 };
 
-/** Test proxy with buildInTree when source contains tangram.ts with external imports.
- *
- * This reproduces the bug where the tangram checkin process tries to resolve
- * local imports in tangram.ts files, failing when those imports point to paths
- * outside the temp build directory.
- *
- * Structure:
- * - Source contains a tangram.ts with `local: "../external.tg.ts"` import
- * - Build with buildInTree: true copies source to temp directory
- * - The relative import path doesn't exist in the temp directory
- * - The proxy should handle this gracefully
- */
-export const testBuildInTreeWithExternalTsImport = async () => {
+/** Test that tangram.ts with external imports in source does not break the proxy. */
+export const testExternalTsImport = async () => {
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
 
 	// Add a tangram.ts file that imports from an external path (simulating the tangram repo structure).
-	const sourceWithTangram = await tg.directory(source, {
+	const sourceWithTangram = tg.directory(source, {
 		"tangram.ts": tg.file(`
 // This import references a file outside the workspace
 import foo from "foo" with { local: "../external-package/foo.tg.ts" };
@@ -752,11 +745,7 @@ export default foo;
 `),
 	});
 
-	// Build with buildInTree: true.
-	const result = await buildWithStats({
-		source: sourceWithTangram,
-		buildInTree: true,
-	});
+	const result = await buildWithStats({ source: sourceWithTangram });
 
 	const stats = await parseStats(result);
 	if (stats) {
@@ -771,23 +760,11 @@ export default foo;
 	return result;
 };
 
-/** Test proxy with buildInTree for a workspace crate with build.rs at root.
- *
- * This reproduces the bug where build.rs files at the crate root (not under src/)
- * were not having their paths rewritten correctly. For a workspace like:
- *   crates/app/build.rs
- * The proxy needs to extract "crates/app" as the subpath so that
- * "crates/app/build.rs" gets rewritten to just "build.rs".
- */
-export const testBuildInTreeWithBuildScript = async () => {
-	const source = await tests
-		.get("workspace-build-script")
-		.then(tg.Directory.expect);
+/** Test that a workspace crate with build.rs at root compiles correctly. */
+export const testWorkspaceBuildScript = async () => {
+	const source = tests.get("workspace-build-script").then(tg.Directory.expect);
 
-	const result = await buildWithStats({
-		source,
-		buildInTree: true,
-	});
+	const result = await buildWithStats({ source });
 
 	const stats = await parseStats(result);
 	if (stats) {
@@ -802,7 +779,7 @@ export const testBuildInTreeWithBuildScript = async () => {
 	return result;
 };
 
-/** Test that DEP_* env vars from build scripts don't break caching. */
+/** Test that DEP_* env vars from build scripts do not break caching. */
 export const testCacheHitWithDepVars = async () => {
 	const source = await tests.get("dep-var-cache").then(tg.Directory.expect);
 	await assertCacheHit({
@@ -813,17 +790,18 @@ export const testCacheHitWithDepVars = async () => {
 			consumer: true,
 			lib_sys: true,
 		},
-		buildArgs: { buildInTree: true },
 	});
 };
 
-/** Test vendored crate caching with pre script that modifies PATH. */
+/** Test vendored crate caching with pre script that modifies PATH.
+ *
+ * The node_modules directory is provided as a separate artifact via env so that
+ * changing app/src/main.rs does not affect the PATH content-addressing.
+ */
 export const testCacheHitWithPreScript = async () => {
 	const source = await tests.get("vendor-cache-hit").then(tg.Directory.expect);
-	const pre = await tg`
-		mkdir -p "$SOURCE/node_modules/.bin"
-		export PATH="$PATH:$SOURCE/node_modules/.bin"
-	`;
+	const nodeModulesBin = tg.directory({ ".gitkeep": tg.file("") });
+	const pre = tg`export PATH="$PATH:${nodeModulesBin}"`;
 
 	await assertCacheHit({
 		source,
@@ -835,38 +813,329 @@ export const testCacheHitWithPreScript = async () => {
 			once_cell: true,
 			memchr: true,
 		},
-		buildArgs: { buildInTree: true, useCargoVendor: true, pre },
+		buildArgs: [{ useCargoVendor: true, pre }],
 	});
 };
 
-/** Test that -sys crate link paths don't break caching.
- *
- * Runs with both buildInTree: false and buildInTree: true to cover both
- * code paths. The buildInTree variant reproduces the issue where cc-rs
- * embeds temp source paths in .o files.
- */
+/** Test that -sys crate link paths do not break caching. */
 export const testSysLinkCache = async () => {
-	const sysLinkExpectations = {
-		app: false,
-		consumer: true,
-		wrapper_sys: true,
-		build_script_build: true,
-	};
+	const source = await tests.get("sys-link-cache").then(tg.Directory.expect);
+	await assertCacheHit({
+		source,
+		modifyPath: "packages/app/src/main.rs",
+		expectations: {
+			app: false,
+			consumer: true,
+			wrapper_sys: true,
+			"build_script_build(wrapper_sys)": true,
+		},
+	});
+};
 
-	const runVariant = async (buildInTree: boolean) => {
-		const tag = buildInTree ? "sys-link buildInTree" : "sys-link default";
-		const source = await tests.get("sys-link-cache").then(tg.Directory.expect);
-		await assertCacheHit({
-			source,
-			modifyPath: "packages/app/src/main.rs",
-			expectations: sysLinkExpectations,
-			buildArgs: { buildInTree },
-			tag,
-		});
-	};
+/** Test that workspace member build scripts can access files at the workspace root. */
+export const testRunnerWorkspaceRootAccess = async () => {
+	const source = tests.get("workspace-root-access").then(tg.Directory.expect);
 
-	await runVariant(false);
-	await runVariant(true);
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=trace",
+		},
+	});
+	console.log("testRunnerWorkspaceRootAccess result", result.id);
+
+	// Verify the build succeeded and the config from the workspace root was included.
+	const output = await $`app | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.includes("workspace-level shared configuration"),
+		`Expected output to include workspace config, got: ${text}`,
+	);
+};
+
+/** Test that the build script runner caches workspace member build scripts
+ * when only an unrelated crate is modified.
+ */
+export const testRunnerCacheHitWorkspace = async () => {
+	const source = await tests
+		.get("workspace-runner-cache")
+		.then(tg.Directory.expect);
+
+	// First build to populate both rustc and runner caches.
+	const firstResult = await buildWithStats({ source });
+	const firstStats = await parseStats(firstResult);
+
+	// Modify only app/src/main.rs (not the lib crate or its build script).
+	const originalMain = await source
+		.get("packages/app/src/main.rs")
+		.then(tg.File.expect)
+		.then((f: tg.File) => f.text);
+	const modifiedSource = tg.directory(source, {
+		"packages/app/src/main.rs": tg.file(
+			`${originalMain}\n// workspace runner cache test\n`,
+		),
+	});
+
+	// Rebuild with modified source.
+	const secondResult = await buildWithStats({ source: modifiedSource });
+	const secondStats = await parseStats(secondResult);
+	if (!firstStats || !secondStats) {
+		throw new Error("Both builds should have stats.");
+	}
+
+	// The proxy for lib should be a cache hit since only app was modified.
+	const libStatus = getCrateStatus(secondStats, "lib");
+	tg.assert(
+		libStatus?.cached === true,
+		`Proxy for lib should be a cache hit, got cached=${libStatus?.cached}.`,
+	);
+};
+
+/** Test that the build script runner caches build script execution.
+ *
+ * Uses the hello-cc-rs test project which has a build script that compiles C
+ * code using cc-rs. Builds twice with a modified main.rs to verify that:
+ * 1. The build script runner invocation is cached on the second build.
+ * 2. The rustc proxy invocations for unchanged crates are also cached.
+ * 3. The binary produces correct output after both builds.
+ */
+export const testRunnerBuildScript = async () => {
+	const source = await tests.get("hello-cc-rs").then(tg.Directory.expect);
+
+	// First build to populate both rustc and runner caches.
+	const firstResult = await buildWithStats({ source });
+	const firstRunnerStats = await parseStats(firstResult, "runner_complete");
+	console.log(
+		"runner first build stats",
+		firstRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
+	);
+
+	// Verify the first build produces correct output.
+	const firstOutput = await $`hello-cc-rs | tee ${tg.output}`
+		.env(firstResult)
+		.then(tg.File.expect);
+	tg.assert((await firstOutput.text).trim() === "10 + 32 = 42");
+
+	// Modify only main.rs (not the build script or C source).
+	const originalMain = await source
+		.get("src/main.rs")
+		.then(tg.File.expect)
+		.then((f: tg.File) => f.text);
+	const modifiedSource = tg.directory(source, {
+		"src/main.rs": tg.file(`${originalMain}\n// runner cache test\n`),
+	});
+
+	// Rebuild with modified source.
+	const secondResult = await buildWithStats({ source: modifiedSource });
+	const secondRunnerStats = await parseStats(secondResult, "runner_complete");
+	console.log(
+		"runner second build stats",
+		secondRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
+	);
+
+	// The build script runner should be a cache hit since the build script
+	// and its inputs (C source, build.rs) did not change.
+	if (secondRunnerStats) {
+		for (const stat of secondRunnerStats) {
+			tg.assert(
+				stat.cached,
+				`Build script runner for ${stat.crate_name} should be a cache hit, but was a miss.`,
+			);
+		}
+	}
+
+	// Verify the second build also produces correct output.
+	const secondOutput = await $`hello-cc-rs | tee ${tg.output}`
+		.env(secondResult)
+		.then(tg.File.expect);
+	tg.assert((await secondOutput.text).trim() === "10 + 32 = 42");
+};
+
+/** Test that the runner passes through environment variables to build scripts.
+ *
+ * Reproduces the tangram.ts testProxy failure where NODE_PATH is blacklisted
+ * from the runner environment. The tangram_js and tangram_compiler build scripts
+ * check for NODE_PATH; when it is missing, they try to create a lock file outside
+ * the workspace, which fails in the runner sandbox with PermissionDenied.
+ */
+export const testRunnerEnvPassthrough = async () => {
+	// Make the source unique per invocation so the build is never cached. This
+	// test validates runtime sandbox behavior, so a cached result would be a
+	// false negative.
+	const baseSource = await tests
+		.get("runner-env-passthrough")
+		.then(tg.Directory.expect);
+	const mainRs = await baseSource.get("src/main.rs").then(tg.File.expect);
+	const mainRsText = await mainRs.text;
+	const source = tg.directory(baseSource, {
+		src: { "main.rs": `${mainRsText}\n// ${Date.now()}\n` },
+	});
+
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		env: {
+			NODE_PATH: "/some/node/modules",
+			TGRUSTC_TRACING: "tgrustc=trace",
+		},
+	});
+	console.log("testRunnerEnvPassthrough result", result.id);
+
+	// Assert the binary received NODE_PATH from the build script.
+	const output = await $`runner-env-passthrough | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.includes("NODE_PATH was:"),
+		"Build script should have received NODE_PATH.",
+	);
+};
+
+/** Test that the runner makes tools in NODE_PATH/.bin available via PATH. */
+export const testRunnerPathTools = async () => {
+	// Create a fake node_modules directory with a .bin symlink structure
+	// mimicking how npm/bun installs tools.
+	const toolFile = tg.file("tool output from my-tool\n");
+	const nodeModules = tg.directory({
+		"my-tool-pkg": {
+			"tool.sh": toolFile,
+		},
+		".bin": {
+			// Symlink: .bin/my-tool -> ../my-tool-pkg/tool.sh
+			"my-tool": tg.symlink("../my-tool-pkg/tool.sh"),
+		},
+	});
+
+	// Include node_modules in the source artifact and set env vars in pre.
+	// Make the source unique per invocation so the build is never cached. This
+	// test validates runtime sandbox behavior, so a cached result would be a
+	// false negative.
+	const baseSource = await tests
+		.get("runner-path-tools")
+		.then(tg.Directory.expect);
+	const mainRs = await baseSource.get("src/main.rs").then(tg.File.expect);
+	const mainRsText = await mainRs.text;
+	const source = tg.directory(baseSource, {
+		node_modules: nodeModules,
+		src: { "main.rs": `${mainRsText}\n// ${Date.now()}\n` },
+	});
+
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		pre: `export NODE_PATH="$SOURCE/node_modules" && export PATH="$PATH:$NODE_PATH/.bin"`,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=trace",
+		},
+	});
+	console.log("testRunnerPathTools result", result.id);
+
+	// Assert the build script ran the tool and captured its output.
+	const output = await $`runner-path-tools | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.includes("tool output from my-tool"),
+		"Build script should have run my-tool from NODE_PATH/.bin.",
+	);
+};
+
+/** Test that build script cfg probes via RUSTC_WRAPPER work in runner mode.
+ *
+ * Reproduces the rustix compilation failure in tangram.ts testProxy: rustix's
+ * build script calls can_compile() which spawns RUSTC_WRAPPER (tgrustc) to
+ * probe compiler capabilities. Without the fix, tgrustc-internal env vars
+ * (TGRUSTC_RUNNER_DRIVER_MODE) leak into the child process, causing tgrustc
+ * to enter runner driver mode instead of the stdin-passthrough path.
+ */
+export const testRunnerCfgProbe = async () => {
+	// Make the source unique per invocation so the build is never cached. This
+	// test validates runtime sandbox behavior, so a cached result would be a
+	// false negative.
+	const baseSource = await tests
+		.get("runner-cfg-probe")
+		.then(tg.Directory.expect);
+	const mainRs = await baseSource.get("src/main.rs").then(tg.File.expect);
+	const mainRsText = await mainRs.text;
+	const source = tg.directory(baseSource, {
+		src: { "main.rs": `${mainRsText}\n// ${Date.now()}\n` },
+	});
+
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=trace",
+		},
+	});
+	console.log("testRunnerCfgProbe result", result.id);
+
+	const output = await $`runner-cfg-probe | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.includes("probe passed"),
+		"Build script cfg probe via RUSTC_WRAPPER should succeed in runner mode.",
+	);
+};
+
+/** Test that the runner can execute wrapped tools in the sandbox.
+ *
+ * Reproduces the tangram.ts testProxy failure on Linux where `bunx tsgo` fails
+ * because the runner sandbox does not have `/usr/bin/env` available, so
+ * shebang-based scripts cannot resolve their interpreters. The fix wraps
+ * shebang scripts with `std.wrap` using explicit interpreter binaries, making
+ * them native ELF executables that don't need shebangs at all.
+ */
+export const testRunnerPathExec = async () => {
+	const host = await std.triple.host();
+	// Get the dash interpreter.
+	const dashBin = await dash({ host })
+		.then((d) => d.get("bin/dash"))
+		.then(tg.File.expect);
+	// Create a shell script tool, then wrap it so it doesn't need a shebang.
+	const script = tg.file({
+		contents: '#!/usr/bin/env sh\necho "hello from exec tool"\n',
+		executable: true,
+	});
+	const tool = await std.wrap(script, { interpreter: dashBin, host });
+	const toolDir = tg.directory({ bin: { "my-exec-tool": tool } });
+
+	// Make the source unique per invocation so the build is never cached. This
+	// test validates runtime sandbox behavior, so a cached result would be a
+	// false negative.
+	const baseSource = await tests
+		.get("runner-path-exec")
+		.then(tg.Directory.expect);
+	const mainRs = await baseSource.get("src/main.rs").then(tg.File.expect);
+	const mainRsText = await mainRs.text;
+	const source = tg.directory(baseSource, {
+		src: { "main.rs": `${mainRsText}\n// ${Date.now()}\n` },
+	});
+
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		env: std.env.arg(toolDir, {
+			TGRUSTC_TRACING: "tgrustc=trace",
+		}),
+	});
+	console.log("testRunnerPathExec result", result.id);
+
+	const output = await $`runner-path-exec | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.includes("hello from exec tool"),
+		"Build script should have executed the tool from PATH.",
+	);
 };
 
 export const test = async () => {
@@ -887,8 +1156,8 @@ export const test = async () => {
 		testCacheHitVendoredDeps(),
 		testCacheHitSharedDepsAcrossProjects(),
 		testCacheHitUnchangedWorkspaceCrates(),
-		testBuildInTreeWithExternalTsImport(),
-		testBuildInTreeWithBuildScript(),
+		testExternalTsImport(),
+		testWorkspaceBuildScript(),
 		testMultiVersionCacheHit(),
 		testAliasedExtern(),
 		testPubUseReexport(),
@@ -897,5 +1166,12 @@ export const test = async () => {
 		testCacheHitWithDepVars(),
 		testCacheHitWithPreScript(),
 		testSysLinkCache(),
+		testRunnerWorkspaceRootAccess(),
+		testRunnerCacheHitWorkspace(),
+		testRunnerBuildScript(),
+		testRunnerEnvPassthrough(),
+		testRunnerPathTools(),
+		testRunnerCfgProbe(),
+		testRunnerPathExec(),
 	]);
 };

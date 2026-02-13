@@ -129,7 +129,7 @@ export namespace download {
 		const mirrors = gnuHosts.slice(1).map(gnuUrl);
 
 		const outer = await download
-			.extractArchive({ checksum, url, mirrors })
+			.extractArchive({ checksum, url })
 			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
 	};

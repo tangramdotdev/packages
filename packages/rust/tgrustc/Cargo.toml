@@ -25,7 +25,9 @@ futures = "0.3"
 rustix = { version = "1", features = ["stdio"] }
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "4dd1ae684e45cdb8e581aaad5609212dc40a42c7" }
 tangram_futures = { git = "https://github.com/tangramdotdev/tangram", rev = "4dd1ae684e45cdb8e581aaad5609212dc40a42c7" }
+glob = "0.3"
 tangram_std = { path = "../../std" }
+toml_edit = "0.23"
 tokio = { version = "1", default-features = false, features = [
   "rt",
   "fs",

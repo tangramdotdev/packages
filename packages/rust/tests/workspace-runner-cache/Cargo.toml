@@ -1,0 +1,16 @@
+[workspace]
+default-members = ["packages/app"]
+members = ["packages/lib", "packages/app"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Tangram <root@tangram.dev>"]
+description = "Test runner caching for workspace member build scripts"
+edition = "2021"
+homepage = "https://www.tangram.dev"
+license = "MIT"
+publish = false
+version = "0.0.0"
+
+[workspace.dependencies]
+lib = { path = "packages/lib" }

@@ -1,4 +1,5 @@
 import * as std from "std" with { local: "../std" };
+import openssl from "openssl" with { local: "../openssl.tg.ts" };
 import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
 import { $ } from "std" with { local: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
@@ -58,6 +59,9 @@ export type Arg = {
 
 	/** Whether to use the tangram_rustc proxy. */
 	proxy?: boolean;
+
+	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to "nightly". */
+	channel?: "stable" | "nightly" | string;
 
 	/** SDK configuration to use during the build. */
 	sdk?: std.sdk.Arg;
@@ -141,6 +145,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const {
 		buildInTree = false,
 		captureStderr = false,
+		channel: channel_,
 		checksum,
 		disableDefaultFeatures = false,
 		env: env_,
@@ -182,7 +187,14 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
-	const rustArtifact = await tg.build(self, { host: rustHost, target });
+	// When using the proxy, default to nightly so that upstream cargo's host.runner
+	// support is available without needing the tangramdotdev/cargo fork.
+	const channel = channel_ ?? (proxy ? "nightly" : "stable");
+	const rustArtifact = await tg.build(self, {
+		host: rustHost,
+		target,
+		channel,
+	});
 	envs.push(rustArtifact);
 	if (pkgConfig) {
 		envs.push(await tg.build(pkgconf, { host }));
@@ -211,6 +223,19 @@ replace-with = "vendored-sources"
 
 [source.vendored-sources]
 directory = "${vendoredDir}"`;
+	}
+
+	// When using the proxy, resolve the proxy directory once for reuse.
+	const proxyDir = proxy ? proxy_.proxy() : undefined;
+
+	// When using the proxy, add the host.runner config to wrap build script execution.
+	if (proxy && proxyDir !== undefined) {
+		const hostLinker = os === "darwin" ? "clang" : "gcc";
+		cargoConfig = await tg`${cargoConfig}
+
+[host]
+runner = ["${proxyDir}/bin/tgrustc", "runner"]
+linker = "${hostLinker}"`;
 	}
 
 	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
@@ -249,10 +274,18 @@ directory = "${vendoredDir}"`;
 
 	// Create the build script.
 	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
+	// When using the proxy, add unstable flags for host.runner support.
+	const cargoPrefix = proxy
+		? "cargo -Zhost-config -Ztarget-applies-to-host"
+		: "cargo";
 	// Optionally capture stderr to a file (for parsing tgrustc tracing in tests).
+	// Avoid bash process substitution (2> >(tee ...)) because on Linux the tee
+	// process can be killed before flushing when the sandbox tears down, losing
+	// the final proxy_complete events. Instead, redirect stderr to the file and
+	// replay it afterward so it still appears in the process logs.
 	const buildCommand = captureStderr
-		? tg`cargo build ${cargoArgString} 2> >(tee "${tg.output}/cargo-stderr.log" >&2)`
-		: tg`cargo build ${cargoArgString}`;
+		? tg`${cargoPrefix} build ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
+		: tg`${cargoPrefix} build ${cargoArgString}`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
@@ -301,11 +334,10 @@ directory = "${vendoredDir}"`;
 		envs.push(crossEnv);
 	}
 
-	if (proxy) {
+	if (proxy && proxyDir !== undefined) {
 		// Enable the tgrustc proxy for Tangram-cached Rust compilation.
 		// The proxy uses a self-as-driver pattern, running tgrustc itself as
 		// the inner executable, eliminating the need for a shell.
-		const proxyDir = proxy_.proxy();
 		const proxyBin = proxyDir
 			.then((d) => d.get("bin/tgrustc"))
 			.then(tg.File.expect);
@@ -445,11 +477,7 @@ export type CargoVendorArg = {
 	source: tg.Directory;
 };
 
-/** Extract only Cargo manifest files (Cargo.toml and Cargo.lock) from a source directory.
- * This allows vendoring to depend only on dependency declarations, not source code.
- * Also creates placeholder source files to satisfy cargo's manifest validation.
- * Note: Extracts from the entire source tree since path dependencies may reference
- * directories outside the manifestSubdir. */
+/** Extract only Cargo manifest files (Cargo.toml and Cargo.lock) from a source directory. */
 export const extractCargoManifests = async (
 	source: tg.Directory,
 ): Promise<tg.Directory> => {
@@ -490,9 +518,7 @@ export const extractCargoManifests = async (
 			}
 		}
 
-		// If this directory has a Cargo.toml, create placeholder source files
-		// to satisfy cargo's manifest validation. Cargo expects at least one of
-		// src/lib.rs, src/main.rs, or explicit target definitions.
+		// If this directory has a Cargo.toml, create placeholder source files.
 		if (hasCargoToml) {
 			result = await tg.directory(result, {
 				src: {
@@ -657,7 +683,6 @@ export const test = async () => {
 	return true;
 };
 
-import openssl from "openssl" with { local: "../openssl.tg.ts" };
 export const testUnproxiedWorkspace = async () => {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
