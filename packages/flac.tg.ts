@@ -7,7 +7,13 @@ export const metadata = {
 	name: "flac",
 	version: "1.5.0",
 	tag: "flac/1.5.0",
-	provides: {},
+	provides: {
+		binaries: ["flac", "metaflac"],
+		libraries: [
+			{ name: "FLAC", pkgConfigName: "flac", dylib: false },
+			{ name: "FLAC++", pkgConfigName: "flac++", dylib: false },
+		],
+	},
 };
 
 export const source = async () => {
@@ -32,11 +38,27 @@ export const deps = () =>
 export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
-	cmake.build({ source: source(), deps }, ...args);
+	cmake.build(
+		{
+			source: source(),
+			deps,
+			phases: {
+				configure: {
+					args: ["-DCMAKE_INSTALL_LIBDIR=lib"],
+				},
+			},
+		},
+		...args,
+	);
 
 export const env = () =>
 	std.env.arg({
-		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib/pkgconfig`, ":"),
 	});
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

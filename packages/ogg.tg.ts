@@ -6,7 +6,9 @@ export const metadata = {
 	name: "ogg",
 	version: "1.3.6",
 	tag: "ogg/1.3.6",
-	provides: {},
+	provides: {
+		libraries: [{ name: "ogg", dylib: false }],
+	},
 };
 
 export const source = () => {
@@ -27,11 +29,26 @@ export const source = () => {
 export type Arg = cmake.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
-	cmake.build({ source: source() }, ...args);
+	cmake.build(
+		{
+			source: source(),
+			phases: {
+				configure: {
+					args: ["-DCMAKE_INSTALL_LIBDIR=lib"],
+				},
+			},
+		},
+		...args,
+	);
 
 export const env = () =>
 	std.env.arg({
-		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib/pkgconfig`, ":"),
 	});
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

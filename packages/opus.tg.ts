@@ -6,7 +6,9 @@ export const metadata = {
 	name: "opus",
 	version: "1.5.2",
 	tag: "opus/1.5.2",
-	provides: {},
+	provides: {
+		libraries: [{ name: "opus", dylib: false }],
+	},
 };
 
 export const source = async () => {
@@ -26,11 +28,26 @@ export const source = async () => {
 export type Arg = cmake.Arg;
 
 export const build = (...args: std.Args<Arg>) =>
-	cmake.build({ source: source() }, ...args);
+	cmake.build(
+		{
+			source: source(),
+			phases: {
+				configure: {
+					args: ["-DCMAKE_INSTALL_LIBDIR=lib"],
+				},
+			},
+		},
+		...args,
+	);
 
 export const env = () =>
 	std.env.arg({
-		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib/pkgconfig`, ":"),
 	});
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

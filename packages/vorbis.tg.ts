@@ -7,7 +7,13 @@ export const metadata = {
 	name: "vorbis",
 	version: "1.3.7",
 	tag: "vorbis/1.3.7",
-	provides: {},
+	provides: {
+		libraries: [
+			{ name: "vorbis", dylib: false },
+			{ name: "vorbisenc", dylib: false },
+			{ name: "vorbisfile", dylib: false },
+		],
+	},
 };
 
 export const source = () => {
@@ -33,11 +39,27 @@ export const deps = () =>
 export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
-	cmake.build({ source: source(), deps }, ...args);
+	cmake.build(
+		{
+			source: source(),
+			deps,
+			phases: {
+				configure: {
+					args: ["-DCMAKE_INSTALL_LIBDIR=lib"],
+				},
+			},
+		},
+		...args,
+	);
 
 export const env = () =>
 	std.env.arg({
-		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib/pkgconfig`, ":"),
 	});
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};

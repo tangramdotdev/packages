@@ -12,7 +12,7 @@ export const metadata = {
 	version: "1.2.2",
 	tag: "libsndfile/1.2.2",
 	provides: {
-		libraries: ["sndfile"],
+		libraries: [{ name: "sndfile", dylib: false }],
 	},
 };
 
@@ -46,11 +46,27 @@ export const deps = () =>
 export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
-	cmake.build({ source: source(), deps }, ...args);
+	cmake.build(
+		{
+			source: source(),
+			deps,
+			phases: {
+				configure: {
+					args: ["-DCMAKE_INSTALL_LIBDIR=lib"],
+				},
+			},
+		},
+		...args,
+	);
 
 export const env = () =>
 	std.env.arg({
-		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib64/pkgconfig`, ":"),
+		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib/pkgconfig`, ":"),
 	});
 
 export default build;
+
+export const test = async () => {
+	const spec = std.assert.defaultSpec(metadata);
+	return await std.assert.pkg(build, spec);
+};
