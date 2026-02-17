@@ -4,12 +4,12 @@ import * as std from "std" with { local: "../std" };
 import packageLock from "./package-lock.json" with { type: "file" };
 
 export const metadata = {
-	home: "https://eslint.org",
+	homepage: "https://eslint.org",
 	license: "MIT",
 	name: "eslint",
 	repository: "https://github.com/eslint/eslint",
-	version: "9.1.1",
-	tag: "eslint/9.1.1",
+	version: "10.0.0",
+	tag: "eslint/10.0.0",
 	provides: {
 		binaries: ["eslint"],
 	},
@@ -18,7 +18,7 @@ export const metadata = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:4f39cb81c3540cbb5e0ccbbb7afff672fec31ac835b1f0be9bbf353083c61b38";
+		"sha256:465f34c0e6d389957194daced33a5ea65a193559f012c6463218a1d8cd638348";
 	const owner = name;
 	const repo = name;
 	const tag = `v${version}`;

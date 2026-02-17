@@ -7,8 +7,8 @@ export const metadata = {
 		"https://github.com/nodejs/node/blob/12fb157f79da8c094a54bc99370994941c28c235/LICENSE",
 	name: "nodejs",
 	repository: "https://github.com/nodejs/node",
-	version: "22.18.0",
-	tag: "nodejs/22.18.0",
+	version: "24.13.1",
+	tag: "nodejs/24.13.1",
 };
 
 export type ToolchainArg = {
@@ -34,22 +34,22 @@ const source = async (): Promise<tg.Directory> => {
 		["aarch64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-arm64.tar.xz`,
 			checksum:
-				"sha256:04fca1b9afecf375f26b41d65d52aa1703a621abea5a8948c7d1e351e85edade",
+				"sha256:c827d3d301e2eed1a51f36d0116b71b9e3d9e3b728f081615270ea40faac34c1",
 		},
 		["x86_64-linux"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-linux-x64.tar.xz`,
 			checksum:
-				"sha256:c1bfeecf1d7404fa74728f9db72e697decbd8119ccc6f5a294d795756dfcfca7",
+				"sha256:30215f90ea3cd04dfbc06e762c021393fa173a1d392974298bbc871a8e461089",
 		},
 		["aarch64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-arm64.tar.xz`,
 			checksum:
-				"sha256:6616f388e127c858989fc7fa92879cdb20d2a5d446adbfdca6ee4feb385bfa8a",
+				"sha256:d82a321541d65109c696505135be3b7dd46e3358f0f04d664f50f0d1e1ccb8a6",
 		},
 		["x86_64-darwin"]: {
 			url: `https://nodejs.org/dist/v${version}/node-v${version}-darwin-x64.tar.xz`,
 			checksum:
-				"sha256:76e4a1997da953dbf8e21f6ed1c4dd7eceb39deb96defe3b3e9d8f786ee287a8",
+				"sha256:013a8f786a022ad1729cf435e3675e097a77d5a42eaf139a2d5d1d5309a027d4",
 		},
 	};
 
@@ -235,14 +235,24 @@ export const build = async (...args: std.Args<any>) => {
 	) as PackageLockJson;
 
 	// Install the dependencies and dev dependencies.
-	const [dependencies, devDependencies] = await install(packageLockFile);
+	const [dependencies, devDependencies, downloadedPaths] =
+		await install(packageLockFile);
 	let devBins = tg.directory();
 	for (const [dst, pkg] of Object.entries(packageLock.packages)) {
 		if (pkg.bin && pkg.dev) {
+			if (!downloadedPaths.has(dst)) {
+				for (const name of Object.keys(pkg.bin)) {
+					console.log(
+						`Warning: skipping dev binary ${name} because ${dst} was not downloaded.`,
+					);
+				}
+				continue;
+			}
 			for (const [name, path] of Object.entries(pkg.bin)) {
-				const executable = devDependencies
-					.get(`${dst}/${path}`)
-					.then(tg.File.expect);
+				// Use a symlink to preserve the directory context so that relative requires work.
+				const executable = tg.symlink(
+					tg`${devDependencies}/${dst}/${path}`,
+				);
 				const wrapped = std.wrap({
 					executable,
 					interpreter,
@@ -308,7 +318,7 @@ type PackageLockJson = {
 
 export const install = async (
 	packageLockJson: tg.File,
-): Promise<[tg.Directory, tg.Directory]> => {
+): Promise<[tg.Directory, tg.Directory, Set<string>]> => {
 	// Parse the package-lock.json.
 	const packageLock = tg.encoding.json.decode(
 		await packageLockJson.text,
@@ -317,9 +327,13 @@ export const install = async (
 	// Install the packages specified by the package-lock.json.
 	const downloads = await downloadPackages(packageLock);
 
+	// Collect the set of successfully downloaded package paths.
+	const downloadedPaths = new Set(downloads.map(([name]) => name));
+
 	return [
 		await installPackages(downloads, false),
 		await installPackages(downloads, true),
+		downloadedPaths,
 	];
 };
 
@@ -374,18 +388,28 @@ const downloadPackages = async (
 			);
 		}
 
-		const dir = await std
-			.download({
-				url: data.resolved as string,
-				checksum: integrity,
-				mode: "extract",
-			})
-			.then(tg.Directory.expect)
-			.then(std.directory.unwrap);
-		return [name, dir, data.dev] as [string, tg.Directory, boolean];
+		try {
+			const dir = await std
+				.download({
+					url: data.resolved as string,
+					checksum: integrity,
+					mode: "extract",
+				})
+				.then(tg.Directory.expect)
+				.then(std.directory.unwrap);
+			return [name, dir, data.dev] as [string, tg.Directory, boolean];
+		} catch (e) {
+			console.log(
+				`Warning: failed to extract ${name} from ${data.resolved}, skipping.`,
+			);
+			return undefined;
+		}
 	});
 
-	return Promise.all(all);
+	const results = await Promise.all(all);
+	return results.filter(
+		(r): r is [string, tg.Directory, boolean] => r !== undefined,
+	);
 };
 
 /** Install a list of packages to the paths specified by package-lock.json. */
