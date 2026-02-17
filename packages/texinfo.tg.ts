@@ -1,4 +1,6 @@
 import * as bash from "bash" with { local: "./bash.tg.ts" };
+import * as gawk from "gawk" with { local: "./gawk.tg.ts" };
+import * as gnused from "gnused" with { local: "./gnused.tg.ts" };
 import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
 import * as perl from "perl" with { local: "./perl" };
 import * as std from "std" with { local: "./std" };
@@ -67,49 +69,78 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	const interpreter = tg.File.expect(await perlArtifact.get("bin/perl"));
 
+	const perlLibPaths = [
+		tg`${output}/share/texi2any/lib/Text-Unidecode/lib`,
+		tg`${output}/share/texi2any/lib/Unicode-EastAsianWidth/lib`,
+		tg`${output}/share/texi2any/lib/libintl-perl/lib`,
+		tg`${output}/share/texi2any/Pod-Simple-Texinfo`,
+		tg`${output}/share/texi2any`,
+	];
+
+	const perlEnv: tg.Unresolved<std.env.Arg> = {
+		PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
+	};
+
 	let binDir = tg.directory({
 		["bin/install-info"]: output.get("bin/install-info"),
 		["bin/pod2texi"]: std.wrap({
 			executable: tg.File.expect(await output.get("bin/pod2texi")),
 			interpreter,
+			env: perlEnv,
 		}),
 		["bin/texi2any"]: std.wrap({
 			executable: tg.File.expect(await output.get("bin/texi2any")),
 			interpreter,
+			env: perlEnv,
 		}),
 		["bin/makeinfo"]: tg.symlink("texi2any"),
 	});
 
-	const shellScripts = ["pdftexi2dvi", "texi2dvi", "texi2pdf", "texindex"];
+	// The shell scripts need sed in PATH.
+	const sedArtifact = await gnused.build({ host });
+	const sedEnv = await std.env.arg(sedArtifact);
 
-	for (const script of shellScripts) {
+	// Wrap texi2dvi first, as pdftexi2dvi and texi2pdf depend on it.
+	const texi2dviFile = tg.File.expect(await output.get("bin/texi2dvi"));
+	const texi2dviWrapped = await bash.wrapScript(texi2dviFile, host, sedEnv);
+	binDir = tg.directory(binDir, {
+		["bin/texi2dvi"]: texi2dviWrapped,
+	});
+
+	// pdftexi2dvi and texi2pdf exec texi2dvi internally, so they need it and sed in PATH.
+	const texi2dviDir = tg.directory({ ["bin/texi2dvi"]: texi2dviWrapped });
+	const pdfScriptEnv = await std.env.arg(sedArtifact, texi2dviDir);
+	for (const script of ["pdftexi2dvi", "texi2pdf"]) {
 		const scriptFile = tg.File.expect(await output.get(`bin/${script}`));
 		binDir = tg.directory(binDir, {
-			[`bin/${script}`]: bash.wrapScript(scriptFile, host),
+			[`bin/${script}`]: bash.wrapScript(scriptFile, host, pdfScriptEnv),
 		});
 	}
 
-	const perlLibPaths = [
-		tg`${output}/share/texinfo/lib/Text-Unidecode/lib`,
-		tg`${output}/share/texinfo/lib/Unicode-EastAsianWidth/lib`,
-		tg`${output}/share/texinfo/lib/libintl-perl/lib`,
-		tg`${output}/share/texinfo/Pod-Simple-Texinfo`,
-		tg`${output}/share/texinfo`,
-	];
-
-	return std.env(binDir, {
-		PERL5LIB: tg.Mutation.suffix(tg.Template.join(":", ...perlLibPaths), ":"),
+	// texindex execs gawk with the texindex.awk script.
+	const gawkArtifact = await gawk.build({ host });
+	const texindexEnv = await std.env.arg(gawkArtifact, {
+		TEXINDEX_AWK: tg.Mutation.setIfUnset(tg`${gawkArtifact}/bin/gawk`),
 		TEXINDEX_SCRIPT: tg.Mutation.setIfUnset(
 			tg`${output}/share/texinfo/texindex.awk`,
 		),
 	});
+	const texindexFile = tg.File.expect(await output.get("bin/texindex"));
+	binDir = tg.directory(binDir, {
+		["bin/texindex"]: bash.wrapScript(texindexFile, host, texindexEnv),
+	});
+
+	return binDir;
 };
 
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
-	// FIXME - build should return a directory, not an env - wrap the bins in the env.
-	return true;
-	// return await std.assert.pkg(build, spec);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			pod2texi: { testArgs: ["--version"], snapshot: "0.01" },
+		}),
+	};
+	return await std.assert.pkg(build, spec);
 };
