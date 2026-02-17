@@ -6,8 +6,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "binutils",
 	repository: "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git",
-	version: "2.44",
-	tag: "binutils/2.44",
+	version: "2.45",
+	tag: "binutils/2.45",
 	provides: {
 		binaries: [
 			"addr2line",
@@ -30,7 +30,7 @@ export const source = async () => {
 	const { name, version } = metadata;
 
 	const checksum =
-		"sha256:79cb120b39a195ad588cd354aed886249bfab36c808e746b30208d15271cc95c";
+		"sha256:7f288c9a869582d53dc645bf1b9e90cc5123f6862738850472ddbca69def47a3";
 
 	return std.download.fromGnu({
 		name,
@@ -40,10 +40,16 @@ export const source = async () => {
 	});
 };
 
-export type Arg = std.autotools.Arg & {
-	staticBuild?: boolean;
-	target?: string;
-};
+export const deps = () =>
+	std.deps({
+		texinfo: { build: texinfo.build, kind: "buildtime" },
+	});
+
+export type Arg = std.autotools.Arg &
+	std.deps.Arg<typeof deps> & {
+		staticBuild?: boolean;
+		target?: string;
+	};
 
 export const build = async (...args: std.Args<Arg>) => {
 	// Extract custom options first.
@@ -96,6 +102,8 @@ export const build = async (...args: std.Args<Arg>) => {
 			tg`--with-sysroot=${tg.output}`,
 			"--disable-dependency-tracking",
 			"--disable-nls",
+			"--disable-werror",
+			"--enable-gprofng=no",
 			`--build=${build_}`,
 			`--host=${host}`,
 			`--target=${target}`,
@@ -108,17 +116,21 @@ export const build = async (...args: std.Args<Arg>) => {
 		build: buildPhase,
 	};
 
-	const arg = await std.autotools.arg(
+	const env = std.env.arg(
+		{ CFLAGS: tg.Mutation.suffix("-Wno-implicit-function-declaration", " ") },
+		additionalEnv,
+	);
+
+	return std.autotools.build(
 		{
 			source: source(),
-			// texinfo returns an env file, not a directory, so add it directly to env.
-			env: std.env.arg(texinfo.build({ build: build_, host }), additionalEnv),
+			deps,
+			env,
+			fortifySource: false,
 			phases,
 		},
 		...args,
 	);
-
-	return std.autotools.build(arg);
 };
 
 export default build;
