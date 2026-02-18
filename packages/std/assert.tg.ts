@@ -268,12 +268,13 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		return true;
 	}
 
-	// Run the binary with the provided test invocation.
+	// Run the binary with the provided test invocation. When exitOnErr is false, append `|| true` so the shell exits 0 regardless of the binary's exit code. The `-e` flag alone does not help here because it only affects multi-command scripts.
 	const preScript = pre ? tg`${pre}\n` : "";
+	const exitSuffix = exitOnErr ? "" : " || true";
 	const executable = tg`${preScript}${arg.directory}/bin/${name} ${tg.Template.join(
 		" ",
 		...testArgs,
-	)} > ${tg.output} 2>&1`;
+	)} > ${tg.output} 2>&1${exitSuffix}`;
 
 	const stdout = await $`${executable}`
 		.bootstrap(true)

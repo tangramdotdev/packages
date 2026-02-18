@@ -186,7 +186,7 @@ export const test = async () => {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.binaries(binaries, {
-			fdbdecode: { skipRun: true },
+			fdbdecode: { exitOnErr: false },
 			fdbmonitor: { testArgs: ["--help"] },
 		}),
 	};

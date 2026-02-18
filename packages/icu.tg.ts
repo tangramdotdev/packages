@@ -118,7 +118,7 @@ export const test = async () => {
 			gencfu: hasUsage,
 			gencnval: { testArgs: ["--help"], snapshot: "usage" },
 			gendict: hasUsage,
-			icuinfo: { testArgs: [], snapshot: "77.1" },
+			icuinfo: { testArgs: [], snapshot: "78.2" },
 			makeconv: { snapshot: "6.2" },
 			pkgdata: { testArgs: ["--help"], snapshot: "usage:", exitOnErr: false },
 		}),
