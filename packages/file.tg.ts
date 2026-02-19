@@ -1,5 +1,7 @@
+import * as bzip2 from "bzip2" with { local: "./bzip2" };
 import * as libseccomp from "libseccomp" with { local: "./libseccomp.tg.ts" };
 import * as std from "std" with { local: "./std" };
+import * as xz from "xz" with { local: "./xz.tg.ts" };
 import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
 export const metadata = {
@@ -80,7 +82,7 @@ export const test = async () => {
 				name: "magic",
 				staticlib: false,
 				dylib: true,
-				runtimeDeps: [zlib.build(), libseccomp.build()],
+				runtimeDeps: [zlib.build(), libseccomp.build(), xz.build(), bzip2.build()],
 			},
 		],
 	});
