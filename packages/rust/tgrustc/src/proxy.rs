@@ -933,17 +933,11 @@ async fn write_outputs_to_cargo(
 		}
 	}
 
-	// Classify entries and collect artifact IDs for dependency files that need caching.
-	let dep_artifact_ids: Vec<tg::artifact::Id> = entries
-		.iter()
-		.filter(|(filename, _)| is_dependency_file(filename))
-		.map(|(_, artifact)| artifact.id())
-		.collect();
+	// Write outputs to cargo's output directory.
+	let all_artifact_ids: Vec<tg::artifact::Id> =
+		entries.iter().map(|(_, artifact)| artifact.id()).collect();
+	process::batch_cache(tg, all_artifact_ids).await?;
 
-	// Batch cache all dependency artifacts in a single HTTP call.
-	process::batch_cache(tg, dep_artifact_ids).await?;
-
-	// Now create symlinks and copy binaries concurrently.
 	let futures = entries.into_iter().map(|(filename, artifact)| {
 		let output_directory = output_directory.clone();
 		async move {
@@ -954,38 +948,16 @@ async fn write_outputs_to_cargo(
 				tokio::fs::remove_file(&to).await.ok();
 			}
 
-			if is_dependency_file(&filename) {
-				// Symlink dependencies to the artifact store (already cached above).
-				process::symlink_cached_artifact(&artifact, &to).await?;
-			} else {
-				// Copy binaries and set executable permissions.
-				let file = artifact
-					.try_unwrap_file()
-					.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
-				let bytes = file.bytes(tg).await?;
-				tokio::fs::write(&to, &bytes).await.map_err(|error| {
-					tg::error!(source = error, "failed to write file {}", to.display())
-				})?;
-				// Make the file executable (required on Linux).
-				let permissions = std::fs::Permissions::from_mode(0o755);
-				tokio::fs::set_permissions(&to, permissions)
-					.await
-					.map_err(|error| {
-						tg::error!(
-							source = error,
-							"failed to set permissions on {}",
-							to.display()
-						)
-					})?;
+			// Symlink to the artifact store.
+			process::symlink_cached_artifact(&artifact, &to).await?;
 
-				// For binaries with a metadata suffix (e.g., `foo_bar-abc123`), cargo expects
-				// a convenience symlink with hyphens and no suffix (e.g., `foo-bar`).
+			// Create a convenience symlink for binaries with a metadata suffix.
+			if !is_dependency_file(&filename) {
 				if let Some(convenience_name) = strip_metadata_suffix(&filename) {
 					let convenience_path = output_directory.join(&convenience_name);
 					if convenience_path.exists() || convenience_path.is_symlink() {
 						tokio::fs::remove_file(&convenience_path).await.ok();
 					}
-					// Create a symlink to the copied binary.
 					tokio::fs::symlink(&to, &convenience_path)
 						.await
 						.map_err(|error| {

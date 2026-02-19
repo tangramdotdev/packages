@@ -250,9 +250,7 @@ export const build = async (...args: std.Args<any>) => {
 			}
 			for (const [name, path] of Object.entries(pkg.bin)) {
 				// Use a symlink to preserve the directory context so that relative requires work.
-				const executable = tg.symlink(
-					tg`${devDependencies}/${dst}/${path}`,
-				);
+				const executable = tg.symlink(tg`${devDependencies}/${dst}/${path}`);
 				const wrapped = std.wrap({
 					executable,
 					interpreter,

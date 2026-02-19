@@ -318,20 +318,21 @@ pub(crate) async fn batch_cache(
 	Ok(())
 }
 
-/// Create a symlink from `target` pointing to a pre-cached artifact in the local store.
+/// Create an absolute symlink from `target` pointing to a pre-cached artifact in the local store.
 pub(crate) async fn symlink_cached_artifact(
 	artifact: &tg::Artifact,
 	target: &Path,
 ) -> tg::Result<()> {
-	let from = PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact.id().to_string());
-	tokio::fs::symlink(&from, target)
+	let artifacts_path =
+		PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact.id().to_string());
+	tokio::fs::symlink(&artifacts_path, target)
 		.await
 		.map_err(|error: std::io::Error| {
 			tg::error!(
 				source = error,
 				"failed to symlink {} to {}",
 				target.display(),
-				from.display()
+				artifacts_path.display()
 			)
 		})
 }

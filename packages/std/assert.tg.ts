@@ -263,6 +263,33 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		subpath: `bin/${name}`,
 	});
 
+	// If the binary is a wrapper, assert that it has dependencies.
+	const artifact = await arg.directory.tryGet(`bin/${name}`);
+	if (artifact !== undefined) {
+		let file: tg.File | undefined;
+		if (artifact instanceof tg.Symlink) {
+			const resolved = await artifact.resolve();
+			if (resolved instanceof tg.File) {
+				file = resolved;
+			}
+		} else if (artifact instanceof tg.File) {
+			file = artifact;
+		}
+		if (file !== undefined) {
+			const kind = await std.file.detectExecutableKind(file);
+			if (kind === "elf" || kind === "mach-o") {
+				const manifest = await wrap.Manifest.read(file);
+				if (manifest !== undefined) {
+					const deps = await file.dependencyObjects;
+					tg.assert(
+						deps !== undefined && deps.length > 0,
+						`Binary bin/${name} is a wrapper but has no dependencies. This indicates the wrapper was not properly constructed.`,
+					);
+				}
+			}
+		}
+	}
+
 	// If skipRun is set, only check existence.
 	if (skipRun) {
 		return true;

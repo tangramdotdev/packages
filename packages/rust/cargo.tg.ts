@@ -382,13 +382,13 @@ linker = "${hostLinker}"`;
 		.get(`target/${target}/${profileDir}`)
 		.then(tg.Directory.expect);
 
-	// Grab the bins from the release dir.
+	// Grab the bins from the release dir, resolving symlinks to files.
 	const bins: Record<string, tg.Artifact> = {};
 	for await (const [name, artifact] of releaseDir) {
-		if (artifact instanceof tg.File) {
-			if (await artifact.executable) {
-				bins[name] = artifact;
-			}
+		const resolved =
+			artifact instanceof tg.Symlink ? await artifact.resolve() : artifact;
+		if (resolved instanceof tg.File && (await resolved.executable)) {
+			bins[name] = resolved;
 		}
 	}
 
