@@ -10,7 +10,7 @@ export const metadata = {
 	provides: {
 		// FIXME - yacc requires sed
 		binaries: ["bison"],
-		libraries: [{ name: "y", dylib: false, staticlib: true }],
+		libraries: [{ name: "y", pkgConfigName: false, dylib: false, staticlib: true }],
 	},
 };
 

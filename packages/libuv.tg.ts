@@ -37,11 +37,7 @@ export const build = (...args: std.Args<Arg>) =>
 			source: source(),
 			phases: {
 				configure: {
-					args: [
-						"-DCMAKE_BUILD_TYPE=Release",
-						"-DCMAKE_INSTALL_LIBDIR=lib",
-						"-DBUILD_TESTING=OFF",
-					],
+					args: ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_TESTING=OFF"],
 				},
 			},
 		},

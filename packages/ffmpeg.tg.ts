@@ -10,13 +10,13 @@ export const metadata = {
 	provides: {
 		binaries: ["ffmpeg", "ffprobe"],
 		libraries: [
-			"avcodec",
-			"avdevice",
-			"avfilter",
-			"avformat",
-			"avutil",
-			"swresample",
-			"swscale",
+			{ name: "avcodec", dylib: false },
+			{ name: "avdevice", dylib: false },
+			{ name: "avfilter", dylib: false },
+			{ name: "avformat", dylib: false },
+			{ name: "avutil", dylib: false },
+			{ name: "swresample", dylib: false },
+			{ name: "swscale", dylib: false },
 		],
 	},
 };
@@ -57,3 +57,15 @@ export const build = (...args: std.Args<Arg>) =>
 	);
 
 export default build;
+
+export const test = async () => {
+	return await std.assert.pkg(build, {
+		// ffmpeg uses -version (single dash), not --version.
+		binaries: std.assert.allBinaries(["ffmpeg", "ffprobe"], {
+			testArgs: ["-version"],
+			snapshot: metadata.version,
+		}),
+		// Static-only libs need `pkg-config --libs --static` for transitive deps;
+		// the test framework uses `--libs` without `--static`, so skip link tests.
+	});
+};

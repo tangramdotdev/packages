@@ -32,3 +32,13 @@ export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build({ source: source() }, ...args);
 
 export default build;
+
+export const test = async () => {
+	// nasm and ndisasm use -v for version, not --version.
+	return await std.assert.pkg(build, {
+		binaries: [
+			{ name: "nasm", testArgs: ["-v"], snapshot: metadata.version },
+			{ name: "ndisasm", testArgs: ["-v"], snapshot: metadata.version },
+		],
+	});
+};

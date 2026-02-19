@@ -32,11 +32,6 @@ export const build = (...args: std.Args<Arg>) =>
 	cmake.build(
 		{
 			source: source(),
-			phases: {
-				configure: {
-					args: ["-DCMAKE_INSTALL_LIBDIR=lib"],
-				},
-			},
 		},
 		...args,
 	);

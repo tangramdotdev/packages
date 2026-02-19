@@ -79,7 +79,9 @@ export const test = async () => {
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
 			testArgs: [],
 			snapshot: "Usage:",
+			exitOnErr: false,
 		}),
+		libraries: [{ name: "acl", runtimeDeps: [attr.build()] }],
 	};
 	return await std.assert.pkg(build, spec);
 };

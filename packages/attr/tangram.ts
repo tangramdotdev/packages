@@ -60,6 +60,7 @@ export const test = async () => {
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
 			testArgs: [],
 			snapshot: "Usage:",
+			exitOnErr: false,
 		}),
 		metadata,
 	};

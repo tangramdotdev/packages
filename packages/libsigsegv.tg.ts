@@ -8,7 +8,7 @@ export const metadata = {
 	version: "2.14",
 	tag: "libsigsegv/2.14",
 	provides: {
-		libraries: ["sigsegv"],
+		libraries: [{ name: "sigsegv", pkgConfigName: false, dylib: false }],
 	},
 };
 

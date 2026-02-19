@@ -42,11 +42,6 @@ export const build = (...args: std.Args<Arg>) =>
 		{
 			source: source(),
 			deps,
-			phases: {
-				configure: {
-					args: ["-DCMAKE_INSTALL_LIBDIR=lib"],
-				},
-			},
 		},
 		...args,
 	);

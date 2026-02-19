@@ -14,7 +14,7 @@ export const metadata = {
 	provides: {
 		binaries: ["bzip2"],
 		// FIXME - there is a dylib, but no pkgconfig.
-		libraries: [{ name: "bz2", staticlib: true, dylib: false }],
+		libraries: [{ name: "bz2", pkgConfigName: false, staticlib: true, dylib: false }],
 	},
 };
 

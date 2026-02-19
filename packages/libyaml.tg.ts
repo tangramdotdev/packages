@@ -8,7 +8,7 @@ export const metadata = {
 	version: "0.2.5",
 	tag: "libyaml/0.2.5",
 	provides: {
-		libraries: ["yaml"],
+		libraries: [{ name: "yaml", pkgConfigName: false }],
 	},
 };
 

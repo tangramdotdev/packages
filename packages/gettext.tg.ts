@@ -1,5 +1,6 @@
 import * as acl from "acl" with { local: "./acl.tg.ts" };
 import * as attr from "attr" with { local: "./attr" };
+import * as bash from "bash" with { local: "./bash.tg.ts" };
 import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
 import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
 import * as std from "std" with { local: "./std" };
@@ -119,12 +120,27 @@ export const build = async (...args: std.Args<Arg>) => {
 		configure: { args: configureArgs },
 	});
 
-	return std.autotools.build({ ...arg, phases });
+	let output = await std.autotools.build({ ...arg, phases });
+
+	// Wrap shell scripts with a Tangram-managed bash interpreter.
+	const shellScripts = ["autopoint", "gettext.sh", "gettextize"];
+	for (const script of shellScripts) {
+		const file = tg.File.expect(await output.get(`bin/${script}`));
+		output = await tg.directory(output, {
+			[`bin/${script}`]: bash.wrapScript(file, arg.host),
+		});
+	}
+
+	return output;
 };
 
 export default build;
 
 export const test = async () => {
 	const spec = std.assert.defaultSpec(metadata);
+	// On Linux, libintl.h is provided by glibc, not by this package.
+	if (std.triple.os(std.triple.host()) === "linux") {
+		spec.headers = spec.headers?.filter((h) => h !== "libintl.h");
+	}
 	return await std.assert.pkg(build, spec);
 };

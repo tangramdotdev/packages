@@ -46,6 +46,13 @@ export const build = (...args: std.Args<Arg>) =>
 export default build;
 
 export let test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
-	return await std.assert.pkg(build, spec);
+	return await std.assert.pkg(build, {
+		...std.assert.defaultSpec(metadata),
+		libraries: [
+			{
+				name: "ssh2",
+				runtimeDeps: [openssl.build(), zlib.build()],
+			},
+		],
+	});
 };

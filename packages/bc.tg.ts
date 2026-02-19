@@ -53,7 +53,16 @@ export const build = async (...args: std.Args<Arg>) => {
 	const env = std.env.arg(arg.env, {
 		CC: tg.Mutation.setIfUnset(ccCommand),
 	});
-	return std.autotools.build({ ...arg, env });
+	let output = await std.autotools.build({ ...arg, env });
+	// bc's safe-install.sh uses `cat` to copy files, which strips xattrs.
+	// Re-wrap the binaries to restore dependency metadata from the manifest.
+	for (const bin of ["bc", "dc"]) {
+		const file = await output.get(`bin/${bin}`).then(tg.File.expect);
+		output = await tg.directory(output, {
+			[`bin/${bin}`]: std.wrap(file),
+		});
+	}
+	return output;
 };
 
 export default build;

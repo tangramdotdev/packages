@@ -73,6 +73,15 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
-	return await std.assert.pkg(build, spec);
+	return await std.assert.pkg(build, {
+		...std.assert.defaultSpec(metadata),
+		libraries: [
+			{
+				name: "magic",
+				staticlib: false,
+				dylib: true,
+				runtimeDeps: [zlib.build(), libseccomp.build()],
+			},
+		],
+	});
 };

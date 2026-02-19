@@ -1,3 +1,5 @@
+import * as bash from "bash" with { local: "./bash.tg.ts" };
+import * as gnused from "gnused" with { local: "./gnused.tg.ts" };
 import * as std from "std" with { local: "./std" };
 
 export const metadata = {
@@ -22,8 +24,24 @@ const source = () => {
 
 export type Arg = std.autotools.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build({ source: source() }, ...args);
+export const build = async (...args: std.Args<Arg>) => {
+	const arg = await std.autotools.arg({ source: source() }, ...args);
+	let output = await std.autotools.build(arg);
+
+	// updatedb is a shell script that uses sed for argument parsing.
+	// Wrap it with bash and provide sed so it works outside the build env.
+	const updatedb = tg.File.expect(await output.get("bin/updatedb"));
+	const sedArtifact = await gnused.build({ host: arg.host });
+	output = await tg.directory(output, {
+		"bin/updatedb": bash.wrapScript(updatedb, arg.host, {
+			SED: tg.Mutation.setIfUnset(
+				tg`${sedArtifact}/bin/sed`,
+			),
+		}),
+	});
+
+	return output;
+};
 
 export default build;
 

@@ -11,7 +11,7 @@ export const metadata = {
 	version: "1.2.5",
 	tag: "musl/1.2.5",
 	provides: {
-		libraries: ["c"],
+		libraries: [{ name: "c", pkgConfigName: false }],
 	},
 };
 

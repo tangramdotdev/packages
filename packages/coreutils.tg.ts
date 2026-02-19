@@ -3,6 +3,7 @@ import * as attr from "attr" with { local: "./attr" };
 import * as libcap from "libcap" with { local: "./libcap.tg.ts" };
 import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
 import * as std from "std" with { local: "./std" };
+import alwaysPreserveXattrsPatch from "./std/utils/coreutils-always-preserve-xattrs.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/coreutils/",
@@ -36,12 +37,16 @@ export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:16535a9adf0b10037364e2d612aad3d9f4eca3a344949ced74d12faf4bd51d25";
-	const source = await std.download.fromGnu({
+	let source = await std.download.fromGnu({
 		name,
 		version,
 		compression: "xz",
 		checksum,
 	});
+
+	// Apply the xattr preservation patch so that coreutils' own `install`
+	// command preserves extended attributes during `make install`.
+	source = await std.patch(source, alwaysPreserveXattrsPatch);
 
 	return source;
 };

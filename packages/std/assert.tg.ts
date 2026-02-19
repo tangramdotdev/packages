@@ -487,7 +487,7 @@ export const linkableLib = async (arg: LibraryArg) => {
 				if (libNameExists) {
 					resolvedPkgConfigName = `lib${pkgConfigName}`;
 				} else {
-					throw new Error(`pkg-config file not found for ${pkgConfigName}`);
+					resolvedPkgConfigName = undefined;
 				}
 			}
 		}

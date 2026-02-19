@@ -373,6 +373,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		`-G`,
 		`"${generator}"`,
 		tg`-DCMAKE_INSTALL_PREFIX=${prefixPath}`,
+		`-DCMAKE_INSTALL_LIBDIR=lib`,
 		`-B`,
 		buildDir,
 	];
@@ -417,7 +418,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	const mergedPhases = await std.phases.arg(defaultPhases, ...userPhasesArray);
 
 	const system = std.triple.archAndOs(host);
-	return await tg
+	let output = await tg
 		.build(std.phases.run, {
 			bootstrap: true,
 			debug,
@@ -430,6 +431,26 @@ export const build = async (...args: std.Args<BuildArg>) => {
 			...(processName !== undefined ? { processName } : {}),
 		})
 		.then(tg.Directory.expect);
+
+	// cmake's file(INSTALL) strips xattrs. Re-wrap compiled binaries to
+	// restore tgld dependency metadata.
+	try {
+		const binDir = await output.get("bin").then(tg.Directory.expect);
+		for await (const [name, artifact] of binDir) {
+			if (artifact instanceof tg.File) {
+				const meta = await std.file.tryExecutableMetadata(artifact);
+				if (meta?.format === "elf" || meta?.format === "mach-o") {
+					output = await tg.directory(output, {
+						[`bin/${name}`]: std.wrap(artifact),
+					});
+				}
+			}
+		}
+	} catch {
+		// No bin directory (library-only packages) - nothing to re-wrap.
+	}
+
+	return output;
 };
 
 export const test = async () => {

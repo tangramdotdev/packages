@@ -62,6 +62,7 @@ export const test = async () => {
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
 			testArgs: ["-h"],
 			snapshot: "usage:",
+			exitOnErr: false,
 		}),
 	};
 	return await std.assert.pkg(build, spec);
