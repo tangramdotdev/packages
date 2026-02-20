@@ -1,6 +1,6 @@
 import * as std from "std" with { local: "./std" };
 import binutils from "binutils" with { local: "./binutils.tg.ts" };
-import glibc from "glibc" with { local: "./glibc.tg.ts" };
+import * as glibc from "glibc" with { local: "./glibc.tg.ts" };
 import musl from "musl" with { local: "./musl" };
 import perl from "perl" with { local: "./perl" };
 import python from "python" with { local: "./python" };
@@ -269,14 +269,18 @@ export const mpfrSource = async () => {
 	});
 };
 
-/** Select the correct libc for the host. */
-export const libc = (host: string) => {
+/** Select the correct libc sysroot for the host. Returns a directory with headers and libraries at the root level (include/, lib/). */
+export const libc = async (host: string) => {
 	const environment = std.triple.environment(std.triple.normalize(host));
 	switch (environment) {
 		case "musl":
 			return musl({ host });
 		case "gnu":
-			return glibc({ host });
+			// glibc.sysroot() returns a directory structured as ${host}/lib/, ${host}/include/. Extract the host subdirectory so that --with-sysroot finds headers and libraries at the root level.
+			return glibc
+				.sysroot({ host })
+				.then((d) => d.get(host))
+				.then(tg.Directory.expect);
 		default:
 			throw new Error(`Unsupported environment: ${environment}`);
 	}

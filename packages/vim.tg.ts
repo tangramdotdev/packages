@@ -7,8 +7,8 @@ export const metadata = {
 	license:
 		"https://github.com/vim/vim/blob/c8b47f26d8ae0db2d65a1cd34d7e34a2c7a6b462/LICENSE",
 	repository: "https://github.com/vim/vim",
-	version: "9.1.0814",
-	tag: "vim/9.1.0814",
+	version: "9.2.0",
+	tag: "vim/9.2.0",
 	provides: {
 		binaries: ["vim"],
 	},
@@ -20,7 +20,7 @@ export const source = () => {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:5fefd3c8bcc474b56873a4dd7c85748081443baedc253d39634d3553ec65d751";
+		"sha256:9c60fc4488d78bbca9069e74e9cfafd006bdfcece5bb0971eac6268531f1b51f";
 	return std.download.fromGithub({
 		checksum,
 		owner,
@@ -38,7 +38,18 @@ export const deps = () =>
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build({ source: source(), deps, buildInTree: true }, ...args);
+	std.autotools.build(
+		{
+			source: source(),
+			deps,
+			buildInTree: true,
+			fortifySource: false,
+			phases: {
+				configure: { args: ["--with-tlib=ncursesw"] },
+			},
+		},
+		...args,
+	);
 
 export default build;
 

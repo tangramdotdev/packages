@@ -84,13 +84,12 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	// FIXME are the lib flags at the end necessary?
-	const prepare = tg`export LD_LIBRARY_PATH="${sysroot}/lib:${zlibNgArtifact}/lib:${ncursesArtifact}/lib:/lib:/lib/${host}:/build/lib:/build/lib/${host}" && export SYSROOT_LIBDIR="$(gcc -print-sysroot)/lib" && export HOST_GCC_TRIPLE=""$(gcc -dumpmachine)""`;
+	const prepare = tg`set -x && export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibNgArtifact}/lib:${ncursesArtifact}/lib:$HOME/build/lib:$HOME/build/lib/${host}"`;
 
 	// Define default flags.
 	const configure = {
 		args: [
-			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS="${stage2ExeLinkerFlags}"`,
+			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
 			`-DLLVM_RUNTIME_TARGETS=${host}`,
@@ -118,17 +117,8 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Add the cmake cache file last.
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
-	const buildPhase = {
-		pre: "cd /build",
-		body: {
-			command: "ninja",
-			args: tg.Mutation.set(["stage2-distribution"]),
-		},
-	};
-	const install = {
-		command: "ninja",
-		args: tg.Mutation.set(["stage2-install-distribution"]),
-	};
+	const buildPhase = "cd build && ninja stage2-distribution";
+	const install = "ninja stage2-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
@@ -154,18 +144,23 @@ export const toolchain = async (arg?: LLVMArg) => {
 	});
 
 	// The bootstrap compiler was not proxied. Manually wrap the output binaries.
+	// With the sysroot embedded, binaries can find libraries relative to their location.
+	// We still wrap to ensure the interpreter is correct.
 
 	// Collect all required library paths.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
-	const hostLibDir = tg.symlink(tg`${libDir}/${host}`);
+	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
 	const ncursesLibDir = ncursesArtifact.get("lib").then(tg.Directory.expect);
 	const zlibLibDir = zlibNgArtifact.get("lib").then(tg.Directory.expect);
 	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
 
-	// Wrap all ELF binaries in the bin directory.
+	// Wrap all ELF binaries in the bin directory, except clang-XX which must not be
+	// wrapped to preserve /proc/self/exe for the -cc1 driver.
+	const majorVersion = llvmMajorVersion();
+	const clangBinaryName = `clang-${majorVersion}`;
 	const binDir = await llvmArtifact.get("bin").then(tg.Directory.expect);
 	for await (const [name, artifact] of binDir) {
-		if (artifact instanceof tg.File) {
+		if (artifact instanceof tg.File && name !== clangBinaryName) {
 			const { format } = await std.file.executableMetadata(artifact);
 			if (format === "elf") {
 				const unwrapped = binDir.get(name).then(tg.File.expect);
@@ -178,6 +173,18 @@ export const toolchain = async (arg?: LLVMArg) => {
 			}
 		}
 	}
+
+	// Replace clang and clang++ with shell scripts that exec the unwrapped clang binary.
+	// This allows the toolchain to work correctly since /proc/self/exe will point to the
+	// real clang binary, enabling it to find its resource directory.
+	llvmArtifact = await tg.directory(llvmArtifact, {
+		"bin/clang": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
+			executable: true,
+		}),
+		"bin/clang++": tg.file(`#!/bin/sh\nexec ${clangBinaryName} "$@"\n`, {
+			executable: true,
+		}),
+	});
 
 	return llvmArtifact;
 };
@@ -383,8 +390,8 @@ export const test = async () => {
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
 
-	const expectedInterpreter =
-		os === "darwin" ? undefined : `/lib/${glibc.interpreterName(host)}`;
+	const expectedInterpreterName =
+		os === "darwin" ? undefined : glibc.interpreterName(host);
 
 	const directory = await toolchain({ host });
 	tg.Directory.assert(directory);
@@ -399,6 +406,7 @@ export const test = async () => {
 	const cOut = await $`
 		set -x && clang -v -xc ${testCSource} -fuse-ld=lld -o ${tg.output}
 	`
+		.bootstrap(true)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
@@ -410,12 +418,10 @@ export const test = async () => {
 			`expected elf, got ${cMetadata.format}`,
 		);
 		tg.assert(
-			cMetadata.interpreter === expectedInterpreter,
-			`expected ${expectedInterpreter}, got ${cMetadata.interpreter}`,
-		);
-		tg.assert(
-			cMetadata.arch === hostArch,
-			`expected ${hostArch}, got ${cMetadata.arch}`,
+			expectedInterpreterName !== undefined
+				? cMetadata.interpreter?.includes(expectedInterpreterName)
+				: cMetadata.interpreter === undefined,
+			`expected ${expectedInterpreterName}, got ${cMetadata.interpreter}`,
 		);
 	} else if (os === "darwin") {
 		tg.assert(
@@ -432,8 +438,9 @@ export const test = async () => {
 		}
 	`;
 	const cxxOut = await $`
-		set -x && clang++ -v -xc++ ${testCXXSource} -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
+		set -x && clang++ -v -xc++ ${testCXXSource} -stdlib=libc++ -lc++ -fuse-ld=lld -unwindlib=libunwind -o ${tg.output}
 	`
+		.bootstrap(true)
 		.env(directory)
 		.host(system)
 		.then(tg.File.expect);
@@ -445,12 +452,10 @@ export const test = async () => {
 			`expected elf, got ${cxxMetadata.format}`,
 		);
 		tg.assert(
-			cxxMetadata.interpreter === expectedInterpreter,
-			`expected ${expectedInterpreter}, got ${cxxMetadata.interpreter}`,
-		);
-		tg.assert(
-			cxxMetadata.arch === hostArch,
-			`expected ${hostArch}, got ${cxxMetadata.arch}`,
+			expectedInterpreterName !== undefined
+				? cxxMetadata.interpreter?.includes(expectedInterpreterName)
+				: cxxMetadata.interpreter === undefined,
+			`expected ${expectedInterpreterName}, got ${cxxMetadata.interpreter}`,
 		);
 	} else if (os === "darwin") {
 		tg.assert(

@@ -11,14 +11,35 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "elfutils",
 	repository: "https://sourceware.org/git/?p=elfutils.git;a=summary",
-	version: "0.191",
-	tag: "elfutils/0.191",
+	version: "0.194",
+	tag: "elfutils/0.194",
+	provides: {
+		binaries: [
+			"eu-addr2line",
+			"eu-ar",
+			"eu-elfclassify",
+			"eu-elfcmp",
+			"eu-elfcompress",
+			"eu-elflint",
+			"eu-findtextrel",
+			"eu-nm",
+			"eu-objdump",
+			"eu-readelf",
+			"eu-size",
+			"eu-stack",
+			"eu-strings",
+			"eu-strip",
+			"eu-unstrip",
+		],
+		headers: ["libelf.h", "gelf.h"],
+		libraries: ["elf", "dw", "asm"],
+	},
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871";
+		"sha256:09e2ff033d39baa8b388a2d7fbc5390bfde99ae3b7c67c7daaf7433fbcf0f01e";
 	const extension = ".tar.bz2";
 	const base = `https://sourceware.org/elfutils/ftp/${version}`;
 	return await std.download
@@ -38,16 +59,13 @@ export const deps = () =>
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export const build = async (...args: std.Args<Arg>) => {
+	const arg = await std.autotools.arg(
 		{
 			source: source(),
 			deps,
 			env: {
-				CFLAGS: tg.Mutation.suffix(
-					"-Wno-format-nonliteral -lz -lbz2 -llzma",
-					" ",
-				),
+				CFLAGS: tg.Mutation.suffix("-Wno-format-nonliteral", " "),
 			},
 			phases: {
 				configure: {
@@ -69,8 +87,32 @@ export const build = (...args: std.Args<Arg>) =>
 		...args,
 	);
 
+	// The linker needs rpath-link to find transitive .so deps (zlib, lzma, bz2) referenced by the internal libelf.so and libdw.so during the build.
+	const {
+		zlib: zlibArtifact,
+		xz: xzArtifact,
+		bzip2: bzip2Artifact,
+	} = await std.deps.artifacts(deps, arg);
+	const env = std.env.arg(arg.env, {
+		LDFLAGS: tg.Mutation.suffix(
+			tg`-Wl,-rpath-link,${zlibArtifact}/lib:${xzArtifact}/lib:${bzip2Artifact}/lib`,
+			" ",
+		),
+	});
+
+	return std.autotools.build({ ...arg, env });
+};
+
 export default build;
 
-export const test = () => {
-	return tg.unimplemented();
+export const test = async () => {
+	const runtimeDeps = [zlib.build(), xz.build(), bzip2.build()];
+	return await std.assert.pkg(build, {
+		...std.assert.defaultSpec(metadata),
+		libraries: [
+			{ name: "elf", runtimeDeps },
+			{ name: "dw", runtimeDeps },
+			{ name: "asm", runtimeDeps },
+		],
+	});
 };

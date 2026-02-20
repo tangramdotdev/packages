@@ -77,10 +77,14 @@ export const build = async (...args: std.Args<Arg>) => {
 			TGLD_PASSTHROUGH: true,
 		},
 		arg.env,
+		{ utils: false },
 	);
 
 	let result = await std.autotools.build({
-		...(await std.triple.rotate({ build, host })),
+		build,
+		host,
+		defaultCrossArgs: false,
+		defaultCrossEnv: false,
 		env,
 		fortifySource: false,
 		hardeningCFlags: false,
@@ -176,6 +180,17 @@ export const interpreterName = (triple: string) => {
 };
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
-	return await std.assert.pkg(build, spec);
+	const host = std.sdk.canonicalTriple(std.triple.host());
+	const directory = await build();
+	await std.assert.nonEmpty(directory);
+	// The glibc build installs under ${host}/ via DESTDIR. Verify the key files exist.
+	await std.assert.fileExists({
+		directory,
+		subpath: `${host}/lib/libc.so`,
+	});
+	await std.assert.fileExists({
+		directory,
+		subpath: `${host}/lib/libc.a`,
+	});
+	return directory;
 };

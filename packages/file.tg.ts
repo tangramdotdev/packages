@@ -82,7 +82,12 @@ export const test = async () => {
 				name: "magic",
 				staticlib: false,
 				dylib: true,
-				runtimeDeps: [zlib.build(), libseccomp.build(), xz.build(), bzip2.build()],
+				runtimeDeps: [
+					zlib.build(),
+					libseccomp.build(),
+					xz.build(),
+					bzip2.build(),
+				],
 			},
 		],
 	});

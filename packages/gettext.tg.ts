@@ -1,6 +1,9 @@
 import * as acl from "acl" with { local: "./acl.tg.ts" };
 import * as attr from "attr" with { local: "./attr" };
 import * as bash from "bash" with { local: "./bash.tg.ts" };
+import coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
+import * as gnugrep from "gnugrep" with { local: "./gnugrep.tg.ts" };
+import * as gnused from "gnused" with { local: "./gnused.tg.ts" };
 import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
 import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
 import * as std from "std" with { local: "./std" };
@@ -123,11 +126,18 @@ export const build = async (...args: std.Args<Arg>) => {
 	let output = await std.autotools.build({ ...arg, phases });
 
 	// Wrap shell scripts with a Tangram-managed bash interpreter.
+	// These scripts call sed, grep, and coreutils (cat, basename, etc.)
+	// at runtime, so include those tools in the wrapper env.
+	const sedArtifact = await gnused.build({ host: arg.host });
+	const grepArtifact = await gnugrep.build({ host: arg.host });
+	const coreutilsArtifact = await coreutils({ host: arg.host });
+	const scriptEnv = std.env.arg(sedArtifact, grepArtifact, coreutilsArtifact);
+
 	const shellScripts = ["autopoint", "gettext.sh", "gettextize"];
 	for (const script of shellScripts) {
 		const file = tg.File.expect(await output.get(`bin/${script}`));
 		output = await tg.directory(output, {
-			[`bin/${script}`]: bash.wrapScript(file, arg.host),
+			[`bin/${script}`]: bash.wrapScript(file, arg.host, scriptEnv),
 		});
 	}
 

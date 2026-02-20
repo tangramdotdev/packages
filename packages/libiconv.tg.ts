@@ -10,7 +10,10 @@ export const metadata = {
 	provides: {
 		binaries: ["iconv"],
 		headers: ["iconv.h", "libcharset.h", "localcharset.h"],
-		libraries: [{ name: "charset", pkgConfigName: false }, { name: "iconv", pkgConfigName: false, dylib: true, staticlib: false }],
+		libraries: [
+			{ name: "charset", pkgConfigName: false },
+			{ name: "iconv", pkgConfigName: false, dylib: true, staticlib: false },
+		],
 	},
 };
 

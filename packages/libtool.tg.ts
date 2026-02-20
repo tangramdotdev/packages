@@ -71,25 +71,15 @@ export const build = async (...args: std.Args<Arg>) => {
 			sedArtifact,
 			coreutilsArtifact,
 			{
-				["_lt_pkgdatadir"]: tg.Mutation.setIfUnset(
-					tg`${output}/share/libtool`,
-				),
-				EGREP: tg.Mutation.setIfUnset(
-					tg`${grepArtifact}/bin/grep -E`,
-				),
-				FGREP: tg.Mutation.setIfUnset(
-					tg`${grepArtifact}/bin/grep -F`,
-				),
+				["_lt_pkgdatadir"]: tg.Mutation.setIfUnset(tg`${output}/share/libtool`),
+				EGREP: tg.Mutation.setIfUnset(tg`${grepArtifact}/bin/grep -E`),
+				FGREP: tg.Mutation.setIfUnset(tg`${grepArtifact}/bin/grep -F`),
 				GREP: tg.Mutation.setIfUnset(tg`${grepArtifact}/bin/grep`),
 				SED: tg.Mutation.setIfUnset(tg`${sedArtifact}/bin/sed`),
 			},
 		);
 		output = await tg.directory(output, {
-			[`bin/${scriptName}`]: bash.wrapScript(
-				patchedFile,
-				host,
-				scriptEnv,
-			),
+			[`bin/${scriptName}`]: bash.wrapScript(patchedFile, host, scriptEnv),
 		});
 	}
 

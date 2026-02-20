@@ -19,8 +19,8 @@ export const metadata = {
 	name: "ruby",
 	license: "BSD-2-Clause",
 	repository: "https://git.ruby-lang.org/ruby.git",
-	version: "3.4.1",
-	tag: "ruby/3.4.1",
+	version: "3.4.8",
+	tag: "ruby/3.4.8",
 	provides: {
 		binaries: [
 			"bundle",
@@ -39,7 +39,7 @@ export const metadata = {
 export const source = async () => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:3d385e5d22d368b064c817a13ed8e3cc3f71a7705d7ed1bae78013c33aa7c87f";
+		"sha256:53c4ddad41fbb6189f1f5ee0db57a51d54bd1f87f8755b3d68604156a35b045b";
 	const extension = ".tar.gz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${extension}`;
@@ -260,9 +260,9 @@ const bundledGems = (): Promise<tg.Directory> => {
 			},
 			{
 				name: "rexml",
-				version: "3.4.0",
+				version: "3.4.4",
 				checksum:
-					"sha256:efbea1efba7fa151158e0ee1e643525834da2d8eb4cf744aa68f6480bc9804b2",
+					"sha256:19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142",
 			},
 			{
 				name: "rss",
@@ -278,9 +278,9 @@ const bundledGems = (): Promise<tg.Directory> => {
 			},
 			{
 				name: "net-imap",
-				version: "0.5.4",
+				version: "0.5.8",
 				checksum:
-					"sha256:b665d23a4eeea6af725a9bda0e3dbb65f06b7907e7a3986c1bbcc5d09444599d",
+					"sha256:52aa5fdfc1a8a3df1f793b20a327e95b5a9dfe1d733e1f0d53075d2dbcfcf593",
 			},
 			{
 				name: "net-pop",
@@ -290,9 +290,9 @@ const bundledGems = (): Promise<tg.Directory> => {
 			},
 			{
 				name: "net-smtp",
-				version: "0.5.0",
+				version: "0.5.1",
 				checksum:
-					"sha256:5fc0415e6ea1cc0b3dfea7270438ec22b278ca8d524986a3ae4e5ae8d087b42a",
+					"sha256:ed96a0af63c524fceb4b29b0d352195c30d82dd916a42f03c62a3a70e5b70736",
 			},
 			{
 				name: "matrix",
@@ -316,15 +316,15 @@ export const test = async () => {
 		std.assert.binary(name, { snapshot: version });
 
 	const binaries = [
-		hasVersion("bundle", "2.6.2"),
-		hasVersion("bundler", "2.6.2"),
+		hasVersion("bundle", "2.6.9"),
+		hasVersion("bundler", "2.6.9"),
 		hasVersion("erb", "4.0.4"),
-		hasVersion("gem", "3.6.2"),
+		hasVersion("gem", "3.6.9"),
 		hasVersion("irb", "1.14.3"),
 		hasVersion("racc", "1.8.1"),
-		hasVersion("rdoc", "6.10.0"),
+		hasVersion("rdoc", "6.14.0"),
 		hasVersion("ruby", metadata.version),
-		hasVersion("ri", "6.10.0"),
+		hasVersion("ri", "6.14.0"),
 	];
 	const spec = {
 		...std.assert.defaultSpec(metadata),

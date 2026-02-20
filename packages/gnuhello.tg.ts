@@ -7,8 +7,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "hello",
 	repository: "https://git.savannah.gnu.org/cgit/hello.git",
-	version: "2.12.1",
-	tag: "hello/2.12.1",
+	version: "2.12.2",
+	tag: "hello/2.12.2",
 	provides: {
 		binaries: ["hello"],
 	},
@@ -17,7 +17,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:8d99142afd92576f30b0cd7cb42a8dc6809998bc5d607d88761f512e26c7db20";
+		"sha256:5a9a996dc292cc24dcf411cee87e92f6aae5b8d13bd9c6819b4c7a9dce0818ab";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
