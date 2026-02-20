@@ -56,6 +56,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			`--host=${host}`,
 			"libc_cv_slibdir=/lib",
 			"libc_cv_forced_unwind=yes",
+			"MSGFMT=:",
 		],
 	};
 
@@ -180,7 +181,8 @@ export const interpreterName = (triple: string) => {
 };
 
 export const test = async () => {
-	const host = std.sdk.canonicalTriple(std.triple.host());
+	// Use the same host triple that autotools.arg() resolves, so paths match the DESTDIR output.
+	const host = std.triple.host();
 	const directory = await build();
 	await std.assert.nonEmpty(directory);
 	// The glibc build installs under ${host}/ via DESTDIR. Verify the key files exist.

@@ -13,8 +13,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "gcc",
 	repository: "https://gcc.gnu.org/git.html",
-	version: "14.1.0",
-	tag: "gcc/14.1.0",
+	version: "15.2.0",
+	tag: "gcc/15.2.0",
 	provides: {
 		binaries: ["gcc"],
 	},
@@ -23,10 +23,10 @@ export const metadata = {
 /* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
 export const source = () =>
 	tg.directory(gccSource(), {
-		gmp: gmpSource(),
-		isl: islSource(),
-		mpfr: mpfrSource(),
-		mpc: mpcSource(),
+		gmp: std.dependencies.gmp.source(),
+		isl: std.dependencies.isl.source(),
+		mpfr: std.dependencies.mpfr.source(),
+		mpc: std.dependencies.mpc.source(),
 	});
 
 export type Arg = std.autotools.Arg & {
@@ -97,9 +97,12 @@ export const build = async (...args: std.Args<Arg>) => {
 
 	let result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
+		defaultCrossArgs: false,
+		defaultCrossEnv: false,
 		env,
+		fortifySource: false,
 		phases,
-		opt: "2",
+		opt: "3",
 		sdk: arg.sdk,
 		source: arg.source,
 	});
@@ -198,9 +201,12 @@ export const libgcc = async (...args: std.Args<Arg>) => {
 
 	const result = await std.autotools.build({
 		...(await std.triple.rotate({ build, host })),
+		defaultCrossArgs: false,
+		defaultCrossEnv: false,
 		env,
+		fortifySource: false,
 		phases,
-		opt: "2",
+		opt: "3",
 		sdk: arg.sdk,
 		source: arg.source,
 	});
@@ -212,61 +218,14 @@ export const libgcc = async (...args: std.Args<Arg>) => {
 
 export const gccSource = async () => {
 	const { name, version } = metadata;
-	const extension = ".tar.gz";
-	const checksum =
-		"sha256:e283c654987afe3de9d8080bc0bd79534b5ca0d681a73a11ff2b5d3767426840";
-	const base = `https://ftp.gnu.org/gnu/${name}/${name}-${version}`;
-	return await std.download
-		.extractArchive({ base, checksum, name, version, extension })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-};
-
-export const gmpSource = async () => {
-	const name = "gmp";
-	const version = "6.2.1";
 	const extension = ".tar.xz";
 	const checksum =
-		"sha256:fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2";
-	const base = `https://gmplib.org/download/${name}`;
+		"sha256:438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e";
+	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
-
-export const islSource = async () => {
-	const name = "isl";
-	const version = "0.24";
-	const extension = ".tar.xz";
-	const checksum =
-		"sha256:043105cc544f416b48736fff8caf077fb0663a717d06b1113f16e391ac99ebad";
-	const base = `https://libisl.sourceforge.io/`;
-	return await std.download
-		.extractArchive({ base, checksum, name, version, extension })
-		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
-};
-
-export const mpcSource = () => {
-	const name = "mpc";
-	const version = "1.2.1";
-	const checksum =
-		"sha256:17503d2c395dfcf106b622dc142683c1199431d095367c6aacba6eec30340459";
-	return std.download.fromGnu({ checksum, name, version });
-};
-
-export const mpfrSource = async () => {
-	const name = "mpfr";
-	const version = "4.1.0";
-	const checksum =
-		"sha256:feced2d430dd5a97805fa289fed3fc8ff2b094c02d05287fd6133e7f1f0ec926";
-	return std.download.fromGnu({
-		checksum,
-		name,
-		version,
-		compression: "bz2",
-	});
 };
 
 /** Select the correct libc sysroot for the host. Returns a directory with headers and libraries at the root level (include/, lib/). */
