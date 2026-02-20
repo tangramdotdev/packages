@@ -47,6 +47,13 @@ export const build = async (...args: std.Args<Arg>) => {
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		// The locate binary calls setgid() to drop group privileges before
+		// processing arguments, which fails in the sandbox with EPERM.
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			locate: { exitOnErr: false },
+		}),
+	};
 	return await std.assert.pkg(build, spec);
 };

@@ -275,8 +275,13 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 			// Use Tangram-native vendoring
 			// Parse go.mod/go.sum and download dependencies from proxy.golang.org
 			const goMod = await source.get("go.mod").then(tg.File.expect);
-			const goSum = await source.get("go.sum").then(tg.File.expect);
-			vendorArtifact = await vendorDependencies(goMod, goSum);
+			const goSumArtifact = await source.tryGet("go.sum");
+			if (goSumArtifact instanceof tg.File) {
+				vendorArtifact = await vendorDependencies(goMod, goSumArtifact);
+			} else {
+				// No go.sum means no dependencies to vendor.
+				shouldCreateVendor = false;
+			}
 		}
 	}
 

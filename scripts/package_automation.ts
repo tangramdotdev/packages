@@ -537,6 +537,10 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 	],
 };
 
+/** Packages that are higher-level builders with no standalone build artifact.
+ * These skip the build action but can still run check, test, publish, etc. */
+const BUILD_SKIP_PACKAGES = new Set(["autobuild"]);
+
 /** Default export matrix for packages without custom configuration */
 const DEFAULT_EXPORT_MATRIX: ExportMatrix = [
 	{ ref: "default", tagPath: "default" },
@@ -833,6 +837,14 @@ class PackageExecutor {
 			let packageSuccess = true;
 
 			for (const actionName of orderedActions) {
+				if (
+					actionName === "build" &&
+					BUILD_SKIP_PACKAGES.has(packageName)
+				) {
+					log(`[build] Skipping ${packageName} (library-only package)`);
+					continue;
+				}
+
 				const actionFn = ACTION_MAP[actionName];
 				if (!actionFn) {
 					log(`Unknown action: ${actionName}`);

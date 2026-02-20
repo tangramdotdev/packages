@@ -118,6 +118,12 @@ export const build = async (...args: std.Args<Arg>) => {
 		configureArgs.push("--with-included-gettext");
 		// Allow the build process to locate libraries from the compile-time library path.
 		configureArgs.push("DYLD_FALLBACK_LIBRARY_PATH=$LIBRARY_PATH");
+	} else {
+		// On Linux, use glibc's built-in iconv instead of GNU libiconv.
+		// Without this, configure detects libiconv from the SDK and links
+		// against it, but the wrapper doesn't propagate the transitive
+		// dependency to all tools.
+		configureArgs.push("--without-libiconv-prefix");
 	}
 	const phases = std.phases.arg(arg.phases, {
 		configure: { args: configureArgs },
@@ -141,13 +147,42 @@ export const build = async (...args: std.Args<Arg>) => {
 		});
 	}
 
+	// The recode-sr-latin sub-project configure still links against
+	// libiconv despite --without-libiconv-prefix. Add the missing
+	// transitive library paths (libiconv, libacl, libattr) to its wrapper.
+	if (os === "linux") {
+		const {
+			acl: aclArtifact,
+			attr: attrArtifact,
+		} = await std.deps.artifacts(deps, arg);
+		const recodeBin = tg.File.expect(
+			await output.get("bin/recode-sr-latin"),
+		);
+		output = await tg.directory(output, {
+			"bin/recode-sr-latin": std.wrap(recodeBin, {
+				libraryPaths: [
+					tg`${aclArtifact}/lib`,
+					tg`${attrArtifact}/lib`,
+					tg`${await libiconv.build({ host: arg.host })}/lib`,
+				],
+			}),
+		});
+	}
+
 	return output;
 };
 
 export default build;
 
 export const test = async () => {
-	const spec = std.assert.defaultSpec(metadata);
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		// gettext.sh is a shell library (function definitions), not a
+		// runnable command, so skip executing it.
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			"gettext.sh": { skipRun: true },
+		}),
+	};
 	// On Linux, libintl.h is provided by glibc, not by this package.
 	if (std.triple.os(std.triple.host()) === "linux") {
 		spec.headers = spec.headers?.filter((h) => h !== "libintl.h");
