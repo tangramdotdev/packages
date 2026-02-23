@@ -6,6 +6,12 @@ use std::{
 };
 use tangram_client::prelude::*;
 
+type ExternResult = (
+	Vec<tg::Value>,
+	Vec<tg::artifact::Id>,
+	Option<(String, tg::Directory)>,
+);
+
 /// Run the proxy.
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
@@ -692,11 +698,7 @@ async fn process_externs(
 		}
 	});
 
-	let results: Vec<(
-		Vec<tg::Value>,
-		Vec<tg::artifact::Id>,
-		Option<(String, tg::Directory)>,
-	)> = futures::future::try_join_all(futures).await?;
+	let results: Vec<ExternResult> = futures::future::try_join_all(futures).await?;
 
 	// Batch-store all wrapper directories in a single daemon RPC by collecting
 	// them into a parent directory. Value::store() recursively collects all
@@ -732,6 +734,7 @@ async fn process_externs(
 /// Performs a single `read_dir` pass over each dependency directory to simultaneously
 /// build the externs map (for transitive closure BFS) and catalog dependency files,
 /// avoiding the overhead of scanning directories twice.
+#[allow(clippy::too_many_lines)]
 async fn process_dependencies(
 	tg: &impl tg::Handle,
 	dependencies: &[String],
@@ -757,15 +760,15 @@ async fn process_dependencies(
 
 			// Read .externs files into the externs map for BFS.
 			if ext == Some("externs") {
-				if let Some(stem) = extract_stem(name) {
-					if let Ok(content) = std::fs::read_to_string(&path) {
-						let deps: HashSet<String> = content
-							.lines()
-							.map(|s| s.trim().to_owned())
-							.filter(|s| !s.is_empty())
-							.collect();
-						externs_map.insert(stem.to_owned(), deps);
-					}
+				if let Some(stem) = extract_stem(name)
+					&& let Ok(content) = std::fs::read_to_string(&path)
+				{
+					let deps: HashSet<String> = content
+						.lines()
+						.map(|s| s.trim().to_owned())
+						.filter(|s| !s.is_empty())
+						.collect();
+					externs_map.insert(stem.to_owned(), deps);
 				}
 				continue;
 			}
@@ -955,23 +958,23 @@ async fn write_outputs_to_cargo(
 			process::symlink_cached_artifact(&artifact, &to).await?;
 
 			// Create a convenience symlink for binaries with a metadata suffix.
-			if !is_dependency_file(&filename) {
-				if let Some(convenience_name) = strip_metadata_suffix(&filename) {
-					let convenience_path = output_directory.join(&convenience_name);
-					if convenience_path.exists() || convenience_path.is_symlink() {
-						tokio::fs::remove_file(&convenience_path).await.ok();
-					}
-					tokio::fs::symlink(&to, &convenience_path)
-						.await
-						.map_err(|error| {
-							tg::error!(
-								source = error,
-								"failed to create convenience symlink from {} to {}",
-								convenience_path.display(),
-								to.display()
-							)
-						})?;
+			if !is_dependency_file(&filename)
+				&& let Some(convenience_name) = strip_metadata_suffix(&filename)
+			{
+				let convenience_path = output_directory.join(&convenience_name);
+				if convenience_path.exists() || convenience_path.is_symlink() {
+					tokio::fs::remove_file(&convenience_path).await.ok();
 				}
+				tokio::fs::symlink(&to, &convenience_path)
+					.await
+					.map_err(|error| {
+						tg::error!(
+							source = error,
+							"failed to create convenience symlink from {} to {}",
+							convenience_path.display(),
+							to.display()
+						)
+					})?;
 			}
 
 			Ok::<_, tg::Error>(())
