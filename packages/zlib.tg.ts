@@ -4,8 +4,8 @@ export const metadata = {
 	homepage: "https://zlib.net",
 	license: "https://zlib.net/zlib_license.html",
 	name: "zlib",
-	version: "1.3.1",
-	tag: "zlib/1.3.1",
+	version: "1.3.2",
+	tag: "zlib/1.3.2",
 	provides: {
 		docs: ["man/man3/zlib.3"],
 		libraries: [{ name: "z", pkgConfigName: "zlib" }],
@@ -15,7 +15,7 @@ export const metadata = {
 export const source = async () => {
 	const { homepage, name, version } = metadata;
 	const checksum =
-		"sha256:38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32";
+		"sha256:d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3";
 	const extension = ".tar.xz";
 	return std.download
 		.extractArchive({ checksum, base: homepage, name, version, extension })
