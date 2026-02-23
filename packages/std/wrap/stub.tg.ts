@@ -316,6 +316,67 @@ export const testStrip = async () => {
 		);
 };
 
+export const testPrintManifest = async () => {
+	const toolchain = std.bootstrap.sdk();
+	const source = tg.directory({
+		"main.c": tg.file(`
+			#include <stdio.h>
+			int main() {
+				printf("hello from main\\n");
+				return 0;
+			}
+		`),
+	});
+	const executable = await std.run`
+		gcc ${source}/main.c -o ${tg.output}
+	`
+		.bootstrap(true)
+		.env(toolchain, { utils: false })
+		.then(tg.File.expect);
+
+	const wrapper = await std.wrap(executable, {
+		env: {
+			HELLO: "WORLD",
+		},
+		args: ["--foo"],
+	});
+	await wrapper.store();
+	const wrapperId = wrapper.id;
+	console.log("testPrintManifest wrapper ID", wrapperId);
+
+	// Run the wrapper with --tangram-print-manifest and capture stdout.
+	const output = await std
+		.build`${wrapper} --tangram-print-manifest > ${tg.output}`
+		.bootstrap(true)
+		.then(tg.File.expect);
+	const text = await output.text;
+	console.log("manifest output", text);
+
+	// The output should be valid JSON.
+	const manifest = tg.encoding.json.decode(text);
+	tg.assert(manifest, "Expected manifest to be valid JSON");
+
+	// Verify the manifest contains an executable field.
+	tg.assert(
+		typeof manifest === "object" && manifest !== null && "executable" in manifest,
+		"Expected manifest to contain an executable field",
+	);
+
+	// Verify environment mutations are present.
+	tg.assert(
+		"env" in manifest,
+		"Expected manifest to contain an env field",
+	);
+
+	// Verify args are present.
+	tg.assert(
+		"args" in manifest,
+		"Expected manifest to contain an args field",
+	);
+
+	return true;
+};
+
 export const testModify = async () => {
 	let file = await tg.file("nothing to see here\n");
 	return std.run`

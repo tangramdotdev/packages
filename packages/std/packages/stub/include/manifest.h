@@ -28,6 +28,7 @@ typedef struct {
 	String 		ld_library_path;
 	String 		ld_preload;
 	Table		env;
+	String		raw;
 } Manifest;
 
 typedef struct {
@@ -127,47 +128,14 @@ static String render_ld_preload (Arena* arena, Manifest* manifest) {
 }
 
 static void print_manifest (Manifest* manifest) {
-	if (manifest->executable.ptr) {
-		trace("executable: ");
-		print_json_string(&manifest->executable);
-		trace("\n");
-	}
-	if (manifest->entrypoint) {
-		trace("entrypoint: %d\n", manifest->entrypoint);
-	}
-	trace("interpreter: %s\n", manifest->interpreter.ptr);
-	trace("libary_paths:\n");
-	for(int i = 0; i < manifest->num_library_paths; i++) {
-		trace("\t");
-		for (int n = 0; n < manifest->library_paths[i].len; n++) {
-			trace("%c", manifest->library_paths[i].ptr[n]);
+	uint8_t* ptr = manifest->raw.ptr;
+	uint64_t len = manifest->raw.len;
+	while (len > 0 && ptr) {
+		int64_t amt = write(STDOUT_FILENO, (void*)ptr, len);
+		if (amt <= 0) {
+			break;
 		}
-		trace("\n");
-	}
-	trace("preloads:\n");
-	for(int i = 0; i < manifest->num_preloads; i++) {
-		trace("\t");
-		for (int n = 0; n < manifest->preloads[i].len; n++) {
-			trace("%c", manifest->preloads[i].ptr[n]);
-		}
-		trace("\n");
-	}
-	trace("env:\n");
-	for(Node* itr = manifest->env.list; itr != manifest->env.list + manifest->env.capacity; itr++) {
-		Node* node = itr;
-		while(node) {
-			if (node->key.ptr) {
-				trace("\t");
-				for (int c = 0; c < node->key.len; c++) {
-					trace("%c", node->key.ptr[c]);
-				}
-				trace("=");
-				for (int c = 0; c < node->val.len; c++) {
-					trace("%c", node->val.ptr[c]);
-				}
-				trace("\n");
-			}
-			node = node->next;
-		}
+		ptr += amt;
+		len -= amt;
 	}
 }
