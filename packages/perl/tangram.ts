@@ -75,7 +75,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			phases: {
 				configure: {
 					args: configureArgs,
-					command: "$SHELL Configure",
+					command: "bash Configure",
 				},
 			},
 		},

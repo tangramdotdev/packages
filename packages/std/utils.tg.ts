@@ -60,17 +60,10 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		host,
 		sdk,
 	});
-	const shellExecutable = await shellArtifact
-		.get(`bin/bash`)
-		.then(tg.File.expect);
-	const shellEnv = {
-		CONFIG_SHELL: shellExecutable,
-		SHELL: shellExecutable,
-	};
-	const env = await std.env.arg(env_, shellEnv, { utils: false });
+	const env = await std.env.arg(env_, { utils: false });
 	const commonArg = { bootstrap, build, env, host, sdk };
 
-	let utils = [shellArtifact, shellEnv];
+	let utils = [shellArtifact];
 	utils = utils.concat(
 		await Promise.all([
 			bzip2(commonArg),

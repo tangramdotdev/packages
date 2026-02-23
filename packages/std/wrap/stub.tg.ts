@@ -345,10 +345,10 @@ export const testPrintManifest = async () => {
 	console.log("testPrintManifest wrapper ID", wrapperId);
 
 	// Run the wrapper with --tangram-print-manifest and capture stdout.
-	const output = await std
-		.build`${wrapper} --tangram-print-manifest > ${tg.output}`
-		.bootstrap(true)
-		.then(tg.File.expect);
+	const output =
+		await std.build`${wrapper} --tangram-print-manifest > ${tg.output}`
+			.bootstrap(true)
+			.then(tg.File.expect);
 	const text = await output.text;
 	console.log("manifest output", text);
 
@@ -358,21 +358,17 @@ export const testPrintManifest = async () => {
 
 	// Verify the manifest contains an executable field.
 	tg.assert(
-		typeof manifest === "object" && manifest !== null && "executable" in manifest,
+		typeof manifest === "object" &&
+			manifest !== null &&
+			"executable" in manifest,
 		"Expected manifest to contain an executable field",
 	);
 
 	// Verify environment mutations are present.
-	tg.assert(
-		"env" in manifest,
-		"Expected manifest to contain an env field",
-	);
+	tg.assert("env" in manifest, "Expected manifest to contain an env field");
 
 	// Verify args are present.
-	tg.assert(
-		"args" in manifest,
-		"Expected manifest to contain an args field",
-	);
+	tg.assert("args" in manifest, "Expected manifest to contain an args field");
 
 	return true;
 };

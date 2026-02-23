@@ -6,15 +6,24 @@
 
 #define ARTIFACTS_DIR "/.tangram/artifacts"
 #define ARTIFACTS_DIR_LEN 19
+#define OPT_ARTIFACTS_DIR "/opt/tangram/artifacts"
+#define OPT_ARTIFACTS_DIR_LEN 22
 #define PATH_MAX 4096
 
 static void find_artifacts_dir (Arena* arena, String* path) {
 	stat_t statbuf;
 
-	// First check the root. 
+	// First check the root.
 	if (stat(ARTIFACTS_DIR, &statbuf) == 0) {
 		path->ptr = ARTIFACTS_DIR;
 		path->len = ARTIFACTS_DIR_LEN;
+		return;
+	}
+
+	// Check /opt/tangram/artifacts.
+	if (stat(OPT_ARTIFACTS_DIR, &statbuf) == 0) {
+		path->ptr = OPT_ARTIFACTS_DIR;
+		path->len = OPT_ARTIFACTS_DIR_LEN;
 		return;
 	}
 

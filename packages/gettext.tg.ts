@@ -151,13 +151,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	// libiconv despite --without-libiconv-prefix. Add the missing
 	// transitive library paths (libiconv, libacl, libattr) to its wrapper.
 	if (os === "linux") {
-		const {
-			acl: aclArtifact,
-			attr: attrArtifact,
-		} = await std.deps.artifacts(deps, arg);
-		const recodeBin = tg.File.expect(
-			await output.get("bin/recode-sr-latin"),
+		const { acl: aclArtifact, attr: attrArtifact } = await std.deps.artifacts(
+			deps,
+			arg,
 		);
+		const recodeBin = tg.File.expect(await output.get("bin/recode-sr-latin"));
 		output = await tg.directory(output, {
 			"bin/recode-sr-latin": std.wrap(recodeBin, {
 				libraryPaths: [

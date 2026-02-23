@@ -10,7 +10,9 @@ export type RequirementsArg = {
 
 export const requirements = async (arg: tg.File | RequirementsArg) => {
 	const { lockFile, groups, exclude } =
-		arg instanceof tg.File ? { lockFile: arg, groups: undefined, exclude: undefined } : arg;
+		arg instanceof tg.File
+			? { lockFile: arg, groups: undefined, exclude: undefined }
+			: arg;
 	// Parse and validate the TOML.
 	console.log(`lockfile: ${lockFile.id}`);
 	const lockFileToml = tg.encoding.toml.decode(await lockFile.text) as LockFile;

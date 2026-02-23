@@ -46,8 +46,8 @@ export const build = async (...args: std.Args<Arg>) => {
 			buildInTree: true,
 			phases: {
 				configure: tg.Mutation.unset(),
-				build: `make CC="cc" SHELL="$SHELL" -f Makefile-libbz2_so && make CC="cc" SHELL="$SHELL"`,
-				install: { args: [tg`PREFIX="${tg.output}" SHELL="$SHELL"`] },
+				build: `make CC="cc" -f Makefile-libbz2_so && make CC="cc"`,
+				install: { args: [tg`PREFIX="${tg.output}"`] },
 			},
 		},
 		...args,

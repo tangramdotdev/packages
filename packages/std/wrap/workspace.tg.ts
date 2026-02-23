@@ -341,7 +341,6 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 
 	// Use the bootstrap shell and utils.
 	const utilsArtifact = await bootstrap.sdk.prepareBootstrapUtils();
-	const shell = await utilsArtifact.get("bin/sh").then(tg.File.expect);
 
 	// Get the appropriate toolchain directory.
 	// You need a build toolchian AND a host toolchain. These may be the same.
@@ -406,7 +405,6 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		rustToolchain,
 		utilsArtifact,
 		{
-			SHELL: shell,
 			SSL_CERT_FILE: certFile,
 			CARGO_HTTP_CAINFO: certFile,
 			RUST_TARGET: standardizedTarget,

@@ -54,7 +54,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 			"-Dusethreads",
 			'-Doptimize="-O3 -pipe -fstack-protector -fwrapv -fno-strict-aliasing"',
 		],
-		command: "$SHELL Configure",
+		command: "bash Configure",
 	};
 
 	// On Linux non-musl hosts, specify that LC_ALL uses name/value pairs.

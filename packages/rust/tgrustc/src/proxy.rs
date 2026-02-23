@@ -36,7 +36,9 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	let source_future = async {
 		let manifest_dir = &args.source_directory;
 
-		if manifest_dir.contains("/.tangram/artifacts/") {
+		if manifest_dir.contains("/.tangram/artifacts/")
+			|| manifest_dir.contains("/opt/tangram/artifacts/")
+		{
 			// Fast path: extract artifact from the already-rendered path.
 			let (artifact, subpath) = process::extract_artifact_from_path(tg, manifest_dir).await?;
 			#[cfg(feature = "tracing")]
@@ -209,8 +211,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			let path = path.clone();
 			async move { process::content_address_path(tg, &path).await }
 		});
-		let resolved: Vec<tg::Value> =
-			futures::future::try_join_all(resolve_futures).await?;
+		let resolved: Vec<tg::Value> = futures::future::try_join_all(resolve_futures).await?;
 		for ((idx, _, is_native), value) in pending.iter().zip(resolved) {
 			let final_value = if *is_native {
 				// Prepend "native=" to the content-addressed path.
@@ -433,8 +434,7 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 			let value = value.clone();
 			async move { process::content_address_path(tg, &value).await }
 		});
-		let resolved: Vec<tg::Value> =
-			futures::future::try_join_all(env_futures).await?;
+		let resolved: Vec<tg::Value> = futures::future::try_join_all(env_futures).await?;
 		for ((name, _), value) in env_pending.into_iter().zip(resolved) {
 			env.insert(name, value);
 		}
@@ -692,8 +692,11 @@ async fn process_externs(
 		}
 	});
 
-	let results: Vec<(Vec<tg::Value>, Vec<tg::artifact::Id>, Option<(String, tg::Directory)>)> =
-		futures::future::try_join_all(futures).await?;
+	let results: Vec<(
+		Vec<tg::Value>,
+		Vec<tg::artifact::Id>,
+		Option<(String, tg::Directory)>,
+	)> = futures::future::try_join_all(futures).await?;
 
 	// Batch-store all wrapper directories in a single daemon RPC by collecting
 	// them into a parent directory. Value::store() recursively collects all
@@ -714,9 +717,11 @@ async fn process_externs(
 	// Batch cache all artifact IDs (file artifacts + now-stored wrapper directories).
 	let mut all_cache_ids: Vec<tg::artifact::Id> =
 		results.iter().flat_map(|(_, ids, _)| ids.clone()).collect();
-	all_cache_ids.extend(results.iter().filter_map(|(_, _, wrapper)| {
-		wrapper.as_ref().map(|(_, dir)| dir.id().into())
-	}));
+	all_cache_ids.extend(
+		results
+			.iter()
+			.filter_map(|(_, _, wrapper)| wrapper.as_ref().map(|(_, dir)| dir.id().into())),
+	);
 	process::batch_cache(tg, all_cache_ids).await?;
 
 	Ok(results.into_iter().flat_map(|(args, _, _)| args).collect())
@@ -828,9 +833,7 @@ async fn process_dependencies(
 	// Filter the catalog to only files whose stems are in the transitive closure.
 	let files: BTreeMap<String, String> = file_catalog
 		.into_iter()
-		.filter(|(name, _)| {
-			extract_stem(name).is_some_and(|stem| needed_stems.contains(stem))
-		})
+		.filter(|(name, _)| extract_stem(name).is_some_and(|stem| needed_stems.contains(stem)))
 		.collect();
 
 	// Resolve all files to artifacts without caching individually.

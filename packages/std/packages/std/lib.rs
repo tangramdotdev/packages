@@ -86,6 +86,12 @@ pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
 			break;
 		}
 	}
+	if closest_artifact_path.is_none() {
+		let opt_path = std::path::Path::new("/opt/tangram/artifacts");
+		if opt_path.exists() {
+			closest_artifact_path = Some("/opt/tangram/artifacts".to_string());
+		}
+	}
 	closest_artifact_path.expect("Failed to find the closest artifact path")
 });
 

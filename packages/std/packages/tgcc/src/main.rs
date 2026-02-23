@@ -408,13 +408,18 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		.map_err(|error| tg::error!(source = error, "failed to get current working directory"))?;
 	while !tangram_path.join(".tangram").exists() {
 		let Some(parent) = tangram_path.parent() else {
-			return Err(tg::error!("failed to find .tangram directory."));
+			break;
 		};
 		tangram_path = parent.into();
 	}
-	let artifact_path = tangram_path
-		.join(".tangram/artifacts")
-		.join(output_file.id().to_string());
+	let artifacts_path = if tangram_path.join(".tangram").exists() {
+		tangram_path.join(".tangram/artifacts")
+	} else if std::path::Path::new("/opt/tangram/artifacts").exists() {
+		"/opt/tangram/artifacts".into()
+	} else {
+		return Err(tg::error!("failed to find the artifacts directory"));
+	};
+	let artifact_path = artifacts_path.join(output_file.id().to_string());
 	eprintln!("Copying {} to {output:#?}", artifact_path.display());
 	std::fs::copy(artifact_path, output)
 		.map_err(|error| tg::error!(source = error, "failed to copy file"))?;
@@ -470,7 +475,7 @@ async fn create_remapping_table(
 		}
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
-		if path.starts_with("/.tangram/artifacts") {
+		if path.starts_with("/.tangram/artifacts") || path.starts_with("/opt/tangram/artifacts") {
 			let template = tangram_std::unrender(path.to_str().unwrap())?;
 			table.insert(remap_target, template);
 			continue;

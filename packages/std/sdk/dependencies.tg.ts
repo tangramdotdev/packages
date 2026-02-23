@@ -200,9 +200,9 @@ export const buildTools = async (
 	let grepArtifact: tg.Directory | undefined;
 	let autoconfArtifact: tg.Directory | undefined;
 
-	// Get bash for tools that need it
+	// Get bash for tools that need it.
 	const bashExe = await std.env
-		.getArtifactByKey({ env: buildEnv, key: "SHELL" })
+		.which({ env: buildEnv, name: "bash" })
 		.then(tg.File.expect);
 
 	// pkg-config
