@@ -21,7 +21,7 @@ export const source = async () => {
 	const checksum =
 		"sha256:b185cd8d81325f97c773582e50f1c5e047c2d8575b53d676469c9daf2a52f341";
 	const owner = name;
-	const repo = name;
+	const repo = "cli";
 	const tag = version;
 
 	return std.download.fromGithub({

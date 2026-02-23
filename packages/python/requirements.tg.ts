@@ -2,6 +2,7 @@ import * as rust from "rust" with { local: "../rust" };
 import * as std from "std" with { local: "../std" };
 import { $ } from "std" with { local: "../std" };
 
+import * as libffi from "libffi" with { local: "../libffi.tg.ts" };
 import { versionString, wrapScripts } from "./tangram.ts";
 export type Arg = tg.File;
 
@@ -11,8 +12,18 @@ export const install = async (
 ) => {
 	const pythonArtifact = await tg.resolve(pythonArtifactArg);
 	const requirements = await tg.resolve(requirementsArg);
-	// Construct an env with the standard C/C++ sdks, the Rust toolchain, and Python.
-	const toolchains = std.env.arg(std.sdk(), rust.self(), pythonArtifact);
+	// Construct an env with the standard C/C++ sdks, the Rust toolchain, Python, and libffi (needed by cffi, a common native extension build dependency).
+	const certFile = tg`${std.caCertificates()}/cacert.pem`;
+	const toolchains = std.env.arg(
+		std.sdk(),
+		rust.self(),
+		pythonArtifact,
+		libffi.build(),
+		{
+			SSL_CERT_FILE: certFile,
+			CARGO_HTTP_CAINFO: certFile,
+		},
+	);
 
 	// Download the requirements specified in any requirements.txt files.
 	const downloads = await $`

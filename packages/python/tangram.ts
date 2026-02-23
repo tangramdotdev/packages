@@ -337,7 +337,7 @@ export type BuildArg = {
 	/** The machine this package will build on. */
 	build?: string;
 
-	/** Additi8onal environment to include. */
+	/** Additional environment to include. */
 	env?: std.env.Arg;
 
 	/** The machine this package produces binaries for. */
@@ -349,8 +349,11 @@ export type BuildArg = {
 	/** The source directory. */
 	source: tg.Directory;
 
-	/** Optional overides to the python environment. */
+	/** Optional overrides to the python environment. */
 	python?: Arg;
+
+	/** Optional version override. Used for dist-info when the pyproject.toml uses dynamic versioning. */
+	version?: string;
 };
 
 export const build = async (...args: std.Args<BuildArg>) => {
@@ -361,6 +364,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 		python: pythonArg,
 		pyprojectToml: pyprojectToml_,
 		source,
+		version: versionOverride,
 	} = await std.args.apply<BuildArg, BuildArg>({
 		args,
 		map: async (arg) => arg,
@@ -380,17 +384,17 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	) as PyProjectToml;
 
 	// Add the source directory to the python environment.
-	const name = pyprojectToml.project?.name.toLowerCase();
+	const name = pyprojectToml.project?.name?.toLowerCase();
 	if (!name) {
 		throw new Error("Invalid pyproject.toml: missing 'project.name'.");
 	}
 
 	// Determine where the package source is located.
 	// Try src/${name} first (PEP 517/518 src-layout), then fall back to ${name} (flat layout).
-	let packageSourcePath: tg.Template.Arg;
+	let packageDir: tg.Directory;
 	const srcLayoutPath = await source.tryGet(`src/${name}`);
 	if (srcLayoutPath !== undefined) {
-		packageSourcePath = await tg`${source}/src/${name}`;
+		packageDir = tg.Directory.expect(srcLayoutPath);
 	} else {
 		const flatLayoutPath = await source.tryGet(name);
 		if (flatLayoutPath === undefined) {
@@ -398,24 +402,44 @@ export const build = async (...args: std.Args<BuildArg>) => {
 				`Could not locate package source at ${name} or src/${name}`,
 			);
 		}
-		packageSourcePath = await tg`${source}/${name}`;
+		packageDir = tg.Directory.expect(flatLayoutPath);
 	}
 
-	// Construct the python environment.
-	const pythonArtifact = await tg.directory(
-		self({ ...pythonArg, build: buildTriple, env, host }),
-		{
-			["lib/python3/site-packages"]: {
-				[name]: tg.symlink(packageSourcePath),
-			},
-		},
+	// Build the base python environment.
+	const baseEnv = await self({ ...pythonArg, build: buildTriple, env, host });
+
+	// Merge the package source with any existing package directory in site-packages.
+	// This handles namespace packages (e.g. poetry.core from poetry-core coexisting with poetry from source).
+	const existingPackage = await baseEnv.tryGet(
+		`lib/python3/site-packages/${name}`,
 	);
+	const mergedPackage =
+		existingPackage instanceof tg.Directory
+			? tg.directory(existingPackage, packageDir)
+			: packageDir;
+
+	// Construct the python environment with the package source and dist-info metadata.
+	const version = versionOverride ?? pyprojectToml.project?.version;
+	const sitePackages: Record<string, tg.Unresolved<tg.Artifact>> = {
+		[name]: mergedPackage,
+	};
+	// Generate dist-info metadata so importlib.metadata can find the package.
+	if (version) {
+		sitePackages[`${name}-${version}.dist-info`] = tg.directory({
+			METADATA: tg.file(
+				`Metadata-Version: 2.1\nName: ${name}\nVersion: ${version}\n`,
+			),
+		});
+	}
+	const pythonArtifact = await tg.directory(baseEnv, {
+		["lib/python3/site-packages"]: sitePackages,
+	});
 
 	// Create the bin directory by symlinking in the python artifacts.
 	const pythonBins = tg.Directory.expect(await pythonArtifact.get("bin"));
 	let binDir = tg.directory();
 	for await (const [name, _] of pythonBins) {
-		binDir = tg.directory({
+		binDir = tg.directory(binDir, {
 			[name]: tg.symlink(tg`${pythonArtifact}/bin/${name}`),
 		});
 	}
@@ -438,7 +462,8 @@ export const build = async (...args: std.Args<BuildArg>) => {
 type PyProjectToml = {
 	project?: {
 		name: string;
-		scripts: Record<string, string>;
+		version?: string;
+		scripts?: Record<string, string>;
 		console_scripts?: Record<string, string>;
 		"entry-points"?: Record<string, string>;
 	};
