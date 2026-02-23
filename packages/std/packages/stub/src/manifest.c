@@ -67,7 +67,8 @@ void parse_manifest (
 	JsonValue value;
 	ABORT_IF(parse_json_value(&parser, &value), "failed to parse manifest JSON");
 	create_manifest_from_json(&cx, &value);
-
+	manifest->raw.ptr = data;
+	manifest->raw.len = len;
 	String true_ = STRING_LITERAL("true");
 	String clear_ld_library_path = STRING_LITERAL("TANGRAM_CLEAR_LD_LIBRARY_PATH");
 	String clear_ld_preload = STRING_LITERAL("TANGRAM_CLEAR_LD_PRELOAD");
