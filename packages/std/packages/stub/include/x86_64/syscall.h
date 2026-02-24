@@ -10,7 +10,6 @@
 #define __NR_pread64	17
 #define __NR_execve		59
 #define __NR_exit		60
-#define __NR_getcwd		79
 #define __NR_readlink	89
 #define __NR_getrlimit	97
 #define __NR_getrandom	318
