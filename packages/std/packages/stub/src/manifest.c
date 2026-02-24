@@ -27,10 +27,12 @@ static void find_artifacts_dir (Arena* arena, String* path) {
 		return;
 	}
 
-	// Get cwd.
+	// Get the parent directory of the current executable.
 	path->ptr = alloc(arena, PATH_MAX, 1);
-	ABORT_IF(getcwd(path->ptr, PATH_MAX - ARTIFACTS_DIR_LEN) - 1 <= 0, "failed to get the cwd");
-	path->len = strlen(path->ptr);
+	long exe_len = readlink("/proc/self/exe", (char*)path->ptr, PATH_MAX - ARTIFACTS_DIR_LEN);
+	ABORT_IF(exe_len <= 0, "failed to read /proc/self/exe");
+	path->len = exe_len;
+	*path = parent_dir(*path);
 
 	// Walk the parent directory tree.
 	do {

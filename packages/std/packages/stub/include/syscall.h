@@ -129,10 +129,6 @@ static inline void exit (int status) {
 	__builtin_unreachable();
 }
 
-static inline int getcwd(char* buf, size_t size) {
-	return (int)syscall2(__NR_getcwd, (long)buf, (long)size);
-}
-
 static inline long readlink (const char* pathname, char* buf, size_t bufsiz) {
 	#if defined __x86_64__
 		return syscall3(__NR_readlink, (long)pathname, (long)buf, (long)bufsiz);

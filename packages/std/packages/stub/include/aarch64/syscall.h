@@ -1,6 +1,5 @@
 #pragma once
 
-#define __NR_getcwd 		17
 #define __NR_openat		56
 #define __NR_close		57
 #define __NR_lseek		62
