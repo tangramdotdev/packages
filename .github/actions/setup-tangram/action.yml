@@ -1,0 +1,35 @@
+name: Setup Tangram CI Directory
+description: Configure /opt/tangram as the Tangram build directory for CI
+
+runs:
+  using: composite
+  steps:
+    - name: Create /opt/tangram directory
+      shell: bash
+      run: mkdir -p /opt/tangram/bin
+
+    - name: Write config
+      shell: bash
+      run: |
+        cat > /opt/tangram/config.json <<'CONFIG'
+        {
+          "directory": "/opt/tangram",
+          "remotes": [{
+            "name": "default",
+            "url": "https://staging.tangram.dev"
+          }]
+        }
+        CONFIG
+
+    - name: Create tangram wrapper
+      shell: bash
+      run: |
+        cat > /opt/tangram/bin/tangram <<'WRAPPER'
+        #!/bin/sh
+        exec tangram --config /opt/tangram/config.json "$@"
+        WRAPPER
+        chmod +x /opt/tangram/bin/tangram
+
+    - name: Set TG_EXE
+      shell: bash
+      run: echo "TG_EXE=/opt/tangram/bin/tangram" >> "$GITHUB_ENV"
