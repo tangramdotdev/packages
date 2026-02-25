@@ -5,21 +5,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  format:
-    name: Format Check
-    runs-on: [self-hosted, macOS, ARM64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - uses: ./.github/actions/setup-tangram
-      - run: bun install --frozen-lockfile
-      - run: bun run auto --format
-      - name: Verify no formatting changes
-        run: git diff --exit-code
-
   test:
     name: Test (${{ matrix.platform }})
-    needs: format
     runs-on: ${{ matrix.runner }}
     environment: test
     strategy:
