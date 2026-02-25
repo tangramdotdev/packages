@@ -23,4 +23,4 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - uses: ./.github/actions/setup-tangram
       - run: bun install --frozen-lockfile
-      - run: bun run auto --publish --release
+      - run: bun run auto --release
