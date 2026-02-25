@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    name: Release (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: aarch64-darwin
+            runner: [self-hosted, macOS, ARM64]
+          - platform: x86_64-linux
+            runner: [self-hosted, Linux, X64]
+          - platform: aarch64-linux
+            runner: [self-hosted, Linux, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: ./.github/actions/setup-tangram
+      - run: bun install --frozen-lockfile
+      - run: bun run auto --release
