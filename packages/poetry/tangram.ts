@@ -95,7 +95,7 @@ export const build = async (args: BuildArgs) => {
 	// Parse the lockfile into a requirements.txt.
 	const requirements = await lockfile.requirements({
 		lockFile: poetryLock,
-		exclude: args.exclude,
+		...(args.exclude !== undefined && { exclude: args.exclude }),
 	});
 
 	// Install the requirements specified by the poetry.lock file.
@@ -123,6 +123,7 @@ export const build = async (args: BuildArgs) => {
 	let packageDir: tg.Directory;
 	if (poetryMeta.packages && poetryMeta.packages.length > 0) {
 		const pkg = poetryMeta.packages[0];
+		tg.assert(pkg, "Missing packages entry in poetry configuration.");
 		const from = pkg.from ?? ".";
 		const path = from === "." ? pkg.include : `${from}/${pkg.include}`;
 		packageDir = tg.Directory.expect(await args.source.get(path));

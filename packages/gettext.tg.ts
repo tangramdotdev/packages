@@ -183,7 +183,9 @@ export const test = async () => {
 	};
 	// On Linux, libintl.h is provided by glibc, not by this package.
 	if (std.triple.os(std.triple.host()) === "linux") {
-		spec.headers = spec.headers?.filter((h) => h !== "libintl.h");
+		if (spec.headers) {
+			spec.headers = spec.headers.filter((h) => h !== "libintl.h");
+		}
 	}
 	return await std.assert.pkg(build, spec);
 };
