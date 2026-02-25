@@ -10,6 +10,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     environment: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: aarch64-darwin
