@@ -24,4 +24,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - uses: ./.github/actions/setup-tangram
       - run: bun install --frozen-lockfile
-      - run: bun run auto --test
+      - name: Verify formatting
+        run: |
+          bun run auto --format
+          git diff --exit-code
+      - name: Check
+        run: bun run auto --check
+      - name: Test
+        run: bun run auto --test --retry
