@@ -1,0 +1,38 @@
+name: Manual Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Packages to process (space-separated)
+        required: true
+        type: string
+      action:
+        description: Action to run
+        required: true
+        type: choice
+        options:
+          - test
+          - publish
+          - release
+
+jobs:
+  run:
+    name: ${{ inputs.action }} (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    strategy:
+      matrix:
+        include:
+          - platform: aarch64-darwin
+            runner: [self-hosted, macOS, ARM64]
+          - platform: x86_64-linux
+            runner: [self-hosted, Linux, X64]
+          - platform: aarch64-linux
+            runner: [self-hosted, Linux, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: ./.github/actions/setup-tangram
+      - run: bun install --frozen-lockfile
+      - run: bun run auto --${{ inputs.action }} ${{ inputs.packages }}

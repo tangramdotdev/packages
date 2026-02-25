@@ -759,10 +759,10 @@ const ACTION_ORDER = ["format", "check", "build", "test", "publish", "release"];
 const ACTION_DEPENDENCIES: Record<string, string[]> = {
 	format: [],
 	check: [],
-	build: [],
+	build: ["check"],
 	test: ["build"],
 	publish: [],
-	release: ["build", "publish"],
+	release: ["test", "publish"],
 };
 
 type ActionFunction = (ctx: Context) => Promise<Result<unknown>>;
