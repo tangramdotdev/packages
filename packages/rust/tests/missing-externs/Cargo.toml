@@ -1,0 +1,6 @@
+[workspace]
+members = ["leaf", "middle", "top"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"

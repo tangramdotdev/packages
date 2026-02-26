@@ -1,6 +1,6 @@
 use crate::{args::Args, driver::RUNNER_OUT_DIR_PLACEHOLDER, process};
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, HashMap, HashSet, VecDeque},
 	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
 };
@@ -12,18 +12,24 @@ type ExternResult = (
 	Option<(String, tg::Directory)>,
 );
 
-/// Run the proxy.
-#[allow(clippy::too_many_lines)]
+/// Run the proxy for non-local (registry) crates. Delegates to the shared inner
+/// implementation without a target directory mount.
 pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
-	#[cfg(feature = "tracing")]
+	run_proxy_inner(&args).await
+}
+
+/// Run the proxy for a crate. Builds a Tangram command with content-addressed
+/// inputs and spawns it in a sandbox.
+#[allow(clippy::too_many_lines)]
+async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 	let start_time = std::time::Instant::now();
-	// When cargo compiles a build script, it passes `--crate-name build_script_build`
-	// for all build scripts regardless of which crate they belong to. Use CARGO_PKG_NAME
-	// to produce a more descriptive display name for process naming and tracing.
-	let display_name = if args.crate_name == "build_script_build" {
+	// When cargo compiles a build script, it passes `--crate-name build_script_<name>`
+	// (usually `build_script_build`, but `build_script_main` for `build = "build/main.rs"`).
+	// Use CARGO_PKG_NAME to produce a more descriptive display name for process naming and tracing.
+	let display_name = if args.crate_name.starts_with("build_script_") {
 		if let Ok(pkg) = std::env::var("CARGO_PKG_NAME") {
 			// Normalize hyphens to underscores to match cargo's --crate-name convention.
-			format!("build_script_build({})", pkg.replace('-', "_"))
+			format!("{}({})", args.crate_name, pkg.replace('-', "_"))
 		} else {
 			args.crate_name.clone()
 		}
@@ -31,7 +37,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		args.crate_name.clone()
 	};
 
-	#[cfg(feature = "tracing")]
 	let _span = tracing::info_span!("rustc_proxy", crate = %display_name).entered();
 
 	// Create a client.
@@ -47,7 +52,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		{
 			// Fast path: extract artifact from the already-rendered path.
 			let (artifact, subpath) = process::extract_artifact_from_path(tg, manifest_dir).await?;
-			#[cfg(feature = "tracing")]
 			tracing::info!(id = ?artifact.id(), ?subpath, "resolved crate source from artifact path");
 			Ok::<_, tg::Error>((
 				tangram_std::template_from_artifact(artifact).into(),
@@ -55,7 +59,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			))
 		} else {
 			// Check in the manifest directory to get a crate-specific artifact.
-			#[cfg(feature = "tracing")]
 			tracing::info!(?manifest_dir, "checking in crate source directory");
 			Ok((process::content_address_path(tg, manifest_dir).await?, None))
 		}
@@ -64,7 +67,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	// Check in the cargo out directory (used for build script outputs like cc-rs compiled libs).
 	// The artifact is passed as TGRUSTC_OUT_DIR to the inner driver.
 	let out_dir_future = async {
-		#[cfg(feature = "tracing")]
 		let _span = tracing::info_span!("checkin_out_dir").entered();
 
 		if let Some(path) = &args.cargo_out_directory {
@@ -77,6 +79,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 						deterministic: true,
 						ignore: false,
 						lock: None,
+						root: true,
 						..Default::default()
 					},
 					path: out_dir_path.clone(),
@@ -85,7 +88,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			)
 			.await?;
 
-			#[cfg(feature = "tracing")]
 			tracing::info!(?path, artifact_id = ?artifact.id(), "checked in OUT_DIR");
 
 			Ok::<_, tg::Error>(tangram_std::template_from_artifact(artifact).into())
@@ -108,25 +110,104 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	)
 	.await?;
 
-	// Unrender the environment.
+	// When the source is a real filesystem path (not an artifact), crate_subpath
+	// will be None. Derive it from the workspace root so that workspace-relative
+	// source paths get rewritten to crate-relative paths.
+	// TGRUSTC_PASSTHROUGH_PROJECT_DIR provides the workspace root. Both paths
+	// are canonicalized to handle macOS /var → /private/var symlinks.
+	let crate_subpath = crate_subpath.or_else(|| {
+		let project_dir = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR").ok()?;
+		let source = std::fs::canonicalize(&args.source_directory).ok()?;
+		let project = std::fs::canonicalize(&project_dir).ok()?;
+		source
+			.strip_prefix(&project)
+			.ok()
+			.map(|p| p.to_string_lossy().to_string())
+			.filter(|s| !s.is_empty())
+	});
+
+	// Build the command environment. In run mode (unsandboxed via `tg run`),
+	// use an allowlist of compilation-relevant variables to prevent
+	// session-specific host variables (terminal, shell, editor, etc.) from
+	// polluting the command_id cache key and causing spurious cache misses.
+	// Build scripts can set arbitrary env vars via `cargo:rustc-env=KEY=VALUE`
+	// (e.g., `BUILD_TIME`), so in run mode we also check a snapshot of the
+	// host env taken before cargo ran — any var not in the snapshot was added
+	// by cargo and is allowed through.
+	//
+	// In build mode (sandboxed via `tangram build`), the Tangram sandbox
+	// provides a clean, controlled environment, so all env vars are
+	// build-relevant and no filtering is needed.
+	let run_mode = std::env::var("TGRUSTC_RUN_MODE").is_ok();
+	let host_env_snapshot = load_host_env_snapshot();
 	let mut env = BTreeMap::new();
-	for (name, value) in
-		std::env::vars().filter(|(name, _)| !BLACKLISTED_ENV_VARS.contains(&name.as_str()))
-	{
-		let value = tangram_std::unrender(&value)?;
-		env.insert(name, value.into());
+	let mut pending_env: Vec<(String, String)> = Vec::new();
+	for (name, value) in std::env::vars().filter(|(name, value)| {
+		// Exclude vars that change per invocation and are not relevant for
+		// individual crate compilations. TGRUSTC_* vars are proxy config.
+		// TANGRAM_* and sandbox-specific vars change per process invocation.
+		if is_excluded_proxy_env(name) {
+			return false;
+		}
+		// Apply the allowlist to include known compilation-relevant variables.
+		is_allowed_proxy_env(name)
+			|| is_cargo_target_var(name)
+			|| value.contains("/.tangram/artifacts/")
+			|| value.contains("/opt/tangram/artifacts/")
+			// In run mode, allow vars not present in the pre-cargo host env
+			// snapshot. These were added by cargo from build script
+			// `cargo:rustc-env` output and have arbitrary names. In build
+			// mode (no snapshot), allow any unknown var through since the
+			// sandbox env is clean — any var not in the exclusion list or
+			// the allowlist was injected by cargo.
+			|| is_cargo_added_env(name, host_env_snapshot.as_ref(), run_mode)
+	}) {
+		let needs_checkin = value.starts_with('/')
+			&& !value.contains("/.tangram/artifacts/")
+			&& !value.contains("/opt/tangram/artifacts/")
+			&& std::path::Path::new(&value).exists();
+		if needs_checkin {
+			pending_env.push((name, value));
+		} else {
+			let value = tangram_std::unrender(&value)?;
+			env.insert(name, value.into());
+		}
+	}
+	if !pending_env.is_empty() {
+		let resolve_futures = pending_env.iter().map(|(_, path)| {
+			let path = path.clone();
+			async move { process::content_address_path(tg, &path).await }
+		});
+		let resolved: Vec<tg::Value> = futures::future::try_join_all(resolve_futures).await?;
+		for ((name, _), value) in pending_env.into_iter().zip(resolved) {
+			env.insert(name, value);
+		}
 	}
 
 	// Set up driver mode environment variables.
 	// These tell the inner tgrustc (running in driver mode) where things are.
-	let rustc_template = tangram_std::unrender(&args.rustc)?;
+	// In tg run context, TGRUSTC_TANGRAM_RUSTC provides the Tangram-provided rustc
+	// artifact path (the host's rustc is not accessible inside the sandbox).
+	let rustc_for_inner =
+		std::env::var("TGRUSTC_TANGRAM_RUSTC").unwrap_or_else(|_| args.rustc.clone());
+	let rustc_template = tangram_std::unrender(&rustc_for_inner)?;
 	env.insert("TGRUSTC_DRIVER_MODE".to_owned(), "1".to_owned().into());
 	env.insert("TGRUSTC_RUSTC".to_owned(), rustc_template.into());
 	env.insert("TGRUSTC_SOURCE".to_owned(), source_directory.clone());
 	env.insert("TGRUSTC_OUT_DIR".to_owned(), out_dir.clone());
 	// Set CARGO_MANIFEST_DIR for proc-macros that read Cargo.toml.
 	env.insert("CARGO_MANIFEST_DIR".to_owned(), source_directory.clone());
-	#[cfg(feature = "tracing")]
+
+	// When TGRUSTC_SANDBOX_SDK is set (run mode), add the SDK's bin directory
+	// to the command's PATH so that crates requiring a linker (proc-macros,
+	// build scripts, cdylib, dylib, bin) can be compiled inside the sandbox.
+	if let Ok(sdk_path) = std::env::var("TGRUSTC_SANDBOX_SDK") {
+		let sdk_template = tangram_std::unrender(&sdk_path)?;
+		let mut components = sdk_template.components;
+		components.push("/bin".to_owned().into());
+		env.insert("PATH".to_owned(), tg::Template { components }.into());
+	}
+
 	tracing::info!(?source_directory, "source_directory value for inner build");
 
 	// Build command arguments - these are passed directly to rustc by the driver.
@@ -167,6 +248,17 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			continue;
 		}
 
+		// Handle -C incremental=<path>. The incremental cache path does not
+		// exist inside the sandbox and would pollute the command_id cache key,
+		// so both args are dropped.
+		if arg == "-C" {
+			let mut peek = remaining_iter.clone();
+			if peek.next().is_some_and(|a| a.starts_with("incremental=")) {
+				remaining_iter.next();
+				continue;
+			}
+		}
+
 		// Handle native= args: push placeholder, resolve concurrently later.
 		if let Some(native_path) = arg.strip_prefix("native=") {
 			let idx = command_args.len();
@@ -175,26 +267,34 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			continue;
 		}
 
-		// Rewrite workspace-relative source file paths to crate-relative paths.
-		// Cargo passes paths like "packages/greeting/src/lib.rs" (relative to
-		// the workspace root), but the inner driver sets current_dir to the crate
-		// directory, so we need "src/lib.rs" instead.
-		if let Some(ref subpath) = crate_subpath {
+		// Rewrite source file paths to be crate-relative. The inner driver
+		// sets current_dir to the source directory artifact, so source files
+		// must be expressed as relative paths within it.
+		// - Workspace members: strip the workspace-relative crate subpath
+		//   (e.g., "packages/greeting/src/lib.rs" → "src/lib.rs").
+		// - External crates: strip the absolute source_directory prefix
+		//   (e.g., "/path/to/bytes/src/lib.rs" → "src/lib.rs").
+		{
 			let is_source_file = std::path::Path::new(arg)
 				.extension()
 				.is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
 				&& !arg.starts_with('-');
 			if is_source_file {
-				let stripped = arg.strip_prefix(subpath).map(|s| s.trim_start_matches('/'));
+				let stripped = crate_subpath
+					.as_ref()
+					.and_then(|subpath| arg.strip_prefix(subpath.as_str()))
+					.or_else(|| arg.strip_prefix(args.source_directory.as_str()));
 				if let Some(relative_path) = stripped {
-					#[cfg(feature = "tracing")]
-					tracing::info!(
-						original = %arg,
-						rewritten = %relative_path,
-						"rewrote source file path to be crate-relative"
-					);
-					command_args.push(Some(relative_path.to_owned().into()));
-					continue;
+					let relative_path = relative_path.trim_start_matches('/');
+					if !relative_path.is_empty() {
+						tracing::info!(
+							original = %arg,
+							rewritten = %relative_path,
+							"rewrote source file path to be crate-relative"
+						);
+						command_args.push(Some(relative_path.to_owned().into()));
+						continue;
+					}
 				}
 			}
 		}
@@ -241,7 +341,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Process extern crate arguments and dependency directories concurrently.
 	let (extern_args, dep_args) = {
-		#[cfg(feature = "tracing")]
 		let _span = tracing::info_span!(
 			"process_deps",
 			externs = args.externs.len(),
@@ -260,7 +359,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Create the process.
 	let host = crate::host().to_string();
-	#[cfg(feature = "tracing")]
 	tracing::info!(?host, "creating inner process");
 
 	// Build a command for the process.
@@ -279,7 +377,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	let description = format!("Inner process for crate '{display_name}'");
 	let result = process::spawn_and_wait(tg, command_ref, &description).await?;
 
-	#[cfg(feature = "tracing")]
 	{
 		let output_id = result.output.id();
 		tracing::info!(?output_id, cached = result.cached, "got output");
@@ -299,7 +396,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 						result.process_id
 					)
 				})?;
-			#[cfg(feature = "tracing")]
 			{
 				let build_dir_id = dir.id();
 				tracing::info!(?build_dir_id, "got build directory");
@@ -308,9 +404,11 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		})
 		.await?;
 
-	// Write outputs to cargo's output directory.
+	// Write outputs to cargo's output directory. In tg run mode
+	// (TGRUSTC_RUN_MODE), copy files with writable permissions so plain cargo
+	// can overwrite them later and fingerprint them correctly. In tangram build
+	// mode, symlink dependency files to the artifact store for deduplication.
 	{
-		#[cfg(feature = "tracing")]
 		let _span = tracing::info_span!("write_outputs").entered();
 
 		let output_directory = PathBuf::from(
@@ -318,26 +416,22 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 				.as_deref()
 				.ok_or_else(|| tg::error!("expected --out-dir argument from cargo"))?,
 		);
-		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs).await?;
+		let copy_all = std::env::var("TGRUSTC_RUN_MODE").is_ok();
+		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs, copy_all).await?;
 	}
 
 	// Now that symlinks are created, forward stdout/stderr.
 	// Cargo watches for JSON output indicating the .rmeta file is ready.
 	process::forward_logs(&stdout, &stderr).await?;
 
-	#[cfg(feature = "tracing")]
 	{
 		let elapsed = start_time.elapsed();
-		let source_debug = format!("{source_directory:?}");
-		let out_dir_debug = format!("{out_dir:?}");
 		tracing::info!(
 			crate_name = %display_name,
 			elapsed_ms = elapsed.as_millis(),
 			cached = result.cached,
 			process_id = %result.process_id,
 			command_id = %command_id,
-			source = %source_debug,
-			out_dir = %out_dir_debug,
 			"proxy_complete"
 		);
 	}
@@ -349,7 +443,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 /// for build script execution, then write outputs back to cargo's `OUT_DIR`.
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn run_runner() -> tg::Result<()> {
-	#[cfg(feature = "tracing")]
 	let start_time = std::time::Instant::now();
 
 	// The build script binary is argv[2] (argv[0]=tgrustc, argv[1]="runner").
@@ -359,8 +452,8 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 
 	let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".into());
 
-	#[cfg(feature = "tracing")]
-	let _span = tracing::info_span!("runner", crate = %crate_name, binary = %script_binary).entered();
+	let _span =
+		tracing::info_span!("runner", crate = %crate_name, binary = %script_binary).entered();
 
 	// Create a client.
 	let tg = tg::Client::with_env()?;
@@ -381,8 +474,8 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	let source_future = async {
 		let manifest_dir = crate::required_env("CARGO_MANIFEST_DIR")?;
 
-		// Check if CARGO_MANIFEST_DIR is a subdirectory of SOURCE (workspace member).
-		let subpath = std::env::var("SOURCE").ok().and_then(|source| {
+		// Check if CARGO_MANIFEST_DIR is a subdirectory of TGRUSTC_SOURCE_DIR (workspace member).
+		let subpath = std::env::var("TGRUSTC_SOURCE_DIR").ok().and_then(|source| {
 			Path::new(&manifest_dir)
 				.strip_prefix(&source)
 				.ok()
@@ -396,7 +489,7 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 			// (just Cargo.toml). This makes the runner's command_id independent of
 			// changes to other members' source files, preventing cache miss cascades
 			// for non-deterministic build scripts.
-			let source_dir = std::env::var("SOURCE").unwrap();
+			let source_dir = std::env::var("TGRUSTC_SOURCE_DIR").unwrap();
 			let source_value = create_filtered_workspace(tg, &source_dir, subpath).await?;
 			Ok::<_, tg::Error>((source_value, subpath.clone()))
 		} else {
@@ -417,18 +510,27 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	)
 	.await?;
 
-	// Unrender the environment. For PATH, we use unrender directly on the full
-	// colon-separated string, which converts artifact references to templates while
-	// preserving system path entries (like /usr/bin, /bin) as literal strings.
-	// System paths in PATH become harmless dead entries in the sandbox since
-	// all tools are provided as wrapped artifacts.
+	// Build the command environment from an allowlist of build-script-relevant
+	// variables. For PATH, unrender the full colon-separated string, which
+	// converts artifact references to templates while preserving system path
+	// entries (like /usr/bin, /bin) as literal strings. System paths become
+	// harmless dead entries in the sandbox since all tools are provided as
+	// wrapped artifacts.
 	//
 	// Content-address all non-PATH env vars concurrently to avoid sequential I/O.
+	// In build mode (sandbox), exclude per-invocation vars that change between
+	// builds (TANGRAM_*, TARGET_DIR, etc.) and CARGO_MANIFEST_DIR which changes
+	// when any workspace file changes — the runner driver overrides it anyway.
+	// In run mode, use the runner allowlist to filter host session vars.
 	let mut env = BTreeMap::new();
 	let mut env_pending: Vec<(String, String)> = Vec::new();
-	for (name, value) in
-		std::env::vars().filter(|(name, _)| !RUNNER_BLACKLISTED_ENV_VARS.contains(&name.as_str()))
-	{
+	let run_mode = std::env::var("TGRUSTC_RUN_MODE").is_ok();
+	for (name, value) in std::env::vars().filter(|(name, _)| {
+		if is_excluded_proxy_env(name) || name == "CARGO_MANIFEST_DIR" {
+			return false;
+		}
+		!run_mode || is_allowed_runner_env(name)
+	}) {
 		if name == "PATH" {
 			env.insert(name, tangram_std::unrender(&value)?.into());
 		} else {
@@ -509,7 +611,6 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	};
 	process::forward_logs(&stdout, &stderr).await?;
 
-	#[cfg(feature = "tracing")]
 	{
 		let elapsed = start_time.elapsed();
 		let stdout_str = String::from_utf8_lossy(&stdout);
@@ -741,8 +842,6 @@ async fn process_dependencies(
 	externs: &[(String, String)],
 	crate_name: &str,
 ) -> tg::Result<Vec<tg::Value>> {
-	use std::collections::{HashMap, HashSet, VecDeque};
-
 	// Single-pass scan: build externs map and file catalog simultaneously.
 	let mut externs_map: HashMap<String, HashSet<String>> = HashMap::new();
 	let mut file_catalog: BTreeMap<String, String> = BTreeMap::new();
@@ -825,19 +924,34 @@ async fn process_dependencies(
 		}
 	}
 
-	_ = crate_name;
-	#[cfg(feature = "tracing")]
-	tracing::info!(
-		crate_name,
-		closure_size = needed_stems.len(),
-		"transitive_closure_computed"
-	);
+	// Check if the transitive closure is complete. A stem present in
+	// needed_stems but absent from externs_map means that crate was compiled
+	// without the proxy (e.g., by a plain `cargo build`), so its own
+	// transitive dependencies are unknown. In that case, fall back to
+	// including all files from the dependency directories.
+	let closure_complete = needed_stems
+		.iter()
+		.all(|stem| externs_map.contains_key(stem));
 
-	// Filter the catalog to only files whose stems are in the transitive closure.
-	let files: BTreeMap<String, String> = file_catalog
-		.into_iter()
-		.filter(|(name, _)| extract_stem(name).is_some_and(|stem| needed_stems.contains(stem)))
-		.collect();
+	let files: BTreeMap<String, String> = if closure_complete {
+		tracing::info!(
+			crate_name,
+			closure_size = needed_stems.len(),
+			"transitive_closure_computed"
+		);
+		file_catalog
+			.into_iter()
+			.filter(|(name, _)| extract_stem(name).is_some_and(|stem| needed_stems.contains(stem)))
+			.collect()
+	} else {
+		tracing::info!(
+			crate_name,
+			closure_size = needed_stems.len(),
+			catalog_size = file_catalog.len(),
+			"incomplete .externs coverage, including all dependency files"
+		);
+		file_catalog
+	};
 
 	// Resolve all files to artifacts without caching individually.
 	let futures = files.iter().map(|(name, path)| {
@@ -873,6 +987,33 @@ async fn process_dependencies(
 	Ok(vec!["-L".to_owned().into(), template.into()])
 }
 
+/// Copy a file artifact to a path on disk with the specified permissions.
+async fn copy_artifact_to_file(
+	tg: &impl tg::Handle,
+	artifact: tg::Artifact,
+	to: &Path,
+	filename: &str,
+	mode: u32,
+) -> tg::Result<()> {
+	let file = artifact
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
+	let bytes = file.bytes(tg).await?;
+	tokio::fs::write(&to, &bytes)
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to write file {}", to.display()))?;
+	tokio::fs::set_permissions(&to, std::fs::Permissions::from_mode(mode))
+		.await
+		.map_err(|error| {
+			tg::error!(
+				source = error,
+				"failed to set permissions on {}",
+				to.display()
+			)
+		})?;
+	Ok(())
+}
+
 /// Write build outputs to cargo's output directory.
 ///
 /// Dependency files (.rlib, .rmeta, .d, .so, .dylib) are symlinked to the artifact
@@ -890,6 +1031,7 @@ async fn write_outputs_to_cargo(
 	build_dir: &tg::Directory,
 	output_directory: &PathBuf,
 	externs: &[(String, String)],
+	copy_all: bool,
 ) -> tg::Result<()> {
 	// Create the output directory if it does not exist.
 	if !output_directory.exists() {
@@ -908,11 +1050,16 @@ async fn write_outputs_to_cargo(
 	let entries: Vec<_> = build_dir.entries(tg).await?.into_iter().collect();
 
 	// Write .externs sidecar file for transitive dependency computation.
+	// When TGRUSTC_TEST_SKIP_EXTERNS is set, skip writing to simulate crates
+	// compiled by plain `cargo build` (without the proxy).
+	let skip_externs = std::env::var("TGRUSTC_TEST_SKIP_EXTERNS").is_ok();
+
 	// Find an rlib or rmeta in the build dir to get the filename prefix.
 	for (filename, _) in &entries {
 		let path = std::path::Path::new(filename);
 		let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-		if ext.eq_ignore_ascii_case("rlib") || ext.eq_ignore_ascii_case("rmeta") {
+		if !skip_externs && (ext.eq_ignore_ascii_case("rlib") || ext.eq_ignore_ascii_case("rmeta"))
+		{
 			let externs_filename = path.with_extension("externs");
 			let externs_path = output_directory.join(externs_filename.file_name().unwrap());
 			let extern_stems: Vec<String> = externs
@@ -939,10 +1086,13 @@ async fn write_outputs_to_cargo(
 		}
 	}
 
-	// Write outputs to cargo's output directory.
-	let all_artifact_ids: Vec<tg::artifact::Id> =
-		entries.iter().map(|(_, artifact)| artifact.id()).collect();
-	process::batch_cache(tg, all_artifact_ids).await?;
+	// Write outputs to cargo's output directory. When copy_all is true (tg run mode),
+	// skip caching since we will copy instead of symlinking.
+	if !copy_all {
+		let all_artifact_ids: Vec<tg::artifact::Id> =
+			entries.iter().map(|(_, artifact)| artifact.id()).collect();
+		process::batch_cache(tg, all_artifact_ids).await?;
+	}
 
 	let futures = entries.into_iter().map(|(filename, artifact)| {
 		let output_directory = output_directory.clone();
@@ -954,8 +1104,23 @@ async fn write_outputs_to_cargo(
 				tokio::fs::remove_file(&to).await.ok();
 			}
 
-			// Symlink to the artifact store.
-			process::symlink_cached_artifact(&artifact, &to).await?;
+			if copy_all {
+				// Copy the file. Dependency files get 0o644 (writable so plain
+				// cargo can overwrite them later). Binaries get 0o755.
+				let mode = if is_dependency_file(&filename) {
+					0o644
+				} else {
+					0o755
+				};
+				copy_artifact_to_file(tg, artifact, &to, &filename, mode).await?;
+			} else if Path::new(&filename).extension().is_some_and(|e| e == "d") {
+				// Copy .d files with writable permissions. Cargo needs to overwrite
+				// them on subsequent builds, which fails if they are read-only symlinks.
+				copy_artifact_to_file(tg, artifact, &to, &filename, 0o644).await?;
+			} else {
+				// Symlink to the artifact store.
+				process::symlink_cached_artifact(&artifact, &to).await?;
+			}
 
 			// Create a convenience symlink for binaries with a metadata suffix.
 			if !is_dependency_file(&filename)
@@ -987,7 +1152,7 @@ async fn write_outputs_to_cargo(
 }
 
 /// Extract the full stem (crate name + metadata hash) from a library filename.
-fn extract_stem(filename: &str) -> Option<&str> {
+pub(crate) fn extract_stem(filename: &str) -> Option<&str> {
 	let stem = Path::new(filename).file_stem()?.to_str()?;
 	Some(stem.strip_prefix("lib").unwrap_or(stem))
 }
@@ -1037,7 +1202,6 @@ async fn create_filtered_workspace(
 
 	// Try to parse workspace members. If parsing fails, fall back to the full workspace.
 	let Some(members) = parse_workspace_members(source_dir) else {
-		#[cfg(feature = "tracing")]
 		tracing::warn!("could not parse workspace members, using full workspace source");
 		return Ok(workspace_value);
 	};
@@ -1100,7 +1264,6 @@ async fn create_filtered_workspace(
 	let filtered = builder.build();
 	filtered.store(tg).await?;
 
-	#[cfg(feature = "tracing")]
 	tracing::info!(
 		?current_crate_subpath,
 		filtered_id = ?filtered.id(),
@@ -1181,82 +1344,147 @@ fn expand_member_glob(source_dir: &str, pattern: &str) -> Vec<String> {
 		.collect()
 }
 
-// Environment variables that must be filtered out before invoking the driver target.
-// These either:
-// - Are used only by the outer proxy (not the inner driver)
-// - Vary per outer build and would pollute the inner process's cache key
-const BLACKLISTED_ENV_VARS: [&str; 20] = [
-	// Proxy-specific vars (used by outer proxy, not inner driver).
-	"TGRUSTC_TRACING",
-	"TGRUSTC_DRIVER_EXECUTABLE",
-	// Tangram vars.
-	"TANGRAM_HOST",
-	"TANGRAM_URL",
-	"TANGRAM_OUTPUT",
-	"TANGRAM_PROCESS",
-	// Build-specific paths that vary per cargo invocation.
-	// These are safe to remove because rustc gets explicit --out-dir and current_dir.
-	"HOME",
-	"PWD",
-	"TARGET_DIR",
-	"CARGO_TARGET_DIR",
-	"SOURCE",
-	// OUT_DIR is a temp path that varies per build. We check it in and pass the
-	// content-addressed artifact via TGRUSTC_OUT_DIR instead. The driver then
-	// sets OUT_DIR for rustc from TGRUSTC_OUT_DIR.
-	"OUT_DIR",
-	// Language-specific path vars that rustc does not need.
-	"NODE_PATH",
-	"PYTHONPATH",
-	// CARGO_HOME is cargo-specific; rustc does not use it.
-	"CARGO_HOME",
-	// CARGO_MANIFEST_DIR/PATH contain workspace root which varies.
-	// Rustc does not need these; we set current_dir to the crate source.
-	"CARGO_MANIFEST_DIR",
-	"CARGO_MANIFEST_PATH",
-	// CARGO_MAKEFLAGS contains jobserver file descriptors that are non-deterministic.
-	// The inner rustc process does not use make flags.
-	"CARGO_MAKEFLAGS",
-	// Library path vars are non-deterministic (contain cargo target dir). The inner
-	// rustc receives its dependencies through explicit --extern and -L args.
-	"DYLD_FALLBACK_LIBRARY_PATH",
-	"LD_LIBRARY_PATH",
-];
+/// Check whether an environment variable should be excluded from the proxy
+/// command. These vars change per invocation and are not relevant for
+/// individual crate compilations — including them would invalidate the cache.
+fn is_excluded_proxy_env(name: &str) -> bool {
+	// TGRUSTC_* vars are configuration for the proxy itself (run mode, driver
+	// executable, passthrough dir, source dir, etc.). The proxy explicitly
+	// inserts what the inner driver needs.
+	if name.starts_with("TGRUSTC_") {
+		return true;
+	}
+	// Tangram sandbox vars and per-invocation vars that change per process.
+	if name.starts_with("TANGRAM_") {
+		return true;
+	}
+	matches!(
+		name,
+		"PWD"
+			| "OLDPWD"
+			| "HOME"
+			| "CARGO_HOME"
+			| "CARGO_TARGET_DIR"
+			| "CARGO_MANIFEST_PATH"
+			| "CARGO_MAKEFLAGS"
+			| "OUT_DIR"
+			| "TARGET_DIR"
+			| "RUSTC_WRAPPER"
+			| "DYLD_FALLBACK_LIBRARY_PATH"
+			| "LD_LIBRARY_PATH"
+	)
+}
 
-// Environment variables that must be filtered out in runner mode.
-// These either vary per outer build or are set by the inner driver.
-const RUNNER_BLACKLISTED_ENV_VARS: [&str; 21] = [
-	// Proxy/runner-specific vars.
-	"TGRUSTC_TRACING",
-	"TGRUSTC_DRIVER_EXECUTABLE",
-	"TGRUSTC_RUNNER_DRIVER_MODE",
-	"TGRUSTC_RUNNER_SOURCE",
-	// Tangram vars.
-	"TANGRAM_HOST",
-	"TANGRAM_URL",
-	"TANGRAM_OUTPUT",
-	"TANGRAM_PROCESS",
-	// Build-specific paths that vary per cargo invocation.
-	"HOME",
-	"PWD",
-	"TARGET_DIR",
-	"CARGO_TARGET_DIR",
-	"SOURCE",
-	// OUT_DIR is the output, not an input. The inner driver sets it.
-	"OUT_DIR",
-	// CARGO_HOME is cargo-specific.
-	"CARGO_HOME",
-	// CARGO_MANIFEST_DIR varies with the build. The inner driver sets it from TGRUSTC_RUNNER_SOURCE.
-	"CARGO_MANIFEST_DIR",
-	"CARGO_MANIFEST_PATH",
-	// RUSTC_WRAPPER is used by cargo for the proxy, not relevant inside build scripts.
-	"RUSTC_WRAPPER",
-	// CARGO_MAKEFLAGS contains jobserver fds that do not work inside the Tangram sandbox.
-	"CARGO_MAKEFLAGS",
-	// DYLD_FALLBACK_LIBRARY_PATH and LD_LIBRARY_PATH include the cargo target
-	// directory, which changes between builds. Build scripts in the Tangram sandbox
-	// receive their library dependencies through the command's artifacts, not
-	// through these paths.
-	"DYLD_FALLBACK_LIBRARY_PATH",
-	"LD_LIBRARY_PATH",
-];
+/// Check whether an environment variable should be included in the proxy
+/// command. Uses an allowlist approach: only variables relevant to rustc
+/// compilation are included. This prevents session-specific variables
+/// (`TERM_SESSION_ID`, `GPG_TTY`, `TMUX`, `STARSHIP_SESSION_KEY`, etc.) from
+/// polluting the `command_id` cache key and causing spurious cache misses.
+fn is_allowed_proxy_env(name: &str) -> bool {
+	// Cargo-set per-crate variables that affect compilation.
+	if name.starts_with("CARGO_PKG_")
+		|| name.starts_with("CARGO_CFG_")
+		|| name.starts_with("CARGO_FEATURE_")
+	{
+		return true;
+	}
+
+	// Build script outputs: DEP_<crate>_<key> variables set by dependencies'
+	// build scripts via `cargo:metadata=key=value`.
+	if name.starts_with("DEP_") {
+		return true;
+	}
+
+	// Cross-compilation tool variables (AR_<triple>, CC_<triple>, CXX_<triple>).
+	if name.starts_with("AR_") || name.starts_with("CC_") || name.starts_with("CXX_") {
+		return true;
+	}
+
+	// Individual variables that rustc or the driver needs.
+	matches!(
+		name,
+		// Cargo variables.
+		"CARGO"
+			| "CARGO_BUILD_JOBS"
+			| "CARGO_CRATE_NAME"
+			| "CARGO_BIN_NAME"
+			| "CARGO_PRIMARY_PACKAGE"
+			| "CARGO_ENCODED_RUSTFLAGS"
+			| "CARGO_REGISTRIES_CRATES_IO_PROTOCOL"
+			// Cross-compilation linker variables.
+			| "CARGO_BUILD_TARGET"
+			// Rust compilation variables. The inner driver gets its rustc via
+			// TGRUSTC_RUSTC, but RUSTC and RUSTFLAGS may affect compilation
+			// flags that cargo passes through.
+			| "RUSTC"
+			| "RUSTFLAGS"
+			| "RUST_TARGET"
+			| "RUST_RECURSION_COUNT"
+			// Build profile variables set by cargo.
+			| "HOST"
+			| "TARGET"
+			| "NUM_JOBS"
+			| "OPT_LEVEL"
+			| "DEBUG"
+			| "PROFILE"
+			// macOS deployment target affects compilation output.
+			| "MACOSX_DEPLOYMENT_TARGET"
+	)
+}
+
+/// Check whether an environment variable name starts with a cargo target
+/// linker prefix (e.g., `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER`).
+fn is_cargo_target_var(name: &str) -> bool {
+	name.starts_with("CARGO_TARGET_") && name.ends_with("_LINKER")
+}
+
+/// Load the host environment snapshot from `TGRUSTC_HOST_ENV_SNAPSHOT`.
+/// Returns `None` if the variable is not set or the file cannot be read.
+/// The snapshot file contains one env var name per line, representing the
+/// host environment before cargo ran.
+fn load_host_env_snapshot() -> Option<HashSet<String>> {
+	let path = std::env::var("TGRUSTC_HOST_ENV_SNAPSHOT").ok()?;
+	let contents = std::fs::read_to_string(&path).ok()?;
+	Some(contents.lines().map(ToOwned::to_owned).collect())
+}
+
+/// Check whether an env var was added by cargo (not present in the pre-cargo
+/// host env snapshot). In run mode, uses the snapshot to identify vars that
+/// cargo added from build script `cargo:rustc-env` output. In build mode
+/// (no snapshot), all unknown vars are assumed to be cargo-added since the
+/// sandbox env is clean and controlled.
+fn is_cargo_added_env(name: &str, snapshot: Option<&HashSet<String>>, run_mode: bool) -> bool {
+	match snapshot {
+		Some(s) => !s.contains(name),
+		None => !run_mode,
+	}
+}
+
+/// Check whether an environment variable should be included in the runner
+/// command. Build scripts need a broader set of variables than the proxy
+/// (they may read `PATH` for tool discovery, `CARGO_MANIFEST_DIR` for file
+/// access, etc.). The inner driver overrides `OUT_DIR` and `CARGO_MANIFEST_DIR`
+/// with sandbox-appropriate values.
+fn is_allowed_runner_env(name: &str) -> bool {
+	// Build scripts need PATH for tool discovery (cc, cmake, pkg-config, etc.).
+	if name == "PATH" {
+		return true;
+	}
+
+	// All proxy-allowed vars are also relevant for build scripts.
+	if is_allowed_proxy_env(name) || is_cargo_target_var(name) {
+		return true;
+	}
+
+	// Build scripts may read CARGO_MANIFEST_DIR (the inner driver overrides it).
+
+	// Build scripts may need library/include paths for native compilation.
+	if name.starts_with("PKG_CONFIG")
+		|| name.starts_with("OPENSSL_")
+		|| name.starts_with("BINDGEN_")
+	{
+		return true;
+	}
+
+	false
+}

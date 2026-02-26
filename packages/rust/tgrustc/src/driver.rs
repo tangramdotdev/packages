@@ -11,7 +11,6 @@ pub(crate) const RUNNER_OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
 
 /// Run in driver mode inside the Tangram sandbox, executing rustc.
 pub(crate) fn run_driver() -> tg::Result<()> {
-	#[cfg(feature = "tracing")]
 	tracing::info!("running in driver mode");
 
 	// Read required environment variables.
@@ -20,7 +19,6 @@ pub(crate) fn run_driver() -> tg::Result<()> {
 	let source_dir = crate::required_env("TGRUSTC_SOURCE")?;
 	let out_dir_source = crate::required_env("TGRUSTC_OUT_DIR")?;
 
-	#[cfg(feature = "tracing")]
 	tracing::info!(
 		?tangram_output,
 		?rustc_path,
@@ -38,7 +36,6 @@ pub(crate) fn run_driver() -> tg::Result<()> {
 	std::fs::create_dir_all(&log_path)
 		.map_err(|e| tg::error!("failed to create {log_path}: {e}"))?;
 
-	#[cfg(feature = "tracing")]
 	tracing::info!("using OUT_DIR artifact directly, setting up output redirection");
 
 	// Collect rustc arguments from command line (skip argv[0] which is tgrustc).
@@ -56,7 +53,6 @@ pub(crate) fn run_driver() -> tg::Result<()> {
 	rustix::stdio::dup2_stderr(&stderr_file)
 		.map_err(|e| tg::error!("failed to redirect stderr: {e}"))?;
 
-	#[cfg(feature = "tracing")]
 	tracing::info!(?rustc_args, "executing rustc");
 
 	// Change to source directory and exec rustc.
@@ -86,7 +82,6 @@ pub(crate) fn run_driver() -> tg::Result<()> {
 /// form that does not embed the sandbox temp path. The outer runner (`run_runner`)
 /// replaces the placeholder with cargo's actual `OUT_DIR` when replaying.
 pub(crate) fn run_runner_driver() -> tg::Result<()> {
-	#[cfg(feature = "tracing")]
 	tracing::info!("running in runner driver mode");
 
 	let tangram_output = crate::required_env("TANGRAM_OUTPUT")?;
@@ -113,7 +108,6 @@ pub(crate) fn run_runner_driver() -> tg::Result<()> {
 		.nth(1)
 		.ok_or_else(|| tg::error!("expected build script binary path as argument"))?;
 
-	#[cfg(feature = "tracing")]
 	tracing::info!(
 		?script_binary,
 		?source_dir,

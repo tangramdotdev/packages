@@ -14,7 +14,6 @@ pub(crate) struct SpawnResult {
 	/// The process ID.
 	pub(crate) process_id: tg::process::Id,
 	/// Whether the result was a cache hit (no token assigned).
-	#[cfg_attr(not(feature = "tracing"), allow(dead_code))]
 	pub(crate) cached: bool,
 }
 
@@ -38,6 +37,7 @@ pub(crate) async fn resolve_executable(
 					deterministic: true,
 					ignore: false,
 					lock: None,
+					root: true,
 					..Default::default()
 				},
 				path: self_exe,
@@ -60,8 +60,16 @@ pub(crate) async fn spawn_and_wait(
 ) -> tg::Result<SpawnResult> {
 	let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
 	spawn_arg.network = false;
+	spawn_and_wait_with_arg(tg, spawn_arg, description).await
+}
 
-	#[cfg(feature = "tracing")]
+/// Spawn a Tangram process with a pre-built spawn arg, wait for completion, and
+/// return the output directory.
+async fn spawn_and_wait_with_arg(
+	tg: &impl tg::Handle,
+	spawn_arg: tg::process::spawn::Arg,
+	description: &str,
+) -> tg::Result<SpawnResult> {
 	tracing::info!(%description, "spawning process");
 
 	let stream = tg::Process::spawn(tg, spawn_arg).await?;
@@ -74,7 +82,6 @@ pub(crate) async fn spawn_and_wait(
 		.ok_or_else(|| tg::error!("expected the output"))?;
 	let process_id = process.id().clone();
 
-	#[cfg(feature = "tracing")]
 	tracing::info!(?process_id, %description, "spawned process");
 
 	// Wait for the process output.
@@ -100,7 +107,6 @@ pub(crate) async fn spawn_and_wait(
 			eprintln!("{description} stderr:\n{stderr_str}");
 		}
 		eprintln!("{description} failed. View logs with: tangram log {process_id}");
-		#[cfg(feature = "tracing")]
 		tracing::error!(exit = wait.exit, ?process_id, %description, "process error details");
 		return Err(tg::error!("the process exited with code {}", wait.exit));
 	}
@@ -197,7 +203,6 @@ pub(crate) async fn content_address_path(
 		.any(|c| matches!(c, tg::template::Component::Artifact(_)));
 
 	if has_artifacts {
-		#[cfg(feature = "tracing")]
 		tracing::trace!(?path, "path contains artifacts, using unrender result");
 		return Ok(template.into());
 	}
@@ -205,7 +210,6 @@ pub(crate) async fn content_address_path(
 	// The path doesn't contain artifacts. Check it in,
 	let path_obj = Path::new(path);
 	if path_obj.is_absolute() && path_obj.exists() {
-		#[cfg(feature = "tracing")]
 		tracing::trace!(?path, "content-addressing absolute path via checkin");
 
 		let artifact = tg::checkin(
@@ -216,6 +220,7 @@ pub(crate) async fn content_address_path(
 					deterministic: true,
 					ignore: false,
 					local_dependencies: false,
+					root: true,
 					solve: false,
 					..Default::default()
 				},

@@ -145,10 +145,12 @@ export class CommandBuilder<
 	): Promise<TResult1 | TResult2> {
 		let arg = await mergeArgs(...this.#args);
 		let envs: std.Args<std.env.Arg> = [];
+		// Track whether host was explicitly provided. Use the detected host for internal
+		// resolution (shell, mounts) but do not set it on the output command, since tg run
+		// rejects commands with host set.
 		let tangramHost = std.triple.host();
-		if (arg.host === undefined) {
-			arg.host = tangramHost;
-		}
+		let hostExplicit = arg.host !== undefined;
+		let effectiveHost = arg.host ?? tangramHost;
 		if (!this.#includeUtils) {
 			envs.push({ utils: false });
 		}
@@ -183,15 +185,20 @@ export class CommandBuilder<
 			}
 			arg.args.unshift("-e");
 		}
-		if (std.triple.os(arg.host) === "linux" && this.#defaultMount) {
+		if (std.triple.os(effectiveHost) === "linux" && this.#defaultMount) {
 			let linuxMount = await tg
-				.build(linuxRootMount, arg.host)
+				.build(linuxRootMount, effectiveHost)
 				.named("linux root mount");
 			if (arg.mounts === undefined) {
 				arg.mounts = [linuxMount];
 			} else {
 				arg.mounts.unshift(linuxMount);
 			}
+		}
+		if (hostExplicit) {
+			arg.host = effectiveHost;
+		} else {
+			delete arg.host;
 		}
 		return (
 			tg.Command.new(arg as tg.Command.Arg.Object) as Promise<tg.Command<A, R>>

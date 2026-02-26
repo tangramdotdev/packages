@@ -1,4 +1,5 @@
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use tangram_client::prelude::*;
 
 mod args;
@@ -7,7 +8,6 @@ mod process;
 mod proxy;
 
 fn main() {
-	#[cfg(feature = "tracing")]
 	tangram_std::tracing::setup("TGRUSTC_TRACING");
 
 	if let Err(e) = main_inner() {
@@ -39,17 +39,34 @@ fn main_inner() -> tg::Result<()> {
 	}
 
 	let args = args::Args::parse()?;
-	#[cfg(feature = "tracing")]
 	tracing::info!(?args, "parsed arguments");
 
 	// If cargo expects to pipe into stdin or contains only a single arg, we immediately invoke rustc without doing anything.
 	if args.stdin || args.remaining.len() < 2 {
-		#[cfg(feature = "tracing")]
 		tracing::info!("invoking rustc without tangram");
 		let error = std::process::Command::new(std::env::args().nth(1).unwrap())
 			.args(std::env::args().skip(2))
 			.exec();
 		return Err(tg::error!("exec failed: {error}."));
+	}
+
+	// Route workspace members to passthrough. TGRUSTC_PASSTHROUGH_PROJECT_DIR
+	// provides the workspace root for member detection. Note: current_dir()
+	// cannot be used as a fallback because cargo sets it to the crate's own
+	// source directory per invocation.
+	{
+		let passthrough_dir = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR");
+		tracing::info!(
+			?passthrough_dir,
+			source_directory = %args.source_directory,
+			crate_name = %args.crate_name,
+			"dispatch check"
+		);
+	}
+	if let Ok(project_dir) = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR")
+		&& is_workspace_member(&args.source_directory, &project_dir)
+	{
+		return passthrough_to_rustc(&args);
 	}
 
 	tokio::runtime::Builder::new_current_thread()
@@ -59,6 +76,102 @@ fn main_inner() -> tg::Result<()> {
 		.block_on(proxy::run_proxy(args))?;
 
 	Ok(())
+}
+
+/// Check whether a crate's source directory is under the project directory,
+/// indicating it is a workspace member (not an external dependency).
+/// Both paths are canonicalized to handle macOS /var → /private/var symlinks.
+fn is_workspace_member(source_directory: &str, project_dir: &str) -> bool {
+	let source = std::fs::canonicalize(source_directory)
+		.unwrap_or_else(|_| Path::new(source_directory).to_owned());
+	let project =
+		std::fs::canonicalize(project_dir).unwrap_or_else(|_| Path::new(project_dir).to_owned());
+	source.starts_with(&project)
+}
+
+/// Invoke rustc directly without going through a Tangram process.
+/// This enables incremental compilation for workspace members.
+pub(crate) fn passthrough_to_rustc(args: &args::Args) -> tg::Result<()> {
+	tracing::info!(crate_name = %args.crate_name, source_directory = %args.source_directory, "passthrough mode: calling rustc directly");
+
+	// Write an .externs sidecar file before exec so that downstream proxy
+	// crates can compute the transitive dependency closure. This is needed
+	// when a crate has mixed crate types (e.g., rlib + cdylib) — the cdylib
+	// type triggers passthrough, but the rlib output is still consumed by
+	// downstream crates compiled through the proxy.
+	maybe_write_passthrough_externs(args);
+
+	let error = std::process::Command::new(&args.rustc)
+		.args(std::env::args().skip(2))
+		.exec();
+	Err(tg::error!("exec failed: {error}."))
+}
+
+/// Write a .externs sidecar file for a crate compiled in passthrough mode.
+///
+/// Crates with mixed crate types (e.g., `["lib", "cdylib"]`) are passthrough'd
+/// because they need the host linker for the cdylib/dylib output. However, they
+/// also produce rlib output that downstream proxy crates depend on. Without an
+/// .externs file, `process_dependencies` cannot traverse through these crates
+/// during the BFS transitive closure computation, causing downstream proxy crates
+/// to miss transitive dependencies.
+///
+/// This function extracts the `-C extra-filename=` flag from the rustc args to
+/// determine the output filename, then writes the .externs file before exec.
+fn maybe_write_passthrough_externs(args: &args::Args) {
+	// Only write .externs for crates that produce rlib output and have extern deps.
+	let produces_rlib = args.crate_types.is_empty()
+		|| args
+			.crate_types
+			.iter()
+			.any(|ct| matches!(ct.as_str(), "lib" | "rlib"));
+	if !produces_rlib || args.externs.is_empty() {
+		return;
+	}
+	let Some(output_dir) = &args.rustc_output_directory else {
+		return;
+	};
+
+	// Extract -C extra-filename=<suffix> from the remaining args.
+	let extra_filename = args
+		.remaining
+		.windows(2)
+		.find_map(|pair| {
+			if pair[0] == "-C" {
+				pair[1].strip_prefix("extra-filename=")
+			} else {
+				None
+			}
+		})
+		.unwrap_or("");
+
+	// Construct the .externs filename to match the rlib output.
+	let externs_filename = format!("lib{}{}.externs", args.crate_name, extra_filename);
+	let externs_path = std::path::Path::new(output_dir).join(externs_filename);
+
+	// Compute extern stems using the same format as write_outputs_to_cargo.
+	let extern_stems: Vec<String> = args
+		.externs
+		.iter()
+		.filter_map(|(_, path)| {
+			std::path::Path::new(path)
+				.file_name()
+				.and_then(|s| s.to_str())
+				.and_then(proxy::extract_stem)
+				.map(ToOwned::to_owned)
+		})
+		.collect();
+	let content = extern_stems.join("\n");
+	if let Err(e) = std::fs::write(&externs_path, content) {
+		tracing::warn!(error = %e, path = %externs_path.display(), "failed to write passthrough .externs file");
+	} else {
+		tracing::info!(
+			crate_name = %args.crate_name,
+			path = %externs_path.display(),
+			stems = extern_stems.len(),
+			"wrote passthrough .externs file"
+		);
+	}
 }
 
 /// Get the host string for the current target.
