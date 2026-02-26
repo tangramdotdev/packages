@@ -1138,6 +1138,170 @@ export const testRunnerPathExec = async () => {
 	);
 };
 
+/** Test run_local mode: non-local deps go through proxy, local deps go through
+ * run_local (sandboxed with target dir mount) or fall back to passthrough.
+ *
+ * Sets TGRUSTC_RUN_MODE=1 and TGRUSTC_PASSTHROUGH_PROJECT_DIR to verify the
+ * three-way dispatch: non-local deps get proxy_complete, workspace members get
+ * run_local_complete (or passthrough if the mount fails in nested sandbox context).
+ */
+export const testRunMode = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_RUN_MODE: "1",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}`,
+		},
+	});
+
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	tg.assert(stderrLog !== undefined, "Should have cargo-stderr.log.");
+	const stderrText = await stderrLog.text;
+
+	// Non-local deps (bytes) should go through the normal proxy path.
+	const proxyStats = await parseStats(result, "proxy_complete");
+	tg.assert(
+		proxyStats !== undefined && proxyStats.some((s) => s.crate_name === "bytes"),
+		"bytes should go through proxy_complete.",
+	);
+
+	// Local deps should go through run_local or passthrough.
+	const hasRunLocal = stderrText.includes("run_local_complete");
+	const hasPassthrough = stderrText.includes("passthrough mode");
+	tg.assert(
+		hasRunLocal || hasPassthrough,
+		"Workspace members should use run_local or passthrough.",
+	);
+
+	// Verify the build succeeded.
+	const output = await $`${result}/bin/cli | tee ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
+
+	return result;
+};
+
+/** Test that non-local deps cache hit in run_local mode when only a workspace
+ * member is modified.
+ *
+ * Builds hello-workspace twice with TGRUSTC_RUN_MODE=1. The second build
+ * modifies cli/src/main.rs. bytes should be a cache hit since it is an external
+ * dep compiled via run_proxy (no mount, cacheable).
+ */
+export const testRunModeCacheHit = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	// First build to populate cache.
+	const firstResult = await cargo.build({
+		source,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_RUN_MODE: "1",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}`,
+		},
+	});
+	const firstStats = await parseStats(firstResult);
+	tg.assert(firstStats !== undefined, "First build should have stats.");
+
+	// Modify cli/src/main.rs.
+	const originalText = await source
+		.get("packages/cli/src/main.rs")
+		.then(tg.File.expect)
+		.then((f: tg.File) => f.text);
+	const modifiedSource = tg.directory(source, {
+		"packages/cli/src/main.rs": tg.file(
+			`${originalText}\n// run mode cache test\n`,
+		),
+	});
+
+	// Second build with modified source. TGRUSTC_PASSTHROUGH_PROJECT_DIR points to
+	// the modified source so workspace member detection still works.
+	const secondResult = await cargo.build({
+		source: modifiedSource,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_RUN_MODE: "1",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${modifiedSource}`,
+		},
+	});
+	const secondStats = await parseStats(secondResult);
+	tg.assert(secondStats !== undefined, "Second build should have stats.");
+
+	// bytes should be a cache hit (external dep, compiled via run_proxy, cacheable).
+	const bytesStatus = secondStats.find((s) => s.crate_name === "bytes");
+	tg.assert(
+		bytesStatus?.cached === true,
+		`bytes should be a cache hit, got cached=${bytesStatus?.cached}.`,
+	);
+
+	// Verify the build succeeded.
+	const output = await $`${secondResult}/bin/cli | tee ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
+};
+
+/** Test passthrough mode: workspace crates compile directly, deps go through proxy.
+ *
+ * Sets TGRUSTC_PASSTHROUGH_PROJECT_DIR to the source directory and verifies that
+ * workspace member crates show "passthrough mode" in trace output while dependency
+ * crates go through the normal proxy path ("spawned process").
+ */
+export const testPassthrough = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	// Build with proxy and passthrough enabled. We use captureStderr to capture
+	// tracing output and set TGRUSTC_PASSTHROUGH_PROJECT_DIR to the source.
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}`,
+		},
+	});
+
+	// Parse the stderr log for passthrough and proxy traces.
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	tg.assert(stderrLog !== undefined, "Should have cargo-stderr.log");
+	const stderrText = await stderrLog.text;
+
+	// Workspace members should show "passthrough mode".
+	tg.assert(
+		stderrText.includes("passthrough mode"),
+		"Workspace members should trigger passthrough mode",
+	);
+
+	// Dependencies (bytes crate) should show "spawned process".
+	tg.assert(
+		stderrText.includes("spawned process"),
+		"Dependencies should go through the normal proxy path",
+	);
+
+	// Verify the build succeeded by running the binary.
+	const output = await $`${result}/bin/cli | tee ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
+
+	return result;
+};
+
 export const test = async () => {
 	// Ensure the proxy compiles before running other tests.
 	await testProxyCompiles();
@@ -1173,5 +1337,8 @@ export const test = async () => {
 		testRunnerPathTools(),
 		testRunnerCfgProbe(),
 		testRunnerPathExec(),
+		testPassthrough(),
+		testRunMode(),
+		testRunModeCacheHit(),
 	]);
 };

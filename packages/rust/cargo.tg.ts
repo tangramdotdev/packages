@@ -5,15 +5,13 @@ import { $ } from "std" with { local: "../std" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
 
-export type Arg = {
+/** Fields shared between sandboxed `build()` and unsandboxed `run()`. */
+type CommonArg = {
 	/** The machine performing the compilation. */
 	build?: string;
 
-	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
-	buildInTree?: boolean;
-
-	/** Capture cargo stderr to a file in the output. Useful for parsing tgrustc tracing output in tests. Default: false. */
-	captureStderr?: boolean;
+	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to "nightly". */
+	channel?: "stable" | "nightly" | string;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
 	deps?: std.deps.ConfigArg | undefined;
@@ -21,17 +19,8 @@ export type Arg = {
 	/** Dependency argument overrides. Keys must match deps config keys. */
 	dependencies?: std.packages.ResolvedDependencyArgs | undefined;
 
-	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
-	checksum?: tg.Checksum;
-
-	/** Should the default features get disabled? Default: false. */
-	disableDefaultFeatures?: boolean;
-
 	/** Environment variables to set during the build. */
 	env?: std.env.Arg;
-
-	/** Features to enable during the build. */
-	features?: Array<string>;
 
 	/** Machine that will run the compilation. */
 	host?: string;
@@ -39,29 +28,14 @@ export type Arg = {
 	/** Parent of the directory containing the Cargo.toml relative to the source dir if not at the expected location. */
 	manifestSubdir?: string;
 
-	/** Should this build have network access? Must set a checksum to enable. Default: false. */
-	network?: boolean;
-
 	/** Number of parallel jobs to use. */
 	parallelJobs?: number;
-
-	/** Should the build environment include pkg-config? Default: true. */
-	pkgConfig?: boolean;
-
-	/** The cargo build profile to use. Default: "release". */
-	profile?: string;
-
-	/** A name for the build process. */
-	processName?: string;
 
 	/** Additional script to run prior to the build. */
 	pre?: tg.Template.Arg;
 
 	/** Whether to use the tangram_rustc proxy. */
 	proxy?: boolean;
-
-	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to "nightly". */
-	channel?: "stable" | "nightly" | string;
 
 	/** SDK configuration to use during the build. */
 	sdk?: std.sdk.Arg;
@@ -78,11 +52,40 @@ export type Arg = {
 	/** Target triple for the build. */
 	target?: string;
 
-	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
-	timings?: boolean;
-
 	/** Whether to use cargo vendor instead of the Tangram-native vendoring. */
 	useCargoVendor?: boolean;
+};
+
+export type Arg = CommonArg & {
+	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
+	buildInTree?: boolean;
+
+	/** Capture cargo stderr to a file in the output. Useful for parsing tgrustc tracing output in tests. Default: false. */
+	captureStderr?: boolean;
+
+	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
+	checksum?: tg.Checksum;
+
+	/** Should the default features get disabled? Default: false. */
+	disableDefaultFeatures?: boolean;
+
+	/** Features to enable during the build. */
+	features?: Array<string>;
+
+	/** Should this build have network access? Must set a checksum to enable. Default: false. */
+	network?: boolean;
+
+	/** Should the build environment include pkg-config? Default: true. */
+	pkgConfig?: boolean;
+
+	/** The cargo build profile to use. Default: "release". */
+	profile?: string;
+
+	/** A name for the build process. */
+	processName?: string;
+
+	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
+	timings?: boolean;
 
 	/** Whether to enable verbose logging. */
 	verbose?: boolean;
@@ -124,23 +127,210 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 	};
 };
 
+export type RunArg = CommonArg & {
+	/** Cargo.lock file for vendoring (alternative to providing full source). */
+	cargoLock?: tg.File;
+
+	/** When proxy is true, whether workspace members should be compiled directly via passthrough. Default: true. */
+	passthrough?: boolean;
+};
+
+/** The result of runArg() - a RunArg with build and host guaranteed to be resolved. */
+export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
+	build: string;
+	host: string;
+};
+
+/** Resolve run args to a mutable arg object. Returns a RunArg with build and host guaranteed to be resolved. */
+export const runArg = async (
+	...args: std.Args<RunArg>
+): Promise<ResolvedRunArg> => {
+	const collect = await std.args.apply<RunArg, RunArg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			sdk: (a, b) => std.sdk.arg(a, b),
+			subtreeEnv: (a, b) => std.env.arg(a, b),
+			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
+
+	const { build: build_, host: host_, ...rest } = collect;
+
+	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
+
+	return {
+		build,
+		host,
+		...rest,
+	};
+};
+
+/** Resolve deps configuration to env, merging with any existing env arg. */
+const resolveDepsEnv = async (resolved: {
+	build: string;
+	host: string;
+	deps?: std.deps.ConfigArg | undefined;
+	dependencies?: std.packages.ResolvedDependencyArgs | undefined;
+	env?: std.env.Arg | undefined;
+	sdk?: std.sdk.Arg | undefined;
+	subtreeEnv?: std.env.Arg | undefined;
+	subtreeSdk?: std.sdk.Arg | undefined;
+}) => {
+	const depsConfig = await std.deps.resolveConfig(resolved.deps);
+	if (!depsConfig) return resolved.env;
+	return std.deps.env(depsConfig, {
+		build: resolved.build,
+		host: resolved.host,
+		sdk: resolved.sdk,
+		dependencies: resolved.dependencies,
+		env: resolved.env,
+		subtreeEnv: resolved.subtreeEnv,
+		subtreeSdk: resolved.subtreeSdk,
+	});
+};
+
+export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
+	const resolved = await runArg(...args);
+	const depsEnv = await resolveDepsEnv(resolved);
+
+	const {
+		cargoLock,
+		channel: channel_,
+		host,
+		manifestSubdir,
+		parallelJobs,
+		passthrough = true,
+		pre,
+		proxy = false,
+		source,
+		target: target_,
+		useCargoVendor = false,
+	} = resolved;
+	const rustHost = rustTriple(host);
+	const target = target_ ? rustTriple(target_) : rustHost;
+	const crossCompiling = target !== rustHost;
+
+	// The run() command executes unsandboxed via tg run, inheriting the host's environment
+	// (PATH, cc, etc.). All Tangram-specific configuration is set inside the script so
+	// that the host's env is preserved. Do not set the command's env field — tg run
+	// replaces the entire process env when one is provided.
+
+	// Optionally vendor dependencies.
+	let vendorSetup: string | tg.Template = "";
+	if (cargoLock || useCargoVendor) {
+		let cargoConfig: tg.Template;
+		if (useCargoVendor) {
+			tg.assert(source, "source is required when useCargoVendor is true");
+			const manifests = await tg.build(extractCargoManifests, source);
+			cargoConfig = await tg.build(vendoredSources, {
+				manifestSubdir,
+				source: manifests,
+				useCargoVendor: true,
+			});
+		} else {
+			let lockFile: tg.File;
+			if (cargoLock) {
+				lockFile = cargoLock;
+			} else {
+				tg.assert(source, "source or cargoLock must be provided for vendoring");
+				const sourcePath = manifestSubdir
+					? await source.get(manifestSubdir).then(tg.Directory.expect)
+					: source;
+				lockFile = await sourcePath
+					.get("Cargo.lock")
+					.then(tg.File.expect);
+			}
+			const vendoredDir = await tg.build(vendorDependencies, lockFile);
+			cargoConfig = await tg`
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "${vendoredDir}"`;
+		}
+		vendorSetup = await tg`export CARGO_HOME="$(mktemp -d)"
+mkdir -p "$CARGO_HOME"
+cat > "$CARGO_HOME/config.toml" << 'VENDORCFG'
+${cargoConfig}
+VENDORCFG`;
+	}
+
+	// Build env export lines for the script.
+	const exports: Array<string> = [
+		`export RUST_TARGET="${target}"`,
+		`export CARGO_REGISTRIES_CRATES_IO_PROTOCOL="sparse"`,
+		`export TANGRAM_HOST="${std.triple.archAndOs(rustHost)}"`,
+	];
+
+	// If cross-compiling, set linker and tool env vars.
+	if (crossCompiling) {
+		const envVar = tripleToEnvVar(target, true);
+		exports.push(`export CARGO_TARGET_${envVar}_LINKER="${target}-cc"`);
+		exports.push(`export AR_${tripleToEnvVar(target)}="${target}-ar"`);
+		exports.push(`export CC_${tripleToEnvVar(target)}="${target}-cc"`);
+		exports.push(`export CXX_${tripleToEnvVar(target)}="${target}-c++"`);
+	}
+
+	// When using the tgrustc proxy, default to high parallelism.
+	const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+	if (effectiveJobs !== undefined) {
+		exports.push(`export CARGO_BUILD_JOBS="${effectiveJobs}"`);
+	}
+
+	// Always set the project directory when proxy is enabled so the proxy can
+	// detect workspace members and route them to run_local (mounted sandbox)
+	// for linker/SDK access. Without this, external deps would also be routed
+	// to run_local since cargo sets cwd to each crate's source directory.
+	const passthroughSetup = proxy
+		? 'export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$PWD"'
+		: "";
+
+	// If proxy is enabled, set RUSTC_WRAPPER, TGRUSTC_DRIVER_EXECUTABLE,
+	// TGRUSTC_RUN_MODE, and TGRUSTC_TANGRAM_RUSTC via the script.
+	let proxySetup: string | tg.Template = "";
+	if (proxy) {
+		const proxyDir = proxy_.proxy();
+		const proxyBin = proxyDir
+			.then((d) => d.get("bin/tgrustc"))
+			.then(tg.File.expect);
+		if (!channel_ && !source) {
+			throw new Error(
+				"When proxy mode is enabled, provide a 'source' directory or 'channel' argument to determine the Rust toolchain channel.",
+			);
+		}
+		const channel =
+			channel_ ?? (source ? await readToolchainChannel(source) : undefined) ?? "stable";
+		const toolchainDir = self({ host, channel });
+		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
+export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"
+export TGRUSTC_RUN_MODE=1
+export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"`;
+	}
+
+	const preSetup = pre ? await tg`${pre}` : "";
+	const exportsBlock = exports.join("\n");
+	const script = tg`#!/usr/bin/env bash
+set -euo pipefail
+${exportsBlock}
+${vendorSetup}
+${proxySetup}
+${passthroughSetup}
+${preSetup}
+exec cargo "$@"
+`;
+
+	return tg.command({
+		args: ["-c", script, "--"],
+		executable: { path: "/bin/bash" },
+	});
+}
+
 export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
-
-	// If deps were provided, resolve them to env.
-	let depsEnv = resolved.env;
-	const depsConfig = await std.deps.resolveConfig(resolved.deps);
-	if (depsConfig) {
-		depsEnv = await std.deps.env(depsConfig, {
-			build: resolved.build,
-			host: resolved.host,
-			sdk: resolved.sdk,
-			dependencies: resolved.dependencies,
-			env: depsEnv,
-			subtreeEnv: resolved.subtreeEnv,
-			subtreeSdk: resolved.subtreeSdk,
-		});
-	}
+	const depsEnv = await resolveDepsEnv(resolved);
 
 	const {
 		buildInTree = false,
@@ -661,6 +851,21 @@ export const vendorPackage = async (
 	});
 };
 
+/** Read the toolchain channel from rust-toolchain.toml if present in a source directory. */
+const readToolchainChannel = async (
+	dir: tg.Directory,
+): Promise<string | undefined> => {
+	const file = await dir
+		.tryGet("rust-toolchain.toml")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	if (!file) return undefined;
+	const text = await file.text;
+	const toml = tg.encoding.toml.decode(text) as {
+		toolchain?: { channel?: string };
+	};
+	return toml.toolchain?.channel;
+};
+
 const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	const allCaps = upcase ?? false;
 	let result = triple.replace(/-/g, "_");
@@ -677,7 +882,6 @@ export const test = async () => {
 
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
-
 	await Promise.all(tests);
 
 	return true;

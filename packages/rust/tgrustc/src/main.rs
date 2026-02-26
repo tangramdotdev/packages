@@ -1,4 +1,5 @@
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use tangram_client::prelude::*;
 
 mod args;
@@ -52,6 +53,49 @@ fn main_inner() -> tg::Result<()> {
 		return Err(tg::error!("exec failed: {error}."));
 	}
 
+	// In tg run mode, crates that need linking (build scripts, proc-macros,
+	// cdylib, and dylib) require the host linker (cc), which the proxy's sandbox
+	// does not provide. Pass through to rustc directly. Build script execution
+	// caching is handled by runner mode. This does not affect tangram build,
+	// where the SDK provides cc.
+	let needs_host_linker = args.crate_name.starts_with("build_script_")
+		|| args
+			.crate_types
+			.iter()
+			.any(|ct| matches!(ct.as_str(), "proc-macro" | "cdylib" | "dylib" | "bin"));
+	if needs_host_linker && std::env::var("TGRUSTC_RUN_MODE").is_ok() {
+		return passthrough_to_rustc(&args);
+	}
+
+	// Route workspace members to run_local (mounted sandbox) or passthrough.
+	// TGRUSTC_PASSTHROUGH_PROJECT_DIR provides the workspace root for member
+	// detection. Note: current_dir() cannot be used as a fallback because
+	// cargo sets it to the crate's own source directory per invocation.
+	#[cfg(feature = "tracing")]
+	{
+		let passthrough_dir = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR");
+		let run_mode = std::env::var("TGRUSTC_RUN_MODE");
+		tracing::info!(
+			?passthrough_dir,
+			?run_mode,
+			source_directory = %args.source_directory,
+			crate_name = %args.crate_name,
+			"dispatch check"
+		);
+	}
+	if let Ok(project_dir) = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR")
+		&& is_workspace_member(&args.source_directory, &project_dir)
+	{
+		if std::env::var("TGRUSTC_RUN_MODE").is_ok() {
+			return tokio::runtime::Builder::new_current_thread()
+				.enable_all()
+				.build()
+				.unwrap()
+				.block_on(proxy::run_local(args));
+		}
+		return passthrough_to_rustc(&args);
+	}
+
 	tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
@@ -59,6 +103,29 @@ fn main_inner() -> tg::Result<()> {
 		.block_on(proxy::run_proxy(args))?;
 
 	Ok(())
+}
+
+/// Check whether a crate's source directory is under the project directory,
+/// indicating it is a workspace member (not an external dependency).
+/// Both paths are canonicalized to handle macOS /var → /private/var symlinks.
+fn is_workspace_member(source_directory: &str, project_dir: &str) -> bool {
+	let source = std::fs::canonicalize(source_directory)
+		.unwrap_or_else(|_| Path::new(source_directory).to_owned());
+	let project = std::fs::canonicalize(project_dir)
+		.unwrap_or_else(|_| Path::new(project_dir).to_owned());
+	source.starts_with(&project)
+}
+
+/// Invoke rustc directly without going through a Tangram process.
+/// This enables incremental compilation for workspace members.
+pub(crate) fn passthrough_to_rustc(args: &args::Args) -> tg::Result<()> {
+	#[cfg(feature = "tracing")]
+	tracing::info!(crate_name = %args.crate_name, source_directory = %args.source_directory, "passthrough mode: calling rustc directly");
+
+	let error = std::process::Command::new(&args.rustc)
+		.args(std::env::args().skip(2))
+		.exec();
+	Err(tg::error!("exec failed: {error}."))
 }
 
 /// Get the host string for the current target.

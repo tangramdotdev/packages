@@ -38,6 +38,7 @@ pub(crate) async fn resolve_executable(
 					deterministic: true,
 					ignore: false,
 					lock: None,
+					root: true,
 					..Default::default()
 				},
 				path: self_exe,
@@ -60,7 +61,42 @@ pub(crate) async fn spawn_and_wait(
 ) -> tg::Result<SpawnResult> {
 	let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
 	spawn_arg.network = false;
+	spawn_and_wait_with_arg(tg, spawn_arg, description).await
+}
 
+/// Spawn a Tangram process with a host directory mounted into the sandbox, wait
+/// for completion, and return the output directory.
+///
+/// The mount makes the host directory accessible inside the sandbox at the same
+/// path with read-write access. Note: processes with mounts are not cacheable
+/// unless a checksum is provided.
+pub(crate) async fn spawn_and_wait_mounted(
+	tg: &impl tg::Handle,
+	command_ref: tg::Referent<tg::command::Id>,
+	description: &str,
+	mount_source: &Path,
+) -> tg::Result<SpawnResult> {
+	let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
+	spawn_arg.mounts.push(tg::process::data::Mount {
+		source: mount_source.to_owned(),
+		target: mount_source.to_owned(),
+		readonly: false,
+	});
+	spawn_arg.network = false;
+
+	#[cfg(feature = "tracing")]
+	tracing::info!(mount = %mount_source.display(), "mounting host directory into sandbox");
+
+	spawn_and_wait_with_arg(tg, spawn_arg, description).await
+}
+
+/// Spawn a Tangram process with a pre-built spawn arg, wait for completion, and
+/// return the output directory.
+async fn spawn_and_wait_with_arg(
+	tg: &impl tg::Handle,
+	spawn_arg: tg::process::spawn::Arg,
+	description: &str,
+) -> tg::Result<SpawnResult> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(%description, "spawning process");
 
@@ -216,6 +252,7 @@ pub(crate) async fn content_address_path(
 					deterministic: true,
 					ignore: false,
 					local_dependencies: false,
+					root: true,
 					solve: false,
 					..Default::default()
 				},

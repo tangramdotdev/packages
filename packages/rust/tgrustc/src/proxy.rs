@@ -12,18 +12,57 @@ type ExternResult = (
 	Option<(String, tg::Directory)>,
 );
 
-/// Run the proxy.
-#[allow(clippy::too_many_lines)]
+/// Run the proxy for non-local (registry) crates. Delegates to the shared inner
+/// implementation without a target directory mount.
 pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
+	run_proxy_inner(&args, None).await
+}
+
+/// Run the proxy for local (workspace member) crates. Spawns the inner process
+/// with the host's target directory mounted into the sandbox for incremental
+/// compilation state. Falls back to passthrough if spawning fails (e.g. in a
+/// nested sandbox context).
+pub(crate) async fn run_local(args: Args) -> tg::Result<()> {
+	let Some(output_dir) = args.rustc_output_directory.as_deref() else {
+		#[cfg(feature = "tracing")]
+		tracing::warn!("no --out-dir argument, falling back to passthrough");
+		return crate::passthrough_to_rustc(&args);
+	};
+	let Some(target_dir) = Path::new(output_dir).parent().and_then(Path::parent) else {
+		#[cfg(feature = "tracing")]
+		tracing::warn!(output_dir, "could not determine target directory, falling back to passthrough");
+		return crate::passthrough_to_rustc(&args);
+	};
+	let target_dir = target_dir.to_owned();
+
+	match run_proxy_inner(&args, Some(&target_dir)).await {
+		Ok(()) => Ok(()),
+		#[cfg(feature = "tracing")]
+		Err(e) => {
+			tracing::warn!(error = %e, "run_local failed, falling back to passthrough");
+			crate::passthrough_to_rustc(&args)
+		},
+		#[cfg(not(feature = "tracing"))]
+		Err(_) => crate::passthrough_to_rustc(&args),
+	}
+}
+
+/// Shared implementation for both proxy and `run_local` modes.
+///
+/// When `mount` is `None`, behaves as the standard proxy (sandboxed, cacheable).
+/// When `mount` is `Some(target_dir)`, the host's target directory is mounted
+/// into the sandbox (sandboxed but not cacheable due to the mount).
+#[allow(clippy::too_many_lines)]
+async fn run_proxy_inner(args: &Args, mount: Option<&Path>) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	let start_time = std::time::Instant::now();
-	// When cargo compiles a build script, it passes `--crate-name build_script_build`
-	// for all build scripts regardless of which crate they belong to. Use CARGO_PKG_NAME
-	// to produce a more descriptive display name for process naming and tracing.
-	let display_name = if args.crate_name == "build_script_build" {
+	// When cargo compiles a build script, it passes `--crate-name build_script_<name>`
+	// (usually `build_script_build`, but `build_script_main` for `build = "build/main.rs"`).
+	// Use CARGO_PKG_NAME to produce a more descriptive display name for process naming and tracing.
+	let display_name = if args.crate_name.starts_with("build_script_") {
 		if let Ok(pkg) = std::env::var("CARGO_PKG_NAME") {
 			// Normalize hyphens to underscores to match cargo's --crate-name convention.
-			format!("build_script_build({})", pkg.replace('-', "_"))
+			format!("{}({})", args.crate_name, pkg.replace('-', "_"))
 		} else {
 			args.crate_name.clone()
 		}
@@ -32,7 +71,11 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	};
 
 	#[cfg(feature = "tracing")]
-	let _span = tracing::info_span!("rustc_proxy", crate = %display_name).entered();
+	let _span = if mount.is_some() {
+		tracing::info_span!("run_local", crate = %display_name).entered()
+	} else {
+		tracing::info_span!("rustc_proxy", crate = %display_name).entered()
+	};
 
 	// Create a client.
 	let tg = tg::Client::with_env()?;
@@ -77,6 +120,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 						deterministic: true,
 						ignore: false,
 						lock: None,
+						root: true,
 						..Default::default()
 					},
 					path: out_dir_path.clone(),
@@ -108,6 +152,22 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	)
 	.await?;
 
+	// When the source is a real filesystem path (not an artifact), crate_subpath
+	// will be None. Derive it from the workspace root so that workspace-relative
+	// source paths get rewritten to crate-relative paths.
+	// TGRUSTC_PASSTHROUGH_PROJECT_DIR provides the workspace root. Both paths
+	// are canonicalized to handle macOS /var → /private/var symlinks.
+	let crate_subpath = crate_subpath.or_else(|| {
+		let project_dir = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR").ok()?;
+		let source = std::fs::canonicalize(&args.source_directory).ok()?;
+		let project = std::fs::canonicalize(&project_dir).ok()?;
+		source
+			.strip_prefix(&project)
+			.ok()
+			.map(|p| p.to_string_lossy().to_string())
+			.filter(|s| !s.is_empty())
+	});
+
 	// Unrender the environment.
 	let mut env = BTreeMap::new();
 	for (name, value) in
@@ -119,7 +179,11 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Set up driver mode environment variables.
 	// These tell the inner tgrustc (running in driver mode) where things are.
-	let rustc_template = tangram_std::unrender(&args.rustc)?;
+	// In tg run context, TGRUSTC_TANGRAM_RUSTC provides the Tangram-provided rustc
+	// artifact path (the host's rustc is not accessible inside the sandbox).
+	let rustc_for_inner = std::env::var("TGRUSTC_TANGRAM_RUSTC")
+		.unwrap_or_else(|_| args.rustc.clone());
+	let rustc_template = tangram_std::unrender(&rustc_for_inner)?;
 	env.insert("TGRUSTC_DRIVER_MODE".to_owned(), "1".to_owned().into());
 	env.insert("TGRUSTC_RUSTC".to_owned(), rustc_template.into());
 	env.insert("TGRUSTC_SOURCE".to_owned(), source_directory.clone());
@@ -167,6 +231,22 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			continue;
 		}
 
+		// Handle -C incremental=<path>. In run_local mode the target directory
+		// is mounted, so the incremental cache is accessible and should be kept.
+		// In run_proxy mode the path does not exist inside the sandbox and would
+		// pollute the command_id cache key, so both args are dropped.
+		if arg == "-C" {
+			let mut peek = remaining_iter.clone();
+			if peek.next().is_some_and(|a| a.starts_with("incremental=")) {
+				let incremental_arg = remaining_iter.next().unwrap();
+				if mount.is_some() {
+					command_args.push(Some("-C".to_owned().into()));
+					command_args.push(Some(incremental_arg.clone().into()));
+				}
+				continue;
+			}
+		}
+
 		// Handle native= args: push placeholder, resolve concurrently later.
 		if let Some(native_path) = arg.strip_prefix("native=") {
 			let idx = command_args.len();
@@ -175,26 +255,35 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			continue;
 		}
 
-		// Rewrite workspace-relative source file paths to crate-relative paths.
-		// Cargo passes paths like "packages/greeting/src/lib.rs" (relative to
-		// the workspace root), but the inner driver sets current_dir to the crate
-		// directory, so we need "src/lib.rs" instead.
-		if let Some(ref subpath) = crate_subpath {
+		// Rewrite source file paths to be crate-relative. The inner driver
+		// sets current_dir to the source directory artifact, so source files
+		// must be expressed as relative paths within it.
+		// - Workspace members: strip the workspace-relative crate subpath
+		//   (e.g., "packages/greeting/src/lib.rs" → "src/lib.rs").
+		// - External crates: strip the absolute source_directory prefix
+		//   (e.g., "/path/to/bytes/src/lib.rs" → "src/lib.rs").
+		{
 			let is_source_file = std::path::Path::new(arg)
 				.extension()
 				.is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
 				&& !arg.starts_with('-');
 			if is_source_file {
-				let stripped = arg.strip_prefix(subpath).map(|s| s.trim_start_matches('/'));
+				let stripped = crate_subpath
+					.as_ref()
+					.and_then(|subpath| arg.strip_prefix(subpath.as_str()))
+					.or_else(|| arg.strip_prefix(args.source_directory.as_str()));
 				if let Some(relative_path) = stripped {
-					#[cfg(feature = "tracing")]
-					tracing::info!(
-						original = %arg,
-						rewritten = %relative_path,
-						"rewrote source file path to be crate-relative"
-					);
-					command_args.push(Some(relative_path.to_owned().into()));
-					continue;
+					let relative_path = relative_path.trim_start_matches('/');
+					if !relative_path.is_empty() {
+						#[cfg(feature = "tracing")]
+						tracing::info!(
+							original = %arg,
+							rewritten = %relative_path,
+							"rewrote source file path to be crate-relative"
+						);
+						command_args.push(Some(relative_path.to_owned().into()));
+						continue;
+					}
 				}
 			}
 		}
@@ -275,9 +364,14 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		.name
 		.replace(format!("rustc {display_name}"));
 
-	// Spawn and wait for the inner process.
+	// Spawn and wait for the inner process. When a mount is provided (run_local
+	// mode), the host's target directory is mounted into the sandbox.
 	let description = format!("Inner process for crate '{display_name}'");
-	let result = process::spawn_and_wait(tg, command_ref, &description).await?;
+	let result = if let Some(mount_path) = mount {
+		process::spawn_and_wait_mounted(tg, command_ref, &description, mount_path).await?
+	} else {
+		process::spawn_and_wait(tg, command_ref, &description).await?
+	};
 
 	#[cfg(feature = "tracing")]
 	{
@@ -308,7 +402,10 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		})
 		.await?;
 
-	// Write outputs to cargo's output directory.
+	// Write outputs to cargo's output directory. In run_local mode (mount is
+	// Some), copy files with writable permissions so plain cargo can overwrite
+	// them later. In run_proxy mode (mount is None), symlink dependency files
+	// to the artifact store for deduplication.
 	{
 		#[cfg(feature = "tracing")]
 		let _span = tracing::info_span!("write_outputs").entered();
@@ -318,7 +415,9 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 				.as_deref()
 				.ok_or_else(|| tg::error!("expected --out-dir argument from cargo"))?,
 		);
-		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs).await?;
+		let copy_all = mount.is_some();
+		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs, copy_all)
+			.await?;
 	}
 
 	// Now that symlinks are created, forward stdout/stderr.
@@ -328,17 +427,15 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	{
 		let elapsed = start_time.elapsed();
-		let source_debug = format!("{source_directory:?}");
-		let out_dir_debug = format!("{out_dir:?}");
+		let mode = if mount.is_some() { "run_local_complete" } else { "proxy_complete" };
 		tracing::info!(
 			crate_name = %display_name,
 			elapsed_ms = elapsed.as_millis(),
 			cached = result.cached,
 			process_id = %result.process_id,
 			command_id = %command_id,
-			source = %source_debug,
-			out_dir = %out_dir_debug,
-			"proxy_complete"
+			mode,
+			"{mode}"
 		);
 	}
 
@@ -890,6 +987,7 @@ async fn write_outputs_to_cargo(
 	build_dir: &tg::Directory,
 	output_directory: &PathBuf,
 	externs: &[(String, String)],
+	copy_all: bool,
 ) -> tg::Result<()> {
 	// Create the output directory if it does not exist.
 	if !output_directory.exists() {
@@ -939,10 +1037,13 @@ async fn write_outputs_to_cargo(
 		}
 	}
 
-	// Write outputs to cargo's output directory.
-	let all_artifact_ids: Vec<tg::artifact::Id> =
-		entries.iter().map(|(_, artifact)| artifact.id()).collect();
-	process::batch_cache(tg, all_artifact_ids).await?;
+	// Write outputs to cargo's output directory. When copy_all is true (run_local mode),
+	// skip caching since we will copy instead of symlinking.
+	if !copy_all {
+		let all_artifact_ids: Vec<tg::artifact::Id> =
+			entries.iter().map(|(_, artifact)| artifact.id()).collect();
+		process::batch_cache(tg, all_artifact_ids).await?;
+	}
 
 	let futures = entries.into_iter().map(|(filename, artifact)| {
 		let output_directory = output_directory.clone();
@@ -954,8 +1055,50 @@ async fn write_outputs_to_cargo(
 				tokio::fs::remove_file(&to).await.ok();
 			}
 
-			// Symlink to the artifact store.
-			process::symlink_cached_artifact(&artifact, &to).await?;
+			if copy_all {
+				// Copy the file. Dependency files get 0o644 (writable so plain
+				// cargo can overwrite them later). Binaries get 0o755.
+				let is_dep = is_dependency_file(&filename);
+				let mode = if is_dep { 0o644 } else { 0o755 };
+				let file = artifact
+					.try_unwrap_file()
+					.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
+				let bytes = file.bytes(tg).await?;
+				tokio::fs::write(&to, &bytes).await.map_err(|error| {
+					tg::error!(source = error, "failed to write file {}", to.display())
+				})?;
+				tokio::fs::set_permissions(&to, std::fs::Permissions::from_mode(mode))
+					.await
+					.map_err(|error| {
+						tg::error!(
+							source = error,
+							"failed to set permissions on {}",
+							to.display()
+						)
+					})?;
+			} else if Path::new(&filename).extension().is_some_and(|e| e == "d") {
+				// Copy .d files with writable permissions. Cargo needs to overwrite
+				// them on subsequent builds, which fails if they are read-only symlinks.
+				let file = artifact
+					.try_unwrap_file()
+					.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
+				let bytes = file.bytes(tg).await?;
+				tokio::fs::write(&to, &bytes).await.map_err(|error| {
+					tg::error!(source = error, "failed to write file {}", to.display())
+				})?;
+				tokio::fs::set_permissions(&to, std::fs::Permissions::from_mode(0o644))
+					.await
+					.map_err(|error| {
+						tg::error!(
+							source = error,
+							"failed to set permissions on {}",
+							to.display()
+						)
+					})?;
+			} else {
+				// Symlink to the artifact store.
+				process::symlink_cached_artifact(&artifact, &to).await?;
+			}
 
 			// Create a convenience symlink for binaries with a metadata suffix.
 			if !is_dependency_file(&filename)
@@ -994,9 +1137,12 @@ fn extract_stem(filename: &str) -> Option<&str> {
 
 /// Check whether a filename has a dependency file extension (rlib, rmeta, d, so, dylib).
 fn is_dependency_file(filename: &str) -> bool {
+	// Note: `.d` files (dependency tracking) are excluded because they must be
+	// writable for cargo's incremental compilation. Symlinking them to read-only
+	// Tangram artifacts would prevent cargo from overwriting them on the next build.
 	Path::new(filename)
 		.extension()
-		.is_some_and(|ext| matches!(ext.to_str(), Some("rlib" | "rmeta" | "d" | "so" | "dylib")))
+		.is_some_and(|ext| matches!(ext.to_str(), Some("rlib" | "rmeta" | "so" | "dylib")))
 }
 
 /// Strip the rustc metadata suffix from a filename and convert underscores to hyphens.
@@ -1185,10 +1331,14 @@ fn expand_member_glob(source_dir: &str, pattern: &str) -> Vec<String> {
 // These either:
 // - Are used only by the outer proxy (not the inner driver)
 // - Vary per outer build and would pollute the inner process's cache key
-const BLACKLISTED_ENV_VARS: [&str; 20] = [
+const BLACKLISTED_ENV_VARS: [&str; 23] = [
 	// Proxy-specific vars (used by outer proxy, not inner driver).
 	"TGRUSTC_TRACING",
 	"TGRUSTC_DRIVER_EXECUTABLE",
+	// Run mode vars (used by outer proxy dispatch, not inner driver).
+	"TGRUSTC_RUN_MODE",
+	"TGRUSTC_TANGRAM_RUSTC",
+	"TGRUSTC_PASSTHROUGH_PROJECT_DIR",
 	// Tangram vars.
 	"TANGRAM_HOST",
 	"TANGRAM_URL",
@@ -1225,12 +1375,16 @@ const BLACKLISTED_ENV_VARS: [&str; 20] = [
 
 // Environment variables that must be filtered out in runner mode.
 // These either vary per outer build or are set by the inner driver.
-const RUNNER_BLACKLISTED_ENV_VARS: [&str; 21] = [
+const RUNNER_BLACKLISTED_ENV_VARS: [&str; 24] = [
 	// Proxy/runner-specific vars.
 	"TGRUSTC_TRACING",
 	"TGRUSTC_DRIVER_EXECUTABLE",
 	"TGRUSTC_RUNNER_DRIVER_MODE",
 	"TGRUSTC_RUNNER_SOURCE",
+	// Run mode vars (used by outer proxy dispatch, not inside build scripts).
+	"TGRUSTC_RUN_MODE",
+	"TGRUSTC_TANGRAM_RUSTC",
+	"TGRUSTC_PASSTHROUGH_PROJECT_DIR",
 	// Tangram vars.
 	"TANGRAM_HOST",
 	"TANGRAM_URL",

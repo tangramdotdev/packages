@@ -7,6 +7,8 @@ pub(crate) struct Args {
 	pub(crate) cargo_out_directory: Option<String>,
 	/// The crate being compiled, from `--crate-name`.
 	pub(crate) crate_name: String,
+	/// Crate types from `--crate-type` args.
+	pub(crate) crate_types: Vec<String>,
 	/// Paths from `-L dependency=` args.
 	pub(crate) dependencies: Vec<String>,
 	/// Extern crate entries from `--extern name=path` args.
@@ -30,6 +32,7 @@ impl Args {
 			.ok_or(tg::error!("missing argument for rustc"))?;
 		let mut stdin = false;
 		let mut crate_name = None;
+		let mut crate_types = Vec::new();
 		let mut dependencies = Vec::new();
 		let mut externs = Vec::new();
 		let mut rustc_output_directory = None;
@@ -61,7 +64,12 @@ impl Args {
 					};
 					externs.push((name.into(), path.into()));
 				},
-				("--out-dir", Some(value)) => rustc_output_directory = Some(value),
+				("--crate-type", Some(value)) => {
+				crate_types.push(value.clone());
+				remaining.push(arg);
+				remaining.push(value);
+			},
+			("--out-dir", Some(value)) => rustc_output_directory = Some(value),
 				(arg, None) if arg.starts_with("--out-dir=") => {
 					rustc_output_directory = arg.strip_prefix("--out-dir=").map(Into::into);
 				},
@@ -98,6 +106,7 @@ impl Args {
 		Ok(Self {
 			cargo_out_directory,
 			crate_name: crate_name.unwrap_or_else(|| "unknown".into()),
+			crate_types,
 			dependencies,
 			externs,
 			remaining,
