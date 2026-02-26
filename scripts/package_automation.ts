@@ -502,6 +502,8 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 			ref: "buildAutotoolsBuildTools",
 			tagPath: "dependencies/buildTools/autotools",
 		},
+		{ ref: "buildSdk", tagPath: "sdk/build" },
+		{ ref: "buildCrossSdk", tagPath: "sdk/cross" },
 	],
 	rust: [
 		{ ref: "default", tagPath: "default" },
@@ -838,10 +840,10 @@ class PackageExecutor {
 
 			for (const actionName of orderedActions) {
 				if (
-					actionName === "build" &&
+					(actionName === "build" || actionName === "release") &&
 					BUILD_SKIP_PACKAGES.has(packageName)
 				) {
-					log(`[build] Skipping ${packageName} (library-only package)`);
+					log(`[${actionName}] Skipping ${packageName} (library-only package)`);
 					continue;
 				}
 

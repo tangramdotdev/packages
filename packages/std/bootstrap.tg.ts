@@ -97,16 +97,18 @@ export const interpreterName = (host?: string) => {
 
 /** Apply one or more patches to a directory using the bootstrap utils. */
 export const patch = async (
-	source: tg.Directory,
-	...patches: Array<tg.File | tg.Symlink>
+	source: tg.Unresolved<tg.Directory>,
+	...patches: Array<tg.Unresolved<tg.File | tg.Symlink>>
 ) => {
+	const source_ = await tg.resolve(source);
+	const patches_ = await Promise.all(patches.map(tg.resolve));
 	const host = std.triple.host();
 	const patchScript = tg.Template.join(
 		"\n",
-		...patches.map((p) => tg`patch -p1 < ${p}`),
+		...patches_.map((p) => tg`patch -p1 < ${p}`),
 	);
 	return std.build`
-		cp -R ${source} ${tg.output}
+		cp -R ${source_} ${tg.output}
 		chmod -R +w ${tg.output}
 		cd ${tg.output}
 		${patchScript}

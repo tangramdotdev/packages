@@ -3,6 +3,7 @@ import { mergeLibDirs } from "../../sdk.tg.ts";
 import { interpreterName } from "../libc.tg.ts";
 import { defaultGlibcVersion } from "../libc/glibc.tg.ts";
 import * as dependencies from "../dependencies.tg.ts";
+import libgompConstFix from "./gcc-libgomp-const-fix.patch" with { type: "file" };
 import * as std from "../../tangram.ts";
 
 export const metadata = {
@@ -26,7 +27,8 @@ export const source = (bundledSources?: boolean) => {
 	let sourceDir = std.download
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
-		.then(std.directory.unwrap);
+		.then(std.directory.unwrap)
+		.then((source) => bootstrap.patch(source, libgompConstFix));
 
 	// If requested, include the bundled sources as subdirectories.
 	if (bundledSources) {

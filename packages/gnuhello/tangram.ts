@@ -1,6 +1,7 @@
-import * as gettext from "gettext" with { local: "./gettext.tg.ts" };
-import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as gettext from "gettext" with { local: "../gettext" };
+import * as libiconv from "libiconv" with { local: "../libiconv.tg.ts" };
+import * as std from "std" with { local: "../std" };
+import c23ConstGenericPatch from "./c23-const-generic.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/hello/",
@@ -18,7 +19,11 @@ export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:5a9a996dc292cc24dcf411cee87e92f6aae5b8d13bd9c6819b4c7a9dce0818ab";
-	return std.download.fromGnu({ name, version, checksum });
+	const source = std.download.fromGnu({ name, version, checksum });
+	// GNU Hello 2.12.2 bundles a gnulib snapshot that predates the glibc 2.43
+	// C23 _Generic fix (gnulib commit df17f4f3, Nov 2025). Parenthesize
+	// function names in gnulib replacement headers to prevent macro expansion.
+	return std.patch(source, c23ConstGenericPatch);
 };
 
 export const deps = () =>

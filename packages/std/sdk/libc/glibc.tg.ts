@@ -1,9 +1,24 @@
 import * as std from "../../tangram.ts";
 
 // Define supported versions.
-type GlibcVersion = "2.37" | "2.38" | "2.39" | "2.40" | "2.41";
-export const AllGlibcVersions = ["2.37", "2.38", "2.39", "2.40", "2.41"];
-export const defaultGlibcVersion: GlibcVersion = "2.41";
+type GlibcVersion =
+	| "2.37"
+	| "2.38"
+	| "2.39"
+	| "2.40"
+	| "2.41"
+	| "2.42"
+	| "2.43";
+export const AllGlibcVersions = [
+	"2.37",
+	"2.38",
+	"2.39",
+	"2.40",
+	"2.41",
+	"2.42",
+	"2.43",
+];
+export const defaultGlibcVersion: GlibcVersion = "2.43";
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/libc/",
@@ -61,7 +76,9 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		version === "2.38" ||
 		version === "2.39" ||
 		version === "2.40" ||
-		version === "2.41"
+		version === "2.41" ||
+		version === "2.42" ||
+		version === "2.43"
 	) {
 		// This flag is not available in previous versions. The `-DFORTIFY_SOURCE` macro was already available to users of glibc. This flag additionally uses this macro to build libc itself. It's used to detect buffer overflows at compile time.
 		additionalFlags.push("--enable-fortify-source");
@@ -214,5 +231,13 @@ const checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 	[
 		"2.41",
 		"sha256:a5a26b22f545d6b7d7b3dd828e11e428f24f4fac43c934fb071b6a7d0828e901",
+	],
+	[
+		"2.42",
+		"sha256:d1775e32e4628e64ef930f435b67bb63af7599acb6be2b335b9f19f16509f17f",
+	],
+	[
+		"2.43",
+		"sha256:d9c86c6b5dbddb43a3e08270c5844fc5177d19442cf5b8df4be7c07cd5fa3831",
 	],
 ]);

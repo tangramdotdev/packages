@@ -1,11 +1,12 @@
-import * as std from "std" with { local: "./std" };
-import binutils from "binutils" with { local: "./binutils.tg.ts" };
-import * as glibc from "glibc" with { local: "./glibc.tg.ts" };
-import musl from "musl" with { local: "./musl" };
-import perl from "perl" with { local: "./perl" };
-import python from "python" with { local: "./python" };
-import texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
-import zstd from "zstd" with { local: "./zstd.tg.ts" };
+import * as std from "std" with { local: "../std" };
+import binutils from "binutils" with { local: "../binutils.tg.ts" };
+import * as glibc from "glibc" with { local: "../glibc.tg.ts" };
+import libgompConstFix from "./gcc-libgomp-const-fix.patch" with { type: "file" };
+import musl from "musl" with { local: "../musl" };
+import perl from "perl" with { local: "../perl" };
+import python from "python" with { local: "../python" };
+import texinfo from "texinfo" with { local: "../texinfo.tg.ts" };
+import zstd from "zstd" with { local: "../zstd.tg.ts" };
 
 export const metadata = {
 	homepage: "https://gcc.gnu.org/",
@@ -222,10 +223,11 @@ export const gccSource = async () => {
 	const checksum =
 		"sha256:438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e";
 	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
-	return await std.download
+	const source = await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
+	return std.patch(source, libgompConstFix);
 };
 
 /** Select the correct libc sysroot for the host. Returns a directory with headers and libraries at the root level (include/, lib/). */

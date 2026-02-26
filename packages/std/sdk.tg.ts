@@ -18,9 +18,35 @@ export * as gnu from "./sdk/gnu.tg.ts";
 export * as llvm from "./sdk/llvm.tg.ts";
 export * as proxy from "./sdk/proxy.tg.ts";
 
-/** An SDK combines a compiler, a linker, a libc, and a set of basic utilities. */
+/** An SDK combines a compiler, a linker, a libc, and a set of basic utilities.
+ * Normalizes variadic args and delegates to pre-built release SDKs when the
+ * resolved arguments match platform defaults, enabling remote cache hits. */
 export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
-	let {
+	const resolved = await sdk.arg(...args);
+
+	// Delegate to pre-built SDKs when args match defaults for remote cache hits.
+	const detectedHost = sdk.canonicalTriple(std.triple.host());
+	if (resolved.host === detectedHost && sdk.isDefaultArgs(resolved)) {
+		if (resolved.target === detectedHost) {
+			return tg.build(std.buildSdk);
+		}
+		if (std.triple.os(detectedHost) === "linux") {
+			const arch = std.triple.arch(detectedHost);
+			const crossArch = arch === "x86_64" ? "aarch64" : "x86_64";
+			const expectedCross = sdk.canonicalTriple(`${crossArch}-linux`);
+			if (resolved.target === expectedCross) {
+				return tg.build(std.buildCrossSdk);
+			}
+		}
+	}
+
+	return tg.build(sdkInner, resolved);
+}
+
+/** Inner SDK implementation. Takes already-resolved, canonical arguments so
+ * the build ID is stable across all callers. */
+export const sdkInner = async (arg: sdk.ResolvedArg) => {
+	const {
 		embedWrapper,
 		host,
 		proxyCompiler,
@@ -29,7 +55,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 		target,
 		toolchain: toolchain_,
 		linker,
-	} = await sdk.arg(...args);
+	} = arg;
 	const hostOs = std.triple.os(host);
 
 	// Determine host toolchain.
@@ -100,7 +126,7 @@ export async function sdk(...args: std.Args<sdk.Arg>): Promise<tg.Directory> {
 		proxyArg = { ...proxyArg, linkerExe };
 	}
 	return await tg.build(proxy.env, proxyArg).named("proxy sdk");
-}
+};
 
 export namespace sdk {
 	/** The minimum macOS version that produced binaries should support. */
@@ -1171,6 +1197,34 @@ export namespace sdk {
 	export type LinkerKind = "bfd" | "lld" | "mold" | tg.Symlink | tg.File;
 
 	export type ToolchainKind = sdk.ToolchainFlavor | tg.Directory;
+
+	/** The resolved form of SDK args, returned by `sdk.arg()`. All fields are
+	 * canonical and defaulted. */
+	export type ResolvedArg = {
+		embedWrapper: boolean | undefined;
+		host: string;
+		proxyCompiler: boolean;
+		proxyLinker: boolean;
+		proxyStrip: boolean;
+		target: string;
+		toolchain: ToolchainKind;
+		linker: LinkerKind | undefined;
+	};
+
+	/** Check whether the resolved args match platform defaults. Used by `sdk()`
+	 * to delegate to pre-built release SDKs for remote cache hits. */
+	export const isDefaultArgs = (resolved: ResolvedArg): boolean => {
+		const defaultToolchain: ToolchainFlavor =
+			std.triple.os(resolved.host) === "darwin" ? "llvm" : "gnu";
+		return (
+			resolved.embedWrapper === undefined &&
+			resolved.linker === undefined &&
+			resolved.proxyCompiler === false &&
+			resolved.proxyLinker === true &&
+			resolved.proxyStrip === true &&
+			resolved.toolchain === defaultToolchain
+		);
+	};
 }
 
 /** Check whether Tangram supports building a cross compiler from the host to the target. */

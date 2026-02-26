@@ -1,0 +1,19 @@
+Fix const-correctness in libgomp for glibc >= 2.43.
+
+glibc 2.43 introduced ISO C23 const-preserving _Generic macros for strchr
+and similar functions. When the input is const char *, strchr now returns
+const char * instead of char *, causing a -Werror=discarded-qualifiers
+failure.
+
+diff --git a/libgomp/affinity-fmt.c b/libgomp/affinity-fmt.c
+--- a/libgomp/affinity-fmt.c
++++ b/libgomp/affinity-fmt.c
+@@ -327,7 +327,7 @@
+ 	      }
+ 	  if (c == '{')
+ 	    {
+-	      char *q = strchr (p + 1, '}');
++	      const char *q = strchr (p + 1, '}');
+ 	      if (q)
+ 		gomp_fatal ("unsupported long type name '%.*s' in affinity "
+ 			    "format", (int) (q - (p + 1)), p + 1);

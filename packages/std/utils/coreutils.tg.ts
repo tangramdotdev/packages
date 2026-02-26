@@ -23,7 +23,10 @@ export const source = async (os: string) => {
 		checksum,
 	});
 
-	// Apply xattr patch on Linux.
+	// Apply xattr patch on Linux. The gnulib xattr module only supports Linux's
+	// libattr (attr/xattr.h), not macOS's native sys/xattr.h, so this patch
+	// only works on Linux. On macOS, cp and install are replaced with Apple's
+	// file_cmds versions which preserve xattrs natively.
 	if (os === "linux") {
 		const patches = [];
 		patches.push(alwaysPreserveXattrsPatch);
@@ -89,6 +92,17 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 			}),
 		);
 	}
+
+	// On macOS, build Apple xattr-preserving cp and install. These must be in
+	// the build env so that `make install` uses Apple install (which preserves
+	// xattrs) rather than GNU install (which does not support xattrs on macOS
+	// because gnulib's xattr module is Linux-only). The same binaries also
+	// replace the GNU versions in the output.
+	let appleXattrCmds: ReturnType<typeof macOsXattrCmds> | undefined;
+	if (os === "darwin") {
+		appleXattrCmds = macOsXattrCmds(arg);
+		dependencies.push(appleXattrCmds);
+	}
 	const env = [...dependencies, { FORCE_UNSAFE_CONFIGURE: true }];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
@@ -119,12 +133,12 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		source: source_ ?? source(os),
 	});
 
-	// On macOS, replace `install` with the Apple Open Source version that correctly handles xattrs.
+	// On macOS, replace `cp` and `install` with Apple versions in the output.
 	if (os === "darwin") {
 		output = await tg.directory(
 			output,
-			{ "bin/install": undefined },
-			macOsXattrCmds(arg),
+			{ "bin/cp": undefined, "bin/install": undefined },
+			appleXattrCmds,
 		);
 	}
 
@@ -133,35 +147,34 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 
 export default build;
 
-/** Obtain just the `env` binary. */
-export const gnuEnv = async () => {
-	const host = bootstrap.toolchainTriple(std.triple.host());
-	const sdk = await tg.build(bootstrap.sdk, host).named("bootstrap sdk");
+/** Build bootstrap coreutils with consistent, normalized args. This is the shared entry point used by both gnuEnv() and prerequisites() to ensure cache hits. */
+export const bootstrapBuild = async (hostArg?: string) => {
+	const host = bootstrap.toolchainTriple(hostArg ?? std.triple.host());
 	const env = std.env.arg(
-		sdk,
-		await tg.build(bootstrap.make.build, { host }).named("bootstrap make"),
-		{
-			utils: false,
-		},
+		tg.build(bootstrap.sdk, host),
+		tg.build(bootstrap.make.build, { host }),
+		{ utils: false },
 	);
-	const directory = await tg
+	return tg
 		.build(build, {
 			host,
 			env,
 			bootstrap: true,
 			usePrerequisites: false,
 		})
-		.named("coreutils");
-	const exe = tg.File.expect(await directory.get("bin/env"));
-	return exe;
+		.named("bootstrap coreutils");
+};
+
+/** Obtain just the `env` binary. */
+export const gnuEnv = async () => {
+	const coreutils = await bootstrapBuild();
+	return tg.File.expect(await coreutils.get("bin/env"));
 };
 
 /** Release helper - builds gnuEnv with a referent to this file for cache hits. */
 export const buildGnuEnv = async () => {
 	return tg.build(gnuEnv).named("gnu env");
 };
-
-/** This test asserts that this installation of coreutils preserves xattrs when using both `cp` and `install` on Linux. */
 
 export const test = async () => {
 	const host = bootstrap.toolchainTriple(std.triple.host());

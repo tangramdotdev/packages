@@ -1,21 +1,22 @@
-import * as acl from "acl" with { local: "./acl.tg.ts" };
-import * as attr from "attr" with { local: "./attr" };
-import * as bash from "bash" with { local: "./bash.tg.ts" };
-import coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
-import * as gnugrep from "gnugrep" with { local: "./gnugrep.tg.ts" };
-import * as gnused from "gnused" with { local: "./gnused.tg.ts" };
-import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
-import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import * as xz from "xz" with { local: "./xz.tg.ts" };
+import * as acl from "acl" with { local: "../acl.tg.ts" };
+import * as attr from "attr" with { local: "../attr" };
+import * as bash from "bash" with { local: "../bash.tg.ts" };
+import coreutils from "coreutils" with { local: "../coreutils.tg.ts" };
+import * as gnugrep from "gnugrep" with { local: "../gnugrep.tg.ts" };
+import * as gnused from "gnused" with { local: "../gnused.tg.ts" };
+import * as libiconv from "libiconv" with { local: "../libiconv.tg.ts" };
+import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
+import * as std from "std" with { local: "../std" };
+import * as xz from "xz" with { local: "../xz.tg.ts" };
+import progrelocFix from "./gettext-progreloc-fix.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/gettext",
 	license: "GPL-3.0-or-later",
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
-	version: "0.26",
-	tag: "gettext/0.26",
+	version: "1.0",
+	tag: "gettext/1.0",
 	provides: {
 		binaries: [
 			"autopoint",
@@ -57,13 +58,14 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:d1fb86e260cfe7da6031f94d2e44c0da55903dbae0a2fa0fae78c91ae1b56f00";
-	return std.download.fromGnu({
+		"sha256:71132a3fb71e68245b8f2ac4e9e97137d3e5c02f415636eb508ae607bc01add7";
+	const source = std.download.fromGnu({
 		name,
 		version,
 		checksum,
 		compression: "xz",
 	});
+	return std.patch(source, progrelocFix);
 };
 
 export const deps = () =>
@@ -94,9 +96,6 @@ export const build = async (...args: std.Args<Arg>) => {
 		{
 			source: source(),
 			deps,
-			env: {
-				CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
-			},
 		},
 		...args,
 	);
@@ -121,7 +120,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	} else {
 		// On Linux, use glibc's built-in iconv instead of GNU libiconv.
 		// Without this, configure detects libiconv from the SDK and links
-		// against it, but the wrapper doesn't propagate the transitive
+		// against it, but the wrapper does not propagate the transitive
 		// dependency to all tools.
 		configureArgs.push("--without-libiconv-prefix");
 	}

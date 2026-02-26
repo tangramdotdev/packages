@@ -3,7 +3,7 @@ import { $ } from "std" with { local: "../../std" };
 
 import autoconf from "autoconf" with { local: "../../autoconf.tg.ts" };
 import automake from "automake" with { local: "../../automake.tg.ts" };
-import gettext from "gettext" with { local: "../../gettext.tg.ts" };
+import gettext from "gettext" with { local: "../../gettext" };
 import help2man from "help2man" with { local: "../../help2man.tg.ts" };
 import perl from "perl" with { local: "../../perl" };
 import texinfo from "texinfo" with { local: "../../texinfo.tg.ts" };

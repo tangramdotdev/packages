@@ -114,12 +114,12 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 		});
 	}
 
-	// Collect SDKS for host and all required targets.
-	const sdks = [std.sdk({ host })];
-	for (let target of targets) {
-		sdks.push(std.sdk({ host, target }));
+	// Use tg.build to create cacheable build nodes matching the std release.
+	const sdks: Array<tg.Unresolved<std.env.Arg>> = [tg.build(std.sdk, { host })];
+	for (const target of targets) {
+		sdks.push(tg.build(std.sdk, { host, target }));
 	}
-	const env = await std.env.arg(...sdks, { utils: false });
+	const env = await std.env.arg(...sdks);
 
 	// Install each package.
 	let rustInstall = await $`
@@ -140,6 +140,8 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 		rustInstall,
 	});
 
+	const zlibArtifact = await zlib({ host });
+
 	// Wrap the Rust binaries.
 	const executables = [
 		"bin/rustc",
@@ -151,8 +153,6 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	];
 
 	let artifact = tg.directory();
-
-	const zlibArtifact = await zlib({ host });
 
 	for (const executable of executables) {
 		// Add the zlib library path with the default strategy, isolating libz.

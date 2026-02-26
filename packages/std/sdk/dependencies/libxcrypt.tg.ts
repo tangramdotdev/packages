@@ -5,8 +5,8 @@ export const metadata = {
 	name: "libxcrypt",
 	license: "LGPL-2.1",
 	repository: "https://github.com/besser82/libxcrypt",
-	version: "4.4.38",
-	tag: "libxcrypt/4.4.38",
+	version: "4.5.2",
+	tag: "libxcrypt/4.5.2",
 };
 
 export const source = () => {
@@ -15,7 +15,7 @@ export const source = () => {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:80304b9c306ea799327f01d9a7549bdb28317789182631f1b54f4511b4206dd6";
+		"sha256:71513a31c01a428bccd5367a32fd95f115d6dac50fb5b60c779d5c7942aec071";
 	return std.download.fromGithub({
 		checksum,
 		compression: "xz",

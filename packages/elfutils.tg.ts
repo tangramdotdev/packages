@@ -2,6 +2,7 @@ import * as bzip2 from "bzip2" with { local: "./bzip2" };
 import * as libarchive from "libarchive" with { local: "./libarchive.tg.ts" };
 import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
 import * as std from "std" with { local: "./std" };
+import constFix from "./elfutils-const-fix.patch" with { type: "file" };
 import * as xz from "xz" with { local: "./xz.tg.ts" };
 import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
 
@@ -42,10 +43,11 @@ export const source = async () => {
 		"sha256:09e2ff033d39baa8b388a2d7fbc5390bfde99ae3b7c67c7daaf7433fbcf0f01e";
 	const extension = ".tar.bz2";
 	const base = `https://sourceware.org/elfutils/ftp/${version}`;
-	return await std.download
+	const source = await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
+	return std.patch(source, constFix);
 };
 
 export const deps = () =>

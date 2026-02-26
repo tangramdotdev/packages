@@ -399,12 +399,17 @@ export const stripProxy = async (arg: StripProxyArg) => {
 		host,
 	});
 
+	// Use the host machine's codesign binary.
+	const codesign = await tg.build(workspace.rcodesign).named("rcodesign");
+	await codesign.store();
+
 	const envs: std.Args<std.env.Arg> = [
 		{
 			TGSTRIP_COMMAND_PATH: tg.Mutation.setIfUnset<
 				tg.File | tg.Symlink | tg.Template
 			>(stripCommand),
 			TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
+			TANGRAM_CODESIGN_ID: tg.Mutation.setIfUnset(codesign.id),
 		},
 	];
 	if (arg.runtimeLibraryPath !== undefined) {
@@ -413,7 +418,7 @@ export const stripProxy = async (arg: StripProxyArg) => {
 		});
 	}
 
-	return std.wrap(stripProxy, {
+	return await std.wrap(stripProxy, {
 		buildToolchain,
 		env: std.env.arg(...envs, { utils: false }),
 	});

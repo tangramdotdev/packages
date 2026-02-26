@@ -1,7 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
-import guardedGettextPatch from "./bash-use-guarded-gettext-header.patch" with { type: "file" };
 import envRestorePatch from "./patch-bash-env-restore.patch" with { type: "file" };
 
 export const metadata = {
@@ -9,8 +8,8 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "bash",
 	repository: "https://git.savannah.gnu.org/git/bash.git",
-	version: "5.2.37",
-	tag: "bash/5.2.37",
+	version: "5.3",
+	tag: "bash/5.3",
 };
 
 export type Arg = {
@@ -25,9 +24,9 @@ export type Arg = {
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:9599b22ecd1d5787ad7d3b7bf0c59f312b3396d1e281175dd1f8a4014da621ff";
+		"sha256:0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba";
 	let source = await std.download.fromGnu({ name, version, checksum });
-	source = await bootstrap.patch(source, guardedGettextPatch, envRestorePatch);
+	source = await bootstrap.patch(source, envRestorePatch);
 	return source;
 };
 

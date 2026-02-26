@@ -288,6 +288,15 @@ export const mergeArgs = async (
 	});
 };
 
+export const test = async () => {
+	await testBuild();
+	await testBuildBootstrap();
+	await testBuildNonTemplateString();
+	await testBuildNonTemplateArtifact();
+	await testBuildNonTemplateEnv();
+	return true;
+};
+
 export const testBuild = async () => {
 	const expected = tg.process.env.TANGRAM_HOST;
 	const output = await std.build`echo $TANGRAM_HOST > ${tg.output}`.then(
@@ -308,5 +317,44 @@ export const testBuildBootstrap = async () => {
 	console.log("OUTPUT", output.id);
 	const actual = (await output.text).trim();
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
+	return true;
+};
+
+/** Test the non-template `build` overload with a string executable path. */
+export const testBuildNonTemplateString = async () => {
+	const output = await build({
+		executable: "/bin/sh",
+		args: ["-c", tg`echo "hello" > ${tg.output}`],
+	}).then(tg.File.expect);
+	const actual = await output.text;
+	const expected = "hello\n";
+	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
+	return true;
+};
+
+/** Test the non-template `build` overload with an artifact executable. */
+export const testBuildNonTemplateArtifact = async () => {
+	const bashDir = await std.utils.bash.build({ env: std.sdk() });
+	const bashExe = await bashDir.get("bin/bash").then(tg.File.expect);
+	const output = await build({
+		executable: bashExe,
+		args: ["-c", tg`echo "artifact" > ${tg.output}`],
+	}).then(tg.File.expect);
+	const actual = await output.text;
+	const expected = "artifact\n";
+	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
+	return true;
+};
+
+/** Test the non-template `build` overload with an env containing an SDK. */
+export const testBuildNonTemplateEnv = async () => {
+	const env = await std.env.arg(std.sdk());
+	const output = await build({
+		executable: "/bin/sh",
+		args: ["-c", tg`cc --version > ${tg.output}`],
+		env,
+	}).then(tg.File.expect);
+	const actual = await output.text;
+	tg.assert(actual.length > 0, "expected non-empty compiler version output");
 	return true;
 };

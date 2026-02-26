@@ -23,9 +23,9 @@ export const versions = {
 			"sha256:ed5ef34cda36cfa2f3a340f07cac7e7814f91c7f3c411f6d3562323a866c5c66",
 	},
 	"3.14": {
-		version: "3.14.2",
+		version: "3.14.3",
 		checksum:
-			"sha256:ce543ab854bc256b61b71e9b27f831ffd1bfd60a479d639f8be7f9757cf573e9",
+			"sha256:a97d5549e9ad81fe17159ed02c68774ad5d266c72f8d9a0b5a9c371fe85d902b",
 	},
 } as const;
 
@@ -38,8 +38,8 @@ export const metadata = {
 	name: "python",
 	license: "Python Software Foundation License",
 	repository: "https://github.com/python/cpython",
-	version: "3.14.2",
-	tag: `python/3.14.2`,
+	version: "3.14.3",
+	tag: `python/3.14.3`,
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */

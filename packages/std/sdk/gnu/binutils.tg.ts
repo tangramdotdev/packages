@@ -6,14 +6,14 @@ export const metadata = {
 	license: "GPL-3.0-or-later",
 	name: "binutils",
 	repository: "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git",
-	version: "2.45",
-	tag: "binutils/2.45",
+	version: "2.46.0",
+	tag: "binutils/2.46.0",
 };
 
 export const source = async (build: string) => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:7f288c9a869582d53dc645bf1b9e90cc5123f6862738850472ddbca69def47a3";
+		"sha256:8ba6a3c4d29eae4dc1bdffb29d1e99b2a658c3f4c6a23ea1c507e9fa47db2898";
 	return std.download.fromGnu({
 		name,
 		version,

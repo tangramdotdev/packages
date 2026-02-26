@@ -1,15 +1,14 @@
 diff --git a/common.mk b/common.mk
-index 0ea360c..4005aff 100644
 --- a/common.mk
 +++ b/common.mk
-@@ -1523,17 +1523,6 @@ extract-gems: $(HAVE_BASERUBY:yes=update-gems)
- 
- update-gems$(gnumake:yes=-sequential): PHONY
+@@ -1523,17 +1523,6 @@ extract-gems: $(HAVE_BASERUBY:yes=update-gems) $(HAVE_BASERUBY:yes=outdate-bund
+
+ update-gems$(sequential): PHONY
  	$(ECHO) Downloading bundled gem files...
 -	$(Q) $(BASERUBY) -C "$(srcdir)" \
--	    -I./tool -rdownloader -answ \
+-	    -I./tool -rdownloader $(split_option) -answ \
 -	    -e 'gem, ver = *$$F' \
--	    -e 'next if !ver or /^#/=~gem' \
+-	    -e 'next if !ver' \
 -	    -e 'old = Dir.glob("gems/#{gem}-*.gem")' \
 -	    -e 'gem = "#{gem}-#{ver}.gem"' \
 -	    -e 'Downloader::RubyGems.download(gem, "gems", nil) and' \
@@ -17,6 +16,6 @@ index 0ea360c..4005aff 100644
 -	    -e 'File.unlink(*old) and' \
 -	    -e 'FileUtils.rm_rf(old.map{'"|n|"'n.chomp(".gem")})' \
 -	    gems/bundled_gems
- 
- extract-gems$(gnumake:yes=-sequential): PHONY
+
+ extract-gems$(sequential): PHONY
  	$(ECHO) Extracting bundled gem files...

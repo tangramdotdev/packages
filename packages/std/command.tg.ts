@@ -249,7 +249,9 @@ export const defaultCommandArg = async (hostArg?: tg.Unresolved<string>) => {
 			.named("linux root mount");
 		arg.mounts = [builtMount];
 	}
-	const defaultEnv = await tg.build(std.utils.env, { host }).named("utils");
+	const defaultEnv = await tg
+		.build(std.utils.env, { host, env: std.sdk() })
+		.named("utils");
 	arg.env = defaultEnv;
 	return arg;
 };
@@ -290,4 +292,53 @@ export const linuxRootMount = async (
 		source: root,
 		target: "/",
 	};
+};
+
+export const test = async () => {
+	await testCommandNonTemplateString();
+	await testCommandNonTemplateArtifact();
+	await testCommandNonTemplateEnv();
+	return true;
+};
+
+/** Test the non-template `command` overload with a string executable path. */
+export const testCommandNonTemplateString = async () => {
+	const cmd = await command({
+		executable: "/bin/sh",
+		args: ["-c", tg`echo "hello" > ${tg.output}`],
+	});
+	const output = await tg.run(cmd).then(tg.File.expect);
+	const actual = await output.text;
+	const expected = "hello\n";
+	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
+	return true;
+};
+
+/** Test the non-template `command` overload with an artifact executable. */
+export const testCommandNonTemplateArtifact = async () => {
+	const bashDir = await std.utils.bash.build({ env: std.sdk() });
+	const bashExe = await bashDir.get("bin/bash").then(tg.File.expect);
+	const cmd = await command({
+		executable: bashExe,
+		args: ["-c", tg`echo "artifact" > ${tg.output}`],
+	});
+	const output = await tg.run(cmd).then(tg.File.expect);
+	const actual = await output.text;
+	const expected = "artifact\n";
+	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
+	return true;
+};
+
+/** Test the non-template `command` overload with an env containing an SDK. */
+export const testCommandNonTemplateEnv = async () => {
+	const env = await std.env.arg(std.sdk());
+	const cmd = await command({
+		executable: "/bin/sh",
+		args: ["-c", tg`cc --version > ${tg.output}`],
+		env,
+	});
+	const output = await tg.run(cmd).then(tg.File.expect);
+	const actual = await output.text;
+	tg.assert(actual.length > 0, "expected non-empty compiler version output");
+	return true;
 };

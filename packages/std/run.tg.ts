@@ -316,6 +316,55 @@ export const testDollarBootstrap = async () => {
 	return true;
 };
 
+export const test = async () => {
+	await testDollar();
+	await testDollarBootstrap();
+	await testRunNonTemplateString();
+	await testRunNonTemplateArtifact();
+	await testRunNonTemplateEnv();
+	await testEnvClear();
+	return true;
+};
+
+/** Test the non-template `run` overload with a string executable path. */
+export const testRunNonTemplateString = async () => {
+	const output = await run({
+		executable: "/bin/sh",
+		args: ["-c", tg`echo "hello" > ${tg.output}`],
+	}).then(tg.File.expect);
+	const actual = await output.text;
+	const expected = "hello\n";
+	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
+	return true;
+};
+
+/** Test the non-template `run` overload with an artifact executable. */
+export const testRunNonTemplateArtifact = async () => {
+	const bashDir = await std.utils.bash.build({ env: std.sdk() });
+	const bashExe = await bashDir.get("bin/bash").then(tg.File.expect);
+	const output = await run({
+		executable: bashExe,
+		args: ["-c", tg`echo "artifact" > ${tg.output}`],
+	}).then(tg.File.expect);
+	const actual = await output.text;
+	const expected = "artifact\n";
+	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
+	return true;
+};
+
+/** Test the non-template `run` overload with an env containing an SDK. */
+export const testRunNonTemplateEnv = async () => {
+	const env = await std.env.arg(std.sdk());
+	const output = await run({
+		executable: "/bin/sh",
+		args: ["-c", tg`cc --version > ${tg.output}`],
+		env,
+	}).then(tg.File.expect);
+	const actual = await output.text;
+	tg.assert(actual.length > 0, "expected non-empty compiler version output");
+	return true;
+};
+
 export const testEnvClear = async () => {
 	const output = await $`/usr/bin/env > ${tg.output}`
 		.bootstrap(true)

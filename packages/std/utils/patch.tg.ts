@@ -1,36 +1,26 @@
-import {
-	patch as bootstrapPatch,
-	sdk as bootstrapSdk,
-	toolchainTriple,
-} from "../bootstrap.tg.ts";
+import { sdk as bootstrapSdk, toolchainTriple } from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 import attr from "./attr.tg.ts";
 import libiconv from "./libiconv.tg.ts";
 import coreutils from "./coreutils.tg.ts";
 import diffutils from "./diffutils.tg.ts";
-import rlimitFix from "./patch-rlimit-fix.patch" with { type: "file" };
-
 export const metadata = {
 	name: "patch",
-	version: "2.7.6",
-	tag: "patch/2.7.6",
+	version: "2.8",
+	tag: "patch/2.8",
 };
 
 export const source = async () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd";
-	let source = await std.download.fromGnu({
+		"sha256:f87cee69eec2b4fcbf60a396b030ad6aa3415f192aa5f7ee84cad5e11f7f5ae3";
+	return std.download.fromGnu({
 		name,
 		version,
 		compression: "xz",
 		checksum,
 	});
-	// Apply rlimit fix.
-	// See https://savannah.gnu.org/bugs/index.php?62958
-	source = await bootstrapPatch(source, rlimitFix);
-	return source;
 };
 
 export type Arg = {

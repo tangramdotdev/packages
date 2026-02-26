@@ -254,7 +254,6 @@ export const rust = async (
 	const shellExecutable = await shell.get("bin/dash").then(tg.File.expect);
 	return await std.build`
 		set -x
-		echo HI
 		for package in ${packages}/*/* ; do
 			sh $package/install.sh --prefix="${tg.output}"
 			chmod -R +w "${tg.output}"

@@ -19,8 +19,8 @@ export const metadata = {
 	name: "ruby",
 	license: "BSD-2-Clause",
 	repository: "https://git.ruby-lang.org/ruby.git",
-	version: "3.4.8",
-	tag: "ruby/3.4.8",
+	version: "4.0.1",
+	tag: "ruby/4.0.1",
 	provides: {
 		binaries: [
 			"bundle",
@@ -39,7 +39,7 @@ export const metadata = {
 export const source = async () => {
 	const { version } = metadata;
 	const checksum =
-		"sha256:53c4ddad41fbb6189f1f5ee0db57a51d54bd1f87f8755b3d68604156a35b045b";
+		"sha256:3924be2d05db30f4e35f859bf028be85f4b7dd01714142fd823e4af5de2faf9d";
 	const extension = ".tar.gz";
 	const majorMinor = version.split(".").slice(0, 2).join(".");
 	const url = `https://cache.ruby-lang.org/pub/ruby/${majorMinor}/ruby-${version}${extension}`;
@@ -122,6 +122,8 @@ export const self = async (...args: std.Args<Arg>) => {
 					tg`--with-gmp-dir=${gmpArtifact}`,
 					// Required for `psych` to work with rdoc.
 					tg`--with-opt-dir=${libYamlArtifact}`,
+					// Work around glibc 2.43 qsort_r incompatibility.
+					"ac_cv_func_qsort_r=no",
 				],
 			},
 		},
@@ -236,27 +238,27 @@ const bundledGems = (): Promise<tg.Directory> => {
 		[
 			{
 				name: "minitest",
-				version: "5.25.4",
+				version: "5.27.0",
 				checksum:
-					"sha256:9cf2cae25ac4dfc90c988ebc3b917f53c054978b673273da1bd20bcb0778f947",
+					"sha256:2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5",
 			},
 			{
 				name: "power_assert",
-				version: "2.0.5",
+				version: "3.0.1",
 				checksum:
-					"sha256:63b511b85bb8ea57336d25156864498644f5bbf028699ceda27949e0125bc323",
+					"sha256:8ce9876716cc74e863fcd4cdcdc52d792bd983598d1af3447083a3a9a4d34103",
 			},
 			{
 				name: "rake",
-				version: "13.2.1",
+				version: "13.3.1",
 				checksum:
-					"sha256:46cb38dae65d7d74b6020a4ac9d48afed8eb8149c040eccf0523bec91907059d",
+					"sha256:8c9e89d09f66a26a01264e7e3480ec0607f0c497a861ef16063604b1b08eb19c",
 			},
 			{
 				name: "test-unit",
-				version: "3.6.7",
+				version: "3.7.3",
 				checksum:
-					"sha256:c342bb9f7334ea84a361b43c20b063f405c0bf3c7dbe3ff38f61a91661d29221",
+					"sha256:242e22c6df990f11fb6abc2507a238f80810a903291f90d8573261554488175e",
 			},
 			{
 				name: "rexml",
@@ -272,15 +274,15 @@ const bundledGems = (): Promise<tg.Directory> => {
 			},
 			{
 				name: "net-ftp",
-				version: "0.3.8",
+				version: "0.3.9",
 				checksum:
-					"sha256:28d63e407a7edb9739c320a4faaec515e43e963815248d06418aba322478874f",
+					"sha256:307817ccf7f428f79d083f7e36dbb46a9d1d375e0d23027824de1866f0b13b65",
 			},
 			{
 				name: "net-imap",
-				version: "0.5.8",
+				version: "0.6.1",
 				checksum:
-					"sha256:52aa5fdfc1a8a3df1f793b20a327e95b5a9dfe1d733e1f0d53075d2dbcfcf593",
+					"sha256:f99e94075bc760a6aca0d8ca636fd34422127203b4d19e801f0e0ff08b3a285a",
 			},
 			{
 				name: "net-pop",
@@ -296,15 +298,15 @@ const bundledGems = (): Promise<tg.Directory> => {
 			},
 			{
 				name: "matrix",
-				version: "0.4.2",
+				version: "0.4.3",
 				checksum:
-					"sha256:71083ccbd67a14a43bfa78d3e4dc0f4b503b9cc18e5b4b1d686dc0f9ef7c4cc0",
+					"sha256:a0d5ab7ddcc1973ff690ab361b67f359acbb16958d1dc072b8b956a286564c5b",
 			},
 			{
 				name: "prime",
-				version: "0.1.3",
+				version: "0.1.4",
 				checksum:
-					"sha256:baf031c50d6ce923594913befc8ac86a3251bffb9d6a5e8b03687962054e53e3",
+					"sha256:4d755ebf7c2994a6f3a3fee0d072063be3fff2d4042ebff6cd5eebd4747a225e",
 			},
 		];
 
@@ -316,15 +318,15 @@ export const test = async () => {
 		std.assert.binary(name, { snapshot: version });
 
 	const binaries = [
-		hasVersion("bundle", "2.6.9"),
-		hasVersion("bundler", "2.6.9"),
-		hasVersion("erb", "4.0.4"),
-		hasVersion("gem", "3.6.9"),
-		hasVersion("irb", "1.14.3"),
+		hasVersion("bundle", "4.0.3"),
+		hasVersion("bundler", "4.0.3"),
+		hasVersion("erb", "6.0.1"),
+		hasVersion("gem", "4.0.3"),
+		hasVersion("irb", "1.16.0"),
 		hasVersion("racc", "1.8.1"),
-		hasVersion("rdoc", "6.14.0"),
+		hasVersion("rdoc", "7.0.3"),
 		hasVersion("ruby", metadata.version),
-		hasVersion("ri", "6.14.0"),
+		hasVersion("ri", "7.0.3"),
 	];
 	const spec = {
 		...std.assert.defaultSpec(metadata),

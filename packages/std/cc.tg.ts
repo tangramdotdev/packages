@@ -187,7 +187,7 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 
 	const build = build_ ?? host;
 	const isCross = build !== host;
-	const detectedHost = std.triple.host();
+	const detectedHost = std.sdk.canonicalTriple(std.triple.host());
 	const canUsePrebuiltBuildTools = build === detectedHost;
 	const envs: std.Args<std.env.Arg> = [];
 
@@ -222,9 +222,11 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 
 		if (preset !== undefined) {
 			// Set up the native SDK for the build machine.
-			const sdk = canUsePrebuiltBuildTools
-				? await tg.build(std.sdk, sdkArg, { host: detectedHost }).named("sdk")
-				: await tg.build(std.sdk, sdkArg, { host: build }).named("sdk");
+			const sdkHost = canUsePrebuiltBuildTools ? detectedHost : build;
+			const sdk =
+				sdkArg !== undefined
+					? await tg.build(std.sdk, sdkArg, { host: sdkHost }).named("sdk")
+					: await tg.build(std.sdk, { host: sdkHost }).named("sdk");
 
 			let buildToolsEnv: tg.Unresolved<std.env.Arg>;
 			// Use the pre-built std.buildAutotoolsBuildTools for the "autotools" preset.

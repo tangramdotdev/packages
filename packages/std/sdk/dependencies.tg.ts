@@ -35,7 +35,6 @@ export * as m4 from "../autotools/m4.tg.ts";
 export * as mpc from "./dependencies/mpc.tg.ts";
 export * as mpfr from "./dependencies/mpfr.tg.ts";
 export * as libxcrypt from "./dependencies/libxcrypt.tg.ts";
-export * as libxml2 from "./dependencies/libxml2.tg.ts";
 export * as ncurses from "./dependencies/ncurses.tg.ts";
 export * as perl from "../autotools/perl.tg.ts";
 export * as python from "./dependencies/python.tg.ts";
@@ -419,7 +418,7 @@ export const buildTools = async (
 
 /** The autotools build tools built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
 export const autotoolsBuildTools = async () => {
-	const host = std.triple.host();
+	const host = std.sdk.canonicalTriple(std.triple.host());
 	const sdk = await tg.build(std.sdk, { host }).named("sdk");
 	const utils = await tg.build(std.buildDefaultEnv).named("default env");
 	return tg

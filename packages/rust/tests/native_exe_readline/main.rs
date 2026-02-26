@@ -2,7 +2,7 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 
 #[link(name = "readline")]
-extern "C" {
+unsafe extern "C" {
     static rl_library_version: *const c_char;
 }
 

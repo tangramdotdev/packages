@@ -2,14 +2,14 @@ import * as std from "../tangram.ts";
 
 export const metadata = {
 	name: "m4",
-	version: "1.4.20",
-	tag: "m4/1.4.20",
+	version: "1.4.21",
+	tag: "m4/1.4.21",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:e236ea3a1ccf5f6c270b1c4bb60726f371fa49459a8eaaebc90b216b328daf2b";
+		"sha256:f25c6ab51548a73a75558742fb031e0625d6485fe5f9155949d6486a2408ab66";
 	return std.download.fromGnu({
 		name,
 		version,
@@ -41,11 +41,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		args: ["--disable-dependency-tracking"],
 	};
 
-	const env = std.env.arg(
-		{ CFLAGS: tg.Mutation.suffix("-std=gnu17", " ") },
-		env_,
-		{ utils: false },
-	);
+	const env = std.env.arg(env_, { utils: false });
 
 	const output = std.utils.autotoolsInternal({
 		build,

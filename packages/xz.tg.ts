@@ -3,8 +3,8 @@ import * as std from "std" with { local: "./std" };
 export const metadata = {
 	homepage: "https://tukaani.org/xz/",
 	name: "xz",
-	version: "5.8.1",
-	tag: "xz/5.8.1",
+	version: "5.8.2",
+	tag: "xz/5.8.2",
 	provides: {
 		binaries: [
 			"lzmadec",
@@ -42,7 +42,7 @@ export const source = async () => {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
-		"sha256:507825b599356c10dca1cd720c9d0d0c9d5400b9de300af00e4d1ea150795543";
+		"sha256:ce09c50a5962786b83e5da389c90dd2c15ecd0980a258dd01f70f9e7ce58a8f1";
 	const base = `https://github.com/tukaani-project/xz/releases/download/v${version}`;
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })

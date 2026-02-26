@@ -1,12 +1,13 @@
 import * as std from "std" with { local: "./std" };
+import strchrConstFix from "./libxcrypt-strchr-const-fix.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://github.com/besser82/libxcrypt",
 	name: "libxcrypt",
 	license: "LGPL-2.1",
 	repository: "https://github.com/besser82/libxcrypt",
-	version: "4.4.38",
-	tag: "libxcrypt/4.4.38",
+	version: "4.5.2",
+	tag: "libxcrypt/4.5.2",
 	provides: {
 		headers: ["crypt.h"],
 		libraries: ["crypt"],
@@ -19,8 +20,8 @@ const source = () => {
 	const repo = name;
 	const tag = `v${version}`;
 	const checksum =
-		"sha256:80304b9c306ea799327f01d9a7549bdb28317789182631f1b54f4511b4206dd6";
-	return std.download.fromGithub({
+		"sha256:71513a31c01a428bccd5367a32fd95f115d6dac50fb5b60c779d5c7942aec071";
+	const source = std.download.fromGithub({
 		checksum,
 		compression: "xz",
 		owner,
@@ -29,6 +30,7 @@ const source = () => {
 		tag,
 		version,
 	});
+	return std.patch(source, strchrConstFix);
 };
 
 export type Arg = std.autotools.Arg;

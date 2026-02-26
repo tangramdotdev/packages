@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-/** Produce an `install` executable that preserves xattrs on macOS, alongside the `xattr` command, to include with the coreutils. */
+/** Produce `cp`, `install`, and `xattr` executables that preserve xattrs on macOS, to include with the coreutils. */
 export const macOsXattrCmds = async (arg?: tg.Unresolved<Arg>) => {
 	const resolved = await tg.resolve(arg);
 	const build = resolved?.build ?? std.triple.host();
@@ -46,6 +46,17 @@ export const macOsXattrCmds = async (arg?: tg.Unresolved<Arg>) => {
 
 	let result = await tg.directory({
 		bin: tg.directory(),
+	});
+
+	// cp (cp.c + utils.c, needs include path for pathnames.h)
+	const cpSource = tg.Directory.expect(await sourceDir.get("cp"));
+	result = await compileUtil({
+		...resolved,
+		destDir: result,
+		extraArgs: [tg`-I${cpSource}`, tg`${cpSource}/utils.c`],
+		fileName: "cp.c",
+		utilSource: cpSource,
+		utilName: "cp",
 	});
 
 	// install
@@ -80,13 +91,12 @@ type UtilArg = Arg & {
 	utilName: string;
 };
 
-export const compileUtil = async (arg: UtilArg) => {
-	tg.assert(arg.env);
-	const build = arg.build ?? std.triple.host();
+export const compileUtil = async (arg: tg.Unresolved<UtilArg>) => {
+	const resolved = await tg.resolve(arg);
+	tg.assert(resolved.env);
+	const { destDir, extraArgs = [], fileName, utilName, utilSource } = resolved;
+	const build = resolved.build ?? std.triple.host();
 	const host = build;
-
-	// Grab args.
-	const { destDir, extraArgs = [], fileName, utilName, utilSource } = arg;
 
 	// Get the shell from the bootstrap directly.
 	const shell = await bootstrap.shell(build);
@@ -97,7 +107,7 @@ export const compileUtil = async (arg: UtilArg) => {
 			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o ${tg.output} ${utilSource}/${fileName}`
 		.bootstrap(true)
 		.executable(shellExecutable)
-		.env(arg.env)
+		.env(resolved.env)
 		.host(host)
 		.then(tg.File.expect);
 

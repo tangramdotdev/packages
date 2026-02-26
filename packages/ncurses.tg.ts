@@ -4,8 +4,8 @@ export const metadata = {
 	homepage: "https://invisible-island.net/ncurses/",
 	license: "https://invisible-island.net/ncurses/ncurses-license.html",
 	name: "ncurses",
-	version: "6.5",
-	tag: "ncurses/6.5",
+	version: "6.6",
+	tag: "ncurses/6.6",
 	provides: {
 		headers: [
 			"ncursesw/curses.h",
@@ -26,7 +26,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6";
+		"sha256:355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11";
 	return std.download.fromGnu({ name, version, checksum });
 };
 

@@ -3,7 +3,7 @@ import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as std from "./tangram.ts";
 import * as bash from "./utils/bash.tg.ts";
 import bzip2 from "./utils/bzip2.tg.ts";
-import coreutils from "./utils/coreutils.tg.ts";
+import coreutils, * as coreutilsNs from "./utils/coreutils.tg.ts";
 import diffutils from "./utils/diffutils.tg.ts";
 import findutils from "./utils/findutils.tg.ts";
 import gawk from "./utils/gawk.tg.ts";
@@ -87,7 +87,7 @@ export default env;
 
 /** The standard utils built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
 export const defaultEnv = async () => {
-	const host = std.triple.host();
+	const host = std.sdk.canonicalTriple(std.triple.host());
 	const sdk = await tg.build(std.sdk, { host }).named("sdk");
 	return tg.build(env, { host, env: sdk }).named("default utils");
 };
@@ -99,18 +99,16 @@ export const buildDefaultEnv = async () => {
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
 export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
-	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();
+	const rawHost = hostArg ? await tg.resolve(hostArg) : std.triple.host();
+	const host = bootstrap.toolchainTriple(rawHost);
 
 	// Add GNU make.
-	const makeArtifact = await bootstrap.make.build({ host });
+	const makeArtifact = await tg
+		.build(bootstrap.make.build, { host })
+		.named("bootstrap make");
 
-	// Add patched GNU coreutils.
-	const coreutilsArtifact = await coreutils({
-		bootstrap: true,
-		env: std.env.arg(bootstrap.sdk(), makeArtifact, { utils: false }),
-		host,
-		usePrerequisites: false,
-	});
+	// Add patched GNU coreutils, sharing the cache with gnuEnv().
+	const coreutilsArtifact = await coreutilsNs.bootstrapBuild(host);
 
 	// Order matters: items later in the array prepend to PATH later, so they appear first.
 	// We want coreutils first, then make. The SDK provides baseline utils (busybox/toybox) at lowest precedence.

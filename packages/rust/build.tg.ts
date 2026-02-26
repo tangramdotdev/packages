@@ -2,7 +2,6 @@ import * as std from "std" with { local: "../std" };
 import { $ } from "std" with { local: "../std" };
 import tests from "./tests" with { type: "directory" };
 import { self, rustTriple } from "./tangram.ts";
-import rustcProxy from "./proxy.tg.ts";
 
 export type Arg = {
 	/** The name of the crate. If not provided ,the ID of the source directory will be used. */
@@ -35,9 +34,6 @@ export type Arg = {
 
 	/** Whether to enable Link Time Optimization */
 	lto?: boolean | "thin" | "fat";
-
-	/** Should rustc be proxied? Default: true. */
-	proxy?: boolean;
 
 	/** Additional flags to pass to rustc */
 	rustcFlags?: Array<string>;
@@ -83,7 +79,6 @@ export const build = async (...args: std.Args<Arg>) => {
 		host,
 		lto,
 		optimizationLevel,
-		proxy = true,
 		rustcFlags,
 		rustDependencies,
 		setRuntimeLibraryPath = false,
@@ -106,7 +101,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	// Obtain the SDK and toolchain.
 	const sdk = await std.sdk({ host, target });
 	envs.push(sdk);
-	const rustToolchain = self({ host, target });
+	const rustToolchain = await self({ host, target });
 	envs.push(rustToolchain);
 
 	// Find the main.rs or lib.rs file.
@@ -129,14 +124,12 @@ export const build = async (...args: std.Args<Arg>) => {
 	const crateType = crateType_ ?? inferredCrateType;
 	const outputLocation = crateType === "bin" ? "bin" : "lib";
 
-	// Set up the proxy if requested.
-	const rustcPrefix = proxy ? tg`${rustcProxy()}/bin/tgrustc ` : "";
-
 	// Set the common rustc flags.
 	let flags: tg.Unresolved<Array<tg.Template.Arg>> = [
 		tg`--out-dir=${tg.output}/${outputLocation}`,
 		`--edition=${edition}`,
 		`-C linker=${targetPrefix}cc`,
+		`-C linker-features=-lld`,
 		`--crate-name=${crateName}`,
 		`--crate-type=${crateType}`,
 		`--target=${rustTarget}`,
@@ -164,10 +157,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	if (rustcFlags) {
 		flags = flags.concat(rustcFlags.map((f) => `-C ${f}`));
 	}
-	const rustcCommand = tg`${rustcPrefix}rustc ${tg.Template.join(
-		" ",
-		...flags,
-	)}`;
+	const rustcCommand = tg`rustc ${tg.Template.join(" ", ...flags)}`;
 	let pre = "";
 	if (setRuntimeLibraryPath) {
 		const runtimeLibEnvVar =
@@ -178,7 +168,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	// Combine the envs with the user env last.
 	const env = std.env.arg(...envs, env_);
 
-	// Run the rustc command in the source directory.
+	// Run the rustc command.
 	const result = await $`${pre}\n${rustcCommand}`
 		.env(env)
 		.then(tg.Directory.expect);
@@ -233,8 +223,7 @@ export const flagForDependency = async (
 export const test = async () => {
 	const tests = [];
 
-	tests.push(testBasicExeUnproxied());
-	tests.push(testBasicExeProxied());
+	tests.push(testBasicExe());
 	tests.push(testBasicLib());
 	tests.push(testBasicExeModules());
 	tests.push(testBasicExeWithLib());
@@ -248,33 +237,11 @@ export const test = async () => {
 	return true;
 };
 
-export const testBasicExeUnproxied = async () => {
+export const testBasicExe = async () => {
 	const crateName = "native_basic_exe";
 	const basicExe = await build({
 		crateName,
-		proxy: false,
 		source: tests.get(crateName).then(tg.Directory.expect),
-	});
-	const basicExeOutput = await $`${crateName} | tee ${tg.output}`
-		.env(basicExe)
-		.then(tg.File.expect);
-	const basicExeText = await basicExeOutput.text;
-	tg.assert(basicExeText.trim() === "Hello, native world!");
-
-	return true;
-};
-
-export const testBasicExeProxied = async () => {
-	const crateName = "native_basic_exe";
-	const basicExe = await build({
-		crateName,
-		env: {
-			WATERMARK: "2",
-			TGRUSTC_TRACING: "tgrustc=trace",
-		},
-		proxy: true,
-		source: tests.get(crateName).then(tg.Directory.expect),
-		verbose: true,
 	});
 	const basicExeOutput = await $`${crateName} | tee ${tg.output}`
 		.env(basicExe)
@@ -338,9 +305,6 @@ export const testExeWithCratesIoDependency = async () => {
 	const crateName = "native_deps_exe";
 	const depsExe = await build({
 		crateName,
-		env: {
-			TGRUSTC_TRACING: "tgrustc=trace",
-		},
 		source: tests.get(crateName).then(tg.Directory.expect),
 		rustDependencies: [
 			{

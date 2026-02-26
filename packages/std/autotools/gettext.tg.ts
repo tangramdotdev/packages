@@ -1,12 +1,14 @@
+import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
+import progrelocFix from "./gettext-progreloc-fix.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/gettext",
 	license: "GPL-3.0-or-later",
 	name: "gettext",
 	repository: "https://git.savannah.gnu.org/git/gettext.git",
-	version: "0.26",
-	tag: "gettext/0.26",
+	version: "1.0",
+	tag: "gettext/1.0",
 	provides: {
 		binaries: [
 			"autopoint",
@@ -38,13 +40,14 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:d1fb86e260cfe7da6031f94d2e44c0da55903dbae0a2fa0fae78c91ae1b56f00";
-	return std.download.fromGnu({
+		"sha256:71132a3fb71e68245b8f2ac4e9e97137d3e5c02f415636eb508ae607bc01add7";
+	const source = std.download.fromGnu({
 		name,
 		version,
 		checksum,
 		compression: "xz",
 	});
+	return bootstrap.patch(source, progrelocFix);
 };
 
 export type Arg = {
@@ -68,13 +71,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const host = host_ ?? std.triple.host();
 	const os = std.triple.os(host);
 
-	const envs: std.Args<std.env.Arg> = [
-		{
-			CFLAGS: tg.Mutation.suffix("-Wno-incompatible-pointer-types", " "),
-		},
-	];
-
-	const env = std.env.arg(...envs, env_, { utils: false });
+	const env = std.env.arg(env_, { utils: false });
 
 	const configure = {
 		args: [

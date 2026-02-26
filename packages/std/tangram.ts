@@ -30,6 +30,7 @@ import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
 import * as build from "./build.tg.ts";
 import caCertificates from "./certificates.tg.ts";
+import * as command_ from "./command.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
 import * as directory from "./directory.tg.ts";
 import * as download from "./download.tg.ts";
@@ -193,11 +194,9 @@ const testActions = (): Record<string, () => any> => {
 		imageBasicEnvImageDocker: image.testBasicEnvImageDocker,
 		imageBasicEnvImageOci: image.testBasicEnvImageOci,
 		image: image.test,
-		stdBuild: build.testBuild,
-		stdBuildBootstrap: build.testBuildBootstrap,
-		dollar: run.testDollar,
-		dollarBootstrap: run.testDollarBootstrap,
-		dollarEnvClear: run.testEnvClear,
+		stdBuild: build.test,
+		stdRun: run.test,
+		stdCommand: command_.test,
 	};
 };
 
@@ -212,7 +211,9 @@ const defaultTests = [
 	"file",
 	"wrap",
 	"sdkDefault",
-	"dollar",
+	"stdBuild",
+	"stdRun",
+	"stdCommand",
 ];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
@@ -271,4 +272,23 @@ export const buildDefaultWrapper = async () => {
 
 export const buildAutotoolsBuildTools = async () => {
 	return dependencies.autotoolsBuildTools();
+};
+
+export const buildSdk = async () => {
+	const host = sdk.sdk.canonicalTriple(triple.host());
+	const resolved = await sdk.sdk.arg({ host });
+	return sdk.sdkInner(resolved);
+};
+
+export const buildCrossSdk = async () => {
+	const host = sdk.sdk.canonicalTriple(triple.host());
+	const os = triple.os(host);
+	if (os !== "linux") {
+		throw new Error(`${os} is not found in supported hosts for cross SDK`);
+	}
+	const arch = triple.arch(host);
+	const crossArch = arch === "x86_64" ? "aarch64" : "x86_64";
+	const crossTarget = sdk.sdk.canonicalTriple(`${crossArch}-linux`);
+	const resolved = await sdk.sdk.arg({ host, target: crossTarget });
+	return sdk.sdkInner(resolved);
 };

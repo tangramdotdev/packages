@@ -3,7 +3,7 @@ import zlib from "../dependencies/zlib.tg.ts";
 
 const metadata = {
 	name: "git",
-	version: "2.52.0",
+	version: "2.53.0",
 };
 
 export const source = async () => {
@@ -11,7 +11,7 @@ export const source = async () => {
 	const extension = ".tar.xz";
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/git`;
 	const checksum =
-		"sha256:3cd8fee86f69a949cb610fee8cd9264e6873d07fa58411f6060b3d62729ed7c5";
+		"sha256:5818bd7d80b061bbbdfec8a433d609dc8818a05991f731ffc4a561e2ca18c653";
 	return await std.download
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)

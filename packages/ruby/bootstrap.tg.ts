@@ -22,7 +22,11 @@ export const ruby = async (host: string) => {
 		source: source(),
 		phases: {
 			configure: {
-				args: ["--disable-install-doc"],
+				args: [
+					"--disable-install-doc",
+					// Skip fiddle ext: its bundled libffi-3.2.1 libtool is incompatible with dash.
+					"--with-out-ext=fiddle",
+				],
 			},
 		},
 	});

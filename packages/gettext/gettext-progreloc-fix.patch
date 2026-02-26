@@ -1,0 +1,32 @@
+Fix syntax error in progreloc.c on Linux (regression from gnulib scope
+reduction in 2025-12-09).
+
+An extraneous closing brace placed `buf` out of scope before its use in the
+`open()` call.  Fixed upstream in gnulib commit 5b8f646ff5 on 2026-01-29,
+after the gettext 1.0 release.
+
+This patch applies to both gettext-runtime/gnulib-lib/progreloc.c and
+gettext-tools/gnulib-lib/progreloc.c (identical files).
+
+diff --git a/gettext-runtime/gnulib-lib/progreloc.c b/gettext-runtime/gnulib-lib/progreloc.c
+--- a/gettext-runtime/gnulib-lib/progreloc.c
++++ b/gettext-runtime/gnulib-lib/progreloc.c
+@@ -259,7 +259,6 @@
+     char *link = xreadlink (buf);
+     if (link != NULL && link[0] != '[')
+       return link;
+-    }
+     if (executable_fd < 0)
+       executable_fd = open (buf, O_EXEC | O_CLOEXEC, 0);
+   }
+diff --git a/gettext-tools/gnulib-lib/progreloc.c b/gettext-tools/gnulib-lib/progreloc.c
+--- a/gettext-tools/gnulib-lib/progreloc.c
++++ b/gettext-tools/gnulib-lib/progreloc.c
+@@ -259,7 +259,6 @@
+     char *link = xreadlink (buf);
+     if (link != NULL && link[0] != '[')
+       return link;
+-    }
+     if (executable_fd < 0)
+       executable_fd = open (buf, O_EXEC | O_CLOEXEC, 0);
+   }
