@@ -93,21 +93,21 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		);
 	}
 
-	// On macOS, build Apple xattr-preserving cp and install. These must be in
-	// the build env so that `make install` uses Apple install (which preserves
-	// xattrs) rather than GNU install (which does not support xattrs on macOS
-	// because gnulib's xattr module is Linux-only). The same binaries also
-	// replace the GNU versions in the output.
+	// On macOS, build Apple xattr-preserving cp and install.
 	let appleXattrCmds: ReturnType<typeof macOsXattrCmds> | undefined;
 	if (os === "darwin") {
-		appleXattrCmds = macOsXattrCmds(arg);
-		dependencies.push(appleXattrCmds);
+		appleXattrCmds = macOsXattrCmds({
+			env: env_ ?? bootstrap.sdk(host),
+		});
 	}
 	const env = [...dependencies, { FORCE_UNSAFE_CONFIGURE: true }];
 	if (staticBuild) {
 		env.push({ CC: "gcc -static" });
 	}
 	env.push(env_);
+	if (os === "darwin" && appleXattrCmds) {
+		env.push(appleXattrCmds);
+	}
 
 	const configure = {
 		args: [
@@ -121,12 +121,18 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		],
 	};
 
+	// On macOS, override INSTALL on the make install command line.
+	const phases: std.phases.PhasesArg = { configure };
+	if (os === "darwin") {
+		phases.install = "make install 'INSTALL=install -c'";
+	}
+
 	let output = await autotoolsInternal({
 		build,
 		host,
 		bootstrap: bootstrap_,
 		env: std.env.arg(...env, { utils: false }),
-		phases: { configure },
+		phases,
 		processName: metadata.name,
 		opt: staticBuild ? "s" : undefined,
 		sdk,
