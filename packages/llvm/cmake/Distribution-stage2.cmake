@@ -20,7 +20,8 @@ set(LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")
 set(LIBCXXABI_USE_LLVM_UNWINDER ON CACHE BOOL "")
 set(LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
 
-# NOTE - the coresponding CMAKE_EXE_LINKER_FLAGS is set in `llvm.tg.ts`.
+# Set linker flags for executables and shared libraries.
+# The dynamic linker and RPATH are configured via cmake variables below.
 set(CMAKE_SHARED_LINKER_FLAGS "-unwindlib=libunwind" CACHE STRING "")
 
 # Set up LLVM configuration.
@@ -30,7 +31,16 @@ set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
 set(LLVM_ENABLE_LIBEDIT OFF CACHE BOOL "")
 set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL "")
 set(CMAKE_INSTALL_LIBDIR lib CACHE STRING "")
-set(CMAKE_SKIP_INSTALL_RPATH ON CACHE BOOL "")
+
+# Configure RPATH for installed binaries. Use $ORIGIN for relocatable binaries.
+# TANGRAM_HOST_TRIPLE is passed from tangram.ts to set the host-specific library path.
+set(CMAKE_SKIP_INSTALL_RPATH OFF CACHE BOOL "")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON CACHE BOOL "")
+if(TANGRAM_HOST_TRIPLE)
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/${TANGRAM_HOST_TRIPLE}" CACHE STRING "")
+else()
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib" CACHE STRING "")
+endif()
 
 # Define toolchain components.
 set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")

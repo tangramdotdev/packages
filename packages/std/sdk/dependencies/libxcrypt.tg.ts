@@ -1,4 +1,6 @@
 import * as std from "../../tangram.ts";
+import * as bootstrap from "../../bootstrap.tg.ts";
+import strchrConstFix from "./libxcrypt-strchr-const-fix.patch" with { type: "file" };
 
 export const metadata = {
 	homepage: "https://github.com/besser82/libxcrypt",
@@ -16,15 +18,17 @@ export const source = () => {
 	const tag = `v${version}`;
 	const checksum =
 		"sha256:71513a31c01a428bccd5367a32fd95f115d6dac50fb5b60c779d5c7942aec071";
-	return std.download.fromGithub({
-		checksum,
-		compression: "xz",
-		owner,
-		source: "release",
-		repo,
-		tag,
-		version,
-	});
+	return std.download
+		.fromGithub({
+			checksum,
+			compression: "xz",
+			owner,
+			source: "release",
+			repo,
+			tag,
+			version,
+		})
+		.then((dir) => bootstrap.patch(dir, strchrConstFix));
 };
 
 export type Arg = std.autotools.Arg;
@@ -44,8 +48,6 @@ export const build = async (...args: std.Args<Arg>) => {
 };
 
 export default build;
-
-import * as bootstrap from "../../bootstrap.tg.ts";
 
 export const test = async () => {
 	const host = bootstrap.toolchainTriple(std.triple.host());

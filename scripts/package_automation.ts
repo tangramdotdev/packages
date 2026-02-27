@@ -533,6 +533,10 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 		{ ref: "default", tagPath: "default" },
 		{ ref: "self", tagPath: "self" },
 	],
+	llvm: [
+		{ ref: "default", tagPath: "default" },
+		{ ref: "libclang", tagPath: "libclang" },
+	],
 	poetry: [
 		{ ref: "default", tagPath: "default" },
 		{ ref: "self", tagPath: "self" },

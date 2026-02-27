@@ -1,0 +1,33 @@
+Fix const-correctness in strchr casts for glibc >= 2.43.
+
+glibc 2.43 introduced ISO C23 const-preserving _Generic macros for strchr
+and similar functions. When the input is const char *, strchr now returns
+const char * instead of char *, causing a -Werror=discarded-qualifiers
+failure. Remove the unnecessary const casts.
+
+Upstream fix: https://github.com/besser82/libxcrypt/commit/174c24d6e87aeae631bc0a7bb1ba983cf8def4de
+
+diff --git a/lib/crypt-gost-yescrypt.c b/lib/crypt-gost-yescrypt.c
+--- a/lib/crypt-gost-yescrypt.c
++++ b/lib/crypt-gost-yescrypt.c
+@@ -131,7 +131,7 @@
+   intbuf->outbuf[1] = 'g';
+
+   /* extract yescrypt output from "$y$param$salt$output" */
+-  char *hptr = strchr ((const char *) intbuf->retval + 3, '$');
++  char *hptr = strchr ((char *) intbuf->retval + 3, '$');
+   if (!hptr)
+     {
+       errno = EINVAL;
+diff --git a/lib/crypt-sm3-yescrypt.c b/lib/crypt-sm3-yescrypt.c
+--- a/lib/crypt-sm3-yescrypt.c
++++ b/lib/crypt-sm3-yescrypt.c
+@@ -136,7 +136,7 @@
+   intbuf->outbuf[3] = '3';
+
+   /* extract yescrypt output from "$y$param$salt$output" */
+-  char *hptr = strchr ((const char *) intbuf->retval + 3, '$');
++  char *hptr = strchr ((char *) intbuf->retval + 3, '$');
+   if (!hptr)
+     {
+       errno = EINVAL;

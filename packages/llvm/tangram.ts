@@ -52,7 +52,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 		sdk,
 		source: source_,
 	} = arg ?? {};
-	const host = host_ ?? std.triple.host();
+	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const build = build_ ?? host;
 
 	const sourceDir = source_ ?? source();
@@ -69,13 +69,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 		.then((d) => d.get(host))
 		.then(tg.Directory.expect);
 
-	const env = await std.env.arg(
-		...deps,
-		{
-			CFLAGS: tg.Mutation.suffix("-Wno-unused-command-line-argument", " "),
-		},
-		env_,
-	);
+	const env = await std.env.arg(...deps, env_, { utils: false });
 
 	const ldsoName = glibc.interpreterName(host);
 	// Ensure that stage2 unproxied binaries are runnable during the build, before we have a chance to wrap them post-install.
@@ -84,7 +78,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We'll wrap them afterwards.
-	const prepare = tg`set -x && export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibNgArtifact}/lib:${ncursesArtifact}/lib:$HOME/build/lib:$HOME/build/lib/${host}"`;
+	const prepare = tg`set -x && export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibNgArtifact}/lib:$HOME/build/lib:$HOME/build/lib/${host}"`;
 
 	// Define default flags.
 	const configure = {
@@ -92,11 +86,10 @@ export const toolchain = async (arg?: LLVMArg) => {
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
+			`-DTANGRAM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
-			tg`-DTerminfo_ROOT=${ncursesArtifact}`,
-			tg`-DBOOTSTRAP_Terminfo_ROOT=${ncursesArtifact}`,
 			tg`-DZLIB_ROOT=${zlibNgArtifact}`,
-			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
+			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT;TANGRAM_HOST_TRIPLE"`,
 		],
 	};
 
@@ -120,15 +113,22 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const phases = { prepare, configure, build: buildPhase, install };
 
 	let llvmArtifact = await cmake.build({
-		...(await std.triple.rotate({ build, host })),
+		host: build,
+		target: host,
 		env,
 		phases,
 		sdk,
 		source: tg`${sourceDir}/llvm`,
 	});
 
-	// Add sysroot and symlinks.
+	// Merge zlib-ng libraries into the artifact so $ORIGIN-based RPATH can find them.
+	const zlibLibDir = await tg.Directory.expect(zlibNgArtifact)
+		.get("lib")
+		.then(tg.Directory.expect);
+
+	// Add sysroot, zlib libs, and symlinks.
 	llvmArtifact = await tg.directory(llvmArtifact, sysroot, {
+		lib: zlibLibDir,
 		"bin/ar": tg.symlink("llvm-ar"),
 		"bin/cc": tg.symlink("clang"),
 		"bin/c++": tg.symlink("clang++"),
@@ -142,15 +142,13 @@ export const toolchain = async (arg?: LLVMArg) => {
 	});
 
 	// The bootstrap compiler was not proxied. Manually wrap the output binaries.
-	// With the sysroot embedded, binaries can find libraries relative to their location.
-	// We still wrap to ensure the interpreter is correct.
+	// With $ORIGIN-based RPATH embedded during build, binaries can find libraries
+	// relative to their location. We still wrap to ensure the interpreter is correct.
 
-	// Collect all required library paths.
+	// Collect library paths for non-clang binaries that may not have RPATH set.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
 	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
-	const ncursesLibDir = ncursesArtifact.get("lib").then(tg.Directory.expect);
-	const zlibLibDir = zlibNgArtifact.get("lib").then(tg.Directory.expect);
-	const libraryPaths = [libDir, hostLibDir, ncursesLibDir, zlibLibDir];
+	const libraryPaths = [libDir, hostLibDir];
 
 	// Wrap all ELF binaries in the bin directory, except clang-XX which must not be
 	// wrapped to preserve /proc/self/exe for the -cc1 driver.
