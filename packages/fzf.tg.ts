@@ -6,8 +6,8 @@ export const metadata = {
 	license: "MIT",
 	name: "fzf",
 	repository: "https://github.com/junegunn/fzf",
-	version: "0.66.1",
-	tag: "fzf/0.66.1",
+	version: "0.70.0",
+	tag: "fzf/0.70.0",
 	provides: {
 		binaries: ["fzf"],
 	},
@@ -16,7 +16,7 @@ export const metadata = {
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:ae70923dba524d794451b806dbbb605684596c1b23e37cc5100daa04b984b706";
+		"sha256:a99e0df4dfb6228c8af63a2f99f39f7476b7da614833141be30a6b3a3f9d440f";
 	const tag = `v${version}`;
 	return std.download.fromGithub({
 		checksum,
