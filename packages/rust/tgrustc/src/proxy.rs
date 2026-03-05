@@ -845,6 +845,9 @@ async fn process_dependencies(
 	// Single-pass scan: build externs map and file catalog simultaneously.
 	let mut externs_map: HashMap<String, HashSet<String>> = HashMap::new();
 	let mut file_catalog: BTreeMap<String, String> = BTreeMap::new();
+	// Cache of artifact IDs read from .tgid sidecar files (written in tg run mode).
+	// Entries here bypass tg::checkin in the resolution phase.
+	let mut artifact_id_cache: HashMap<String, tg::artifact::Id> = HashMap::new();
 
 	for dep in dependencies {
 		let Ok(entries) = std::fs::read_dir(dep) else {
@@ -872,8 +875,8 @@ async fn process_dependencies(
 				continue;
 			}
 
-			// Skip .d files.
-			if ext == Some("d") {
+			// Skip .d and .tgid files.
+			if ext == Some("d") || ext == Some("tgid") {
 				continue;
 			}
 
@@ -886,6 +889,14 @@ async fn process_dependencies(
 					.ok()
 					.and_then(|t| t.to_str().map(ToOwned::to_owned))
 			} else if path.is_file() {
+				// Check for a .tgid sidecar written by the proxy in tg run mode.
+				// If present, record the artifact ID to bypass tg::checkin later.
+				let tgid_path = path.with_file_name(format!("{}.tgid", name));
+				if let Ok(id_str) = std::fs::read_to_string(&tgid_path)
+					&& let Ok(id) = id_str.trim().parse::<tg::artifact::Id>()
+				{
+					artifact_id_cache.insert(name.to_owned(), id);
+				}
 				path.to_str().map(ToOwned::to_owned)
 			} else {
 				None
@@ -953,12 +964,18 @@ async fn process_dependencies(
 		file_catalog
 	};
 
-	// Resolve all files to artifacts without caching individually.
+	// Resolve all files to artifacts. Use cached artifact IDs from .tgid
+	// sidecars when available to avoid re-checking in files through the daemon.
 	let futures = files.iter().map(|(name, path)| {
 		let name = name.clone();
 		let path = path.clone();
+		let cached_id = artifact_id_cache.get(&name).cloned();
 		async move {
-			let artifact = process::resolve_path_to_artifact(tg, &path).await.ok()?;
+			let artifact = if let Some(id) = cached_id {
+				tg::Artifact::with_id(id)
+			} else {
+				process::resolve_path_to_artifact(tg, &path).await.ok()?
+			};
 			Some((name, artifact))
 		}
 	});
@@ -1120,7 +1137,15 @@ async fn write_outputs_to_cargo(
 				} else {
 					0o755
 				};
-				copy_artifact_to_file(tg, artifact, &to, &filename, mode).await?;
+				copy_artifact_to_file(tg, artifact.clone(), &to, &filename, mode).await?;
+
+				// Write a .tgid sidecar containing the artifact ID so that
+				// process_dependencies can resolve the artifact directly
+				// without re-checking in the file through the daemon.
+				let tgid_path = to.with_file_name(format!("{}.tgid", filename));
+				tokio::fs::write(&tgid_path, artifact.id().to_string())
+					.await
+					.ok();
 			} else if Path::new(&filename).extension().is_some_and(|e| e == "d") {
 				// Copy .d files with writable permissions. Cargo needs to overwrite
 				// them on subsequent builds, which fails if they are read-only symlinks.
