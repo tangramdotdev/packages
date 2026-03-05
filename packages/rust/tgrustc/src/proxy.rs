@@ -1054,11 +1054,19 @@ async fn write_outputs_to_cargo(
 	// compiled by plain `cargo build` (without the proxy).
 	let skip_externs = std::env::var("TGRUSTC_TEST_SKIP_EXTERNS").is_ok();
 
-	// Find an rlib or rmeta in the build dir to get the filename prefix.
+	// Find a tracked output in the build dir to get the filename prefix.
+	// This includes rlib/rmeta (normal crates) and dylib/so (proc-macro crates).
+	// Without .externs for proc-macros, the BFS transitive closure in
+	// process_dependencies cannot traverse through them, causing all downstream
+	// crates to fall back to scanning the entire deps directory.
 	for (filename, _) in &entries {
 		let path = std::path::Path::new(filename);
 		let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-		if !skip_externs && (ext.eq_ignore_ascii_case("rlib") || ext.eq_ignore_ascii_case("rmeta"))
+		if !skip_externs
+			&& matches!(
+				ext.to_ascii_lowercase().as_str(),
+				"rlib" | "rmeta" | "dylib" | "so"
+			)
 		{
 			let externs_filename = path.with_extension("externs");
 			let externs_path = output_directory.join(externs_filename.file_name().unwrap());

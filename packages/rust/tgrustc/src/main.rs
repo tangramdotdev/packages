@@ -119,13 +119,16 @@ pub(crate) fn passthrough_to_rustc(args: &args::Args) -> tg::Result<()> {
 /// This function extracts the `-C extra-filename=` flag from the rustc args to
 /// determine the output filename, then writes the .externs file before exec.
 fn maybe_write_passthrough_externs(args: &args::Args) {
-	// Only write .externs for crates that produce rlib output and have extern deps.
-	let produces_rlib = args.crate_types.is_empty()
+	// Only write .externs for crates that produce tracked output and have extern deps.
+	// This includes proc-macro crates, which produce dylib output that downstream
+	// crates depend on. Without .externs for proc-macros, the BFS transitive closure
+	// cannot traverse through them, causing fallback to scanning all deps.
+	let produces_tracked_output = args.crate_types.is_empty()
 		|| args
 			.crate_types
 			.iter()
-			.any(|ct| matches!(ct.as_str(), "lib" | "rlib"));
-	if !produces_rlib || args.externs.is_empty() {
+			.any(|ct| matches!(ct.as_str(), "lib" | "rlib" | "proc-macro" | "dylib"));
+	if !produces_tracked_output || args.externs.is_empty() {
 		return;
 	}
 	let Some(output_dir) = &args.rustc_output_directory else {
