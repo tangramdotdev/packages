@@ -271,10 +271,8 @@ VENDORCFG`;
 		exports.push(`export CXX_${tripleToEnvVar(target)}="${target}-c++"`);
 	}
 
-	// When using the tgrustc proxy, default to high parallelism.
-	const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
-	if (effectiveJobs !== undefined) {
-		exports.push(`export CARGO_BUILD_JOBS="${effectiveJobs}"`);
+	if (parallelJobs !== undefined) {
+		exports.push(`export CARGO_BUILD_JOBS="${parallelJobs}"`);
 	}
 
 	// Always set the project directory when proxy is enabled so the proxy can
@@ -572,11 +570,9 @@ linker = "${hostLinker}"`;
 		envs.push(proxyEnv);
 	}
 
-	// When using the tgrustc proxy, default to high parallelism to allow tangram to limit.
-	const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
-	if (effectiveJobs !== undefined) {
+	if (parallelJobs !== undefined) {
 		const jobsEnv = {
-			CARGO_BUILD_JOBS: `${effectiveJobs}`,
+			CARGO_BUILD_JOBS: `${parallelJobs}`,
 		};
 		envs.push(jobsEnv);
 	}

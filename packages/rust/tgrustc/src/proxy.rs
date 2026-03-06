@@ -45,6 +45,7 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 
 	// Resolve the three initial artifacts concurrently: source directory, OUT_DIR, and driver executable.
 	let source_future = async {
+		let _span = tracing::info_span!("checkin_source").entered();
 		let manifest_dir = &args.source_directory;
 
 		if manifest_dir.contains("/.tangram/artifacts/")
@@ -99,6 +100,11 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 		}
 	};
 
+	let resolve_exe_future = async {
+		let _span = tracing::info_span!("resolve_exe").entered();
+		process::resolve_executable(tg).await
+	};
+
 	let ((source_directory, crate_subpath), out_dir, executable): (
 		(tg::Value, Option<String>),
 		tg::Value,
@@ -106,7 +112,7 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 	) = futures::future::try_join3(
 		source_future,
 		out_dir_future,
-		process::resolve_executable(tg),
+		resolve_exe_future,
 	)
 	.await?;
 
@@ -174,6 +180,11 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 		}
 	}
 	if !pending_env.is_empty() {
+		let _span = tracing::info_span!("resolve_env", count = pending_env.len()).entered();
+		tracing::info!(
+			vars = ?pending_env.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+			"resolving env vars that need checkin"
+		);
 		let resolve_futures = pending_env.iter().map(|(_, path)| {
 			let path = path.clone();
 			async move { process::content_address_path(tg, &path).await }
@@ -313,6 +324,7 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 
 	// Resolve all pending content-address operations concurrently.
 	if !pending.is_empty() {
+		let _span = tracing::info_span!("resolve_args", count = pending.len()).entered();
 		let resolve_futures = pending.iter().map(|(_, path, _)| {
 			let path = path.clone();
 			async move { process::content_address_path(tg, &path).await }
@@ -366,7 +378,9 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 		.args(command_args)
 		.env(env)
 		.build();
+	let store_start = std::time::Instant::now();
 	let command_id = command.store(tg).await?;
+	tracing::info!(store_ms = store_start.elapsed().as_millis(), %command_id, "stored command");
 	let mut command_ref = tg::Referent::with_item(command_id.clone());
 	command_ref
 		.options
