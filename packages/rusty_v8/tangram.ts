@@ -1,8 +1,10 @@
 import * as std from "std" with { local: "../std" };
 import { $ } from "std" with { local: "../std" };
+import bindgen from "bindgen" with { local: "../bindgen.tg.ts" };
 import * as gn from "gn" with { local: "../gn.tg.ts" };
 import ninja from "ninja" with { local: "../ninja.tg.ts" };
 import python from "python" with { local: "../python" };
+import * as rust from "rust" with { local: "../rust" };
 
 export const metadata = {
 	name: "rusty_v8",
@@ -109,13 +111,13 @@ export const source = async (): Promise<tg.Directory> => {
 		}),
 	);
 
-	// Assemble the full source tree.
-	let tree: Record<string, tg.Unresolved<tg.Artifact>> = {};
+	// Assemble the full source tree by layering each submodule on top.
+	let result = mainSource;
 	for (const [path, dir] of submoduleEntries) {
-		tree = setNestedPath(tree, path, dir);
+		result = await tg.directory(result, pathToNestedDir(path, dir));
 	}
 
-	return tg.directory(mainSource, tree);
+	return result;
 };
 
 /** Download a GitHub archive and unwrap the top-level directory. */
@@ -138,7 +140,7 @@ const downloadSubmodule = async (
 	commit: string,
 ): Promise<tg.Directory> => {
 	const checksum = "sha256:any" as tg.Checksum;
-	if (url.includes("github.com")) {
+	if (url.startsWith("https://github.com")) {
 		const archiveUrl = `${url}/archive/${commit}.tar.gz`;
 		return await std
 			.download({ checksum, url: archiveUrl, mode: "extract" })
@@ -153,32 +155,19 @@ const downloadSubmodule = async (
 	}
 };
 
-/** Set a value at a nested path in an object, creating intermediate objects as needed. */
-const setNestedPath = (
-	obj: Record<string, tg.Unresolved<tg.Artifact>>,
+/** Convert a slash-separated path into a nested directory object for use with tg.directory(). */
+const pathToNestedDir = (
 	path: string,
 	value: tg.Directory,
 ): Record<string, tg.Unresolved<tg.Artifact>> => {
 	const parts = path.split("/");
-	if (parts.length === 1) {
-		obj[parts[0]!] = value;
-		return obj;
-	}
-
-	// Build nested directory structure for paths like "third_party/icu".
-	let current: Record<string, tg.Unresolved<tg.Artifact>> = {};
-	current[parts[parts.length - 1]!] = value;
+	let result: Record<string, tg.Unresolved<tg.Artifact>> = {
+		[parts[parts.length - 1]!]: value,
+	};
 	for (let i = parts.length - 2; i >= 0; i--) {
-		const wrapper: Record<string, tg.Unresolved<tg.Artifact>> = {};
-		wrapper[parts[i]!] = tg.directory(current);
-		current = wrapper;
+		result = { [parts[i]!]: tg.directory(result) };
 	}
-
-	// Merge into the top-level object.
-	for (const [key, val] of Object.entries(current)) {
-		obj[key] = val;
-	}
-	return obj;
+	return result;
 };
 
 export type Arg = std.args.BasePackageArg;
@@ -199,9 +188,19 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	const arch = std.triple.arch(host);
 	const targetCpu = arch === "aarch64" ? "arm64" : "x64";
 
-	// V8 requires clang via the LLVM SDK.
+	// V8 requires clang via the LLVM SDK, plus Rust and bindgen.
+	const llvmSdk = std.sdk({
+		host: build,
+		target: host,
+		toolchain: "llvm",
+		...sdk,
+	});
+	const rustToolchain = rust.self({ host: build });
+	const bindgenPkg = bindgen({ host: build });
 	const env = std.env.arg(
-		std.sdk({ host: build, target: host, toolchain: "llvm", ...sdk }),
+		llvmSdk,
+		rustToolchain,
+		bindgenPkg,
 		gn.build({ host: build }),
 		ninja({ host: build }),
 		python({ host: build }),
@@ -217,15 +216,24 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		chmod -R u+w src
 		cd src
 
-		# Find the clang base path from the SDK. GN expects a directory containing bin/clang.
-		CLANG_BASE_PATH=$(dirname $(dirname $(which clang)))
+		# Find the clang base path from the SDK.
+		CLANG_BIN=$(command -v clang)
+		CLANG_BASE_PATH=$(dirname $(dirname "$CLANG_BIN"))
 
-		# Point the build at the environment's Rust toolchain.
-		RUST_SYSROOT=$(dirname $(dirname $(which rustc))) || true
-		if [ -d "$RUST_SYSROOT" ]; then
-			rm -rf third_party/rust-toolchain
-			ln -sf "$RUST_SYSROOT" third_party/rust-toolchain
-		fi
+		# Set up third_party/rust-toolchain from our Rust sysroot.
+		RUSTC_PATH=$(command -v rustc)
+		RUST_SYSROOT=$(dirname $(dirname "$RUSTC_PATH"))
+		rm -rf third_party/rust-toolchain
+		cp -R "$RUST_SYSROOT" third_party/rust-toolchain
+		chmod -R u+w third_party/rust-toolchain
+
+		# Add bindgen to the toolchain directory.
+		BINDGEN_PATH=$(command -v bindgen)
+		cp "$BINDGEN_PATH" third_party/rust-toolchain/bin/bindgen
+
+		# Create the VERSION file that GN expects.
+		RUST_VERSION=$(rustc --version | sed 's/rustc //')
+		echo "$RUST_VERSION" > third_party/rust-toolchain/VERSION
 
 		# Write GN args.
 		mkdir -p gn_out
@@ -233,25 +241,22 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		is_debug = false
 		is_clang = true
 		clang_base_path = "$CLANG_BASE_PATH"
+		rust_sysroot_absolute = "$PWD/third_party/rust-toolchain"
 		use_sysroot = false
 		use_custom_libcxx = false
 		v8_enable_sandbox = false
 		v8_enable_pointer_compression = false
 		treat_warnings_as_errors = false
+		use_glib = false
 		target_cpu = "${targetCpu}"
 		GNARGS
-
-		# If we have a Rust sysroot, tell GN about it.
-		if [ -d "$RUST_SYSROOT" ]; then
-			echo "rust_sysroot_absolute = \"$RUST_SYSROOT\"" >> gn_out/args.gn
-		fi
 
 		# Generate build files and build.
 		gn gen gn_out
 		ninja -C gn_out rusty_v8
 
 		# Compress and output the static library.
-		gzip -c gn_out/obj/librusty_v8.a > $OUTPUT
+		gzip -c gn_out/obj/librusty_v8.a > ${tg.output}
 	`
 		.env(env)
 		.then(tg.File.expect);

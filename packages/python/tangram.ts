@@ -9,6 +9,7 @@ import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
 import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
 import * as readline from "readline" with { local: "../readline.tg.ts" };
 import * as sqlite from "sqlite" with { local: "../sqlite.tg.ts" };
+import * as xz from "xz" with { local: "../xz.tg.ts" };
 import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
 import * as zstd from "zstd" with { local: "../zstd.tg.ts" };
 
@@ -74,6 +75,7 @@ export const deps = () =>
 		openssl: openssl.build,
 		readline: readline.build,
 		sqlite: sqlite.build,
+		xz: xz.build,
 		zlib: zlib.build,
 		zstd: zstd.build,
 	});
@@ -169,6 +171,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		artifacts.libffi,
 		artifacts.mpdecimal,
 		artifacts.openssl,
+		artifacts.xz,
 		artifacts.zlib,
 		artifacts.zstd,
 	]
