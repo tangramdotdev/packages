@@ -27,6 +27,8 @@ export type ToolchainArg = {
 	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD" for pinned nightly. */
 	channel?: "stable" | "nightly" | string;
 	host?: string;
+	/** Rustup profile controlling which components are installed. "minimal" (default) includes rustc, cargo, and rust-std. "default" adds rustfmt, clippy, and rust-docs. */
+	profile?: "minimal" | "default" | "complete";
 	target?: string;
 	targets?: Array<string>;
 };
@@ -37,6 +39,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	const detectedHost = std.triple.host();
 	const host = rustTriple(arg?.host ?? detectedHost);
 	const channel = arg?.channel ?? "stable";
+	const profile = arg?.profile ?? "minimal";
 	const targets = [];
 	if (arg?.target && arg.target !== host) {
 		targets.push(arg.target);
@@ -80,7 +83,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	)) as RustupManifestV2;
 
 	// Get all the available packages for the selected profile and target.
-	const packageNames = manifest.profiles[PROFILE];
+	const packageNames = manifest.profiles[profile];
 	tg.assert(Array.isArray(packageNames));
 	const packages = packageNames.flatMap((packageName) => {
 		const data = manifest.pkg[packageName];
@@ -142,37 +145,27 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 
 	const zlibArtifact = await zlib({ host });
 
-	// Wrap the Rust binaries.
-	const executables = [
-		"bin/rustc",
-		"bin/cargo",
-		"bin/rustdoc",
-		"bin/rust-gdb",
-		"bin/rust-gdbgui",
-		"bin/rust-lldb",
-	];
-
-	let artifact = tg.directory();
-
-	for (const executable of executables) {
+	// Wrap all ELF binaries found in the install's bin/ directory.
+	const binDir = await rustInstall.get("bin").then(tg.Directory.expect);
+	let wrappedBins: Record<string, tg.Unresolved<tg.Artifact>> = {};
+	for await (const [name, artifact] of binDir) {
+		if (!(artifact instanceof tg.File)) {
+			continue;
+		}
 		// Add the zlib library path with the default strategy, isolating libz.
-		const unwrapped = rustInstall.get(executable).then(tg.File.expect);
-		let wrapped = std.wrap(unwrapped, {
+		let wrapped = std.wrap(artifact, {
 			libraryPaths: [tg`${zlibArtifact}/lib`],
 		});
-
 		// Add the rust library path with no library path handling, preserving the whole structure and `rustlib` subdirectory.
 		wrapped = std.wrap(wrapped, {
 			libraryPaths: [tg`${rustInstall}/lib`],
 			libraryPathStrategy: "none",
 		});
-
-		artifact = tg.directory(artifact, {
-			[executable]: wrapped,
-		});
+		wrappedBins[name] = wrapped;
 	}
 
-	return artifact;
+	// Start from the full install (preserving lib/, etc.) and replace bin/ entries with wrapped versions.
+	return tg.directory(rustInstall, { bin: wrappedBins });
 };
 
 export default self;
