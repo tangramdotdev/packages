@@ -195,7 +195,7 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		toolchain: "llvm",
 		...sdk,
 	});
-	const rustToolchain = rust.self({ host: build });
+	const rustToolchain = rust.self({ host: build, profile: "default" });
 	const bindgenPkg = bindgen({ host: build });
 	const env = std.env.arg(
 		llvmSdk,
@@ -221,18 +221,19 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		CLANG_BASE_PATH=$(dirname $(dirname "$CLANG_BIN"))
 
 		# Set up third_party/rust-toolchain from our Rust sysroot.
-		RUSTC_PATH=$(command -v rustc)
-		RUST_SYSROOT=$(dirname $(dirname "$RUSTC_PATH"))
 		rm -rf third_party/rust-toolchain
-		cp -R "$RUST_SYSROOT" third_party/rust-toolchain
+		cp -R ${rustToolchain} third_party/rust-toolchain
 		chmod -R u+w third_party/rust-toolchain
 
 		# Add bindgen to the toolchain directory.
-		BINDGEN_PATH=$(command -v bindgen)
-		cp "$BINDGEN_PATH" third_party/rust-toolchain/bin/bindgen
+		cp ${bindgenPkg}/bin/bindgen third_party/rust-toolchain/bin/bindgen
+
+		# Copy libclang.so into the Rust toolchain so that bindgen can find it.
+		cp "$CLANG_BASE_PATH"/lib/libclang.so* third_party/rust-toolchain/lib/
 
 		# Create the VERSION file that GN expects.
-		RUST_VERSION=$(rustc --version | sed 's/rustc //')
+		RUSTC_VERSION=$(third_party/rust-toolchain/bin/rustc -V)
+		RUST_VERSION=$(echo "$RUSTC_VERSION" | sed 's/rustc //')
 		echo "$RUST_VERSION" > third_party/rust-toolchain/VERSION
 
 		# Write GN args.
@@ -242,12 +243,14 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		is_clang = true
 		clang_base_path = "$CLANG_BASE_PATH"
 		rust_sysroot_absolute = "$PWD/third_party/rust-toolchain"
+		rustc_version = "$RUSTC_VERSION"
 		use_sysroot = false
 		use_custom_libcxx = false
 		v8_enable_sandbox = false
 		v8_enable_pointer_compression = false
 		treat_warnings_as_errors = false
 		use_glib = false
+		clang_version = "22"
 		target_cpu = "${targetCpu}"
 		GNARGS
 
