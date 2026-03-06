@@ -271,8 +271,11 @@ VENDORCFG`;
 		exports.push(`export CXX_${tripleToEnvVar(target)}="${target}-c++"`);
 	}
 
-	if (parallelJobs !== undefined) {
-		exports.push(`export CARGO_BUILD_JOBS="${parallelJobs}"`);
+	{
+		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+		if (effectiveJobs !== undefined) {
+			exports.push(`export CARGO_BUILD_JOBS="${effectiveJobs}"`);
+		}
 	}
 
 	// Always set the project directory when proxy is enabled so the proxy can
@@ -570,11 +573,14 @@ linker = "${hostLinker}"`;
 		envs.push(proxyEnv);
 	}
 
-	if (parallelJobs !== undefined) {
-		const jobsEnv = {
-			CARGO_BUILD_JOBS: `${parallelJobs}`,
-		};
-		envs.push(jobsEnv);
+	{
+		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+		if (effectiveJobs !== undefined) {
+			const jobsEnv = {
+				CARGO_BUILD_JOBS: `${effectiveJobs}`,
+			};
+			envs.push(jobsEnv);
+		}
 	}
 
 	if (verbose) {

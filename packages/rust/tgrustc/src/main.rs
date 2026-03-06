@@ -44,7 +44,35 @@ fn main_inner() -> tg::Result<()> {
 	// If cargo expects to pipe into stdin or contains only a single arg, we immediately invoke rustc without doing anything.
 	if args.stdin || args.remaining.len() < 2 {
 		tracing::info!("invoking rustc without tangram");
-		let error = std::process::Command::new(std::env::args().nth(1).unwrap())
+		let rustc_path = std::env::args().nth(1).unwrap();
+		// If the rustc path is an artifact store path that does not exist on
+		// disk, cache it so the exec can succeed.
+		if !Path::new(&rustc_path).exists()
+			&& (rustc_path.contains("/.tangram/artifacts/")
+				|| rustc_path.contains("/opt/tangram/artifacts/"))
+		{
+			tracing::info!(%rustc_path, "caching rustc artifact for passthrough");
+			let tg_client = tg::Client::with_env()?;
+			let rt = tokio::runtime::Builder::new_current_thread()
+				.enable_all()
+				.build()
+				.unwrap();
+			rt.block_on(async {
+				// Cache the top-level directory artifact, not the inner file.
+				// `extract_artifact_from_path` navigates into subdirectories,
+				// but we need the whole directory materialized on disk so the
+				// full path (e.g. dir_xxx/bin/rustc) resolves.
+				let template = tangram_std::unrender(&rustc_path)?;
+				let artifact = template
+					.components
+					.into_iter()
+					.find_map(|c| c.try_unwrap_artifact().ok())
+					.ok_or_else(|| tg::error!("no artifact in rustc path: {rustc_path}"))?;
+				tracing::info!(%rustc_path, artifact_id = %artifact.id(), "caching top-level artifact");
+				process::batch_cache(&tg_client, vec![artifact.id()]).await
+			})?;
+		}
+		let error = std::process::Command::new(&rustc_path)
 			.args(std::env::args().skip(2))
 			.exec();
 		return Err(tg::error!("exec failed: {error}."));

@@ -155,6 +155,11 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 		if is_excluded_proxy_env(name) {
 			return false;
 		}
+		// CARGO_MANIFEST_DIR is always overwritten with the content-addressed
+		// source directory below. Skip it here to avoid a redundant checkin.
+		if name == "CARGO_MANIFEST_DIR" {
+			return false;
+		}
 		// Apply the allowlist to include known compilation-relevant variables.
 		is_allowed_proxy_env(name)
 			|| is_cargo_target_var(name)
@@ -162,10 +167,9 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 			|| value.contains("/opt/tangram/artifacts/")
 			// In run mode, allow vars not present in the pre-cargo host env
 			// snapshot. These were added by cargo from build script
-			// `cargo:rustc-env` output and have arbitrary names. In build
-			// mode (no snapshot), allow any unknown var through since the
-			// sandbox env is clean — any var not in the exclusion list or
-			// the allowlist was injected by cargo.
+			// `cargo:rustc-env` output and have arbitrary names (e.g.
+			// BUILD_TIME). In build mode (no snapshot), allow any unknown var
+			// through since the sandbox env is clean.
 			|| is_cargo_added_env(name, host_env_snapshot.as_ref(), run_mode)
 	}) {
 		let needs_checkin = value.starts_with('/')
@@ -1519,6 +1523,10 @@ fn is_excluded_proxy_env(name: &str) -> bool {
 			| "RUSTC_WRAPPER"
 			| "DYLD_FALLBACK_LIBRARY_PATH"
 			| "LD_LIBRARY_PATH"
+			// The inner driver uses a specific rustc via TGRUSTC_RUSTC.
+			// Rustup directories are never needed and can be very large.
+			| "RUSTUP_HOME"
+			| "RUSTUP_TOOLCHAIN"
 	)
 }
 
