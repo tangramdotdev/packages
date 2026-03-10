@@ -66,7 +66,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	} = arg ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 
-	const build = build_ ?? host;
+	const build = build_ ?? std.sdk.canonicalTriple(std.triple.host());
 	const target = target_ ?? host;
 
 	if (std.triple.os(host) === "darwin") {
@@ -102,7 +102,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 		std.sdk(),
 		tg
 			.build(dependencies.buildTools, {
-				host,
+				host: build,
 				preset: "toolchain",
 				python: true,
 			})
@@ -112,7 +112,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Build host libraries (zlib and ncurses for LLVM).
 	const hostLibraries = tg
 		.build(dependencies.hostLibraries, {
-			host,
+			host: build,
 			buildToolchain: buildTools,
 			preset: "llvm",
 		})
@@ -120,12 +120,12 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	// Build ncurses and zlib separately for cmake configuration and library paths.
 	const zlibArtifact = dependencies.zlib.build({
-		host,
+		host: build,
 		env: buildTools,
 		bootstrap: true,
 	});
 	const gitArtifact = git({
-		host,
+		host: build,
 		env: buildTools,
 	});
 
@@ -135,6 +135,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Obtain a sysroot for the requested host.
 	const sysroot = await constructSysroot({
 		bootstrap: true,
+		build,
 		env: buildTools,
 		host,
 	})
@@ -162,6 +163,11 @@ export const toolchain = async (arg?: LLVMArg) => {
 		],
 	};
 
+	// Ensure stage2 is compiled against libc++ (not libstdc++) so the final
+	// toolchain binaries are self-contained. Stage1's libc++ (built as part of
+	// stage1 runtimes) is used for this linking step.
+	configure.args.push("-DBOOTSTRAP_CMAKE_CXX_FLAGS=-stdlib=libc++");
+
 	// Support musl sysroots.
 	const isMusl = std.triple.environment(host) === "musl";
 	if (isMusl) {
@@ -183,7 +189,6 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	let llvmArtifact = await cmake.build({
 		host: build,
-		target: host,
 		env: std.env.arg(...env, { utils: false }),
 		phases,
 		sdk,
@@ -275,11 +280,11 @@ export const buildLld = async (arg?: LLVMArg) => {
 		source: source_,
 	} = arg ?? {};
 	const host = host_ ?? std.triple.host();
-	const build = build_ ?? host;
+	const build = build_ ?? std.sdk.canonicalTriple(std.triple.host());
 
 	const sourceDir = source_ ?? source();
 
-	const buildToolchain = await std.env.arg(bootstrap.sdk(host));
+	const buildToolchain = await std.env.arg(bootstrap.sdk(build));
 
 	// Define build environment.
 	const buildTools = await tg.build(dependencies.buildTools, {

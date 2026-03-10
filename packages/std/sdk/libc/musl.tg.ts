@@ -45,15 +45,21 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 
+	// Only consider arch/OS differences as cross-compilation. An environment
+	// difference (e.g. gnu vs musl) on the same arch/OS is not true
+	// cross-compilation — the host GCC can compile musl directly.
 	const isCrossCompiling =
 		std.triple.arch(build) !== std.triple.arch(host) ||
-		std.triple.os(build) !== std.triple.os(host) ||
-		std.triple.environment(build) !== std.triple.environment(host);
+		std.triple.os(build) !== std.triple.os(host);
 
+	// When not cross-compiling (same arch/OS, different environment like
+	// gnu vs musl), pass --build matching --host so musl's configure doesn't
+	// try to use a ${host}-gcc cross-compiler that doesn't exist.
+	const configureBuild = isCrossCompiling ? build : host;
 	const commonFlags = [
 		`--enable-debug`,
 		`--enable-optimize=*`,
-		`--build=${build}`,
+		`--build=${configureBuild}`,
 		`--host=${host}`,
 	];
 

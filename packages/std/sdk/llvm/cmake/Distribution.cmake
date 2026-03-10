@@ -19,8 +19,12 @@ if (NOT APPLE)
   set(BOOTSTRAP_LLVM_ENABLE_LLD ON CACHE BOOL "")
 endif()
 
-# Configure the stage1 buidl to use all LLVm components.
-set(CLANG_DEFAULT_CXX_STDLIB "libc++" CACHE STRING "")
+# Configure the stage1 build to use LLVM components.
+# NOTE: Do not set CLANG_DEFAULT_CXX_STDLIB here. During stage1 runtimes
+# configure, compiler-rt's test_target_arch tries to link with clang++, which
+# would require libc++ before it's built. Stage1 clang defaults to libstdc++
+# (available from the bootstrap GCC), allowing runtimes to configure and build.
+# Stage2 gets -stdlib=libc++ via BOOTSTRAP_CMAKE_CXX_FLAGS in llvm.tg.ts.
 set(CLANG_DEFAULT_RTLIB "compiler-rt" CACHE STRING "")
 set(LIBCXX_USE_COMPILER_RT ON CACHE BOOL "")
 set(LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")

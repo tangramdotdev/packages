@@ -12,8 +12,12 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -gline-tables-only -DNDEBUG" CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -gline-tables-only -DNDEBUG" CACHE STRING "")
 
-# Mirror the stage1 configuration to use all LLVM components.
-set(CLANG_DEFAULT_CXX_STDLIB "libc++" CACHE STRING "")
+# Mirror the stage1 configuration to use LLVM components.
+# NOTE: Do not set CLANG_DEFAULT_CXX_STDLIB here. Stage2 runtimes configure
+# has the same chicken-and-egg issue as stage1 (compiler-rt needs to link
+# -lc++ but libc++ hasn't been built yet). Instead, stage2 is compiled with
+# -stdlib=libc++ via BOOTSTRAP_CMAKE_CXX_FLAGS, and the SDK proxy adds
+# -stdlib=libc++ for end users via wrapArgs.
 set(CLANG_DEFAULT_RTLIB "compiler-rt" CACHE STRING "")
 set(LIBCXX_USE_COMPILER_RT ON CACHE BOOL "")
 set(LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")
