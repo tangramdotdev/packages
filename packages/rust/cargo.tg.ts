@@ -316,6 +316,7 @@ export TGRUSTC_RUN_MODE=1
 export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
 export TGRUSTC_SOURCE_DIR="$PWD"
+export TGRUSTC_CARGO="${toolchainDir}/bin/cargo"
 # Snapshot host env var names before cargo runs so the proxy can identify
 # vars added by cargo from build script cargo:rustc-env=KEY=VALUE output.
 export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
@@ -331,18 +332,13 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 		featureFlags.push(`--features "${features.join(",")}"`);
 	}
 
-	// When feature flags are specified, extract the cargo subcommand ($1),
-	// inject the flags, then pass remaining args (${@:2}). This ensures
-	// --features comes before any -- separator the user might pass.
-	// The user can add more --features on the CLI (cargo merges them additively).
-	// When the proxy is enabled, add unstable flags and --config for host.runner
-	// support so that build scripts are wrapped in Tangram processes and cached.
-	// Without this, native build scripts (cc-rs, cmake) produce non-deterministic
-	// output on each run, causing cache misses for all dependent crates.
+	// When the proxy is enabled, use the Tangram-packaged nightly cargo to
+	// enable -Zhost-config and host.runner support. The host's stable cargo
+	// silently ignores -Z flags, preventing runner mode from working.
 	const os = std.triple.os(host);
 	const hostLinker = os === "darwin" ? "clang" : "gcc";
 	const cargoCmd = proxy
-		? `cargo -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config "host.runner = [\\"$RUSTC_WRAPPER\\", \\"runner\\"]" --config 'host.linker = "${hostLinker}"'`
+		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config "host.runner = [\\"$RUSTC_WRAPPER\\", \\"runner\\"]" --config 'host.linker = "${hostLinker}"'`
 		: `cargo`;
 	const execLine =
 		featureFlags.length > 0
@@ -372,7 +368,7 @@ ${line}`,
 	const preSetup = pre ? await tg`${pre}` : "";
 	const exportsBlock = exports.join("\n");
 	const script = tg`#!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
 ${exportsBlock}
 ${envSetup}
 ${vendorSetup}
