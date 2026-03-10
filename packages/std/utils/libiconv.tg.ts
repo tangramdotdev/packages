@@ -3,14 +3,14 @@ import { autotoolsInternal, prerequisites } from "../utils.tg.ts";
 
 export const metadata = {
 	name: "libiconv",
-	version: "1.18",
-	tag: "libiconv/1.18",
+	version: "1.19",
+	tag: "libiconv/1.19",
 };
 
 export const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8";
+		"sha256:88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6";
 	return std.download.fromGnu({ name, version, checksum });
 };
 

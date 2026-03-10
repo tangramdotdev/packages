@@ -5,8 +5,8 @@ export const metadata = {
 	name: "libiconv",
 	license: "LGPL-2.1-or-later",
 	repository: "https://git.savannah.gnu.org/git/libiconv.git",
-	version: "1.18",
-	tag: "libiconv/1.18",
+	version: "1.19",
+	tag: "libiconv/1.19",
 	provides: {
 		binaries: ["iconv"],
 		headers: ["iconv.h", "libcharset.h", "localcharset.h"],
@@ -20,7 +20,7 @@ export const metadata = {
 const source = () => {
 	const { name, version } = metadata;
 	const checksum =
-		"sha256:3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8";
+		"sha256:88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6";
 	return std.download.fromGnu({ name, version, checksum });
 };
 
