@@ -543,11 +543,18 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	let mut env = BTreeMap::new();
 	let mut env_pending: Vec<(String, String)> = Vec::new();
 	let run_mode = std::env::var("TGRUSTC_RUN_MODE").is_ok();
-	for (name, value) in std::env::vars().filter(|(name, _)| {
+	for (name, value) in std::env::vars().filter(|(name, value)| {
 		if is_excluded_proxy_env(name) || name == "CARGO_MANIFEST_DIR" {
 			return false;
 		}
-		!run_mode || is_allowed_runner_env(name)
+		if !run_mode {
+			return true;
+		}
+		// In run mode, allow vars whose values are artifact paths (e.g.
+		// RUSTY_V8_ARCHIVE set by tangram.ts to a pre-downloaded artifact).
+		is_allowed_runner_env(name)
+			|| value.contains("/.tangram/artifacts/")
+			|| value.contains("/opt/tangram/artifacts/")
 	}) {
 		if name == "PATH" {
 			env.insert(name, tangram_std::unrender(&value)?.into());
@@ -564,6 +571,16 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		for ((name, _), value) in env_pending.into_iter().zip(resolved) {
 			env.insert(name, value);
 		}
+	}
+
+	// When TGRUSTC_SANDBOX_SDK is set (run mode), set the command's PATH to
+	// the SDK's bin directory so that build scripts requiring a C compiler
+	// (cc-rs, cmake) can find tools inside the sandbox.
+	if let Ok(sdk_path) = std::env::var("TGRUSTC_SANDBOX_SDK") {
+		let sdk_template = tangram_std::unrender(&sdk_path)?;
+		let mut components = sdk_template.components;
+		components.push("/bin".to_owned().into());
+		env.insert("PATH".to_owned(), tg::Template { components }.into());
 	}
 
 	// Set runner driver mode environment variables.
@@ -1632,6 +1649,12 @@ fn is_allowed_runner_env(name: &str) -> bool {
 	}
 
 	// Build scripts may read CARGO_MANIFEST_DIR (the inner driver overrides it).
+
+	// Cargo-provided build script env vars not covered by the prefix matches
+	// in is_allowed_proxy_env.
+	if name == "CARGO_MANIFEST_LINKS" || name == "RUSTC_LINKER" {
+		return true;
+	}
 
 	// Build scripts may need library/include paths for native compilation.
 	if name.starts_with("PKG_CONFIG")

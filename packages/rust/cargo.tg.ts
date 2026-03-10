@@ -209,11 +209,6 @@ export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
 	const target = target_ ? rustTriple(target_) : rustHost;
 	const crossCompiling = target !== rustHost;
 
-	// The run() command executes unsandboxed via tg run, inheriting the host's environment
-	// (PATH, cc, etc.). All Tangram-specific configuration is set inside the script so
-	// that the host's env is preserved. Do not set the command's env field — tg run
-	// replaces the entire process env when one is provided.
-
 	// Optionally vendor dependencies.
 	let vendorSetup: string | tg.Template = "";
 	if (cargoLock || useCargoVendor) {
@@ -320,6 +315,7 @@ export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"
 export TGRUSTC_RUN_MODE=1
 export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
+export TGRUSTC_SOURCE_DIR="$PWD"
 # Snapshot host env var names before cargo runs so the proxy can identify
 # vars added by cargo from build script cargo:rustc-env=KEY=VALUE output.
 export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
@@ -339,16 +335,46 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 	// inject the flags, then pass remaining args (${@:2}). This ensures
 	// --features comes before any -- separator the user might pass.
 	// The user can add more --features on the CLI (cargo merges them additively).
+	// When the proxy is enabled, add unstable flags and --config for host.runner
+	// support so that build scripts are wrapped in Tangram processes and cached.
+	// Without this, native build scripts (cc-rs, cmake) produce non-deterministic
+	// output on each run, causing cache misses for all dependent crates.
+	const os = std.triple.os(host);
+	const hostLinker = os === "darwin" ? "clang" : "gcc";
+	const cargoCmd = proxy
+		? `cargo -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config "host.runner = [\\"$RUSTC_WRAPPER\\", \\"runner\\"]" --config 'host.linker = "${hostLinker}"'`
+		: `cargo`;
 	const execLine =
 		featureFlags.length > 0
-			? `exec cargo "$1" ${featureFlags.join(" ")} "\${@:2}"`
-			: `exec cargo "$@"`;
+			? `exec ${cargoCmd} "$1" ${featureFlags.join(" ")} "\${@:2}"`
+			: `exec ${cargoCmd} "$@"`;
+
+	// Resolve env arg into export lines for the script. Only "set" mutations
+	// are emitted — prefix/suffix mutations target PATH-like variables already
+	// provided by the host environment.
+	let envSetup: tg.Template.Arg = "";
+	if (depsEnv !== undefined) {
+		const resolvedEnv = await std.env.arg(depsEnv);
+		const lines: Array<tg.Template> = [];
+		for (const [key, val] of Object.entries(resolvedEnv)) {
+			if (val instanceof tg.Mutation && val.inner.kind === "set") {
+				lines.push(await tg`export ${key}="${val.inner.value}"`);
+			}
+		}
+		if (lines.length > 0) {
+			envSetup = lines.reduce(
+				(acc, line) => tg`${acc}
+${line}`,
+			);
+		}
+	}
 
 	const preSetup = pre ? await tg`${pre}` : "";
 	const exportsBlock = exports.join("\n");
 	const script = tg`#!/usr/bin/env bash
 set -euo pipefail
 ${exportsBlock}
+${envSetup}
 ${vendorSetup}
 ${proxySetup}
 ${passthroughSetup}
