@@ -180,12 +180,16 @@ export const toolchain = async (arg?: LLVMArg) => {
 		// built as part of the same runtimes build and available at link time.
 		configure.args.push("-DCOMPILER_RT_USE_LLVM_UNWINDER=ON");
 		configure.args.push("-DBOOTSTRAP_COMPILER_RT_USE_LLVM_UNWINDER=ON");
-		// Disable sanitizers for stage1 — the musl sysroot has no C++ headers
-		// (libc++ is being built in the same runtimes build), so sanitizer
-		// components that #include <new> fail. Stage1 is throwaway; stage2
-		// will build sanitizers with libc++ from stage1.
+		// Disable all optional compiler-rt components for stage1. The musl
+		// sysroot has no C++ headers (libc++ is being built in the same
+		// runtimes build), so any component that includes C++ headers fails.
+		// Stage1 is throwaway — only builtins (built separately) are needed.
+		// Stage2 will build these with libc++ from stage1.
 		configure.args.push("-DCOMPILER_RT_BUILD_SANITIZERS=OFF");
+		configure.args.push("-DCOMPILER_RT_BUILD_XRAY=OFF");
 		configure.args.push("-DCOMPILER_RT_BUILD_MEMPROF=OFF");
+		configure.args.push("-DCOMPILER_RT_BUILD_LIBFUZZER=OFF");
+		configure.args.push("-DCOMPILER_RT_BUILD_PROFILE=OFF");
 	}
 
 	// Add additional flags from the target args.
