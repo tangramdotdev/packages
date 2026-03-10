@@ -173,10 +173,19 @@ export const toolchain = async (arg?: LLVMArg) => {
 	if (isMusl) {
 		configure.args.push("-DLIBCXX_HAS_MUSL_LIBC=On");
 		configure.args.push("-DBOOTSTRAP_LIBCXX_HAS_MUSL_LIBC=On");
-		// Disable scudo standalone for musl — it requires an unwinder library
-		// at configure time, but libunwind hasn't been built yet (chicken-and-egg).
-		configure.args.push("-DCOMPILER_RT_BUILD_SCUDO_STANDALONE=OFF");
-		configure.args.push("-DBOOTSTRAP_COMPILER_RT_BUILD_SCUDO_STANDALONE=OFF");
+		// Tell compiler-rt to use LLVM's libunwind instead of libgcc_s.
+		// On musl there's no libgcc_s, so multiple compiler-rt components
+		// (scudo, fuzzer tests) fail the unwinder check at configure time.
+		// Setting this flag makes all those checks succeed. libunwind is
+		// built as part of the same runtimes build and available at link time.
+		configure.args.push("-DCOMPILER_RT_USE_LLVM_UNWINDER=ON");
+		configure.args.push("-DBOOTSTRAP_COMPILER_RT_USE_LLVM_UNWINDER=ON");
+		// Disable sanitizers for stage1 — the musl sysroot has no C++ headers
+		// (libc++ is being built in the same runtimes build), so sanitizer
+		// components that #include <new> fail. Stage1 is throwaway; stage2
+		// will build sanitizers with libc++ from stage1.
+		configure.args.push("-DCOMPILER_RT_BUILD_SANITIZERS=OFF");
+		configure.args.push("-DCOMPILER_RT_BUILD_MEMPROF=OFF");
 	}
 
 	// Add additional flags from the target args.
