@@ -317,6 +317,8 @@ export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
 export TGRUSTC_SOURCE_DIR="$PWD"
 export TGRUSTC_CARGO="${toolchainDir}/bin/cargo"
+# Tell cargo to wrap build script execution with the proxy's runner mode.
+export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"
 # Snapshot host env var names before cargo runs so the proxy can identify
 # vars added by cargo from build script cargo:rustc-env=KEY=VALUE output.
 export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
@@ -338,12 +340,34 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 	const os = std.triple.os(host);
 	const hostLinker = os === "darwin" ? "clang" : "gcc";
 	const cargoCmd = proxy
-		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config "host.runner = [\\"$RUSTC_WRAPPER\\", \\"runner\\"]" --config 'host.linker = "${hostLinker}"'`
+		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'host.linker = "${hostLinker}"'`
 		: `cargo`;
-	const execLine =
-		featureFlags.length > 0
-			? `exec ${cargoCmd} "$1" ${featureFlags.join(" ")} "\${@:2}"`
-			: `exec ${cargoCmd} "$@"`;
+	// When the proxy is enabled, pass --target so cargo distinguishes host from
+	// target artifacts. Without --target, host.runner is not applied to build
+	// scripts. The target is the host triple for native builds.
+	const targetFlag = proxy ? `--target "$RUST_TARGET"` : "";
+	const insertedFlags = [targetFlag, ...featureFlags].filter(Boolean).join(" ");
+	// When --target is passed, cargo places the final binaries under
+	// target/<triple>/<profile>/ instead of target/<profile>/. After cargo
+	// finishes, symlink each executable into target/<profile>/ so that
+	// workflows switching between `tg run` and plain `cargo build` find
+	// output at the usual path. We cannot use `exec` when symlinking because
+	// post-build commands must run after cargo exits.
+	const execLine = insertedFlags
+		? proxy
+			? `${cargoCmd} "$1" ${insertedFlags} "\${@:2}"
+__cargo_status=$?
+for __f in "target/$RUST_TARGET/debug/"* "target/$RUST_TARGET/release/"*; do
+  [ -f "$__f" ] && [ -x "$__f" ] || continue
+  __name=$(basename "$__f")
+  case "$__name" in *.*) continue;; esac
+  __rel=$(echo "$__f" | sed "s|^target/|../|")
+  __dir=$(dirname "$__f" | sed "s|^target/$RUST_TARGET/||")
+  ln -sf "$__rel" "target/$__dir/$__name" 2>/dev/null || true
+done
+exit $__cargo_status`
+			: `exec ${cargoCmd} "$1" ${insertedFlags} "\${@:2}"`
+		: `exec ${cargoCmd} "$@"`;
 
 	// Resolve env arg into export lines for the script. Only "set" mutations
 	// are emitted — prefix/suffix mutations target PATH-like variables already
