@@ -163,23 +163,19 @@ export const toolchain = async (arg?: LLVMArg) => {
 		],
 	};
 
-	// Ensure stage2 is compiled against libc++ (not libstdc++) so the final
-	// toolchain binaries are self-contained. Stage1's libc++ (built as part of
-	// stage1 runtimes) is used for this linking step.
-	configure.args.push("-DBOOTSTRAP_CMAKE_CXX_FLAGS=-stdlib=libc++");
+	// Tell compiler-rt to use LLVM's libunwind instead of libgcc_s.
+	// The sysroot doesn't include libgcc_s, so compiler-rt components
+	// (scudo, fuzzer tests) fail the unwinder check at configure time.
+	// This is consistent with CLANG_DEFAULT_RTLIB=compiler-rt and
+	// LIBUNWIND_USE_COMPILER_RT=ON in the cmake caches.
+	configure.args.push("-DCOMPILER_RT_USE_LLVM_UNWINDER=ON");
+	configure.args.push("-DBOOTSTRAP_COMPILER_RT_USE_LLVM_UNWINDER=ON");
 
 	// Support musl sysroots.
 	const isMusl = std.triple.environment(host) === "musl";
 	if (isMusl) {
 		configure.args.push("-DLIBCXX_HAS_MUSL_LIBC=On");
 		configure.args.push("-DBOOTSTRAP_LIBCXX_HAS_MUSL_LIBC=On");
-		// Tell compiler-rt to use LLVM's libunwind instead of libgcc_s.
-		// On musl there's no libgcc_s, so multiple compiler-rt components
-		// (scudo, fuzzer tests) fail the unwinder check at configure time.
-		// Setting this flag makes all those checks succeed. libunwind is
-		// built as part of the same runtimes build and available at link time.
-		configure.args.push("-DCOMPILER_RT_USE_LLVM_UNWINDER=ON");
-		configure.args.push("-DBOOTSTRAP_COMPILER_RT_USE_LLVM_UNWINDER=ON");
 		// Disable all optional compiler-rt components for stage1. The musl
 		// sysroot has no C++ headers (libc++ is being built in the same
 		// runtimes build), so any component that includes C++ headers fails.
