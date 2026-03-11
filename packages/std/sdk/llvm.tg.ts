@@ -196,7 +196,19 @@ export const toolchain = async (arg?: LLVMArg) => {
 	// Add the cmake cache file last.
 	configure.args.push(tg`-C${cmakeCacheDir}/Distribution.cmake`);
 
-	const buildPhase = "cd build && ninja stage2-distribution";
+	// Seed the stage1 build tree with libc++ source headers and a stub library.
+	// Stage1 clang has CLANG_DEFAULT_CXX_STDLIB=libc++ baked in, so it needs
+	// libc++ headers and a library to satisfy the runtimes configure link test.
+	// The real libc++ is built during the runtimes step and replaces the stub.
+	// Copy (not symlink) since the runtimes cmake writes generated files here.
+	const buildPhase = tg`
+		cd build
+		mkdir -p include/c++ lib
+		cp -R ${sourceDir}/libcxx/include include/c++/v1
+		chmod -R u+w include/c++/v1
+		ar rcs lib/libc++.a
+		ninja stage2-distribution
+	`;
 	const install = "ninja stage2-install-distribution";
 	const phases = { prepare, configure, build: buildPhase, install };
 
