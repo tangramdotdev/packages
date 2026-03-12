@@ -148,7 +148,8 @@ export const toolchain = async (arg?: LLVMArg) => {
 	const stage2ExeLinkerFlags = tg`-Wl,-dynamic-linker=${sysroot}/lib/${ldsoName} -unwindlib=libunwind`;
 
 	// Ensure that stage2 unproxied binaries are able to locate libraries during the build, without hardcoding rpaths. We will wrap them afterwards.
-	const prepare = tg`set -x && export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:$HOME/build/lib"`;
+	// The lib/${host} entry is needed because stage1 runtimes use per-target directories.
+	const prepare = tg`set -x && export HOME=$PWD && export LD_LIBRARY_PATH="${sysroot}/lib:${zlibArtifact}/lib:$HOME/build/lib:$HOME/build/lib/${host}"`;
 
 	// Define default flags.
 	const configure = {
@@ -246,8 +247,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	// Collect library paths for non-clang binaries that may not have RPATH set.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
-	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
-	const libraryPaths = [libDir, hostLibDir];
+	const libraryPaths = [libDir];
 
 	// Wrap all ELF binaries in the bin directory, except clang-XX which has
 	// $ORIGIN RPATH and must not be wrapped to preserve /proc/self/exe for -cc1.
