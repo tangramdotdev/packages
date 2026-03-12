@@ -229,8 +229,9 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		cp ${bindgenPkg}/bin/bindgen third_party/rust-toolchain/bin/bindgen
 
 		# Copy libclang.so and its dependency libc++.so into the Rust toolchain so that bindgen can find them.
+		# libc++.so lives in the per-target runtime directory.
 		cp "$CLANG_BASE_PATH"/lib/libclang.so* third_party/rust-toolchain/lib/
-		cp "$CLANG_BASE_PATH"/lib/libc++.so* third_party/rust-toolchain/lib/
+		cp "$CLANG_BASE_PATH"/lib/${host}/libc++.so* third_party/rust-toolchain/lib/
 
 		# Create the VERSION file that GN expects.
 		RUSTC_VERSION=$(third_party/rust-toolchain/bin/rustc -V)

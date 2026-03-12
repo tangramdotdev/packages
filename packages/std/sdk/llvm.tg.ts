@@ -157,9 +157,10 @@ export const toolchain = async (arg?: LLVMArg) => {
 			tg`-DBOOTSTRAP_CMAKE_EXE_LINKER_FLAGS='${stage2ExeLinkerFlags}'`,
 			tg`-DDEFAULT_SYSROOT=${sysroot}`,
 			`-DLLVM_HOST_TRIPLE=${host}`,
+			`-DTANGRAM_HOST_TRIPLE=${host}`,
 			"-DLLVM_PARALLEL_LINK_JOBS=1",
 			tg`-DZLIB_ROOT=${zlibArtifact}`,
-			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT"`,
+			`-DCLANG_BOOTSTRAP_PASSTHROUGH="DEFAULT_SYSROOT;LLVM_PARALLEL_LINK_JOBS;ZLIB_ROOT;TANGRAM_HOST_TRIPLE"`,
 		],
 	};
 
@@ -247,7 +248,8 @@ export const toolchain = async (arg?: LLVMArg) => {
 
 	// Collect library paths for non-clang binaries that may not have RPATH set.
 	const libDir = llvmArtifact.get("lib").then(tg.Directory.expect);
-	const libraryPaths = [libDir];
+	const hostLibDir = libDir.then((d) => d.get(host)).then(tg.Directory.expect);
+	const libraryPaths = [libDir, hostLibDir];
 
 	// Wrap all ELF binaries in the bin directory, except clang-XX which has
 	// $ORIGIN RPATH and must not be wrapped to preserve /proc/self/exe for -cc1.
