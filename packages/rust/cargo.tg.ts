@@ -340,7 +340,7 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 	const os = std.triple.os(host);
 	const hostLinker = os === "darwin" ? "clang" : "gcc";
 	const cargoCmd = proxy
-		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'host.linker = "${hostLinker}"'`
+		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config 'host.linker = "${hostLinker}"' --config "host.runner = '$CARGO_HOST_RUNNER'"`
 		: `cargo`;
 	// When the proxy is enabled, pass --target so cargo distinguishes host from
 	// target artifacts. Without --target, host.runner is not applied to build
@@ -392,7 +392,7 @@ ${line}`,
 	const preSetup = pre ? await tg`${pre}` : "";
 	const exportsBlock = exports.join("\n");
 	const script = tg`#!/usr/bin/env bash
-set -euxo pipefail
+set -euo pipefail
 ${exportsBlock}
 ${envSetup}
 ${vendorSetup}

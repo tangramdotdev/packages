@@ -8,7 +8,7 @@ mod process;
 mod proxy;
 
 // FIXME REMOVE
-// WATERMARK 4
+// WATERMARK 10
 
 fn main() {
 	tangram_std::tracing::setup("TGRUSTC_TRACING");

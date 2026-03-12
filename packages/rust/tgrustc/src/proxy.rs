@@ -473,6 +473,21 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	let _span =
 		tracing::info_span!("runner", crate = %crate_name, binary = %script_binary).entered();
 
+	// Check if this crate should bypass the runner and exec directly. Some build
+	// scripts (e.g. rusty_v8) walk up parent directories from OUT_DIR to create
+	// shared output directories, which is incompatible with the runner's sandbox
+	// capture. TGRUSTC_RUNNER_PASSTHROUGH is a comma-separated list of crate names.
+	if let Ok(passthrough) = std::env::var("TGRUSTC_RUNNER_PASSTHROUGH") {
+		if passthrough.split(',').any(|s| s.trim() == crate_name) {
+			tracing::info!(%crate_name, "passthrough: bypassing runner sandbox");
+			let remaining_args: Vec<String> = std::env::args().skip(2).collect();
+			let err = std::process::Command::new(&remaining_args[0])
+				.args(&remaining_args[1..])
+				.exec();
+			return Err(tg::error!("failed to exec build script: {err}"));
+		}
+	}
+
 	// Create a client.
 	let tg = tg::Client::with_env()?;
 	let tg = &tg;
