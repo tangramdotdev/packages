@@ -228,8 +228,9 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		# Add bindgen to the toolchain directory.
 		cp ${bindgenPkg}/bin/bindgen third_party/rust-toolchain/bin/bindgen
 
-		# Copy libclang.so into the Rust toolchain so that bindgen can find it.
+		# Copy libclang.so and its dependency libc++.so into the Rust toolchain so that bindgen can find them.
 		cp "$CLANG_BASE_PATH"/lib/libclang.so* third_party/rust-toolchain/lib/
+		cp "$CLANG_BASE_PATH"/lib/libc++.so* third_party/rust-toolchain/lib/
 
 		# Create the VERSION file that GN expects.
 		RUSTC_VERSION=$(third_party/rust-toolchain/bin/rustc -V)
@@ -252,6 +253,8 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		use_glib = false
 		clang_version = "22"
 		target_cpu = "${targetCpu}"
+		added_rust_stdlib_libs = ["adler2"]
+		removed_rust_stdlib_libs = ["adler"]
 		GNARGS
 
 		# Generate build files and build.

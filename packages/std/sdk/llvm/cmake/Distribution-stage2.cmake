@@ -32,15 +32,16 @@ set(LLVM_ENABLE_LIBEDIT OFF CACHE BOOL "")
 set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL "")
 set(CMAKE_INSTALL_LIBDIR lib CACHE STRING "")
 
+# Install runtime libraries (libc++, libc++abi, libunwind) directly into lib/
+# rather than lib/<triple>/. This is a single-target toolchain, so per-target
+# directories add complexity with no benefit and make it harder for consumers
+# to locate runtime libraries alongside other LLVM shared libraries.
+set(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR OFF CACHE BOOL "")
+
 # Configure RPATH for installed binaries. Use $ORIGIN for relocatable binaries.
-# TANGRAM_HOST_TRIPLE is passed from llvm.tg.ts to set the host-specific library path.
 set(CMAKE_SKIP_INSTALL_RPATH OFF CACHE BOOL "")
 set(CMAKE_BUILD_WITH_INSTALL_RPATH ON CACHE BOOL "")
-if(TANGRAM_HOST_TRIPLE)
-  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/${TANGRAM_HOST_TRIPLE}" CACHE STRING "")
-else()
-  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib" CACHE STRING "")
-endif()
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib" CACHE STRING "")
 
 # Define toolchain components.
 set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")
