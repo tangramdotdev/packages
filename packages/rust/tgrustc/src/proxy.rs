@@ -482,17 +482,9 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 			tracing::info!(%crate_name, "passthrough: bypassing runner sandbox");
 			let remaining_args: Vec<String> = std::env::args().skip(2).collect();
 
-			// Inject DYLD_INSERT_LIBRARIES to trace unlink/rename syscalls on
-			// .tmp files. This helps diagnose the v8 build.rs ENOENT issue where
-			// the .tmp file vanishes between copy_archive and remove_file.
-			let mut cmd = std::process::Command::new(&remaining_args[0]);
-			cmd.args(&remaining_args[1..]);
-			cmd.env("RUST_BACKTRACE", "1");
-			if let Ok(dylib) = std::env::var("TGRUSTC_UNLINK_TRACE_DYLIB") {
-				tracing::info!(%crate_name, %dylib, "passthrough: injecting unlink trace dylib");
-				cmd.env("DYLD_INSERT_LIBRARIES", &dylib);
-			}
-			let status = cmd.status();
+			let status = std::process::Command::new(&remaining_args[0])
+				.args(&remaining_args[1..])
+				.status();
 
 			match status {
 				Ok(s) if s.success() => {
