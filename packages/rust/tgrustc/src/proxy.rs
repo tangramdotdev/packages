@@ -213,14 +213,13 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 	// Set CARGO_MANIFEST_DIR for proc-macros that read Cargo.toml.
 	env.insert("CARGO_MANIFEST_DIR".to_owned(), source_directory.clone());
 
-	// When TGRUSTC_SANDBOX_SDK is set (run mode), add the SDK's bin directory
-	// to the command's PATH so that crates requiring a linker (proc-macros,
-	// build scripts, cdylib, dylib, bin) can be compiled inside the sandbox.
-	if let Ok(sdk_path) = std::env::var("TGRUSTC_SANDBOX_SDK") {
-		let sdk_template = tangram_std::unrender(&sdk_path)?;
-		let mut components = sdk_template.components;
-		components.push("/bin".to_owned().into());
-		env.insert("PATH".to_owned(), tg::Template { components }.into());
+	// In run mode, include PATH from the host env so that the inner sandbox
+	// process has access to the SDK (for linking), bun, and other tools.
+	// The SDK's bin dir is prepended to PATH in the setup script (cargo.tg.ts).
+	if run_mode {
+		if let Ok(path_value) = std::env::var("PATH") {
+			env.insert("PATH".to_owned(), tangram_std::unrender(&path_value)?.into());
+		}
 	}
 
 	tracing::info!(?source_directory, "source_directory value for inner build");
@@ -601,16 +600,6 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		for ((name, _), value) in env_pending.into_iter().zip(resolved) {
 			env.insert(name, value);
 		}
-	}
-
-	// When TGRUSTC_SANDBOX_SDK is set (run mode), set the command's PATH to
-	// the SDK's bin directory so that build scripts requiring a C compiler
-	// (cc-rs, cmake) can find tools inside the sandbox.
-	if let Ok(sdk_path) = std::env::var("TGRUSTC_SANDBOX_SDK") {
-		let sdk_template = tangram_std::unrender(&sdk_path)?;
-		let mut components = sdk_template.components;
-		components.push("/bin".to_owned().into());
-		env.insert("PATH".to_owned(), tg::Template { components }.into());
 	}
 
 	// Set runner driver mode environment variables.

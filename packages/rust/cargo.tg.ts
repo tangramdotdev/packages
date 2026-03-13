@@ -314,7 +314,7 @@ export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
 export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"
 export TGRUSTC_RUN_MODE=1
 export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
-export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
+export PATH="${sandboxSdk}/bin:$PATH"
 export TGRUSTC_SOURCE_DIR="$PWD"
 export TGRUSTC_CARGO="${toolchainDir}/bin/cargo"
 # Tell cargo to wrap build script execution with the proxy's runner mode.
