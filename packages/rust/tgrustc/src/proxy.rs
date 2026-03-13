@@ -216,6 +216,9 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 	// When TGRUSTC_SANDBOX_SDK is set (run mode), add the SDK's bin directory
 	// to the command's PATH so that crates requiring a linker (proc-macros,
 	// build scripts, cdylib, dylib, bin) can be compiled inside the sandbox.
+	// The SDK cannot be added to the host's PATH because the wrapped clang
+	// would break passthrough compilation of workspace members (incremental
+	// compilation files cause checkin failures).
 	if let Ok(sdk_path) = std::env::var("TGRUSTC_SANDBOX_SDK") {
 		let sdk_template = tangram_std::unrender(&sdk_path)?;
 		let mut components = sdk_template.components;
@@ -434,8 +437,7 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 				.as_deref()
 				.ok_or_else(|| tg::error!("expected --out-dir argument from cargo"))?,
 		);
-		let copy_all = std::env::var("TGRUSTC_RUN_MODE").is_ok();
-		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs, copy_all).await?;
+		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs).await?;
 	}
 
 	// Now that symlinks are created, forward stdout/stderr.
@@ -589,13 +591,29 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		if name == "PATH" {
 			env.insert(name, tangram_std::unrender(&value)?.into());
 		} else {
-			env_pending.push((name, value));
+			// For values that are not absolute paths pointing to existing
+			// directories, unrender is sufficient and avoids an expensive checkin.
+			let needs_checkin = value.starts_with('/')
+				&& std::path::Path::new(&value).exists();
+			if needs_checkin {
+				env_pending.push((name, value));
+			} else {
+				let resolved = tangram_std::unrender(&value)?;
+				env.insert(name, resolved.into());
+			}
 		}
 	}
 	if !env_pending.is_empty() {
-		let env_futures = env_pending.iter().map(|(_, value)| {
+		let env_futures = env_pending.iter().map(|(name, value)| {
+			let name = name.clone();
 			let value = value.clone();
-			async move { process::content_address_path(tg, &value).await }
+			async move {
+				process::content_address_path(tg, &value).await.map_err(|e| {
+					tg::error!(
+						"failed to content-address env var {name}={value}: {e}"
+					)
+				})
+			}
 		});
 		let resolved: Vec<tg::Value> = futures::future::try_join_all(env_futures).await?;
 		for ((name, _), value) in env_pending.into_iter().zip(resolved) {
@@ -603,14 +621,24 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		}
 	}
 
-	// When TGRUSTC_SANDBOX_SDK is set (run mode), set the command's PATH to
-	// the SDK's bin directory so that build scripts requiring a C compiler
-	// (cc-rs, cmake) can find tools inside the sandbox.
+	// When TGRUSTC_SANDBOX_SDK is set (run mode), prepend the SDK's bin
+	// directory to PATH so that build scripts requiring a C compiler (cc-rs,
+	// cmake) can find tools inside the sandbox while preserving other PATH
+	// entries from the host env.
 	if let Ok(sdk_path) = std::env::var("TGRUSTC_SANDBOX_SDK") {
-		let sdk_template = tangram_std::unrender(&sdk_path)?;
-		let mut components = sdk_template.components;
-		components.push("/bin".to_owned().into());
-		env.insert("PATH".to_owned(), tg::Template { components }.into());
+		let mut prefix = tangram_std::unrender(&sdk_path)?.components;
+		prefix.push("/bin".to_owned().into());
+		prepend_to_path(&mut env, prefix);
+	}
+
+	// When TGRUSTC_RUNNER_EXTRA_PATH is set, prepend additional directories
+	// to PATH. This allows the caller to inject tool paths (e.g. bun,
+	// node_modules/.bin) that are not reachable via standard PATH mutations
+	// because tg run injects SDK into the base process PATH and cargo.run()
+	// only exports "set" mutations to avoid inheriting those SDK entries.
+	if let Ok(extra_path) = std::env::var("TGRUSTC_RUNNER_EXTRA_PATH") {
+		let prefix = tangram_std::unrender(&extra_path)?.components;
+		prepend_to_path(&mut env, prefix);
 	}
 
 	// Set runner driver mode environment variables.
@@ -1206,10 +1234,8 @@ async fn copy_artifact_to_file(
 
 /// Write build outputs to cargo's output directory.
 ///
-/// Dependency files (.rlib, .rmeta, .d, .so, .dylib) are symlinked to the artifact
-/// store for speed. Binaries are copied with explicit executable permissions (0o755)
-/// to ensure proper execution on all platforms, particularly Linux which requires
-/// the executable bit to be set.
+/// Output files are symlinked to the artifact store for speed. The only exception
+/// is `.d` (dependency) files, which cargo needs to overwrite on subsequent builds.
 ///
 /// For binaries with metadata suffixes, also creates convenience symlinks
 /// (e.g., `build_script_build-abc123` gets a `build-script-build` symlink).
@@ -1221,7 +1247,6 @@ async fn write_outputs_to_cargo(
 	build_dir: &tg::Directory,
 	output_directory: &PathBuf,
 	externs: &[(String, String)],
-	copy_all: bool,
 ) -> tg::Result<()> {
 	// Create the output directory if it does not exist.
 	if !output_directory.exists() {
@@ -1284,9 +1309,9 @@ async fn write_outputs_to_cargo(
 		}
 	}
 
-	// Write outputs to cargo's output directory. When copy_all is true (tg run mode),
-	// skip caching since we will copy instead of symlinking.
-	if !copy_all {
+	// Ensure all output artifacts are materialized in the local store so we
+	// can symlink to them. This is a single batched request to the daemon.
+	{
 		let all_artifact_ids: Vec<tg::artifact::Id> =
 			entries.iter().map(|(_, artifact)| artifact.id()).collect();
 		process::batch_cache(tg, all_artifact_ids).await?;
@@ -1302,21 +1327,13 @@ async fn write_outputs_to_cargo(
 				tokio::fs::remove_file(&to).await.ok();
 			}
 
-			if copy_all {
-				// Copy the file. Dependency files get 0o644 (writable so plain
-				// cargo can overwrite them later). Binaries get 0o755.
-				let mode = if is_dependency_file(&filename) {
-					0o644
-				} else {
-					0o755
-				};
-				copy_artifact_to_file(tg, artifact, &to, &filename, mode).await?;
-			} else if Path::new(&filename).extension().is_some_and(|e| e == "d") {
+			if Path::new(&filename).extension().is_some_and(|e| e == "d") {
 				// Copy .d files with writable permissions. Cargo needs to overwrite
 				// them on subsequent builds, which fails if they are read-only symlinks.
 				copy_artifact_to_file(tg, artifact, &to, &filename, 0o644).await?;
 			} else {
-				// Symlink to the artifact store.
+				// Symlink to the artifact store. Cargo's fingerprinting follows
+				// symlinks, so it sees the artifact's stable mtime and size.
 				process::symlink_cached_artifact(&artifact, &to).await?;
 			}
 
@@ -1540,6 +1557,24 @@ fn expand_member_glob(source_dir: &str, pattern: &str) -> Vec<String> {
 				.map(ToOwned::to_owned)
 		})
 		.collect()
+}
+
+/// Prepend template components to the PATH entry in an env map, joining with `:`.
+fn prepend_to_path(
+	env: &mut std::collections::BTreeMap<String, tg::Value>,
+	mut prefix: Vec<tg::template::Component>,
+) {
+	if let Some(tg::Value::Template(existing)) = env.get("PATH") {
+		prefix.push(":".to_owned().into());
+		prefix.extend(existing.components.iter().cloned());
+	}
+	env.insert(
+		"PATH".to_owned(),
+		tg::Template {
+			components: prefix,
+		}
+		.into(),
+	);
 }
 
 /// Check whether an environment variable should be excluded from the proxy

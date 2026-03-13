@@ -18,6 +18,7 @@ pedantic = { level = "warn", priority = -1 }
 result_large_err = "allow"
 
 [dependencies]
+fnv = "1"
 futures = "0.3"
 rustix = { version = "1", features = ["stdio"] }
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "4fc03afce598d60269600a0466412c5d5f29b07b" }

@@ -371,7 +371,9 @@ exit $__cargo_status`
 
 	// Resolve env arg into export lines for the script. Only "set" mutations
 	// are emitted — prefix/suffix mutations target PATH-like variables already
-	// provided by the host environment.
+	// provided by the host environment. Note: `tg run` injects SDK into the
+	// base process PATH, so emitting prefix/suffix for PATH would include
+	// wrapped clang, breaking passthrough compilation.
 	let envSetup: tg.Template.Arg = "";
 	if (depsEnv !== undefined) {
 		const resolvedEnv = await std.env.arg(depsEnv);

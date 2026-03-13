@@ -2358,6 +2358,7 @@ dependencies = [
 name = "tgrustc"
 version = "0.0.0"
 dependencies = [
+ "fnv",
  "futures",
  "glob",
  "rustix 1.1.4",

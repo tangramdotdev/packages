@@ -2,6 +2,7 @@ use futures::TryStreamExt as _;
 use std::{
 	path::{Path, PathBuf},
 	pin::pin,
+	sync::LazyLock,
 };
 use tangram_client::prelude::*;
 use tangram_futures::stream::TryExt as _;
@@ -188,12 +189,65 @@ pub(crate) async fn forward_logs(stdout: &[u8], stderr: &[u8]) -> tg::Result<()>
 	Ok(())
 }
 
+/// Directory for caching checkin results across proxy invocations. Stored in the
+/// cargo target directory so it persists across invocations within a build but is
+/// cleared by `cargo clean`. Computed once per process.
+///
+/// Resolution order:
+/// 1. `CARGO_TARGET_DIR` or `TARGET_DIR` env var (explicit target dir).
+/// 2. In `tg run` mode, `TGRUSTC_SOURCE_DIR` points to the workspace root, so
+///    `<source_dir>/target` is the default cargo target directory.
+static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	let target_dir = std::env::var("CARGO_TARGET_DIR")
+		.or_else(|_| std::env::var("TARGET_DIR"))
+		.map(PathBuf::from)
+		.ok()
+		.or_else(|| {
+			let source_dir = std::env::var("TGRUSTC_SOURCE_DIR").ok()?;
+			let target = PathBuf::from(source_dir).join("target");
+			target.exists().then_some(target)
+		})?;
+	let dir = target_dir.join(".tgrustc_cache");
+	std::fs::create_dir_all(&dir).ok()?;
+	Some(dir)
+});
+
+/// Try to read a cached artifact ID for a previously checked-in path.
+fn read_checkin_cache(path: &str) -> Option<tg::artifact::Id> {
+	let cache_dir = CHECKIN_CACHE_DIR.as_ref()?;
+	let key = checkin_cache_key(path);
+	let contents = std::fs::read_to_string(cache_dir.join(key)).ok()?;
+	contents.trim().parse().ok()
+}
+
+/// Write a checkin result to the cache. Uses atomic rename for concurrent safety.
+fn write_checkin_cache(path: &str, artifact: &tg::Artifact) {
+	let Some(cache_dir) = CHECKIN_CACHE_DIR.as_ref() else {
+		return;
+	};
+	let key = checkin_cache_key(path);
+	let tmp = cache_dir.join(format!("{key}.{}", std::process::id()));
+	if std::fs::write(&tmp, artifact.id().to_string()).is_ok() {
+		std::fs::rename(&tmp, cache_dir.join(key)).ok();
+	}
+}
+
+/// Compute a deterministic cache filename from a path string using FNV-1a.
+/// `DefaultHasher` cannot be used here because its seed is randomized per process,
+/// producing different keys across proxy invocations.
+fn checkin_cache_key(path: &str) -> String {
+	use std::hash::{Hash as _, Hasher as _};
+	let mut hasher = fnv::FnvHasher::default();
+	path.hash(&mut hasher);
+	format!("{:016x}", hasher.finish())
+}
+
 /// Content-address a path, returning an artifact-based template value.
 pub(crate) async fn content_address_path(
 	tg: &impl tg::Handle,
 	path: &str,
 ) -> tg::Result<tg::Value> {
-	// First, try to unrender the path. This handles:
+	// First, try to unrender the path. This handles artifact-containing paths.
 	let template = tangram_std::unrender(path)?;
 
 	// Check if the template contains any artifacts. If so, use it.
@@ -207,9 +261,18 @@ pub(crate) async fn content_address_path(
 		return Ok(template.into());
 	}
 
-	// The path doesn't contain artifacts. Check it in,
+	// The path doesn't contain artifacts. Check it in.
 	let path_obj = Path::new(path);
 	if path_obj.is_absolute() && path_obj.exists() {
+		// Check the file-based cache first. All proxy invocations for the same
+		// cargo build share this cache, avoiding redundant checkins of the same
+		// path (e.g. FDB_LIB_PATH resolved 697 times).
+		if let Some(cached_id) = read_checkin_cache(path) {
+			tracing::trace!(?path, "checkin cache hit");
+			let artifact = tg::Artifact::with_id(cached_id);
+			return Ok(tangram_std::template_from_artifact(artifact).into());
+		}
+
 		tracing::trace!(?path, "content-addressing absolute path via checkin");
 
 		let artifact = tg::checkin(
@@ -218,7 +281,7 @@ pub(crate) async fn content_address_path(
 				options: tg::checkin::Options {
 					destructive: false,
 					deterministic: true,
-					ignore: false,
+					ignore: true,
 					local_dependencies: false,
 					root: true,
 					solve: false,
@@ -229,6 +292,8 @@ pub(crate) async fn content_address_path(
 			},
 		)
 		.await?;
+
+		write_checkin_cache(path, &artifact);
 
 		return Ok(tangram_std::template_from_artifact(artifact).into());
 	}
