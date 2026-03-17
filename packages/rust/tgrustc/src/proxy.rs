@@ -109,12 +109,7 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 		(tg::Value, Option<String>),
 		tg::Value,
 		tg::command::Executable,
-	) = futures::future::try_join3(
-		source_future,
-		out_dir_future,
-		resolve_exe_future,
-	)
-	.await?;
+	) = futures::future::try_join3(source_future, out_dir_future, resolve_exe_future).await?;
 
 	// When the source is a real filesystem path (not an artifact), crate_subpath
 	// will be None. Derive it from the workspace root so that workspace-relative
@@ -479,29 +474,29 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	// scripts (e.g. rusty_v8) walk up parent directories from OUT_DIR to create
 	// shared output directories, which is incompatible with the runner's sandbox
 	// capture. TGRUSTC_RUNNER_PASSTHROUGH is a comma-separated list of crate names.
-	if let Ok(passthrough) = std::env::var("TGRUSTC_RUNNER_PASSTHROUGH") {
-		if passthrough.split(',').any(|s| s.trim() == crate_name) {
-			tracing::info!(%crate_name, "passthrough: bypassing runner sandbox");
-			let remaining_args: Vec<String> = std::env::args().skip(2).collect();
+	if let Ok(passthrough) = std::env::var("TGRUSTC_RUNNER_PASSTHROUGH")
+		&& passthrough.split(',').any(|s| s.trim() == crate_name)
+	{
+		tracing::info!(%crate_name, "passthrough: bypassing runner sandbox");
+		let remaining_args: Vec<String> = std::env::args().skip(2).collect();
 
-			let status = std::process::Command::new(&remaining_args[0])
-				.args(&remaining_args[1..])
-				.status();
+		let status = std::process::Command::new(&remaining_args[0])
+			.args(&remaining_args[1..])
+			.status();
 
-			match status {
-				Ok(s) if s.success() => {
-					tracing::info!(%crate_name, "passthrough: build script succeeded");
-					std::process::exit(0);
-				},
-				Ok(s) => {
-					let code = s.code().unwrap_or(1);
-					tracing::error!(%crate_name, exit_code = code, "passthrough: build script failed");
-					std::process::exit(code);
-				},
-				Err(e) => {
-					return Err(tg::error!("failed to spawn build script: {e}"));
-				},
-			}
+		match status {
+			Ok(s) if s.success() => {
+				tracing::info!(%crate_name, "passthrough: build script succeeded");
+				std::process::exit(0);
+			},
+			Ok(s) => {
+				let code = s.code().unwrap_or(1);
+				tracing::error!(%crate_name, exit_code = code, "passthrough: build script failed");
+				std::process::exit(code);
+			},
+			Err(e) => {
+				return Err(tg::error!("failed to spawn build script: {e}"));
+			},
 		}
 	}
 
@@ -593,8 +588,7 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		} else {
 			// For values that are not absolute paths pointing to existing
 			// directories, unrender is sufficient and avoids an expensive checkin.
-			let needs_checkin = value.starts_with('/')
-				&& std::path::Path::new(&value).exists();
+			let needs_checkin = value.starts_with('/') && std::path::Path::new(&value).exists();
 			if needs_checkin {
 				env_pending.push((name, value));
 			} else {
@@ -608,11 +602,11 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 			let name = name.clone();
 			let value = value.clone();
 			async move {
-				process::content_address_path(tg, &value).await.map_err(|e| {
-					tg::error!(
-						"failed to content-address env var {name}={value}: {e}"
-					)
-				})
+				process::content_address_path(tg, &value)
+					.await
+					.map_err(|e| {
+						tg::error!("failed to content-address env var {name}={value}: {e}")
+					})
 			}
 		});
 		let resolved: Vec<tg::Value> = futures::future::try_join_all(env_futures).await?;
@@ -1046,14 +1040,18 @@ async fn process_dependencies(
 		file_catalog
 	};
 
-	// Resolve all files to artifacts. Partition into artifact-store paths
-	// (resolvable via unrender with no daemon calls) and real file paths
-	// (requiring tg::checkin). Real files are batched into a single directory
-	// checkin to avoid overwhelming the daemon with individual RPC calls.
+	// Resolve all files to artifacts. Partition into three categories:
+	// 1. Checkin-cached files: previously written by write_outputs_to_cargo,
+	//    artifact ID known without any daemon calls.
+	// 2. Artifact-store paths: resolvable via unrender with no daemon calls.
+	// 3. Real file paths: requiring tg::checkin (batched to reduce RPC load).
+	let mut cached_entries: BTreeMap<String, tg::Artifact> = BTreeMap::new();
 	let mut artifact_store_files: Vec<(String, String)> = Vec::new();
 	let mut real_files: Vec<(String, String)> = Vec::new();
 	for (name, target) in &files {
-		if target.contains("/.tangram/artifacts/")
+		if let Some(id) = process::read_checkin_cache(target) {
+			cached_entries.insert(name.clone(), tg::Artifact::with_id(id));
+		} else if target.contains("/.tangram/artifacts/")
 			|| target.contains("/opt/tangram/artifacts/")
 		{
 			artifact_store_files.push((name.clone(), target.clone()));
@@ -1061,6 +1059,14 @@ async fn process_dependencies(
 			real_files.push((name.clone(), target.clone()));
 		}
 	}
+
+	tracing::info!(
+		crate_name,
+		cached = cached_entries.len(),
+		artifact_store = artifact_store_files.len(),
+		real = real_files.len(),
+		"process_deps_resolution"
+	);
 
 	// Resolve artifact store paths concurrently (fast, no daemon calls).
 	let artifact_futures = artifact_store_files.iter().map(|(name, path)| {
@@ -1071,11 +1077,13 @@ async fn process_dependencies(
 			Some((name, artifact))
 		}
 	});
-	let mut entries: BTreeMap<String, tg::Artifact> = futures::future::join_all(artifact_futures)
-		.await
-		.into_iter()
-		.flatten()
-		.collect();
+	let mut entries: BTreeMap<String, tg::Artifact> = cached_entries;
+	entries.extend(
+		futures::future::join_all(artifact_futures)
+			.await
+			.into_iter()
+			.flatten(),
+	);
 
 	// Batch checkin real files via a temporary hardlink directory.
 	if !real_files.is_empty() {
@@ -1090,8 +1098,7 @@ async fn process_dependencies(
 					let name = name.clone();
 					let path = path.clone();
 					async move {
-						let artifact =
-							process::resolve_path_to_artifact(tg, &path).await.ok()?;
+						let artifact = process::resolve_path_to_artifact(tg, &path).await.ok()?;
 						Some((name, artifact))
 					}
 				});
@@ -1206,38 +1213,17 @@ async fn batch_checkin_files(
 }
 
 /// Copy a file artifact to a path on disk with the specified permissions.
-async fn copy_artifact_to_file(
-	tg: &impl tg::Handle,
-	artifact: tg::Artifact,
-	to: &Path,
-	filename: &str,
-	mode: u32,
-) -> tg::Result<()> {
-	let file = artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("expected file artifact for {}", filename))?;
-	let bytes = file.bytes(tg).await?;
-	tokio::fs::write(&to, &bytes)
-		.await
-		.map_err(|error| tg::error!(source = error, "failed to write file {}", to.display()))?;
-	tokio::fs::set_permissions(&to, std::fs::Permissions::from_mode(mode))
-		.await
-		.map_err(|error| {
-			tg::error!(
-				source = error,
-				"failed to set permissions on {}",
-				to.display()
-			)
-		})?;
-	Ok(())
-}
-
 /// Write build outputs to cargo's output directory.
 ///
-/// Output files are symlinked to the artifact store for speed. The only exception
-/// is `.d` (dependency) files, which cargo needs to overwrite on subsequent builds.
+/// Output files are copied from the artifact store (after `batch_cache` materializes
+/// them). Copies are necessary because artifact store files have mtime=0 (epoch),
+/// and cargo's fingerprinting uses `stat()` to check output freshness. Symlinks
+/// would resolve to mtime=0, causing cargo to consider every output stale and
+/// recompile all external crates on every incremental build. The copy cost is paid
+/// once per `cargo clean`; subsequent builds skip external crates entirely via
+/// cargo's fingerprinting.
 ///
-/// For binaries with metadata suffixes, also creates convenience symlinks
+/// For binaries with metadata suffixes, creates convenience symlinks
 /// (e.g., `build_script_build-abc123` gets a `build-script-build` symlink).
 /// Also writes:
 /// - `.externs` sidecar file listing extern crate names for transitive dependency computation
@@ -1281,8 +1267,7 @@ async fn write_outputs_to_cargo(
 			&& matches!(
 				ext.to_ascii_lowercase().as_str(),
 				"rlib" | "rmeta" | "dylib" | "so"
-			)
-		{
+			) {
 			let externs_filename = path.with_extension("externs");
 			let externs_path = output_directory.join(externs_filename.file_name().unwrap());
 			let extern_stems: Vec<String> = externs
@@ -1309,17 +1294,26 @@ async fn write_outputs_to_cargo(
 		}
 	}
 
-	// Ensure all output artifacts are materialized in the local store so we
-	// can symlink to them. This is a single batched request to the daemon.
-	{
-		let all_artifact_ids: Vec<tg::artifact::Id> =
-			entries.iter().map(|(_, artifact)| artifact.id()).collect();
-		process::batch_cache(tg, all_artifact_ids).await?;
-	}
+	// Check out the entire build directory in a single RPC call, then move
+	// files into the output directory. This avoids N individual checkout calls.
+	let checkout_dir = tg::checkout::checkout(
+		tg,
+		tg::checkout::Arg {
+			artifact: build_dir.id().into(),
+			dependencies: false,
+			extension: None,
+			force: true,
+			lock: None,
+			path: None,
+		},
+	)
+	.await?;
 
 	let futures = entries.into_iter().map(|(filename, artifact)| {
 		let output_directory = output_directory.clone();
+		let checkout_dir = checkout_dir.clone();
 		async move {
+			let from = checkout_dir.join(&filename);
 			let to = output_directory.join(&filename);
 
 			// Remove existing file/symlink if present.
@@ -1327,15 +1321,25 @@ async fn write_outputs_to_cargo(
 				tokio::fs::remove_file(&to).await.ok();
 			}
 
-			if Path::new(&filename).extension().is_some_and(|e| e == "d") {
-				// Copy .d files with writable permissions. Cargo needs to overwrite
-				// them on subsequent builds, which fails if they are read-only symlinks.
-				copy_artifact_to_file(tg, artifact, &to, &filename, 0o644).await?;
-			} else {
-				// Symlink to the artifact store. Cargo's fingerprinting follows
-				// symlinks, so it sees the artifact's stable mtime and size.
-				process::symlink_cached_artifact(&artifact, &to).await?;
+			// Move the checked-out file into cargo's output directory. Falls back
+			// to copy if rename fails (e.g. across filesystem boundaries).
+			if tokio::fs::rename(&from, &to).await.is_err() {
+				tokio::fs::copy(&from, &to).await.map_err(|error| {
+					tg::error!(source = error, "failed to copy {}", filename)
+				})?;
+				tokio::fs::remove_file(&from).await.ok();
 			}
+
+			// Tangram checkouts are read-only with mtime=0. Add owner-write and
+			// set mtime to now so cargo's fingerprinting considers the output fresh.
+			process::touch_checkout(tg, &to).await?;
+
+			// Record the artifact ID in the checkin cache so that
+			// process_dependencies can resolve this file without a daemon call.
+			process::write_checkin_cache(
+				to.to_str().unwrap_or_default(),
+				&artifact,
+			);
 
 			// Create a convenience symlink for binaries with a metadata suffix.
 			if !is_dependency_file(&filename)
@@ -1570,10 +1574,7 @@ fn prepend_to_path(
 	}
 	env.insert(
 		"PATH".to_owned(),
-		tg::Template {
-			components: prefix,
-		}
-		.into(),
+		tg::Template { components: prefix }.into(),
 	);
 }
 

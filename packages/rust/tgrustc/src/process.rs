@@ -1,5 +1,6 @@
 use futures::TryStreamExt as _;
 use std::{
+	os::unix::fs::PermissionsExt as _,
 	path::{Path, PathBuf},
 	pin::pin,
 	sync::LazyLock,
@@ -213,7 +214,7 @@ static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 });
 
 /// Try to read a cached artifact ID for a previously checked-in path.
-fn read_checkin_cache(path: &str) -> Option<tg::artifact::Id> {
+pub(crate) fn read_checkin_cache(path: &str) -> Option<tg::artifact::Id> {
 	let cache_dir = CHECKIN_CACHE_DIR.as_ref()?;
 	let key = checkin_cache_key(path);
 	let contents = std::fs::read_to_string(cache_dir.join(key)).ok()?;
@@ -221,7 +222,7 @@ fn read_checkin_cache(path: &str) -> Option<tg::artifact::Id> {
 }
 
 /// Write a checkin result to the cache. Uses atomic rename for concurrent safety.
-fn write_checkin_cache(path: &str, artifact: &tg::Artifact) {
+pub(crate) fn write_checkin_cache(path: &str, artifact: &tg::Artifact) {
 	let Some(cache_dir) = CHECKIN_CACHE_DIR.as_ref() else {
 		return;
 	};
@@ -388,21 +389,28 @@ pub(crate) async fn batch_cache(
 	Ok(())
 }
 
-/// Create an absolute symlink from `target` pointing to a pre-cached artifact in the local store.
-pub(crate) async fn symlink_cached_artifact(
-	artifact: &tg::Artifact,
+/// Make a checked-out file writable and set its mtime to now.
+///
+/// Tangram checkouts are read-only with mtime=0 for reproducibility. Cargo's
+/// fingerprinting considers mtime=0 outputs stale, so we add owner-write and
+/// update the mtime after checkout.
+pub(crate) async fn touch_checkout(
+	_tg: &impl tg::Handle,
 	target: &Path,
 ) -> tg::Result<()> {
-	let artifacts_path =
-		PathBuf::from(&*tangram_std::CLOSEST_ARTIFACT_PATH).join(artifact.id().to_string());
-	tokio::fs::symlink(&artifacts_path, target)
+	let mode = tokio::fs::metadata(target)
 		.await
-		.map_err(|error: std::io::Error| {
-			tg::error!(
-				source = error,
-				"failed to symlink {} to {}",
-				target.display(),
-				artifacts_path.display()
-			)
-		})
+		.map_err(|error| tg::error!(source = error, "failed to stat {}", target.display()))?
+		.permissions()
+		.mode();
+	tokio::fs::set_permissions(target, std::fs::Permissions::from_mode(mode | 0o200))
+		.await
+		.map_err(|error| tg::error!(source = error, "failed to chmod {}", target.display()))?;
+	let now = std::fs::FileTimes::new().set_modified(std::time::SystemTime::now());
+	std::fs::File::options()
+		.write(true)
+		.open(target)
+		.and_then(|f| f.set_times(now))
+		.map_err(|error| tg::error!(source = error, "failed to touch {}", target.display()))?;
+	Ok(())
 }
