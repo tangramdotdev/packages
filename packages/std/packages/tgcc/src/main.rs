@@ -77,7 +77,7 @@ impl Environment {
 				},
 				key if BLACKLISTED_ENV_VARS.contains(&key) => {},
 				_ => {
-					let value = tangram_std::unrender(&value)?;
+					let value = common::unrender(&value)?;
 					env.insert(key, value.into());
 				},
 			}
@@ -276,7 +276,7 @@ impl Args {
 
 fn main() {
 	if let Err(e) = main_inner() {
-		tangram_std::error::print_error(e);
+		common::error::print_error(e);
 		std::process::exit(1);
 	}
 }
@@ -334,7 +334,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	let remappings = create_remapping_table(remap_targets).await?;
 
 	// Create the arguments to the driver script.
-	let cc = tangram_std::unrender(environment.cc.to_str().unwrap())?.into();
+	let cc = common::unrender(environment.cc.to_str().unwrap())?.into();
 	let mut args = std::iter::once("tangram_cc".to_string().into())
 		.chain(std::iter::once(cc))
 		.chain(cli_args.into_iter().map(tg::Value::from))
@@ -495,7 +495,7 @@ async fn create_remapping_table(
 
 		// Check if this is a path that should be a template. Needs to happen after canonicalization in case a local symlink was created pointing to an artifact.
 		if path.starts_with("/.tangram/artifacts") || path.starts_with("/opt/tangram/artifacts") {
-			let template = tangram_std::unrender(path.to_str().unwrap())?;
+			let template = common::unrender(path.to_str().unwrap())?;
 			table.insert(remap_target, template);
 			continue;
 		}
@@ -590,6 +590,7 @@ async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarge
 						source_dependencies: true,
 						locked: false,
 						lock: None,
+						root: true,
 						..tg::checkin::Options::default()
 					},
 					path,

@@ -1,15 +1,15 @@
 use std::{os::unix::fs::PermissionsExt, path::PathBuf};
 
+use common::{Manifest, manifest};
 use tangram_client::prelude::*;
-use tangram_std::{Manifest, manifest};
 
 fn main() {
 	// Setup tracing.
 	#[cfg(feature = "tracing")]
-	tangram_std::tracing::setup("TGSTRIP_TRACING");
+	common::tracing::setup("TGSTRIP_TRACING");
 
 	if let Err(e) = main_inner() {
-		tangram_std::error::print_error(e);
+		common::error::print_error(e);
 		std::process::exit(1);
 	}
 }
@@ -125,7 +125,7 @@ async fn run_proxy(
 
 			// Get the path to the actual executable.
 			let executable_path = std::path::PathBuf::from(
-				tangram_std::render_template_data(&artifact_path).map_err(|source| {
+				common::render_template_data(&artifact_path).map_err(|source| {
 					tg::error!(!source, ?artifact_path, "unable to render executable path")
 				})?,
 			);
@@ -172,6 +172,7 @@ async fn run_proxy(
 					ignore: false,
 					locked: false,
 					lock: Some(tg::checkin::Lock::Attr),
+					root: true,
 					..tg::checkin::Options::default()
 				},
 				path: local_executable_path,
@@ -194,10 +195,8 @@ async fn run_proxy(
 			// Produce a new manifest with the stripped executable, and the rest of the manifest unchanged.
 			let new_manifest = Manifest {
 				executable: manifest::Executable::Path(
-					tangram_std::template_from_artifact(tg::Artifact::with_id(
-						stripped_file_id.into(),
-					))
-					.to_data(),
+					common::template_from_artifact(tg::Artifact::with_id(stripped_file_id.into()))
+						.to_data(),
 				),
 				..manifest
 			};
