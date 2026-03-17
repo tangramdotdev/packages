@@ -200,6 +200,48 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		envs.push(await tg.build(pkgconf, { host }));
 	}
 
+	// Read any existing cargo config from the source directory to merge with
+	// the generated config. The build system generates [source.*] sections for
+	// vendoring, and optionally [host] for proxy builds. All other sections from
+	// the user's config are preserved.
+	type CargoConfig = Record<string, unknown>;
+	let userConfigToml = "";
+	let sourceHostExtras = "";
+	{
+		let sourceConfig: CargoConfig = {};
+		const configArtifact = await source.tryGet(".cargo/config.toml");
+		if (configArtifact instanceof tg.File) {
+			const text = await configArtifact.text;
+			sourceConfig = tg.encoding.toml.decode(text) as CargoConfig;
+		}
+
+		// Remove [source.*] sections, which the build system always generates.
+		const { source: _, ...withoutSource } = sourceConfig;
+
+		if (proxy) {
+			// Extract [host] for merging with the proxy host config.
+			const { host: hostSection, ...rest } = withoutSource;
+			if (hostSection && typeof hostSection === "object") {
+				// Preserve host keys that the proxy does not set.
+				const {
+					runner: _r,
+					linker: _l,
+					...hostRest
+				} = hostSection as CargoConfig;
+				if (Object.keys(hostRest).length > 0) {
+					sourceHostExtras = tg.encoding.toml.encode(hostRest);
+				}
+			}
+			if (Object.keys(rest).length > 0) {
+				userConfigToml = tg.encoding.toml.encode(rest);
+			}
+		} else {
+			if (Object.keys(withoutSource).length > 0) {
+				userConfigToml = tg.encoding.toml.encode(withoutSource);
+			}
+		}
+	}
+
 	// Download the dependencies using vendoring.
 	// Extract only manifest files first so that only changes to dependencies
 	// (not source code) trigger re-vendoring.
@@ -235,10 +277,16 @@ directory = "${vendoredDir}"`;
 
 [host]
 runner = ["${proxyDir}/bin/tgrustc", "runner"]
-linker = "${hostLinker}"`;
+linker = "${hostLinker}"
+${sourceHostExtras}`;
 	}
 
-	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
+	// Prepend the user's cargo config sections.
+	if (userConfigToml) {
+		cargoConfig = await tg`${userConfigToml}\n${cargoConfig}`;
+	}
+
+	// Write the merged cargo config. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
 	const preparePathCommands = [
 		tg`mkdir -p "${tg.output}/target"`,
 		tg`export TARGET_DIR="$(realpath "${tg.output}/target")"`,
