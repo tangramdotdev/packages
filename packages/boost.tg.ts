@@ -9,7 +9,7 @@ export const metadata = {
 	tag: "boost/1.87.0",
 };
 
-export const source = () => {
+export const source = async () => {
 	const { version } = metadata;
 	const underscoreVersion = version.replace(/\./g, "_");
 	const checksum =
@@ -57,3 +57,11 @@ export const build = async (...args: std.Args<Arg>) => {
 };
 
 export default build;
+
+export const test = async () => {
+	const spec: std.assert.PackageSpec = {
+		headers: ["boost/version.hpp"],
+		libraries: [{ name: "boost_system", dylib: true, staticlib: true }],
+	};
+	return await std.assert.pkg(build, spec);
+};
