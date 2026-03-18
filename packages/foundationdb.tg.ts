@@ -1,6 +1,10 @@
 import * as std from "std" with { local: "./std" };
 import { $ } from "std" with { local: "./std" };
+import * as boost from "boost" with { local: "./boost.tg.ts" };
+import * as cmake from "cmake" with { local: "./cmake" };
 import libarchive from "libarchive" with { local: "./libarchive.tg.ts" };
+import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
+import python from "python" with { local: "./python" };
 import xar from "xar" with { local: "./xar" };
 import xz from "xz" with { local: "./xz.tg.ts" };
 import zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
@@ -20,15 +24,53 @@ export const metadata = {
 	},
 };
 
-export type Arg = std.args.BasePackageArg;
+export const source = () => {
+	const { version } = metadata;
+	const checksum = "sha256:none";
+	const owner = "apple";
+	const repo = "foundationdb";
+	const tag = version;
+	return std.download.fromGithub({
+		checksum,
+		owner,
+		repo,
+		source: "tag",
+		tag,
+	});
+};
+
+export const sourceBuildDeps = () =>
+	std.deps({
+		boost: (...args: std.Args<boost.Arg>) =>
+			boost.build({ libraries: ["context", "filesystem", "system"] }, ...args),
+		openssl: openssl.build,
+	});
+
+export type Arg = cmake.BuildArg &
+	std.deps.Arg<typeof sourceBuildDeps> & {
+		buildMode?: "prebuilt" | "source";
+	};
 
 export const build = async (...args: std.Args<Arg>) => {
-	const { build, host } = await std.packages.applyArgs<Arg>(...args);
+	const resolved = await std.args.apply<Arg, Arg>({
+		args: args as std.Args<Arg>,
+		map: async (arg) => arg,
+		reduce: {},
+	});
+	const buildTriple = resolved.build ?? resolved.host ?? std.triple.host();
+	const host = resolved.host ?? std.triple.host();
+	const buildMode = (resolved.buildMode as string) ?? "prebuilt";
 	const os = std.triple.os(host);
+
+	if (buildMode === "source" && os === "linux") {
+		return buildFromSource(...args);
+	}
+
+	// Original prebuilt path (unchanged).
 	if (os === "linux") {
-		return downloadLinuxPrebuilt(build, host);
+		return downloadLinuxPrebuilt(buildTriple, host);
 	} else if (os === "darwin") {
-		return downloadMacosPrebuilt(build, host);
+		return downloadMacosPrebuilt(buildTriple, host);
 	} else {
 		return tg.unreachable(`unrecognized os ${os}`);
 	}
@@ -173,6 +215,39 @@ const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	},
 };
 
+export const buildFromSource = async (...args: std.Args<Arg>) => {
+	const resolved = await cmake.arg(
+		{
+			source: source(),
+			deps: sourceBuildDeps,
+			processName: "foundationdb_source",
+			env: std.env.arg(python({ host: std.triple.host() })),
+			phases: {
+				configure: {
+					args: [
+						"-DCMAKE_BUILD_TYPE=Release",
+						"-DFDB_RELEASE=ON",
+						"-DBUILD_TESTING=OFF",
+						"-DWITH_PYTHON=OFF",
+						"-DWITH_DOCUMENTATION=OFF",
+						"-DWITH_SWIFT=OFF",
+						"-DBUILD_AWS_BACKUP=OFF",
+					],
+				},
+				fixup: tg`
+					if [ -d ${tg.output}/sbin ]; then
+						mkdir -p ${tg.output}/bin
+						mv ${tg.output}/sbin/* ${tg.output}/bin/
+						rmdir ${tg.output}/sbin
+					fi`,
+			},
+			order: ["configure", "build", "install", "fixup"],
+		},
+		...args,
+	);
+	return cmake.build(resolved);
+};
+
 export const test = async () => {
 	const host = std.triple.host();
 	const os = std.triple.os(host);
@@ -191,4 +266,21 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
+};
+
+export const testSource = async () => {
+	const host = std.triple.host();
+	const os = std.triple.os(host);
+	if (os !== "linux") return;
+	const spec = {
+		...std.assert.defaultSpec(metadata),
+		binaries: std.assert.binaries(metadata.provides.binaries, {
+			fdbdecode: { exitOnErr: false },
+			fdbmonitor: { testArgs: ["--help"] },
+		}),
+	};
+	return await std.assert.pkg(
+		(...a: std.Args<Arg>) => build({ buildMode: "source" }, ...a),
+		spec,
+	);
 };
