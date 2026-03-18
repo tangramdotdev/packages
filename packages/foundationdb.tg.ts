@@ -26,7 +26,8 @@ export const metadata = {
 
 export const source = () => {
 	const { version } = metadata;
-	const checksum = "sha256:none";
+	const checksum =
+		"sha256:8612dd9b800fd2667a586c39e3de22c0bf228fe4590cbaf0e9a850a7a372827c";
 	const owner = "apple";
 	const repo = "foundationdb";
 	const tag = version;
@@ -39,17 +40,9 @@ export const source = () => {
 	});
 };
 
-export const sourceBuildDeps = () =>
-	std.deps({
-		boost: (...args: std.Args<boost.Arg>) =>
-			boost.build({ libraries: ["context", "filesystem", "system"] }, ...args),
-		openssl: openssl.build,
-	});
-
-export type Arg = cmake.BuildArg &
-	std.deps.Arg<typeof sourceBuildDeps> & {
-		buildMode?: "prebuilt" | "source";
-	};
+export type Arg = cmake.BuildArg & {
+	buildMode?: "prebuilt" | "source";
+};
 
 export const build = async (...args: std.Args<Arg>) => {
 	const resolved = await std.args.apply<Arg, Arg>({
@@ -216,12 +209,17 @@ const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 };
 
 export const buildFromSource = async (...args: std.Args<Arg>) => {
+	const host = std.triple.host();
+	const boostArtifact = await boost.build({
+		host,
+		libraries: ["context", "filesystem", "system"],
+	});
+	const opensslArtifact = await openssl.build({ host });
 	const resolved = await cmake.arg(
 		{
 			source: source(),
-			deps: sourceBuildDeps,
 			processName: "foundationdb_source",
-			env: std.env.arg(python({ host: std.triple.host() })),
+			env: std.env.arg(boostArtifact, opensslArtifact, python({ host })),
 			phases: {
 				configure: {
 					args: [
