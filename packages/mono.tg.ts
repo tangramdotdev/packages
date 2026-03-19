@@ -1,3 +1,5 @@
+import * as cmake from "cmake" with { local: "./cmake" };
+import python from "python" with { local: "./python" };
 import * as std from "std" with { local: "./std" };
 
 export const metadata = {
@@ -12,9 +14,10 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export const source = async () => {
 	const { name, version } = metadata;
-	const checksum = "sha256:none";
+	const checksum =
+		"sha256:c0850d545353a6ba2238d45f0914490c6a14a0017f151d3905b558f033478ef5";
 	const url = `https://download.mono-project.com/sources/${name}/${name}-${version}.tar.xz`;
 	return std.download
 		.extractArchive({ checksum, url })
@@ -22,18 +25,26 @@ export const source = () => {
 		.then(std.directory.unwrap);
 };
 
-export type Arg = std.autotools.Arg;
+export const deps = () =>
+	std.deps({
+		cmake: { build: cmake.self, kind: "full" },
+		python: { build: python, kind: "buildtime" },
+	});
+
+export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 export const build = (...args: std.Args<Arg>) =>
 	std.autotools.build(
 		{
 			source: source(),
+			deps,
 			buildInTree: true,
 			phases: {
 				configure: {
 					args: [
 						"--disable-dependency-tracking",
 						"--disable-boehm",
+						"--disable-btls",
 						"--with-mcs-docs=no",
 					],
 				},
