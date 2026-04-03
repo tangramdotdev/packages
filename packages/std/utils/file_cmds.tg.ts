@@ -1,4 +1,3 @@
-import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 
 export const metadata = {
@@ -98,15 +97,10 @@ export const compileUtil = async (arg: tg.Unresolved<UtilArg>) => {
 	const build = resolved.build ?? std.triple.host();
 	const host = build;
 
-	// Get the shell from the bootstrap directly.
-	const shell = await bootstrap.shell(build);
-	const shellExecutable = await shell.get("bin/dash").then(tg.File.expect);
-
 	// Compile the util using std.build with bootstrap mode.
 	const util = await std.build`
 			cc -Oz ${tg.Template.join(" ", ...extraArgs)} -o ${tg.output} ${utilSource}/${fileName}`
 		.bootstrap(true)
-		.executable(shellExecutable)
 		.env(resolved.env)
 		.host(host)
 		.then(tg.File.expect);

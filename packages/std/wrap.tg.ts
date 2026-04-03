@@ -2553,18 +2553,17 @@ export const argAndEnvDump = async (arg?: BuildAndHostArg) => {
 		? gnu.toolchain({ host: build, target: host })
 		: bootstrap.sdk(bootstrap.toolchainTriple(host));
 
-	const sdkEnv = await std.env.arg(
-		buildToolchain,
-		{
-			TGLD_TRACING: "tgld=trace",
-			TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
-		},
-		{ utils: false },
-	);
 	const targetPrefix = isCross ? `${host}-` : "";
 	return await std.build`${targetPrefix}cc -xc ${inspectProcessSource} -o ${tg.output}`
 		.bootstrap(true)
-		.env(sdkEnv)
+		.env(
+			buildToolchain,
+			{
+				TGLD_TRACING: "tgld=trace",
+				TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace",
+			},
+			{ utils: false },
+		)
 		.then(tg.File.expect);
 };
 
@@ -2737,8 +2736,8 @@ export const testContentExecutable = async () => {
 	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
 	const output = await std.build`set -x; ${wrapper} > ${tg.output}`
-		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.bootstrap(true)
+		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.then(tg.File.expect);
 	const text = await output.text.then((t) => t.trim());
 	console.log("text", text);
@@ -2760,8 +2759,8 @@ export const testContentExecutableVariadic = async () => {
 	console.log("wrapper", wrapper.id);
 	// Check the output matches the expected output.
 	const output = await std.build`set -x; ${wrapper} > ${tg.output}`
-		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.bootstrap(true)
+		.env({ TANGRAM_WRAPPER_TRACING: "tangram_wrapper=trace" })
 		.then(tg.File.expect);
 	const text = await output.text.then((t) => t.trim());
 	console.log("text", text);
@@ -2789,12 +2788,8 @@ export const testDependencies = async () => {
 	await binDir.store();
 	console.log("binDir", binDir.id);
 
-	const bootstrapShell = await bootstrap.shell();
-	const shellExe = await bootstrapShell.get("bin/sh").then(tg.File.expect);
-
 	const wrapper = await std.wrap({
 		buildToolchain,
-		executable: shellExe,
 		env: {
 			PATH: tg`${binDir}/bin`,
 		},

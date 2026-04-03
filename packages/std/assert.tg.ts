@@ -1,5 +1,5 @@
 import * as std from "./tangram.ts";
-import { $ } from "./run.tg.ts";
+import { $ } from "./process.tg.ts";
 import {
 	fileOrSymlinkFromManifestTemplate,
 	manifestDependencies,

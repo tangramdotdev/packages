@@ -152,13 +152,11 @@ export const testBinary = async () => {
 	`
 		.bootstrap(true)
 		.env(
-			std.env.arg(
-				bootstrapSDK,
-				{
-					TGLD_PASSTHROUGH: true,
-				},
-				{ utils: false },
-			),
+			bootstrapSDK,
+			{
+				TGLD_PASSTHROUGH: true,
+			},
+			{ utils: false },
 		)
 		.then(tg.Directory.expect);
 

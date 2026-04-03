@@ -264,10 +264,12 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	tracing::info!(?host, "creating inner process");
 
 	// Build a command for the process.
-	let command = tg::Command::builder(host, executable)
+	let command = tg::Command::builder()
+		.host(host)
+		.executable(executable)
 		.args(command_args)
 		.env(env)
-		.build();
+		.finish()?;
 	let command_id = command.store(tg).await?;
 	let mut command_ref = tg::Referent::with_item(command_id.clone());
 	command_ref
@@ -463,10 +465,12 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	let command_args: Vec<tg::Value> = vec![script_value];
 
 	let host_str = crate::host().to_string();
-	let command = tg::Command::builder(host_str, executable)
+	let command = tg::Command::builder()
+		.host(host_str)
+		.executable(executable)
 		.args(command_args)
 		.env(env)
-		.build();
+		.finish()?;
 	let command_id = command.store(tg).await?;
 	let mut command_ref = tg::Referent::with_item(command_id.clone());
 	command_ref

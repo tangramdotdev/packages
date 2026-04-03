@@ -324,15 +324,12 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Create the driver executable.
 	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
-	let executable = Some(
-		tg::File::with_object(tg::file::Object::Node(tg::file::object::Node {
-			contents,
-			executable: true,
-			dependencies: BTreeMap::new(),
-			module: None,
-		}))
-		.into(),
-	);
+	let executable = tg::File::with_object(tg::file::Object::Node(tg::file::object::Node {
+		contents,
+		executable: true,
+		dependencies: BTreeMap::new(),
+		module: None,
+	}));
 
 	// Create the remapping table.
 	let remappings = create_remapping_table(tg, remap_targets).await?;
@@ -357,19 +354,43 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		args.push(value.into());
 	}
 
-	// Create a process.
+	// Create a command.
 	let host = tg::host().to_string();
-	let run_arg = tg::run::Arg {
-		args,
-		env: environment.env,
-		executable,
-		host: Some(host),
-		name: Some("cc".into()),
-		network: Some(false),
-		..Default::default()
+	let command = tg::Command::builder()
+		.host(host)
+		.executable(executable)
+		.args(args)
+		.env(environment.env)
+		.finish()?;
+	let command_id = command.store(tg).await?;
+	let mut command_ref = tg::Referent::with_item(command_id);
+	command_ref.options.name.replace("cc".into());
+
+	// Spawn and wait for the process.
+	let spawn_arg = tg::process::spawn::Arg {
+		cached: None,
+		checksum: None,
+		command: command_ref,
+		local: None,
+		parent: None,
+		remotes: None,
+		retry: false,
+		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg {
+			network: false,
+			..Default::default()
+		})),
+		stderr: tg::process::Stdio::default(),
+		stdin: tg::process::Stdio::default(),
+		stdout: tg::process::Stdio::default(),
+		tty: None,
 	};
-	let build_directory = tg::run::run(tg, run_arg)
-		.await?
+
+	let process = tg::Process::spawn(tg, spawn_arg).await?;
+	let wait = process.wait(tg, tg::process::wait::Arg::default()).await?;
+
+	let build_directory = wait
+		.output
+		.ok_or_else(|| tg::error!("expected the build to produce output"))?
 		.try_unwrap_object()
 		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
 		.try_unwrap_directory()

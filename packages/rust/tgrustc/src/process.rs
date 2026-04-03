@@ -1,10 +1,6 @@
 use futures::TryStreamExt as _;
-use std::{
-	path::{Path, PathBuf},
-	pin::pin,
-};
+use std::path::{Path, PathBuf};
 use tangram_client::prelude::*;
-use tangram_futures::stream::TryExt as _;
 use tokio::io::AsyncWriteExt;
 
 /// Result of spawning and waiting for a Tangram process.
@@ -58,20 +54,25 @@ pub(crate) async fn spawn_and_wait(
 	command_ref: tg::Referent<tg::command::Id>,
 	description: &str,
 ) -> tg::Result<SpawnResult> {
-	let mut spawn_arg = tg::process::spawn::Arg::with_command(command_ref);
-	spawn_arg.network = false;
+	let spawn_arg = tg::process::spawn::Arg {
+		cached: None,
+		checksum: None,
+		command: command_ref,
+		local: None,
+		parent: None,
+		remotes: None,
+		retry: false,
+		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg::default())),
+		stderr: tg::process::Stdio::default(),
+		stdin: tg::process::Stdio::default(),
+		stdout: tg::process::Stdio::default(),
+		tty: None,
+	};
 
 	#[cfg(feature = "tracing")]
 	tracing::info!(%description, "spawning process");
 
-	let stream = tg::Process::spawn(tg, spawn_arg).await?;
-	let process = pin!(stream)
-		.try_last()
-		.await?
-		.ok_or_else(|| tg::error!("expected an event"))?
-		.try_unwrap_output()
-		.ok()
-		.ok_or_else(|| tg::error!("expected the output"))?;
+	let process = tg::Process::spawn(tg, spawn_arg).await?;
 	let process_id = process.id().clone();
 
 	#[cfg(feature = "tracing")]

@@ -907,7 +907,7 @@ export namespace sdk {
 				set -x
 				${cmd} -v -x${langStr} ${testProgram} -o ${tg.output}`
 				.bootstrap(true)
-				.env(std.env.arg(arg.sdkEnv, { utils: false }))
+				.env(arg.sdkEnv, { utils: false })
 				.host(std.triple.archAndOs(expectedHost))
 				.then(tg.File.expect);
 
@@ -1303,11 +1303,9 @@ export const assertComment = async (
 	const elfComment =
 		await std.build`readelf -p .comment ${exe} | grep ${textToMatch} > ${tg.output}`
 			.bootstrap(true)
-			.env(
-				std.env.arg(toolchain, bootstrap.sdk.prepareBootstrapUtils(), {
-					utils: false,
-				}),
-			)
+			.env(toolchain, bootstrap.sdk.prepareBootstrapUtils(), {
+				utils: false,
+			})
 			.then(tg.File.expect);
 	const text = await elfComment.text;
 	tg.assert(text.includes(textToMatch));

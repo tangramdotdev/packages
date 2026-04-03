@@ -212,19 +212,18 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	}
 
 	const system = std.triple.archAndOs(build);
-	const env = std.env.arg(
-		buildToolchain,
-		{
-			// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
-			TGLD_PASSTHROUGH: true,
-		},
-		arg.env,
-		{ utils: false },
-	);
 	const output =
 		std.build`${executable} -xc ${arg.source} -o ${tg.output} ${tg.Template.join(" ", ...args)}`
 			.bootstrap(true)
-			.env(env)
+			.env(
+				buildToolchain,
+				{
+					// Ensure the linker proxy is always skipped, whether or not the toolchain is proxied.
+					TGLD_PASSTHROUGH: true,
+				},
+				arg.env,
+				{ utils: false },
+			)
 			.host(system)
 			.then(tg.File.expect);
 	return output;

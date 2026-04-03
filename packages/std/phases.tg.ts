@@ -165,11 +165,11 @@ export const run = async (...args: std.Args<RunArg>) => {
 	}
 
 	let builder = std.run`${script}`.env(env_);
-	if (commandArg !== undefined) {
-		builder = builder.arg(commandArg);
-	}
 	if (bootstrap) {
 		builder = builder.bootstrap(bootstrap);
+	}
+	if (commandArg !== undefined) {
+		builder = builder.arg(commandArg);
 	}
 	if (checksum) {
 		builder = builder.checksum(checksum);

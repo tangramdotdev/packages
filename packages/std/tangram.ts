@@ -3,7 +3,7 @@ export * as args from "./args.tg.ts";
 export * as assert from "./assert.tg.ts";
 export * as autotools from "./autotools.tg.ts";
 export * as cc from "./cc.tg.ts";
-export { build } from "./build.tg.ts";
+export { build } from "./process.tg.ts";
 export { caCertificates } from "./certificates.tg.ts";
 export { command } from "./command.tg.ts";
 export * as dependencies from "./sdk/dependencies.tg.ts";
@@ -17,7 +17,7 @@ export { patch } from "./patch.tg.ts";
 export * as packages from "./packages.tg.ts";
 export * as phases from "./phases.tg.ts";
 export * as pkgconfig from "./pkgconfig.tg.ts";
-export { $, run } from "./run.tg.ts";
+export { $, run, spawn } from "./process.tg.ts";
 export { sdk } from "./sdk.tg.ts";
 export * as sdkModule from "./sdk.tg.ts";
 export * as triple from "./triple.tg.ts";
@@ -28,7 +28,7 @@ export * as bootstrap from "./bootstrap.tg.ts";
 
 import * as bootstrap from "./bootstrap.tg.ts";
 import * as bootstrapSdk from "./bootstrap/sdk.tg.ts";
-import * as build from "./build.tg.ts";
+import * as process_ from "./process.tg.ts";
 import caCertificates from "./certificates.tg.ts";
 import * as command_ from "./command.tg.ts";
 import * as dependencies from "./sdk/dependencies.tg.ts";
@@ -42,7 +42,6 @@ import * as injection from "./wrap/injection.tg.ts";
 import * as packages from "./packages_test.tg.ts";
 import * as phases from "./phases.tg.ts";
 import * as pkgconfig from "./pkgconfig.tg.ts";
-import * as run from "./run.tg.ts";
 import * as sdk from "./sdk.tg.ts";
 import * as triple from "./triple.tg.ts";
 import * as utils from "./utils.tg.ts";
@@ -86,7 +85,6 @@ const testActions = (): Record<string, () => any> => {
 		pkgconfig: pkgconfig.test,
 		packages: packages.test,
 		certificates: caCertificates,
-		bootstrapShell: bootstrap.shell,
 		bootstrapUtils: bootstrap.utils,
 		bootstrapToolchain: bootstrap.toolchain,
 		bootstrapMacOsSdk: bootstrap.macOsSdk,
@@ -194,8 +192,8 @@ const testActions = (): Record<string, () => any> => {
 		imageBasicEnvImageDocker: image.testBasicEnvImageDocker,
 		imageBasicEnvImageOci: image.testBasicEnvImageOci,
 		image: image.test,
-		stdBuild: build.test,
-		stdRun: run.test,
+		stdBuild: process_.testBuildAll,
+		stdRun: process_.testRunAll,
 		stdCommand: command_.test,
 	};
 };

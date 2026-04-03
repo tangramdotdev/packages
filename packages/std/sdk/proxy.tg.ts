@@ -455,7 +455,7 @@ export const testBasic = async (target?: string) => {
 				/usr/bin/env
 				${cmd} -v -xc ${helloSource} -o ${tg.output}
 				echo "done"`
-		.bootstrap(true)
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
 				buildToolchain,
@@ -573,7 +573,7 @@ export const testSharedLibraryWithDep = async (target?: string) => {
 		cp libprinter.${dylibExt} ${tg.output}/lib
 		cp main ${tg.output}/bin
 	`
-		.bootstrap(true)
+		.bootstrap(target ? false : true)
 		.env(
 			std.env.arg(
 				testSDK,

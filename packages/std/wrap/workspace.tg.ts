@@ -206,11 +206,11 @@ export const rust = async (
 	const hostSystem = std.triple.archAndOs(host);
 
 	// Download and parse the Rust manifest for the selected version.
-	const version = "1.94.0";
+	const version = "1.94.1";
 	const manifestBlob = await std.download({
 		url: `https://static.rust-lang.org/dist/channel-rust-${version}.toml`,
 		checksum:
-			"sha256:aaa177def36e01d539bee6bde95295230b9ce378f81057845db8d0ebe97898ee",
+			"sha256:cc2f04dfc883549d683c8cc2a9393f523a3dfbd931f5d5eaef00303cca64a60d",
 	});
 	tg.Blob.assert(manifestBlob);
 	const manifestFile = await tg.file(manifestBlob as tg.Blob);
@@ -250,8 +250,6 @@ export const rust = async (
 
 	// Install the packages.
 	const env = bootstrap.sdk.env(host);
-	const shell = await bootstrap.shell(host);
-	const shellExecutable = await shell.get("bin/dash").then(tg.File.expect);
 	return await std.build`
 		set -x
 		for package in ${packages}/*/* ; do
@@ -259,7 +257,6 @@ export const rust = async (
 			chmod -R +w "${tg.output}"
 		done`
 		.bootstrap(true)
-		.executable(shellExecutable)
 		.host(hostSystem)
 		.env(env)
 		.named("rust toolchain install")

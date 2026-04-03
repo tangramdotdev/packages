@@ -292,13 +292,12 @@ async function getGccVersion(
 	const targetPrefix = host === targetTriple ? `` : `${targetTriple}-`;
 	await std.env.assertProvides({ env, name: `${targetPrefix}gcc` });
 	// We always need an `awk`, but don't care where it comes from. Users should be able to just provide a toolchain dir and have this target work.
-	const envObject = std.env.arg(bootstrap.sdk.prepareBootstrapUtils(), env, {
-		utils: false,
-	});
 	const result =
 		await std.build`${targetPrefix}gcc --version | awk '/^${targetPrefix}gcc / {print $3}' > ${tg.output}`
 			.bootstrap(true)
-			.env(envObject)
+			.env(bootstrap.sdk.prepareBootstrapUtils(), env, {
+				utils: false,
+			})
 			.then(tg.File.expect);
 	return (await result.text).trim();
 }

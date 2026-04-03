@@ -30,17 +30,10 @@ export namespace sdk {
 		return await tg.directory(toolchain, utils);
 	};
 
-	/** Combine the busybox/toybox artifact with the dash shell from the bootstrap. */
+	/** Get the busybox/toybox utils artifact from the bootstrap. */
 	export const prepareBootstrapUtils = async (hostArg?: string) => {
 		const host = hostArg ?? std.triple.host();
-		const shell = await bootstrap.shell(host);
-		const shellFile = await shell.get("bin/dash").then(tg.File.expect);
-		const utils = bootstrap.utils(host);
-		const combined = await tg.directory(utils, {
-			"bin/dash": shellFile,
-			"bin/sh": tg.symlink("dash"),
-		});
-		return combined;
+		return bootstrap.utils(host);
 	};
 }
 

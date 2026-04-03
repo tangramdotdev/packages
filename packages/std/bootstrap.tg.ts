@@ -41,19 +41,6 @@ export const bootstrap = async (arg?: Arg) => {
 
 export default bootstrap;
 
-/** Retrieve just the dash component. */
-export const dash = (host?: string) => bootstrap({ host, component: "dash" });
-export const shell = dash;
-
-/** Retrieve just the env component (Linux only). */
-export const env = (host?: string) => {
-	const host_ = host ?? std.triple.host();
-	if (std.triple.os(host_) !== "linux") {
-		throw new Error("The env bootstrap component is only available on Linux.");
-	}
-	return bootstrap({ host: host_, component: "env" });
-};
-
 /** Retrieve just the toolchain component. */
 export const toolchain = (host?: string) =>
 	bootstrap({ host, component: "toolchain" });
@@ -114,7 +101,7 @@ export const patch = async (
 		${patchScript}
 	`
 		.bootstrap(true)
-		.env(std.env.arg(utils(host), shell(host), { utils: false }))
+		.env(utils(host), { utils: false })
 		.then(tg.Directory.expect);
 };
 
@@ -141,13 +128,12 @@ export const componentList = (host?: string): Array<string> | undefined => {
 		case "aarch64-linux":
 		case "x86_64-linux": {
 			const suffix = h.replace("-", "_");
-			return ["dash", "env", "toolchain", "utils"].map((c) => `${c}_${suffix}`);
+			return ["toolchain", "utils"].map((c) => `${c}_${suffix}`);
 		}
 		case "aarch64-darwin":
 		case "x86_64-darwin":
 		case "universal_darwin":
 			return [
-				"dash_universal_darwin",
 				...sdkVersions.map((v) => `macos_sdk_${v}`),
 				"toolchain_universal_darwin",
 				"utils_universal_darwin",
@@ -177,16 +163,6 @@ export const test = async () => {
 };
 
 const checksums: Record<string, tg.Checksum> = {
-	dash_aarch64_linux:
-		"sha256:dc5895857027f718e9eaf69f893f355f6cd8957937a6f137bb3c00a7d1f9e70a",
-	dash_universal_darwin:
-		"sha256:c4d4e24dc4c3e56f5fb4cccec5bf36d07c0422ad3c647a8fed295f2d74ca410e",
-	dash_x86_64_linux:
-		"sha256:5b07cc4e1c038e53eda90ab9c227648f4b579570d48b9be344664086b8fda503",
-	env_aarch64_linux:
-		"sha256:7891a449fcc36ebac7f176a22f4c63749a644241416b97b71511300fce1db573",
-	env_x86_64_linux:
-		"sha256:f5c75ab823a33bbf081b929e8adb715e54220146776a3891a955e8a77db34239",
 	"macos_sdk_12.1":
 		"sha256:69f73de40e06f9d5ee1ec6b79583646fc568d4b2318a24619189469d19068417",
 	"macos_sdk_12.3":

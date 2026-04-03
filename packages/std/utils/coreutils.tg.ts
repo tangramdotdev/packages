@@ -258,11 +258,9 @@ export const test = async () => {
 			: attr({ host, bootstrap: true, env: sdk });
 	const output = await std.build`${script}`
 		.bootstrap(true)
-		.env(
-			std.env.arg({ SHELL: "/bin/sh" }, platformSupportLib, coreutils, {
-				utils: false,
-			}),
-		)
+		.env({ SHELL: "/bin/sh" }, platformSupportLib, coreutils, {
+			utils: false,
+		})
 		.then(tg.File.expect);
 
 	const contents = (await output.text).trim();
