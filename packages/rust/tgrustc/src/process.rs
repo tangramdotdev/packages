@@ -72,7 +72,7 @@ pub(crate) async fn spawn_and_wait(
 	#[cfg(feature = "tracing")]
 	tracing::info!(%description, "spawning process");
 
-	let process = tg::Process::spawn(tg, spawn_arg).await?;
+	let process: tg::Process = tg::Process::spawn(tg, spawn_arg).await?;
 	let process_id = process.id().clone();
 
 	#[cfg(feature = "tracing")]
