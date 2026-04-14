@@ -19,6 +19,8 @@ fn main_inner() -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	tracing::info!(?options, "parsed options");
 
+	tg::init()?;
+
 	// Set the runtime library path.
 	let original_runtime_library_path =
 		if let Some(runtime_library_path) = &options.strip_runtime_library_path {
@@ -118,10 +120,6 @@ async fn run_proxy(
 	// Handle the executable based on its type.
 	match manifest.executable {
 		manifest::Executable::Path(artifact_path) => {
-			// Create the tangram instance.
-			let tg = tg::Client::with_env()?;
-			tg.connect().await?;
-
 			#[cfg(feature = "tracing")]
 			tracing::info!(?artifact_path, "found executable artifact path");
 
@@ -166,22 +164,19 @@ async fn run_proxy(
 			tracing::info!(?local_executable_path, "strip succeeded");
 
 			// Check in the result.
-			let stripped_file = tg::checkin(
-				&tg,
-				tg::checkin::Arg {
-					options: tg::checkin::Options {
-						local_dependencies: true,
-						destructive: false,
-						deterministic: true,
-						ignore: false,
-						locked: false,
-						lock: Some(tg::checkin::Lock::Attr),
-						..tg::checkin::Options::default()
-					},
-					path: local_executable_path,
-					updates: vec![],
+			let stripped_file = tg::checkin(tg::checkin::Arg {
+				options: tg::checkin::Options {
+					local_dependencies: true,
+					destructive: false,
+					deterministic: true,
+					ignore: false,
+					locked: false,
+					lock: Some(tg::checkin::Lock::Attr),
+					..tg::checkin::Options::default()
 				},
-			)
+				path: local_executable_path,
+				updates: vec![],
+			})
 			.await?
 			.try_unwrap_file()
 			.map_err(|error| tg::error!(source = error, "expected a file"))?;
@@ -209,8 +204,8 @@ async fn run_proxy(
 			#[cfg(feature = "tracing")]
 			tracing::info!(?new_manifest, "created new manifest");
 
-			let new_wrapper = new_manifest.write(&tg).await?;
-			new_wrapper.store(&tg).await?;
+			let new_wrapper = new_manifest.write().await?;
+			new_wrapper.store().await?;
 			#[cfg(feature = "tracing")]
 			{
 				let new_wrapper_id = new_wrapper.id();
@@ -233,17 +228,14 @@ async fn run_proxy(
 				.map_err(|error| tg::error!(source = error, "failed to remove the output file"))?;
 
 			let artifact = tg::Artifact::from(new_wrapper).id();
-			tg::checkout(
-				&tg,
-				tg::checkout::Arg {
-					artifact,
-					dependencies: false,
-					extension: None,
-					force: true,
-					path: Some(canonical_target_path),
-					lock: Some(tg::checkout::Lock::Attr),
-				},
-			)
+			tg::checkout(tg::checkout::Arg {
+				artifact,
+				dependencies: false,
+				extension: None,
+				force: true,
+				path: Some(canonical_target_path),
+				lock: Some(tg::checkout::Lock::Attr),
+			})
 			.await?;
 			#[cfg(feature = "tracing")]
 			tracing::info!("checked out the new output file");

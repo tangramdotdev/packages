@@ -1,4 +1,3 @@
-use futures::TryStreamExt as _;
 use std::path::{Path, PathBuf};
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
@@ -15,11 +14,9 @@ pub(crate) struct SpawnResult {
 }
 
 /// Resolve the driver executable from `TGRUSTC_DRIVER_EXECUTABLE` env var or checkin self.
-pub(crate) async fn resolve_executable(
-	tg: &impl tg::Handle,
-) -> tg::Result<tg::command::Executable> {
+pub(crate) async fn resolve_executable() -> tg::Result<tg::command::Executable> {
 	if let Ok(path) = std::env::var("TGRUSTC_DRIVER_EXECUTABLE") {
-		let (artifact, _) = extract_artifact_from_path(tg, &path).await?;
+		let (artifact, _) = extract_artifact_from_path(&path).await?;
 		Ok(artifact
 			.try_unwrap_file()
 			.map_err(|_| tg::error!("expected file in TGRUSTC_DRIVER_EXECUTABLE"))?
@@ -27,19 +24,16 @@ pub(crate) async fn resolve_executable(
 	} else {
 		let self_exe = std::env::current_exe()
 			.map_err(|e| tg::error!("failed to get current executable: {e}"))?;
-		let artifact = tg::checkin(
-			tg,
-			tg::checkin::Arg {
-				options: tg::checkin::Options {
-					deterministic: true,
-					ignore: false,
-					lock: None,
-					..Default::default()
-				},
-				path: self_exe,
-				updates: vec![],
+		let artifact = tg::checkin(tg::checkin::Arg {
+			options: tg::checkin::Options {
+				deterministic: true,
+				ignore: false,
+				lock: None,
+				..Default::default()
 			},
-		)
+			path: self_exe,
+			updates: vec![],
+		})
 		.await?;
 		Ok(artifact
 			.try_unwrap_file()
@@ -50,7 +44,6 @@ pub(crate) async fn resolve_executable(
 
 /// Spawn a Tangram process, wait for completion, and return the output directory.
 pub(crate) async fn spawn_and_wait(
-	tg: &impl tg::Handle,
 	command_ref: tg::Referent<tg::command::Id>,
 	description: &str,
 ) -> tg::Result<SpawnResult> {
@@ -72,14 +65,14 @@ pub(crate) async fn spawn_and_wait(
 	#[cfg(feature = "tracing")]
 	tracing::info!(%description, "spawning process");
 
-	let process: tg::Process = tg::Process::spawn(tg, spawn_arg).await?;
+	let process: tg::Process = tg::Process::spawn(spawn_arg).await?;
 	let process_id = process.id().clone();
 
 	#[cfg(feature = "tracing")]
 	tracing::info!(?process_id, %description, "spawned process");
 
 	// Wait for the process output.
-	let wait = process.wait(tg, tg::process::wait::Arg::default()).await?;
+	let wait = process.wait(tg::process::wait::Arg::default()).await?;
 
 	if wait.exit != 0 {
 		// Try to get stderr from the output.
@@ -87,12 +80,12 @@ pub(crate) async fn spawn_and_wait(
 			let output_obj = wait.output.as_ref()?.clone().try_unwrap_object().ok()?;
 			let output_dir = output_obj.try_unwrap_directory().ok()?;
 			let stderr_file = output_dir
-				.get(tg, "log/stderr")
+				.get("log/stderr")
 				.await
 				.ok()?
 				.try_unwrap_file()
 				.ok()?;
-			let bytes = stderr_file.contents(tg).await.ok()?.bytes(tg).await.ok()?;
+			let bytes = stderr_file.contents().await.ok()?.bytes().await.ok()?;
 			Some(bytes)
 		}
 		.await;
@@ -133,31 +126,28 @@ pub(crate) async fn spawn_and_wait(
 }
 
 /// Read stdout and stderr log files from a process output directory.
-pub(crate) async fn read_logs(
-	tg: &impl tg::Handle,
-	output: &tg::Directory,
-) -> tg::Result<(Vec<u8>, Vec<u8>)> {
+pub(crate) async fn read_logs(output: &tg::Directory) -> tg::Result<(Vec<u8>, Vec<u8>)> {
 	futures::future::try_join(
 		async {
 			output
-				.get(tg, &"log/stdout")
+				.get(&"log/stdout")
 				.await?
 				.try_unwrap_file()
 				.unwrap()
-				.contents(tg)
+				.contents()
 				.await?
-				.bytes(tg)
+				.bytes()
 				.await
 		},
 		async {
 			output
-				.get(tg, &"log/stderr")
+				.get(&"log/stderr")
 				.await?
 				.try_unwrap_file()
 				.unwrap()
-				.contents(tg)
+				.contents()
 				.await?
-				.bytes(tg)
+				.bytes()
 				.await
 		},
 	)
@@ -184,10 +174,7 @@ pub(crate) async fn forward_logs(stdout: &[u8], stderr: &[u8]) -> tg::Result<()>
 }
 
 /// Content-address a path, returning an artifact-based template value.
-pub(crate) async fn content_address_path(
-	tg: &impl tg::Handle,
-	path: &str,
-) -> tg::Result<tg::Value> {
+pub(crate) async fn content_address_path(path: &str) -> tg::Result<tg::Value> {
 	// First, try to unrender the path. This handles:
 	let template = tangram_std::unrender(path)?;
 
@@ -209,21 +196,18 @@ pub(crate) async fn content_address_path(
 		#[cfg(feature = "tracing")]
 		tracing::trace!(?path, "content-addressing absolute path via checkin");
 
-		let artifact = tg::checkin(
-			tg,
-			tg::checkin::Arg {
-				options: tg::checkin::Options {
-					destructive: false,
-					deterministic: true,
-					ignore: false,
-					local_dependencies: false,
-					solve: false,
-					..Default::default()
-				},
-				path: path.into(),
-				updates: vec![],
+		let artifact = tg::checkin(tg::checkin::Arg {
+			options: tg::checkin::Options {
+				destructive: false,
+				deterministic: true,
+				ignore: false,
+				local_dependencies: false,
+				solve: false,
+				..Default::default()
 			},
-		)
+			path: path.into(),
+			updates: vec![],
+		})
 		.await?;
 
 		return Ok(tangram_std::template_from_artifact(artifact).into());
@@ -236,7 +220,6 @@ pub(crate) async fn content_address_path(
 /// Extract an artifact from a rendered path containing "/.tangram/artifacts/".
 /// Returns the artifact and optional subpath. Navigates into directories if there is a subpath.
 pub(crate) async fn extract_artifact_from_path(
-	tg: &impl tg::Handle,
 	path: &str,
 ) -> tg::Result<(tg::Artifact, Option<String>)> {
 	let template = tangram_std::unrender(path)?;
@@ -260,7 +243,7 @@ pub(crate) async fn extract_artifact_from_path(
 		let dir = artifact
 			.try_unwrap_directory()
 			.map_err(|_| tg::error!("expected directory for subpath in: {path}"))?;
-		let inner = dir.get(tg, subpath).await?;
+		let inner = dir.get(subpath).await?;
 		Ok((inner, Some(subpath.trim_end_matches('/').to_owned())))
 	} else {
 		Ok((artifact, None))
@@ -268,11 +251,8 @@ pub(crate) async fn extract_artifact_from_path(
 }
 
 /// Resolve a path to an artifact. Uses `content_address_path` internally.
-pub(crate) async fn resolve_path_to_artifact(
-	tg: &impl tg::Handle,
-	target_path: &str,
-) -> tg::Result<tg::Artifact> {
-	let value = content_address_path(tg, target_path).await?;
+pub(crate) async fn resolve_path_to_artifact(target_path: &str) -> tg::Result<tg::Artifact> {
+	let value = content_address_path(target_path).await?;
 
 	// Extract the artifact from the value.
 	match value {
@@ -286,10 +266,7 @@ pub(crate) async fn resolve_path_to_artifact(
 }
 
 /// Follow a symlink (if present) and resolve the target to an artifact.
-pub(crate) async fn follow_and_resolve(
-	tg: &impl tg::Handle,
-	path: &str,
-) -> tg::Result<tg::Artifact> {
+pub(crate) async fn follow_and_resolve(path: &str) -> tg::Result<tg::Artifact> {
 	let file_path = PathBuf::from(path);
 	let target = if file_path.is_symlink() {
 		std::fs::read_link(&file_path)
@@ -299,21 +276,15 @@ pub(crate) async fn follow_and_resolve(
 	} else {
 		path.to_owned()
 	};
-	resolve_path_to_artifact(tg, &target).await
+	resolve_path_to_artifact(&target).await
 }
 
 /// Batch cache a set of artifacts in a single HTTP call.
-pub(crate) async fn batch_cache(
-	tg: &impl tg::Handle,
-	artifacts: Vec<tg::artifact::Id>,
-) -> tg::Result<()> {
+pub(crate) async fn batch_cache(artifacts: Vec<tg::artifact::Id>) -> tg::Result<()> {
 	if artifacts.is_empty() {
 		return Ok(());
 	}
-	tg.cache(tg::cache::Arg { artifacts })
-		.await
-		.map_err(|e| tg::error!(source = e, "failed to cache artifacts"))?
-		.try_collect::<Vec<_>>()
+	tg::cache::cache(tg::cache::Arg { artifacts })
 		.await
 		.map_err(|e| tg::error!(source = e, "failed to cache artifacts"))?;
 	Ok(())

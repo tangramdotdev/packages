@@ -31,6 +31,7 @@ fn main_inner() -> tg::Result<()> {
 	// Runner mode: tgrustc runner <build-script-binary> [args...]
 	let first_arg = std::env::args().nth(1);
 	if first_arg.as_deref() == Some("runner") {
+		tg::init()?;
 		return tokio::runtime::Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -51,6 +52,8 @@ fn main_inner() -> tg::Result<()> {
 			.exec();
 		return Err(tg::error!("exec failed: {error}."));
 	}
+
+	tg::init()?;
 
 	tokio::runtime::Builder::new_current_thread()
 		.enable_all()

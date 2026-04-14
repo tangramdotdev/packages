@@ -300,6 +300,8 @@ fn main_inner() -> tg::Result<()> {
 		));
 	}
 
+	tg::init()?;
+
 	tokio::runtime::Builder::new_multi_thread()
 		.enable_all()
 		.build()
@@ -319,11 +321,8 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	} = args;
 	let output = output.unwrap();
 
-	// Create a client.
-	let tg = &tg::Client::with_env()?;
-
 	// Create the driver executable.
-	let contents = tg::Blob::with_reader(tg, DRIVER_SH.as_bytes()).await?;
+	let contents = tg::Blob::with_reader(DRIVER_SH.as_bytes()).await?;
 	let executable = tg::File::with_object(tg::file::Object::Node(tg::file::object::Node {
 		contents,
 		executable: true,
@@ -332,7 +331,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	}));
 
 	// Create the remapping table.
-	let remappings = create_remapping_table(tg, remap_targets).await?;
+	let remappings = create_remapping_table(remap_targets).await?;
 
 	// Create the arguments to the driver script.
 	let cc = tangram_std::unrender(environment.cc.to_str().unwrap())?.into();
@@ -362,7 +361,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		.args(args)
 		.env(environment.env)
 		.finish()?;
-	let command_id = command.store(tg).await?;
+	let command_id = command.store().await?;
 	let mut command_ref = tg::Referent::with_item(command_id);
 	command_ref.options.name.replace("cc".into());
 
@@ -385,8 +384,8 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		tty: None,
 	};
 
-	let process: tg::Process = tg::Process::spawn(tg, spawn_arg).await?;
-	let wait = process.wait(tg, tg::process::wait::Arg::default()).await?;
+	let process: tg::Process = tg::Process::spawn(spawn_arg).await?;
+	let wait = process.wait(tg::process::wait::Arg::default()).await?;
 
 	let build_directory = wait
 		.output
@@ -398,21 +397,21 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Dump stdout, stderr
 	let stdout: Vec<u8> = build_directory
-		.get(tg, &"stdout")
+		.get(&"stdout")
 		.await?
 		.try_unwrap_file()
 		.unwrap()
-		.bytes(tg)
+		.bytes()
 		.await?;
 	std::io::stdout()
 		.write_all(&stdout)
 		.map_err(|error| tg::error!(source = error, "failed to dump stdout"))?;
 	let stderr: Vec<u8> = build_directory
-		.get(tg, &"stderr")
+		.get(&"stderr")
 		.await?
 		.try_unwrap_file()
 		.unwrap()
-		.bytes(tg)
+		.bytes()
 		.await?;
 	std::io::stderr()
 		.write_all(&stderr)
@@ -420,7 +419,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 
 	// Copy the output file to the destination.
 	let output_file = build_directory
-		.get(tg, &"output")
+		.get(&"output")
 		.await
 		.map_err(|error| tg::error!(source = error, "cc failed: no output"))?;
 
@@ -477,7 +476,6 @@ struct SourceTree {
 
 // Convert a list of sources into a corresponding list of tg::Template.
 async fn create_remapping_table(
-	tg: &impl tg::Handle,
 	remap_targets: Vec<RemapTarget>,
 ) -> tg::Result<BTreeMap<RemapTarget, tg::Template>> {
 	let mut table = BTreeMap::new();
@@ -512,7 +510,7 @@ async fn create_remapping_table(
 
 	// Check in every source tree.
 	for subtree in subtrees {
-		table.extend(check_in_source_tree(tg, subtree).await?);
+		table.extend(check_in_source_tree(subtree).await?);
 	}
 
 	Ok(table)
@@ -550,10 +548,7 @@ fn insert_into_source_tree(
 }
 
 // Check in the source tree and return a list of templates that correspond to the files within it.
-async fn check_in_source_tree(
-	tg: &impl tg::Handle,
-	subtree: SourceTree,
-) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
+async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarget, tg::Template)>> {
 	// Directory builder to check in the directory at the end.
 	let mut builder = tg::directory::Builder::with_entries(BTreeMap::new());
 
@@ -587,25 +582,22 @@ async fn check_in_source_tree(
 			// Check if we're remapping a file, and check it in first.
 			if !is_directory {
 				// FIXME - destructive, followed by immediate checkout.
-				let artifact = tg::checkin(
-					tg,
-					tg::checkin::Arg {
-						options: tg::checkin::Options {
-							destructive: false,
-							deterministic: true,
-							ignore: false,
-							local_dependencies: true,
-							locked: false,
-							lock: None,
-							..tg::checkin::Options::default()
-						},
-						path,
-						updates: vec![],
+				let artifact = tg::checkin(tg::checkin::Arg {
+					options: tg::checkin::Options {
+						destructive: false,
+						deterministic: true,
+						ignore: false,
+						local_dependencies: true,
+						locked: false,
+						lock: None,
+						..tg::checkin::Options::default()
 					},
-				)
+					path,
+					updates: vec![],
+				})
 				.await?;
 				builder = builder
-					.add(tg, &subpath, artifact.clone())
+					.add(&subpath, artifact.clone())
 					.await
 					.map_err(|error| {
 						tg::error!(

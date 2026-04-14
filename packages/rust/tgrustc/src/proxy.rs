@@ -34,10 +34,6 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	let _span = tracing::info_span!("rustc_proxy", crate = %display_name).entered();
 
-	// Create a client.
-	let tg = tg::Client::with_env()?;
-	let tg = &tg;
-
 	// Resolve the three initial artifacts concurrently: source directory, OUT_DIR, and driver executable.
 	let source_future = async {
 		let manifest_dir = &args.source_directory;
@@ -46,7 +42,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			|| manifest_dir.contains("/opt/tangram/artifacts/")
 		{
 			// Fast path: extract artifact from the already-rendered path.
-			let (artifact, subpath) = process::extract_artifact_from_path(tg, manifest_dir).await?;
+			let (artifact, subpath) = process::extract_artifact_from_path(manifest_dir).await?;
 			#[cfg(feature = "tracing")]
 			tracing::info!(id = ?artifact.id(), ?subpath, "resolved crate source from artifact path");
 			Ok::<_, tg::Error>((
@@ -57,7 +53,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 			// Check in the manifest directory to get a crate-specific artifact.
 			#[cfg(feature = "tracing")]
 			tracing::info!(?manifest_dir, "checking in crate source directory");
-			Ok((process::content_address_path(tg, manifest_dir).await?, None))
+			Ok((process::content_address_path(manifest_dir).await?, None))
 		}
 	};
 
@@ -70,19 +66,16 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		if let Some(path) = &args.cargo_out_directory {
 			let out_dir_path = PathBuf::from(path);
 
-			let artifact = tg::checkin(
-				tg,
-				tg::checkin::Arg {
-					options: tg::checkin::Options {
-						deterministic: true,
-						ignore: false,
-						lock: None,
-						..Default::default()
-					},
-					path: out_dir_path.clone(),
-					updates: vec![],
+			let artifact = tg::checkin(tg::checkin::Arg {
+				options: tg::checkin::Options {
+					deterministic: true,
+					ignore: false,
+					lock: None,
+					..Default::default()
 				},
-			)
+				path: out_dir_path.clone(),
+				updates: vec![],
+			})
 			.await?;
 
 			#[cfg(feature = "tracing")]
@@ -92,7 +85,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		} else {
 			// Create an empty directory, store it, and wrap it in a template so it renders as a path.
 			let empty_dir = tg::Directory::with_entries(BTreeMap::new());
-			empty_dir.store(tg).await?;
+			empty_dir.store().await?;
 			Ok(tangram_std::template_from_artifact(empty_dir.into()).into())
 		}
 	};
@@ -101,12 +94,8 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		(tg::Value, Option<String>),
 		tg::Value,
 		tg::command::Executable,
-	) = futures::future::try_join3(
-		source_future,
-		out_dir_future,
-		process::resolve_executable(tg),
-	)
-	.await?;
+	) = futures::future::try_join3(source_future, out_dir_future, process::resolve_executable())
+		.await?;
 
 	// Unrender the environment.
 	let mut env = BTreeMap::new();
@@ -215,7 +204,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	if !pending.is_empty() {
 		let resolve_futures = pending.iter().map(|(_, path, _)| {
 			let path = path.clone();
-			async move { process::content_address_path(tg, &path).await }
+			async move { process::content_address_path(&path).await }
 		});
 		let resolved: Vec<tg::Value> = futures::future::try_join_all(resolve_futures).await?;
 		for ((idx, _, is_native), value) in pending.iter().zip(resolved) {
@@ -250,8 +239,8 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		.entered();
 
 		futures::future::try_join(
-			process_externs(tg, &args.externs),
-			process_dependencies(tg, &args.dependencies, &args.externs, &args.crate_name),
+			process_externs(&args.externs),
+			process_dependencies(&args.dependencies, &args.externs, &args.crate_name),
 		)
 		.await?
 	};
@@ -270,7 +259,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 		.args(command_args)
 		.env(env)
 		.finish()?;
-	let command_id = command.store(tg).await?;
+	let command_id = command.store().await?;
 	let mut command_ref = tg::Referent::with_item(command_id.clone());
 	command_ref
 		.options
@@ -279,7 +268,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Spawn and wait for the inner process.
 	let description = format!("Inner process for crate '{display_name}'");
-	let result = process::spawn_and_wait(tg, command_ref, &description).await?;
+	let result = process::spawn_and_wait(command_ref, &description).await?;
 
 	#[cfg(feature = "tracing")]
 	{
@@ -289,10 +278,10 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 
 	// Get build directory and logs from the output concurrently.
 	let ((stdout, stderr), build_dir) =
-		futures::future::try_join(process::read_logs(tg, &result.output), async {
+		futures::future::try_join(process::read_logs(&result.output), async {
 			let dir = result
 				.output
-				.get(tg, "build")
+				.get("build")
 				.await?
 				.try_unwrap_directory()
 				.map_err(|_| {
@@ -320,7 +309,7 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 				.as_deref()
 				.ok_or_else(|| tg::error!("expected --out-dir argument from cargo"))?,
 		);
-		write_outputs_to_cargo(tg, &build_dir, &output_directory, &args.externs).await?;
+		write_outputs_to_cargo(&build_dir, &output_directory, &args.externs).await?;
 	}
 
 	// Now that symlinks are created, forward stdout/stderr.
@@ -364,17 +353,13 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	#[cfg(feature = "tracing")]
 	let _span = tracing::info_span!("runner", crate = %crate_name, binary = %script_binary).entered();
 
-	// Create a client.
-	let tg = tg::Client::with_env()?;
-	let tg = &tg;
-
 	// Content-address the three inputs concurrently.
 	let script_future = async {
 		// Read the (signed) binary and create a file artifact with executable flag.
 		let contents = tokio::fs::read(&script_binary)
 			.await
 			.map_err(|e| tg::error!("failed to read build script binary: {e}"))?;
-		let blob = tg::Blob::with_reader(tg, std::io::Cursor::new(contents)).await?;
+		let blob = tg::Blob::with_reader(std::io::Cursor::new(contents)).await?;
 		let file = tg::File::builder(blob).executable(true).build();
 		let artifact: tg::Artifact = file.into();
 		Ok::<_, tg::Error>(tangram_std::template_from_artifact(artifact).into())
@@ -399,11 +384,11 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 			// changes to other members' source files, preventing cache miss cascades
 			// for non-deterministic build scripts.
 			let source_dir = std::env::var("SOURCE").unwrap();
-			let source_value = create_filtered_workspace(tg, &source_dir, subpath).await?;
+			let source_value = create_filtered_workspace(&source_dir, subpath).await?;
 			Ok::<_, tg::Error>((source_value, subpath.clone()))
 		} else {
 			// Non-workspace crate: check in just the crate directory.
-			let ca_value = process::content_address_path(tg, &manifest_dir).await?;
+			let ca_value = process::content_address_path(&manifest_dir).await?;
 			Ok::<_, tg::Error>((ca_value, String::new()))
 		}
 	};
@@ -412,12 +397,8 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		tg::Value,
 		(tg::Value, String),
 		tg::command::Executable,
-	) = futures::future::try_join3(
-		script_future,
-		source_future,
-		process::resolve_executable(tg),
-	)
-	.await?;
+	) = futures::future::try_join3(script_future, source_future, process::resolve_executable())
+		.await?;
 
 	// Unrender the environment. For PATH, we use unrender directly on the full
 	// colon-separated string, which converts artifact references to templates while
@@ -440,7 +421,7 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	if !env_pending.is_empty() {
 		let env_futures = env_pending.iter().map(|(_, value)| {
 			let value = value.clone();
-			async move { process::content_address_path(tg, &value).await }
+			async move { process::content_address_path(&value).await }
 		});
 		let resolved: Vec<tg::Value> = futures::future::try_join_all(env_futures).await?;
 		for ((name, _), value) in env_pending.into_iter().zip(resolved) {
@@ -471,7 +452,7 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		.args(command_args)
 		.env(env)
 		.finish()?;
-	let command_id = command.store(tg).await?;
+	let command_id = command.store().await?;
 	let mut command_ref = tg::Referent::with_item(command_id.clone());
 	command_ref
 		.options
@@ -480,14 +461,14 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 
 	// Spawn and wait for the runner process.
 	let description = format!("Runner process for crate '{crate_name}'");
-	let result = process::spawn_and_wait(tg, command_ref, &description).await?;
+	let result = process::spawn_and_wait(command_ref, &description).await?;
 
 	// Read logs and out_dir from the output concurrently.
 	let ((stdout, stderr), out_dir) =
-		futures::future::try_join(process::read_logs(tg, &result.output), async {
+		futures::future::try_join(process::read_logs(&result.output), async {
 			result
 				.output
-				.get(tg, RUNNER_OUT_DIR_PLACEHOLDER)
+				.get(RUNNER_OUT_DIR_PLACEHOLDER)
 				.await?
 				.try_unwrap_directory()
 				.map_err(|_| {
@@ -501,7 +482,7 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 
 	// Write OUT_DIR contents to cargo's OUT_DIR path.
 	let cargo_out_dir = crate::required_env("OUT_DIR")?;
-	write_out_dir_to_cargo(tg, &out_dir, &PathBuf::from(&cargo_out_dir)).await?;
+	write_out_dir_to_cargo(&out_dir, &PathBuf::from(&cargo_out_dir)).await?;
 
 	// Replay stdout, replacing the OUT_DIR placeholder with cargo's actual path.
 	// The inner runner driver replaces sandbox paths with this placeholder so the
@@ -542,11 +523,7 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 }
 
 /// Write the contents of a runner output directory to cargo's `OUT_DIR` path.
-async fn write_out_dir_to_cargo(
-	tg: &impl tg::Handle,
-	out_dir: &tg::Directory,
-	target_path: &Path,
-) -> tg::Result<()> {
+async fn write_out_dir_to_cargo(out_dir: &tg::Directory, target_path: &Path) -> tg::Result<()> {
 	// Create the target directory if it does not exist.
 	if !target_path.exists() {
 		tokio::fs::create_dir_all(target_path)
@@ -560,7 +537,7 @@ async fn write_out_dir_to_cargo(
 			})?;
 	}
 
-	let entries: Vec<_> = out_dir.entries(tg).await?.into_iter().collect();
+	let entries: Vec<_> = out_dir.entries().await?.into_iter().collect();
 
 	let futures = entries.into_iter().map(|(name, artifact)| {
 		let target_path = target_path.to_owned();
@@ -579,15 +556,15 @@ async fn write_out_dir_to_cargo(
 			match artifact {
 				tg::Artifact::Directory(dir) => {
 					// Recurse into subdirectories.
-					Box::pin(write_out_dir_to_cargo(tg, &dir, &to)).await?;
+					Box::pin(write_out_dir_to_cargo(&dir, &to)).await?;
 				},
 				tg::Artifact::File(file) => {
-					let bytes = file.bytes(tg).await?;
+					let bytes = file.bytes().await?;
 					tokio::fs::write(&to, &bytes).await.map_err(|error| {
 						tg::error!(source = error, "failed to write file {}", to.display())
 					})?;
 					// Set appropriate permissions.
-					let is_executable = file.executable(tg).await.unwrap_or(false);
+					let is_executable = file.executable().await.unwrap_or(false);
 					let mode = if is_executable { 0o755 } else { 0o644 };
 					let permissions = std::fs::Permissions::from_mode(mode);
 					tokio::fs::set_permissions(&to, permissions)
@@ -602,10 +579,10 @@ async fn write_out_dir_to_cargo(
 				},
 				tg::Artifact::Symlink(symlink) => {
 					// Resolve the symlink to its underlying artifact.
-					if let Some(resolved) = symlink.try_resolve(tg).await? {
+					if let Some(resolved) = symlink.try_resolve().await? {
 						match resolved {
 							tg::Artifact::File(file) => {
-								let bytes = file.bytes(tg).await?;
+								let bytes = file.bytes().await?;
 								tokio::fs::write(&to, &bytes).await.map_err(|error| {
 									tg::error!(
 										source = error,
@@ -615,7 +592,7 @@ async fn write_out_dir_to_cargo(
 								})?;
 							},
 							tg::Artifact::Directory(dir) => {
-								Box::pin(write_out_dir_to_cargo(tg, &dir, &to)).await?;
+								Box::pin(write_out_dir_to_cargo(&dir, &to)).await?;
 							},
 							tg::Artifact::Symlink(symlink) => {
 								// Nested symlinks with artifacts are not expected in OUT_DIR.
@@ -624,7 +601,7 @@ async fn write_out_dir_to_cargo(
 								));
 							},
 						}
-					} else if let Some(path) = symlink.path(tg).await? {
+					} else if let Some(path) = symlink.path().await? {
 						// Relative path symlink without an artifact.
 						tokio::fs::symlink(&path, &to).await.map_err(|error| {
 							tg::error!(source = error, "failed to create symlink {}", to.display())
@@ -647,10 +624,7 @@ async fn write_out_dir_to_cargo(
 /// Creates wrapper directories for file artifacts and uses them in --extern args.
 /// All wrapper directories are batch-stored in a single daemon RPC by collecting
 /// them into a parent directory, then batch-cached in a single HTTP call.
-async fn process_externs(
-	tg: &impl tg::Handle,
-	externs: &[(String, String)],
-) -> tg::Result<Vec<tg::Value>> {
+async fn process_externs(externs: &[(String, String)]) -> tg::Result<Vec<tg::Value>> {
 	let mut sorted = externs.to_vec();
 	sorted.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -674,7 +648,7 @@ async fn process_externs(
 				.ok_or_else(|| tg::error!("extern path has no filename: {path}"))?
 				.to_owned();
 
-			let artifact = process::follow_and_resolve(tg, &path)
+			let artifact = process::follow_and_resolve(&path)
 				.await?
 				.try_unwrap_file()
 				.map_err(|_| tg::error!("expected file for extern crate '{name}'"))?;
@@ -717,7 +691,7 @@ async fn process_externs(
 		.collect();
 	if !batch_entries.is_empty() {
 		let batch_dir = tg::Directory::with_entries(batch_entries);
-		batch_dir.store(tg).await?;
+		batch_dir.store().await?;
 	}
 
 	// Batch cache all artifact IDs (file artifacts + now-stored wrapper directories).
@@ -728,7 +702,7 @@ async fn process_externs(
 			.iter()
 			.filter_map(|(_, _, wrapper)| wrapper.as_ref().map(|(_, dir)| dir.id().into())),
 	);
-	process::batch_cache(tg, all_cache_ids).await?;
+	process::batch_cache(all_cache_ids).await?;
 
 	Ok(results.into_iter().flat_map(|(args, _, _)| args).collect())
 }
@@ -740,7 +714,6 @@ async fn process_externs(
 /// avoiding the overhead of scanning directories twice.
 #[allow(clippy::too_many_lines)]
 async fn process_dependencies(
-	tg: &impl tg::Handle,
 	dependencies: &[String],
 	externs: &[(String, String)],
 	crate_name: &str,
@@ -848,7 +821,7 @@ async fn process_dependencies(
 		let name = name.clone();
 		let path = path.clone();
 		async move {
-			let artifact = process::resolve_path_to_artifact(tg, &path).await.ok()?;
+			let artifact = process::resolve_path_to_artifact(&path).await.ok()?;
 			Some((name, artifact))
 		}
 	});
@@ -866,11 +839,11 @@ async fn process_dependencies(
 	let mut all_cache_ids: Vec<tg::artifact::Id> = entries.values().map(tg::Artifact::id).collect();
 
 	let merged = tg::Directory::with_entries(entries);
-	merged.store(tg).await?;
+	merged.store().await?;
 	all_cache_ids.push(merged.id().into());
 
 	// Batch cache all file artifacts and the merged directory in one call.
-	process::batch_cache(tg, all_cache_ids).await?;
+	process::batch_cache(all_cache_ids).await?;
 	let template = tg::Template {
 		components: vec!["dependency=".to_owned().into(), merged.into()],
 	};
@@ -890,7 +863,6 @@ async fn process_dependencies(
 /// - `.externs` sidecar file listing extern crate names for transitive dependency computation
 #[allow(clippy::too_many_lines)]
 async fn write_outputs_to_cargo(
-	tg: &impl tg::Handle,
 	build_dir: &tg::Directory,
 	output_directory: &PathBuf,
 	externs: &[(String, String)],
@@ -909,7 +881,7 @@ async fn write_outputs_to_cargo(
 	}
 
 	// Collect entries first, then process concurrently.
-	let entries: Vec<_> = build_dir.entries(tg).await?.into_iter().collect();
+	let entries: Vec<_> = build_dir.entries().await?.into_iter().collect();
 
 	// Write .externs sidecar file for transitive dependency computation.
 	// Find an rlib or rmeta in the build dir to get the filename prefix.
@@ -946,7 +918,7 @@ async fn write_outputs_to_cargo(
 	// Write outputs to cargo's output directory.
 	let all_artifact_ids: Vec<tg::artifact::Id> =
 		entries.iter().map(|(_, artifact)| artifact.id()).collect();
-	process::batch_cache(tg, all_artifact_ids).await?;
+	process::batch_cache(all_artifact_ids).await?;
 
 	let futures = entries.into_iter().map(|(filename, artifact)| {
 		let output_directory = output_directory.clone();
@@ -1032,12 +1004,11 @@ fn strip_metadata_suffix(filename: &str) -> Option<String> {
 /// This makes the filtered artifact stable when only sibling Rust source changes,
 /// preventing runner cache miss cascades with non-deterministic build scripts.
 async fn create_filtered_workspace(
-	tg: &impl tg::Handle,
 	source_dir: &str,
 	current_crate_subpath: &str,
 ) -> tg::Result<tg::Value> {
 	// Check in the full workspace.
-	let workspace_value = process::content_address_path(tg, source_dir).await?;
+	let workspace_value = process::content_address_path(source_dir).await?;
 
 	// Try to parse workspace members. If parsing fails, fall back to the full workspace.
 	let Some(members) = parse_workspace_members(source_dir) else {
@@ -1061,8 +1032,7 @@ async fn create_filtered_workspace(
 	};
 
 	// Create a single placeholder file to reuse for all replaced `.rs` files.
-	let placeholder_blob =
-		tg::Blob::with_reader(tg, std::io::Cursor::new(b"// placeholder\n")).await?;
+	let placeholder_blob = tg::Blob::with_reader(std::io::Cursor::new(b"// placeholder\n")).await?;
 	let placeholder_file: tg::Artifact = tg::File::builder(placeholder_blob).build().into();
 
 	// Replace `.rs` files in each sibling member with placeholders concurrently.
@@ -1078,7 +1048,7 @@ async fn create_filtered_workspace(
 		let workspace_dir = workspace_dir.clone();
 		let placeholder_file = placeholder_file.clone();
 		async move {
-			let member_dir = match workspace_dir.get(tg, &member_path).await {
+			let member_dir = match workspace_dir.get(&member_path).await {
 				Ok(artifact) => match artifact.try_unwrap_directory() {
 					Ok(dir) => dir,
 					Err(_) => return Ok::<_, tg::Error>(None),
@@ -1086,23 +1056,23 @@ async fn create_filtered_workspace(
 				Err(_) => return Ok(None),
 			};
 			let filtered =
-				replace_rs_files_with_placeholder(tg, &member_dir, &placeholder_file).await?;
+				replace_rs_files_with_placeholder(&member_dir, &placeholder_file).await?;
 			Ok(Some((member_path, filtered)))
 		}
 	});
 	let filtered_members: Vec<Option<(String, tg::Directory)>> =
 		futures::future::try_join_all(member_futures).await?;
 
-	let mut builder = workspace_dir.builder(tg).await?;
+	let mut builder = workspace_dir.builder().await?;
 	for entry in filtered_members.into_iter().flatten() {
 		let (member_path, filtered_member) = entry;
 		builder = builder
-			.add(tg, Path::new(&member_path), filtered_member.into())
+			.add(Path::new(&member_path), filtered_member.into())
 			.await?;
 	}
 
 	let filtered = builder.build();
-	filtered.store(tg).await?;
+	filtered.store().await?;
 
 	#[cfg(feature = "tracing")]
 	tracing::info!(
@@ -1118,11 +1088,10 @@ async fn create_filtered_workspace(
 /// Recursively replace `.rs` files in a directory with a placeholder artifact.
 /// Non-`.rs` files and subdirectory structure are preserved.
 async fn replace_rs_files_with_placeholder(
-	tg: &impl tg::Handle,
 	dir: &tg::Directory,
 	placeholder: &tg::Artifact,
 ) -> tg::Result<tg::Directory> {
-	let entries = dir.entries(tg).await?;
+	let entries = dir.entries().await?;
 	let mut new_entries: BTreeMap<String, tg::Artifact> = BTreeMap::new();
 	for (name, artifact) in entries {
 		if std::path::Path::new(&name)
@@ -1132,7 +1101,7 @@ async fn replace_rs_files_with_placeholder(
 			new_entries.insert(name, placeholder.clone());
 		} else if let Ok(sub_dir) = artifact.clone().try_unwrap_directory() {
 			let filtered =
-				Box::pin(replace_rs_files_with_placeholder(tg, &sub_dir, placeholder)).await?;
+				Box::pin(replace_rs_files_with_placeholder(&sub_dir, placeholder)).await?;
 			new_entries.insert(name, filtered.into());
 		} else {
 			new_entries.insert(name, artifact);

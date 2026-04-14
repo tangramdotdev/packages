@@ -216,19 +216,16 @@ pub enum Executable {
 
 impl Manifest {
 	/// Read a manifest from the end of the given `[tg::File]`.
-	pub async fn read_from_file(tg: &impl tg::Handle, file: tg::File) -> tg::Result<Option<Self>> {
+	pub async fn read_from_file(file: tg::File) -> tg::Result<Option<Self>> {
 		tracing::debug!(?file, "Reading manifest from file");
-		let path = tg::checkout(
-			tg,
-			tg::checkout::Arg {
-				artifact: file.id().into(),
-				dependencies: false,
-				extension: None,
-				force: false,
-				lock: Some(tg::checkout::Lock::Attr),
-				path: None,
-			},
-		)
+		let path = tg::checkout(tg::checkout::Arg {
+			artifact: file.id().into(),
+			dependencies: false,
+			extension: None,
+			force: false,
+			lock: Some(tg::checkout::Lock::Attr),
+			path: None,
+		})
 		.await
 		.map_err(|source| tg::error!(!source, "failed to checkout the file"))?;
 		tokio::task::spawn_blocking(move || Self::read_from_path(path))
@@ -245,7 +242,7 @@ impl Manifest {
 	}
 
 	#[allow(clippy::too_many_lines)]
-	pub async fn embed(&self, tg: &impl tg::Handle, file: &tg::File) -> tg::Result<tg::File> {
+	pub async fn embed(&self, file: &tg::File) -> tg::Result<tg::File> {
 		#[cfg(feature = "tracing")]
 		tracing::debug!(?self, "Embedding manifest");
 
@@ -264,18 +261,15 @@ impl Manifest {
 			.ok_or_else(|| tg::error!("expected a wrap binary"))?;
 
 		// Cache all the artifacts.
-		tg::cache::cache(
-			tg,
-			tg::cache::Arg {
-				artifacts: vec![
-					file.id().into(),
-					stub_bin.id().into(),
-					stub_elf.id().into(),
-					objcopy.id().into(),
-					wrap.id().into(),
-				],
-			},
-		)
+		tg::cache::cache(tg::cache::Arg {
+			artifacts: vec![
+				file.id().into(),
+				stub_bin.id().into(),
+				stub_elf.id().into(),
+				objcopy.id().into(),
+				wrap.id().into(),
+			],
+		})
 		.await
 		.map_err(|source| tg::error!(!source, "failed to cache artifacts"))?;
 
@@ -355,7 +349,7 @@ impl Manifest {
 		std::fs::remove_file(output)
 			.map_err(|source| tg::error!(!source, "failed to remove output file"))?;
 		let cursor = std::io::Cursor::new(bytes);
-		let blob = tg::Blob::with_reader(tg, cursor)
+		let blob = tg::Blob::with_reader(cursor)
 			.await
 			.map_err(|source| tg::error!(!source, "failed to create blob"))?;
 
@@ -390,21 +384,18 @@ impl Manifest {
 	}
 
 	/// Create a new wrapper from a manifest. Will locate the wrapper file from the `TANGRAM_WRAPPER_ID` environment variable.
-	pub async fn write(&self, tg: &impl tg::Handle) -> tg::Result<tg::File> {
+	pub async fn write(&self) -> tg::Result<tg::File> {
 		tracing::debug!(?self, "Writing manifest");
 
 		// Check out the wrapper file.
-		let path = tg::checkout(
-			tg,
-			tg::checkout::Arg {
-				artifact: TANGRAM_WRAPPER.id().into(),
-				dependencies: false,
-				extension: None,
-				force: false,
-				lock: Some(tg::checkout::Lock::Attr),
-				path: None,
-			},
-		)
+		let path = tg::checkout(tg::checkout::Arg {
+			artifact: TANGRAM_WRAPPER.id().into(),
+			dependencies: false,
+			extension: None,
+			force: false,
+			lock: Some(tg::checkout::Lock::Attr),
+			path: None,
+		})
 		.await
 		.map_err(|source| tg::error!(!source, "failed to checkout the wrapper binary"))?;
 
@@ -437,17 +428,14 @@ impl Manifest {
 			Ok(Some(manifest_tool::Format::Mach64))
 		) {
 			tracing::info!("codesigning binary");
-			let path = tg::checkout(
-				tg,
-				tg::checkout::Arg {
-					artifact: TANGRAM_CODESIGN.id().into(),
-					dependencies: false,
-					extension: None,
-					force: false,
-					lock: Some(tg::checkout::Lock::Attr),
-					path: None,
-				},
-			)
+			let path = tg::checkout(tg::checkout::Arg {
+				artifact: TANGRAM_CODESIGN.id().into(),
+				dependencies: false,
+				extension: None,
+				force: false,
+				lock: Some(tg::checkout::Lock::Attr),
+				path: None,
+			})
 			.await
 			.map_err(|source| tg::error!(!source, "failed to checkout the wrapper binary"))?;
 			let output = tokio::process::Command::new(path)
@@ -465,14 +453,11 @@ impl Manifest {
 		}
 
 		// Check the temp in.
-		let wrapped = tg::checkin(
-			tg,
-			tg::checkin::Arg {
-				options: tg::checkin::Options::default(),
-				path: temp.path().to_owned(),
-				updates: Vec::new(),
-			},
-		)
+		let wrapped = tg::checkin(tg::checkin::Arg {
+			options: tg::checkin::Options::default(),
+			path: temp.path().to_owned(),
+			updates: Vec::new(),
+		})
 		.await
 		.map_err(|source| tg::error!(!source, "failed to check in file"))?
 		.try_unwrap_file()
@@ -484,7 +469,7 @@ impl Manifest {
 
 		// Create a file with the new blob and references.
 		let contents = wrapped
-			.contents(tg)
+			.contents()
 			.await
 			.map_err(|source| tg::error!(!source, "failed to get the file contents"))?;
 		let mut builder = tg::File::builder(contents).executable(true);
