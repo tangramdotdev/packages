@@ -1,11 +1,11 @@
-import * as libcap from "libcap" with { local: "./libcap.tg.ts" };
-import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
-import * as liburcu from "liburcu" with { local: "./liburcu.tg.ts" };
-import * as libuv from "libuv" with { local: "./libuv.tg.ts" };
-import * as libxml2 from "libxml2" with { local: "./libxml2.tg.ts" };
-import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
+import * as libcap from "libcap" with { source: "./libcap.tg.ts" };
+import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
+import * as liburcu from "liburcu" with { source: "./liburcu.tg.ts" };
+import * as libuv from "libuv" with { source: "./libuv.tg.ts" };
+import * as libxml2 from "libxml2" with { source: "./libxml2.tg.ts" };
+import * as openssl from "openssl" with { source: "./openssl.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.isc.org/bind/",

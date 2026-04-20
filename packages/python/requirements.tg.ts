@@ -1,8 +1,8 @@
-import * as rust from "rust" with { local: "../rust" };
-import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
+import * as rust from "rust" with { source: "../rust" };
+import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
 
-import * as libffi from "libffi" with { local: "../libffi.tg.ts" };
+import * as libffi from "libffi" with { source: "../libffi.tg.ts" };
 import { versionString, wrapScripts } from "./tangram.ts";
 export type Arg = tg.File;
 

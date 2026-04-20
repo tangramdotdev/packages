@@ -1,10 +1,10 @@
-import * as bash from "bash" with { local: "./bash.tg.ts" };
-import * as gawk from "gawk" with { local: "./gawk.tg.ts" };
-import * as gnused from "gnused" with { local: "./gnused.tg.ts" };
-import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
-import * as perl from "perl" with { local: "./perl" };
-import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
+import * as bash from "bash" with { source: "./bash.tg.ts" };
+import * as gawk from "gawk" with { source: "./gawk.tg.ts" };
+import * as gnused from "gnused" with { source: "./gnused.tg.ts" };
+import * as ncurses from "ncurses" with { source: "./ncurses.tg.ts" };
+import * as perl from "perl" with { source: "./perl" };
+import * as std from "std" with { source: "./std" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const deps = () =>
 	std.deps({

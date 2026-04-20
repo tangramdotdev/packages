@@ -1,6 +1,6 @@
-import * as help2man from "help2man" with { local: "./help2man.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import * as texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
+import * as help2man from "help2man" with { source: "./help2man.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 
 export const metadata = {
 	homepage: "https://github.com/westes/flex",

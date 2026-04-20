@@ -176,7 +176,6 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	// Set up env.
 	let envs: std.Args<std.env.Arg> = [];
 	if (bootstrap) {
-		// Prevent automatically adding the utils to the env.
 		envs.push({ utils: false });
 	}
 
@@ -235,7 +234,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	// Build prepare phase command if needed.
 	let defaultPrepareCommand = tg.template();
 	if (buildInTree) {
-		defaultPrepareCommand = tg`${defaultPrepareCommand}\nmkdir work\ncp -R ${source}/. ./work && chmod -R u+w work\ncd work`;
+		defaultPrepareCommand = tg`${defaultPrepareCommand}\ncp -R ${source}/. . && chmod -R u+w .`;
 	}
 	if (setRuntimeLibraryPath) {
 		const os = std.triple.os(host);

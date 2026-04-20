@@ -1,5 +1,5 @@
-import * as bash from "bash" with { local: "../bash.tg.ts" };
-import * as std from "std" with { local: "../std" };
+import * as bash from "bash" with { source: "../bash.tg.ts" };
+import * as std from "std" with { source: "../std" };
 
 import dylibDetectOsPatch from "./bzip2_dylib_detect_os.patch" with { type: "file" };
 

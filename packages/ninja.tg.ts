@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "./std" };
-import * as cmake from "cmake" with { local: "./cmake" };
+import * as std from "std" with { source: "./std" };
+import * as cmake from "cmake" with { source: "./cmake" };
 
 export const metadata = {
 	homepage: "https://ninja-build.org/",

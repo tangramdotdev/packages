@@ -1,4 +1,4 @@
-import * as std from "std" with { local: "../std" };
+import * as std from "std" with { source: "../std" };
 import * as cmake from "./tangram.ts";
 
 export const metadata = {

@@ -1,9 +1,9 @@
-import grep from "gnugrep" with { local: "./gnugrep.tg.ts" };
-import * as m4 from "m4" with { local: "./m4.tg.ts" };
-import * as perl from "perl" with { local: "./perl" };
-import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
+import grep from "gnugrep" with { source: "./gnugrep.tg.ts" };
+import * as m4 from "m4" with { source: "./m4.tg.ts" };
+import * as perl from "perl" with { source: "./perl" };
+import * as std from "std" with { source: "./std" };
+import { $ } from "std" with { source: "./std" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/autoconf/",

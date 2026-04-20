@@ -1,5 +1,5 @@
-import * as nasm from "nasm" with { local: "./nasm.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as nasm from "nasm" with { source: "./nasm.tg.ts" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://www.ffmpeg.org/",

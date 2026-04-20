@@ -1,9 +1,9 @@
-import * as cmake from "cmake" with { local: "./cmake" };
-import * as flac from "flac" with { local: "./flac.tg.ts" };
-import * as ogg from "ogg" with { local: "./ogg.tg.ts" };
-import * as opus from "opus" with { local: "./opus.tg.ts" };
-import * as vorbis from "vorbis" with { local: "./vorbis.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as cmake from "cmake" with { source: "./cmake" };
+import * as flac from "flac" with { source: "./flac.tg.ts" };
+import * as ogg from "ogg" with { source: "./ogg.tg.ts" };
+import * as opus from "opus" with { source: "./opus.tg.ts" };
+import * as vorbis from "vorbis" with { source: "./vorbis.tg.ts" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	license: "LGPL-2.1",

@@ -97,13 +97,18 @@ pub(crate) async fn run_proxy(args: Args) -> tg::Result<()> {
 	) = futures::future::try_join3(source_future, out_dir_future, process::resolve_executable())
 		.await?;
 
-	// Unrender the environment.
+	// Unrender the environment. `TANGRAM_ENV_*` companions give us pre-parsed
+	// rich values; plain strings still need unrendering against artifact paths.
 	let mut env = BTreeMap::new();
-	for (name, value) in
-		std::env::vars().filter(|(name, _)| !BLACKLISTED_ENV_VARS.contains(&name.as_str()))
-	{
-		let value = tangram_std::unrender(&value)?;
-		env.insert(name, value.into());
+	for (name, value) in tg::process::env()? {
+		if BLACKLISTED_ENV_VARS.contains(&name.as_str()) {
+			continue;
+		}
+		let value = match value {
+			tg::Value::String(s) => tangram_std::unrender(&s)?.into(),
+			other => other,
+		};
+		env.insert(name, value);
 	}
 
 	// Set up driver mode environment variables.
@@ -400,33 +405,20 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	) = futures::future::try_join3(script_future, source_future, process::resolve_executable())
 		.await?;
 
-	// Unrender the environment. For PATH, we use unrender directly on the full
-	// colon-separated string, which converts artifact references to templates while
-	// preserving system path entries (like /usr/bin, /bin) as literal strings.
-	// System paths in PATH become harmless dead entries in the sandbox since
-	// all tools are provided as wrapped artifacts.
-	//
-	// Content-address all non-PATH env vars concurrently to avoid sequential I/O.
+	// Unrender the environment. String values get parsed against the artifact
+	// path map so embedded `/opt/tangram/artifacts/...` references survive as
+	// artifact components; `TANGRAM_ENV_*` companions deliver pre-parsed rich
+	// values directly.
 	let mut env = BTreeMap::new();
-	let mut env_pending: Vec<(String, String)> = Vec::new();
-	for (name, value) in
-		std::env::vars().filter(|(name, _)| !RUNNER_BLACKLISTED_ENV_VARS.contains(&name.as_str()))
-	{
-		if name == "PATH" {
-			env.insert(name, tangram_std::unrender(&value)?.into());
-		} else {
-			env_pending.push((name, value));
+	for (name, value) in tg::process::env()? {
+		if RUNNER_BLACKLISTED_ENV_VARS.contains(&name.as_str()) {
+			continue;
 		}
-	}
-	if !env_pending.is_empty() {
-		let env_futures = env_pending.iter().map(|(_, value)| {
-			let value = value.clone();
-			async move { process::content_address_path(&value).await }
-		});
-		let resolved: Vec<tg::Value> = futures::future::try_join_all(env_futures).await?;
-		for ((name, _), value) in env_pending.into_iter().zip(resolved) {
-			env.insert(name, value);
-		}
+		let value = match value {
+			tg::Value::String(s) => tangram_std::unrender(&s)?.into(),
+			other => other,
+		};
+		env.insert(name, value);
 	}
 
 	// Set runner driver mode environment variables.
@@ -1158,7 +1150,7 @@ fn expand_member_glob(source_dir: &str, pattern: &str) -> Vec<String> {
 // These either:
 // - Are used only by the outer proxy (not the inner driver)
 // - Vary per outer build and would pollute the inner process's cache key
-const BLACKLISTED_ENV_VARS: [&str; 20] = [
+const BLACKLISTED_ENV_VARS: [&str; 21] = [
 	// Proxy-specific vars (used by outer proxy, not inner driver).
 	"TGRUSTC_TRACING",
 	"TGRUSTC_DRIVER_EXECUTABLE",
@@ -1171,6 +1163,7 @@ const BLACKLISTED_ENV_VARS: [&str; 20] = [
 	// These are safe to remove because rustc gets explicit --out-dir and current_dir.
 	"HOME",
 	"PWD",
+	"OLDPWD",
 	"TARGET_DIR",
 	"CARGO_TARGET_DIR",
 	"SOURCE",
@@ -1198,7 +1191,7 @@ const BLACKLISTED_ENV_VARS: [&str; 20] = [
 
 // Environment variables that must be filtered out in runner mode.
 // These either vary per outer build or are set by the inner driver.
-const RUNNER_BLACKLISTED_ENV_VARS: [&str; 21] = [
+const RUNNER_BLACKLISTED_ENV_VARS: [&str; 22] = [
 	// Proxy/runner-specific vars.
 	"TGRUSTC_TRACING",
 	"TGRUSTC_DRIVER_EXECUTABLE",
@@ -1212,6 +1205,7 @@ const RUNNER_BLACKLISTED_ENV_VARS: [&str; 21] = [
 	// Build-specific paths that vary per cargo invocation.
 	"HOME",
 	"PWD",
+	"OLDPWD",
 	"TARGET_DIR",
 	"CARGO_TARGET_DIR",
 	"SOURCE",

@@ -1,7 +1,7 @@
-import * as std from "std" with { local: "./std" };
-import * as linux from "linux" with { local: "./linux.tg.ts" };
-import python from "python" with { local: "./python" };
-import texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as linux from "linux" with { source: "./linux.tg.ts" };
+import python from "python" with { source: "./python" };
+import texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 
 export const metadata = {
 	homepage: "https://sourceware.org/glibc/",

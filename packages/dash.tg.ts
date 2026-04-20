@@ -1,4 +1,4 @@
-import * as std from "std" with { local: "./std" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "http://gondor.apana.org.au/~herbert/dash/",

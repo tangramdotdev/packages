@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "./std" };
-import * as texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/binutils/",

@@ -1,6 +1,6 @@
-import * as gettext from "gettext" with { local: "../gettext" };
-import * as libiconv from "libiconv" with { local: "../libiconv.tg.ts" };
-import * as std from "std" with { local: "../std" };
+import * as gettext from "gettext" with { source: "../gettext" };
+import * as libiconv from "libiconv" with { source: "../libiconv.tg.ts" };
+import * as std from "std" with { source: "../std" };
 import c23ConstGenericPatch from "./c23-const-generic.patch" with { type: "file" };
 
 export const metadata = {

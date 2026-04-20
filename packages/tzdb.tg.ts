@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "./std" };
-import * as bash from "bash" with { local: "./bash.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as bash from "bash" with { source: "./bash.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.iana.org/time-zones",

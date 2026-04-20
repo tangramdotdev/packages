@@ -1,13 +1,13 @@
-import * as flex from "flex" with { local: "../flex.tg.ts" };
-import * as icu from "icu" with { local: "../icu.tg.ts" };
-import * as lz4 from "lz4" with { local: "../lz4.tg.ts" };
-import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
-import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
-import * as readline from "readline" with { local: "../readline.tg.ts" };
-import * as std from "std" with { local: "../std" };
-import * as tzdb from "tzdb" with { local: "../tzdb.tg.ts" };
-import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
-import * as zstd from "zstd" with { local: "../zstd.tg.ts" };
+import * as flex from "flex" with { source: "../flex.tg.ts" };
+import * as icu from "icu" with { source: "../icu.tg.ts" };
+import * as lz4 from "lz4" with { source: "../lz4.tg.ts" };
+import * as ncurses from "ncurses" with { source: "../ncurses.tg.ts" };
+import * as openssl from "openssl" with { source: "../openssl.tg.ts" };
+import * as readline from "readline" with { source: "../readline.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import * as tzdb from "tzdb" with { source: "../tzdb.tg.ts" };
+import * as zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
+import * as zstd from "zstd" with { source: "../zstd.tg.ts" };
 
 import patches from "./patches" with { type: "directory" };
 

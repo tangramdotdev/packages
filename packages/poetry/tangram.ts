@@ -1,5 +1,5 @@
-import * as python from "python" with { local: "../python" };
-import * as std from "std" with { local: "../std" };
+import * as python from "python" with { source: "../python" };
+import * as std from "std" with { source: "../std" };
 
 import * as lockfile from "./lockfile.tg.ts";
 import requirementsTxt from "./requirements.txt" with { type: "file" };

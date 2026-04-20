@@ -1,7 +1,7 @@
-import * as bash from "bash" with { local: "./bash.tg.ts" };
-import coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
-import * as gnused from "gnused" with { local: "./gnused.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as bash from "bash" with { source: "./bash.tg.ts" };
+import coreutils from "coreutils" with { source: "./coreutils.tg.ts" };
+import * as gnused from "gnused" with { source: "./gnused.tg.ts" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/findutils/",

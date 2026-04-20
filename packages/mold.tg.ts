@@ -1,6 +1,6 @@
-import * as std from "std" with { local: "./std" };
-import * as cmake from "cmake" with { local: "./cmake" };
-import * as zstd from "zstd" with { local: "./zstd.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as cmake from "cmake" with { source: "./cmake" };
+import * as zstd from "zstd" with { source: "./zstd.tg.ts" };
 
 export const metadata = {
 	homepage: "https://github.com/rui314/mold",

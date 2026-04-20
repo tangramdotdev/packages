@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
+import * as std from "std" with { source: "./std" };
+import { $ } from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://go.dev/",

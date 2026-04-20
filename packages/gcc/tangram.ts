@@ -1,12 +1,12 @@
-import * as std from "std" with { local: "../std" };
-import binutils from "binutils" with { local: "../binutils.tg.ts" };
-import * as glibc from "glibc" with { local: "../glibc.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import binutils from "binutils" with { source: "../binutils.tg.ts" };
+import * as glibc from "glibc" with { source: "../glibc.tg.ts" };
 import libgompConstFix from "./gcc-libgomp-const-fix.patch" with { type: "file" };
-import musl from "musl" with { local: "../musl" };
-import perl from "perl" with { local: "../perl" };
-import python from "python" with { local: "../python" };
-import texinfo from "texinfo" with { local: "../texinfo.tg.ts" };
-import zstd from "zstd" with { local: "../zstd.tg.ts" };
+import musl from "musl" with { source: "../musl" };
+import perl from "perl" with { source: "../perl" };
+import python from "python" with { source: "../python" };
+import texinfo from "texinfo" with { source: "../texinfo.tg.ts" };
+import zstd from "zstd" with { source: "../zstd.tg.ts" };
 
 export const metadata = {
 	homepage: "https://gcc.gnu.org/",

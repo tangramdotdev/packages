@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "./std" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.freedesktop.org/wiki/Software/pkg-config/",

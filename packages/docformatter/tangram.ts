@@ -1,5 +1,5 @@
-import * as poetry from "poetry" with { local: "../poetry" };
-import * as std from "std" with { local: "../std" };
+import * as poetry from "poetry" with { source: "../poetry" };
+import * as std from "std" with { source: "../std" };
 import untokenizeModule from "./untokenize.py" with { type: "file" };
 
 export const metadata = {

@@ -1,12 +1,12 @@
-import * as std from "std" with { local: "../std" };
-import * as curl from "curl" with { local: "../curl.tg.ts" };
-import * as libiconv from "libiconv" with { local: "../libiconv.tg.ts" };
-import * as libpsl from "libpsl" with { local: "../libpsl.tg.ts" };
-import * as make from "gnumake" with { local: "../gnumake.tg.ts" };
-import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
-import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
-import * as zlib from "zlib" with { local: "../zlib.tg.ts" };
-import * as zstd from "zstd" with { local: "../zstd.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import * as curl from "curl" with { source: "../curl.tg.ts" };
+import * as libiconv from "libiconv" with { source: "../libiconv.tg.ts" };
+import * as libpsl from "libpsl" with { source: "../libpsl.tg.ts" };
+import * as make from "gnumake" with { source: "../gnumake.tg.ts" };
+import * as ncurses from "ncurses" with { source: "../ncurses.tg.ts" };
+import * as openssl from "openssl" with { source: "../openssl.tg.ts" };
+import * as zlib from "zlib" with { source: "../zlib.tg.ts" };
+import * as zstd from "zstd" with { source: "../zstd.tg.ts" };
 
 import patches from "./patches" with { type: "directory" };
 

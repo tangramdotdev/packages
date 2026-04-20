@@ -1,5 +1,5 @@
-import * as go from "go" with { local: "./go.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as go from "go" with { source: "./go.tg.ts" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://cli.github.com",

@@ -1,4 +1,4 @@
-import * as std from "std" with { local: "../std" };
+import * as std from "std" with { source: "../std" };
 
 /** Source code for the version of Ruby to bootstrap. */
 export const source = async () => {

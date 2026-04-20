@@ -1,14 +1,14 @@
-import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
+import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
 
-import * as libffi from "libffi" with { local: "../libffi.tg.ts" };
-import * as gmp from "gmp" with { local: "../gmp" };
-import * as libyaml from "libyaml" with { local: "../libyaml.tg.ts" };
-import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
-import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
-import * as readline from "readline" with { local: "../readline.tg.ts" };
-import * as rust from "rust" with { local: "../rust" };
-import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
+import * as libffi from "libffi" with { source: "../libffi.tg.ts" };
+import * as gmp from "gmp" with { source: "../gmp" };
+import * as libyaml from "libyaml" with { source: "../libyaml.tg.ts" };
+import * as ncurses from "ncurses" with { source: "../ncurses.tg.ts" };
+import * as openssl from "openssl" with { source: "../openssl.tg.ts" };
+import * as readline from "readline" with { source: "../readline.tg.ts" };
+import * as rust from "rust" with { source: "../rust" };
+import * as zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 
 import * as bootstrap from "./bootstrap.tg.ts";
 

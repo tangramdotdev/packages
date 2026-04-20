@@ -1,5 +1,5 @@
-import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as ncurses from "ncurses" with { source: "./ncurses.tg.ts" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://www.vim.org/",

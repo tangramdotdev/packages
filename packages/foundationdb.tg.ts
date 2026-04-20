@@ -1,9 +1,9 @@
-import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
-import libarchive from "libarchive" with { local: "./libarchive.tg.ts" };
-import xar from "xar" with { local: "./xar" };
-import xz from "xz" with { local: "./xz.tg.ts" };
-import zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import { $ } from "std" with { source: "./std" };
+import libarchive from "libarchive" with { source: "./libarchive.tg.ts" };
+import xar from "xar" with { source: "./xar" };
+import xz from "xz" with { source: "./xz.tg.ts" };
+import zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.foundationdb.org/",

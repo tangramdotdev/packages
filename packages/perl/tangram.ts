@@ -1,7 +1,7 @@
-import * as libffi from "libffi" with { local: "../libffi.tg.ts" };
-import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
-import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
+import * as libffi from "libffi" with { source: "../libffi.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
+import * as zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 import patches from "./patches" with { type: "directory" };
 
 export const metadata = {

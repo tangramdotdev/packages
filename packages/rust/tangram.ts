@@ -1,6 +1,6 @@
-import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
-import zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
+import zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 
 import * as build_ from "./build.tg.ts";
 export * as build from "./build.tg.ts";
@@ -21,7 +21,7 @@ export const metadata = {
 };
 
 const PROFILE = "minimal" as const;
-export const VERSION = "1.94.1" as const;
+export const VERSION = "1.95.0" as const;
 
 export type ToolchainArg = {
 	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD" for pinned nightly. */
@@ -55,7 +55,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	if (channel === "stable" || channel === undefined) {
 		manifestUrl = `https://static.rust-lang.org/dist/channel-rust-${VERSION}.toml`;
 		manifestChecksum =
-			"sha256:cc2f04dfc883549d683c8cc2a9393f523a3dfbd931f5d5eaef00303cca64a60d";
+			"sha256:821ff14e4c4a1cbe1e8915f35aff0a3fbbdf8d293ad48ab8f31e3b0440c581f9";
 	} else if (channel === "nightly") {
 		manifestUrl = "https://static.rust-lang.org/dist/channel-rust-nightly.toml";
 		manifestChecksum = "sha256:any";

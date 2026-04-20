@@ -1,9 +1,9 @@
-import * as libpsl from "libpsl" with { local: "./libpsl.tg.ts" };
-import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
-import * as zstd from "zstd" with { local: "./zstd.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
+import * as libpsl from "libpsl" with { source: "./libpsl.tg.ts" };
+import * as openssl from "openssl" with { source: "./openssl.tg.ts" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
+import * as zstd from "zstd" with { source: "./zstd.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import { $ } from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://curl.se/",

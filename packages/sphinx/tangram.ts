@@ -1,6 +1,6 @@
-import * as std from "std" with { local: "../std" };
+import * as std from "std" with { source: "../std" };
 
-import * as python from "python" with { local: "../python" };
+import * as python from "python" with { source: "../python" };
 
 export const metadata = {
 	homepage: "https://www.sphinx-doc.org/en/master/",

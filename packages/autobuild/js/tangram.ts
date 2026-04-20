@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "../../std" };
-import * as nodejs from "nodejs" with { local: "../../nodejs.tg.ts" };
+import * as std from "std" with { source: "../../std" };
+import * as nodejs from "nodejs" with { source: "../../nodejs.tg.ts" };
 import { wrapScripts } from "../common";
 
 export const metadata = {

@@ -1,6 +1,6 @@
-import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
-import * as ncurses from "ncurses" with { local: "./ncurses.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
+import * as ncurses from "ncurses" with { source: "./ncurses.tg.ts" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/bash/",

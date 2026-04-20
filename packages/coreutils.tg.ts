@@ -1,8 +1,8 @@
-import * as acl from "acl" with { local: "./acl.tg.ts" };
-import * as attr from "attr" with { local: "./attr" };
-import * as libcap from "libcap" with { local: "./libcap.tg.ts" };
-import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
-import * as std from "std" with { local: "./std" };
+import * as acl from "acl" with { source: "./acl.tg.ts" };
+import * as attr from "attr" with { source: "./attr" };
+import * as libcap from "libcap" with { source: "./libcap.tg.ts" };
+import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
+import * as std from "std" with { source: "./std" };
 import alwaysPreserveXattrsPatch from "./std/utils/coreutils-always-preserve-xattrs.patch" with { type: "file" };
 
 export const metadata = {

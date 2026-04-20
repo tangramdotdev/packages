@@ -1,6 +1,6 @@
-import openssl from "openssl" with { local: "./openssl.tg.ts" };
-import { cargo } from "rust" with { local: "./rust" };
-import * as std from "std" with { local: "./std" };
+import openssl from "openssl" with { source: "./openssl.tg.ts" };
+import { cargo } from "rust" with { source: "./rust" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://github.com/ducaale/xh",

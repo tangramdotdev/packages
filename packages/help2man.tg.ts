@@ -1,8 +1,8 @@
-import * as autoconf from "autoconf" with { local: "./autoconf.tg.ts" };
-import * as perl from "perl" with { local: "./perl" };
-import * as std from "std" with { local: "./std" };
-import * as texinfo from "texinfo" with { local: "./texinfo.tg.ts" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
+import * as autoconf from "autoconf" with { source: "./autoconf.tg.ts" };
+import * as perl from "perl" with { source: "./perl" };
+import * as std from "std" with { source: "./std" };
+import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const deps = () =>
 	std.deps({

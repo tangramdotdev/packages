@@ -51,6 +51,30 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		configureArgs.push("--with-curses");
 	}
 
+	// DIAGNOSTIC: When built with bootstrap=true, cc.env will NOT inject a
+	// toolchain, so the caller must supply one via env_ or sdk. Detect the
+	// common regression where the caller passes utils-only into bash. Emit a
+	// stack trace to identify the offending call site.
+	if (bootstrap_) {
+		let hasCompiler = false;
+		for (const name of ["cc", "gcc", "clang", "c99"]) {
+			try {
+				await std.env.which({ env: envArg, name });
+				hasCompiler = true;
+				break;
+			} catch (_) {
+				// not found, try next.
+			}
+		}
+		if (!hasCompiler && sdk === undefined) {
+			const diag = new Error(
+				"std.utils.bash.build invoked with bootstrap=true but env_ contains no C compiler and no sdk was provided. This will fail at configure time with 'no acceptable C compiler found'.",
+			);
+			console.error(diag.stack ?? diag.message);
+			throw diag;
+		}
+	}
+
 	const configure = {
 		args: configureArgs,
 	};

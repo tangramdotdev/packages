@@ -1,8 +1,8 @@
-import * as make from "gnumake" with { local: "./gnumake.tg.ts" };
-import * as nodejs from "nodejs" with { local: "./nodejs.tg.ts" };
-import * as go from "go" with { local: "./go.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
+import * as make from "gnumake" with { source: "./gnumake.tg.ts" };
+import * as nodejs from "nodejs" with { source: "./nodejs.tg.ts" };
+import * as go from "go" with { source: "./go.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import { $ } from "std" with { source: "./std" };
 
 export const metadata = {
 	home: "https://esbuild.github.io",

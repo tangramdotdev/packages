@@ -1,7 +1,7 @@
-import * as std from "std" with { local: "../../std" };
-import cmake from "cmake" with { local: "../../cmake" };
-import openssl from "openssl" with { local: "../../openssl.tg.ts" };
-import * as rust from "rust" with { local: "../../rust" };
+import * as std from "std" with { source: "../../std" };
+import cmake from "cmake" with { source: "../../cmake" };
+import openssl from "openssl" with { source: "../../openssl.tg.ts" };
+import * as rust from "rust" with { source: "../../rust" };
 
 export const metadata = {
 	name: "autobuild-rust",

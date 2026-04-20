@@ -1,5 +1,5 @@
-import { cargo } from "rust" with { local: "./rust" };
-import * as std from "std" with { local: "./std" };
+import { cargo } from "rust" with { source: "./rust" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://github.com/sharkdp/hyperfine",

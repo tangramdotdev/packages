@@ -1,9 +1,9 @@
-import * as std from "std" with { local: "../std" };
-import * as openssl from "openssl" with { local: "../openssl.tg.ts" };
-import * as libiconv from "libiconv" with { local: "../libiconv.tg.ts" };
-import * as libxml2 from "libxml2" with { local: "../libxml2.tg.ts" };
-import * as xz from "xz" with { local: "../xz.tg.ts" };
-import * as zlib from "zlib-ng" with { local: "../zlib-ng.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import * as openssl from "openssl" with { source: "../openssl.tg.ts" };
+import * as libiconv from "libiconv" with { source: "../libiconv.tg.ts" };
+import * as libxml2 from "libxml2" with { source: "../libxml2.tg.ts" };
+import * as xz from "xz" with { source: "../xz.tg.ts" };
+import * as zlib from "zlib-ng" with { source: "../zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://github.com/apple-oss-distributions/xar",

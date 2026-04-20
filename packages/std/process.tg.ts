@@ -64,6 +64,7 @@ export class StdProcessBuilder {
 	#pipefail: boolean;
 	#name: tg.Unresolved<string | undefined> | undefined;
 	#extra: Array<(b: tg.Process.Builder<any>) => tg.Process.Builder<any>>;
+	#cwdExplicit: boolean;
 
 	constructor(
 		mode: Mode,
@@ -83,16 +84,15 @@ export class StdProcessBuilder {
 		this.#pipefail = true;
 		this.#name = undefined;
 		this.#extra = [];
+		this.#cwdExplicit = false;
 	}
 
-	/** Strip std defaults (env, shell, flags). Equivalent to using tg.build/tg.run directly. */
+	/** Use raw /bin/sh. Skips std.utils auto-attach and pipefail (dash lacks pipefail). */
 	bootstrap(b: boolean): this {
 		this.#bootstrap = b;
 		if (b) {
 			this.#includeUtils = false;
 			this.#pipefail = false;
-			this.#exitOnErr = false;
-			this.#disallowUnset = false;
 		}
 		return this;
 	}
@@ -152,6 +152,7 @@ export class StdProcessBuilder {
 	}
 
 	cwd(cwd: tg.Unresolved<tg.MaybeMutation<string | undefined>>): this {
+		this.#cwdExplicit = true;
 		this.#extra.push((b) => b.cwd(cwd));
 		return this;
 	}
@@ -206,10 +207,15 @@ export class StdProcessBuilder {
 
 		if (this.#template !== undefined) {
 			// Template path: resolve shell, flags, env.
-			const template = await tg.template(
+			let template = await tg.template(
 				this.#template,
 				...(this.#placeholders ?? []),
 			);
+
+			// Start in a per-process work subdir so $(pwd) isn't "/".
+			if (!this.#cwdExplicit) {
+				template = await tg.template`cd "$(mktemp -d)"\n${template}`;
+			}
 
 			// Build shell flags.
 			const flags: Array<string> = [];
@@ -252,6 +258,9 @@ export class StdProcessBuilder {
 		}
 		if (!this.#includeUtils) {
 			envArgs.push({ utils: false });
+		}
+		if (this.#bootstrap && this.#template !== undefined) {
+			envArgs.push(std.bootstrap.utils(host));
 		}
 		envArgs.push(...this.#envs);
 		if (envArgs.length > 0) {

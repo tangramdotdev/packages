@@ -129,6 +129,7 @@ export type BuildUtilArg = Omit<std.autotools.Arg, "deps"> & {
 /** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and disabling extra tools. */
 export const autotoolsInternal = async (arg: tg.Unresolved<BuildUtilArg>) => {
 	const {
+		bootstrap = false,
 		extended = false,
 		pkgConfig = false,
 		wrapBashScriptPaths,
@@ -136,8 +137,10 @@ export const autotoolsInternal = async (arg: tg.Unresolved<BuildUtilArg>) => {
 	} = await tg.resolve(arg);
 	let output = await std.autotools.build({
 		...rest,
+		bootstrap,
 		extended,
-		pkgConfig,
+		// For non-bootstrap builds, ensure at least minimal preset to trigger SDK injection
+		pkgConfig: pkgConfig || !bootstrap,
 	});
 	for (const path of wrapBashScriptPaths ?? []) {
 		const file = tg.File.expect(await output.get(path));

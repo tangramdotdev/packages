@@ -1,11 +1,11 @@
-import * as curl from "curl" with { local: "./curl.tg.ts" };
-import * as libpsl from "libpsl" with { local: "./libpsl.tg.ts" };
-import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
-import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
-import * as zstd from "zstd" with { local: "./zstd.tg.ts" };
+import * as curl from "curl" with { source: "./curl.tg.ts" };
+import * as libpsl from "libpsl" with { source: "./libpsl.tg.ts" };
+import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
+import * as openssl from "openssl" with { source: "./openssl.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import { $ } from "std" with { source: "./std" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
+import * as zstd from "zstd" with { source: "./zstd.tg.ts" };
 
 export const metadata = {
 	homepage: "https://git-scm.com/",

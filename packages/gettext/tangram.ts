@@ -1,13 +1,13 @@
-import * as acl from "acl" with { local: "../acl.tg.ts" };
-import * as attr from "attr" with { local: "../attr" };
-import * as bash from "bash" with { local: "../bash.tg.ts" };
-import coreutils from "coreutils" with { local: "../coreutils.tg.ts" };
-import * as gnugrep from "gnugrep" with { local: "../gnugrep.tg.ts" };
-import * as gnused from "gnused" with { local: "../gnused.tg.ts" };
-import * as libiconv from "libiconv" with { local: "../libiconv.tg.ts" };
-import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
-import * as std from "std" with { local: "../std" };
-import * as xz from "xz" with { local: "../xz.tg.ts" };
+import * as acl from "acl" with { source: "../acl.tg.ts" };
+import * as attr from "attr" with { source: "../attr" };
+import * as bash from "bash" with { source: "../bash.tg.ts" };
+import coreutils from "coreutils" with { source: "../coreutils.tg.ts" };
+import * as gnugrep from "gnugrep" with { source: "../gnugrep.tg.ts" };
+import * as gnused from "gnused" with { source: "../gnused.tg.ts" };
+import * as libiconv from "libiconv" with { source: "../libiconv.tg.ts" };
+import * as ncurses from "ncurses" with { source: "../ncurses.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import * as xz from "xz" with { source: "../xz.tg.ts" };
 import progrelocFix from "./gettext-progreloc-fix.patch" with { type: "file" };
 
 export const metadata = {

@@ -1,8 +1,8 @@
-import * as nodejs from "nodejs" with { local: "./nodejs.tg.ts" };
-import * as postgresql from "postgresql" with { local: "./postgresql" };
-import * as ripgrep from "ripgrep" with { local: "./ripgrep.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import { $ } from "std" with { local: "./std" };
+import * as nodejs from "nodejs" with { source: "./nodejs.tg.ts" };
+import * as postgresql from "postgresql" with { source: "./postgresql" };
+import * as ripgrep from "ripgrep" with { source: "./ripgrep.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import { $ } from "std" with { source: "./std" };
 
 export const metadata = {
 	name: "demo",

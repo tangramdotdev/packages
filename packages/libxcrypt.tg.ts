@@ -1,4 +1,4 @@
-import * as std from "std" with { local: "./std" };
+import * as std from "std" with { source: "./std" };
 import strchrConstFix from "./libxcrypt-strchr-const-fix.patch" with { type: "file" };
 
 export const metadata = {

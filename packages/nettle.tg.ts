@@ -1,5 +1,5 @@
-import * as gmp from "gmp" with { local: "./gmp" };
-import * as std from "std" with { local: "./std" };
+import * as gmp from "gmp" with { source: "./gmp" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://www.lysator.liu.se/~nisse/nettle/",

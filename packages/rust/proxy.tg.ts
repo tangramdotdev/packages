@@ -1,6 +1,6 @@
-import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
-import dash from "dash" with { local: "../dash.tg.ts" };
+import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
+import dash from "dash" with { source: "../dash.tg.ts" };
 
 import { cargo, self, VERSION } from "./tangram.ts";
 
@@ -36,10 +36,10 @@ export const proxy = async (...args: std.Args<Arg>) =>
 
 export default proxy;
 
-import { libclang } from "llvm" with { local: "../llvm" };
-import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
-import openssl from "openssl" with { local: "../openssl.tg.ts" };
-import xz from "xz" with { local: "../xz.tg.ts" };
+import { libclang } from "llvm" with { source: "../llvm" };
+import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
+import openssl from "openssl" with { source: "../openssl.tg.ts" };
+import xz from "xz" with { source: "../xz.tg.ts" };
 import tests from "./tests" with { type: "directory" };
 
 export const testProxyCompiles = async () => {
@@ -739,7 +739,7 @@ export const testExternalTsImport = async () => {
 	const sourceWithTangram = tg.directory(source, {
 		"tangram.ts": tg.file(`
 // This import references a file outside the workspace
-import foo from "foo" with { local: "../external-package/foo.tg.ts" };
+import foo from "foo" with { source: "../external-package/foo.tg.ts" };
 
 export default foo;
 `),

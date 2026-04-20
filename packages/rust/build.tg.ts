@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
+import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
 import tests from "./tests" with { type: "directory" };
 import { self, rustTriple } from "./tangram.ts";
 
@@ -352,8 +352,8 @@ export const testConditionalCompilation = async () => {
 	return true;
 };
 
-import * as ncurses from "ncurses" with { local: "../ncurses.tg.ts" };
-import * as readline from "readline" with { local: "../readline.tg.ts" };
+import * as ncurses from "ncurses" with { source: "../ncurses.tg.ts" };
+import * as readline from "readline" with { source: "../readline.tg.ts" };
 export const testLinkReadline = async () => {
 	const crateName = "native_exe_readline";
 

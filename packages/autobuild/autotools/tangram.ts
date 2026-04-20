@@ -1,12 +1,12 @@
-import * as std from "std" with { local: "../../std" };
-import { $ } from "std" with { local: "../../std" };
+import * as std from "std" with { source: "../../std" };
+import { $ } from "std" with { source: "../../std" };
 
-import autoconf from "autoconf" with { local: "../../autoconf.tg.ts" };
-import automake from "automake" with { local: "../../automake.tg.ts" };
-import gettext from "gettext" with { local: "../../gettext" };
-import help2man from "help2man" with { local: "../../help2man.tg.ts" };
-import perl from "perl" with { local: "../../perl" };
-import texinfo from "texinfo" with { local: "../../texinfo.tg.ts" };
+import autoconf from "autoconf" with { source: "../../autoconf.tg.ts" };
+import automake from "automake" with { source: "../../automake.tg.ts" };
+import gettext from "gettext" with { source: "../../gettext" };
+import help2man from "help2man" with { source: "../../help2man.tg.ts" };
+import perl from "perl" with { source: "../../perl" };
+import texinfo from "texinfo" with { source: "../../texinfo.tg.ts" };
 
 export const metadata = {
 	name: "autobuild-autotools",

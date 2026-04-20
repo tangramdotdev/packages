@@ -1,9 +1,9 @@
-import * as bzip2 from "bzip2" with { local: "./bzip2" };
-import * as libiconv from "libiconv" with { local: "./libiconv.tg.ts" };
-import * as openssl from "openssl" with { local: "./openssl.tg.ts" };
-import * as std from "std" with { local: "./std" };
-import * as xz from "xz" with { local: "./xz.tg.ts" };
-import * as zlib from "zlib-ng" with { local: "./zlib-ng.tg.ts" };
+import * as bzip2 from "bzip2" with { source: "./bzip2" };
+import * as libiconv from "libiconv" with { source: "./libiconv.tg.ts" };
+import * as openssl from "openssl" with { source: "./openssl.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as xz from "xz" with { source: "./xz.tg.ts" };
+import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
 export const metadata = {
 	homepage: "https://libarchive.org",

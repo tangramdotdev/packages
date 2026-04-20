@@ -1,5 +1,5 @@
-import * as perl from "perl" with { local: "./perl" };
-import * as std from "std" with { local: "./std" };
+import * as perl from "perl" with { source: "./perl" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://openssl.org/",

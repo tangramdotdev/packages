@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "../../std" };
-import * as ruby from "ruby" with { local: "../../ruby" };
+import * as std from "std" with { source: "../../std" };
+import * as ruby from "ruby" with { source: "../../ruby" };
 import { wrapScripts } from "../common";
 
 export const metadata = {

@@ -1,6 +1,6 @@
-import * as std from "std" with { local: "./std" };
-import * as coreutils from "coreutils" with { local: "./coreutils.tg.ts" };
-import * as tzdb from "tzdb" with { local: "./tzdb.tg.ts" };
+import * as std from "std" with { source: "./std" };
+import * as coreutils from "coreutils" with { source: "./coreutils.tg.ts" };
+import * as tzdb from "tzdb" with { source: "./tzdb.tg.ts" };
 
 export const metadata = {
 	homepage: "https://www.sudo.ws/",

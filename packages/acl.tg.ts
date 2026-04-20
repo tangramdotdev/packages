@@ -1,5 +1,5 @@
-import * as attr from "attr" with { local: "./attr" };
-import * as std from "std" with { local: "./std" };
+import * as attr from "attr" with { source: "./attr" };
+import * as std from "std" with { source: "./std" };
 
 export const metadata = {
 	homepage: "https://savannah.nongnu.org/projects/acl",

@@ -1,5 +1,5 @@
-import * as std from "std" with { local: "../std" };
-import { $ } from "std" with { local: "../std" };
+import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
 
 import * as autotools from "./autotools";
 import * as cmake from "./cmake";

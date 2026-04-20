@@ -166,10 +166,19 @@ export const run = async (...args: std.Args<RunArg>) => {
 
 	let builder = std.run`${script}`.env(env_);
 	if (bootstrap) {
-		builder = builder.bootstrap(bootstrap);
+		// Configure scripts rely on permissive failure handling.
+		builder = builder
+			.bootstrap(bootstrap)
+			.exitOnErr(false)
+			.disallowUnset(false);
 	}
 	if (commandArg !== undefined) {
-		builder = builder.arg(commandArg);
+		if (commandArg.host !== undefined) {
+			builder = builder.host(commandArg.host);
+		}
+		if (commandArg.env !== undefined) {
+			builder = builder.env(commandArg.env as std.env.Arg);
+		}
 	}
 	if (checksum) {
 		builder = builder.checksum(checksum);

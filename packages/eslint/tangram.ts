@@ -1,5 +1,5 @@
-import * as node from "nodejs" with { local: "../nodejs.tg.ts" };
-import * as std from "std" with { local: "../std" };
+import * as node from "nodejs" with { source: "../nodejs.tg.ts" };
+import * as std from "std" with { source: "../std" };
 
 import packageLock from "./package-lock.json" with { type: "file" };
 

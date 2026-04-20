@@ -1,7 +1,6 @@
-import * as std from "std" with { local: "../std" };
-import openssl from "openssl" with { local: "../openssl.tg.ts" };
-import pkgconf from "pkgconf" with { local: "../pkgconf.tg.ts" };
-import { $ } from "std" with { local: "../std" };
+import * as std from "std" with { source: "../std" };
+import openssl from "openssl" with { source: "../openssl.tg.ts" };
+import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
 
@@ -368,7 +367,10 @@ linker = "${hostLinker}"`;
 
 	const env = std.env.arg(...envs, env_);
 
-	let builder = $`${buildScript}`.checksum(checksum).network(network).env(env);
+	let builder = std.build`${buildScript}`
+		.checksum(checksum)
+		.network(network)
+		.env(env);
 	if (processName !== undefined) {
 		builder = builder.named(processName);
 	}
@@ -557,7 +559,7 @@ export const cargoVendor = async (
 	`;
 	const rustArtifact = self();
 	const sdk = std.sdk();
-	return $`${vendorScript}`
+	return std.build`${vendorScript}`
 		.checksum("sha256:any")
 		.network(true)
 		.env(sdk)
