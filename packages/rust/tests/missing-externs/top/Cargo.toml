@@ -1,0 +1,11 @@
+[package]
+name = "top"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "top"
+path = "src/main.rs"
+
+[dependencies]
+middle = { path = "../middle" }

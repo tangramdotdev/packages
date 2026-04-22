@@ -122,7 +122,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	const env = await std.env.arg(...sdks);
 
 	// Install each package.
-	let rustInstall = await $`
+	let rustInstall = await std.build`
 			for package in ${packagesArtifact}/*/* ; do
 				echo "Installing $package"
 				bash "$package/install.sh" --prefix="${tg.output}"

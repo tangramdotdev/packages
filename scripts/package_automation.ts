@@ -95,7 +95,7 @@ class TangramClient {
 
 	async push(
 		target: string,
-		options: { lazy?: boolean; commands?: boolean } = {},
+		options: { lazy?: boolean; commands?: boolean; remote?: string } = {},
 	): Promise<void> {
 		const args = [target];
 		if (options.lazy ?? true) {
@@ -103,6 +103,9 @@ class TangramClient {
 		}
 		if (options.commands) {
 			args.push("--commands");
+		}
+		if (options.remote) {
+			args.push("--remote", options.remote);
 		}
 		await $`${this.exe} push ${args}`.quiet();
 	}
@@ -119,8 +122,15 @@ class TangramClient {
 		await $`${this.exe} check ${path}`;
 	}
 
-	async publish(path: string): Promise<void> {
-		await $`${this.exe} publish ${path}`;
+	async publish(
+		path: string,
+		options: { remote?: string } = {},
+	): Promise<void> {
+		const args = [path];
+		if (options.remote) {
+			args.push("--remote", options.remote);
+		}
+		await $`${this.exe} publish ${args}`;
 	}
 }
 
@@ -207,6 +217,7 @@ class Configuration {
 	readonly verbose: boolean;
 	readonly lazy: boolean;
 	readonly retry: boolean;
+	readonly remote?: string;
 
 	constructor(options: {
 		packages?: PackageFilter;
@@ -218,6 +229,7 @@ class Configuration {
 		platform?: string;
 		lazy?: boolean;
 		retry?: boolean;
+		remote?: string;
 	}) {
 		this.packages = options.packages || {};
 		this.actions = options.actions || [];
@@ -228,6 +240,7 @@ class Configuration {
 		this.verbose = options.verbose ?? false;
 		this.lazy = options.lazy ?? true;
 		this.retry = options.retry ?? false;
+		this.remote = options.remote;
 	}
 
 	private detectTangramExe(): string {
@@ -266,6 +279,7 @@ class Configuration {
 		const tangram = `Tangram: ${this.tangram}`;
 		const platform = `Platform: ${this.currentPlatform}`;
 		const lazy = `Lazy Push: ${this.lazy}`;
+		const remote = `Remote: ${this.remote ?? "default"}`;
 		const retry = `Retry: ${this.retry}`;
 		return [
 			actions,
@@ -275,6 +289,7 @@ class Configuration {
 			tangram,
 			platform,
 			lazy,
+			remote,
 			retry,
 		].join("\n");
 	}
@@ -311,6 +326,7 @@ Flags:
       --parallel        Run packages in parallel (default: sequential)
       --platform=PLAT   Override target platform
       --eager           Disable lazy push (lazy push is enabled by default)
+      --remote=NAME     Override the remote for publish and push (default: "default")
       --retry           Add --retry to build commands
 
 Action Dependencies:
@@ -345,6 +361,7 @@ function parseFromArgs(): Configuration {
 			export: { type: "string", multiple: true },
 			exclude: { type: "string", multiple: true },
 			platform: { type: "string" },
+			remote: { type: "string" },
 			tangram: { type: "string" },
 		},
 		strict: true,
@@ -395,6 +412,7 @@ function parseFromArgs(): Configuration {
 		tangram: values.tangram,
 		platform: values.platform,
 		lazy: !values.eager,
+		remote: values.remote,
 		retry: values.retry ?? false,
 	});
 }
@@ -410,6 +428,7 @@ interface Context {
 	verbose: boolean;
 	lazy: boolean;
 	retry: boolean;
+	remote?: string;
 }
 
 /** Helper to get version from package metadata */
@@ -502,6 +521,7 @@ const PACKAGE_EXPORT_MATRICES: Record<string, ExportMatrix> = {
 			ref: "buildAutotoolsBuildTools",
 			tagPath: "dependencies/buildTools/autotools",
 		},
+		{ ref: "buildBootstrapSdkEnv", tagPath: "bootstrap/sdkEnv" },
 		{ ref: "buildSdk", tagPath: "sdk/build" },
 		{ ref: "buildCrossSdk", tagPath: "sdk/cross" },
 	],
@@ -616,7 +636,7 @@ async function publishAction(ctx: Context): Promise<Result<string>> {
 	// Publish the package
 	log(`[publish] ${versionedName}: ${ctx.packagePath}`);
 	try {
-		await ctx.tangram.publish(ctx.packagePath);
+		await ctx.tangram.publish(ctx.packagePath, { remote: ctx.remote });
 		return { ok: true, value: `published ${versionedName}` };
 	} catch (err) {
 		return { ok: false, error: extractErrorMessage(err) };
@@ -661,7 +681,7 @@ async function releaseAction(ctx: Context): Promise<Result<string>> {
 		// Push the tag (which also pushes the underlying artifact).
 		try {
 			log(`[release] Pushing ${tag}${ctx.lazy ? " (lazy)" : ""}`);
-			await ctx.tangram.push(tag, { lazy: ctx.lazy });
+			await ctx.tangram.push(tag, { lazy: ctx.lazy, remote: ctx.remote });
 			log(`[release] Pushed ${tag}`);
 			uploadedTags.push(tag);
 		} catch (err) {
@@ -837,6 +857,7 @@ class PackageExecutor {
 				processTracker: this.processTracker,
 				verbose: this.config.verbose,
 				lazy: this.config.lazy,
+				remote: this.config.remote,
 				retry: this.config.retry,
 			};
 

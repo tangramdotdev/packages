@@ -268,6 +268,10 @@ export const buildDefaultWrapper = async () => {
 	return workspace.defaultWrapper();
 };
 
+export const buildBootstrapSdkEnv = async () => {
+	return bootstrap.sdk.env(triple.host());
+};
+
 export const buildAutotoolsBuildTools = async () => {
 	return dependencies.autotoolsBuildTools();
 };

@@ -8,7 +8,7 @@ import cargoToml from "./tgrustc/Cargo.toml" with { type: "file" };
 import cargoLock from "./tgrustc/Cargo.lock" with { type: "file" };
 import src from "./tgrustc/src" with { type: "directory" };
 
-// Create a source directory structure where `../../std` from tgrustc's Cargo.toml resolves to the std Rust workspace.
+/** Layout so `../../std` from tgrustc's Cargo.toml resolves to the std Rust workspace. */
 export let source = async () => {
 	return tg.directory({
 		"rust/tgrustc": {
@@ -27,7 +27,6 @@ export const proxy = async (...args: std.Args<Arg>) =>
 		{
 			source: source(),
 			manifestSubdir: "rust/tgrustc",
-			features: ["tracing"],
 			proxy: false,
 			useCargoVendor: true,
 		},
@@ -43,7 +42,6 @@ import xz from "xz" with { source: "../xz.tg.ts" };
 import tests from "./tests" with { type: "directory" };
 
 export const testProxyCompiles = async () => {
-	// Make sure the proxy compiles and runs.
 	const version = await $`tgrustc rustc - --version | tee ${tg.output}`
 		.env(proxy())
 		.env(self())
@@ -53,7 +51,6 @@ export const testProxyCompiles = async () => {
 };
 
 export const testHello = async () => {
-	// Build the basic proxy test.
 	const helloWorld = await cargo.build({
 		source: tests.get("hello-world").then(tg.Directory.expect),
 		proxy: true,
@@ -63,7 +60,6 @@ export const testHello = async () => {
 	});
 	console.log("helloWorld result", helloWorld.id);
 
-	// Assert it produces the correct output.
 	const helloOutput = await $`hello-world | tee ${tg.output}`
 		.env(helloWorld)
 		.then(tg.File.expect);
@@ -78,7 +74,6 @@ export const testPkgconfig = async () => {
 
 	const source = tests.get("hello-c-dylib").then(tg.Directory.expect);
 
-	// compile the dylib
 	let externalLibDir = await $`
 		mkdir -p ${tg.output}/lib
 		mkdir -p ${tg.output}/include
@@ -102,7 +97,6 @@ export const testPkgconfig = async () => {
 	});
 	console.log("externalLibDir", externalLibDir.id);
 
-	// compile the rust.
 	const rustOutput = await cargo.build({
 		source,
 		pre: "set -x",
@@ -115,7 +109,6 @@ export const testPkgconfig = async () => {
 	});
 	console.log("result", rustOutput.id);
 
-	// Assert it produces the correct output.
 	const testOutput = await $`myapp | tee ${tg.output}`
 		.env(rustOutput)
 		.then(tg.File.expect);
@@ -126,7 +119,6 @@ export const testPkgconfig = async () => {
 };
 
 export const testOpenSSL = async () => {
-	// Build the openssl proxy test.
 	const helloOpenssl = await cargo.build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		env: std.env.arg(openssl(), pkgconf(), {
@@ -138,7 +130,6 @@ export const testOpenSSL = async () => {
 	});
 	console.log("helloOpenssl result", helloOpenssl.id);
 
-	// Assert it produces the correct output.
 	const opensslOutput = await $`hello-openssl | tee ${tg.output}`
 		.env(helloOpenssl)
 		.then(tg.File.expect);
@@ -149,7 +140,6 @@ export const testOpenSSL = async () => {
 };
 
 export const testProcMacro = async () => {
-	// Build a workspace with a proc-macro crate and an app that uses it.
 	const result = await cargo.build({
 		source: tests.get("hello-proc-macro").then(tg.Directory.expect),
 		proxy: true,
@@ -159,7 +149,6 @@ export const testProcMacro = async () => {
 	});
 	console.log("testProcMacro result", result.id);
 
-	// Assert it produces the correct output.
 	const output = await $`app | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -168,7 +157,6 @@ export const testProcMacro = async () => {
 };
 
 export const testBuildScriptCodegen = async () => {
-	// Build a project with a build script that generates Rust code.
 	const result = await cargo.build({
 		source: tests.get("hello-codegen").then(tg.Directory.expect),
 		proxy: true,
@@ -178,7 +166,6 @@ export const testBuildScriptCodegen = async () => {
 	});
 	console.log("testBuildScriptCodegen result", result.id);
 
-	// Assert it produces the correct output.
 	const output = await $`hello-codegen | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -187,7 +174,6 @@ export const testBuildScriptCodegen = async () => {
 };
 
 export const testBuildScriptEnvDep = async () => {
-	// Build with MY_BUILD_VAR=first
 	const build1 = await cargo.build({
 		source: tests.get("hello-env-dep").then(tg.Directory.expect),
 		proxy: true,
@@ -204,7 +190,7 @@ export const testBuildScriptEnvDep = async () => {
 	const text1 = await output1.text;
 	tg.assert(text1.includes("first_value"));
 
-	// Build with MY_BUILD_VAR=second - should NOT use cache
+	// Different value must NOT use cache.
 	const build2 = await cargo.build({
 		source: tests.get("hello-env-dep").then(tg.Directory.expect),
 		proxy: true,
@@ -223,7 +209,6 @@ export const testBuildScriptEnvDep = async () => {
 };
 
 export const testBuildScriptFileDep = async () => {
-	// Build a project with a build script that watches a file.
 	const result = await cargo.build({
 		source: tests.get("hello-file-dep").then(tg.Directory.expect),
 		proxy: true,
@@ -233,7 +218,6 @@ export const testBuildScriptFileDep = async () => {
 	});
 	console.log("testBuildScriptFileDep result", result.id);
 
-	// Assert it produces the correct output.
 	const output = await $`hello-file-dep | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -242,7 +226,6 @@ export const testBuildScriptFileDep = async () => {
 };
 
 export const testCcRs = async () => {
-	// Build a project with a build script that uses cc-rs to compile C code.
 	const result = await cargo.build({
 		source: tests.get("hello-cc-rs").then(tg.Directory.expect),
 		proxy: true,
@@ -252,7 +235,6 @@ export const testCcRs = async () => {
 	});
 	console.log("testCcRs result", result.id);
 
-	// Assert it produces the correct output.
 	const output = await $`hello-cc-rs | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -261,7 +243,6 @@ export const testCcRs = async () => {
 };
 
 export const testProcMacroWithDeps = async () => {
-	// Build a workspace with a proc-macro crate that uses syn/quote.
 	const result = await cargo.build({
 		source: tests.get("hello-proc-macro-deps").then(tg.Directory.expect),
 		proxy: true,
@@ -271,7 +252,6 @@ export const testProcMacroWithDeps = async () => {
 	});
 	console.log("testProcMacroWithDeps result", result.id);
 
-	// Assert it produces the correct output.
 	const output = await $`app | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -279,9 +259,8 @@ export const testProcMacroWithDeps = async () => {
 	tg.assert(text.trim() === "Hello from Greeter!");
 };
 
+/** Proc macros build for host; app builds for target. */
 export const testProcMacroCross = async () => {
-	// Cross-compile a proc-macro workspace.
-	// Proc macros must compile for the host, while the app compiles for the target.
 	const hostTriple = std.triple.host();
 	const hostArch = std.triple.arch(hostTriple);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
@@ -297,14 +276,13 @@ export const testProcMacroCross = async () => {
 	});
 	console.log("testProcMacroCross result", result.id);
 
-	// Verify the binary exists (we cannot run it since it is cross-compiled).
+	// Cannot run it since it's cross-compiled.
 	const app = await result.get("bin/app").then(tg.File.expect);
 	tg.assert(app !== undefined);
 };
 
+/** Bindgen requires libclang (LLVM). */
 export const testBindgen = async () => {
-	// Build a project with a build script that uses bindgen.
-	// Bindgen requires libclang, so we need to provide LLVM.
 	const result = await cargo.build({
 		source: tests.get("hello-bindgen").then(tg.Directory.expect),
 		proxy: true,
@@ -314,7 +292,6 @@ export const testBindgen = async () => {
 	});
 	console.log("testBindgen result", result.id);
 
-	// Assert it produces the correct output.
 	const output = await $`hello-bindgen | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -331,11 +308,7 @@ export type RustcStats = {
 	command_id: string;
 };
 
-/** Parse tgrustc stats from cargo-stderr.log in a build result.
- *
- * Looks for tracing events matching `eventName` in the format:
- * `<eventName> crate_name=<name> elapsed_ms=<ms> cached=<true|false> process_id=<id> command_id=<id>`
- */
+/** Parse tgrustc stats from cargo-stderr.log; expects `<eventName> crate_name=.. elapsed_ms=.. cached=.. process_id=.. command_id=..`. */
 export const parseStats = async (
 	result: tg.Directory,
 	eventName: string = "proxy_complete",
@@ -407,14 +380,7 @@ const cacheTestArgs: cargo.Arg = {
 	env: { TGRUSTC_TRACING: "tgrustc=info" },
 };
 
-/** Build, modify a file, rebuild, and assert cache hit/miss expectations.
- *
- * 1. Builds once to populate cache.
- * 2. Reads modifyPath from source, appends a unique comment.
- * 3. Rebuilds and parses stats from both builds.
- * 4. Asserts each crate in expectations matches its expected hit/miss.
- * 5. Returns both stat arrays and the second result directory.
- */
+/** Build, modify `modifyPath`, rebuild, assert cache hit/miss per crate. */
 const assertCacheHit = async (
 	config: CacheTestConfig,
 ): Promise<{
@@ -425,7 +391,6 @@ const assertCacheHit = async (
 	const { source, modifyPath, expectations, buildArgs = [], tag } = config;
 	const comment = `${tag ?? "cache test modification"} ${Date.now()}`;
 
-	// First build to populate cache.
 	const firstResult = await cargo.build(
 		{ source },
 		...buildArgs,
@@ -433,7 +398,6 @@ const assertCacheHit = async (
 	);
 	const firstStats = await parseStats(firstResult);
 
-	// Modify the specified file.
 	const originalText = await source
 		.get(modifyPath)
 		.then(tg.File.expect)
@@ -442,7 +406,6 @@ const assertCacheHit = async (
 		[modifyPath]: tg.file(`${originalText}\n// ${comment}\n`),
 	});
 
-	// Rebuild with modified source.
 	const secondResult = await cargo.build(
 		{ source: modifiedSource },
 		...buildArgs,
@@ -457,7 +420,6 @@ const assertCacheHit = async (
 		throw new Error("First build should have stats.");
 	}
 
-	// Assert expectations.
 	for (const [crate_name, expectedCached] of Object.entries(expectations)) {
 		const status = getCrateStatus(secondStats, crate_name);
 		const label = expectedCached ? "cache hit" : "cache miss";
@@ -474,7 +436,7 @@ const assertCacheHit = async (
 export const testCacheHitVendoredDeps = async () => {
 	const source = await tests.get("parallel-deps").then(tg.Directory.expect);
 
-	// Warmup build to ensure vendoring, SDK, toolchain, and proxy are cached.
+	// Warmup so vendoring, SDK, toolchain, and proxy are cached.
 	await cargo.build({ source, proxy: true });
 	// Cold proxy build to populate tgrustc cache.
 	await buildWithStats({ source });
@@ -493,7 +455,6 @@ export const testCacheHitVendoredDeps = async () => {
 	tg.assert(summary.hits >= 3);
 	tg.assert(summary.misses >= 1);
 
-	// Verify the binary works.
 	const output = await $`parallel-deps | tee ${tg.output}`
 		.env(secondResult)
 		.then(tg.File.expect);
@@ -502,13 +463,11 @@ export const testCacheHitVendoredDeps = async () => {
 
 /** Test that different projects with the same dependencies share cached builds. */
 export const testCacheHitSharedDepsAcrossProjects = async () => {
-	// Build project 1 to populate cache for shared deps.
 	await buildWithStats({
 		source: tests.get("parallel-deps").then(tg.Directory.expect),
 	});
 
-	// Make project 2 source unique per invocation so the project_two crate is
-	// never cached from a previous test run.
+	// Unique source per invocation so project_two is never cached from a prior run.
 	const baseSource = await tests.get("project-two").then(tg.Directory.expect);
 	const mainRs = await baseSource.get("src/main.rs").then(tg.File.expect);
 	const mainRsText = await mainRs.text;
@@ -516,14 +475,12 @@ export const testCacheHitSharedDepsAcrossProjects = async () => {
 		src: { "main.rs": `${mainRsText}\n// ${Date.now()}\n` },
 	});
 
-	// Build project 2 - deps should be cached from project 1.
 	const result = await buildWithStats({ source });
 	const stats = await parseStats(result);
 	if (!stats) {
 		throw new Error("Project 2 build should have stats.");
 	}
 
-	// Shared dependencies should hit, project-two crate should miss.
 	const expectations: Record<string, boolean> = {
 		project_two: false,
 		aho_corasick: true,
@@ -540,7 +497,6 @@ export const testCacheHitSharedDepsAcrossProjects = async () => {
 	}
 	tg.assert(summarizeStats(stats).hits >= 3);
 
-	// Verify project 2 produces correct output.
 	const output = await $`project-two | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -561,17 +517,13 @@ export const testCacheHitUnchangedWorkspaceCrates = async () => {
 	});
 	tg.assert(summarizeStats(second).hits >= 2);
 
-	// Verify rebuilt binary works.
 	const output = await $`cli | tee ${tg.output}`
 		.env(secondResult)
 		.then(tg.File.expect);
 	tg.assert((await output.text).trim() === "Hello from a workspace!");
 };
 
-/** Test proxy with crossterm crate which uses proc-macros that read Cargo.toml.
- *
- * Ensures CARGO_MANIFEST_DIR is set correctly for proc-macros.
- */
+/** Ensures CARGO_MANIFEST_DIR is set for proc-macros that read Cargo.toml. */
 export const testProxyCrossterm = async () => {
 	const result = await cargo.build({
 		source: tests.get("hello-crossterm").then(tg.Directory.expect),
@@ -582,7 +534,7 @@ export const testProxyCrossterm = async () => {
 	});
 	console.log("testProxyCrossterm result", result.id);
 
-	// Crossterm outputs ANSI codes, so we just check it runs.
+	// crossterm emits ANSI codes, so just check it runs.
 	const output = await $`hello-crossterm | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -592,17 +544,14 @@ export const testProxyCrossterm = async () => {
 	return result;
 };
 
+/** Verifies the transitive closure covers hashbrown's deps (foldhash, equivalent, allocator-api2). */
 export const testVendoredTransitiveDeps = async () => {
-	// Test transitive dependencies with vendored crates.
-	// hashbrown depends on foldhash, equivalent, allocator-api2.
-	// This tests that the transitive closure includes all deps.
 	const result = await cargo.build({
 		source: tests.get("vendored-transitive").then(tg.Directory.expect),
 		proxy: true,
 	});
 	console.log("testVendoredTransitiveDeps result", result.id);
 
-	// Run the binary to verify it works.
 	const output = await $`vendored-transitive | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -612,12 +561,7 @@ export const testVendoredTransitiveDeps = async () => {
 	return result;
 };
 
-/** Test cache behavior with multi-version dependencies.
- *
- * When a workspace has multiple versions of the same crate (e.g., hashbrown 0.14
- * and 0.16), the transitive closure must use stems (crate_name-metadata_hash) to
- * identify specific versions.
- */
+/** Multi-version deps: transitive closure must use stems (crate-metadata_hash), not names. */
 export const testMultiVersionCacheHit = async () => {
 	const source = await tests.get("multi-version").then(tg.Directory.expect);
 
@@ -630,7 +574,6 @@ export const testMultiVersionCacheHit = async () => {
 		},
 	});
 
-	// All vendored deps should also cache hit.
 	const unexpectedMisses = second.filter(
 		(s) => !s.cached && s.crate_name !== "crate_b",
 	);
@@ -640,16 +583,8 @@ export const testMultiVersionCacheHit = async () => {
 	);
 };
 
+/** Regression: transitive closure must use the real crate name, not cargo's `--extern <alias>=` alias. */
 export const testAliasedExtern = async () => {
-	// Test with crate aliases like signal-hook-mio which uses mio_1_0 for mio.
-	// This reproduces the bug where the transitive closure used the alias name
-	// instead of the actual crate name from the file path.
-	//
-	// The key test is that signal_hook_mio compiles successfully. It depends on
-	// mio but cargo passes it as --extern mio_1_0=/path/to/libmio-*.rmeta.
-	// Without the fix, the transitive closure would look for "mio_1_0" in the
-	// .externs files but find nothing (they use the real name "mio"), causing
-	// mio's dependencies to be missing from the merged deps directory.
 	const result = await cargo.build({
 		source: tests.get("aliased-extern").then(tg.Directory.expect),
 		proxy: true,
@@ -659,14 +594,11 @@ export const testAliasedExtern = async () => {
 	});
 	console.log("testAliasedExtern result", result.id);
 
-	// Build succeeding means signal_hook_mio compiled (which tests the alias fix).
 	return result;
 };
 
+/** Regression: `pub use crate as alias` (async-compression's codecs re-export). */
 export const testPubUseReexport = async () => {
-	// Test the `pub use crate as alias` pattern, mirroring async-compression's
-	// `pub use compression_codecs as codecs;` which fails when building tangram.
-	// This ensures the proxy correctly handles crate re-exports.
 	const result = await cargo.build({
 		source: tests.get("pub-use-reexport").then(tg.Directory.expect),
 		proxy: true,
@@ -679,11 +611,8 @@ export const testPubUseReexport = async () => {
 	return result;
 };
 
+/** Regression: `-L native=PATH` args must not reference the outer Tangram build's tmp dir. */
 export const testXzNative = async () => {
-	// Test with a crate that depends on liblzma-sys with xz provided in the
-	// environment. This reproduces the bug where -L native=PATH args reference
-	// the xz Tangram build's tmp directory, which does not exist in the inner
-	// process sandbox.
 	const result = await cargo.build({
 		source: tests.get("xz-native").then(tg.Directory.expect),
 		proxy: true,
@@ -696,21 +625,7 @@ export const testXzNative = async () => {
 	return result;
 };
 
-/** Test that vendored crates with many parallel dependencies compile correctly.
- *
- * This reproduces the bug seen when building tangram with `proxy: true`:
- * - xattr fails: "can't find crate for `rustix`"
- * - async_compression fails: "can't find crate for `compression_codecs`"
- *
- * The issue only manifests with heavy parallel compilation (many vendored crates
- * building simultaneously). The extern artifact paths are constructed correctly,
- * but the inner rustc process cannot access them.
- *
- * The test includes:
- * - async-compression (uses `pub use compression_codecs as codecs`)
- * - xattr (depends on rustix)
- * - regex, serde, serde_json (add parallelism pressure)
- */
+/** Regression: heavy parallel compilation broke extern access (xattr→rustix, async_compression→compression_codecs). */
 export const testVendoredPubUse = async () => {
 	const result = await cargo.build({
 		source: tests.get("vendored-pub-use").then(tg.Directory.expect),
@@ -721,7 +636,6 @@ export const testVendoredPubUse = async () => {
 	});
 	console.log("testVendoredPubUse result", result.id);
 
-	// Verify the build succeeded by running the binary.
 	const output = await $`vendored-pub-use | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -731,11 +645,34 @@ export const testVendoredPubUse = async () => {
 	return result;
 };
 
+/** Regression: when .externs sidecars are missing (e.g. mixed plain cargo / tg run), fall back to including all dep files. */
+export const testMissingExternsFallback = async () => {
+	const result = await cargo.build({
+		source: tests.get("missing-externs").then(tg.Directory.expect),
+		proxy: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_TEST_SKIP_EXTERNS: "1",
+		},
+	});
+	console.log("testMissingExternsFallback result", result.id);
+
+	const output = await $`top | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await output.text;
+	tg.assert(
+		text.trim() === "result: 43",
+		`Expected "result: 43" but got "${text.trim()}".`,
+	);
+
+	return result;
+};
+
 /** Test that tangram.ts with external imports in source does not break the proxy. */
 export const testExternalTsImport = async () => {
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
 
-	// Add a tangram.ts file that imports from an external path (simulating the tangram repo structure).
 	const sourceWithTangram = tg.directory(source, {
 		"tangram.ts": tg.file(`
 // This import references a file outside the workspace
@@ -752,7 +689,6 @@ export default foo;
 		console.log("stats", summarizeStats(stats));
 	}
 
-	// Verify the build succeeded.
 	const output = await $`cli | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -771,7 +707,6 @@ export const testWorkspaceBuildScript = async () => {
 		console.log("stats", summarizeStats(stats));
 	}
 
-	// Verify the build succeeded.
 	const output = await $`app | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -793,11 +728,7 @@ export const testCacheHitWithDepVars = async () => {
 	});
 };
 
-/** Test vendored crate caching with pre script that modifies PATH.
- *
- * The node_modules directory is provided as a separate artifact via env so that
- * changing app/src/main.rs does not affect the PATH content-addressing.
- */
+/** node_modules is a separate env artifact so main.rs changes don't affect PATH content-addressing. */
 export const testCacheHitWithPreScript = async () => {
 	const source = await tests.get("vendor-cache-hit").then(tg.Directory.expect);
 	const nodeModulesBin = tg.directory({ ".gitkeep": tg.file("") });
@@ -832,7 +763,6 @@ export const testSysLinkCache = async () => {
 	});
 };
 
-/** Test that workspace member build scripts can access files at the workspace root. */
 export const testRunnerWorkspaceRootAccess = async () => {
 	const source = tests.get("workspace-root-access").then(tg.Directory.expect);
 
@@ -845,7 +775,6 @@ export const testRunnerWorkspaceRootAccess = async () => {
 	});
 	console.log("testRunnerWorkspaceRootAccess result", result.id);
 
-	// Verify the build succeeded and the config from the workspace root was included.
 	const output = await $`app | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -856,19 +785,14 @@ export const testRunnerWorkspaceRootAccess = async () => {
 	);
 };
 
-/** Test that the build script runner caches workspace member build scripts
- * when only an unrelated crate is modified.
- */
 export const testRunnerCacheHitWorkspace = async () => {
 	const source = await tests
 		.get("workspace-runner-cache")
 		.then(tg.Directory.expect);
 
-	// First build to populate both rustc and runner caches.
 	const firstResult = await buildWithStats({ source });
 	const firstStats = await parseStats(firstResult);
 
-	// Modify only app/src/main.rs (not the lib crate or its build script).
 	const originalMain = await source
 		.get("packages/app/src/main.rs")
 		.then(tg.File.expect)
@@ -879,14 +803,12 @@ export const testRunnerCacheHitWorkspace = async () => {
 		),
 	});
 
-	// Rebuild with modified source.
 	const secondResult = await buildWithStats({ source: modifiedSource });
 	const secondStats = await parseStats(secondResult);
 	if (!firstStats || !secondStats) {
 		throw new Error("Both builds should have stats.");
 	}
 
-	// The proxy for lib should be a cache hit since only app was modified.
 	const libStatus = getCrateStatus(secondStats, "lib");
 	tg.assert(
 		libStatus?.cached === true,
@@ -894,18 +816,9 @@ export const testRunnerCacheHitWorkspace = async () => {
 	);
 };
 
-/** Test that the build script runner caches build script execution.
- *
- * Uses the hello-cc-rs test project which has a build script that compiles C
- * code using cc-rs. Builds twice with a modified main.rs to verify that:
- * 1. The build script runner invocation is cached on the second build.
- * 2. The rustc proxy invocations for unchanged crates are also cached.
- * 3. The binary produces correct output after both builds.
- */
 export const testRunnerBuildScript = async () => {
 	const source = await tests.get("hello-cc-rs").then(tg.Directory.expect);
 
-	// First build to populate both rustc and runner caches.
 	const firstResult = await buildWithStats({ source });
 	const firstRunnerStats = await parseStats(firstResult, "runner_complete");
 	console.log(
@@ -913,7 +826,6 @@ export const testRunnerBuildScript = async () => {
 		firstRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
 	);
 
-	// Verify the first build produces correct output.
 	const firstOutput = await $`hello-cc-rs | tee ${tg.output}`
 		.env(firstResult)
 		.then(tg.File.expect);
@@ -928,7 +840,6 @@ export const testRunnerBuildScript = async () => {
 		"src/main.rs": tg.file(`${originalMain}\n// runner cache test\n`),
 	});
 
-	// Rebuild with modified source.
 	const secondResult = await buildWithStats({ source: modifiedSource });
 	const secondRunnerStats = await parseStats(secondResult, "runner_complete");
 	console.log(
@@ -936,8 +847,7 @@ export const testRunnerBuildScript = async () => {
 		secondRunnerStats?.map((s) => `${s.crate_name}: cached=${s.cached}`),
 	);
 
-	// The build script runner should be a cache hit since the build script
-	// and its inputs (C source, build.rs) did not change.
+	// Runner should cache-hit: build script + inputs (C source, build.rs) unchanged.
 	if (secondRunnerStats) {
 		for (const stat of secondRunnerStats) {
 			tg.assert(
@@ -947,24 +857,15 @@ export const testRunnerBuildScript = async () => {
 		}
 	}
 
-	// Verify the second build also produces correct output.
 	const secondOutput = await $`hello-cc-rs | tee ${tg.output}`
 		.env(secondResult)
 		.then(tg.File.expect);
 	tg.assert((await secondOutput.text).trim() === "10 + 32 = 42");
 };
 
-/** Test that the runner passes through environment variables to build scripts.
- *
- * Reproduces the tangram.ts testProxy failure where NODE_PATH is blacklisted
- * from the runner environment. The tangram_js and tangram_compiler build scripts
- * check for NODE_PATH; when it is missing, they try to create a lock file outside
- * the workspace, which fails in the runner sandbox with PermissionDenied.
- */
+/** Regression: NODE_PATH must pass through to build scripts (tangram_js/tangram_compiler need it). */
 export const testRunnerEnvPassthrough = async () => {
-	// Make the source unique per invocation so the build is never cached. This
-	// test validates runtime sandbox behavior, so a cached result would be a
-	// false negative.
+	// Unique source per invocation — a cached result would be a false negative.
 	const baseSource = await tests
 		.get("runner-env-passthrough")
 		.then(tg.Directory.expect);
@@ -984,7 +885,6 @@ export const testRunnerEnvPassthrough = async () => {
 	});
 	console.log("testRunnerEnvPassthrough result", result.id);
 
-	// Assert the binary received NODE_PATH from the build script.
 	const output = await $`runner-env-passthrough | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -995,25 +895,20 @@ export const testRunnerEnvPassthrough = async () => {
 	);
 };
 
-/** Test that the runner makes tools in NODE_PATH/.bin available via PATH. */
+/** Tools in NODE_PATH/.bin must resolve via PATH. */
 export const testRunnerPathTools = async () => {
-	// Create a fake node_modules directory with a .bin symlink structure
-	// mimicking how npm/bun installs tools.
+	// Fake node_modules with a .bin symlink, mimicking npm/bun.
 	const toolFile = tg.file("tool output from my-tool\n");
 	const nodeModules = tg.directory({
 		"my-tool-pkg": {
 			"tool.sh": toolFile,
 		},
 		".bin": {
-			// Symlink: .bin/my-tool -> ../my-tool-pkg/tool.sh
 			"my-tool": tg.symlink("../my-tool-pkg/tool.sh"),
 		},
 	});
 
-	// Include node_modules in the source artifact and set env vars in pre.
-	// Make the source unique per invocation so the build is never cached. This
-	// test validates runtime sandbox behavior, so a cached result would be a
-	// false negative.
+	// Unique source per invocation — a cached result would be a false negative.
 	const baseSource = await tests
 		.get("runner-path-tools")
 		.then(tg.Directory.expect);
@@ -1027,14 +922,13 @@ export const testRunnerPathTools = async () => {
 	const result = await cargo.build({
 		source,
 		proxy: true,
-		pre: `export NODE_PATH="$SOURCE/node_modules" && export PATH="$PATH:$NODE_PATH/.bin"`,
+		pre: `export NODE_PATH="$TGRUSTC_SOURCE_DIR/node_modules" && export PATH="$PATH:$NODE_PATH/.bin"`,
 		env: {
 			TGRUSTC_TRACING: "tgrustc=trace",
 		},
 	});
 	console.log("testRunnerPathTools result", result.id);
 
-	// Assert the build script ran the tool and captured its output.
 	const output = await $`runner-path-tools | tee ${tg.output}`
 		.env(result)
 		.then(tg.File.expect);
@@ -1045,18 +939,9 @@ export const testRunnerPathTools = async () => {
 	);
 };
 
-/** Test that build script cfg probes via RUSTC_WRAPPER work in runner mode.
- *
- * Reproduces the rustix compilation failure in tangram.ts testProxy: rustix's
- * build script calls can_compile() which spawns RUSTC_WRAPPER (tgrustc) to
- * probe compiler capabilities. Without the fix, tgrustc-internal env vars
- * (TGRUSTC_RUNNER_DRIVER_MODE) leak into the child process, causing tgrustc
- * to enter runner driver mode instead of the stdin-passthrough path.
- */
+/** Regression: cfg probes via RUSTC_WRAPPER must not inherit TGRUSTC_* internals (rustix can_compile). */
 export const testRunnerCfgProbe = async () => {
-	// Make the source unique per invocation so the build is never cached. This
-	// test validates runtime sandbox behavior, so a cached result would be a
-	// false negative.
+	// Unique source per invocation — a cached result would be a false negative.
 	const baseSource = await tests
 		.get("runner-cfg-probe")
 		.then(tg.Directory.expect);
@@ -1085,21 +970,13 @@ export const testRunnerCfgProbe = async () => {
 	);
 };
 
-/** Test that the runner can execute wrapped tools in the sandbox.
- *
- * Reproduces the tangram.ts testProxy failure on Linux where `bunx tsgo` fails
- * because the runner sandbox does not have `/usr/bin/env` available, so
- * shebang-based scripts cannot resolve their interpreters. The fix wraps
- * shebang scripts with `std.wrap` using explicit interpreter binaries, making
- * them native ELF executables that don't need shebangs at all.
- */
+/** Regression: runner sandbox lacks /usr/bin/env; wrap shebang scripts with std.wrap to an explicit interpreter. */
 export const testRunnerPathExec = async () => {
 	const host = await std.triple.host();
-	// Get the dash interpreter.
 	const dashBin = await dash({ host })
 		.then((d) => d.get("bin/dash"))
 		.then(tg.File.expect);
-	// Create a shell script tool, then wrap it so it doesn't need a shebang.
+	// Wrap the shebang script so it becomes native ELF (no /usr/bin/env needed).
 	const script = tg.file({
 		contents: '#!/usr/bin/env sh\necho "hello from exec tool"\n',
 		executable: true,
@@ -1107,9 +984,7 @@ export const testRunnerPathExec = async () => {
 	const tool = await std.wrap(script, { interpreter: dashBin, host });
 	const toolDir = tg.directory({ bin: { "my-exec-tool": tool } });
 
-	// Make the source unique per invocation so the build is never cached. This
-	// test validates runtime sandbox behavior, so a cached result would be a
-	// false negative.
+	// Unique source per invocation — a cached result would be a false negative.
 	const baseSource = await tests
 		.get("runner-path-exec")
 		.then(tg.Directory.expect);
@@ -1138,10 +1013,140 @@ export const testRunnerPathExec = async () => {
 	);
 };
 
+/** Run mode dispatch: workspace members → passthrough; external deps → proxy. */
+export const testRunMode = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_RUN_MODE: "1",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}`,
+		},
+	});
+
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	tg.assert(stderrLog !== undefined, "Should have cargo-stderr.log.");
+	const stderrText = await stderrLog.text;
+
+	const proxyStats = await parseStats(result, "proxy_complete");
+	tg.assert(
+		proxyStats !== undefined &&
+			proxyStats.some((s) => s.crate_name === "bytes"),
+		"bytes should go through proxy_complete.",
+	);
+
+	tg.assert(
+		stderrText.includes("passthrough mode"),
+		"Workspace members should use passthrough.",
+	);
+
+	const output = await $`${result}/bin/cli | tee ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
+
+	return result;
+};
+
+/** Run mode: external dep (bytes) stays cached when a workspace member changes. */
+export const testRunModeCacheHit = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	const firstResult = await cargo.build({
+		source,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_RUN_MODE: "1",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}`,
+		},
+	});
+	const firstStats = await parseStats(firstResult);
+	tg.assert(firstStats !== undefined, "First build should have stats.");
+
+	const originalText = await source
+		.get("packages/cli/src/main.rs")
+		.then(tg.File.expect)
+		.then((f: tg.File) => f.text);
+	const modifiedSource = tg.directory(source, {
+		"packages/cli/src/main.rs": tg.file(
+			`${originalText}\n// run mode cache test\n`,
+		),
+	});
+
+	// PASSTHROUGH_PROJECT_DIR tracks the modified source for member detection.
+	const secondResult = await cargo.build({
+		source: modifiedSource,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_RUN_MODE: "1",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${modifiedSource}`,
+		},
+	});
+	const secondStats = await parseStats(secondResult);
+	tg.assert(secondStats !== undefined, "Second build should have stats.");
+
+	const bytesStatus = secondStats.find((s) => s.crate_name === "bytes");
+	tg.assert(
+		bytesStatus?.cached === true,
+		`bytes should be a cache hit, got cached=${bytesStatus?.cached}.`,
+	);
+
+	const output = await $`${secondResult}/bin/cli | tee ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
+};
+
+/** Passthrough dispatch: workspace crates → direct rustc, deps → proxy. */
+export const testPassthrough = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		captureStderr: true,
+		env: {
+			TGRUSTC_TRACING: "tgrustc=info",
+			TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}`,
+		},
+	});
+
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	tg.assert(stderrLog !== undefined, "Should have cargo-stderr.log");
+	const stderrText = await stderrLog.text;
+
+	tg.assert(
+		stderrText.includes("passthrough mode"),
+		"Workspace members should trigger passthrough mode",
+	);
+
+	tg.assert(
+		stderrText.includes("spawned process"),
+		"Dependencies should go through the normal proxy path",
+	);
+
+	const output = await $`${result}/bin/cli | tee ${tg.output}`.then(
+		tg.File.expect,
+	);
+	tg.assert((await output.text).trim() === "Hello from a workspace!");
+
+	return result;
+};
+
 export const test = async () => {
-	// Ensure the proxy compiles before running other tests.
 	await testProxyCompiles();
-	// Run remaining tests in parallel.
 	await Promise.all([
 		testHello(),
 		testPkgconfig(),
@@ -1163,6 +1168,7 @@ export const test = async () => {
 		testPubUseReexport(),
 		testXzNative(),
 		testVendoredPubUse(),
+		testMissingExternsFallback(),
 		testCacheHitWithDepVars(),
 		testCacheHitWithPreScript(),
 		testSysLinkCache(),
@@ -1173,5 +1179,8 @@ export const test = async () => {
 		testRunnerPathTools(),
 		testRunnerCfgProbe(),
 		testRunnerPathExec(),
+		testPassthrough(),
+		testRunMode(),
+		testRunModeCacheHit(),
 	]);
 };

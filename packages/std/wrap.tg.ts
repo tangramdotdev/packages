@@ -118,14 +118,11 @@ export async function wrap(...args: std.Args<wrap.Arg>): Promise<tg.File> {
 		if (manifest.executable.kind === "address") {
 			throw new Error("invalid manifest");
 		}
-		// Use default wrapper when no custom build or host is provided.
-		let wrapper =
-			arg.build === undefined && arg.host === undefined
-				? await tg.build(std.buildDefaultWrapper).named("default wrapper")
-				: await workspace.wrapper({
-						build,
-						host,
-					});
+		// Use tg.build for the wrapper so the call is deduplicated across
+		// concurrent wrap() invocations and can cache-hit from a remote.
+		let wrapper = await tg
+			.build(workspace.wrapper, { build, host })
+			.named("default wrapper");
 		return wrap.Manifest.write(wrapper, manifest);
 	}
 }
@@ -1145,7 +1142,7 @@ const getBuildToolchain = async (
 					.named("gnu toolchain"),
 				{ utils: false },
 			)
-		: await bootstrap.sdk.env(host);
+		: await tg.build(std.buildBootstrapSdkEnv).named("bootstrap sdk env");
 };
 
 /** Produce the manifest interpreter object given a set of parameters. */

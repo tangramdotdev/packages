@@ -5,15 +5,13 @@ import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
 import * as proxy_ from "./proxy.tg.ts";
 import { rustTriple, self } from "./tangram.ts";
 
-export type Arg = {
+/** Fields shared between sandboxed `build()` and unsandboxed `run()`. */
+type CommonArg = {
 	/** The machine performing the compilation. */
 	build?: string;
 
-	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
-	buildInTree?: boolean;
-
-	/** Capture cargo stderr to a file in the output. Useful for parsing tgrustc tracing output in tests. Default: false. */
-	captureStderr?: boolean;
+	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to "nightly". */
+	channel?: "stable" | "nightly" | string;
 
 	/** Dependencies configuration. When provided, deps are resolved to env automatically. */
 	deps?: std.deps.ConfigArg | undefined;
@@ -21,17 +19,8 @@ export type Arg = {
 	/** Dependency argument overrides. Keys must match deps config keys. */
 	dependencies?: std.packages.ResolvedDependencyArgs | undefined;
 
-	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
-	checksum?: tg.Checksum;
-
-	/** Should the default features get disabled? Default: false. */
-	disableDefaultFeatures?: boolean;
-
 	/** Environment variables to set during the build. */
 	env?: std.env.Arg;
-
-	/** Features to enable during the build. */
-	features?: Array<string>;
 
 	/** Machine that will run the compilation. */
 	host?: string;
@@ -39,29 +28,14 @@ export type Arg = {
 	/** Parent of the directory containing the Cargo.toml relative to the source dir if not at the expected location. */
 	manifestSubdir?: string;
 
-	/** Should this build have network access? Must set a checksum to enable. Default: false. */
-	network?: boolean;
-
 	/** Number of parallel jobs to use. */
 	parallelJobs?: number;
-
-	/** Should the build environment include pkg-config? Default: true. */
-	pkgConfig?: boolean;
-
-	/** The cargo build profile to use. Default: "release". */
-	profile?: string;
-
-	/** A name for the build process. */
-	processName?: string;
 
 	/** Additional script to run prior to the build. */
 	pre?: tg.Template.Arg;
 
 	/** Whether to use the tangram_rustc proxy. */
 	proxy?: boolean;
-
-	/** Toolchain channel: "stable" (default), "nightly", or "nightly-YYYY-MM-DD". When proxy is enabled, defaults to "nightly". */
-	channel?: "stable" | "nightly" | string;
 
 	/** SDK configuration to use during the build. */
 	sdk?: std.sdk.Arg;
@@ -78,11 +52,40 @@ export type Arg = {
 	/** Target triple for the build. */
 	target?: string;
 
-	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
-	timings?: boolean;
+	/** Should the default features get disabled? Default: false. */
+	disableDefaultFeatures?: boolean;
+
+	/** Features to enable during the build. */
+	features?: Array<string>;
 
 	/** Whether to use cargo vendor instead of the Tangram-native vendoring. */
 	useCargoVendor?: boolean;
+};
+
+export type Arg = CommonArg & {
+	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
+	buildInTree?: boolean;
+
+	/** Capture cargo stderr to a file in the output. Useful for parsing tgrustc tracing output in tests. Default: false. */
+	captureStderr?: boolean;
+
+	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
+	checksum?: tg.Checksum;
+
+	/** Should this build have network access? Must set a checksum to enable. Default: false. */
+	network?: boolean;
+
+	/** Should the build environment include pkg-config? Default: true. */
+	pkgConfig?: boolean;
+
+	/** The cargo build profile to use. Default: "release". */
+	profile?: string;
+
+	/** A name for the build process. */
+	processName?: string;
+
+	/** Whether to generate a cargo timing report. Adds `--timings` to the cargo build command and includes the `cargo-timings/` directory in the output. Default: false. */
+	timings?: boolean;
 
 	/** Whether to enable verbose logging. */
 	verbose?: boolean;
@@ -124,23 +127,266 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 	};
 };
 
+export type RunArg = CommonArg & {
+	/** Cargo.lock file for vendoring (alternative to providing full source). */
+	cargoLock?: tg.File;
+
+	/** When proxy is true, whether workspace members should be compiled directly via passthrough. Default: true. */
+	passthrough?: boolean;
+};
+
+/** The result of runArg() - a RunArg with build and host guaranteed to be resolved. */
+export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
+	build: string;
+	host: string;
+};
+
+/** Resolve run args to a mutable arg object. Returns a RunArg with build and host guaranteed to be resolved. */
+export const runArg = async (
+	...args: std.Args<RunArg>
+): Promise<ResolvedRunArg> => {
+	const collect = await std.args.apply<RunArg, RunArg>({
+		args,
+		map: async (arg) => arg,
+		reduce: {
+			env: (a, b) => std.env.arg(a, b),
+			features: "append",
+			sdk: (a, b) => std.sdk.arg(a, b),
+			subtreeEnv: (a, b) => std.env.arg(a, b),
+			subtreeSdk: (a, b) => std.sdk.arg(a, b),
+		},
+	});
+
+	const { build: build_, host: host_, ...rest } = collect;
+
+	const host = host_ ?? std.triple.host();
+	const build = build_ ?? host;
+
+	return {
+		build,
+		host,
+		...rest,
+	};
+};
+
+/** Resolve deps configuration to env, merging with any existing env arg. */
+const resolveDepsEnv = async (
+	resolved: CommonArg & { build: string; host: string },
+) => {
+	const depsConfig = await std.deps.resolveConfig(resolved.deps);
+	if (!depsConfig) return resolved.env;
+	return std.deps.env(depsConfig, {
+		build: resolved.build,
+		host: resolved.host,
+		sdk: resolved.sdk,
+		dependencies: resolved.dependencies,
+		env: resolved.env,
+		subtreeEnv: resolved.subtreeEnv,
+		subtreeSdk: resolved.subtreeSdk,
+	});
+};
+
+export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
+	const resolved = await runArg(...args);
+	const depsEnv = await resolveDepsEnv(resolved);
+
+	const {
+		cargoLock,
+		channel: channel_,
+		disableDefaultFeatures = false,
+		features = [],
+		host,
+		manifestSubdir,
+		parallelJobs,
+		passthrough = true,
+		pre,
+		proxy = false,
+		source,
+		target: target_,
+		useCargoVendor = false,
+	} = resolved;
+	const rustHost = rustTriple(host);
+	const target = target_ ? rustTriple(target_) : rustHost;
+	const crossCompiling = target !== rustHost;
+
+	let vendorSetup: string | tg.Template = "";
+	if (cargoLock || useCargoVendor) {
+		let cargoConfig: tg.Template;
+		if (useCargoVendor) {
+			tg.assert(source, "source is required when useCargoVendor is true");
+			const manifests = await tg.build(extractCargoManifests, source);
+			cargoConfig = await tg.build(vendoredSources, {
+				manifestSubdir,
+				source: manifests,
+				useCargoVendor: true,
+			});
+		} else {
+			let lockFile: tg.File;
+			if (cargoLock) {
+				lockFile = cargoLock;
+			} else {
+				tg.assert(source, "source or cargoLock must be provided for vendoring");
+				const sourcePath = manifestSubdir
+					? await source.get(manifestSubdir).then(tg.Directory.expect)
+					: source;
+				lockFile = await sourcePath.get("Cargo.lock").then(tg.File.expect);
+			}
+			const vendoredDir = await tg.build(vendorDependencies, lockFile);
+			cargoConfig = await tg`
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "${vendoredDir}"`;
+		}
+		vendorSetup = await tg`export CARGO_HOME="$(mktemp -d)"
+mkdir -p "$CARGO_HOME"
+cat > "$CARGO_HOME/config.toml" << 'VENDORCFG'
+${cargoConfig}
+VENDORCFG`;
+	}
+
+	const exports: Array<string> = [
+		`export RUST_TARGET="${target}"`,
+		`export CARGO_REGISTRIES_CRATES_IO_PROTOCOL="sparse"`,
+		`export TANGRAM_HOST="${std.triple.archAndOs(rustHost)}"`,
+	];
+
+	if (crossCompiling) {
+		exports.push(`export CARGO_BUILD_TARGET="${target}"`);
+
+		const envVar = tripleToEnvVar(target, true);
+		exports.push(`export CARGO_TARGET_${envVar}_LINKER="${target}-cc"`);
+		exports.push(`export AR_${tripleToEnvVar(target)}="${target}-ar"`);
+		exports.push(`export CC_${tripleToEnvVar(target)}="${target}-cc"`);
+		exports.push(`export CXX_${tripleToEnvVar(target)}="${target}-c++"`);
+	}
+
+	{
+		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+		if (effectiveJobs !== undefined) {
+			exports.push(`export CARGO_BUILD_JOBS="${effectiveJobs}"`);
+		}
+	}
+
+	// Lets the proxy detect workspace members and route them to passthrough;
+	// cargo sets cwd per-crate so current_dir alone is insufficient.
+	const passthroughSetup = proxy
+		? 'export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$PWD"'
+		: "";
+
+	let proxySetup: string | tg.Template = "";
+	if (proxy) {
+		const proxyDir = proxy_.proxy();
+		const proxyBin = proxyDir
+			.then((d) => d.get("bin/tgrustc"))
+			.then(tg.File.expect);
+		if (!channel_ && !source) {
+			throw new Error(
+				"When proxy mode is enabled, provide a 'source' directory or 'channel' argument to determine the Rust toolchain channel.",
+			);
+		}
+		const channel =
+			channel_ ??
+			(source ? await readToolchainChannel(source) : undefined) ??
+			"stable";
+		const toolchainDir = self({ host, channel });
+
+		const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target: rustHost }];
+		if (std.triple.os(rustHost) === "linux") {
+			sdkArgs.push({ toolchain: "gnu" });
+		}
+		const sandboxSdk = await tg.build(std.sdk, ...sdkArgs);
+
+		proxySetup = await tg`export RUSTC="${toolchainDir}/bin/rustc"
+export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
+export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"
+export TGRUSTC_RUN_MODE=1
+export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
+export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
+export TGRUSTC_SOURCE_DIR="$PWD"
+export TGRUSTC_CARGO="${toolchainDir}/bin/cargo"
+export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"
+# Snapshot host env names so the proxy can identify cargo:rustc-env additions.
+export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
+env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
+	}
+
+	const featureFlags: Array<string> = [];
+	if (disableDefaultFeatures) {
+		featureFlags.push("--no-default-features");
+	}
+	if (features.length > 0) {
+		featureFlags.push(`--features "${features.join(",")}"`);
+	}
+
+	// Nightly cargo for -Zhost-config support (stable silently ignores -Z).
+	const os = std.triple.os(host);
+	const hostLinker = os === "darwin" ? "clang" : "gcc";
+	const cargoCmd = proxy
+		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config 'host.linker = "${hostLinker}"' --config "host.runner = '$CARGO_HOST_RUNNER'"`
+		: `cargo`;
+	// --target is required for host.runner to apply to build scripts.
+	const targetFlag = proxy ? `--target "$RUST_TARGET"` : "";
+	const insertedFlags = [targetFlag, ...featureFlags].filter(Boolean).join(" ");
+	// Symlink target/<triple>/<profile>/* into target/<profile>/ for plain-cargo compat.
+	const execLine = insertedFlags
+		? proxy
+			? `${cargoCmd} "$1" ${insertedFlags} "\${@:2}"
+__cargo_status=$?
+for __f in "target/$RUST_TARGET/debug/"* "target/$RUST_TARGET/release/"*; do
+  [ -f "$__f" ] && [ -x "$__f" ] || continue
+  __name=$(basename "$__f")
+  case "$__name" in *.*) continue;; esac
+  __rel=$(echo "$__f" | sed "s|^target/|../|")
+  __dir=$(dirname "$__f" | sed "s|^target/$RUST_TARGET/||")
+  ln -sf "$__rel" "target/$__dir/$__name" 2>/dev/null || true
+done
+exit $__cargo_status`
+			: `exec ${cargoCmd} "$1" ${insertedFlags} "\${@:2}"`
+		: `exec ${cargoCmd} "$@"`;
+
+	// Only "set" mutations; prefix/suffix would inherit `tg run` SDK PATH entries
+	// and break passthrough compilation.
+	let envSetup: tg.Template.Arg = "";
+	if (depsEnv !== undefined) {
+		const resolvedEnv = await std.env.arg(depsEnv);
+		const lines: Array<tg.Template> = [];
+		for (const [key, val] of Object.entries(resolvedEnv)) {
+			if (val instanceof tg.Mutation && val.inner.kind === "set") {
+				lines.push(await tg`export ${key}="${val.inner.value}"`);
+			}
+		}
+		if (lines.length > 0) {
+			envSetup = lines.reduce(
+				(acc, line) => tg`${acc}
+${line}`,
+			);
+		}
+	}
+
+	const preSetup = pre ? await tg`${pre}` : "";
+	const exportsBlock = exports.join("\n");
+	const script = tg`#!/usr/bin/env bash
+set -euo pipefail
+${exportsBlock}
+${envSetup}
+${vendorSetup}
+${proxySetup}
+${passthroughSetup}
+${preSetup}
+${execLine}
+`;
+
+	return tg.command({
+		args: ["-c", script, "--"],
+		executable: { path: "/bin/bash" },
+	});
+}
+
 export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
-
-	// If deps were provided, resolve them to env.
-	let depsEnv = resolved.env;
-	const depsConfig = await std.deps.resolveConfig(resolved.deps);
-	if (depsConfig) {
-		depsEnv = await std.deps.env(depsConfig, {
-			build: resolved.build,
-			host: resolved.host,
-			sdk: resolved.sdk,
-			dependencies: resolved.dependencies,
-			env: depsEnv,
-			subtreeEnv: resolved.subtreeEnv,
-			subtreeSdk: resolved.subtreeSdk,
-		});
-	}
+	const depsEnv = await resolveDepsEnv(resolved);
 
 	const {
 		buildInTree = false,
@@ -170,11 +416,9 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const os = std.triple.os(rustHost);
 	const target = target_ ? rustTriple(target_) : rustHost;
 
-	// Check if we're cross-compiling.
 	const crossCompiling = target !== rustHost;
 
-	// Obtain handles to the SDK and Rust artifacts.
-	// NOTE - pulls an SDK assuming the selected target is the intended host. Forces GCC on Linux, as rustc expects libgcc_s.
+	// Forces GCC on Linux — rustc expects libgcc_s.
 	const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target }, sdk_];
 	if (
 		os === "linux" &&
@@ -187,8 +431,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
-	// When using the proxy, default to nightly so that upstream cargo's host.runner
-	// support is available without needing the tangramdotdev/cargo fork.
+	// Nightly required for host.runner.
 	const channel = channel_ ?? (proxy ? "nightly" : "stable");
 	const rustArtifact = await tg.build(self, {
 		host: rustHost,
@@ -200,9 +443,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		envs.push(await tg.build(pkgconf, { host }));
 	}
 
-	// Download the dependencies using vendoring.
-	// Extract only manifest files first so that only changes to dependencies
-	// (not source code) trigger re-vendoring.
+	// Extract only manifests so source changes don't re-vendor.
 	let cargoConfig: tg.Template;
 	if (useCargoVendor) {
 		const manifests = await tg.build(extractCargoManifests, source);
@@ -225,10 +466,8 @@ replace-with = "vendored-sources"
 directory = "${vendoredDir}"`;
 	}
 
-	// When using the proxy, resolve the proxy directory once for reuse.
 	const proxyDir = proxy ? proxy_.proxy() : undefined;
 
-	// When using the proxy, add the host.runner config to wrap build script execution.
 	if (proxy && proxyDir !== undefined) {
 		const hostLinker = os === "darwin" ? "clang" : "gcc";
 		cargoConfig = await tg`${cargoConfig}
@@ -238,27 +477,25 @@ runner = ["${proxyDir}/bin/tgrustc", "runner"]
 linker = "${hostLinker}"`;
 	}
 
-	// Create the cargo config to read vendored dependencies. Note: as of Rust 1.74.0 (stable), Cargo does not support reading these config keys from environment variables.
+	// cargo config must be file-based, not env vars.
 	const preparePathCommands = [
 		tg`mkdir -p "${tg.output}/target"`,
 		tg`export TARGET_DIR="$(realpath "${tg.output}/target")"`,
-		tg`mkdir -p "$PWD/.cargo"\necho '${cargoConfig}' >> "$PWD/.cargo/config.toml"\nexport CARGO_HOME=$PWD/.cargo`,
+		tg`export CARGO_HOME="$(mktemp -d)"\necho '${cargoConfig}' > "$CARGO_HOME/config.toml"\ncd "$CARGO_HOME"`,
 	];
 	const preparePaths = tg.Template.join("\n", ...preparePathCommands);
 
-	// Set the SOURCE variable.
 	const prepareSource = buildInTree
-		? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport SOURCE="$PWD/work"`
-		: tg`export SOURCE=$(realpath ${source})`;
+		? tg`cp -R ${source}/. $PWD/work\nchmod -R u+w $PWD/work\nexport TGRUSTC_SOURCE_DIR="$PWD/work"`
+		: tg`export TGRUSTC_SOURCE_DIR=$(realpath ${source})`;
 
-	// Set up cargo args.
 	const manifestPathArg = manifestSubdir
 		? `${manifestSubdir}/Cargo.toml`
 		: `"Cargo.toml"`;
 	const cargoArgs = [
 		`--profile ${profile}`,
 		tg`--target-dir "${tg.output}/target"`,
-		`--manifest-path "$SOURCE/${manifestPathArg}"`,
+		`--manifest-path "$TGRUSTC_SOURCE_DIR/${manifestPathArg}"`,
 		`--features "${features.join(",")}"`,
 		"--target $RUST_TARGET",
 	];
@@ -272,17 +509,12 @@ linker = "${hostLinker}"`;
 		cargoArgs.push("--timings");
 	}
 
-	// Create the build script.
 	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
-	// When using the proxy, add unstable flags for host.runner support.
 	const cargoPrefix = proxy
 		? "cargo -Zhost-config -Ztarget-applies-to-host"
 		: "cargo";
-	// Optionally capture stderr to a file (for parsing tgrustc tracing in tests).
-	// Avoid bash process substitution (2> >(tee ...)) because on Linux the tee
-	// process can be killed before flushing when the sandbox tears down, losing
-	// the final proxy_complete events. Instead, redirect stderr to the file and
-	// replay it afterward so it still appears in the process logs.
+	// Redirect + replay (not process substitution) to avoid tee being killed
+	// before flushing on Linux.
 	const buildCommand = captureStderr
 		? tg`${cargoPrefix} build ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
 		: tg`${cargoPrefix} build ${cargoArgString}`;
@@ -294,7 +526,7 @@ linker = "${hostLinker}"`;
 		buildCommand,
 	);
 
-	// When not cross-compiling, ensure the `gcc` provided by the SDK is used, which enables Tangram linking.
+	// Use the SDK's `gcc` to enable Tangram linking on non-cross builds.
 	let compilerName = "gcc";
 	if (os === "darwin") {
 		compilerName = "clang";
@@ -307,7 +539,6 @@ linker = "${hostLinker}"`;
 	};
 	envs.push(toolchainEnv);
 
-	// If network is enabled, set the certificates.
 	if (network) {
 		const certFile = tg`${std.caCertificates()}/cacert.pem`;
 		const networkEnv = {
@@ -317,9 +548,7 @@ linker = "${hostLinker}"`;
 		envs.push(networkEnv);
 	}
 
-	// If cross-compiling, set additional environment variables.
 	if (crossCompiling) {
-		// Set both with and without swapping to underscores, and ensure we unconditionally set the linker.
 		const crossEnv = {
 			[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: `${target}-cc`,
 			[`AR_${tripleToEnvVar(target)}`]: tg.Mutation.setIfUnset(`${target}-ar`),
@@ -335,27 +564,25 @@ linker = "${hostLinker}"`;
 	}
 
 	if (proxy && proxyDir !== undefined) {
-		// Enable the tgrustc proxy for Tangram-cached Rust compilation.
-		// The proxy uses a self-as-driver pattern, running tgrustc itself as
-		// the inner executable, eliminating the need for a shell.
 		const proxyBin = proxyDir
 			.then((d) => d.get("bin/tgrustc"))
 			.then(tg.File.expect);
 		const proxyEnv: tg.Unresolved<std.env.Arg> = {
 			RUSTC_WRAPPER: tg`${proxyDir}/bin/tgrustc`,
-			// Pass the tgrustc binary artifact so the proxy does not need to check itself in on each invocation.
+			// Avoids self-checkin per invocation.
 			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
 		};
 		envs.push(proxyEnv);
 	}
 
-	// When using the tgrustc proxy, default to high parallelism to allow tangram to limit.
-	const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
-	if (effectiveJobs !== undefined) {
-		const jobsEnv = {
-			CARGO_BUILD_JOBS: `${effectiveJobs}`,
-		};
-		envs.push(jobsEnv);
+	{
+		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
+		if (effectiveJobs !== undefined) {
+			const jobsEnv = {
+				CARGO_BUILD_JOBS: `${effectiveJobs}`,
+			};
+			envs.push(jobsEnv);
+		}
 	}
 
 	if (verbose) {
@@ -377,15 +604,12 @@ linker = "${hostLinker}"`;
 	}
 	const artifact = await builder.then(tg.Directory.expect);
 
-	// Store a handle to the profile output directory containing Tangram bundles.
-	// Cargo maps the "dev" profile to the "debug" directory; all other profiles
-	// use the profile name as the directory name.
+	// Cargo maps "dev" → "debug"; other profiles use their name.
 	const profileDir = profile === "dev" ? "debug" : profile;
 	const releaseDir = await artifact
 		.get(`target/${target}/${profileDir}`)
 		.then(tg.Directory.expect);
 
-	// Grab the bins from the release dir, resolving symlinks to files.
 	const bins: Record<string, tg.Artifact> = {};
 	for await (const [name, artifact] of releaseDir) {
 		const resolved =
@@ -395,7 +619,6 @@ linker = "${hostLinker}"`;
 		}
 	}
 
-	// Construct a result containing all located executables.
 	let binDir = await tg.directory({});
 	for (const [name, artifact] of Object.entries(bins)) {
 		binDir = await tg.directory(binDir, {
@@ -403,7 +626,6 @@ linker = "${hostLinker}"`;
 		});
 	}
 
-	// Include stderr log if captureStderr was enabled.
 	const result: Record<string, tg.Artifact> = { bin: binDir };
 	if (captureStderr) {
 		const stderrLog = await artifact
@@ -414,7 +636,6 @@ linker = "${hostLinker}"`;
 		}
 	}
 
-	// Include the cargo timing report if timings was enabled.
 	if (timings) {
 		const timingsDir = await artifact
 			.tryGet("target/cargo-timings")
@@ -484,13 +705,11 @@ export type CargoVendorArg = {
 export const extractCargoManifests = async (
 	source: tg.Directory,
 ): Promise<tg.Directory> => {
-	// Placeholder content for source files that satisfies cargo's validation.
+	// Satisfies cargo's target validation.
 	const placeholderFile = tg.file(
 		"// Placeholder for cargo manifest validation\n",
 	);
 
-	// Recursively find all Cargo.toml files and build a directory with just manifests.
-	// Also create placeholder source files to satisfy cargo's target validation.
 	const extractManifests = async (
 		dir: tg.Directory,
 		path: string,
@@ -501,11 +720,9 @@ export const extractCargoManifests = async (
 		for await (const [name, artifact] of dir) {
 			const fullPath = path ? `${path}/${name}` : name;
 			if (artifact instanceof tg.Directory) {
-				// Skip node_modules directories. They never contain Cargo manifests and can be very large.
+				// node_modules never contains Cargo manifests and can be huge.
 				if (name === "node_modules") continue;
-				// Recurse into subdirectories.
 				const subManifests = await extractManifests(artifact, fullPath);
-				// Only include if it has content.
 				const entries = await subManifests.entries;
 				if (Object.keys(entries).length > 0) {
 					result = await tg.directory(result, { [name]: subManifests });
@@ -521,7 +738,6 @@ export const extractCargoManifests = async (
 			}
 		}
 
-		// If this directory has a Cargo.toml, create placeholder source files.
 		if (hasCargoToml) {
 			result = await tg.directory(result, {
 				src: {
@@ -552,11 +768,11 @@ export const cargoVendor = async (
 	const vendorScript = tg`
 		set -x
 		export HOME=$PWD
-		SOURCE="$(realpath ${source})"
+		TGRUSTC_SOURCE_DIR="$(realpath ${source})"
 		export CARGO_HOME=$PWD
 		mkdir -p "${tg.output}/tg_vendor_dir"
 		cd "${tg.output}"
-		cargo vendor --versioned-dirs --locked --manifest-path $SOURCE/${manifestPathArg} tg_vendor_dir > "${tg.output}/config"
+		cargo vendor --versioned-dirs --locked --manifest-path $TGRUSTC_SOURCE_DIR/${manifestPathArg} tg_vendor_dir > "${tg.output}/config"
 	`;
 	const rustArtifact = self();
 	const sdk = std.sdk();
@@ -574,7 +790,7 @@ export const cargoVendor = async (
 		.then(tg.Directory.expect);
 };
 
-// Implementation of `cargo vendor` in tg typescript.
+/** Implementation of `cargo vendor` in tg typescript. */
 export const vendorDependencies = async (
 	cargoLockArg: tg.Unresolved<tg.File>,
 ) => {
@@ -618,7 +834,7 @@ export const vendorDependencies = async (
 	return tg.directory(...downloads);
 };
 
-// Given a crate directory downloaded from crates.io and its checksum, strip excess files and generate the .cargo-checksum.json.
+/** Strip extraneous files from a downloaded crate and generate .cargo-checksum.json. */
 export const vendorPackage = async (
 	pkg: tg.Directory,
 	checksum: tg.Checksum,
@@ -628,20 +844,17 @@ export const vendorPackage = async (
 		package: string;
 	};
 
-	// Strip out unused entries.
 	pkg = await tg.directory(pkg, {
 		[".cargo_vcs_info.json"]: undefined,
 		[".gitignore"]: undefined,
 		["Cargo.toml.orig"]: undefined,
 	});
 
-	// Create an empty .cargo-checksum.json.
 	const cargoChecksum: CargoChecksum = {
 		files: {},
 		package: checksum.replace("sha256:", ""),
 	};
 
-	// Recurse over the files to create it.
 	const stack: Array<[string, tg.Directory]> = [["", pkg]];
 	while (!(stack.length == 0)) {
 		const [path, dir] = stack.pop() as [string, tg.Directory];
@@ -664,6 +877,21 @@ export const vendorPackage = async (
 	});
 };
 
+/** Read the toolchain channel from rust-toolchain.toml if present in a source directory. */
+const readToolchainChannel = async (
+	dir: tg.Directory,
+): Promise<string | undefined> => {
+	const file = await dir
+		.tryGet("rust-toolchain.toml")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	if (!file) return undefined;
+	const text = await file.text;
+	const toml = tg.encoding.toml.decode(text) as {
+		toolchain?: { channel?: string };
+	};
+	return toml.toolchain?.channel;
+};
+
 const tripleToEnvVar = (triple: string, upcase?: boolean) => {
 	const allCaps = upcase ?? false;
 	let result = triple.replace(/-/g, "_");
@@ -680,7 +908,6 @@ export const test = async () => {
 
 	tests.push(testUnproxiedWorkspace());
 	tests.push(testVendorDependencies());
-
 	await Promise.all(tests);
 
 	return true;
