@@ -406,7 +406,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				destructive: false,
 				deterministic: true,
 				ignore: false,
-				local_dependencies: true,
+				source_dependencies: true,
 				locked: false,
 				lock: None,
 				..tg::checkin::Options::default()
@@ -581,7 +581,7 @@ async fn checkin_local_library_path(
 						destructive: false,
 						deterministic: true,
 						ignore: false,
-						local_dependencies: true,
+						source_dependencies: true,
 						locked: true,
 						lock: None,
 						..tg::checkin::Options::default()
@@ -869,7 +869,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 								destructive: false,
 								deterministic: true,
 								ignore: false,
-								local_dependencies: true,
+								source_dependencies: true,
 								locked: true,
 								lock: None,
 								..tg::checkin::Options::default()

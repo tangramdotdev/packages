@@ -166,7 +166,7 @@ async fn run_proxy(
 			// Check in the result.
 			let stripped_file = tg::checkin(tg::checkin::Arg {
 				options: tg::checkin::Options {
-					local_dependencies: true,
+					source_dependencies: true,
 					destructive: false,
 					deterministic: true,
 					ignore: false,

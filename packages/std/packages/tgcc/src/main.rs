@@ -587,7 +587,7 @@ async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarge
 						destructive: false,
 						deterministic: true,
 						ignore: false,
-						local_dependencies: true,
+						source_dependencies: true,
 						locked: false,
 						lock: None,
 						..tg::checkin::Options::default()

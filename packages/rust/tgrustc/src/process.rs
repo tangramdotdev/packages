@@ -49,16 +49,16 @@ pub(crate) async fn spawn_and_wait(
 ) -> tg::Result<SpawnResult> {
 	let spawn_arg = tg::process::spawn::Arg {
 		cached: None,
+		cache_location: None,
 		checksum: None,
 		command: command_ref,
-		local: None,
+		location: None,
 		parent: None,
-		remotes: None,
 		retry: false,
 		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg::default())),
-		stderr: tg::process::Stdio::default(),
-		stdin: tg::process::Stdio::default(),
-		stdout: tg::process::Stdio::default(),
+		stderr: tg::process::Stdio::Log,
+		stdin: tg::process::Stdio::Null,
+		stdout: tg::process::Stdio::Log,
 		tty: None,
 	};
 
@@ -201,7 +201,7 @@ pub(crate) async fn content_address_path(path: &str) -> tg::Result<tg::Value> {
 				destructive: false,
 				deterministic: true,
 				ignore: false,
-				local_dependencies: false,
+				source_dependencies: false,
 				solve: false,
 				..Default::default()
 			},

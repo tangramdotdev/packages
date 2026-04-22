@@ -1,4 +1,5 @@
 import * as std from "std" with { source: "../std" };
+import { $ } from "std" with { source: "../std" };
 import openssl from "openssl" with { source: "../openssl.tg.ts" };
 import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
 import * as proxy_ from "./proxy.tg.ts";

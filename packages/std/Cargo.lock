@@ -388,9 +388,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.0"
+version = "4.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b193af5b67834b676abd72466a96c1024e6a6ad978a1f484bd90b85c94041351"
+checksum = "1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -410,9 +410,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.6.0"
+version = "4.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1110bd8a634a1ab8cb04345d8d878267d57c3cf1b38d91b71af6686408bbca6a"
+checksum = "f2ce8604710f6733aa641a2b3731eaa1e8b3d9973d5e3565da11800813f997a9"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1674,9 +1674,9 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
 dependencies = [
  "libc",
  "rand_chacha",
@@ -1834,7 +1834,7 @@ dependencies = [
  "borsh",
  "bytes",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rkyv",
  "serde",
  "serde_json",
@@ -2224,7 +2224,7 @@ checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "async-channel",
  "blake3",
@@ -2251,6 +2251,7 @@ dependencies = [
  "regex",
  "scopeguard",
  "serde",
+ "serde-untagged",
  "serde_json",
  "serde_qs",
  "serde_with",
@@ -2261,7 +2262,6 @@ dependencies = [
  "tangram_serialize",
  "tangram_uri",
  "tangram_util",
- "tempfile",
  "time",
  "tokio",
  "tokio-stream",
@@ -2277,7 +2277,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2286,7 +2286,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "dashmap",
  "futures",
@@ -2300,7 +2300,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2328,7 +2328,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "bytes",
  "num",
@@ -2339,7 +2339,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -2371,7 +2371,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "derive_more",
  "http",
@@ -2386,10 +2386,11 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bb68c41bf837a3c395cf56c0ef434f7f213b51a7#bb68c41bf837a3c395cf56c0ef434f7f213b51a7"
+source = "git+https://github.com/tangramdotdev/tangram?rev=b121fb108f4dd437e9a5c7e747a8c27145689b00#b121fb108f4dd437e9a5c7e747a8c27145689b00"
 dependencies = [
  "bytes",
  "data-encoding",
+ "data-encoding-macro",
  "derive_more",
  "fnv",
  "futures",
@@ -2406,6 +2407,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "uuid",
  "xattr",
 ]
 
@@ -2571,9 +2573,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.51.1"
+version = "1.52.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f66bf9585cda4b724d3e78ab34b73fb2bbaba9011b9bfdf69dc836382ea13b8c"
+checksum = "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
 dependencies = [
  "bytes",
  "libc",
@@ -2790,9 +2792,9 @@ checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "typenum"
-version = "1.19.0"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "unicode-ident"
@@ -2844,9 +2846,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.23.0"
+version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ac8b6f42ead25368cf5b098aeb3dc8a1a2c05a3eee8a9a1a68c640edbfc79d9"
+checksum = "ddd74a9687298c6858e9b88ec8935ec45d22e8fd5e6394fa1bd4e99a87789c76"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
@@ -2882,11 +2884,11 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.2+wasi-0.2.9"
+version = "1.0.3+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
+checksum = "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.57.1",
 ]
 
 [[package]]
@@ -2895,7 +2897,7 @@ version = "0.4.0+wasi-0.3.0-rc-2026-01-06"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5428f8bf88ea5ddc08faddef2ac4a67e390b88186c703ce6dbd955e1c145aca5"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.51.0",
 ]
 
 [[package]]
@@ -3142,9 +3144,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
+checksum = "2ee1708bef14716a11bae175f579062d4554d95be2c6829f518df847b7b3fdd0"
 dependencies = [
  "memchr",
 ]
@@ -3157,6 +3159,12 @@ checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
 dependencies = [
  "wit-bindgen-rust-macro",
 ]
+
+[[package]]
+name = "wit-bindgen"
+version = "0.57.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "wit-bindgen-core"
