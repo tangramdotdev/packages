@@ -368,11 +368,11 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 	// Spawn and wait for the process.
 	let spawn_arg = tg::process::spawn::Arg {
 		cached: None,
+		cache_location: None,
 		checksum: None,
 		command: command_ref,
-		local: None,
+		location: None,
 		parent: None,
-		remotes: None,
 		retry: false,
 		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg {
 			network: false,
