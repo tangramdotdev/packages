@@ -171,8 +171,14 @@ pub(crate) async fn forward_logs(stdout: &[u8], stderr: &[u8]) -> tg::Result<()>
 	Ok(())
 }
 
-/// Under the cargo target dir so it persists within a build but is cleared by `cargo clean`.
+/// In `$TMPDIR`, keyed by the cargo target dir, so `tg::checkin` walks of
+/// `target/` don't race with our atomic-rename temp files. Set
+/// `TGRUSTC_DISABLE_CHECKIN_CACHE=1` to disable (every path goes through the
+/// daemon).
 static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	if std::env::var("TGRUSTC_DISABLE_CHECKIN_CACHE").is_ok() {
+		return None;
+	}
 	let target_dir = std::env::var("CARGO_TARGET_DIR")
 		.or_else(|_| std::env::var("TARGET_DIR"))
 		.map(PathBuf::from)
@@ -182,7 +188,8 @@ static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 			let target = PathBuf::from(source_dir).join("target");
 			target.exists().then_some(target)
 		})?;
-	let dir = target_dir.join(".tgrustc_cache");
+	let key = checkin_cache_key(&target_dir.to_string_lossy());
+	let dir = std::env::temp_dir().join(format!("tgrustc-cache-{key}"));
 	std::fs::create_dir_all(&dir).ok()?;
 	Some(dir)
 });

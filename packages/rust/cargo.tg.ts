@@ -72,6 +72,9 @@ export type Arg = CommonArg & {
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
 
+	/** Disable the tgrustc per-build path→artifact-id cache. Every path is content-addressed via the daemon. Useful for benchmarking or working around cache-related issues. Default: false. */
+	disableCheckinCache?: boolean;
+
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
 	network?: boolean;
 
@@ -393,6 +396,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		captureStderr = false,
 		channel: channel_,
 		checksum,
+		disableCheckinCache = false,
 		disableDefaultFeatures = false,
 		env: env_,
 		features = [],
@@ -572,6 +576,9 @@ linker = "${hostLinker}"`;
 			// Avoids self-checkin per invocation.
 			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
 		};
+		if (disableCheckinCache) {
+			proxyEnv.TGRUSTC_DISABLE_CHECKIN_CACHE = "1";
+		}
 		envs.push(proxyEnv);
 	}
 
