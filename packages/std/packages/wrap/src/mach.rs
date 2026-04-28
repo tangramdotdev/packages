@@ -1,5 +1,3 @@
-use std::os::unix::fs::PermissionsExt;
-
 use crate::{BinaryFormat, File, FileLocation, Footer, MAGIC};
 use num::ToPrimitive as _;
 use sys::{

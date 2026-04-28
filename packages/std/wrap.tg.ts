@@ -1058,11 +1058,6 @@ const isArgObject = (arg: unknown): arg is wrap.ArgObject => {
 	);
 };
 
-/** The magic number is `tangram\0`. */
-const MANIFEST_MAGIC_NUMBER: Uint8Array = new Uint8Array([
-	116, 97, 110, 103, 114, 97, 109, 0,
-]);
-
 const MANIFEST_VERSION_0 = 0;
 
 const manifestExecutableFromArg = async (

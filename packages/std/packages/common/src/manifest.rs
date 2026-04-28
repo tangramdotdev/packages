@@ -9,9 +9,6 @@ use tokio::io::AsyncWriteExt;
 
 use crate::CLOSEST_ARTIFACT_PATH;
 
-/// The magic number used to indicate an executable has a manifest.
-pub const MAGIC_NUMBER: &[u8] = b"tangram\0";
-
 /// The name of the section that will appear in the binary.
 pub const SECTION_NAME: &str = "tg-manifest";
 
