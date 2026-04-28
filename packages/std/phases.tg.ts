@@ -166,11 +166,7 @@ export const run = async (...args: std.Args<RunArg>) => {
 
 	let builder = std.run`${script}`.env(env_);
 	if (bootstrap) {
-		// Configure scripts rely on permissive failure handling.
-		builder = builder
-			.bootstrap(bootstrap)
-			.exitOnErr(false)
-			.disallowUnset(false);
+		builder = builder.bootstrap(bootstrap);
 	}
 	if (commandArg !== undefined) {
 		if (commandArg.host !== undefined) {

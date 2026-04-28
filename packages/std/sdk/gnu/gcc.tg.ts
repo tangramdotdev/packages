@@ -190,11 +190,22 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		const sysrootLdso = `${sysrootLibDir}/${interpreterName(target)}`;
 		const ldflagsForTarget = `-Wl,-dynamic-linker,${sysrootLdso}`;
 		configureArgs.push(`LDFLAGS_FOR_TARGET=${ldflagsForTarget}`);
-		preConfigureHook = tg`${preConfigureHook}\nexport LD_LIBRARY_PATH=${sysrootLibDir}\nexport WATERMARK=3`;
+		preConfigureHook = tg`
+			${preConfigureHook}
+			export LIBRARY_PATH=${sysrootLibDir}
+			export LD_LIBRARY_PATH=${sysrootLibDir}
+		`;
 	}
 
 	if (variant === "stage2_full") {
-		preConfigureHook = tg`${preConfigureHook}\nunset LD_PRELOAD\n`;
+		const sysrootLibDir = `${prefixSysrootPath}/lib`;
+		preConfigureHook = tg`
+			${preConfigureHook}
+			unset LD_PRELOAD
+			export LD_LIBRARY_PATH=${sysrootLibDir}
+			export CFLAGS="$CFLAGS --sysroot=${prefixSysrootPath}"
+			export CXXFLAGS="$CXXFLAGS --sysroot=${prefixSysrootPath}"
+		`;
 	}
 
 	// Set up phases.

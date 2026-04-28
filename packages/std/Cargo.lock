@@ -433,6 +433,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
+name = "common"
+version = "0.0.0"
+dependencies = [
+ "anstream 0.6.21",
+ "bytes",
+ "clap",
+ "crossterm 0.28.1",
+ "futures",
+ "serde",
+ "serde_json",
+ "tangram_client",
+ "tangram_either",
+ "tangram_serialize",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wrap",
+]
+
+[[package]]
 name = "compression-codecs"
 version = "0.4.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1283,20 +1304,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
-]
-
-[[package]]
-name = "manifest_tool"
-version = "0.0.0"
-dependencies = [
- "clap",
- "num",
- "paste",
- "rustix 1.1.4",
- "serde",
- "serde_json",
- "tracing",
- "zerocopy",
 ]
 
 [[package]]
@@ -2348,27 +2355,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tangram_std"
-version = "0.0.0"
-dependencies = [
- "anstream 0.6.21",
- "bytes",
- "clap",
- "crossterm 0.28.1",
- "futures",
- "manifest_tool",
- "serde",
- "serde_json",
- "tangram_client",
- "tangram_either",
- "tangram_serialize",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tangram_uri"
 version = "0.0.0"
 source = "git+https://github.com/tangramdotdev/tangram?rev=3b762b53e4f1d0dc585243cdc09269603b9b9ae4#3b762b53e4f1d0dc585243cdc09269603b9b9ae4"
@@ -2454,12 +2440,12 @@ dependencies = [
 name = "tgcc"
 version = "0.0.0"
 dependencies = [
+ "common",
  "futures",
  "itertools",
  "serde",
  "serde_json",
  "tangram_client",
- "tangram_std",
  "tokio",
 ]
 
@@ -2467,6 +2453,7 @@ dependencies = [
 name = "tgld"
 version = "0.0.0"
 dependencies = [
+ "common",
  "fnv",
  "futures",
  "goblin",
@@ -2474,7 +2461,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tangram_client",
- "tangram_std",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2485,11 +2471,11 @@ dependencies = [
 name = "tgstrip"
 version = "0.0.0"
 dependencies = [
+ "common",
  "futures",
  "serde",
  "serde_json",
  "tangram_client",
- "tangram_std",
  "tempfile",
  "tokio",
  "tracing",
@@ -3246,17 +3232,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "wrapper"
+name = "wrap"
 version = "0.0.0"
 dependencies = [
- "fnv",
- "libc",
+ "clap",
+ "num",
+ "paste",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
- "tangram_client",
- "tangram_std",
+ "tempfile",
  "tracing",
- "tracing-subscriber",
+ "zerocopy",
 ]
 
 [[package]]

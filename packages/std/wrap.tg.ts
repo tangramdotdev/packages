@@ -955,7 +955,7 @@ export namespace wrap {
 			try {
 				const manifestFile = await tg
 					.build({
-						executable: workspace.manifestTool({}),
+						executable: workspace.wrap({}),
 						args: ["read", tg`${file}`, "-o", tg.output],
 						env: { RUST_BACKTRACE: "full" },
 					})
@@ -965,7 +965,7 @@ export namespace wrap {
 				const manifestString = tg.encoding.utf8.decode(manifestBytes);
 				const output = tg.encoding.json.decode(
 					manifestString,
-				) as workspace.ManifestToolOutput;
+				) as workspace.WrapOutput;
 				return output.manifest;
 			} catch (e) {
 				return undefined;
@@ -983,7 +983,7 @@ export namespace wrap {
 			// Create the file with the new manifest.
 			let newFile = await tg
 				.build({
-					executable: workspace.manifestTool({}),
+					executable: workspace.wrap({}),
 					args: [
 						"write",
 						tg`${file}`,
@@ -996,6 +996,7 @@ export namespace wrap {
 				})
 				.named("write manifest")
 				.then(tg.File.expect);
+
 			// Codesign the new file.
 			if (await needsCodesign(newFile)) {
 				newFile = await tg
@@ -1056,11 +1057,6 @@ const isArgObject = (arg: unknown): arg is wrap.ArgObject => {
 		)
 	);
 };
-
-/** The magic number is `tangram\0`. */
-const MANIFEST_MAGIC_NUMBER: Uint8Array = new Uint8Array([
-	116, 97, 110, 103, 114, 97, 109, 0,
-]);
 
 const MANIFEST_VERSION_0 = 0;
 
@@ -2572,13 +2568,21 @@ export const argAndEnvDumpCross = () =>
 
 export const test = async () => {
 	await Promise.all([
-		testSingleArgObjectNoMutations(),
-		testDependencies(),
-		testDylibPath(),
-		testContentExecutable(),
-		testContentExecutableVariadic(),
-		testInterpreterSwappingNormal(),
-		testInterpreterWrappingPreloads(),
+		tg.build(testSingleArgObjectNoMutations, {
+			name: "single arg object no mutations",
+		}),
+		tg.build(testDependencies, { name: "dependencies" }),
+		tg.build(testDylibPath, { name: "dylib path" }),
+		tg.build(testContentExecutable, { name: "content executable" }),
+		tg.build(testContentExecutableVariadic, {
+			name: "content executable variadic",
+		}),
+		tg.build(testInterpreterSwappingNormal, {
+			name: "interpreter swapping normal",
+		}),
+		tg.build(testInterpreterWrappingPreloads, {
+			name: "interpreter wrapping preloads",
+		}),
 	]);
 	return true;
 };
@@ -2587,6 +2591,7 @@ export const testSingleArgObjectNoMutations = async () => {
 	const executable = await argAndEnvDump();
 	await executable.store();
 	const executableID = executable.id;
+
 	// The program is a wrapper produced by the LD proxy.
 	console.log("argAndEnvDump wrapper ID", executableID);
 
@@ -2625,7 +2630,7 @@ export const testSingleArgObjectNoMutations = async () => {
 
 	if (os === "linux") {
 		tg.assert(
-			text.includes(`/proc/self/exe: /.tangram/artifacts/${wrapperID}`),
+			text.includes(`/proc/self/exe: /opt/tangram/artifacts/${wrapperID}`),
 			"Expected /proc/self/exe to be set to the artifact ID of the wrapper",
 		);
 		tg.assert(
@@ -3019,4 +3024,102 @@ export const testInterpreterWrappingPreloads = async () => {
 	tg.assert(foundCustomPreload, "Expected the custom preload to be added");
 
 	return extendedWrapper;
+};
+
+import helloSource from "./wrap/test/hello.c" with { type: "file" };
+import callHelloSource from "./wrap/test/call_hello.c" with { type: "file" };
+import dlopenSource from "./wrap/test/dlopen.c" with { type: "file" };
+import printEnvSource from "./wrap/test/print_env.c" with { type: "file" };
+export const testLoadThroughEnvLdLibraryPath = async () => {
+	const host = std.triple.host();
+	const os = std.triple.os(host);
+	const expectedKind = os === "darwin" ? "dyld" : "ld-musl";
+
+	const toolchain = await bootstrap.sdk(host);
+	const libHello = await std.run`
+		mkdir -p ${tg.output}/lib
+		cp ${helloSource} libhello.c
+		gcc -fPIC -shared -Wl,-soname,libhello.so -o ${tg.output}/lib/libhello.so libhello.c
+	`
+		.bootstrap(true)
+		.env(
+			toolchain,
+			{ utils: true },
+		)
+		.then(tg.Directory.expect);
+	const output = await std.run`
+		cp ${callHelloSource} callhello.c
+		cp ${dlopenSource} dlopen.c
+		gcc -fPIC -shared callhello.c -lhello -L${libHello}/lib -o call_hello
+		gcc dlopen.c -o dlopen
+
+		export LD_LIBRARY_PATH=${libHello}/lib
+		sh -c 'TANGRAM_TRACING=1 ./dlopen > ${tg.output}'
+	`
+		.bootstrap(true)
+		.env(
+			toolchain,
+			{ utils: true },
+		)
+		.then(tg.File.expect);
+	const string = await output.text;
+	const result = string === "hello, world!\n";
+	tg.assert(result);
+	return result;
+};
+
+/** Test that LD_LIBRARY_PATH is preserved through wrapped binary execution.
+ *  This simulates the autotools build scenario:
+ *  1. Build script sets export LD_LIBRARY_PATH=$LIBRARY_PATH
+ *  2. A wrapped binary (like make) runs
+ *  3. That wrapped binary spawns another wrapped binary (like python)
+ *  4. The inner binary needs LD_LIBRARY_PATH to find transitive deps via dlopen
+ *
+ *  The old Rust wrapper preserved LD_LIBRARY_PATH via --library-path to ld-linux.
+ *  The new C wrapper uses LD_LIBRARY_PATH env + injection library to restore it.
+ */
+export const testLdLibraryPathPreservedThroughNestedWrapping = async () => {
+	const host = std.triple.host();
+	const os = std.triple.os(host);
+	if (os === "darwin") {
+		return true; // Skip on macOS, different mechanism.
+	}
+
+	const toolchain = await bootstrap.sdk(host);
+
+	// Build libhello.so in its own directory (simulates a transitive dependency).
+	const libHello = std.run`
+		mkdir -p ${tg.output}/lib
+		cp ${helloSource} libhello.c
+		gcc -fPIC -shared -Wl,-soname,libhello.so -o ${tg.output}/lib/libhello.so libhello.c
+	`
+		.bootstrap(true)
+		.env(toolchain, { utils: true })
+		.then(tg.Directory.expect);
+
+	const output = await std.run`
+		cp ${callHelloSource} callhello.c
+		cp ${printEnvSource} print_env.c
+		gcc -fPIC -shared callhello.c -lhello -L${libHello}/lib -o call_hello.so
+		gcc print_env.c -ldl -o print_env
+
+		export LD_LIBRARY_PATH=${libHello}/lib
+		echo "outer shell: LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >&2
+
+		# Level 1: wrapped sh (simulates make)
+		sh -c '
+			echo "inner shell: LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >&2
+			# Level 2: wrapped print_env (simulates python loading a module)
+			TANGRAM_TRACING=1 ./print_env ./call_hello.so > ${tg.output}
+		'
+	`
+		.bootstrap(true)
+		.env(toolchain, { utils: true })
+		.then(tg.File.expect);
+	const string = await output.text;
+	console.log("test output:", string);
+	// print_env calls call_hello which calls hello_world → prints "hello, world!"
+	const result = string === "hello, world!\n";
+	tg.assert(result, `Expected "hello, world!\\n" but got "${string}"`);
+	return result;
 };
