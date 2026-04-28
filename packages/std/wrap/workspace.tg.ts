@@ -4,8 +4,13 @@ import * as llvm from "../sdk/llvm.tg.ts";
 import * as std from "../tangram.ts";
 import cargoToml from "../Cargo.toml" with { type: "file" };
 import cargoLock from "../Cargo.lock" with { type: "file" };
-import packages from "../packages" with { type: "directory" };
 
+import * as wrapperSrc from "./wrapper.tg.ts";
+import common from "../packages/common" with { type: "directory" };
+import tgcc from "../packages/tgcc" with { type: "directory" };
+import tgld from "../packages/tgld" with { type: "directory" };
+import tgstrip from "../packages/tgstrip" with { type: "directory" };
+import wrap_ from "../packages/wrap" with { type: "directory" };
 export type Arg = {
 	build?: string;
 	host?: string;
@@ -29,12 +34,19 @@ export const workspace = async (
 	const buildTriple = build_ ?? host;
 
 	// Get the source.
+	const defaultSource = tg.directory({
+		common,
+		tgcc,
+		tgld,
+		tgstrip,
+		["wrap"]: wrap_
+	});
 	const source = source_
 		? source_
 		: await tg.directory({
 				"Cargo.toml": cargoToml,
 				"Cargo.lock": cargoLock,
-				packages: packages,
+				packages: defaultSource,
 			});
 
 	return await tg
@@ -109,7 +121,7 @@ export const ldProxy = async (arg: tg.Unresolved<Arg>) => {
 		.then(tg.File.expect);
 };
 
-export type ManifestToolOutput = {
+export type WrapOutput = {
 	manifest?: std.wrap.Manifest | undefined;
 	location?: FileLocation | undefined;
 };
@@ -119,7 +131,7 @@ export type FileLocation = {
 	length: number;
 };
 
-export const manifestTool = async (arg: tg.Unresolved<Arg>) => {
+export const wrap = async (arg: tg.Unresolved<Arg>) => {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
 	if (
@@ -128,12 +140,12 @@ export const manifestTool = async (arg: tg.Unresolved<Arg>) => {
 		const workspace = await tg
 			.build(std.buildDefaultWorkspace)
 			.named("default workspace");
-		return workspace.get("bin/manifest_tool").then(tg.File.expect);
+		return workspace.get("bin/wrap").then(tg.File.expect);
 	}
 	return await tg
 		.build(workspace, arg)
 		.named("workspace")
-		.then((dir) => dir.get("bin/manifest_tool"))
+		.then((dir) => dir.get("bin/wrap"))
 		.then(tg.File.expect);
 };
 
@@ -170,7 +182,24 @@ export const wrapper = async (arg: tg.Unresolved<Arg>) => {
 	return await tg
 		.build(workspace, arg)
 		.named("workspace")
-		.then((dir) => dir.get("bin/wrapper"))
+		.then((dir) => dir.get("bin/wrapper.exe"))
+		.then(tg.File.expect);
+};
+
+export const wrapperBinary = async (arg: tg.Unresolved<Arg>) => {
+	const resolved = await tg.resolve(arg ?? {});
+	const { build, host, release = true, source, verbose = false } = resolved;
+
+	if (
+		await shouldUseDefaultWorkspace({ build, host, release, source, verbose })
+	) {
+		return tg.build(defaultWrapperBinary).named("default wrapper");
+	}
+
+	return await tg
+		.build(workspace, arg)
+		.named("workspace")
+		.then((dir) => dir.get("bin/wrapper.bin"))
 		.then(tg.File.expect);
 };
 
@@ -185,12 +214,25 @@ export const defaultWrapper = async () => {
 	const workspace = await tg
 		.build(std.buildDefaultWorkspace)
 		.named("default workspace");
-	return workspace.get("bin/wrapper").then(tg.File.expect);
+	return workspace.get("bin/wrapper.exe").then(tg.File.expect);
+};
+
+/** The default wrapper binary built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
+export const defaultWrapperBinary = async () => {
+	const workspace = await tg
+		.build(std.buildDefaultWorkspace)
+		.named("default workspace");
+	return workspace.get("bin/wrapper.bin").then(tg.File.expect);
 };
 
 /** Release helper - builds defaultWrapper with a referent to this file for cache hits. */
 export const buildDefaultWrapper = async () => {
 	return tg.build(defaultWrapper).named("default wrapper");
+};
+
+/** Release helper - builds defaultWrapperBinary with a referent to this file for cache hits. */
+export const buildDefaultWrapperBin = async () => {
+	return tg.build(defaultWrapperBinary).named("default wrapper binary");
 };
 
 type ToolchainArg = {
@@ -519,7 +561,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	};
 
 	const buildType = release ? "/release" : "/debug";
-	const items = ["manifest_tool", "tgcc", "tgld", "tgstrip", "wrapper"];
+	const items = ["tgcc", "tgld", "tgstrip", "wrap"];
 	const install = {
 		pre: tg`mkdir -p ${tg.output}/bin`,
 		body: tg`
@@ -529,8 +571,8 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		`,
 	};
 
-	// Build and return.
-	return await tg
+	// Build and install all the crates/
+	const crates = await tg
 		.build(std.phases.run, {
 			bootstrap: true,
 			env: std.env.arg(...env),
@@ -543,6 +585,14 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		})
 		.named("workspace cargo build")
 		.then(tg.Directory.expect);
+
+	// Build the wrapper.
+	const wrapper = await tg
+		.build(wrapperSrc.build, arg)
+		.then(tg.Directory.expect);
+
+	// Combine and return.
+	return tg.directory(crates, wrapper);
 };
 
 /* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */

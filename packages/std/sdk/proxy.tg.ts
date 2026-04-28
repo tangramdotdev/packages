@@ -1,7 +1,6 @@
 import * as bootstrap from "../bootstrap.tg.ts";
 import * as std from "../tangram.ts";
 import * as sdk from "../sdk.tg.ts";
-import * as stub from "../wrap/stub.tg.ts";
 import * as injection from "../wrap/injection.tg.ts";
 import * as workspace from "../wrap/workspace.tg.ts";
 import * as gnu from "./gnu.tg.ts";
@@ -271,35 +270,27 @@ const ldProxy = async (arg: LdProxyArg) => {
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const buildToolchain = arg.buildToolchain;
-	const embedWrapper = arg.embedWrapper ?? std.triple.os(build) === "linux";
+	const embedWrapper = std.triple.os(build) === "linux" ? (arg.embedWrapper ?? true) : false;
 
 	// Get the embedded wrapper artifacts.
-	let stubBin = undefined;
-	let stubElf = undefined;
-	let wrapBin = undefined;
+	const wrapperBin = await workspace.wrapperBinary({ host, build });
+	const wrapperExe = await workspace.wrapper({ host, build });
 	let objcopy = undefined;
-	if (std.triple.os(build) === "linux") {
-		const stub_ = await stub.workspace(arg);
-		stubBin = await stub_.get("stub.bin");
-		stubElf = await stub_.get("stub.elf");
-		wrapBin = await stub_.get("wrap");
 
-		// Find objcopy. Resolve symlinks to get the actual file.
-		const binDir = await buildToolchain.get("bin").then(tg.Directory.expect);
-		for (let [name, artifact] of Object.entries(await binDir.entries)) {
-			if (name.endsWith("objcopy")) {
-				// If it's a symlink, resolve it to get the actual file.
-				if (artifact instanceof tg.Symlink) {
-					const resolved = await binDir.get(name);
-					if (resolved instanceof tg.File) {
-						objcopy = resolved;
-					}
-				} else if (artifact instanceof tg.File) {
-					objcopy = artifact;
+	// Find objcopy. Resolve symlinks to get the actual file.
+	const binDir = await buildToolchain.get("bin").then(tg.Directory.expect);
+	for (let [name, artifact] of Object.entries(await binDir.entries)) {
+		if (name.endsWith("objcopy")) {
+			// If it's a symlink, resolve it to get the actual file.
+			if (artifact instanceof tg.Symlink) {
+				const resolved = await binDir.get(name);
+				if (resolved instanceof tg.File) {
+					objcopy = resolved;
 				}
+			} else if (artifact instanceof tg.File) {
+				objcopy = artifact;
 			}
 		}
-		tg.assert(objcopy, "failed to find objcopy binary");
 	}
 
 	// The linker proxy is built for the build machine.
@@ -336,28 +327,20 @@ const ldProxy = async (arg: LdProxyArg) => {
 		TGLD_COMMAND_PATH: tg.Mutation.setIfUnset<
 			tg.File | tg.Symlink | tg.Template
 		>(arg.linker),
-		TGLD_INJECTION_PATH: tg.Mutation.setIfUnset(hostInjectionLibrary),
+		TGLD_INJECTION_PATH: tg.Mutation.set(hostInjectionLibrary),
 		TGLD_INTERPRETER_ARGS: arg.interpreterArgs
 			? tg.Mutation.setIfUnset(tg.Template.join(" ", ...arg.interpreterArgs))
 			: undefined,
 		TGLD_INTERPRETER_PATH: tg.Mutation.setIfUnset<tg.File | "none">(
 			arg.interpreter ?? "none",
 		),
-		TANGRAM_WRAPPER_ID: tg.Mutation.setIfUnset(hostWrapper.id),
-		TANGRAM_CODESIGN_ID: tg.Mutation.setIfUnset(codesign.id),
-		TANGRAM_STUB_BIN_ID: stubBin
-			? tg.Mutation.setIfUnset(stubBin.id)
-			: undefined,
-		TANGRAM_STUB_ELF_ID: stubElf
-			? tg.Mutation.setIfUnset(stubElf.id)
-			: undefined,
-		TANGRAM_OBJCOPY_ID: objcopy
-			? tg.Mutation.setIfUnset(objcopy.id)
-			: undefined,
-		TANGRAM_WRAP_ID: wrapBin ? tg.Mutation.setIfUnset(wrapBin.id) : undefined,
+		TANGRAM_CODESIGN_ID: tg.Mutation.set(codesign.id),
+		TANGRAM_WRAPPER_BIN_ID: tg.Mutation.set(wrapperBin.id),
+		TANGRAM_WRAPPER_EXE_ID: tg.Mutation.set(wrapperExe.id),
+		TANGRAM_OBJCOPY_ID: objcopy ? tg.Mutation.set(objcopy.id) : tg.Mutation.unset() as tg.Mutation<string>,
 		TGLD_EMBED_WRAPPER: embedWrapper
-			? tg.Mutation.setIfUnset("true")
-			: undefined,
+			? tg.Mutation.set("true")
+			: tg.Mutation.unset() as tg.Mutation<string>
 	};
 
 	// Create the linker proxy.

@@ -15,15 +15,17 @@ const MAX_DEPTH: usize = 16;
 
 fn main() {
 	if let Err(e) = main_inner() {
-		tangram_std::error::print_error(e);
+		common::error::print_error(e);
 		std::process::exit(1);
 	}
 }
 
 fn main_inner() -> tg::Result<()> {
+	// Setup tracing.
+	common::tracing::setup("TGLD_TRACING");
+
 	// Read the options from the environment and arguments.
 	let options = read_options()?;
-	tangram_std::tracing::setup("TGLD_TRACING");
 	tracing::debug!(?options);
 
 	tg::init()?;
@@ -103,6 +105,12 @@ struct Options {
 
 	/// Whether the linker should run in passthrough mode.
 	passthrough: bool,
+
+	/// Additional argument values to set in the wrapper.
+	wrapper_arg_value: Option<Vec<tg::template::Data>>,
+
+	/// Additional environment variable values to set in the wrapper.
+	wrapper_env_value: Option<tg::mutation::Data>,
 }
 
 // Read the options from the environment and arguments.
@@ -162,10 +170,46 @@ fn read_options() -> tg::Result<Options> {
 	// Prepare to store dynamic libraries passed directly to the linker.
 	let mut additional_library_candidate_paths = Vec::new();
 
+	// Prepare to store wrapper arg values.
+	let mut wrapper_arg_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ARG_VALUE_PATH") {
+		let value = std::fs::read_to_string(&path)
+			.map_err(|e| tg::error!(source = e, "failed to read TGLD_WRAPPER_ARG_VALUE_PATH"))?
+			.parse::<tg::Value>()
+			.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+		let data = value
+			.to_data()
+			.try_unwrap_array()
+			.map_err(|_| tg::error!("expected an array"))?
+			.into_iter()
+			.map(|v| {
+				v.try_unwrap_template()
+					.map_err(|_| tg::error!("expected a template"))
+			})
+			.collect::<tg::Result<Vec<_>>>()?;
+		Some(data)
+	} else {
+		None
+	};
+
+	// Prepare to store wrapper env values.
+	let mut wrapper_env_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ENV_VALUE_PATH") {
+		let value = std::fs::read_to_string(&path)
+			.map_err(|e| tg::error!(source = e, "failed to read TGLD_WRAPPER_ENV_VALUE_PATH"))?
+			.parse::<tg::Value>()
+			.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+		let data = value
+			.try_unwrap_mutation()
+			.map_err(|_| tg::error!("expected a mutation"))?
+			.to_data();
+		Some(data)
+	} else {
+		None
+	};
+
 	// Handle the arguments.
 	while let Some(arg) = args.next() {
 		// Pass through any arg that isn't a tangram arg.
-		if arg.starts_with("--tg-") {
+		if arg.starts_with("--tg-") || arg.starts_with("--tangram-") {
 			// Handle setting combined library paths. Will override the env var if set.
 			if arg.starts_with("--tg-library-path-opt-level=") {
 				let option = arg.strip_prefix("--tg-library-path-opt-level=").unwrap();
@@ -184,6 +228,118 @@ fn read_options() -> tg::Result<Options> {
 				disallow_missing = true;
 			} else if arg.starts_with("--tg-embed-wrapper") {
 				embed = true;
+			} else if let Some(value) = arg.strip_prefix("--tangram-wrapper-arg-value=") {
+				let value = value
+					.parse::<tg::Value>()
+					.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+				let data = value
+					.to_data()
+					.try_unwrap_array()
+					.map_err(|_| tg::error!("expected an array"))?
+					.into_iter()
+					.map(|v| {
+						v.try_unwrap_template()
+							.map_err(|_| tg::error!("expected a template"))
+					})
+					.collect::<tg::Result<Vec<_>>>()?;
+				wrapper_arg_value.replace(data);
+			} else if arg == "--tangram-wrapper-arg-value" {
+				if let Some(value) = args.next() {
+					let value = value
+						.parse::<tg::Value>()
+						.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+					let data = value
+						.to_data()
+						.try_unwrap_array()
+						.map_err(|_| tg::error!("expected an array"))?
+						.into_iter()
+						.map(|v| {
+							v.try_unwrap_template()
+								.map_err(|_| tg::error!("expected a template"))
+						})
+						.collect::<tg::Result<Vec<_>>>()?;
+					wrapper_arg_value.replace(data);
+				}
+			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-arg-value-path=") {
+				let value = std::fs::read_to_string(path)
+					.map_err(|e| tg::error!(source = e, "failed to read wrapper arg value path"))?
+					.parse::<tg::Value>()
+					.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+				let data = value
+					.to_data()
+					.try_unwrap_array()
+					.map_err(|_| tg::error!("expected an array"))?
+					.into_iter()
+					.map(|v| {
+						v.try_unwrap_template()
+							.map_err(|_| tg::error!("expected a template"))
+					})
+					.collect::<tg::Result<Vec<_>>>()?;
+				wrapper_arg_value.replace(data);
+			} else if arg == "--tangram-wrapper-arg-value-path" {
+				if let Some(path) = args.next() {
+					let value = std::fs::read_to_string(&path)
+						.map_err(|e| {
+							tg::error!(source = e, "failed to read wrapper arg value path")
+						})?
+						.parse::<tg::Value>()
+						.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+					let data = value
+						.to_data()
+						.try_unwrap_array()
+						.map_err(|_| tg::error!("expected an array"))?
+						.into_iter()
+						.map(|v| {
+							v.try_unwrap_template()
+								.map_err(|_| tg::error!("expected a template"))
+						})
+						.collect::<tg::Result<Vec<_>>>()?;
+					wrapper_arg_value.replace(data);
+				}
+			} else if let Some(value) = arg.strip_prefix("--tangram-wrapper-env-value=") {
+				let value = value
+					.parse::<tg::Value>()
+					.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+				let data = value
+					.try_unwrap_mutation()
+					.map_err(|_| tg::error!("expected a mutation"))?
+					.to_data();
+				wrapper_env_value.replace(data);
+			} else if arg == "--tangram-wrapper-env-value" {
+				if let Some(value) = args.next() {
+					let value = value
+						.parse::<tg::Value>()
+						.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+					let data = value
+						.try_unwrap_mutation()
+						.map_err(|_| tg::error!("expected a mutation"))?
+						.to_data();
+					wrapper_env_value.replace(data);
+				}
+			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-env-value-path=") {
+				let value = std::fs::read_to_string(path)
+					.map_err(|e| tg::error!(source = e, "failed to read wrapper env value path"))?
+					.parse::<tg::Value>()
+					.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+				let data = value
+					.try_unwrap_mutation()
+					.map_err(|_| tg::error!("expected a mutation"))?
+					.to_data();
+				wrapper_env_value.replace(data);
+			} else if arg == "--tangram-wrapper-env-value-path" {
+				if let Some(path) = args.next() {
+					let value = std::fs::read_to_string(&path)
+						.map_err(|e| {
+							tg::error!(source = e, "failed to read wrapper env value path")
+						})?
+						.parse::<tg::Value>()
+						.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+					let data = value
+						.try_unwrap_mutation()
+						.map_err(|_| tg::error!("expected a mutation"))?
+						.to_data();
+					wrapper_env_value.replace(data);
+				}
 			} else {
 				command_args.push(arg.clone());
 			}
@@ -263,6 +419,8 @@ fn read_options() -> tg::Result<Options> {
 		max_depth,
 		output_path,
 		passthrough,
+		wrapper_arg_value,
+		wrapper_env_value,
 	};
 
 	Ok(options)
@@ -318,8 +476,8 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		.into_iter()
 		.chain(
 			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
-				let symlink_data = tangram_std::template_data_to_symlink_data(
-					tangram_std::unrender(library_path)?.to_data(),
+				let symlink_data = common::template_data_to_symlink_data(
+					common::unrender(library_path)?.to_data(),
 				)?;
 				let artifact_path = match symlink_data.clone() {
 					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
@@ -409,6 +567,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 				source_dependencies: true,
 				locked: false,
 				lock: None,
+				root: true,
 				..tg::checkin::Options::default()
 			},
 			path: output_path,
@@ -470,7 +629,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// If requested, embed the wrapper.
 		let new_wrapper = if options.embed {
 			if let Some(entrypoint) = entrypoint {
-				manifest.executable = tangram_std::manifest::Executable::Address(entrypoint);
+				manifest.executable = common::manifest::Executable::Address(entrypoint);
 			}
 			manifest.embed(&output_file).await?
 		} else {
@@ -584,6 +743,7 @@ async fn checkin_local_library_path(
 						source_dependencies: true,
 						locked: true,
 						lock: None,
+						root: true,
 						..tg::checkin::Options::default()
 					},
 					path: library_candidate_path,
@@ -630,7 +790,7 @@ async fn create_manifest<H: BuildHasher>(
 	options: &Options,
 	interpreter: InterpreterRequirement,
 	library_paths: Option<HashSet<DirectoryWithSubpath, H>>,
-) -> tg::Result<tangram_std::Manifest> {
+) -> tg::Result<common::Manifest> {
 	// Create the interpreter.
 	let interpreter = {
 		let config = match interpreter {
@@ -657,9 +817,9 @@ async fn create_manifest<H: BuildHasher>(
 				|dir_with_subpath| async move {
 					let directory = tg::Directory::with_id(dir_with_subpath.id);
 					let template = if let Some(subpath) = dir_with_subpath.subpath {
-						tangram_std::template_from_artifact_and_subpath(directory.into(), subpath)
+						common::template_from_artifact_and_subpath(directory.into(), subpath)
 					} else {
-						tangram_std::template_from_artifact(directory.into())
+						common::template_from_artifact(directory.into())
 					};
 					let data = template.to_data();
 					Ok::<_, tg::Error>(data)
@@ -674,41 +834,41 @@ async fn create_manifest<H: BuildHasher>(
 
 		if let Some((path, interpreter_flavor)) = config {
 			// Unrender the interpreter path.
-			let path = tangram_std::unrender(&path)?;
+			let path = common::unrender(&path)?;
 			let path = path.to_data();
 
 			// Unrender the preloads.
 			let mut preloads = None;
 			if let Some(injection_path) = options.injection_path.as_deref() {
-				preloads = Some(vec![tangram_std::unrender(injection_path)?.to_data()]);
+				preloads = Some(vec![common::unrender(injection_path)?.to_data()]);
 			}
 
 			// Unrender the additional args.
 			let mut args = None;
 			if let Some(interpreter_args) = options.interpreter_args.as_deref() {
-				let interpreter_args = interpreter_args.iter().map(|arg| async move {
-					Ok::<_, tg::Error>(tangram_std::unrender(arg)?.to_data())
-				});
+				let interpreter_args = interpreter_args
+					.iter()
+					.map(|arg| async move { Ok::<_, tg::Error>(common::unrender(arg)?.to_data()) });
 				args = Some(futures::future::try_join_all(interpreter_args).await?);
 			}
 
 			match interpreter_flavor {
-				InterpreterFlavor::Dyld => Some(tangram_std::manifest::Interpreter::DyLd(
-					tangram_std::manifest::DyLdInterpreter {
+				InterpreterFlavor::Dyld => Some(common::manifest::Interpreter::DyLd(
+					common::manifest::DyLdInterpreter {
 						library_paths,
 						preloads,
 					},
 				)),
-				InterpreterFlavor::Gnu => Some(tangram_std::manifest::Interpreter::LdLinux(
-					tangram_std::manifest::LdLinuxInterpreter {
+				InterpreterFlavor::Gnu => Some(common::manifest::Interpreter::LdLinux(
+					common::manifest::LdLinuxInterpreter {
 						path,
 						library_paths,
 						preloads,
 						args,
 					},
 				)),
-				InterpreterFlavor::Musl => Some(tangram_std::manifest::Interpreter::LdMusl(
-					tangram_std::manifest::LdMuslInterpreter {
+				InterpreterFlavor::Musl => Some(common::manifest::Interpreter::LdMusl(
+					common::manifest::LdMuslInterpreter {
 						path,
 						library_paths,
 						preloads,
@@ -723,16 +883,16 @@ async fn create_manifest<H: BuildHasher>(
 	};
 
 	// Create the executable.
-	let executable = tangram_std::manifest::Executable::Path(
-		tangram_std::template_from_artifact(tg::Artifact::with_id(ld_output_id)).to_data(),
+	let executable = common::manifest::Executable::Path(
+		common::template_from_artifact(tg::Artifact::with_id(ld_output_id)).to_data(),
 	);
 
 	// Create empty values for env and args.
-	let env = None;
-	let args = None;
+	let env = options.wrapper_env_value.clone();
+	let args = options.wrapper_arg_value.clone();
 
 	// Create the manifest.
-	let manifest = tangram_std::Manifest {
+	let manifest = common::Manifest {
 		interpreter,
 		executable,
 		env,
@@ -816,10 +976,10 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 
 				// Obtain the file object.
 				let library_candidate_file =
-					if library_candidate_path.starts_with(&*tangram_std::CLOSEST_ARTIFACT_PATH) {
+					if library_candidate_path.starts_with(&*common::CLOSEST_ARTIFACT_PATH) {
 						tracing::trace!("found an artifact, extracting file object");
 						let template =
-							tangram_std::unrender(library_candidate_path.to_str().ok_or_else(
+							common::unrender(library_candidate_path.to_str().ok_or_else(
 								|| tg::error!(path = %library_candidate_path.display(), "unable to convert path to str"),
 							)?)?;
 						tracing::trace!(?template, "unrendered library candidate path");
@@ -841,7 +1001,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 										tg::error!(!source, "expected a directory")
 									})?;
 								if let Some(inner) = d
-									.try_get(subpath.strip_prefix('/').unwrap_or(subpath))
+									.try_get(subpath.strip_prefix('/').unwrap_or(&subpath))
 									.await?
 								{
 									inner
@@ -872,6 +1032,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 								source_dependencies: true,
 								locked: true,
 								lock: None,
+								root: true,
 								..tg::checkin::Options::default()
 							},
 							path: library_candidate_path.clone(),

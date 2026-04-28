@@ -19,8 +19,7 @@ export const injection = async (unresolved?: tg.Unresolved<Arg>) => {
 	const os = std.triple.os(host);
 
 	// Get the source.
-	const sourceDir = arg?.source ? arg.source : injectionSource;
-	const source = await sourceDir.get(`${os}/lib.c`).then(tg.File.expect);
+	const source = arg?.source ? arg.source : injectionSource;
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
 	const buildToolchain = arg?.buildToolchain ?? (await bootstrap.sdk.env(host));
@@ -31,6 +30,7 @@ export const injection = async (unresolved?: tg.Unresolved<Arg>) => {
 	// Select the correct toolchain and options for the given triple.
 	let additionalArgs: Array<string | tg.Template> = [];
 	if (os === "linux") {
+		additionalArgs.push(`-Wl,-soname=tangram-injection-${host}.so`);
 		if (std.triple.os(build) === "linux") {
 			additionalArgs.push("-Wl,--no-as-needed", "-s");
 		}
@@ -62,7 +62,7 @@ type MacOsInjectionArg = {
 	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
-	source: tg.File;
+	source: tg.Directory;
 };
 
 export const macOsInjection = async (arg: MacOsInjectionArg) => {
@@ -128,12 +128,14 @@ type DylibArg = {
 	buildToolchain?: std.env.Arg;
 	env?: std.env.Arg;
 	host?: string;
-	source: tg.File;
+	source: tg.Directory;
 };
 
 export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
+	const os = std.triple.os(std.triple.archAndOs(build));
+	const source = arg.source;
 
 	// Get the build toolchain. If not provided, use bootstrap SDK.
 	const buildToolchain = arg.buildToolchain ?? (await bootstrap.sdk.env(host));
@@ -180,6 +182,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 		"-O3",
 		"-pipe",
 		"-mtune=generic",
+		tg`-I${source}/include`,
 	];
 	if (!(std.triple.os(build) === "darwin" && std.triple.os(host) === "linux")) {
 		args.push("-fstack-protector-strong");
@@ -213,7 +216,7 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 
 	const system = std.triple.archAndOs(build);
 	const output =
-		std.build`${executable} -xc ${arg.source} -o ${tg.output} ${tg.Template.join(" ", ...args)}`
+		std.build`${executable} -xc ${arg.source}/${os}/lib.c -o ${tg.output} ${tg.Template.join(" ", ...args)}`
 			.bootstrap(true)
 			.env(
 				buildToolchain,

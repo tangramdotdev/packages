@@ -240,13 +240,18 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		const os = std.triple.os(host);
 		const runtimeLibEnvVar =
 			os === "darwin" ? "DYLD_FALLBACK_LIBRARY_PATH" : "LD_LIBRARY_PATH";
-		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport ${runtimeLibEnvVar}=$LIBRARY_PATH`;
+		defaultPrepareCommand = tg`
+			${defaultPrepareCommand}
+			export ${runtimeLibEnvVar}=$LIBRARY_PATH
+		`;
 	}
 	if (defaultCrossEnv && isCross) {
 		// Toolchain prefix is the canonical host triple (where output runs).
 		const canonicalHost = std.sdkModule.sdk.canonicalTriple(host);
 		const hostPrefix = `${canonicalHost}-`;
-		defaultPrepareCommand = tg`${defaultPrepareCommand}\nexport CC=${hostPrefix}cc && export CXX=${hostPrefix}c++ && export AR=${hostPrefix}ar`;
+		defaultPrepareCommand = tg`
+			${defaultPrepareCommand}
+			export CC=${hostPrefix}cc && export CXX=${hostPrefix}c++ && export AR=${hostPrefix}ar`;
 	}
 	const needsPrepare = buildInTree || setRuntimeLibraryPath || defaultCrossEnv;
 
