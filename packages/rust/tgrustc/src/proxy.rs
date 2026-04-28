@@ -1372,6 +1372,9 @@ fn is_excluded_proxy_env(name: &str) -> bool {
 			// Inner driver uses TGRUSTC_RUSTC; rustup dirs are unused and large.
 			| "RUSTUP_HOME"
 			| "RUSTUP_TOOLCHAIN"
+			| "TANGRAM_OUTPUT"
+			| "TANGRAM_PROCESS"
+			| "TANGRAM_URL"
 	)
 }
 
