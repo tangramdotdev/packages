@@ -237,6 +237,10 @@ pub(crate) async fn content_address_path(path: &str) -> tg::Result<tg::Value> {
 		return Ok(template.into());
 	}
 
+	if path.starts_with("/proc/") || path.starts_with("/sys/") || path.starts_with("/dev/") {
+		return Ok(template.into());
+	}
+
 	let path_obj = Path::new(path);
 	if path_obj.is_absolute() && path_obj.exists() {
 		if let Some(cached_id) = read_checkin_cache(path) {
