@@ -43,33 +43,35 @@ pub(crate) async fn resolve_executable() -> tg::Result<tg::command::Executable> 
 }
 
 pub(crate) async fn spawn_and_wait(
-	command_ref: tg::Referent<tg::command::Id>,
+	executable: tg::command::Executable,
+	args: Vec<tg::Value>,
+	env: tg::value::Map,
+	host: String,
+	name: String,
 	description: &str,
 ) -> tg::Result<SpawnResult> {
-	let spawn_arg = tg::process::spawn::Arg {
-		cached: None,
-		cache_location: None,
-		checksum: None,
-		command: command_ref,
-		location: None,
-		parent: None,
-		retry: false,
+	let arg = tg::process::Arg {
+		args,
+		env,
+		executable: Some(executable),
+		host: Some(host),
+		name: Some(name),
 		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg::default())),
 		stderr: tg::process::Stdio::Log,
 		stdin: tg::process::Stdio::Null,
 		stdout: tg::process::Stdio::Log,
-		tty: None,
+		..Default::default()
 	};
-	spawn_and_wait_with_arg(spawn_arg, description).await
+	spawn_and_wait_with_arg(arg, description).await
 }
 
 async fn spawn_and_wait_with_arg(
-	spawn_arg: tg::process::spawn::Arg,
+	arg: tg::process::Arg,
 	description: &str,
 ) -> tg::Result<SpawnResult> {
 	tracing::info!(%description, "spawning process");
 
-	let process: tg::Process = tg::Process::spawn(spawn_arg).await?;
+	let process: tg::Process = tg::Process::spawn(arg).await?;
 	let process_id = process.id().unwrap_right().clone();
 
 	tracing::info!(?process_id, %description, "spawned process");
@@ -171,8 +173,11 @@ pub(crate) async fn forward_logs(stdout: &[u8], stderr: &[u8]) -> tg::Result<()>
 	Ok(())
 }
 
-/// Under the cargo target dir so it persists within a build but is cleared by `cargo clean`.
+/// In `$TMPDIR` so atomic-rename temp files don't race with `tg::checkin` walks of `target/`.
 static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	if std::env::var("TGRUSTC_DISABLE_CHECKIN_CACHE").is_ok() {
+		return None;
+	}
 	let target_dir = std::env::var("CARGO_TARGET_DIR")
 		.or_else(|_| std::env::var("TARGET_DIR"))
 		.map(PathBuf::from)
@@ -182,7 +187,8 @@ static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 			let target = PathBuf::from(source_dir).join("target");
 			target.exists().then_some(target)
 		})?;
-	let dir = target_dir.join(".tgrustc_cache");
+	let key = checkin_cache_key(&target_dir.to_string_lossy());
+	let dir = std::env::temp_dir().join(format!("tgrustc-cache-{key}"));
 	std::fs::create_dir_all(&dir).ok()?;
 	Some(dir)
 });

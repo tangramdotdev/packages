@@ -309,23 +309,16 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 	let host = crate::host().to_string();
 	tracing::info!(?host, "creating inner process");
 
-	let command = tg::Command::builder()
-		.host(host)
-		.executable(executable)
-		.args(command_args)
-		.env(env)
-		.finish()?;
-	let store_start = std::time::Instant::now();
-	let command_id = command.store().await?;
-	tracing::info!(store_ms = store_start.elapsed().as_millis(), %command_id, "stored command");
-	let mut command_ref = tg::Referent::with_item(command_id.clone());
-	command_ref
-		.options
-		.name
-		.replace(format!("rustc {display_name}"));
-
 	let description = format!("Inner process for crate '{display_name}'");
-	let result = process::spawn_and_wait(command_ref, &description).await?;
+	let result = process::spawn_and_wait(
+		executable,
+		command_args,
+		env,
+		host,
+		format!("rustc {display_name}"),
+		&description,
+	)
+	.await?;
 
 	{
 		let output_id = result.output.id();
@@ -375,7 +368,6 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 			elapsed_ms = elapsed.as_millis(),
 			cached = result.cached,
 			process_id = %result.process_id,
-			command_id = %command_id,
 			"proxy_complete"
 		);
 	}
@@ -543,21 +535,16 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 	let command_args: Vec<tg::Value> = vec![script_value];
 
 	let host_str = crate::host().to_string();
-	let command = tg::Command::builder()
-		.host(host_str)
-		.executable(executable)
-		.args(command_args)
-		.env(env)
-		.finish()?;
-	let command_id = command.store().await?;
-	let mut command_ref = tg::Referent::with_item(command_id.clone());
-	command_ref
-		.options
-		.name
-		.replace(format!("build-script {crate_name}"));
-
 	let description = format!("Runner process for crate '{crate_name}'");
-	let result = process::spawn_and_wait(command_ref, &description).await?;
+	let result = process::spawn_and_wait(
+		executable,
+		command_args,
+		env,
+		host_str,
+		format!("build-script {crate_name}"),
+		&description,
+	)
+	.await?;
 
 	let ((stdout, stderr), out_dir) =
 		futures::future::try_join(process::read_logs(&result.output), async {
@@ -595,7 +582,6 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 			elapsed_ms = elapsed.as_millis(),
 			cached = result.cached,
 			process_id = %result.process_id,
-			command_id = %command_id,
 			stdout_bytes = stdout.len(),
 			stdout_lines = stdout_lines.len(),
 			"runner_complete"
@@ -1372,6 +1358,9 @@ fn is_excluded_proxy_env(name: &str) -> bool {
 			// Inner driver uses TGRUSTC_RUSTC; rustup dirs are unused and large.
 			| "RUSTUP_HOME"
 			| "RUSTUP_TOOLCHAIN"
+			| "TANGRAM_OUTPUT"
+			| "TANGRAM_PROCESS"
+			| "TANGRAM_URL"
 	)
 }
 

@@ -261,7 +261,6 @@ impl Manifest {
 					wrapper_exe.id().into(),
 					wrapper_bin.id().into(),
 				])
-				.into_iter()
 				.collect(),
 		})
 		.await

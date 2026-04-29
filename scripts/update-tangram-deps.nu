@@ -7,14 +7,19 @@ def main [
     let root = $env.FILE_PWD | path dirname
     let hash = $hash | default (git ls-remote https://github.com/tangramdotdev/tangram HEAD | split row "\t" | first)
 
-    # Find and update all Cargo.toml files with tangram git dependencies.
     let files = glob $"($root)/**/Cargo.toml" | where { open $in --raw | str contains "tangramdotdev/tangram" }
-    for f in $files { open $f --raw | str replace -ar 'rev = "[a-f0-9]{40}"' $'rev = "($hash)"' | save -f $f }
+    if ($files | is-empty) { return }
 
-    # Run cargo update and clippy in each workspace.
-    for d in ($files | each { path dirname } | uniq) { cd $d; cargo update; cargo clippy --all-targets --all-features -- -D warnings }
+    for f in $files {
+        open $f --raw | str replace -ar '(tangramdotdev/tangram[^\n]*?rev = ")[a-f0-9]{40}' $"${1}($hash)" | save -f $f
+    }
 
-    # Commit only modified Cargo.toml and Cargo.lock files.
+    let roots = $files | each { |f| cargo locate-project --workspace --manifest-path $f --message-format plain | str trim } | uniq
+    for r in $roots {
+        cargo update --manifest-path $r
+        cargo clippy --manifest-path $r --all-targets --all-features -- -D warnings
+    }
+
     cd $root
     if (git status --porcelain | lines | where { $in =~ 'Cargo\.(toml|lock)$' } | is-empty) { return }
     git diff --stat -- "*.toml" "*.lock"

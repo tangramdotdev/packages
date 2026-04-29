@@ -1001,7 +1001,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 										tg::error!(!source, "expected a directory")
 									})?;
 								if let Some(inner) = d
-									.try_get(subpath.strip_prefix('/').unwrap_or(&subpath))
+									.try_get(subpath.strip_prefix('/').unwrap_or(subpath))
 									.await?
 								{
 									inner

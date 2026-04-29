@@ -353,38 +353,21 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		args.push(value.into());
 	}
 
-	// Create a command.
-	let host = tg::host().to_string();
-	let command = tg::Command::builder()
-		.host(host)
-		.executable(executable)
-		.args(args)
-		.env(environment.env)
-		.finish()?;
-	let command_id = command.store().await?;
-	let mut command_ref = tg::Referent::with_item(command_id);
-	command_ref.options.name.replace("cc".into());
-
-	// Spawn and wait for the process.
-	let spawn_arg = tg::process::spawn::Arg {
-		cached: None,
-		cache_location: None,
-		checksum: None,
-		command: command_ref,
-		location: None,
-		parent: None,
-		retry: false,
+	let host = tg::host::current().to_owned();
+	let arg = tg::process::Arg {
+		args,
+		env: environment.env,
+		executable: Some(executable.into()),
+		host: Some(host),
+		name: Some("cc".into()),
 		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg {
 			network: false,
 			..Default::default()
 		})),
-		stderr: tg::process::Stdio::default(),
-		stdin: tg::process::Stdio::default(),
-		stdout: tg::process::Stdio::default(),
-		tty: None,
+		..Default::default()
 	};
 
-	let process: tg::Process = tg::Process::spawn(spawn_arg).await?;
+	let process: tg::Process = tg::Process::spawn(arg).await?;
 	let wait = process.wait(tg::process::wait::Arg::default()).await?;
 
 	let build_directory = wait
