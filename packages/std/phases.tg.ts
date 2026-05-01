@@ -104,9 +104,7 @@ export const run = async (...args: std.Args<RunArg>) => {
 	const phases = resolvePhases(runArg.phases);
 
 	// Construct the phases in order.
-	// FIXME: This is a hack to avoid the 0: Bad file descriptor in configure scripts on Linux.`
-	const empty = tg.template("exec 0</dev/null");
-	// let empty = tg.template();
+	let empty = tg.template();
 	const order = order_ ?? defaultOrder();
 	let script = empty;
 	if (debug) {
