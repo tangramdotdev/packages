@@ -270,7 +270,8 @@ const ldProxy = async (arg: LdProxyArg) => {
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const buildToolchain = arg.buildToolchain;
-	const embedWrapper = std.triple.os(build) === "linux" ? (arg.embedWrapper ?? true) : false;
+	const embedWrapper =
+		std.triple.os(build) === "linux" ? (arg.embedWrapper ?? true) : false;
 
 	// Get the embedded wrapper artifacts.
 	const wrapperBin = await workspace.wrapperBinary({ host, build });
@@ -337,10 +338,12 @@ const ldProxy = async (arg: LdProxyArg) => {
 		TANGRAM_CODESIGN_ID: tg.Mutation.set(codesign.id),
 		TANGRAM_WRAPPER_BIN_ID: tg.Mutation.set(wrapperBin.id),
 		TANGRAM_WRAPPER_EXE_ID: tg.Mutation.set(wrapperExe.id),
-		TANGRAM_OBJCOPY_ID: objcopy ? tg.Mutation.set(objcopy.id) : tg.Mutation.unset() as tg.Mutation<string>,
+		TANGRAM_OBJCOPY_ID: objcopy
+			? tg.Mutation.set(objcopy.id)
+			: (tg.Mutation.unset() as tg.Mutation<string>),
 		TGLD_EMBED_WRAPPER: embedWrapper
 			? tg.Mutation.set("true")
-			: tg.Mutation.unset() as tg.Mutation<string>
+			: (tg.Mutation.unset() as tg.Mutation<string>),
 	};
 
 	// Create the linker proxy.

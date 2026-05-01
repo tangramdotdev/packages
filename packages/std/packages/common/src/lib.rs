@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::LazyLock};
+use std::{
+	path::PathBuf,
+	sync::{LazyLock, Mutex},
+};
 use tangram_client::prelude::*;
 
 pub mod manifest;
@@ -67,58 +70,96 @@ pub fn template_from_artifact_and_subpath(
 	])
 }
 
-/// Compute the closest located artifact path for the current running process, reusing the result for subsequent lookups.
-pub static CLOSEST_ARTIFACT_PATH: LazyLock<String> = LazyLock::new(|| {
-	let mut closest_artifact_path = None;
-	let cwd = std::env::current_exe()
-		.expect("Failed to get the current directory")
+struct ArtifactRootSearch {
+	/// Roots discovered so far, ordered closest-first.
+	found: Vec<String>,
+	/// Candidates not yet probed.
+	pending: std::vec::IntoIter<PathBuf>,
+}
+
+static ARTIFACT_ROOTS: LazyLock<Mutex<ArtifactRootSearch>> = LazyLock::new(|| {
+	let exe = std::env::current_exe()
+		.expect("failed to get the current executable")
 		.canonicalize()
-		.expect("failed to canonicalize current directory");
-	for path in cwd.ancestors().skip(1) {
-		let directory = path.join(".tangram/artifacts");
-		if directory.exists() {
-			closest_artifact_path = Some(
-				directory
-					.to_str()
-					.expect("artifacts directory should be valid UTF-8")
-					.to_string(),
-			);
-			break;
-		}
-	}
-	if closest_artifact_path.is_none() {
-		let opt_path = std::path::Path::new("/opt/tangram/artifacts");
-		if opt_path.exists() {
-			closest_artifact_path = Some("/opt/tangram/artifacts".to_string());
-		}
-	}
-	closest_artifact_path.expect("Failed to find the closest artifact path")
+		.expect("failed to canonicalize the current executable");
+	let mut pending: Vec<PathBuf> = exe
+		.ancestors()
+		.skip(1)
+		.map(|a| a.join(".tangram/artifacts"))
+		.collect();
+	pending.push(PathBuf::from("/opt/tangram/artifacts"));
+	Mutex::new(ArtifactRootSearch {
+		found: Vec::new(),
+		pending: pending.into_iter(),
+	})
 });
 
-/// Render a [`tg::template::Data`] to a `String` using the closest located artifact path.
-pub fn render_template_data(data: &tg::template::Data) -> std::io::Result<String> {
+/// Return the i-th artifact root, walking ancestors only as far as needed.
+fn artifact_root_at(index: usize) -> Option<String> {
+	let mut search = ARTIFACT_ROOTS.lock().unwrap();
+	while search.found.len() <= index {
+		let candidate = search.pending.next()?;
+		if candidate.is_dir() {
+			let s = candidate
+				.to_str()
+				.expect("artifact root path must be valid UTF-8")
+				.to_string();
+			search.found.push(s);
+		}
+	}
+	search.found.get(index).cloned()
+}
+
+/// Substring check: does this path live under any artifact root?
+#[must_use]
+pub fn is_artifact_path(path: &str) -> bool {
+	path.contains("/.tangram/artifacts/") || path.contains("/opt/tangram/artifacts/")
+}
+
+/// Find the on-disk path for an artifact ID by walking ancestor roots.
+#[must_use]
+pub fn artifact_path_for(id: &tg::artifact::Id) -> Option<PathBuf> {
+	let suffix = id.to_string();
+	let mut i = 0;
+	while let Some(root) = artifact_root_at(i) {
+		let candidate = PathBuf::from(&root).join(&suffix);
+		if candidate.exists() {
+			return Some(candidate);
+		}
+		i += 1;
+	}
+	None
+}
+
+/// Render a [`tg::template::Data`] to a `String`, using the closest artifact that contains it.
+pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 	data.components
 		.iter()
 		.map(|component| match component {
 			tg::template::data::Component::String(string) => Ok(string.clone()),
 			tg::template::data::Component::Artifact(artifact_id) => {
-				PathBuf::from(&*CLOSEST_ARTIFACT_PATH)
-					.join(artifact_id.to_string())
-					.into_os_string()
+				let path = artifact_path_for(artifact_id).ok_or_else(|| {
+					tg::error!("artifact {artifact_id} not present in any artifact root")
+				})?;
+				path.into_os_string()
 					.into_string()
-					.map_err(|e| {
-						std::io::Error::new(
-							std::io::ErrorKind::InvalidData,
-							format!("unable to convert OsString to String: {}", e.display()),
-						)
-					})
+					.map_err(|os| tg::error!("artifact path is not valid UTF-8: {}", os.display()))
 			},
 			tg::template::data::Component::Placeholder(data) => Ok(data.name.clone()),
 		})
-		.collect::<std::io::Result<String>>()
+		.collect()
 }
 
-/// Unrender a template string to a [`tg::Template`] using the closest located artifact path.
+/// Unrender a template string into a [`tg::Template`].
 pub fn unrender(string: &str) -> tg::Result<tg::Template> {
-	tg::Template::unrender(&CLOSEST_ARTIFACT_PATH, string)
+	let prefix = if string.contains("/.tangram/artifacts/") {
+		".tangram/artifacts"
+	} else if string.contains("/opt/tangram/artifacts/") {
+		"/opt/tangram/artifacts"
+	} else {
+		return Ok(tg::Template::from(tg::template::Component::String(
+			string.to_owned(),
+		)));
+	};
+	tg::Template::unrender(prefix, string)
 }

@@ -220,9 +220,7 @@ fn checkin_cache_key(path: &str) -> String {
 	format!("{:016x}", hasher.finish())
 }
 
-pub(crate) fn is_artifact_path(path: &str) -> bool {
-	path.contains("/.tangram/artifacts/") || path.contains("/opt/tangram/artifacts/")
-}
+pub(crate) use tangram_std::is_artifact_path;
 
 pub(crate) async fn content_address_path(path: &str) -> tg::Result<tg::Value> {
 	let template = tangram_std::unrender(path)?;

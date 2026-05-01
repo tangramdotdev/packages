@@ -39,7 +39,7 @@ export const workspace = async (
 		tgcc,
 		tgld,
 		tgstrip,
-		["wrap"]: wrap_
+		["wrap"]: wrap_,
 	});
 	const source = source_
 		? source_

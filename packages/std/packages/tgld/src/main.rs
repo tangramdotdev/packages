@@ -975,73 +975,73 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 				);
 
 				// Obtain the file object.
-				let library_candidate_file =
-					if library_candidate_path.starts_with(&*common::CLOSEST_ARTIFACT_PATH) {
-						tracing::trace!("found an artifact, extracting file object");
-						let template =
-							common::unrender(library_candidate_path.to_str().ok_or_else(
-								|| tg::error!(path = %library_candidate_path.display(), "unable to convert path to str"),
-							)?)?;
-						tracing::trace!(?template, "unrendered library candidate path");
-						// Obtain the file object from the artifact.
-						// We expect to underender one of two forms:
-						// - A single file artifact.
-						// - Two components, a directory artifact and string subpath.
-						match template.components() {
-							[tg::template::Component::Artifact(artifact)] => artifact
+				let library_candidate_path_str = library_candidate_path.to_str().ok_or_else(
+					|| tg::error!(path = %library_candidate_path.display(), "unable to convert path to str"),
+				)?;
+				let library_candidate_file = if common::is_artifact_path(library_candidate_path_str)
+				{
+					tracing::trace!("found an artifact, extracting file object");
+					let template = common::unrender(library_candidate_path_str)?;
+					tracing::trace!(?template, "unrendered library candidate path");
+					// Obtain the file object from the artifact.
+					// We expect to underender one of two forms:
+					// - A single file artifact.
+					// - Two components, a directory artifact and string subpath.
+					match template.components() {
+						[tg::template::Component::Artifact(artifact)] => artifact
+							.clone()
+							.try_unwrap_file()
+							.map_err(|source| tg::error!(!source, "expected a file"))?,
+						[
+							tg::template::Component::Artifact(artifact),
+							tg::template::Component::String(subpath),
+						] => {
+							let d = artifact
 								.clone()
-								.try_unwrap_file()
-								.map_err(|source| tg::error!(!source, "expected a file"))?,
-							[
-								tg::template::Component::Artifact(artifact),
-								tg::template::Component::String(subpath),
-							] => {
-								let d =
-									artifact.clone().try_unwrap_directory().map_err(|source| {
-										tg::error!(!source, "expected a directory")
-									})?;
-								if let Some(inner) = d
-									.try_get(subpath.strip_prefix('/').unwrap_or(subpath))
-									.await?
-								{
-									inner
-										.try_unwrap_file()
-										.map_err(|source| tg::error!(!source, "expected a file"))?
-								} else {
-									let artifact = artifact.id();
-									return Err(
-										tg::error!(%artifact, %subpath, "failed to get inner artifact at subpath"),
-									);
-								}
-							},
-							_ => {
-								return Err(tg::error!(
-									?template,
-									"expected a template with one artifact and zero or one string components"
-								));
-							},
-						}
-					} else {
-						tracing::trace!("found a path in the current build temp, checking in");
-						// The file is located in our own build directory. Check it in.
-						tg::checkin(tg::checkin::Arg {
-							options: tg::checkin::Options {
-								destructive: false,
-								deterministic: true,
-								ignore: false,
-								source_dependencies: true,
-								locked: true,
-								lock: None,
-								root: true,
-								..tg::checkin::Options::default()
-							},
-							path: library_candidate_path.clone(),
-							updates: vec![],
-						})
-						.await?
-						.try_unwrap_file()
-						.map_err(|error| tg::error!(source = error, "expected a file"))?
-					};
+								.try_unwrap_directory()
+								.map_err(|source| tg::error!(!source, "expected a directory"))?;
+							if let Some(inner) = d
+								.try_get(subpath.strip_prefix('/').unwrap_or(subpath))
+								.await?
+							{
+								inner
+									.try_unwrap_file()
+									.map_err(|source| tg::error!(!source, "expected a file"))?
+							} else {
+								let artifact = artifact.id();
+								return Err(
+									tg::error!(%artifact, %subpath, "failed to get inner artifact at subpath"),
+								);
+							}
+						},
+						_ => {
+							return Err(tg::error!(
+								?template,
+								"expected a template with one artifact and zero or one string components"
+							));
+						},
+					}
+				} else {
+					tracing::trace!("found a path in the current build temp, checking in");
+					// The file is located in our own build directory. Check it in.
+					tg::checkin(tg::checkin::Arg {
+						options: tg::checkin::Options {
+							destructive: false,
+							deterministic: true,
+							ignore: false,
+							source_dependencies: true,
+							locked: true,
+							lock: None,
+							root: true,
+							..tg::checkin::Options::default()
+						},
+						path: library_candidate_path.clone(),
+						updates: vec![],
+					})
+					.await?
+					.try_unwrap_file()
+					.map_err(|error| tg::error!(source = error, "expected a file"))?
+				};
 
 				// Add an entry to the directory.
 				entries.insert(name, tg::Artifact::File(library_candidate_file));

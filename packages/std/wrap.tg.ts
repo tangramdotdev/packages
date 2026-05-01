@@ -3042,10 +3042,7 @@ export const testLoadThroughEnvLdLibraryPath = async () => {
 		gcc -fPIC -shared -Wl,-soname,libhello.so -o ${tg.output}/lib/libhello.so libhello.c
 	`
 		.bootstrap(true)
-		.env(
-			toolchain,
-			{ utils: true },
-		)
+		.env(toolchain, { utils: true })
 		.then(tg.Directory.expect);
 	const output = await std.run`
 		cp ${callHelloSource} callhello.c
@@ -3057,10 +3054,7 @@ export const testLoadThroughEnvLdLibraryPath = async () => {
 		sh -c 'TANGRAM_TRACING=1 ./dlopen > ${tg.output}'
 	`
 		.bootstrap(true)
-		.env(
-			toolchain,
-			{ utils: true },
-		)
+		.env(toolchain, { utils: true })
 		.then(tg.File.expect);
 	const string = await output.text;
 	const result = string === "hello, world!\n";

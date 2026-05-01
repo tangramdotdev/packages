@@ -98,7 +98,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 			"-nolibc",
 			"-nostdlib",
 			"-fno-tree-loop-distribute-patterns",
-			"-static"
+			"-static",
 		];
 	}
 	if (os === "darwin") {
@@ -117,7 +117,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		"-fPIC",
 		...releaseArgs,
 		...verboseArgs,
-		...osArgs
+		...osArgs,
 	];
 	const wrapFlags = ["-static", ...releaseArgs, ...verboseArgs];
 	const objcopy = os === "linux" ? "objcopy -O binary" : "cp";
@@ -403,13 +403,13 @@ export const testWrapperValues = async () => {
 		`),
 	});
 	const valueFiles = tg.directory({
-		"env": `tg.mutation({
+		env: `tg.mutation({
 			"kind": "set",
 			"value": {
 				"CUSTOM": "custom"
 			}
 		})`,
-		"args": `[
+		args: `[
 			tg.template(["--custom"])
 		]`,
 	});
@@ -429,8 +429,14 @@ export const testWrapperValues = async () => {
 		)
 		.then(tg.File.expect);
 	const text = await output.text;
-	tg.assert(text.includes("argv[1] = --custom"), "Expected argv[1] = --custom in output");
-	tg.assert(text.includes("env: CUSTOM=custom"), "Expected env: CUSTOM=custom in output");
+	tg.assert(
+		text.includes("argv[1] = --custom"),
+		"Expected argv[1] = --custom in output",
+	);
+	tg.assert(
+		text.includes("env: CUSTOM=custom"),
+		"Expected env: CUSTOM=custom in output",
+	);
 	return true;
 };
 

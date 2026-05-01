@@ -1,19 +1,8 @@
-use std::{
-	collections::BTreeMap,
-	os::unix::fs::PermissionsExt,
-	path::{Path, PathBuf},
-	sync::LazyLock,
-};
+use std::{collections::BTreeMap, os::unix::fs::PermissionsExt, path::Path, sync::LazyLock};
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
-use crate::CLOSEST_ARTIFACT_PATH;
-
-/// The name of the section that will appear in the binary.
-pub const SECTION_NAME: &str = "tg-manifest";
-
-/// The manifest version.
-pub const VERSION: u64 = 0;
+use crate::artifact_path_for;
 
 /// The Tangram run entrypoint manifest.
 #[derive(
@@ -267,13 +256,23 @@ impl Manifest {
 		.map_err(|source| tg::error!(!source, "failed to cache artifacts"))?;
 
 		// Get their paths on disk.
-		let path: PathBuf = CLOSEST_ARTIFACT_PATH.clone().into();
-		let input = path.join(file.id().to_string());
-		let wrapper_bin = path.join(wrapper_bin.id().to_string());
-		let wrapper_exe = path.join(wrapper_exe.id().to_string());
+		let input_id: tg::artifact::Id = file.id().into();
+		let wrapper_bin_id: tg::artifact::Id = wrapper_bin.id().into();
+		let wrapper_exe_id: tg::artifact::Id = wrapper_exe.id().into();
+		let input = artifact_path_for(&input_id)
+			.ok_or_else(|| tg::error!("failed to locate input file in any artifact root"))?;
+		let wrapper_bin = artifact_path_for(&wrapper_bin_id)
+			.ok_or_else(|| tg::error!("failed to locate wrapper bin in any artifact root"))?;
+		let wrapper_exe = artifact_path_for(&wrapper_exe_id)
+			.ok_or_else(|| tg::error!("failed to locate wrapper exe in any artifact root"))?;
 		let objcopy = objcopy
 			.as_ref()
-			.map(|file| path.join(file.id().to_string()));
+			.map(|file| {
+				let id: tg::artifact::Id = file.id().into();
+				artifact_path_for(&id)
+					.ok_or_else(|| tg::error!("failed to locate objcopy in any artifact root"))
+			})
+			.transpose()?;
 
 		// Provide the context to wrap.
 		wrap::set_wrapper_bin_path(wrapper_bin);
@@ -305,7 +304,10 @@ impl Manifest {
 		)?;
 
 		// Codesign if necessary.
-		if matches!(wrap::detect_format(tempfile.path()), Ok(Some(wrap::Format::Mach64))) {
+		if matches!(
+			wrap::detect_format(tempfile.path()),
+			Ok(Some(wrap::Format::Mach64))
+		) {
 			tracing::info!("codesigning binary");
 			let path = tg::checkout(tg::checkout::Arg {
 				artifact: TANGRAM_CODESIGN.id().into(),
