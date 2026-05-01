@@ -214,9 +214,15 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	}
 
 	const defaultConfigurePath = buildInTree ? "." : source;
+	// Install an ERR trap that dumps the tail of config.log to stderr if the
+	// configure phase fails. Without it, the configure script's diagnostics
+	// die with the sandbox and we are left with only "cannot compile and link".
 	const defaultConfigure = {
-		command: tg`${defaultConfigurePath}/configure`,
-		args: configureArgs,
+		pre: tg`set -E; trap '__rc=$?; if [ -f config.log ]; then echo "=== configure failed (rc=$__rc); tail of config.log: ===" >&2; tail -200 config.log >&2 || true; fi' ERR`,
+		body: {
+			command: tg`${defaultConfigurePath}/configure`,
+			args: configureArgs,
+		},
 	};
 
 	const jobs = parallel ? (hostOs === "darwin" ? "8" : "$(nproc)") : "1";
