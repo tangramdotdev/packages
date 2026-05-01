@@ -245,7 +245,7 @@ export const buildTools = async (
 		const artifact = await libiconv({
 			host,
 			bootstrap: true,
-			env: buildToolchain,
+			env: buildEnv,
 		});
 		retEnvs.push(artifact);
 		buildEnv = await std.env.arg(buildEnv, artifact, { utils: false });
