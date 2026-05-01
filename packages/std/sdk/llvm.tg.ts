@@ -73,7 +73,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	if (std.triple.os(host) === "darwin") {
 		const targetOs = std.triple.os(target);
 		if (targetOs === "darwin") {
-			return await bootstrap.sdk.env(host);
+			return await bootstrap.sdk.toolchain(host);
 		} else if (targetOs === "linux") {
 			const toolchain = bootstrap.toolchain(host);
 			const lld = buildLld({ host });
@@ -350,7 +350,7 @@ export const linuxToDarwin = async (arg?: LinuxToDarwinArg) => {
 	for (const bin of bins) {
 		clangToolchain = await tg.directory(clangToolchain, {
 			[`bin/${target}-${bin}`]: tg.file(
-				`#!/usr/bin/env sh\nset -x\ninstalldir=$(${bin} -print-search-dirs | grep 'programs: =' | sed 's/programs: =//' | cut -d':' -f1)\nexec ${bin} -target ${target} --sysroot \${installdir}/../sysroot \"$@\"`,
+				`#!/usr/bin/env sh\nset -x\ninstalldir=$(${bin} -print-search-dirs | grep 'programs: =' | sed 's/programs: =//' | cut -d':' -f1)\nexec ${bin} -target ${target} --sysroot \${installdir}/../sysroot/MacOSX.sdk \"$@\"`,
 				{ executable: true },
 			),
 		});
@@ -402,7 +402,7 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 		if (targetOs === "darwin") {
 			// If the target is darwin, use the macOS SDK for the SDKROOT.
 			env = {
-				SDKROOT: tg.Mutation.setIfUnset(bootstrap.macOsSdk()),
+				SDKROOT: tg.Mutation.setIfUnset(tg`${bootstrap.macOsSdk()}/MacOSX.sdk`),
 			};
 		} else if (targetOs === "linux") {
 			// If the target is linux, unset any existing SDKROOT and instead use the Linux sysroot.

@@ -81,7 +81,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 	const additionalArgs = ["-Wno-nonnull", "-Wno-nullability-completeness"];
 	const env = await std.env.arg(
 		{
-			SDKROOT: await bootstrap.macOsSdk(),
+			SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
 		},
 		arg.env,
 		{ utils: false },
