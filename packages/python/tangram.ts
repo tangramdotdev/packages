@@ -183,7 +183,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		},
 	);
 
-	let python = wrapScripts(
+	let python: PromiseLike<tg.Directory> = wrapScripts(
 		pythonInterpreter,
 		undefined,
 		output,

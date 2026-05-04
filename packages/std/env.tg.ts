@@ -156,7 +156,7 @@ export namespace env {
 
 	const templateArgOrBooleanToTemplateMutation = (
 		orig: tg.MaybeMutation<tg.Template.Arg | boolean | number>,
-	): Promise<tg.MaybeMutation<tg.Template>> => {
+	): PromiseLike<tg.MaybeMutation<tg.Template>> => {
 		if (orig instanceof tg.Mutation) {
 			if (orig.inner.kind === "unset") {
 				return Promise.resolve(orig) as Promise<tg.Mutation<tg.Template>>;

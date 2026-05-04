@@ -204,12 +204,12 @@ export const test = async () => {
 };
 
 type TestFnArg = {
-	testFile: (buildOutput: tg.Directory) => Promise<tg.Template>;
+	testFile: (buildOutput: tg.Directory) => PromiseLike<tg.Template>;
 	expectedStdout: string;
 };
 
 const defaultTestArg: TestFnArg = {
-	testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
+	testFile: (buildOutput: tg.Directory): PromiseLike<tg.Template> =>
 		tg`${buildOutput}/bin/test`,
 	expectedStdout: "Hello, world!",
 };
@@ -220,31 +220,31 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 		cmake: defaultTestArg,
 		go: {
 			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
+			testFile: (buildOutput: tg.Directory): PromiseLike<tg.Template> =>
 				tg`${buildOutput}/bin/hello`,
 		},
 		"js-node": defaultTestArg,
 		"js-plain": {
 			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
+			testFile: (buildOutput: tg.Directory): PromiseLike<tg.Template> =>
 				tg`${buildOutput}/index.js`,
 		},
 		python: defaultTestArg,
 		"python-plain": {
 			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
+			testFile: (buildOutput: tg.Directory): PromiseLike<tg.Template> =>
 				tg`${buildOutput}/main.py`,
 		},
 		"python-pyproject": defaultTestArg,
 		"ruby-plain": {
 			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
+			testFile: (buildOutput: tg.Directory): PromiseLike<tg.Template> =>
 				tg`${buildOutput}/main.rb`,
 		},
 		"rust-cargo": defaultTestArg,
 		"rust-plain": {
 			...defaultTestArg,
-			testFile: (buildOutput: tg.Directory): Promise<tg.Template> =>
+			testFile: (buildOutput: tg.Directory): PromiseLike<tg.Template> =>
 				tg`${buildOutput}/bin/main`,
 		},
 	};

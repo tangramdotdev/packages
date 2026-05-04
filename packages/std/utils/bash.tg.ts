@@ -89,7 +89,7 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		),
 	});
 
-	let output = autotoolsInternal({
+	let output: PromiseLike<tg.Directory> = autotoolsInternal({
 		build,
 		host,
 		bootstrap: bootstrap_,

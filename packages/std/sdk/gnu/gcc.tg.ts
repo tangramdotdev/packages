@@ -24,7 +24,7 @@ export const source = (bundledSources?: boolean) => {
 	const checksum =
 		"sha256:438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e";
 	const base = `http://ftpmirror.gnu.org/gnu/${name}/${name}-${version}`;
-	let sourceDir = std.download
+	let sourceDir: PromiseLike<tg.Directory> = std.download
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)

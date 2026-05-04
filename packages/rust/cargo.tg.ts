@@ -351,7 +351,7 @@ exit $__cargo_status`
 
 	// Only "set" mutations; prefix/suffix would inherit `tg run` SDK PATH entries
 	// and break passthrough compilation.
-	let envSetup: tg.Template.Arg = "";
+	let envSetup: tg.Unresolved<tg.Template.Arg> = "";
 	if (depsEnv !== undefined) {
 		const resolvedEnv = await std.env.arg(depsEnv);
 		const lines: Array<tg.Template> = [];
@@ -361,10 +361,7 @@ exit $__cargo_status`
 			}
 		}
 		if (lines.length > 0) {
-			envSetup = lines.reduce(
-				(acc, line) => tg`${acc}
-${line}`,
-			);
+			envSetup = tg.Template.join("\n", ...lines);
 		}
 	}
 

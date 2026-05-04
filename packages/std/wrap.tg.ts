@@ -2141,8 +2141,8 @@ export const fileOrSymlinkFromManifestTemplate = async (
 
 const templateFromManifestTemplate = (
 	manifestTemplate: wrap.Manifest.Template,
-): Promise<tg.Template> =>
-	manifestTemplate.components.reduce(
+): PromiseLike<tg.Template> =>
+	manifestTemplate.components.reduce<PromiseLike<tg.Template>>(
 		(result, component) => {
 			switch (component.kind) {
 				case "artifact": {
@@ -2161,7 +2161,7 @@ const templateFromManifestTemplate = (
 
 const mutationFromManifestMutation = (
 	manifestMutation: wrap.Manifest.Mutation,
-): Promise<tg.Mutation> => {
+): PromiseLike<tg.Mutation> => {
 	if (manifestMutation.kind === "unset") {
 		return Promise.resolve(tg.Mutation.unset());
 	} else if (manifestMutation.kind === "set") {

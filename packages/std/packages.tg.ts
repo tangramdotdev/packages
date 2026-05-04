@@ -13,7 +13,7 @@ export type MinimalPackageArg = {
 /** A function that accepts a variable amount of package args and produces a directory. This is the standard type for the default exports of most packages. */
 export type BuildFn<T extends MinimalPackageArg> = (
 	...args: std.Args<T>
-) => Promise<tg.Directory>;
+) => PromiseLike<tg.Directory>;
 
 /**
  * A tg.Command that builds a package, with phantom type parameter preserving the arg type.
@@ -28,7 +28,7 @@ export const buildCommandOutput = async <T extends MinimalPackageArg>(
 	arg: T,
 ): Promise<tg.Directory> => {
 	if (typeof cmd === "function") {
-		return (cmd as (...args: Array<T>) => Promise<tg.Directory>)(arg);
+		return await (cmd as (...args: Array<T>) => PromiseLike<tg.Directory>)(arg);
 	}
 	// For BuildCommand (tg.Command), use .build() method and expect a Directory.
 	return tg.Directory.expect(await (cmd as tg.Command).build(arg));

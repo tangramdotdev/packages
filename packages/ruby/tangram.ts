@@ -233,7 +233,7 @@ const libraryVersion = (version: string) => {
 };
 
 /** These are the gems required by the ruby build itself and installed by default. See `https://stdgems.org`. */
-const bundledGems = (): Promise<tg.Directory> => {
+const bundledGems = (): PromiseLike<tg.Directory> => {
 	const args: Array<{ name: string; version: string; checksum: tg.Checksum }> =
 		[
 			{

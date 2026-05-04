@@ -7,7 +7,7 @@
  * - libdir=${exec_prefix}/lib or ${exec_prefix}/lib64
  * - includedir=${prefix}/include
  */
-export const shellNormalizeCommand = (): Promise<tg.Template> => {
+export const shellNormalizeCommand = (): PromiseLike<tg.Template> => {
 	// The sed command normalizes all path-related variables.
 	// Note: We use ${pcfiledir} which pkg-config expands to the directory containing the .pc file.
 	// The /../.. assumes .pc files are in lib/pkgconfig/ relative to prefix.

@@ -182,7 +182,7 @@ export const patchAutom4teCfg = async (
 
 	let contents = tg``;
 	for (const line of lines) {
-		let newLine: Promise<tg.Template> | string = line;
+		let newLine: PromiseLike<tg.Template> | string = line;
 		if (line.includes("args: --prepend-include")) {
 			newLine = tg`args: -B '${autoconf}/share/autoconf'`;
 		}

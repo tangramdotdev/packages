@@ -106,7 +106,7 @@ export const run = async (...args: std.Args<RunArg>) => {
 	// Construct the phases in order.
 	let empty = tg.template();
 	const order = order_ ?? defaultOrder();
-	let script = empty;
+	let script: PromiseLike<tg.Template> = empty;
 	if (debug) {
 		script = tg`${empty}
 		set -x
@@ -120,7 +120,7 @@ export const run = async (...args: std.Args<RunArg>) => {
 		script = empty;
 	}
 	if (phases !== undefined) {
-		script = order.reduce(async (ret, phaseName) => {
+		script = order.reduce<PromiseLike<tg.Template>>(async (ret, phaseName) => {
 			const phase = phases[phaseName];
 			// Skip undefined phases.
 			if (phase === undefined) {
