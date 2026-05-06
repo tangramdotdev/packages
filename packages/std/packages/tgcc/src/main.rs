@@ -360,10 +360,7 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		executable: Some(executable.into()),
 		host: Some(host),
 		name: Some("cc".into()),
-		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg {
-			network: false,
-			..Default::default()
-		})),
+		sandbox: Some(tg::process::SandboxArg::Bool(true)),
 		..Default::default()
 	};
 
