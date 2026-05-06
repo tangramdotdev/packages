@@ -1,6 +1,7 @@
 use std::{
 	path::{Path, PathBuf},
 	sync::LazyLock,
+	time::Duration,
 };
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
@@ -56,7 +57,10 @@ pub(crate) async fn spawn_and_wait(
 		executable: Some(executable),
 		host: Some(host),
 		name: Some(name),
-		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg::default())),
+		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg {
+			ttl: Some(Duration::ZERO),
+			..Default::default()
+		})),
 		stderr: tg::process::Stdio::Log,
 		stdin: tg::process::Stdio::Null,
 		stdout: tg::process::Stdio::Log,
