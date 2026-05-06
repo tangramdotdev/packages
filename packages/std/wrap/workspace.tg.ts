@@ -471,20 +471,13 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		rustc = tg`${rustToolchain}/bin/rustc`;
 		cargo = tg`${rustToolchain}/bin/cargo`;
 
-		const macOsSdk = bootstrap.macOsSdk();
-
-		// https://github.com/rust-lang/cc-rs/issues/810
-		const sdkroot = tg.directory({
-			"MacOSX.sdk": macOsSdk,
-		});
-
 		if (isCross) {
 			env.push({
 				SDKROOT: tg.Mutation.unset(),
 			});
 		} else {
 			env.push({
-				SDKROOT: tg`${sdkroot}/MacOSX.sdk`,
+				SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
 			});
 		}
 	}
@@ -504,13 +497,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		export RUSTC=$PWD/rustc.sh
 		`;
 	if (hostOs === "darwin" && isCross) {
-		const macOsSdk = bootstrap.macOsSdk();
-
-		// https://github.com/rust-lang/cc-rs/issues/810
-		const sdkroot = tg.directory({
-			"MacOSX.sdk": macOsSdk,
-		});
-		const hostFlag = tg`--sysroot ${sdkroot}/MacOSX.sdk`;
+		const hostFlag = tg`--sysroot ${bootstrap.macOsSdk()}/MacOSX.sdk`;
 		const { directory: targetDirectory } = await std.sdk.toolchainComponents({
 			env: await std.env.arg(hostToolchain, { utils: false }),
 			host: host,

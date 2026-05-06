@@ -48,9 +48,11 @@ export const toolchain = (host?: string) =>
 /** Retrieve just the utils component. */
 export const utils = (host?: string) => bootstrap({ host, component: "utils" });
 
-/** Retrieve a macOS SDK. */
-export const macOsSdk = (version: SdkVersion = LatestSdkVersion) =>
-	bootstrap({ component: `macos_sdk_${version}` });
+/** Retrieve a macOS SDK wrapped under a `MacOSX.sdk/` subdirectory. */
+export const macOsSdk = async (version: SdkVersion = LatestSdkVersion) => {
+	const inner = await bootstrap({ component: `macos_sdk_${version}` });
+	return tg.directory({ "MacOSX.sdk": inner });
+};
 
 /** The build triple string of the bundled Linux toolchain. */
 export const toolchainTriple = (host?: string) => {

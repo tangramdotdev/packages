@@ -14,20 +14,69 @@ export namespace sdk {
 		return { host, toolchain };
 	};
 
+	/** Build a thin `bin/` directory utilizing symlinks to their respective artifacts. */
+	const thinBin = async (
+		sources: Array<tg.Directory>,
+		extras: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {},
+	): Promise<tg.Directory> => {
+		const entries: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {};
+		for (const src of sources) {
+			const srcEntries = await src.entries;
+			if (!("bin" in srcEntries)) continue;
+			const bin = tg.Directory.expect(srcEntries.bin);
+			for (const [name, entry] of Object.entries(await bin.entries)) {
+				entries[name] =
+					entry instanceof tg.Symlink
+						? entry
+						: tg.symlink(tg`${src}/bin/${name}`);
+			}
+		}
+		return tg.directory({ ...entries, ...extras });
+	};
+
+	/** Get the bootstrap toolchain directory, with darwin gcc/g++ symlink fixups applied. Does not include utils. */
+	export const toolchain = async (hostArg: string) => {
+		const host = hostArg ?? std.triple.host();
+		const raw = await bootstrap.toolchain(host);
+		if (std.triple.os(host) !== "darwin") return raw;
+		const overlay: Record<string, tg.Unresolved<tg.Artifact>> = {
+			bin: await thinBin([raw], {
+				gcc: tg.symlink("clang"),
+				"g++": tg.symlink("clang++"),
+			}),
+		};
+		for (const name of Object.keys(await raw.entries)) {
+			if (name !== "bin") overlay[name] = tg.symlink(tg`${raw}/${name}`);
+		}
+		return tg.directory(overlay);
+	};
+
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxies. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
 	export const env = async (hostArg: string) => {
-		const host = hostArg ?? std.triple.host();
-		const os = std.triple.os(host);
-		let toolchain = await bootstrap.toolchain(host);
-		if (os === "darwin") {
-			toolchain = await tg.directory(toolchain, {
-				["bin/gcc"]: tg.symlink("clang"),
-				["bin/g++"]: tg.symlink("clang++"),
-			});
-		}
-		const bootstrapHost = bootstrap.toolchainTriple(host);
+		const t = await toolchain(hostArg);
+		const bootstrapHost = bootstrap.toolchainTriple(
+			hostArg ?? std.triple.host(),
+		);
 		const utils = await prepareBootstrapUtils(bootstrapHost);
-		return await tg.directory(toolchain, utils);
+		const tEntries = await t.entries;
+		const utilsEntries = await utils.entries;
+		const overlay: Record<string, tg.Unresolved<tg.Artifact>> = {
+			bin: await thinBin([t, utils]),
+		};
+		for (const name of Object.keys(tEntries)) {
+			if (name === "bin" || name in utilsEntries) continue;
+			overlay[name] = tg.symlink(tg`${t}/${name}`);
+		}
+		for (const [name, uEntry] of Object.entries(utilsEntries)) {
+			if (name === "bin") continue;
+			const tEntry = tEntries[name];
+			if (tEntry instanceof tg.Directory && uEntry instanceof tg.Directory) {
+				overlay[name] = await tg.directory(tEntry, uEntry);
+			} else {
+				overlay[name] = tg.symlink(tg`${utils}/${name}`);
+			}
+		}
+		return tg.directory(overlay);
 	};
 
 	/** Get the busybox/toybox utils artifact from the bootstrap. */

@@ -104,7 +104,7 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 	if (os === "darwin") {
 		osArgs = [];
 		env.push({
-			SDKROOT: await bootstrap.macOsSdk(),
+			SDKROOT: tg`${bootstrap.macOsSdk()}/MacOSX.sdk`,
 		});
 	}
 

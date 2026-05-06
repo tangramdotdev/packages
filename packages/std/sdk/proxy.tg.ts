@@ -74,8 +74,9 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 	let cxx: tg.File | tg.Symlink = cxx_;
 	const isLlvm = flavor === "llvm";
 
-	// Start with the existing toolchain bin directory
-	let binDir = tg.Directory.expect(await buildToolchainDir.get("bin"));
+	const originalBinDir = tg.Directory.expect(
+		await buildToolchainDir.get("bin"),
+	);
 	let replacements: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {};
 
 	if (proxyLinker) {
@@ -213,19 +214,38 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 			buildToolchain,
 			host,
 			stripCommand: arg.stripExe ?? strip,
-			runtimeLibraryPath:
-				os === "darwin"
-					? await directory.get("lib").then(tg.Directory.expect)
-					: undefined,
+			runtimeLibraryPath: os === "darwin" ? tg`${directory}/lib` : undefined,
 		});
 		replacements.strip = stripProxyArtifact;
 	}
 
-	// Apply replacements to the bin directory
-	binDir = await tg.directory(binDir, replacements);
+	// Build a thin bin directory overlay.
+	const thinBinEntries: Record<
+		string,
+		tg.Unresolved<tg.Artifact | undefined>
+	> = { ...replacements };
+	const originalBinEntries = await originalBinDir.entries;
+	for (const [name, entry] of Object.entries(originalBinEntries)) {
+		if (name in thinBinEntries) continue;
+		if (entry instanceof tg.Symlink) {
+			thinBinEntries[name] = entry;
+		} else {
+			thinBinEntries[name] = tg.symlink(tg`${buildToolchainDir}/bin/${name}`);
+		}
+	}
+	const binDir = await tg.directory(thinBinEntries);
 
-	// Return the toolchain with the modified bin directory
-	return tg.directory(buildToolchainDir, { bin: binDir });
+	// Compose the result.
+	const overlayEntries: Record<string, tg.Unresolved<tg.Artifact>> = {
+		bin: binDir,
+	};
+	const toolchainEntries = await buildToolchainDir.entries;
+	for (const name of Object.keys(toolchainEntries)) {
+		if (name !== "bin") {
+			overlayEntries[name] = tg.symlink(tg`${buildToolchainDir}/${name}`);
+		}
+	}
+	return tg.directory(overlayEntries);
 };
 
 export default env;
@@ -361,11 +381,17 @@ type StripProxyArg = {
 	buildToolchain: std.env.Arg;
 	host?: string;
 	stripCommand: tg.File | tg.Symlink | tg.Template;
-	runtimeLibraryPath?: tg.Directory | undefined;
+	runtimeLibraryPath?: tg.Directory | tg.Template | undefined;
 };
 
-export const stripProxy = async (arg: StripProxyArg) => {
-	const { build: build_, buildToolchain, host: host_, stripCommand } = arg;
+export const stripProxy = async (arg: tg.Unresolved<StripProxyArg>) => {
+	const {
+		build: build_,
+		buildToolchain,
+		host: host_,
+		stripCommand,
+		runtimeLibraryPath,
+	} = await tg.resolve(arg);
 
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
@@ -398,9 +424,9 @@ export const stripProxy = async (arg: StripProxyArg) => {
 			TANGRAM_CODESIGN_ID: tg.Mutation.setIfUnset(codesign.id),
 		},
 	];
-	if (arg.runtimeLibraryPath !== undefined) {
+	if (runtimeLibraryPath !== undefined) {
 		envs.push({
-			TGSTRIP_RUNTIME_LIBRARY_PATH: arg.runtimeLibraryPath,
+			TGSTRIP_RUNTIME_LIBRARY_PATH: runtimeLibraryPath,
 		});
 	}
 

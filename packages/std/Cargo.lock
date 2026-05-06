@@ -972,9 +972,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.13"
+version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f44da3a8150a6703ed5d34e164b875fd14c2cdab9af1252a9a1020bde2bdc54"
+checksum = "171fefbc92fe4a4de27e0698d6a5b392d6a0e333506bc49133760b3bcf948733"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -1593,18 +1593,18 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pin-project"
-version = "1.1.11"
+version = "1.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1749c7ed4bcaf4c3d0a3efc28538844fb29bcdd7d2b67b2be7e20ba861ff517"
+checksum = "cbf0d9e68100b3a7989b4901972f265cd542e560a3a8a724e1e20322f4d06ce9"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "1.1.11"
+version = "1.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b20ed30f105399776b9c883e68e536ef602a16ae6f596d2c473591d6ad64c6"
+checksum = "a990e22f43e84855daf260dded30524ef4a9021cc7541c26540500a50b624389"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1707,9 +1707,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.39.2"
+version = "0.39.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "958f21e8e7ceb5a1aa7fa87fab28e7c75976e0bfe7e23ff069e0a260f894067d"
+checksum = "721da970c312655cde9b4ffe0547f20a8494866a4af5ff51f18b7c633d0c870b"
 dependencies = [
  "memchr",
 ]
@@ -2323,7 +2323,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "async-channel",
  "blake3",
@@ -2375,7 +2375,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2384,7 +2384,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "dashmap",
  "futures",
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2426,7 +2426,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "bytes",
  "num",
@@ -2437,7 +2437,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -2448,7 +2448,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "derive_more",
  "http",
@@ -2463,7 +2463,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1#bed4bbdd0ae0e09e8e236faf9a6f91c309e5c3b1"
+source = "git+https://github.com/tangramdotdev/tangram?rev=0bb70055d7c2974fb02ae3da1d3d85f210edaa84#0bb70055d7c2974fb02ae3da1d3d85f210edaa84"
 dependencies = [
  "bytes",
  "data-encoding",
@@ -2753,9 +2753,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.8"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
+checksum = "a28f0d049ccfaa566e14e9663d304d8577427b368cb4710a20528690287a738b"
 dependencies = [
  "async-compression",
  "bitflags 2.11.1",
