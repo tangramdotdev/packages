@@ -56,7 +56,7 @@ pub(crate) async fn spawn_and_wait(
 		executable: Some(executable),
 		host: Some(host),
 		name: Some(name),
-		sandbox: Some(tg::Either::Left(tg::sandbox::create::Arg::default())),
+		sandbox: Some(tg::process::SandboxArg::Bool(true)),
 		stderr: tg::process::Stdio::Log,
 		stdin: tg::process::Stdio::Null,
 		stdout: tg::process::Stdio::Log,
