@@ -5,6 +5,7 @@
     "oxlint": "^1.66.0"
   },
   "scripts": {
+    "audit": "bun scripts/audit_closure.ts $@",
     "auto": "bun scripts/package_automation.ts $@",
     "check": "oxlint scripts && bun scripts/package_automation.ts --check",
     "format": "oxfmt --write scripts && bun scripts/package_automation.ts --format",
