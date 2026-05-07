@@ -226,8 +226,11 @@ TG_VISIBILITY char* cstr (Arena *arena, String s) {
 TG_VISIBILITY String executable_path (Arena* arena) {
 	String path;
 #ifdef __linux__
-	path.ptr = "/proc/self/exe";
-	path.len = tg_strlen(path.ptr);
+	path.ptr = ALLOC_N(arena, PATH_MAX + 32, uint8_t);
+	long n = readlink("/proc/self/exe", (char*)path.ptr, PATH_MAX);
+	ABORT_IF(n < 0, "failed to readlink /proc/self/exe");
+	path.ptr[n] = 0;
+	path.len = (uint64_t)n;
 #elif defined(__APPLE__)
 	path.ptr = ALLOC_N(arena, 256, uint8_t);
 	uint32_t size = 255;
