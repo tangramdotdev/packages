@@ -1087,51 +1087,26 @@ async fn write_outputs_to_cargo(
 				tokio::fs::remove_file(&to).await.ok();
 			}
 
-			let file = artifact
-				.clone()
-				.try_unwrap_file()
-				.map_err(|_| tg::error!("expected file artifact for {filename}"))?;
-			let bytes = file.bytes().await?;
-			tokio::fs::write(&to, &bytes)
+			let artifact_id = artifact.id();
+			let artifacts_path = match tangram_std::artifact_path_for(&artifact_id) {
+				Some(path) => path,
+				None => {
+					process::batch_checkout(vec![artifact_id.clone()]).await?;
+					tangram_std::artifact_path_for(&artifact_id).ok_or_else(|| {
+						tg::error!("artifact {artifact_id} not present in any artifact root after checkout")
+					})?
+				}
+			};
+			tokio::fs::symlink(&artifacts_path, &to)
 				.await
-				.map_err(|e| tg::error!(source = e, "failed to write {filename}"))?;
-
-			if !is_dependency_file(&filename) {
-				if file.executable().await.unwrap_or(false) {
-					let mut perms = tokio::fs::metadata(&to)
-						.await
-						.map_err(|e| tg::error!(source = e, "failed to stat {filename}"))?
-						.permissions();
-					std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
-					tokio::fs::set_permissions(&to, perms)
-						.await
-						.map_err(|e| tg::error!(source = e, "failed to chmod {filename}"))?;
-				}
-				// Materialize deps so wrapped executables resolve at runtime.
-				let deps = file.dependencies().await?;
-				let dep_ids: Vec<tg::artifact::Id> = deps
-					.values()
-					.filter_map(|dep| {
-						let referent = &dep.as_ref()?.0;
-						let obj = referent.item.as_ref()?;
-						obj.id().try_into().ok()
-					})
-					.collect();
-				if !dep_ids.is_empty() {
-					process::batch_checkout(dep_ids).await?;
-				}
-			}
-
-			// Touch mtime so cargo's fingerprinting treats the output as fresh.
-			let now = std::fs::FileTimes::new().set_modified(std::time::SystemTime::now());
-			std::fs::File::options()
-				.write(true)
-				.open(&to)
-				.and_then(|f| f.set_times(now))
-				.map_err(|e| tg::error!(source = e, "failed to touch {filename}"))?;
-
-			// So process_dependencies can resolve this file without a daemon call.
-			process::write_checkin_cache(to.to_str().unwrap_or_default(), &artifact);
+				.map_err(|error| {
+					tg::error!(
+						source = error,
+						"failed to symlink {} to {}",
+						to.display(),
+						artifacts_path.display()
+					)
+				})?;
 
 			if !is_dependency_file(&filename)
 				&& let Some(convenience_name) = strip_metadata_suffix(&filename)
