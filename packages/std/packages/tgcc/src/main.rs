@@ -302,7 +302,7 @@ fn main_inner() -> tg::Result<()> {
 
 	tg::init()?;
 
-	tokio::runtime::Builder::new_multi_thread()
+	tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
 		.unwrap()

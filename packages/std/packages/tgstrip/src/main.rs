@@ -70,7 +70,7 @@ fn main_inner() -> tg::Result<()> {
 	if !wrappers.is_empty() {
 		let strip_program = &options.strip_program;
 		let strip_args = &options.strip_args;
-		tokio::runtime::Builder::new_multi_thread()
+		tokio::runtime::Builder::new_current_thread()
 			.enable_all()
 			.build()
 			.unwrap()

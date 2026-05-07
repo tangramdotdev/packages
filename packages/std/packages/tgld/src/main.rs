@@ -55,7 +55,7 @@ fn main_inner() -> tg::Result<()> {
 	}
 
 	// Create the wrapper.
-	tokio::runtime::Builder::new_multi_thread()
+	tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
 		.unwrap()
