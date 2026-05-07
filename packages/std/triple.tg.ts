@@ -46,13 +46,15 @@ export const tryArchAndOs = (s: string): string | undefined => {
 };
 
 /** Retrieve the configured host for the current running process. */
-export const host = (): string => {
-	const val = tg.process.env.TANGRAM_HOST;
+export const host = (): string => currentHost();
+
+const currentHost = (): string => {
+	const val = tg.host.current;
 	tg.assert(
 		val !== undefined,
-		"unable to read TANGRAM_HOST from current process",
+		"unable to read the host of the current process.",
 	);
-	return val as string;
+	return val;
 };
 
 /** Retrieve the arch field from a triple string. Throws if unable to parse the input. */
@@ -228,7 +230,7 @@ export const rotate = async (arg: {
 	build?: string | undefined;
 	host?: string | undefined;
 }): Promise<{ host: string; target: string }> => {
-	const host = arg.host ?? (tg.process.env["TANGRAM_HOST"] as string);
+	const host = arg.host ?? currentHost();
 	const build = arg.build ?? host;
 	return { host: build, target: host };
 };

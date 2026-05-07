@@ -299,7 +299,7 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		debug,
 		phases: mergedPhases,
 		env,
-		command: { env: { TANGRAM_HOST: system }, host: system },
+		command: { host: system },
 		checksum,
 		network,
 		...(order !== undefined ? { order } : {}),

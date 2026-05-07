@@ -302,29 +302,6 @@ export class StdProcessBuilder {
 	}
 }
 
-export const testBuild = async () => {
-	const expected = tg.process.env.TANGRAM_HOST;
-	const output = await build`echo $TANGRAM_HOST > ${tg.output}`.then(
-		tg.File.expect,
-	);
-	const actual = (await output.text).trim();
-	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
-	return true;
-};
-
-export const testBuildBootstrap = async () => {
-	const expected = tg.process.env.TANGRAM_HOST;
-	const output = await build`echo $TANGRAM_HOST > ${tg.output}`
-		.bootstrap(true)
-		.env({ SHELL: "/bin/sh" })
-		.then(tg.File.expect);
-	await output.store();
-	console.log("OUTPUT", output.id);
-	const actual = (await output.text).trim();
-	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
-	return true;
-};
-
 /** Test the non-template `build` overload with a string executable path. */
 export const testBuildNonTemplateString = async () => {
 	const output = await build({
@@ -365,8 +342,6 @@ export const testBuildNonTemplateEnv = async () => {
 };
 
 export const testBuildAll = async () => {
-	await testBuild();
-	await testBuildBootstrap();
 	await testBuildNonTemplateString();
 	await testBuildNonTemplateArtifact();
 	await testBuildNonTemplateEnv();

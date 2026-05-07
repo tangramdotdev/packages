@@ -424,7 +424,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 			debug,
 			phases: mergedPhases,
 			env,
-			command: { env: { TANGRAM_HOST: system }, host: system },
+			command: { host: system },
 			checksum,
 			network,
 			...(order !== undefined ? { order } : {}),

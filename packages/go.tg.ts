@@ -339,7 +339,6 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 			GOARCH: goArch,
 			GOOS: goOs,
 			SSL_CERT_FILE: certFile,
-			TANGRAM_HOST: system,
 		},
 		env_,
 	];

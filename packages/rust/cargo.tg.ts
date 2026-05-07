@@ -252,7 +252,6 @@ VENDORCFG`;
 	const exports: Array<string> = [
 		`export RUST_TARGET="${target}"`,
 		`export CARGO_REGISTRIES_CRATES_IO_PROTOCOL="sparse"`,
-		`export TANGRAM_HOST="${std.triple.archAndOs(rustHost)}"`,
 	];
 
 	if (crossCompiling) {
@@ -536,7 +535,6 @@ linker = "${hostLinker}"`;
 		[`CARGO_TARGET_${tripleToEnvVar(target, true)}_LINKER`]: compilerName,
 		RUST_TARGET: target,
 		CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse",
-		TANGRAM_HOST: std.triple.archAndOs(rustHost),
 	};
 	envs.push(toolchainEnv);
 

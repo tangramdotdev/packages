@@ -613,11 +613,10 @@ async fn check_in_source_tree(subtree: SourceTree) -> tg::Result<Vec<(RemapTarge
 const DRIVER_SH: &str = include_str!("driver.sh");
 
 // Environment variables that must be filtered out before invoking the driver target.
-const BLACKLISTED_ENV_VARS: [&str; 6] = [
+const BLACKLISTED_ENV_VARS: [&str; 5] = [
 	"TANGRAM_ADDRESS",
 	"TGCC_TRACING",
 	"TGCC_COMPILER",
-	"TANGRAM_HOST",
 	"HOME",
 	"OUTPUT",
 ];
