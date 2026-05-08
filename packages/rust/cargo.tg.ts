@@ -283,15 +283,18 @@ VENDORCFG`;
 		const proxyBin = proxyDir
 			.then((d) => d.get("bin/tgrustc"))
 			.then(tg.File.expect);
-		if (!channel_ && !source) {
+		// Proxy mode requires nightly cargo for -Zhost-config and host.runner.
+		if (channel_ && channel_ !== "nightly" && !channel_.startsWith("nightly-")) {
 			throw new Error(
-				"When proxy mode is enabled, provide a 'source' directory or 'channel' argument to determine the Rust toolchain channel.",
+				`Proxy mode requires a nightly toolchain (got channel="${channel_}").`,
 			);
 		}
+		const detected =
+			channel_ ?? (source ? await readToolchainChannel(source) : undefined);
 		const channel =
-			channel_ ??
-			(source ? await readToolchainChannel(source) : undefined) ??
-			"stable";
+			detected === "nightly" || detected?.startsWith("nightly-")
+				? detected
+				: "nightly";
 		const toolchainDir = self({ host, channel });
 
 		const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target: rustHost }];
