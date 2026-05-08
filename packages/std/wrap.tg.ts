@@ -2566,6 +2566,18 @@ export const argAndEnvDumpCross = () =>
 		host: "x86_64-unknown-linux-gnu",
 	});
 
+/**
+ * Reproduces the wrapper SEGV that occurs when a wrapped binary is invoked on
+ * a host that has neither /.tangram/artifacts nor /opt/tangram/artifacts.
+ */
+export const demoFindArtifactsDirHostRun = async () => {
+	const exe = await argAndEnvDump();
+	return tg.command({
+		executable: { path: "/bin/bash" },
+		args: ["-c", await tg`exec ${exe} hello`, "--"],
+	});
+};
+
 export const test = async () => {
 	await Promise.all([
 		tg.build(testSingleArgObjectNoMutations, {
