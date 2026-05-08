@@ -275,8 +275,8 @@ pub(crate) async fn extract_artifact_from_path(
 	let mut components = template.components.into_iter();
 
 	let artifact = components
-		.next()
-		.and_then(|c| c.try_unwrap_artifact().ok())
+		.by_ref()
+		.find_map(|c| c.try_unwrap_artifact().ok())
 		.ok_or_else(|| tg::error!("expected artifact in path: {path}"))?;
 
 	if let Some(component) = components.next() {
