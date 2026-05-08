@@ -212,11 +212,11 @@ impl Manifest {
 			path: None,
 		})
 		.await
-		.map_err(|source| tg::error!(!source, "failed to checkout the file"))?;
+		.map_err(|error| tg::error!(!error, "failed to checkout the file"))?;
 		tokio::task::spawn_blocking(move || Self::read_from_path(path))
 			.await
-			.map_err(|source| tg::error!(!source, "failed to read the manifest"))?
-			.map_err(|source| tg::error!(!source, "failed to read the manifest"))
+			.map_err(|error| tg::error!(!error, "failed to read the manifest"))?
+			.map_err(|error| tg::error!(!error, "failed to read the manifest"))
 	}
 
 	/// Read a manifest from the end of the file at the given path.
@@ -253,7 +253,7 @@ impl Manifest {
 				.collect(),
 		})
 		.await
-		.map_err(|source| tg::error!(!source, "failed to cache artifacts"))?;
+		.map_err(|error| tg::error!(!error, "failed to cache artifacts"))?;
 
 		// Get their paths on disk.
 		let input_id: tg::artifact::Id = file.id().into();
@@ -283,13 +283,13 @@ impl Manifest {
 
 		// Copy the input file to a a temp.
 		let tempfile = tempfile::NamedTempFile::new()
-			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
+			.map_err(|error| tg::error!(!error, "failed to create temp file"))?;
 		tokio::fs::copy(&input, tempfile.path())
 			.await
-			.map_err(|source| tg::error!(!source, "failed to copy file"))?;
+			.map_err(|error| tg::error!(!error, "failed to copy file"))?;
 		tokio::fs::set_permissions(tempfile.path(), std::fs::Permissions::from_mode(0o755))
 			.await
-			.map_err(|source| tg::error!(!source, "failed to set permissions"))?;
+			.map_err(|error| tg::error!(!error, "failed to set permissions"))?;
 
 		// Embed the wrapper.
 		tokio::task::spawn_blocking({
@@ -298,9 +298,9 @@ impl Manifest {
 			move || wrap::embed(output, &manifest, None)
 		})
 		.await
-		.map_err(|source| tg::error!(!source, "failed to wrap the binary"))?
+		.map_err(|error| tg::error!(!error, "failed to wrap the binary"))?
 		.map_err(
-			|source| tg::error!(!source, path = %tempfile.path().display(), "failed to wrap the binary"),
+			|error| tg::error!(!error, path = %tempfile.path().display(), "failed to wrap the binary"),
 		)?;
 
 		// Codesign if necessary.
@@ -318,7 +318,7 @@ impl Manifest {
 				path: None,
 			})
 			.await
-			.map_err(|source| tg::error!(!source, "failed to checkout the wrapper binary"))?;
+			.map_err(|error| tg::error!(!error, "failed to checkout the wrapper binary"))?;
 			let output = tokio::process::Command::new(path)
 				.arg("sign")
 				.arg(tempfile.path())
@@ -326,7 +326,7 @@ impl Manifest {
 				.stderr(std::process::Stdio::piped())
 				.output()
 				.await
-				.map_err(|source| tg::error!(!source, "codesign command failed"))?;
+				.map_err(|error| tg::error!(!error, "codesign command failed"))?;
 			if !output.status.success() {
 				tokio::io::stderr().write_all(&output.stderr).await.ok();
 				return Err(tg::error!("codesign command failed"));
@@ -336,10 +336,10 @@ impl Manifest {
 		// Create the blob.
 		let reader = tokio::fs::File::open(tempfile.path())
 			.await
-			.map_err(|source| tg::error!(!source, "failed to open the file"))?;
+			.map_err(|error| tg::error!(!error, "failed to open the file"))?;
 		let blob = tg::Blob::with_reader(reader)
 			.await
-			.map_err(|source| tg::error!(!source, "failed to create blob"))?;
+			.map_err(|error| tg::error!(!error, "failed to create blob"))?;
 
 		// Obtain the dependencies from the manifest to add to the file.
 		// NOTE: We know the wrapper file has no dependencies, so there is no need to merge.
@@ -351,11 +351,13 @@ impl Manifest {
 		};
 
 		// Create a file with the new blob and references.
-		let mut output_file = tg::File::builder(blob).executable(true);
+		let mut output_file = tg::File::builder().contents(blob).executable(true);
 		if let Some(dependencies) = dependencies {
 			output_file = output_file.dependencies(dependencies);
 		}
-		let output_file = output_file.build();
+		let output_file = output_file
+			.build()
+			.map_err(|error| tg::error!(!error, "failed to build wrapper file"))?;
 
 		#[cfg(feature = "tracing")]
 		{
@@ -389,19 +391,19 @@ impl Manifest {
 			path: None,
 		})
 		.await
-		.map_err(|source| tg::error!(!source, "failed to checkout the wrapper binary"))?;
+		.map_err(|error| tg::error!(!error, "failed to checkout the wrapper binary"))?;
 
 		// Create a temp.
 		let temp = tempfile::NamedTempFile::new()
-			.map_err(|source| tg::error!(!source, "failed to create temp file"))?;
+			.map_err(|error| tg::error!(!error, "failed to create temp file"))?;
 
 		// Copy the wrapper to a temp.
 		tokio::fs::copy(&path, temp.path())
 			.await
-			.map_err(|source| tg::error!(!source, "failed to copy the file"))?;
+			.map_err(|error| tg::error!(!error, "failed to copy the file"))?;
 		tokio::fs::set_permissions(temp.path(), std::fs::Permissions::from_mode(0o755))
 			.await
-			.map_err(|source| tg::error!(!source, "failed to set permissions"))?;
+			.map_err(|error| tg::error!(!error, "failed to set permissions"))?;
 
 		// Append the manifest to the temp.
 		let path = temp.path().to_owned();
@@ -411,8 +413,8 @@ impl Manifest {
 			move || manifest.write_to_path(&path)
 		})
 		.await
-		.map_err(|source| tg::error!(!source, "failed to write manifest to file"))?
-		.map_err(|source| tg::error!(!source, "failed to append manifest"))?;
+		.map_err(|error| tg::error!(!error, "failed to write manifest to file"))?
+		.map_err(|error| tg::error!(!error, "failed to append manifest"))?;
 
 		// Codesign if necessary.
 		if matches!(wrap::detect_format(&path), Ok(Some(wrap::Format::Mach64))) {
@@ -426,7 +428,7 @@ impl Manifest {
 				path: None,
 			})
 			.await
-			.map_err(|source| tg::error!(!source, "failed to checkout the wrapper binary"))?;
+			.map_err(|error| tg::error!(!error, "failed to checkout the wrapper binary"))?;
 			let output = tokio::process::Command::new(path)
 				.arg("sign")
 				.arg(temp.path())
@@ -434,7 +436,7 @@ impl Manifest {
 				.stderr(std::process::Stdio::piped())
 				.output()
 				.await
-				.map_err(|source| tg::error!(!source, "codesign command failed"))?;
+				.map_err(|error| tg::error!(!error, "codesign command failed"))?;
 			if !output.status.success() {
 				tokio::io::stderr().write_all(&output.stderr).await.ok();
 				return Err(tg::error!("codesign command failed"));
@@ -451,7 +453,7 @@ impl Manifest {
 			updates: Vec::new(),
 		})
 		.await
-		.map_err(|source| tg::error!(!source, "failed to check in file"))?
+		.map_err(|error| tg::error!(!error, "failed to check in file"))?
 		.try_unwrap_file()
 		.map_err(|_| tg::error!("expected a file"))?;
 
@@ -463,14 +465,16 @@ impl Manifest {
 		let contents = wrapped
 			.contents()
 			.await
-			.map_err(|source| tg::error!(!source, "failed to get the file contents"))?;
-		let mut builder = tg::File::builder(contents).executable(true);
+			.map_err(|error| tg::error!(!error, "failed to get the file contents"))?;
+		let mut builder = tg::File::builder().contents(contents).executable(true);
 		if !dependencies.is_empty() {
 			builder = builder.dependencies(dependencies);
 		}
 
 		// Create the file.
-		let output_file = builder.build();
+		let output_file = builder
+			.build()
+			.map_err(|error| tg::error!(!error, "failed to build wrapper file"))?;
 		tracing::trace!(file = %output_file.id(), "created wrapper file");
 
 		// Return the output file.

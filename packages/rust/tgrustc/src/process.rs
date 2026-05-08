@@ -104,16 +104,11 @@ async fn spawn_and_wait_with_arg(
 	let output = wait.output.unwrap_or(tg::Value::Null);
 	let output = output
 		.try_unwrap_object()
-		.map_err(|source| {
-			tg::error!(
-				!source,
-				"expected process {process_id} to produce an object"
-			)
-		})?
+		.map_err(|error| tg::error!(!error, "expected process {process_id} to produce an object"))?
 		.try_unwrap_directory()
-		.map_err(|source| {
+		.map_err(|error| {
 			tg::error!(
-				!source,
+				!error,
 				"expected process {process_id} to produce a directory"
 			)
 		})?;

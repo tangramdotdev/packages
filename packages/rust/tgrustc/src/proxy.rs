@@ -424,7 +424,11 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 			.await
 			.map_err(|e| tg::error!("failed to read build script binary: {e}"))?;
 		let blob = tg::Blob::with_reader(std::io::Cursor::new(contents)).await?;
-		let file = tg::File::builder(blob).executable(true).build();
+		let file = tg::File::builder()
+			.contents(blob)
+			.executable(true)
+			.build()
+			.map_err(|error| tg::error!(!error, "failed to build script file"))?;
 		let artifact: tg::Artifact = file.into();
 		Ok::<_, tg::Error>(tangram_std::template_from_artifact(artifact).into())
 	};
@@ -1088,14 +1092,15 @@ async fn write_outputs_to_cargo(
 			}
 
 			let artifact_id = artifact.id();
-			let artifacts_path = match tangram_std::artifact_path_for(&artifact_id) {
-				Some(path) => path,
-				None => {
-					process::batch_checkout(vec![artifact_id.clone()]).await?;
-					tangram_std::artifact_path_for(&artifact_id).ok_or_else(|| {
-						tg::error!("artifact {artifact_id} not present in any artifact root after checkout")
-					})?
-				}
+			let artifacts_path = if let Some(path) = tangram_std::artifact_path_for(&artifact_id) {
+				path
+			} else {
+				process::batch_checkout(vec![artifact_id.clone()]).await?;
+				tangram_std::artifact_path_for(&artifact_id).ok_or_else(|| {
+					tg::error!(
+						"artifact {artifact_id} not present in any artifact root after checkout"
+					)
+				})?
 			};
 			tokio::fs::symlink(&artifacts_path, &to)
 				.await
@@ -1185,7 +1190,11 @@ async fn create_filtered_workspace(
 	};
 
 	let placeholder_blob = tg::Blob::with_reader(std::io::Cursor::new(b"// placeholder\n")).await?;
-	let placeholder_file: tg::Artifact = tg::File::builder(placeholder_blob).build().into();
+	let placeholder_file: tg::Artifact = tg::File::builder()
+		.contents(placeholder_blob)
+		.build()
+		.map_err(|error| tg::error!(!error, "failed to build placeholder file"))?
+		.into();
 
 	let sibling_paths: Vec<&String> = members
 		.iter()
@@ -1212,7 +1221,7 @@ async fn create_filtered_workspace(
 	let filtered_members: Vec<Option<(String, tg::Directory)>> =
 		futures::future::try_join_all(member_futures).await?;
 
-	let mut builder = workspace_dir.builder().await?;
+	let mut builder = workspace_dir.to_builder().await?;
 	for entry in filtered_members.into_iter().flatten() {
 		let (member_path, filtered_member) = entry;
 		builder = builder

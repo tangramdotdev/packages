@@ -371,9 +371,9 @@ async fn run_proxy(environment: Environment, args: Args) -> tg::Result<()> {
 		.output
 		.ok_or_else(|| tg::error!("expected the build to produce output"))?
 		.try_unwrap_object()
-		.map_err(|source| tg::error!(!source, "expected the build to produce an object"))?
+		.map_err(|error| tg::error!(!error, "expected the build to produce an object"))?
 		.try_unwrap_directory()
-		.map_err(|source| tg::error!(!source, "expected the build to produce a directory"))?;
+		.map_err(|error| tg::error!(!error, "expected the build to produce a directory"))?;
 
 	// Dump stdout, stderr
 	let stdout: Vec<u8> = build_directory

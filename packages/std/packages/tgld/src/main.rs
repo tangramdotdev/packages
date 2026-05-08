@@ -173,9 +173,9 @@ fn read_options() -> tg::Result<Options> {
 	// Prepare to store wrapper arg values.
 	let mut wrapper_arg_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ARG_VALUE_PATH") {
 		let value = std::fs::read_to_string(&path)
-			.map_err(|e| tg::error!(source = e, "failed to read TGLD_WRAPPER_ARG_VALUE_PATH"))?
+			.map_err(|error| tg::error!(!error, "failed to read TGLD_WRAPPER_ARG_VALUE_PATH"))?
 			.parse::<tg::Value>()
-			.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+			.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
 		let data = value
 			.to_data()
 			.try_unwrap_array()
@@ -194,9 +194,9 @@ fn read_options() -> tg::Result<Options> {
 	// Prepare to store wrapper env values.
 	let mut wrapper_env_value = if let Ok(path) = std::env::var("TGLD_WRAPPER_ENV_VALUE_PATH") {
 		let value = std::fs::read_to_string(&path)
-			.map_err(|e| tg::error!(source = e, "failed to read TGLD_WRAPPER_ENV_VALUE_PATH"))?
+			.map_err(|error| tg::error!(!error, "failed to read TGLD_WRAPPER_ENV_VALUE_PATH"))?
 			.parse::<tg::Value>()
-			.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+			.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
 		let data = value
 			.try_unwrap_mutation()
 			.map_err(|_| tg::error!("expected a mutation"))?
@@ -231,7 +231,7 @@ fn read_options() -> tg::Result<Options> {
 			} else if let Some(value) = arg.strip_prefix("--tangram-wrapper-arg-value=") {
 				let value = value
 					.parse::<tg::Value>()
-					.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+					.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
 				let data = value
 					.to_data()
 					.try_unwrap_array()
@@ -247,7 +247,7 @@ fn read_options() -> tg::Result<Options> {
 				if let Some(value) = args.next() {
 					let value = value
 						.parse::<tg::Value>()
-						.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+						.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
 					let data = value
 						.to_data()
 						.try_unwrap_array()
@@ -262,9 +262,9 @@ fn read_options() -> tg::Result<Options> {
 				}
 			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-arg-value-path=") {
 				let value = std::fs::read_to_string(path)
-					.map_err(|e| tg::error!(source = e, "failed to read wrapper arg value path"))?
+					.map_err(|error| tg::error!(!error, "failed to read wrapper arg value path"))?
 					.parse::<tg::Value>()
-					.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+					.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
 				let data = value
 					.to_data()
 					.try_unwrap_array()
@@ -279,11 +279,11 @@ fn read_options() -> tg::Result<Options> {
 			} else if arg == "--tangram-wrapper-arg-value-path" {
 				if let Some(path) = args.next() {
 					let value = std::fs::read_to_string(&path)
-						.map_err(|e| {
-							tg::error!(source = e, "failed to read wrapper arg value path")
+						.map_err(|error| {
+							tg::error!(!error, "failed to read wrapper arg value path")
 						})?
 						.parse::<tg::Value>()
-						.map_err(|e| tg::error!(source = e, "failed to parse wrapper arg value"))?;
+						.map_err(|error| tg::error!(!error, "failed to parse wrapper arg value"))?;
 					let data = value
 						.to_data()
 						.try_unwrap_array()
@@ -299,7 +299,7 @@ fn read_options() -> tg::Result<Options> {
 			} else if let Some(value) = arg.strip_prefix("--tangram-wrapper-env-value=") {
 				let value = value
 					.parse::<tg::Value>()
-					.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+					.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
 				let data = value
 					.try_unwrap_mutation()
 					.map_err(|_| tg::error!("expected a mutation"))?
@@ -309,7 +309,7 @@ fn read_options() -> tg::Result<Options> {
 				if let Some(value) = args.next() {
 					let value = value
 						.parse::<tg::Value>()
-						.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+						.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
 					let data = value
 						.try_unwrap_mutation()
 						.map_err(|_| tg::error!("expected a mutation"))?
@@ -318,9 +318,9 @@ fn read_options() -> tg::Result<Options> {
 				}
 			} else if let Some(path) = arg.strip_prefix("--tangram-wrapper-env-value-path=") {
 				let value = std::fs::read_to_string(path)
-					.map_err(|e| tg::error!(source = e, "failed to read wrapper env value path"))?
+					.map_err(|error| tg::error!(!error, "failed to read wrapper env value path"))?
 					.parse::<tg::Value>()
-					.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+					.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
 				let data = value
 					.try_unwrap_mutation()
 					.map_err(|_| tg::error!("expected a mutation"))?
@@ -329,11 +329,11 @@ fn read_options() -> tg::Result<Options> {
 			} else if arg == "--tangram-wrapper-env-value-path" {
 				if let Some(path) = args.next() {
 					let value = std::fs::read_to_string(&path)
-						.map_err(|e| {
-							tg::error!(source = e, "failed to read wrapper env value path")
+						.map_err(|error| {
+							tg::error!(!error, "failed to read wrapper env value path")
 						})?
 						.parse::<tg::Value>()
-						.map_err(|e| tg::error!(source = e, "failed to parse wrapper env value"))?;
+						.map_err(|error| tg::error!(!error, "failed to parse wrapper env value"))?;
 					let data = value
 						.try_unwrap_mutation()
 						.map_err(|_| tg::error!("expected a mutation"))?
@@ -659,10 +659,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		// NOTE - in practice, `output_file_executable` will virtually always be false in this branch, but we don't want to lose the information if the caller is doing something fancy.
 		let output_file_executable = output_file.executable().await?;
 		Some(
-			tg::File::builder(output_file_contents)
+			tg::File::builder()
+				.contents(output_file_contents)
 				.executable(output_file_executable)
 				.dependencies(dependencies)
-				.build(),
+				.build()
+				.map_err(|error| tg::error!(!error, "failed to build output file"))?,
 		)
 	} else {
 		None
@@ -674,9 +676,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		tracing::trace!(output_file = ?output_file.id(), "stored");
 		tokio::fs::remove_file(&options.output_path)
 			.await
-			.map_err(|source| tg::error!(!source, path = %&options.output_path.display(), "failed to remove the output file"))?;
+			.map_err(|error| tg::error!(!error, path = %&options.output_path.display(), "failed to remove the output file"))?;
 		let cwd = std::env::current_dir()
-			.map_err(|source| tg::error!(!source, "failed to get the current directory"))?;
+			.map_err(|error| tg::error!(!error, "failed to get the current directory"))?;
 		let output_path = cwd.join(&options.output_path);
 		let output_file_id = output_file.id();
 		tracing::debug!(?output_file_id, ?output_path, "checking out output file");
@@ -692,8 +694,9 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		.await?;
 
 		// Restore the original file permissions after checkout.
-		std::fs::set_permissions(&output_path, original_permissions)
-			.map_err(|source| tg::error!(!source, path = %output_path.display(), "failed to restore file permissions"))?;
+		std::fs::set_permissions(&output_path, original_permissions).map_err(
+			|error| tg::error!(!error, path = %output_path.display(), "failed to restore file permissions"),
+		)?;
 		tracing::debug!(?output_path, "restored original file permissions");
 	}
 
@@ -991,7 +994,7 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 						[tg::template::Component::Artifact(artifact)] => artifact
 							.clone()
 							.try_unwrap_file()
-							.map_err(|source| tg::error!(!source, "expected a file"))?,
+							.map_err(|error| tg::error!(!error, "expected a file"))?,
 						[
 							tg::template::Component::Artifact(artifact),
 							tg::template::Component::String(subpath),
@@ -999,14 +1002,14 @@ async fn create_library_directory_for_command_line_libraries<H: BuildHasher>(
 							let d = artifact
 								.clone()
 								.try_unwrap_directory()
-								.map_err(|source| tg::error!(!source, "expected a directory"))?;
+								.map_err(|error| tg::error!(!error, "expected a directory"))?;
 							if let Some(inner) = d
 								.try_get(subpath.strip_prefix('/').unwrap_or(subpath))
 								.await?
 							{
 								inner
 									.try_unwrap_file()
-									.map_err(|source| tg::error!(!source, "expected a file"))?
+									.map_err(|error| tg::error!(!error, "expected a file"))?
 							} else {
 								let artifact = artifact.id();
 								return Err(
@@ -1187,7 +1190,7 @@ async fn finalize_library_paths<H: BuildHasher + Default>(
 	tracing::debug!("caching libraries");
 	tg::cache::cache(arg)
 		.await
-		.map_err(|source| tg::error!(!source, "failed to cache libraries"))?;
+		.map_err(|error| tg::error!(!error, "failed to cache libraries"))?;
 
 	// Warn or error if any required libraries are not included in the set.
 	verify_missing_libraries(disallow_missing, needed_libraries, &library_paths).await?;
@@ -1267,7 +1270,7 @@ async fn resolve_directories<H: BuildHasher + Default>(
 						tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
 					);
 				};
-				let inner = inner.try_unwrap_directory().map_err(|source| tg::error!(!source, outer =% dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
+				let inner = inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer =% dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?;
 				dir_with_subpath_from_directory(&inner, None).await?
 			} else {
 				dir_with_subpath.clone()
@@ -1368,7 +1371,7 @@ async fn analyze_output_file(
 ) -> tg::Result<AnalyzeOutputFileOutput> {
 	let bytes = bytes_from_path(&path).await?;
 	analyze_executable(&bytes).map_err(
-		|source| tg::error!(!source, path = %path.as_ref().display(), "failed to analyze output file"),
+		|error| tg::error!(!error, path = %path.as_ref().display(), "failed to analyze output file"),
 	)
 }
 
@@ -1561,7 +1564,7 @@ pub async fn directory_from_dir_with_subpath(
 				tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
 			);
 		};
-		inner.try_unwrap_directory().map_err(|source| tg::error!(!source, outer = %dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?
+		inner.try_unwrap_directory().map_err(|error| tg::error!(!error, outer = %dir_with_subpath.id, subpath = %subpath.display(), "expected a directory"))?
 	} else {
 		outer
 	};

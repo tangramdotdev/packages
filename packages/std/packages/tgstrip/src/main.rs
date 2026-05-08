@@ -124,11 +124,10 @@ async fn run_proxy(
 			tracing::info!(?artifact_path, "found executable artifact path");
 
 			// Get the path to the actual executable.
-			let executable_path = std::path::PathBuf::from(
-				common::render_template_data(&artifact_path).map_err(|source| {
-					tg::error!(!source, ?artifact_path, "unable to render executable path")
-				})?,
-			);
+			let executable_path =
+				std::path::PathBuf::from(common::render_template_data(&artifact_path).map_err(
+					|error| tg::error!(!error, ?artifact_path, "unable to render executable path"),
+				)?);
 
 			#[cfg(feature = "tracing")]
 			tracing::info!(?executable_path, "found executable path");
@@ -136,10 +135,10 @@ async fn run_proxy(
 			// Copy the file to a temp directory.
 			#[cfg(target_os = "linux")]
 			let tmpdir = tempfile::TempDir::new_in("/")
-				.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
+				.map_err(|error| tg::error!(!error, "failed to create tempdir"))?;
 			#[cfg(target_os = "macos")]
 			let tmpdir = tempfile::TempDir::new()
-				.map_err(|source| tg::error!(!source, "failed to create tempdir"))?;
+				.map_err(|error| tg::error!(!error, "failed to create tempdir"))?;
 			let tmp_path = tmpdir.path();
 			let local_executable_path = tmp_path.join("executable");
 			#[cfg(feature = "tracing")]
@@ -152,11 +151,11 @@ async fn run_proxy(
 			// Set the file to be writable.
 			let mut perms = tokio::fs::metadata(&local_executable_path)
 				.await
-				.map_err(|source| tg::error!(!source, path = %local_executable_path.display(), "failed to get the file metadata"))?.permissions();
+				.map_err(|error| tg::error!(!error, path = %local_executable_path.display(), "failed to get the file metadata"))?.permissions();
 			perms.set_mode(perms.mode() | 0o200);
 			tokio::fs::set_permissions(&local_executable_path, perms)
 				.await
-				.map_err(|source| tg::error!(!source, path = %local_executable_path.display(), "failed to set file permissions"))?;
+				.map_err(|error| tg::error!(!error, path = %local_executable_path.display(), "failed to set file permissions"))?;
 
 			// Call strip with the correct arguments on the executable.
 			run_strip(strip_program, strip_args, &[&local_executable_path])?;

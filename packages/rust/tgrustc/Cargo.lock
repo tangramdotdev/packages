@@ -350,9 +350,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.61"
+version = "1.2.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d16d90359e986641506914ba71350897565610e87ce0ad9e6f28569db3dd5c6d"
+checksum = "a1dce859f0832a7d088c4f1119888ab94ef4b5d6795d1ce05afb7fe159d79f98"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -2292,7 +2292,7 @@ dependencies = [
 [[package]]
 name = "tangram_client"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "async-channel",
  "blake3",
@@ -2344,7 +2344,7 @@ dependencies = [
 [[package]]
 name = "tangram_either"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "serde",
  "tangram_serialize",
@@ -2353,7 +2353,7 @@ dependencies = [
 [[package]]
 name = "tangram_futures"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "dashmap",
  "futures",
@@ -2367,7 +2367,7 @@ dependencies = [
 [[package]]
 name = "tangram_http"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2395,7 +2395,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "bytes",
  "num",
@@ -2406,7 +2406,7 @@ dependencies = [
 [[package]]
 name = "tangram_serialize_macro"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -2417,7 +2417,7 @@ dependencies = [
 [[package]]
 name = "tangram_uri"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "derive_more",
  "http",
@@ -2432,7 +2432,7 @@ dependencies = [
 [[package]]
 name = "tangram_util"
 version = "0.0.0"
-source = "git+https://github.com/tangramdotdev/tangram?rev=0ba393f5d876861db8f88d1f71f922fc2ea20dbc#0ba393f5d876861db8f88d1f71f922fc2ea20dbc"
+source = "git+https://github.com/tangramdotdev/tangram?rev=bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1#bd3c80dc14ba06e3f37e20c303ccc1f05b0db9b1"
 dependencies = [
  "bytes",
  "data-encoding",
@@ -2590,9 +2590,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.52.2"
+version = "1.52.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "110a78583f19d5cdb2c5ccf321d1290344e71313c6c37d43520d386027d18386"
+checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
 dependencies = [
  "bytes",
  "libc",
