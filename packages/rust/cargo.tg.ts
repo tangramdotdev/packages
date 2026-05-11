@@ -284,7 +284,11 @@ VENDORCFG`;
 			.then((d) => d.get("bin/tgrustc"))
 			.then(tg.File.expect);
 		// Proxy mode requires nightly cargo for -Zhost-config and host.runner.
-		if (channel_ && channel_ !== "nightly" && !channel_.startsWith("nightly-")) {
+		if (
+			channel_ &&
+			channel_ !== "nightly" &&
+			!channel_.startsWith("nightly-")
+		) {
 			throw new Error(
 				`Proxy mode requires a nightly toolchain (got channel="${channel_}").`,
 			);
@@ -335,6 +339,7 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 	const targetFlag = proxy ? `--target "$RUST_TARGET"` : "";
 	const insertedFlags = [targetFlag, ...featureFlags].filter(Boolean).join(" ");
 	// Symlink target/<triple>/<profile>/* into target/<profile>/ for plain-cargo compat.
+	// FIXME - this is illegible?
 	const execLine = insertedFlags
 		? proxy
 			? `${cargoCmd} "$1" ${insertedFlags} "\${@:2}"

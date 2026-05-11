@@ -55,7 +55,7 @@ pub(crate) fn run_driver() -> tg::Result<()> {
 		format!("{tangram_output}/exec_error.txt"),
 		format!("exec failed: {error}"),
 	);
-	Err(tg::error!("failed to exec rustc: {error}"))
+	Err(tg::error!("failed to exec rustc {rustc_path}: {error}"))
 }
 
 /// Run a build script inside the Tangram sandbox. See [`RUNNER_OUT_DIR_PLACEHOLDER`] for stdout rewriting.
