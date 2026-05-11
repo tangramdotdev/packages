@@ -104,7 +104,7 @@ pub(crate) fn run_runner_driver() -> tg::Result<()> {
 		.env_remove("TGRUSTC_RUNNER_SOURCE")
 		.env_remove("TGRUSTC_RUNNER_MANIFEST_SUBPATH")
 		.output()
-		.map_err(|e| tg::error!("failed to spawn build script: {e}"))?;
+		.map_err(|e| tg::error!("failed to spawn build script ${script_binary}: {e}"))?;
 
 	let sandbox_prefix = format!("{tangram_output}/");
 	let stdout_text = String::from_utf8_lossy(&output.stdout);

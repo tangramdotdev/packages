@@ -316,6 +316,11 @@ export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
 export TGRUSTC_SOURCE_DIR="$PWD"
 export TGRUSTC_CARGO="${toolchainDir}/bin/cargo"
 export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"
+# Put the tangram SDK toolchain on PATH so cargo's host.linker (gcc/clang)
+# resolves to the tgld-wrapped linker. Without this, the host's plain gcc/ld
+# produces build-script binaries with PT_INTERP set to host paths, which fail
+# to exec inside the runner sandbox.
+export PATH="${sandboxSdk}/bin:$PATH"
 # Snapshot host env names so the proxy can identify cargo:rustc-env additions.
 export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
 env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
