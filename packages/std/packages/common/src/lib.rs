@@ -152,14 +152,17 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 
 /// Unrender a template string into a [`tg::Template`].
 pub fn unrender(string: &str) -> tg::Result<tg::Template> {
-	let prefix = if string.contains("/.tangram/artifacts/") {
-		".tangram/artifacts"
-	} else if string.contains("/opt/tangram/artifacts/") {
-		"/opt/tangram/artifacts"
-	} else {
-		return Ok(tg::Template::from(tg::template::Component::String(
-			string.to_owned(),
-		)));
-	};
-	tg::Template::unrender(prefix, string)
+	let mut i = 0;
+	while let Some(root) = artifact_root_at(i) {
+		if string.contains(&format!("{root}/")) {
+			return tg::Template::unrender(&root, string);
+		}
+		i += 1;
+	}
+	if string.contains("/opt/tangram/artifacts/") {
+		return tg::Template::unrender("/opt/tangram/artifacts", string);
+	}
+	Ok(tg::Template::from(tg::template::Component::String(
+		string.to_owned(),
+	)))
 }
