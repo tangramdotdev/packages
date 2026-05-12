@@ -1132,6 +1132,29 @@ async fn write_outputs_to_cargo(
 							to.display()
 						)
 					})?;
+				// Artifact store files are read-only; ensure the copy is writable
+				// so cargo can overwrite it on a subsequent rebuild.
+				let mut perms = tokio::fs::metadata(&to)
+					.await
+					.map_err(|error| {
+						tg::error!(
+							source = error,
+							"failed to stat {}",
+							to.display()
+						)
+					})?
+					.permissions();
+				if perms.readonly() {
+					#[allow(clippy::permissions_set_readonly_false)]
+					perms.set_readonly(false);
+					tokio::fs::set_permissions(&to, perms).await.map_err(|error| {
+						tg::error!(
+							source = error,
+							"failed to set permissions on {}",
+							to.display()
+						)
+					})?;
+				}
 			}
 
 			if !is_dependency_file(&filename)
