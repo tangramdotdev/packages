@@ -1102,16 +1102,37 @@ async fn write_outputs_to_cargo(
 					)
 				})?
 			};
-			tokio::fs::symlink(&artifacts_path, &to)
-				.await
-				.map_err(|error| {
-					tg::error!(
-						source = error,
-						"failed to symlink {} to {}",
-						to.display(),
-						artifacts_path.display()
-					)
+			// Rewrite sandbox artifact paths in depfiles so cargo's fingerprint
+			// stat()s resolve on the host on subsequent invocations.
+			let is_depfile = std::path::Path::new(&filename)
+				.extension()
+				.is_some_and(|e| e == "d");
+			if is_depfile {
+				let raw = tokio::fs::read_to_string(&artifacts_path)
+					.await
+					.map_err(|error| {
+						tg::error!(
+							source = error,
+							"failed to read depfile {}",
+							artifacts_path.display()
+						)
+					})?;
+				let rewritten = rewrite_depfile_paths(&raw);
+				tokio::fs::write(&to, rewritten).await.map_err(|error| {
+					tg::error!(source = error, "failed to write depfile {}", to.display())
 				})?;
+			} else {
+				tokio::fs::copy(&artifacts_path, &to)
+					.await
+					.map_err(|error| {
+						tg::error!(
+							source = error,
+							"failed to copy {} to {}",
+							artifacts_path.display(),
+							to.display()
+						)
+					})?;
+			}
 
 			if !is_dependency_file(&filename)
 				&& let Some(convenience_name) = strip_metadata_suffix(&filename)
@@ -1139,6 +1160,44 @@ async fn write_outputs_to_cargo(
 	futures::future::try_join_all(futures).await?;
 
 	Ok(())
+}
+
+/// Rewrite sandbox artifact paths (`/opt/tangram/artifacts/<id>...`) to their
+/// host equivalents so cargo's fingerprint stat()s resolve. Scans for the
+/// sandbox prefix, parses each artifact ID, and substitutes the host path.
+fn rewrite_depfile_paths(content: &str) -> String {
+	const SANDBOX_PREFIX: &str = "/opt/tangram/artifacts/";
+	if !content.contains(SANDBOX_PREFIX) {
+		return content.to_owned();
+	}
+
+	let mut out = String::with_capacity(content.len());
+	let mut rest = content;
+	while let Some(pos) = rest.find(SANDBOX_PREFIX) {
+		out.push_str(&rest[..pos]);
+		let after = &rest[pos + SANDBOX_PREFIX.len()..];
+		// Artifact IDs are alphanumeric with underscores; terminate at `/`,
+		// whitespace, or end of string.
+		let id_end = after
+			.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+			.unwrap_or(after.len());
+		let id_str = &after[..id_end];
+		let resolved = id_str
+			.parse::<tg::artifact::Id>()
+			.ok()
+			.and_then(|id| tangram_std::artifact_path_for(&id));
+		if let Some(host_path) = resolved {
+			out.push_str(&host_path.to_string_lossy());
+			rest = &after[id_end..];
+		} else {
+			// Could not resolve; preserve original sandbox path.
+			out.push_str(SANDBOX_PREFIX);
+			out.push_str(id_str);
+			rest = &after[id_end..];
+		}
+	}
+	out.push_str(rest);
+	out
 }
 
 /// Extract stem (crate name + metadata hash).
