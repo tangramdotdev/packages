@@ -294,9 +294,11 @@ def cache_command_artifacts [cmd_id: string] {
     }
 }
 
-# Run a SQL query against a tangram database and return the trimmed result.
+# Run a SQL query against the tangram processes database and return the
+# trimmed result. Process metadata moved out of the main `database` into a
+# dedicated `processes` sqlite file; all queries here target that table.
 def run_sql [tangram_dir: string, query: string]: nothing -> string {
-    sqlite3 $"($tangram_dir)/database" $query | str trim
+    sqlite3 $"($tangram_dir)/processes" $query | str trim
 }
 
 # Start a tangram server in the background. Returns the PID.
