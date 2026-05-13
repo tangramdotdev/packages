@@ -157,9 +157,7 @@ async fn run_proxy_inner(args: &Args) -> tg::Result<()> {
 		}
 	}
 
-	let rustc_for_inner =
-		std::env::var("TGRUSTC_TANGRAM_RUSTC").unwrap_or_else(|_| args.rustc.clone());
-	let rustc_template = tangram_std::unrender(&rustc_for_inner)?;
+	let rustc_template = resolve_rustc_template(&args.rustc).await?;
 	env.insert("TGRUSTC_DRIVER_MODE".to_owned(), "1".to_owned().into());
 	env.insert("TGRUSTC_RUSTC".to_owned(), rustc_template.into());
 	env.insert("TGRUSTC_SOURCE".to_owned(), source_directory.clone());
@@ -1183,6 +1181,54 @@ async fn write_outputs_to_cargo(
 	futures::future::try_join_all(futures).await?;
 
 	Ok(())
+}
+
+/// Resolve the rustc binary path cargo passed to a sandbox-usable template.
+///
+/// Resolution order:
+/// 1. `TGRUSTC_TANGRAM_RUSTC` if set (explicit override).
+/// 2. `args.rustc` if already a tangram artifact path.
+/// 3. Otherwise: treat as a host toolchain, check it in, expose under the
+///    artifact path as `<artifact>/bin/rustc`. Uses `rustc --print sysroot`
+///    to resolve rustup shims to the actual toolchain directory.
+async fn resolve_rustc_template(rustc_path: &str) -> tg::Result<tg::Template> {
+	if let Ok(override_path) = std::env::var("TGRUSTC_TANGRAM_RUSTC") {
+		return tangram_std::unrender(&override_path);
+	}
+	if process::is_artifact_path(rustc_path) {
+		return tangram_std::unrender(rustc_path);
+	}
+
+	let sysroot = std::process::Command::new(rustc_path)
+		.arg("--print")
+		.arg("sysroot")
+		.output()
+		.map_err(|error| {
+			tg::error!(source = error, "failed to invoke {rustc_path} --print sysroot")
+		})?;
+	if !sysroot.status.success() {
+		return Err(tg::error!(
+			"`{rustc_path} --print sysroot` exited with {}",
+			sysroot.status
+		));
+	}
+	let sysroot_path = String::from_utf8(sysroot.stdout)
+		.map_err(|error| tg::error!(source = error, "rustc sysroot output is not UTF-8"))?
+		.trim()
+		.to_owned();
+
+	let toolchain_value = process::content_address_path(&sysroot_path).await?;
+	let toolchain_template = match toolchain_value {
+		tg::Value::Template(t) => t,
+		_ => {
+			return Err(tg::error!(
+				"expected template for checked-in toolchain at {sysroot_path}"
+			))
+		},
+	};
+	let mut components = toolchain_template.components;
+	components.push("/bin/rustc".to_owned().into());
+	Ok(tg::Template { components })
 }
 
 /// Rewrite sandbox artifact paths (`/opt/tangram/artifacts/<id>...`) to their

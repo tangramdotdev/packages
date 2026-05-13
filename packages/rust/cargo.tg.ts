@@ -264,11 +264,8 @@ VENDORCFG`;
 		exports.push(`export CXX_${tripleToEnvVar(target)}="${target}-c++"`);
 	}
 
-	{
-		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
-		if (effectiveJobs !== undefined) {
-			exports.push(`export CARGO_BUILD_JOBS="${effectiveJobs}"`);
-		}
+	if (parallelJobs !== undefined) {
+		exports.push(`export CARGO_BUILD_JOBS="${parallelJobs}"`);
 	}
 
 	// Lets the proxy detect workspace members and route them to passthrough;
@@ -283,23 +280,6 @@ VENDORCFG`;
 		const proxyBin = proxyDir
 			.then((d) => d.get("bin/tgrustc"))
 			.then(tg.File.expect);
-		// Proxy mode requires nightly cargo for -Zhost-config and host.runner.
-		if (
-			channel_ &&
-			channel_ !== "nightly" &&
-			!channel_.startsWith("nightly-")
-		) {
-			throw new Error(
-				`Proxy mode requires a nightly toolchain (got channel="${channel_}").`,
-			);
-		}
-		const detected =
-			channel_ ?? (source ? await readToolchainChannel(source) : undefined);
-		const channel =
-			detected === "nightly" || detected?.startsWith("nightly-")
-				? detected
-				: "nightly";
-		const toolchainDir = self({ host, channel });
 
 		const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target: rustHost }];
 		if (std.triple.os(rustHost) === "linux") {
@@ -307,20 +287,18 @@ VENDORCFG`;
 		}
 		const sandboxSdk = await tg.build(std.sdk, ...sdkArgs);
 
-		proxySetup = await tg`export RUSTC="${toolchainDir}/bin/rustc"
-export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
+		// Transparent caching: cargo runs as the user's host toolchain (so
+		// fingerprints match a plain `cargo build`), with tgrustc inserted as
+		// RUSTC_WRAPPER. tgrustc detects the host rustc from its first arg,
+		// checks the rustup toolchain in as a tangram artifact, and uses that
+		// artifact inside the sandbox so dep rlibs match the host rustc.
+		// Workspace crates pass through to host rustc directly via
+		// TGRUSTC_PASSTHROUGH_PROJECT_DIR.
+		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
 export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"
 export TGRUSTC_RUN_MODE=1
-export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
 export TGRUSTC_SOURCE_DIR="$PWD"
-export TGRUSTC_CARGO="${toolchainDir}/bin/cargo"
-export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"
-# Put the tangram SDK toolchain on PATH so cargo's host.linker (gcc/clang)
-# resolves to the tgld-wrapped linker. Without this, the host's plain gcc/ld
-# produces build-script binaries with PT_INTERP set to host paths, which fail
-# to exec inside the runner sandbox.
-export PATH="${sandboxSdk}/bin:$PATH"
 # Snapshot host env names so the proxy can identify cargo:rustc-env additions.
 export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
 env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
@@ -334,31 +312,13 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 		featureFlags.push(`--features "${features.join(",")}"`);
 	}
 
-	// Nightly cargo for -Zhost-config support (stable silently ignores -Z).
-	const os = std.triple.os(host);
-	const hostLinker = os === "darwin" ? "clang" : "gcc";
-	const cargoCmd = proxy
-		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config 'host.linker = "${hostLinker}"' --config "host.runner = '$CARGO_HOST_RUNNER'"`
-		: `cargo`;
-	// --target is required for host.runner to apply to build scripts.
-	const targetFlag = proxy ? `--target "$RUST_TARGET"` : "";
-	const insertedFlags = [targetFlag, ...featureFlags].filter(Boolean).join(" ");
-	// Symlink target/<triple>/<profile>/* into target/<profile>/ for plain-cargo compat.
-	// FIXME - this is illegible?
+	// Use the host's cargo and let it resolve rustc via rust-toolchain.toml.
+	// This keeps cargo's per-crate fingerprint identical to a plain user-invoked
+	// `cargo build`, so artifacts in target/ are reused across both entrypoints.
+	const cargoCmd = `cargo`;
+	const insertedFlags = featureFlags.filter(Boolean).join(" ");
 	const execLine = insertedFlags
-		? proxy
-			? `${cargoCmd} "$1" ${insertedFlags} "\${@:2}"
-__cargo_status=$?
-for __f in "target/$RUST_TARGET/debug/"* "target/$RUST_TARGET/release/"*; do
-  [ -f "$__f" ] && [ -x "$__f" ] || continue
-  __name=$(basename "$__f")
-  case "$__name" in *.*) continue;; esac
-  __rel=$(echo "$__f" | sed "s|^target/|../|")
-  __dir=$(dirname "$__f" | sed "s|^target/$RUST_TARGET/||")
-  ln -sf "$__rel" "target/$__dir/$__name" 2>/dev/null || true
-done
-exit $__cargo_status`
-			: `exec ${cargoCmd} "$1" ${insertedFlags} "\${@:2}"`
+		? `exec ${cargoCmd} "$1" ${insertedFlags} "\${@:2}"`
 		: `exec ${cargoCmd} "$@"`;
 
 	// Only "set" mutations; prefix/suffix would inherit `tg run` SDK PATH entries
