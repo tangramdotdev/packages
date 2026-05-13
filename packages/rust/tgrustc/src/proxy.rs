@@ -518,15 +518,27 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		prepend_to_path(&mut env, prefix);
 	}
 
-	// Build scripts such as `libc/build.rs` shell out to `rustc --version`, so
-	// the tangram-managed toolchain's `bin/` must be on PATH in the runner
-	// sandbox. Strip the trailing `/bin/rustc` from `TGRUSTC_TANGRAM_RUSTC` to
-	// recover the toolchain root, then prepend `<toolchain>/bin`.
-	if let Ok(rustc_path) = std::env::var("TGRUSTC_TANGRAM_RUSTC")
-		&& let Some(toolchain_bin) = rustc_path.strip_suffix("/rustc")
-	{
-		let prefix = tangram_std::unrender(toolchain_bin)?.components;
-		prepend_to_path(&mut env, prefix);
+	// Cargo propagates `RUSTC` and `CARGO` (host rustup paths) to build
+	// scripts; in the runner sandbox those paths don't exist. Rewrite both to
+	// the tangram-wrapped toolchain artifact and prepend its `bin/` to PATH so
+	// scripts that shell out to `rustc --version` or `cargo metadata` resolve
+	// inside the sandbox.
+	if let Ok(rustc_path) = std::env::var("TGRUSTC_TANGRAM_RUSTC") {
+		let rustc_template = tangram_std::unrender(&rustc_path)?;
+		env.insert("RUSTC".to_owned(), rustc_template.into());
+		if let Some(toolchain_bin) = rustc_path.strip_suffix("/rustc") {
+			let bin_template = tangram_std::unrender(toolchain_bin)?;
+			let mut cargo_components = bin_template.components.clone();
+			cargo_components.push("/cargo".to_owned().into());
+			env.insert(
+				"CARGO".to_owned(),
+				tg::Template {
+					components: cargo_components,
+				}
+				.into(),
+			);
+			prepend_to_path(&mut env, bin_template.components);
+		}
 	}
 
 	// Caller-injected tool paths unreachable via standard PATH mutations.

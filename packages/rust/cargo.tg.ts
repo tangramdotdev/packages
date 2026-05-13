@@ -315,7 +315,8 @@ VENDORCFG`;
 			channel: effectiveChannel,
 		});
 		const hostRunner = useHostRunner
-			? await tg`export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"`
+			? await tg`export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"
+export PATH="${sandboxSdk}/bin:$PATH"`
 			: "";
 		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
 export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"

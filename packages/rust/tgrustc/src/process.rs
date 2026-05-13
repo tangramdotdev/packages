@@ -182,7 +182,7 @@ static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 			let target = PathBuf::from(source_dir).join("target");
 			target.exists().then_some(target)
 		})?;
-	let key = checkin_cache_key(&target_dir.to_string_lossy());
+	let key = path_hash_key(&target_dir.to_string_lossy());
 	let dir = std::env::temp_dir().join(format!("tgrustc-cache-{key}"));
 	std::fs::create_dir_all(&dir).ok()?;
 	Some(dir)
@@ -190,7 +190,7 @@ static CHECKIN_CACHE_DIR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 
 pub(crate) fn read_checkin_cache(path: &str) -> Option<tg::artifact::Id> {
 	let cache_dir = CHECKIN_CACHE_DIR.as_ref()?;
-	let key = checkin_cache_key(path);
+	let key = checkin_cache_key(path)?;
 	let contents = std::fs::read_to_string(cache_dir.join(key)).ok()?;
 	contents.trim().parse().ok()
 }
@@ -200,15 +200,39 @@ pub(crate) fn write_checkin_cache(path: &str, artifact: &tg::Artifact) {
 	let Some(cache_dir) = CHECKIN_CACHE_DIR.as_ref() else {
 		return;
 	};
-	let key = checkin_cache_key(path);
+	let Some(key) = checkin_cache_key(path) else {
+		return;
+	};
 	let tmp = cache_dir.join(format!("{key}.{}", std::process::id()));
 	if std::fs::write(&tmp, artifact.id().to_string()).is_ok() {
 		std::fs::rename(&tmp, cache_dir.join(key)).ok();
 	}
 }
 
-/// FNV-1a (not `DefaultHasher`, which is randomized per process).
-fn checkin_cache_key(path: &str) -> String {
+/// FNV-1a (not `DefaultHasher`, which is randomized per process). Includes the
+/// file's mtime + size so the cache self-invalidates when cargo rewrites an
+/// output: stale entries (e.g. an rlib from a prior tgrustc run) would
+/// otherwise let a follow-up build resolve an extern dep to an artifact whose
+/// metadata hash no longer matches what's at the path.
+fn checkin_cache_key(path: &str) -> Option<String> {
+	use std::hash::{Hash as _, Hasher as _};
+	let meta = std::fs::metadata(path).ok()?;
+	let mtime = meta
+		.modified()
+		.ok()?
+		.duration_since(std::time::UNIX_EPOCH)
+		.ok()?
+		.as_nanos();
+	let size = meta.len();
+	let mut hasher = fnv::FnvHasher::default();
+	path.hash(&mut hasher);
+	mtime.hash(&mut hasher);
+	size.hash(&mut hasher);
+	Some(format!("{:016x}", hasher.finish()))
+}
+
+/// Path-only FNV-1a hash for naming the per-target-dir cache root.
+fn path_hash_key(path: &str) -> String {
 	use std::hash::{Hash as _, Hasher as _};
 	let mut hasher = fnv::FnvHasher::default();
 	path.hash(&mut hasher);
