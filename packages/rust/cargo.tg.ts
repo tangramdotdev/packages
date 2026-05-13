@@ -348,7 +348,7 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 	const cargoCmd = useHostRunner
 		? `cargo -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config 'host.linker = "${hostLinker}"' --config "host.runner = '$CARGO_HOST_RUNNER'"`
 		: `cargo`;
-	const targetFlag = useHostRunner ? `--target "$RUST_TARGET"` : "";
+	const targetFlag = "";
 	const insertedFlags = [targetFlag, ...featureFlags].filter(Boolean).join(" ");
 	const execLine = insertedFlags
 		? `exec ${cargoCmd} "$1" ${insertedFlags} "\${@:2}"`
