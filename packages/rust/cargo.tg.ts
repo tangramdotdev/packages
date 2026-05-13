@@ -212,6 +212,23 @@ export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
 	const target = target_ ? rustTriple(target_) : rustHost;
 	const crossCompiling = target !== rustHost;
 
+	// Hybrid proxy mode needs `-Zhost-config` to wire `host.runner` to the
+	// tgrustc runner; that flag is nightly-only. The in-sandbox compiler must
+	// match the host's rustup nightly bit-for-bit (same upstream archive) so
+	// dep rlibs pass cargo's fingerprint check on a plain `cargo build`.
+	const detectedChannel = source
+		? await readToolchainChannel(source)
+		: undefined;
+	const effectiveChannel = channel_ ?? detectedChannel ?? "stable";
+	const isNightly =
+		effectiveChannel === "nightly" || effectiveChannel.startsWith("nightly-");
+	const useHostRunner = proxy && isNightly;
+	if (proxy && !isNightly) {
+		console.warn(
+			`cargo.run: proxy enabled with channel="${effectiveChannel}"; build-script sandboxing requires nightly (host.runner needs -Zhost-config). External-dep caching via tgrustc is still active.`,
+		);
+	}
+
 	let vendorSetup: string | tg.Template = "";
 	if (cargoLock || useCargoVendor) {
 		let cargoConfig: tg.Template;
@@ -287,18 +304,26 @@ VENDORCFG`;
 		}
 		const sandboxSdk = await tg.build(std.sdk, ...sdkArgs);
 
-		// Transparent caching: cargo runs as the user's host toolchain (so
-		// fingerprints match a plain `cargo build`), with tgrustc inserted as
-		// RUSTC_WRAPPER. tgrustc detects the host rustc from its first arg,
-		// checks the rustup toolchain in as a tangram artifact, and uses that
-		// artifact inside the sandbox so dep rlibs match the host rustc.
-		// Workspace crates pass through to host rustc directly via
-		// TGRUSTC_PASSTHROUGH_PROJECT_DIR.
+		// `TGRUSTC_TANGRAM_RUSTC` is consumed by the proxy when spawning inner
+		// sandboxed processes; the host's cargo still resolves `rustc` via
+		// rustup (no `RUSTC` override) so cargo's per-crate fingerprint matches
+		// a plain `cargo build`. Pinning the same channel on both sides means
+		// the two binaries come from the same upstream archive and produce
+		// ABI-identical rlibs.
+		const toolchainDir = await tg.build(self, {
+			host: rustHost,
+			channel: effectiveChannel,
+		});
+		const hostRunner = useHostRunner
+			? await tg`export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"`
+			: "";
 		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
 export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"
 export TGRUSTC_RUN_MODE=1
+export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
 export TGRUSTC_SOURCE_DIR="$PWD"
+${hostRunner}
 # Snapshot host env names so the proxy can identify cargo:rustc-env additions.
 export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
 env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
@@ -312,11 +337,18 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 		featureFlags.push(`--features "${features.join(",")}"`);
 	}
 
-	// Use the host's cargo and let it resolve rustc via rust-toolchain.toml.
-	// This keeps cargo's per-crate fingerprint identical to a plain user-invoked
-	// `cargo build`, so artifacts in target/ are reused across both entrypoints.
-	const cargoCmd = `cargo`;
-	const insertedFlags = featureFlags.filter(Boolean).join(" ");
+	// Host cargo resolves rustc via rust-toolchain.toml so its fingerprint
+	// matches a plain `cargo build`. When host.runner is enabled, the
+	// `-Zhost-config`/`-Ztarget-applies-to-host` nightly flags route build-
+	// script invocations through `tgrustc runner`; `--target` is required for
+	// host.runner to actually apply to build scripts (stable cargo would error
+	// on the `-Z` flags, so we only emit them in hybrid mode).
+	const hostLinker = std.triple.os(rustHost) === "darwin" ? "clang" : "gcc";
+	const cargoCmd = useHostRunner
+		? `cargo -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config 'host.linker = "${hostLinker}"' --config "host.runner = '$CARGO_HOST_RUNNER'"`
+		: `cargo`;
+	const targetFlag = useHostRunner ? `--target "$RUST_TARGET"` : "";
+	const insertedFlags = [targetFlag, ...featureFlags].filter(Boolean).join(" ");
 	const execLine = insertedFlags
 		? `exec ${cargoCmd} "$1" ${insertedFlags} "\${@:2}"`
 		: `exec ${cargoCmd} "$@"`;
