@@ -518,6 +518,17 @@ pub(crate) async fn run_runner() -> tg::Result<()> {
 		prepend_to_path(&mut env, prefix);
 	}
 
+	// Build scripts such as `libc/build.rs` shell out to `rustc --version`, so
+	// the tangram-managed toolchain's `bin/` must be on PATH in the runner
+	// sandbox. Strip the trailing `/bin/rustc` from `TGRUSTC_TANGRAM_RUSTC` to
+	// recover the toolchain root, then prepend `<toolchain>/bin`.
+	if let Ok(rustc_path) = std::env::var("TGRUSTC_TANGRAM_RUSTC")
+		&& let Some(toolchain_bin) = rustc_path.strip_suffix("/rustc")
+	{
+		let prefix = tangram_std::unrender(toolchain_bin)?.components;
+		prepend_to_path(&mut env, prefix);
+	}
+
 	// Caller-injected tool paths unreachable via standard PATH mutations.
 	if let Ok(extra_path) = std::env::var("TGRUSTC_RUNNER_EXTRA_PATH") {
 		let prefix = tangram_std::unrender(&extra_path)?.components;
