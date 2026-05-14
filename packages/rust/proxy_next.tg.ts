@@ -8,6 +8,7 @@ import cargoLock from "./tgrustc-next/Cargo.lock" with { type: "file" };
 import src from "./tgrustc-next/src" with { type: "directory" };
 
 import probeFixture from "./tgrustc-next/tests/probe" with { type: "directory" };
+import tests from "./tests" with { type: "directory" };
 
 /** Same layout trick as proxy.tg.ts: `../../std` from tgrustc-next's Cargo.toml resolves to the std Rust workspace. */
 export const source = async () =>
@@ -30,6 +31,39 @@ export const proxyNext = async (...args: std.Args<cargo.Arg>) =>
 		},
 		...args,
 	);
+
+/** Phase-2: workspace with cli + greeting lib. Exercises --extern and -L. */
+export const testWorkspace = async () => {
+	const wrapper = await proxyNext();
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+
+	const result = await cargo.build({
+		source,
+		proxy: false,
+		captureStderr: true,
+		verbose: true,
+		env: {
+			RUSTC_WRAPPER: tg`${wrapper}/bin/tgrustc-next`,
+		},
+	});
+	console.log("testWorkspace result", result.id);
+
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	if (stderrLog) {
+		const text = await stderrLog.text;
+		console.log("cargo stderr (first 4000 chars):\n", text.slice(0, 4000));
+	}
+
+	const out = await $`cli | tee ${tg.output}`.env(result).then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(
+		text.trim() === "Hello from a workspace!",
+		`unexpected output: ${text}`,
+	);
+	return result;
+};
 
 /** Phase-1 probe: build a tiny single-bin cargo project with tgrustc-next as RUSTC_WRAPPER. */
 export const testProbe = async () => {

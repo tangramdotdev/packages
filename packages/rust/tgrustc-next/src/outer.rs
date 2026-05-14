@@ -9,21 +9,21 @@ use tokio::io::AsyncWriteExt;
 pub async fn run() -> tg::Result<()> {
 	let args = Args::parse()?;
 
-	let rustc_path = PathBuf::from(&args.rustc);
-	// Cargo invokes the wrapper for query commands like `rustc -vV` with the
-	// rustc binary as a bare name (resolved via PATH). We can't sandbox those
-	// because we have no path to checkin; passthrough instead.
-	let Some(toolchain_dir) = rustc_path.parent().and_then(Path::parent) else {
-		use std::os::unix::process::CommandExt as _;
-		let mut cmd = std::process::Command::new(&args.rustc);
-		if let Some(out_dir) = &args.out_dir {
-			cmd.arg("--out-dir").arg(out_dir);
-		}
-		cmd.args(&args.passthrough);
-		let error = cmd.exec();
-		return Err(tg::error!("failed to exec rustc: {error}"));
-	};
-	let toolchain_dir = toolchain_dir.to_path_buf();
+	// Cargo passes the rustc binary either as an absolute path (host `cargo
+	// build`) or as a bare name resolved via PATH (cargo inside a tangram
+	// sandbox). Normalize both to an absolute path so we can derive the
+	// toolchain artifact for sandboxing.
+	let rustc_path = resolve_rustc(&args.rustc)?;
+	let toolchain_dir = rustc_path
+		.parent()
+		.and_then(Path::parent)
+		.ok_or_else(|| {
+			tg::error!(
+				"cannot derive toolchain root from rustc path: {}",
+				rustc_path.display()
+			)
+		})?
+		.to_path_buf();
 
 	let source_dir = std::env::current_dir()
 		.map_err(|error| tg::error!("failed to read cwd: {error}"))?;
@@ -47,23 +47,39 @@ pub async fn run() -> tg::Result<()> {
 	]);
 	let mut spawn_args: tg::value::Array = Vec::with_capacity(args.passthrough.len() + 1);
 	spawn_args.push(tg::Value::Template(rustc_template));
-	for arg in &args.passthrough {
+	let mut iter = args.passthrough.iter();
+	while let Some(arg) = iter.next() {
+		if arg == "--extern" {
+			let value = iter
+				.next()
+				.ok_or_else(|| tg::error!("--extern was the last argument; expected a value"))?;
+			spawn_args.push(tg::Value::String("--extern".to_owned()));
+			spawn_args.push(rewrite_extern(value).await?);
+			continue;
+		}
 		spawn_args.push(rewrite_arg(arg, &source_artifact, &source_dir));
 	}
 
-	let mut env: tg::value::Map = std::env::vars()
-		.map(|(k, v)| (k, tg::Value::String(v)))
-		.collect();
+	// `tg::process::env()` reconstitutes typed values from the parent process's
+	// `TANGRAM_ENV_*` shadow vars and yields each name exactly once without the
+	// reserved prefix. Doing this by hand (e.g. `std::env::vars()`) both loses
+	// the typed values and leaks the reserved prefix back to the child.
+	let mut env = tg::process::env::env()?;
 	env.insert(
 		"TGRUSTC_NEXT_DRIVER".to_owned(),
 		tg::Value::String("1".to_owned()),
 	);
 
+	let name = args
+		.crate_name
+		.as_deref()
+		.map_or_else(|| "rustc".to_owned(), |c| format!("rustc {c}"));
 	let process_arg = tg::process::Arg {
 		args: spawn_args,
 		env,
 		executable: Some(executable),
 		host: Some(crate::host().to_owned()),
+		name: Some(name),
 		sandbox: Some(tg::process::SandboxArg::Bool(true)),
 		stderr: tg::process::Stdio::Log,
 		stdin: tg::process::Stdio::Null,
@@ -86,7 +102,7 @@ pub async fn run() -> tg::Result<()> {
 			"tgrustc-next: sandbox exited {}. tangram log {process_id}",
 			wait.exit
 		);
-		std::process::exit(wait.exit.try_into().unwrap_or(1));
+		std::process::exit(wait.exit.into());
 	}
 
 	let output_dir: tg::Directory = wait
@@ -143,6 +159,53 @@ async fn checkout_outputs(build: &tg::Directory, out_dir: &Path) -> tg::Result<(
 	Ok(())
 }
 
+/// Rewrite `name=/path/to/libfoo.rlib` (the value following `--extern`) so it
+/// resolves inside the child sandbox. Rustc inspects the filename to choose a
+/// loader (`lib*.rlib`, `lib*.so`, ...) so we cannot just point at the bare
+/// `fil_<id>` artifact; we wrap the file in a single-entry directory keyed by
+/// its original filename and emit `name=<dir-artifact>/<filename>`.
+async fn rewrite_extern(value: &str) -> tg::Result<tg::Value> {
+	let Some((name, path)) = value.split_once('=') else {
+		// `--extern name` with no value is valid rustc syntax (forces ABI compat
+		// without supplying a path). Pass through unchanged.
+		return Ok(tg::Value::String(value.to_owned()));
+	};
+	let file_path = Path::new(path);
+	let filename = file_path
+		.file_name()
+		.and_then(|s| s.to_str())
+		.ok_or_else(|| tg::error!("--extern path has no filename: {path}"))?
+		.to_owned();
+	let artifact = checkin(file_path).await?;
+	let entries: BTreeMap<String, tg::Artifact> = [(filename.clone(), artifact)].into();
+	let wrapper = tg::Directory::with_entries(entries);
+	let template = tg::Template::with_components([
+		tg::template::Component::String(format!("{name}=")),
+		tg::template::Component::Artifact(wrapper.into()),
+		tg::template::Component::String(format!("/{filename}")),
+	]);
+	Ok(tg::Value::Template(template))
+}
+
+/// Resolve a rustc invocation to an absolute filesystem path. Cargo passes a
+/// bare name when invoking the wrapper from inside a tangram sandbox (rustc
+/// lives on PATH); on the host it passes the full path.
+fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
+	let candidate = Path::new(rustc);
+	if candidate.is_absolute() {
+		return Ok(candidate.to_path_buf());
+	}
+	let path = std::env::var_os("PATH")
+		.ok_or_else(|| tg::error!("PATH is not set; cannot resolve rustc binary"))?;
+	for dir in std::env::split_paths(&path) {
+		let candidate = dir.join(rustc);
+		if candidate.is_file() {
+			return Ok(candidate);
+		}
+	}
+	Err(tg::error!("could not find {rustc} on PATH"))
+}
+
 async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {
 	tg::checkin(tg::checkin::Arg {
 		options: tg::checkin::Options {
@@ -162,10 +225,10 @@ async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {
 /// relative to the package source dir; rewrite that single arg to a template
 /// pointing into the source artifact so the sandbox can find it.
 fn rewrite_arg(arg: &str, source_artifact: &tg::Artifact, source_dir: &Path) -> tg::Value {
-	if !arg.ends_with(".rs") {
+	let path = Path::new(arg);
+	if path.extension().is_none_or(|ext| ext != "rs") {
 		return tg::Value::String(arg.to_owned());
 	}
-	let path = Path::new(arg);
 	let absolute = if path.is_absolute() {
 		path.to_path_buf()
 	} else {

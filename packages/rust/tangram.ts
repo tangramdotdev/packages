@@ -8,7 +8,10 @@ export * as build from "./build.tg.ts";
 import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
 
-export { testProbe as testProxyNext } from "./proxy_next.tg.ts";
+export {
+	testProbe as testProxyNext,
+	testWorkspace as testProxyNextWorkspace,
+} from "./proxy_next.tg.ts";
 
 import * as cargo_ from "./cargo.tg.ts";
 export * as cargo from "./cargo.tg.ts";
