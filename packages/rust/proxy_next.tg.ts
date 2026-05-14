@@ -32,6 +32,31 @@ export const proxyNext = async (...args: std.Args<cargo.Arg>) =>
 		...args,
 	);
 
+/** Phase-4: workspace with proc-macro crate + crates.io deps. */
+export const testProcMacroDeps = async () => {
+	const wrapper = await proxyNext();
+	const source = await tests.get("hello-proc-macro-deps").then(tg.Directory.expect);
+
+	const result = await cargo.build({
+		source,
+		proxy: false,
+		captureStderr: true,
+		env: {
+			RUSTC_WRAPPER: tg`${wrapper}/bin/tgrustc-next`,
+			CARGO_BUILD_PIPELINING: "false",
+		},
+	});
+	console.log("testProcMacroDeps result", result.id);
+
+	const out = await $`app | tee ${tg.output}`.env(result).then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(
+		text.trim() === "Hello from Greeter!",
+		`unexpected output: ${text}`,
+	);
+	return result;
+};
+
 /** Phase-3: single crate with build.rs that writes generated.rs into OUT_DIR. */
 export const testCodegen = async () => {
 	const wrapper = await proxyNext();

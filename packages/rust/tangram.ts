@@ -11,6 +11,7 @@ export * as proxy from "./proxy.tg.ts";
 export {
 	testCodegen as testProxyNextCodegen,
 	testProbe as testProxyNext,
+	testProcMacroDeps as testProxyNextProcMacroDeps,
 	testWorkspace as testProxyNextWorkspace,
 } from "./proxy_next.tg.ts";
 

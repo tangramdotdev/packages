@@ -40,25 +40,13 @@ pub async fn run() -> tg::Result<()> {
 		.map_err(|_| tg::error!("driver artifact must be a file"))?
 		.into();
 
-	// argv[0] of the spawned process: the real rustc inside the toolchain artifact.
-	let rustc_template = tg::Template::with_components([
-		tg::template::Component::Artifact(toolchain_artifact.clone()),
-		tg::template::Component::String("/bin/rustc".to_owned()),
-	]);
-	let mut spawn_args: tg::value::Array = Vec::with_capacity(args.passthrough.len() + 1);
-	spawn_args.push(tg::Value::Template(rustc_template));
-	let mut iter = args.passthrough.iter();
-	while let Some(arg) = iter.next() {
-		if arg == "--extern" {
-			let value = iter
-				.next()
-				.ok_or_else(|| tg::error!("--extern was the last argument; expected a value"))?;
-			spawn_args.push(tg::Value::String("--extern".to_owned()));
-			spawn_args.push(rewrite_extern(value).await?);
-			continue;
-		}
-		spawn_args.push(rewrite_arg(arg, &source_artifact, &source_dir));
-	}
+	let spawn_args = build_spawn_args(
+		&args.passthrough,
+		&toolchain_artifact,
+		&source_artifact,
+		&source_dir,
+	)
+	.await?;
 
 	// `tg::process::env()` reconstitutes typed values from the parent process's
 	// `TANGRAM_ENV_*` shadow vars and yields each name exactly once without the
@@ -180,11 +168,74 @@ async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> 
 	Ok(())
 }
 
-/// Rewrite `name=/path/to/libfoo.rlib` (the value following `--extern`) so it
-/// resolves inside the child sandbox. Rustc inspects the filename to choose a
-/// loader (`lib*.rlib`, `lib*.so`, ...) so we cannot just point at the bare
-/// `fil_<id>` artifact; we wrap the file in a single-entry directory keyed by
-/// its original filename and emit `name=<dir-artifact>/<filename>`.
+/// Assemble the spawn-side argv: `[rustc-template, ...rewritten passthrough]`.
+/// `--extern crate=path` and `-L kind=path` arguments are rewritten to refer to
+/// content-addressed artifacts; positional `.rs` source files are rewritten to
+/// reference the source artifact; everything else is forwarded verbatim.
+async fn build_spawn_args(
+	passthrough: &[String],
+	toolchain_artifact: &tg::Artifact,
+	source_artifact: &tg::Artifact,
+	source_dir: &Path,
+) -> tg::Result<tg::value::Array> {
+	let rustc_template = tg::Template::with_components([
+		tg::template::Component::Artifact(toolchain_artifact.clone()),
+		tg::template::Component::String("/bin/rustc".to_owned()),
+	]);
+	let mut spawn_args: tg::value::Array = Vec::with_capacity(passthrough.len() + 1);
+	spawn_args.push(tg::Value::Template(rustc_template));
+	let mut iter = passthrough.iter();
+	while let Some(arg) = iter.next() {
+		if arg == "--extern" {
+			let value = iter
+				.next()
+				.ok_or_else(|| tg::error!("--extern was the last argument; expected a value"))?;
+			spawn_args.push(tg::Value::String("--extern".to_owned()));
+			spawn_args.push(rewrite_extern(value).await?);
+			continue;
+		}
+		if arg == "-L" {
+			let value = iter
+				.next()
+				.ok_or_else(|| tg::error!("-L was the last argument; expected a value"))?;
+			spawn_args.push(tg::Value::String("-L".to_owned()));
+			spawn_args.push(rewrite_search_path(value).await?);
+			continue;
+		}
+		spawn_args.push(rewrite_arg(arg, source_artifact, source_dir));
+	}
+	Ok(spawn_args)
+}
+
+/// Rewrite the value following `-L` (e.g. `dependency=/host/path`,
+/// `native=/host/path`, or a bare `/host/path`) so the directory resolves
+/// inside the child sandbox. Even with `--extern` providing the explicit path,
+/// rustc still consults `-L dependency=` paths when loading a `.rmeta` to
+/// locate the sibling `.rlib`/`.so`; without this the build fails with E0463.
+async fn rewrite_search_path(value: &str) -> tg::Result<tg::Value> {
+	let (prefix, path) = match value.split_once('=') {
+		Some((kind, p)) => (format!("{kind}="), p),
+		None => (String::new(), value),
+	};
+	let p = Path::new(path);
+	if !p.is_absolute() || !p.is_dir() {
+		return Ok(tg::Value::String(value.to_owned()));
+	}
+	let artifact = checkin(p).await?;
+	let template = tg::Template::with_components([
+		tg::template::Component::String(prefix),
+		tg::template::Component::Artifact(artifact),
+	]);
+	Ok(tg::Value::Template(template))
+}
+
+/// Rewrite `name=/path/to/libfoo-<hash>.<ext>` (the value following `--extern`)
+/// so it resolves inside the child sandbox. Rustc both (a) inspects the
+/// filename to choose a loader (`lib*.rlib`, `lib*.so`, `lib*.rmeta`, ...) and
+/// (b) when given a `.rmeta`, looks for the sibling `.rlib`/`.so` in the same
+/// directory for the actual code. So we cannot wrap the single file alone; we
+/// pull every sibling with the same stem (`libfoo-<hash>`) into a directory
+/// artifact and point `--extern` at the named file inside it.
 async fn rewrite_extern(value: &str) -> tg::Result<tg::Value> {
 	let Some((name, path)) = value.split_once('=') else {
 		// `--extern name` with no value is valid rustc syntax (forces ABI compat
@@ -197,9 +248,45 @@ async fn rewrite_extern(value: &str) -> tg::Result<tg::Value> {
 		.and_then(|s| s.to_str())
 		.ok_or_else(|| tg::error!("--extern path has no filename: {path}"))?
 		.to_owned();
-	let artifact = checkin(file_path).await?;
-	let entries: BTreeMap<String, tg::Artifact> = [(filename.clone(), artifact)].into();
+	let parent = file_path
+		.parent()
+		.ok_or_else(|| tg::error!("--extern path has no parent: {path}"))?;
+	// `lib<crate>-<hash>` — strip just the extension. Filenames without an
+	// extension fall back to using the whole filename as the stem.
+	let stem = file_path
+		.file_stem()
+		.and_then(|s| s.to_str())
+		.ok_or_else(|| tg::error!("--extern path has no stem: {path}"))?;
+
+	let mut entries: BTreeMap<String, tg::Artifact> = BTreeMap::new();
+	let mut dir_iter = tokio::fs::read_dir(parent)
+		.await
+		.map_err(|error| tg::error!("failed to scan extern parent {}: {error}", parent.display()))?;
+	while let Some(entry) = dir_iter
+		.next_entry()
+		.await
+		.map_err(|error| tg::error!("failed to iterate {}: {error}", parent.display()))?
+	{
+		let sibling = entry.file_name();
+		let Some(sibling_str) = sibling.to_str() else {
+			continue;
+		};
+		// A sibling is "same crate" iff its stem matches our stem; this catches
+		// `lib<crate>-<hash>.rmeta`, `.rlib`, `.so`, `.dylib` together while
+		// excluding other crates' files in the shared deps dir.
+		let sibling_stem = Path::new(sibling_str)
+			.file_stem()
+			.and_then(|s| s.to_str())
+			.unwrap_or(sibling_str);
+		if sibling_stem != stem {
+			continue;
+		}
+		let artifact = checkin(&entry.path()).await?;
+		entries.insert(sibling_str.to_owned(), artifact);
+	}
+
 	let wrapper = tg::Directory::with_entries(entries);
+	wrapper.store().await?;
 	let template = tg::Template::with_components([
 		tg::template::Component::String(format!("{name}=")),
 		tg::template::Component::Artifact(wrapper.into()),
