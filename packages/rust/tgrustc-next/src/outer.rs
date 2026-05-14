@@ -65,6 +65,7 @@ pub async fn run() -> tg::Result<()> {
 	// reserved prefix. Doing this by hand (e.g. `std::env::vars()`) both loses
 	// the typed values and leaks the reserved prefix back to the child.
 	let mut env = tg::process::env::env()?;
+	rewrite_dir_env(&mut env, "OUT_DIR").await?;
 	env.insert(
 		"TGRUSTC_NEXT_DRIVER".to_owned(),
 		tg::Value::String("1".to_owned()),
@@ -156,6 +157,26 @@ async fn checkout_outputs(build: &tg::Directory, out_dir: &Path) -> tg::Result<(
 	while let Some(joined) = set.join_next().await {
 		joined.map_err(|error| tg::error!("checkout task panicked: {error}"))??;
 	}
+	Ok(())
+}
+
+/// If `env[key]` is a host-path string pointing at an existing directory,
+/// checkin the directory and replace the value with an artifact-bearing
+/// template so the path resolves inside the child sandbox. This is what makes
+/// build-script-generated content (cargo writes it to `OUT_DIR`) visible to
+/// the proxied rustc invocation that consumes it via `env!("OUT_DIR")`.
+async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> {
+	let Some(tg::Value::String(path_str)) = env.get(key) else {
+		return Ok(());
+	};
+	let path = Path::new(path_str);
+	if !path.is_absolute() || !path.is_dir() {
+		return Ok(());
+	}
+	let artifact = checkin(path).await?;
+	let template =
+		tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
+	env.insert(key.to_owned(), tg::Value::Template(template));
 	Ok(())
 }
 

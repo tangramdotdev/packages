@@ -9,6 +9,7 @@ import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
 
 export {
+	testCodegen as testProxyNextCodegen,
 	testProbe as testProxyNext,
 	testWorkspace as testProxyNextWorkspace,
 } from "./proxy_next.tg.ts";

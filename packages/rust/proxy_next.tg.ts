@@ -32,6 +32,31 @@ export const proxyNext = async (...args: std.Args<cargo.Arg>) =>
 		...args,
 	);
 
+/** Phase-3: single crate with build.rs that writes generated.rs into OUT_DIR. */
+export const testCodegen = async () => {
+	const wrapper = await proxyNext();
+	const source = await tests.get("hello-codegen").then(tg.Directory.expect);
+
+	const result = await cargo.build({
+		source,
+		proxy: false,
+		env: {
+			RUSTC_WRAPPER: tg`${wrapper}/bin/tgrustc-next`,
+		},
+	});
+	console.log("testCodegen result", result.id);
+
+	const out = await $`hello-codegen | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(
+		text.trim() === "generated at build time",
+		`unexpected output: ${text}`,
+	);
+	return result;
+};
+
 /** Phase-2: workspace with cli + greeting lib. Exercises --extern and -L. */
 export const testWorkspace = async () => {
 	const wrapper = await proxyNext();
