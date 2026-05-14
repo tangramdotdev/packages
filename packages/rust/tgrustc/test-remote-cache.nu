@@ -110,7 +110,10 @@ def main [
     let baseline_elapsed = (date now) - $baseline_start
     print $"  Cargo build: ($baseline_cargo_elapsed), total baseline: ($baseline_elapsed)"
 
-    # Step 3: Find the most recent run process with proxy children.
+    # Step 3: Find the most recent real-build process. The baseline above may
+    # have been a full cache hit (no new process created), so we look at
+    # recent processes that actually spawned a meaningful number of rustc
+    # children — those represent the cached state we can republish.
     print "Step 3: Finding run process in primary database..."
     let run_process = (find_run_process $tangram_dir)
     let child_count = (count_rustc_children $tangram_dir $run_process)
@@ -144,9 +147,9 @@ def main [
     let batch_size = 100
     let batches = ($all_processes | chunks $batch_size)
     for batch in $batches {
-        tangram push --eager --outputs $"--remote=($REMOTE_NAME)" ...$batch
+        tangram push --eager --outputs --recursive $"--remote=($REMOTE_NAME)" ...$batch
     }
-    print $"  Pushed ($all_processes | length) processes in ($batches | length) batches."
+    print $"  Pushed ($all_processes | length) processes \(--recursive) in ($batches | length) batches."
 
     # Clean up the remote on the primary server.
     tangram remote delete $REMOTE_NAME
@@ -191,10 +194,17 @@ def main [
     # Run the build. This is where the proxy processes should cache-hit.
     print "  Running cargo build..."
     let cargo_start = (date now)
-    bash -c $"cd ($workspace) && TANGRAM_URL=http://localhost:($fresh_port) TGRUSTC_TRACING=info tangram run ($fresh_cmd) -- build 2>&1 | tee ($rebuild_log)"
+    let fresh_run = (bash -c $"cd ($workspace) && TANGRAM_URL=http://localhost:($fresh_port) TGRUSTC_TRACING=info tangram run ($fresh_cmd) -- build 2>&1 | tee ($rebuild_log); exit ${PIPESTATUS[0]}" | complete)
     let cargo_elapsed = (date now) - $cargo_start
     let rebuild_elapsed = (date now) - $rebuild_start
     print $"  Cargo build: ($cargo_elapsed), total rebuild: ($rebuild_elapsed)"
+    if $fresh_run.exit_code != 0 {
+        print $"  FRESH BUILD FAILED with exit code ($fresh_run.exit_code)."
+        print $"  Fresh server preserved at ($FRESH_DIR) for inspection."
+        print $"  Server log: /tmp/tangram-serve-($fresh_port).log"
+        print $"  Build log:  ($rebuild_log)"
+        error make { msg: "fresh server build failed; cleanup skipped so the fresh server can be inspected" }
+    }
 
     # Step 8: Verify cache hits on the fresh server.
     # Count race outcomes from the server tracing log. When the remote wins
@@ -327,11 +337,14 @@ def kill_server [pid: int] {
     }
 }
 
-# Find the most recent run process with ~697 rustc children.
-def find_run_process [tangram_dir: string]: nothing -> string {
-    let result = (run_sql $tangram_dir "SELECT process FROM process_children WHERE json_extract(options, '$.name') LIKE 'rustc %' GROUP BY process ORDER BY rowid DESC LIMIT 1")
+# Find the most recent run process with at least `min_children` rustc
+# children. The baseline build may be a full cache hit (no new processes
+# created), so we look at recent real builds whose cached children we can
+# republish. The `min_children` floor filters out partial/test builds.
+def find_run_process [tangram_dir: string, min_children: int = 100]: nothing -> string {
+    let result = (run_sql $tangram_dir $"SELECT p.id FROM processes p JOIN \(SELECT process, count\(*) AS cnt FROM process_children WHERE json_extract\(options, '$.name') LIKE 'rustc %' GROUP BY process) c ON p.id = c.process WHERE c.cnt >= ($min_children) ORDER BY p.created_at DESC LIMIT 1")
     if ($result | is-empty) {
-        error make { msg: "No run process found with rustc children." }
+        error make { msg: $"No run process found with >= ($min_children) rustc children." }
     }
     $result
 }
