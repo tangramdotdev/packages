@@ -387,8 +387,8 @@ def do_cleanup [] {
     # server may have set on cached artifacts. Remove parent dirs too.
     let remote_parent = ($REMOTE_DIR | path dirname)
     let fresh_parent = ($FRESH_DIR | path dirname)
-    if ($remote_parent | path exists) { chmod -R +w $remote_parent; rm -rf $remote_parent }
-    if ($fresh_parent | path exists) { chmod -R +w $fresh_parent; rm -rf $fresh_parent }
+    if ($remote_parent | path exists) { chmod -R u+rwX $remote_parent; rm -rf $remote_parent }
+    if ($fresh_parent | path exists) { chmod -R u+rwX $fresh_parent; rm -rf $fresh_parent }
 
     # Remove test remote from primary server if it exists.
     try { tangram remote delete $REMOTE_NAME } catch { }
