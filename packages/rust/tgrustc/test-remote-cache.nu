@@ -147,9 +147,9 @@ def main [
     let batch_size = 100
     let batches = ($all_processes | chunks $batch_size)
     for batch in $batches {
-        tangram push --eager --outputs --recursive $"--remote=($REMOTE_NAME)" ...$batch
+        tangram push --eager --commands --outputs $"--remote=($REMOTE_NAME)" ...$batch
     }
-    print $"  Pushed ($all_processes | length) processes \(--recursive) in ($batches | length) batches."
+    print $"  Pushed ($all_processes | length) processes \(commands + outputs) in ($batches | length) batches."
 
     # Clean up the remote on the primary server.
     tangram remote delete $REMOTE_NAME
