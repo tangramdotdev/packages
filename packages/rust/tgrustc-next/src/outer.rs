@@ -28,15 +28,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 
 	let source_artifact = checkin(&source_dir).await?;
 	let toolchain_artifact = checkin(&toolchain_dir).await?;
-	let driver_artifact = checkin(
-		&std::env::current_exe()
-			.map_err(|error| tg::error!("failed to read current_exe: {error}"))?,
-	)
-	.await?;
-	let executable: tg::command::Executable = driver_artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("driver artifact must be a file"))?
-		.into();
+	let executable: tg::command::Executable = resolve_driver().await?;
 
 	let spawn_args = build_spawn_args(
 		&args.passthrough,
@@ -310,6 +302,29 @@ fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
 		}
 	}
 	Err(tg::error!("could not find {rustc} on PATH"))
+}
+
+/// Resolve the driver binary to use inside the sandbox. By default we check in
+/// `current_exe()`, but the host-built wrapper is dynamically linked against
+/// system glibc which the sandbox does not provide. Setting
+/// `TGRUSTC_NEXT_DRIVER_EXECUTABLE` to a tangram-built (and `std.wrap`-wrapped)
+/// driver path lets the test harness inject a sandbox-compatible binary
+/// without rebuilding the wrapper itself.
+async fn resolve_driver() -> tg::Result<tg::command::Executable> {
+	if let Ok(path) = std::env::var("TGRUSTC_NEXT_DRIVER_EXECUTABLE") {
+		let artifact = checkin(Path::new(&path)).await?;
+		return Ok(artifact
+			.try_unwrap_file()
+			.map_err(|_| tg::error!("TGRUSTC_NEXT_DRIVER_EXECUTABLE must point at a file"))?
+			.into());
+	}
+	let self_exe = std::env::current_exe()
+		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
+	let artifact = checkin(&self_exe).await?;
+	Ok(artifact
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("driver artifact must be a file"))?
+		.into())
 }
 
 async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {

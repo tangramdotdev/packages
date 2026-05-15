@@ -7,9 +7,11 @@ use tangram_client::prelude::*;
 
 /// Decide whether this rustc invocation should bypass the sandbox and exec
 /// directly on the host. Triggered when `TGRUSTC_PASSTHROUGH_PROJECT_DIR` is
-/// set (the `run_integration` Mode 2 contract) and the rustc source file
-/// lives inside that directory — i.e. it is a workspace-member compile, not a
-/// vendored external dependency.
+/// set (the `run_integration` Mode 2 contract) and either the rustc source
+/// file lives inside that directory (a workspace-member compile) or the
+/// invocation has no source file at all (a cargo probe like `rustc -vV` or
+/// `rustc --print sysroot`). Vendored external dependencies have a source
+/// file outside the project directory and go through the sandbox.
 pub fn applies(args: &Args) -> tg::Result<bool> {
 	let Ok(project_dir) = std::env::var("TGRUSTC_PASSTHROUGH_PROJECT_DIR") else {
 		return Ok(false);
@@ -29,7 +31,9 @@ pub fn applies(args: &Args) -> tg::Result<bool> {
 		};
 		return Ok(absolute.starts_with(&project_dir));
 	}
-	Ok(false)
+	// No source file present — this is a probe invocation (e.g. `rustc -vV`).
+	// Passthrough so cargo can interrogate the real toolchain.
+	Ok(true)
 }
 
 /// Re-exec the real rustc with the original argv (including the `--out-dir`
