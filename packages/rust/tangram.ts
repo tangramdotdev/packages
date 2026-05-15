@@ -13,6 +13,7 @@ export {
 	testProbe as testProxyNext,
 	testProcMacroDeps as testProxyNextProcMacroDeps,
 	testWorkspace as testProxyNextWorkspace,
+	testWorkspaceMode2 as testProxyNextWorkspaceMode2,
 } from "./proxy_next.tg.ts";
 
 import * as cargo_ from "./cargo.tg.ts";
