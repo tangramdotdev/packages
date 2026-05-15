@@ -3,6 +3,7 @@ use tangram_client::prelude::*;
 mod args;
 mod driver;
 mod outer;
+mod passthrough;
 
 fn main() {
 	if let Err(error) = main_inner() {
@@ -18,12 +19,21 @@ fn main_inner() -> tg::Result<()> {
 	}
 
 	// Outer wrapper (called by cargo as RUSTC_WRAPPER).
+	let args = args::Args::parse()?;
+
+	// Passthrough lets workspace-member compiles bypass the sandbox entirely
+	// when run_integration's Mode 2 sets TGRUSTC_PASSTHROUGH_PROJECT_DIR. We
+	// detect by checking whether the rustc source file lives inside that dir.
+	if passthrough::applies(&args)? {
+		return passthrough::exec(&args);
+	}
+
 	tg::init()?;
 	tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
 		.map_err(|error| tg::error!("failed to build tokio runtime: {error}"))?
-		.block_on(outer::run())
+		.block_on(outer::run(args))
 }
 
 #[must_use]

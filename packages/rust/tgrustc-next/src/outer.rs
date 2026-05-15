@@ -6,9 +6,7 @@ use std::{
 use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
-pub async fn run() -> tg::Result<()> {
-	let args = Args::parse()?;
-
+pub async fn run(args: Args) -> tg::Result<()> {
 	// Cargo passes the rustc binary either as an absolute path (host `cargo
 	// build`) or as a bare name resolved via PATH (cargo inside a tangram
 	// sandbox). Normalize both to an absolute path so we can derive the
