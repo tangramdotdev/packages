@@ -21,8 +21,8 @@ result_large_err = "allow"
 fnv = "1"
 futures = "0.3"
 rustix = { version = "1", features = ["stdio"] }
-tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "7ea8a4947bf7ba8f172d45d6fef742a654b2fe58" }
-tangram_futures = { git = "https://github.com/tangramdotdev/tangram", rev = "7ea8a4947bf7ba8f172d45d6fef742a654b2fe58" }
+tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "fb597c328f8e83f835f38da3b3831bd8d57e7bfb" }
+tangram_futures = { git = "https://github.com/tangramdotdev/tangram", rev = "fb597c328f8e83f835f38da3b3831bd8d57e7bfb" }
 glob = "0.3"
 tangram_std = { package = "common", path = "../../std/packages/common" }
 toml_edit = "0.23"

@@ -8,7 +8,7 @@ use tokio::io::AsyncWriteExt;
 pub(crate) struct SpawnResult {
 	pub(crate) output: tg::Directory,
 	pub(crate) process_id: tg::process::Id,
-	/// Cache hit (no token assigned).
+	/// Cache hit.
 	pub(crate) cached: bool,
 }
 
@@ -113,7 +113,7 @@ async fn spawn_and_wait_with_arg(
 			)
 		})?;
 
-	let cached = process.token().is_none();
+	let cached = process.cached().unwrap_or(false);
 
 	Ok(SpawnResult {
 		output,
