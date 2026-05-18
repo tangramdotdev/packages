@@ -27,6 +27,7 @@ export const proxyNext = async (...args: std.Args<cargo.Arg>) =>
 			source: source(),
 			manifestSubdir: "rust/tgrustc-next",
 			proxy: false,
+			profile: "dev",
 			useCargoVendor: true,
 		},
 		...args,

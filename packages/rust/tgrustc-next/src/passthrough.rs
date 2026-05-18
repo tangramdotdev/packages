@@ -17,8 +17,7 @@ pub fn applies(args: &Args) -> tg::Result<bool> {
 		return Ok(false);
 	};
 	let project_dir = PathBuf::from(project_dir);
-	let cwd = std::env::current_dir()
-		.map_err(|error| tg::error!("failed to read cwd: {error}"))?;
+	let cwd = std::env::current_dir().map_err(|error| tg::error!("failed to read cwd: {error}"))?;
 	for arg in &args.passthrough {
 		let path = Path::new(arg);
 		if path.extension().is_none_or(|ext| ext != "rs") {

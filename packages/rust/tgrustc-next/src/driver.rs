@@ -7,8 +7,8 @@ use tangram_client::prelude::*;
 /// creates `build/` and `log/` under that, redirects rustc's stdio into the
 /// log files, injects `--out-dir <build>`, then execs the real rustc.
 pub fn run() -> tg::Result<()> {
-	let output = std::env::var("TANGRAM_OUTPUT")
-		.map_err(|_| tg::error!("TANGRAM_OUTPUT is not set"))?;
+	let output =
+		std::env::var("TANGRAM_OUTPUT").map_err(|_| tg::error!("TANGRAM_OUTPUT is not set"))?;
 	let output = PathBuf::from(output);
 
 	let build = output.join("build");

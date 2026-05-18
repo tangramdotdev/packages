@@ -23,12 +23,18 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		})?
 		.to_path_buf();
 
-	let source_dir = std::env::current_dir()
-		.map_err(|error| tg::error!("failed to read cwd: {error}"))?;
+	let source_dir =
+		std::env::current_dir().map_err(|error| tg::error!("failed to read cwd: {error}"))?;
 
 	let source_artifact = checkin(&source_dir).await?;
 	let toolchain_artifact = checkin(&toolchain_dir).await?;
-	let executable: tg::command::Executable = resolve_driver().await?;
+	let self_exe = std::env::current_exe()
+		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
+	let driver_artifact = checkin(&self_exe).await?;
+	let executable: tg::command::Executable = driver_artifact
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("the driver artifact must be a file"))?
+		.into();
 
 	let spawn_args = build_spawn_args(
 		&args.passthrough,
@@ -152,8 +158,7 @@ async fn rewrite_dir_env(env: &mut tg::value::Map, key: &str) -> tg::Result<()> 
 		return Ok(());
 	}
 	let artifact = checkin(path).await?;
-	let template =
-		tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
+	let template = tg::Template::with_components([tg::template::Component::Artifact(artifact)]);
 	env.insert(key.to_owned(), tg::Value::Template(template));
 	Ok(())
 }
@@ -249,9 +254,9 @@ async fn rewrite_extern(value: &str) -> tg::Result<tg::Value> {
 		.ok_or_else(|| tg::error!("--extern path has no stem: {path}"))?;
 
 	let mut entries: BTreeMap<String, tg::Artifact> = BTreeMap::new();
-	let mut dir_iter = tokio::fs::read_dir(parent)
-		.await
-		.map_err(|error| tg::error!("failed to scan extern parent {}: {error}", parent.display()))?;
+	let mut dir_iter = tokio::fs::read_dir(parent).await.map_err(|error| {
+		tg::error!("failed to scan extern parent {}: {error}", parent.display())
+	})?;
 	while let Some(entry) = dir_iter
 		.next_entry()
 		.await
@@ -302,29 +307,6 @@ fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
 		}
 	}
 	Err(tg::error!("could not find {rustc} on PATH"))
-}
-
-/// Resolve the driver binary to use inside the sandbox. By default we check in
-/// `current_exe()`, but the host-built wrapper is dynamically linked against
-/// system glibc which the sandbox does not provide. Setting
-/// `TGRUSTC_NEXT_DRIVER_EXECUTABLE` to a tangram-built (and `std.wrap`-wrapped)
-/// driver path lets the test harness inject a sandbox-compatible binary
-/// without rebuilding the wrapper itself.
-async fn resolve_driver() -> tg::Result<tg::command::Executable> {
-	if let Ok(path) = std::env::var("TGRUSTC_NEXT_DRIVER_EXECUTABLE") {
-		let artifact = checkin(Path::new(&path)).await?;
-		return Ok(artifact
-			.try_unwrap_file()
-			.map_err(|_| tg::error!("TGRUSTC_NEXT_DRIVER_EXECUTABLE must point at a file"))?
-			.into());
-	}
-	let self_exe = std::env::current_exe()
-		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let artifact = checkin(&self_exe).await?;
-	Ok(artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("driver artifact must be a file"))?
-		.into())
 }
 
 async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {
@@ -387,4 +369,3 @@ async fn forward_logs(output_dir: &tg::Directory) -> tg::Result<()> {
 	}
 	Ok(())
 }
-
