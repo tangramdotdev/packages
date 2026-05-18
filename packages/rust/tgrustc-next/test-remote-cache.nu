@@ -95,28 +95,32 @@ def main [
     print $"  Run command: ($cmd_id)"
     print $"  Eval process: ($eval_process)"
 
-    # Step 3: Run cargo build on primary. Track timestamp so orphan rustc
-    # processes spawned by the wrapper can be located later.
+    # Step 3: Run cargo build on primary. Set TGRUSTC_NEXT_SPAWN_LOG so the
+    # wrapper records each spawned process id; the script can then enumerate
+    # sandbox spawns even when every one of them was a primary-cache hit (in
+    # which case process_children has no fresh row).
     print "Step 3: Running baseline build..."
     let baseline_log = "/tmp/tgnext-baseline-build.log"
-    let baseline_start_ts = (date now | format date "%s" | into int)
+    let spawn_log = "/tmp/tgnext-spawn-log.txt"
+    ^rm -f $spawn_log
     let baseline_start = (date now)
-    bash -c $"cd ($workspace_dir) && tangram run ($cmd_id) -- build 2>&1 | tee ($baseline_log)" o+e>| ignore
+    bash -c $"cd ($workspace_dir) && TGRUSTC_NEXT_SPAWN_LOG=($spawn_log) tangram run ($cmd_id) -- build 2>&1 | tee ($baseline_log)" o+e>| ignore
     let baseline_elapsed = (date now) - $baseline_start
-    let baseline_end_ts = (date now | format date "%s" | into int)
     print $"  Baseline cargo build: ($baseline_elapsed)"
 
-    # Step 4: Find sandbox rustc processes spawned during the baseline window.
+    # Step 4: Read sandbox spawn ids from the log.
     print "Step 4: Locating sandbox spawns..."
-    let orphan_rustc = (find_orphan_rustc $tangram_dir $baseline_start_ts $baseline_end_ts)
+    let orphan_rustc = if ($spawn_log | path exists) {
+        open $spawn_log | lines | where { |l| not ($l | is-empty) } | uniq
+    } else { [] }
     let eval_tree = (collect_tree $tangram_dir $eval_process)
     let all_processes = ($orphan_rustc | append $eval_tree | append [$eval_process] | uniq)
-    print $"  Orphan rustc spawns: ($orphan_rustc | length)"
-    print $"  Eval tree size:      ($eval_tree | length)"
-    print $"  Total to push:       ($all_processes | length)"
+    print $"  Sandbox rustc spawns: ($orphan_rustc | length)"
+    print $"  Eval tree size:       ($eval_tree | length)"
+    print $"  Total to push:        ($all_processes | length)"
 
     if ($orphan_rustc | length) < 1 {
-        error make { msg: "no orphan rustc spawns found in time window; tgrustc-next may not have routed to the sandbox" }
+        error make { msg: "no sandbox spawns recorded; check TGRUSTC_NEXT_SPAWN_LOG plumbing" }
     }
 
     # Step 5: Push to remote in batches.
@@ -154,11 +158,11 @@ def main [
     }
     let fresh_cmd_id = ($fresh_eval.stdout | str trim | lines | last)
     let rebuild_log = "/tmp/tgnext-fresh-build.log"
-    let rebuild_start_ts = (date now | format date "%s" | into int)
+    let fresh_spawn_log = "/tmp/tgnext-fresh-spawn-log.txt"
+    ^rm -f $fresh_spawn_log
     let rebuild_start = (date now)
-    let fresh_run = (bash -c $"cd ($workspace_dir) && TANGRAM_URL=http://localhost:($fresh_port) tangram run ($fresh_cmd_id) -- build 2>&1 | tee ($rebuild_log); exit ${PIPESTATUS[0]}" | complete)
+    let fresh_run = (bash -c $"cd ($workspace_dir) && TANGRAM_URL=http://localhost:($fresh_port) TGRUSTC_NEXT_SPAWN_LOG=($fresh_spawn_log) tangram run ($fresh_cmd_id) -- build 2>&1 | tee ($rebuild_log); exit ${PIPESTATUS[0]}" | complete)
     let rebuild_elapsed = (date now) - $rebuild_start
-    let rebuild_end_ts = (date now | format date "%s" | into int)
     if $fresh_run.exit_code != 0 {
         print $"  FRESH BUILD FAILED with exit code ($fresh_run.exit_code)."
         print $"  Fresh server preserved at ($FRESH_DIR) for inspection."
@@ -166,16 +170,21 @@ def main [
     }
     print $"  Fresh cargo build: ($rebuild_elapsed)"
 
-    # Step 8: Count cache hits on the fresh server.
-    # An orphan process is a cache hit if its row exists in the fresh DB but
-    # was originally created (`created_at`) before this rebuild started — i.e.
-    # the process was pulled from the remote rather than freshly spawned.
+    # Step 8: Verify cache hits by comparing primary's spawn ids with fresh's
+    # spawn ids. Identical ids mean the wrapper produced the same content-
+    # addressed key on both machines and the fresh server pulled the cached
+    # output from the remote.
     print ""
     print "Step 8: Verifying cache hits on fresh server..."
-    let fresh_orphans = (find_orphan_rustc $FRESH_DIR $rebuild_start_ts $rebuild_end_ts)
-    let fresh_cached = (count_pre_existing $FRESH_DIR $fresh_orphans $rebuild_start_ts)
-    let fresh_total = ($fresh_orphans | length)
-    print $"  Orphan rustc on fresh: ($fresh_total) total, ($fresh_cached) served from remote cache."
+    let fresh_spawns = if ($fresh_spawn_log | path exists) {
+        open $fresh_spawn_log | lines | where { |l| not ($l | is-empty) } | uniq
+    } else { [] }
+    let primary_set = ($orphan_rustc | uniq)
+    let fresh_set = ($fresh_spawns | uniq)
+    let intersect = ($fresh_set | where { |id| $id in $primary_set })
+    let fresh_total = ($fresh_set | length)
+    let fresh_cached = ($intersect | length)
+    print $"  Fresh sandbox spawns: ($fresh_total), of which ($fresh_cached) match a primary spawn id."
 
     # Step 9: Report.
     print ""
@@ -196,6 +205,18 @@ def main [
     }
     print $"  Sandbox rustc cache: ($fresh_cached) / ($fresh_total) served from remote"
     print "========================================"
+
+    # Dump diagnostic data for offline inspection.
+    let dump = "/tmp/tgnext-remote-cache-diag.txt"
+    [
+        "--- primary sandbox spawn ids ---"
+        ($orphan_rustc | str join "\n")
+        "--- fresh sandbox spawn ids ---"
+        ($fresh_spawns | str join "\n")
+        "--- intersection ---"
+        ($intersect | str join "\n")
+    ] | str join "\n" | save -f $dump
+    print $"  Diagnostic dump: ($dump)"
 
     print ""
     print "Cleaning up..."

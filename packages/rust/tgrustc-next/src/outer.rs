@@ -25,6 +25,24 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let mut env = tg::process::env::env()?;
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
 
+	// Strip runtime/wrapper env that makes the spawn key unstable across
+	// machines but has no semantic effect on rustc inside the sandbox:
+	//   - `TANGRAM_URL`: client→server address; varies per server.
+	//   - `RUSTC_WRAPPER`: cargo's wrapper hint, exported as a rendered host
+	//     path; the sandbox spawns rustc directly so the value is unused. Two
+	//     servers with the same wrapper artifact still render different host
+	//     paths under their own data dirs.
+	//   - `TANGRAM_INJECTION_*`: std.wrap runtime injection state; the
+	//     wrapped rustc binary re-derives these on its own. Inherited values
+	//     are rendered host paths and vary per server.
+	//   - `TANGRAM_OUTPUT`: per-process tempdir; never stable. The driver
+	//     re-resolves its own output path inside the sub-sandbox.
+	env.remove("TANGRAM_URL");
+	env.remove("RUSTC_WRAPPER");
+	env.remove("TANGRAM_OUTPUT");
+	env.remove("TGRUSTC_NEXT_SPAWN_LOG");
+	env.retain(|key, _| !key.starts_with("TANGRAM_INJECTION_"));
+
 	// `TGRUSTC_NEXT_SANDBOX_TOOLCHAIN` overrides the toolchain artifact used
 	// inside the sub-sandbox. Set by `cargo.run` so the host's bare rustup
 	// toolchain is replaced with a `std.wrap`-ed tangram-managed toolchain that
@@ -97,6 +115,18 @@ pub async fn run(args: Args) -> tg::Result<()> {
 
 	let process: tg::Process = tg::Process::spawn(process_arg).await?;
 	let process_id = process.id().unwrap_right().clone();
+	// When `TGRUSTC_NEXT_SPAWN_LOG` points at a path, append each spawned
+	// process id. Used by test-remote-cache.nu to enumerate sandbox spawns
+	// without relying on the database (cache-hit spawns leave no fresh row).
+	if let Ok(log_path) = std::env::var("TGRUSTC_NEXT_SPAWN_LOG")
+		&& let Ok(mut f) = std::fs::OpenOptions::new()
+			.create(true)
+			.append(true)
+			.open(&log_path)
+	{
+		use std::io::Write;
+		let _ = writeln!(f, "{process_id}");
+	}
 	let wait = process.wait(tg::process::wait::Arg::default()).await?;
 
 	if wait.exit != 0 {
