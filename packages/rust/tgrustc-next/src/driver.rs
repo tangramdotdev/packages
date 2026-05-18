@@ -33,10 +33,17 @@ pub fn run() -> tg::Result<()> {
 		.ok_or_else(|| tg::error!("driver: expected rustc path as first argument"))?;
 	let rest: Vec<String> = argv.collect();
 
+	// `--remap-path-prefix` normalizes the per-process output path in rustc's
+	// dep-info (`.d`) and source-mapped diagnostics. Without it the embedded
+	// `/opt/tangram/output/<pid>/build/...` makes the output artifact differ
+	// per run for identical inputs, blowing the process cache key.
+	let remap = format!("{}=/build", build.display());
 	let err = Command::new(&rustc)
 		.args(&rest)
 		.arg("--out-dir")
 		.arg(&build)
+		.arg("--remap-path-prefix")
+		.arg(&remap)
 		.exec();
 	Err(tg::error!("failed to exec rustc {rustc}: {err}"))
 }

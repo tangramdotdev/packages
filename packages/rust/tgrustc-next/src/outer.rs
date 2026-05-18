@@ -260,6 +260,13 @@ async fn build_spawn_args(
 /// inside the child sandbox. Even with `--extern` providing the explicit path,
 /// rustc still consults `-L dependency=` paths when loading a `.rmeta` to
 /// locate the sibling `.rlib`/`.so`; without this the build fails with E0463.
+///
+/// The synthesized directory contains only files rustc actually loads from a
+/// search path: `.rlib`, `.rmeta`, `.so`, `.dylib`, `.a`. Anything else
+/// (notably cargo's `.d` depfiles whose content embeds per-process sandbox
+/// paths) makes the checkin non-deterministic — a stale snapshot taken before
+/// a sibling crate flushes its `.d` to disk produces a different artifact id
+/// than a snapshot taken after, blowing the cache key for the current rustc.
 async fn rewrite_search_path(value: &str) -> tg::Result<tg::Value> {
 	let (prefix, path) = match value.split_once('=') {
 		Some((kind, p)) => (format!("{kind}="), p),
@@ -269,12 +276,42 @@ async fn rewrite_search_path(value: &str) -> tg::Result<tg::Value> {
 	if !p.is_absolute() || !p.is_dir() {
 		return Ok(tg::Value::String(value.to_owned()));
 	}
-	let artifact = checkin(p).await?;
+	let artifact = checkin_loadable_search_path(p).await?;
 	let template = tg::Template::with_components([
 		tg::template::Component::String(prefix),
 		tg::template::Component::Artifact(artifact),
 	]);
 	Ok(tg::Value::Template(template))
+}
+
+/// Synthesize a directory containing only files rustc loads from a search
+/// path. See `rewrite_search_path` for rationale.
+async fn checkin_loadable_search_path(p: &Path) -> tg::Result<tg::Artifact> {
+	let loadable = |ext: &str| matches!(ext, "rlib" | "rmeta" | "so" | "dylib" | "a");
+	let mut dir = tokio::fs::read_dir(p)
+		.await
+		.map_err(|error| tg::error!("failed to read search-path dir {}: {error}", p.display()))?;
+	let mut entries: BTreeMap<String, tg::Artifact> = BTreeMap::new();
+	while let Some(entry) = dir
+		.next_entry()
+		.await
+		.map_err(|error| tg::error!("failed to iterate search-path dir: {error}"))?
+	{
+		let path = entry.path();
+		let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
+			continue;
+		};
+		if !loadable(ext) {
+			continue;
+		}
+		let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+			continue;
+		};
+		let artifact = checkin(&path).await?;
+		entries.insert(name.to_owned(), artifact);
+	}
+	let directory = tg::directory::Builder::with_entries(entries).build();
+	Ok(tg::Artifact::Directory(directory))
 }
 
 /// Rewrite `name=/path/to/libfoo-<hash>.<ext>` (the value following `--extern`)

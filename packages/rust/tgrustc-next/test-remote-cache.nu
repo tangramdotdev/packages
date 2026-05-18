@@ -219,9 +219,7 @@ def main [
     print $"  Diagnostic dump: ($dump)"
 
     print ""
-    print "Cleaning up..."
-    do_cleanup
-    print "  Done."
+    print "Skipping cleanup for inspection."
 }
 
 # Recursively collect every descendant of root via process_children.
