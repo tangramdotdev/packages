@@ -1,7 +1,7 @@
 import * as std from "std" with { source: "../std" };
 import { $ } from "std" with { source: "../std" };
 
-import { cargo } from "./tangram.ts";
+import { cargo, rustTriple, self } from "./tangram.ts";
 
 import cargoToml from "./tgrustc-next/Cargo.toml" with { type: "file" };
 import cargoLock from "./tgrustc-next/Cargo.lock" with { type: "file" };
@@ -32,6 +32,42 @@ export const proxyNext = async (...args: std.Args<cargo.Arg>) =>
 		},
 		...args,
 	);
+
+/** Cargo run command that wires tgrustc-next as RUSTC_WRAPPER over the
+ *  hello-proc-macro-deps fixture. Used by test-remote-cache.nu: cargo runs on
+ *  the host (target/ on host), only rustc invocations spawn sandbox processes.
+ *  Each sandbox process must produce a portable cache key for cross-machine
+ *  reuse, which is what the remote-cache test validates.
+ *
+ *  `TGRUSTC_NEXT_SANDBOX_TOOLCHAIN` and `TGRUSTC_NEXT_SANDBOX_SDK` override
+ *  what the wrapper places inside the sub-sandbox. The host rustup toolchain
+ *  is not sandbox-safe (its rustc has a host-system ELF interpreter); the
+ *  `std.wrap`-ed `self()` toolchain is. The SDK provides `cc` for rustc's
+ *  linker step on final binaries. */
+export const runProcMacroDeps = async () => {
+	const wrapper = await proxyNext();
+	const source = await tests
+		.get("hello-proc-macro-deps")
+		.then(tg.Directory.expect);
+	const host = std.triple.host();
+	const rustHost = rustTriple(host);
+	const sandboxToolchain = await self({ host: rustHost, channel: "stable" });
+	const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target: rustHost }];
+	if (std.triple.os(rustHost) === "linux") {
+		sdkArgs.push({ toolchain: "gnu" });
+	}
+	const sandboxSdk = await std.sdk(...sdkArgs);
+	return cargo.run({
+		source,
+		proxy: false,
+		env: {
+			RUSTC_WRAPPER: tg`${wrapper}/bin/tgrustc-next`,
+			TGRUSTC_NEXT_SANDBOX_TOOLCHAIN: sandboxToolchain,
+			TGRUSTC_NEXT_SANDBOX_SDK: sandboxSdk,
+		},
+		pre: 'export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$PWD"',
+	});
+};
 
 /** Phase-4: workspace with proc-macro crate + crates.io deps. */
 export const testProcMacroDeps = async () => {

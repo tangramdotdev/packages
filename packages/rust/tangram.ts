@@ -9,6 +9,7 @@ import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
 
 export {
+	runProcMacroDeps as runProxyNextProcMacroDeps,
 	testCodegen as testProxyNextCodegen,
 	testProbe as testProxyNext,
 	testProcMacroDeps as testProxyNextProcMacroDeps,

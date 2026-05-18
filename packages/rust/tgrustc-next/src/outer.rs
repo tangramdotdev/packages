@@ -7,27 +7,9 @@ use tangram_client::prelude::*;
 use tokio::io::AsyncWriteExt;
 
 pub async fn run(args: Args) -> tg::Result<()> {
-	// Cargo passes the rustc binary either as an absolute path (host `cargo
-	// build`) or as a bare name resolved via PATH (cargo inside a tangram
-	// sandbox). Normalize both to an absolute path so we can derive the
-	// toolchain artifact for sandboxing.
-	let rustc_path = resolve_rustc(&args.rustc)?;
-	let toolchain_dir = rustc_path
-		.parent()
-		.and_then(Path::parent)
-		.ok_or_else(|| {
-			tg::error!(
-				"cannot derive toolchain root from rustc path: {}",
-				rustc_path.display()
-			)
-		})?
-		.to_path_buf();
-
 	let source_dir =
 		std::env::current_dir().map_err(|error| tg::error!("failed to read cwd: {error}"))?;
-
 	let source_artifact = checkin(&source_dir).await?;
-	let toolchain_artifact = checkin(&toolchain_dir).await?;
 	let self_exe = std::env::current_exe()
 		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
 	let driver_artifact = checkin(&self_exe).await?;
@@ -36,6 +18,58 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.map_err(|_| tg::error!("the driver artifact must be a file"))?
 		.into();
 
+	// `tg::process::env()` reconstitutes typed values from the parent process's
+	// `TANGRAM_ENV_*` shadow vars and yields each name exactly once without the
+	// reserved prefix. Doing this by hand (e.g. `std::env::vars()`) both loses
+	// the typed values and leaks the reserved prefix back to the child.
+	let mut env = tg::process::env::env()?;
+	rewrite_dir_env(&mut env, "OUT_DIR").await?;
+
+	// `TGRUSTC_NEXT_SANDBOX_TOOLCHAIN` overrides the toolchain artifact used
+	// inside the sub-sandbox. Set by `cargo.run` so the host's bare rustup
+	// toolchain is replaced with a `std.wrap`-ed tangram-managed toolchain that
+	// runs without a system dynamic linker. When unset (the `cargo.build`
+	// path), the host rustc's grandparent directory is content-addressed and
+	// used directly, which is sandbox-safe because cargo runs in a tangram-
+	// managed env where the rustc on PATH is already wrapped.
+	let toolchain_artifact = match env
+		.remove("TGRUSTC_NEXT_SANDBOX_TOOLCHAIN")
+		.as_ref()
+		.and_then(extract_artifact)
+	{
+		Some(artifact) => artifact,
+		None => {
+			let rustc_path = resolve_rustc(&args.rustc)?;
+			let toolchain_dir = rustc_path
+				.parent()
+				.and_then(Path::parent)
+				.ok_or_else(|| {
+					tg::error!(
+						"cannot derive toolchain root from rustc path: {}",
+						rustc_path.display()
+					)
+				})?
+				.to_path_buf();
+			checkin(&toolchain_dir).await?
+		},
+	};
+
+	// `TGRUSTC_NEXT_SANDBOX_SDK` provides a linker on PATH inside the sub-
+	// sandbox. Without it, final-binary crates fail to link because rustc
+	// shells out to `cc` which the bare host env does not resolve.
+	if let Some(sdk) = env
+		.remove("TGRUSTC_NEXT_SANDBOX_SDK")
+		.as_ref()
+		.and_then(extract_artifact)
+	{
+		prepend_sdk_to_path(&mut env, sdk);
+	}
+
+	env.insert(
+		"TGRUSTC_NEXT_DRIVER".to_owned(),
+		tg::Value::String("1".to_owned()),
+	);
+
 	let spawn_args = build_spawn_args(
 		&args.passthrough,
 		&toolchain_artifact,
@@ -43,17 +77,6 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		&source_dir,
 	)
 	.await?;
-
-	// `tg::process::env()` reconstitutes typed values from the parent process's
-	// `TANGRAM_ENV_*` shadow vars and yields each name exactly once without the
-	// reserved prefix. Doing this by hand (e.g. `std::env::vars()`) both loses
-	// the typed values and leaks the reserved prefix back to the child.
-	let mut env = tg::process::env::env()?;
-	rewrite_dir_env(&mut env, "OUT_DIR").await?;
-	env.insert(
-		"TGRUSTC_NEXT_DRIVER".to_owned(),
-		tg::Value::String("1".to_owned()),
-	);
 
 	let name = args
 		.crate_name
@@ -307,6 +330,61 @@ fn resolve_rustc(rustc: &str) -> tg::Result<PathBuf> {
 		}
 	}
 	Err(tg::error!("could not find {rustc} on PATH"))
+}
+
+/// Recover the artifact embedded in an env-var value. Two shapes appear:
+///
+/// 1. `tg::Value::Template` with an Artifact component — the typed shape, set
+///    when the parent process used the tangram runtime to wire the value.
+/// 2. `tg::Value::String` containing a rendered artifact path like
+///    `<tangram-dir>/artifacts/dir_XXX[/sub]` — what cargo.run produces, which
+///    serialises env entries as plain bash `export KEY="<rendered>"` lines
+///    that lose the typed-value shadow var.
+///
+/// The String path infers the prefix by locating the artifact id and feeds it
+/// to `tg::Template::unrender`.
+fn extract_artifact(value: &tg::Value) -> Option<tg::Artifact> {
+	let find_in_template = |t: &tg::Template| -> Option<tg::Artifact> {
+		t.components().iter().find_map(|c| match c {
+			tg::template::Component::Artifact(a) => Some(a.clone()),
+			_ => None,
+		})
+	};
+	match value {
+		tg::Value::Template(t) => find_in_template(t),
+		tg::Value::String(s) => {
+			let markers = ["/dir_01", "/fil_01", "/sym_01"];
+			let prefix_end = markers.iter().filter_map(|m| s.find(m)).next()?;
+			let prefix = &s[..prefix_end];
+			let template = tg::Template::unrender(prefix, s).ok()?;
+			find_in_template(&template)
+		},
+		_ => None,
+	}
+}
+
+/// Prepend `<sdk>/bin` to the env's PATH, preserving any existing entries.
+/// PATH may arrive as either a plain String or as a Template; both shapes are
+/// merged into a single Template under the new prefix.
+fn prepend_sdk_to_path(env: &mut tg::value::Map, sdk: tg::Artifact) {
+	let mut components: Vec<tg::template::Component> = vec![
+		tg::template::Component::Artifact(sdk),
+		tg::template::Component::String("/bin".to_owned()),
+	];
+	match env.remove("PATH") {
+		Some(tg::Value::String(p)) => {
+			components.push(tg::template::Component::String(format!(":{p}")));
+		},
+		Some(tg::Value::Template(t)) => {
+			components.push(tg::template::Component::String(":".to_owned()));
+			components.extend(t.components.into_iter());
+		},
+		_ => {},
+	}
+	env.insert(
+		"PATH".to_owned(),
+		tg::Value::Template(tg::Template::with_components(components)),
+	);
 }
 
 async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {
