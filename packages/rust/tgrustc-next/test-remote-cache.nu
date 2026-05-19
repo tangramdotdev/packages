@@ -170,21 +170,23 @@ def main [
     }
     print $"  Fresh cargo build: ($rebuild_elapsed)"
 
-    # Step 8: Verify cache hits by comparing primary's spawn ids with fresh's
-    # spawn ids. Identical ids mean the wrapper produced the same content-
-    # addressed key on both machines and the fresh server pulled the cached
-    # output from the remote.
+    # Step 8: Verify cache hits by comparing primary's spawn command ids with
+    # fresh's spawn command ids. The command id is the wrapper's content-
+    # addressed cache key (executable + args + env). Process ids embed a
+    # creation timestamp so they differ even on a true cache hit; the command
+    # id is the right thing to compare across machines.
     print ""
     print "Step 8: Verifying cache hits on fresh server..."
     let fresh_spawns = if ($fresh_spawn_log | path exists) {
         open $fresh_spawn_log | lines | where { |l| not ($l | is-empty) } | uniq
     } else { [] }
     let primary_set = ($orphan_rustc | uniq)
-    let fresh_set = ($fresh_spawns | uniq)
-    let intersect = ($fresh_set | where { |id| $id in $primary_set })
-    let fresh_total = ($fresh_set | length)
+    let primary_cmds = (lookup_cmds $tangram_dir $primary_set)
+    let fresh_cmds = (lookup_cmds_remote $fresh_port $fresh_spawns)
+    let intersect = ($fresh_cmds | where { |id| $id in $primary_cmds })
+    let fresh_total = ($fresh_cmds | length)
     let fresh_cached = ($intersect | length)
-    print $"  Fresh sandbox spawns: ($fresh_total), of which ($fresh_cached) match a primary spawn id."
+    print $"  Fresh sandbox spawns: ($fresh_total), of which ($fresh_cached) share a primary command id."
 
     # Step 9: Report.
     print ""
@@ -213,7 +215,11 @@ def main [
         ($orphan_rustc | str join "\n")
         "--- fresh sandbox spawn ids ---"
         ($fresh_spawns | str join "\n")
-        "--- intersection ---"
+        "--- primary command ids ---"
+        ($primary_cmds | str join "\n")
+        "--- fresh command ids ---"
+        ($fresh_cmds | str join "\n")
+        "--- command-id intersection ---"
         ($intersect | str join "\n")
     ] | str join "\n" | save -f $dump
     print $"  Diagnostic dump: ($dump)"
@@ -222,6 +228,29 @@ def main [
     print "Cleaning up..."
     do_cleanup
     print "  Done."
+}
+
+# Map process ids to command ids via the local primary database.
+def lookup_cmds [tangram_dir: string, pcs_list: list<string>]: nothing -> list<string> {
+    if ($pcs_list | is-empty) { return [] }
+    let in_clause = ($pcs_list | each { |p| $"'($p)'" } | str join ",")
+    let query = $"SELECT command FROM processes WHERE id IN \(($in_clause))"
+    sqlite3 $"($tangram_dir)/processes" $query
+        | lines
+        | where { |l| not ($l | is-empty) }
+}
+
+# Map process ids to command ids via a remote server's HTTP API.
+def lookup_cmds_remote [port: int, pcs_list: list<string>]: nothing -> list<string> {
+    if ($pcs_list | is-empty) { return [] }
+    $pcs_list | each { |pid|
+        let raw = (with-env { TANGRAM_URL: $"http://localhost:($port)" } {
+            tangram process get $pid | complete
+        })
+        if $raw.exit_code == 0 {
+            $raw.stdout | str trim | from json | get command
+        } else { "" }
+    } | where { |l| not ($l | is-empty) }
 }
 
 # Recursively collect every descendant of root via process_children.
