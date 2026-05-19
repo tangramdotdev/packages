@@ -354,6 +354,71 @@ export const testBindgen = async () => {
 	tg.assert(text.trim() === "6 * 7 = 42", `unexpected output: ${text}`);
 };
 
+/** Legacy fixture: build script reads MY_BUILD_VAR; different values bust cache. */
+export const testBuildScriptEnvDep = async () => {
+	const source = await tests.get("hello-env-dep").then(tg.Directory.expect);
+	const build1 = await cargo.build({
+		source,
+		proxy: true,
+		env: { MY_BUILD_VAR: "first_value" },
+	});
+	console.log("testBuildScriptEnvDep build1 result", build1.id);
+	const out1 = await $`hello-env-dep | tee ${tg.output}`
+		.env(build1)
+		.then(tg.File.expect);
+	tg.assert(
+		(await out1.text).includes("first_value"),
+		"first_value not present in build1 output",
+	);
+
+	const build2 = await cargo.build({
+		source,
+		proxy: true,
+		env: { MY_BUILD_VAR: "second_value" },
+	});
+	console.log("testBuildScriptEnvDep build2 result", build2.id);
+	const out2 = await $`hello-env-dep | tee ${tg.output}`
+		.env(build2)
+		.then(tg.File.expect);
+	tg.assert(
+		(await out2.text).includes("second_value"),
+		"second_value not present in build2 output",
+	);
+};
+
+/** Legacy fixture: build script reads a file from the source tree. */
+export const testBuildScriptFileDep = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-file-dep").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testBuildScriptFileDep result", result.id);
+
+	const out = await $`hello-file-dep | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	tg.assert(
+		(await out.text).includes("hello from config file"),
+		`unexpected output: ${await out.text}`,
+	);
+};
+
+/** Legacy fixture: workspace with a build script in a workspace member. */
+export const testWorkspaceBuildScript = async () => {
+	const result = await cargo.build({
+		source: tests.get("workspace-build-script").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testWorkspaceBuildScript result", result.id);
+
+	const out = await $`app | tee ${tg.output}`.env(result).then(tg.File.expect);
+	tg.assert(
+		(await out.text).includes("Built at:"),
+		`unexpected output: ${await out.text}`,
+	);
+	return result;
+};
+
 /** Legacy fixture: cc-rs C-compile build script. */
 export const testCcRs = async () => {
 	const result = await cargo.build({
@@ -384,6 +449,9 @@ export const test = async () => {
 		testPkgconfig(),
 		testOpenSSL(),
 		testBindgen(),
+		testBuildScriptEnvDep(),
+		testBuildScriptFileDep(),
+		testWorkspaceBuildScript(),
 	]);
 	return true;
 };

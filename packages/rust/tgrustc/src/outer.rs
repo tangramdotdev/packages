@@ -193,11 +193,12 @@ async fn checkout_outputs(build: &tg::Directory, out_dir: &Path) -> tg::Result<(
 	Ok(())
 }
 
-/// Allowlist for env vars that propagate into the sub-sandbox rustc
-/// invocation. Cache stability depends on minimizing what flows through:
-/// every host-varied env var becomes part of the spawn key, and many leak
-/// host fds/paths that warn or fail at runtime. Add entries only when a
-/// failing fixture names a specific need.
+/// Returns true if the env var should propagate to the sub-sandbox rustc
+/// invocation. Template values pass through (their artifacts are content-
+/// addressed). Plain strings pass through unless the key matches a known
+/// host-state pattern that would either poison the spawn-key cache or leak
+/// host fds/paths into the sandbox. Add new deny patterns when a fixture
+/// surfaces one.
 fn is_allowed_sandbox_env(key: &str, value: &tg::Value) -> bool {
 	// `OUT_DIR` is rewritten to a content-addressed template by
 	// `rewrite_dir_env` so its value is sandbox-safe.
@@ -209,35 +210,49 @@ fn is_allowed_sandbox_env(key: &str, value: &tg::Value) -> bool {
 	if key == "PATH" {
 		return true;
 	}
-	// Cargo-set per-crate metadata that `env!` macros consume.
-	if matches!(
-		key,
-		"CARGO_CRATE_NAME"
-			| "CARGO_PRIMARY_PACKAGE"
-			| "CARGO_BIN_NAME"
-			| "CARGO_MANIFEST_LINKS"
-			| "RUSTFLAGS"
-			| "RUSTDOCFLAGS"
-			| "CARGO_ENCODED_RUSTFLAGS"
-	) {
-		return true;
-	}
-	// Cargo-set prefix families.
-	if key.starts_with("CARGO_PKG_")
-		|| key.starts_with("CARGO_CFG_")
-		|| key.starts_with("CARGO_FEATURE_")
-		|| key.starts_with("CARGO_DEP_")
-		|| key.starts_with("CARGO_BIN_EXE_")
-	{
-		return true;
-	}
 	// Template values carry tangram artifact references; their content is
 	// content-addressed so passing them through preserves cache stability
 	// and lets build-env packages like openssl()/pkgconf() reach the linker.
 	if matches!(value, tg::Value::Template(_)) {
 		return true;
 	}
+	// Plain strings come from cargo's per-crate metadata, build-script-set
+	// `cargo:rustc-env=KEY=VAL` outputs, and the host process state. Pass
+	// them through unless the key is one of the known host-state patterns
+	// that would poison the cache key (HOME, locale, jobserver fds) or
+	// reference an unmapped host path (CARGO_HOME, RUSTUP_HOME, ...).
+	if matches!(value, tg::Value::String(_)) {
+		return !is_denied_host_env(key);
+	}
 	false
+}
+
+fn is_denied_host_env(key: &str) -> bool {
+	if matches!(
+		key,
+		// Process identity / shell state — varies per host, no rustc effect.
+		"HOME" | "USER" | "LOGNAME" | "SHELL" | "PWD" | "OLDPWD"
+		| "MAIL" | "HOSTNAME" | "TMPDIR" | "TMP" | "TEMP"
+		// Jobserver fds — point at fds tangram does not propagate.
+		| "CARGO_MAKEFLAGS" | "MAKEFLAGS"
+		// Host-side cargo / rustup state — host paths that do not exist
+		// inside the sandbox, and identifying the host poisons the cache.
+		| "CARGO_HOME" | "CARGO_TARGET_DIR"
+		| "RUSTUP_HOME" | "RUSTUP_TOOLCHAIN"
+		| "RUSTC" | "RUSTC_BOOTSTRAP" | "RUSTC_WORKSPACE_WRAPPER"
+		// Locale: not used by rustc, varies per host, would destabilize
+		// the spawn-key cache cross-machine.
+		| "LANG" | "LC_ALL" | "LC_CTYPE" | "LC_MESSAGES"
+		| "LC_COLLATE" | "LC_NUMERIC" | "LC_TIME" | "LC_MONETARY"
+	) {
+		return true;
+	}
+	// Tangram, wrapper, and user-session prefixes.
+	key.starts_with("TANGRAM_")
+		|| key.starts_with("TGRUSTC_")
+		|| key.starts_with("SSH_")
+		|| key.starts_with("GPG_")
+		|| key.starts_with("XDG_")
 }
 
 /// If `env[key]` is a host-path string pointing at an existing directory,

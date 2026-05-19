@@ -11,6 +11,8 @@ export * as proxy from "./proxy.tg.ts";
 export {
 	runProcMacroDeps,
 	testBindgen,
+	testBuildScriptEnvDep,
+	testBuildScriptFileDep,
 	testCcRs,
 	testCodegen,
 	testHello,
@@ -22,6 +24,7 @@ export {
 	testProcMacroWithDeps,
 	testProxyCompiles,
 	testWorkspace,
+	testWorkspaceBuildScript,
 	testWorkspaceMode2,
 } from "./proxy.tg.ts";
 
