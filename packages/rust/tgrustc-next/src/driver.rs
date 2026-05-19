@@ -23,8 +23,7 @@ pub fn run() -> tg::Result<()> {
 	let log = output.join("log");
 	fs::create_dir_all(&build)
 		.map_err(|error| tg::error!("failed to create build dir: {error}"))?;
-	fs::create_dir_all(&log)
-		.map_err(|error| tg::error!("failed to create log dir: {error}"))?;
+	fs::create_dir_all(&log).map_err(|error| tg::error!("failed to create log dir: {error}"))?;
 
 	let stdout_file = File::create(log.join("stdout"))
 		.map_err(|error| tg::error!("failed to create stdout log: {error}"))?;

@@ -69,7 +69,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 				})?
 				.to_path_buf();
 			checkin(&toolchain_dir).await?
-		},
+		}
 	};
 
 	// `TGRUSTC_NEXT_SANDBOX_SDK` provides a linker on PATH inside the sub-
@@ -151,8 +151,9 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		.try_unwrap_directory()
 		.map_err(|_| tg::error!("expected a directory output (id {process_id})"))?;
 
-	forward_logs(&output_dir).await?;
-
+	// Materialize outputs before forwarding logs. Cargo treats rustc's stdout
+	// as a pipelining readiness signal; releasing it before checkout completes
+	// races the next wrapper's `-L dependency=` directory snapshot.
 	if let Some(out_dir) = &args.out_dir {
 		let build = output_dir
 			.get("build")
@@ -161,6 +162,8 @@ pub async fn run(args: Args) -> tg::Result<()> {
 			.map_err(|_| tg::error!("expected build/ to be a directory"))?;
 		checkout_outputs(&build, Path::new(out_dir)).await?;
 	}
+
+	forward_logs(&output_dir).await?;
 
 	Ok(())
 }
@@ -425,7 +428,7 @@ fn extract_artifact(value: &tg::Value) -> Option<tg::Artifact> {
 			let prefix = &s[..prefix_end];
 			let template = tg::Template::unrender(prefix, s).ok()?;
 			find_in_template(&template)
-		},
+		}
 		_ => None,
 	}
 }
@@ -441,12 +444,12 @@ fn prepend_sdk_to_path(env: &mut tg::value::Map, sdk: tg::Artifact) {
 	match env.remove("PATH") {
 		Some(tg::Value::String(p)) => {
 			components.push(tg::template::Component::String(format!(":{p}")));
-		},
+		}
 		Some(tg::Value::Template(t)) => {
 			components.push(tg::template::Component::String(":".to_owned()));
 			components.extend(t.components.into_iter());
-		},
-		_ => {},
+		}
+		_ => {}
 	}
 	env.insert(
 		"PATH".to_owned(),
