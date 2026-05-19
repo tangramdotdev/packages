@@ -1,7 +1,10 @@
 import * as std from "std" with { source: "../std" };
 import { $ } from "std" with { source: "../std" };
+import { libclang } from "llvm" with { source: "../llvm" };
+import openssl from "openssl" with { source: "../openssl.tg.ts" };
+import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
 
-import { cargo, rustTriple, self } from "./tangram.ts";
+import { cargo, rustTriple, self, VERSION } from "./tangram.ts";
 
 import cargoToml from "./tgrustc/Cargo.toml" with { type: "file" };
 import cargoLock from "./tgrustc/Cargo.lock" with { type: "file" };
@@ -209,6 +212,163 @@ export const testProbe = async () => {
 	return result;
 };
 
+/** Legacy fixture: hello-world with build.rs, OUT_DIR, include_bytes!, itoa vendored. */
+export const testHello = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-world").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testHello result", result.id);
+
+	const out = await $`hello-world | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(
+		text.trim() === "hello, proxy!\n128\nHello, build!",
+		`unexpected output: ${text}`,
+	);
+};
+
+/** Legacy fixture: single proc-macro crate (no external deps). */
+export const testProcMacro = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-proc-macro").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testProcMacro result", result.id);
+
+	const out = await $`app | tee ${tg.output}`.env(result).then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(text.trim() === "Hello from Greeter!", `unexpected output: ${text}`);
+};
+
+/** Legacy fixture: same as testProcMacroDeps but via the proxy=true flow. */
+export const testProcMacroWithDeps = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-proc-macro-deps").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testProcMacroWithDeps result", result.id);
+
+	const out = await $`app | tee ${tg.output}`.env(result).then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(text.trim() === "Hello from Greeter!", `unexpected output: ${text}`);
+};
+
+/** Legacy smoke test: invoke the wrapper directly to print rustc --version. */
+export const testProxyCompiles = async () => {
+	const version = await $`tgrustc rustc - --version | tee ${tg.output}`
+		.env(proxy())
+		.env(self())
+		.then(tg.File.expect);
+	const versionText = await version.text;
+	tg.assert(
+		versionText.trim().includes(VERSION),
+		`unexpected version output: ${versionText}`,
+	);
+};
+
+/** Legacy fixture: links against a custom pkgconfig-provided dylib. */
+export const testPkgconfig = async () => {
+	const host = std.triple.host();
+	const os = std.triple.os(host);
+	const dylibExt = os === "darwin" ? "dylib" : "so";
+
+	const fixture = await tests.get("hello-c-dylib").then(tg.Directory.expect);
+
+	let externalLibDir = await $`
+		mkdir -p ${tg.output}/lib
+		mkdir -p ${tg.output}/include
+		gcc -shared -fPIC ${fixture}/src/lib.c -o ${tg.output}/lib/libexternal.${dylibExt}
+		cp ${fixture}/src/lib.h ${tg.output}/include/lib.h`
+		.env(std.sdk())
+		.then(tg.Directory.expect);
+
+	externalLibDir = await tg.directory(externalLibDir, {
+		["lib/pkgconfig/external.pc"]: tg.file`
+				prefix=/tmp/external-pkgconfig-prefix
+				exec_prefix=\${prefix}
+				libdir=\${exec_prefix}/lib
+				includedir=\${prefix}/include
+
+				Name: external
+				Description: Example shared library
+				Version: 1.0.0
+				Libs: -L\${libdir} -lexternal
+				Cflags: -I\${includedir}`,
+	});
+
+	const result = await cargo.build({
+		source: fixture,
+		pre: "set -x",
+		env: std.env.arg(pkgconf(), externalLibDir),
+		parallelJobs: 1,
+		proxy: true,
+		verbose: true,
+	});
+	console.log("testPkgconfig result", result.id);
+
+	const out = await $`myapp | tee ${tg.output}`.env(result).then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(
+		text.trim() === "You passed the number: 42",
+		`unexpected output: ${text}`,
+	);
+};
+
+/** Legacy fixture: links against system openssl via openssl-sys. */
+export const testOpenSSL = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-openssl").then(tg.Directory.expect),
+		env: std.env.arg(openssl(), pkgconf()),
+		parallelJobs: 1,
+		proxy: true,
+		verbose: true,
+	});
+	console.log("testOpenSSL result", result.id);
+
+	const out = await $`hello-openssl | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(
+		text.trim() === "Hello, from a crate that links against libssl!",
+		`unexpected output: ${text}`,
+	);
+};
+
+/** Legacy fixture: bindgen requires libclang from LLVM. */
+export const testBindgen = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-bindgen").then(tg.Directory.expect),
+		proxy: true,
+		env: std.env.arg(libclang()),
+	});
+	console.log("testBindgen result", result.id);
+
+	const out = await $`hello-bindgen | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(text.trim() === "6 * 7 = 42", `unexpected output: ${text}`);
+};
+
+/** Legacy fixture: cc-rs C-compile build script. */
+export const testCcRs = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-cc-rs").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testCcRs result", result.id);
+
+	const out = await $`hello-cc-rs | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	const text = await out.text;
+	tg.assert(text.trim() === "10 + 32 = 42", `unexpected output: ${text}`);
+};
+
 export const test = async () => {
 	await Promise.all([
 		testProbe(),
@@ -216,6 +376,14 @@ export const test = async () => {
 		testCodegen(),
 		testProcMacroDeps(),
 		testWorkspaceMode2(),
+		testHello(),
+		testProcMacro(),
+		testProcMacroWithDeps(),
+		testCcRs(),
+		testProxyCompiles(),
+		testPkgconfig(),
+		testOpenSSL(),
+		testBindgen(),
 	]);
 	return true;
 };

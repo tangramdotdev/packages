@@ -10,9 +10,17 @@ export * as proxy from "./proxy.tg.ts";
 
 export {
 	runProcMacroDeps,
+	testBindgen,
+	testCcRs,
 	testCodegen,
+	testHello,
+	testOpenSSL,
+	testPkgconfig,
 	testProbe,
+	testProcMacro,
 	testProcMacroDeps,
+	testProcMacroWithDeps,
+	testProxyCompiles,
 	testWorkspace,
 	testWorkspaceMode2,
 } from "./proxy.tg.ts";

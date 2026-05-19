@@ -66,10 +66,15 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	}
 
 	// Allowlist filter: the sub-sandbox sees only env vars whose names are
-	// explicitly known to influence rustc behavior. Everything else (host
-	// paths, jobserver fds, locale, terminal state, wrapper plumbing) drops
-	// out so it cannot poison the spawn-key cache or warn at runtime.
-	env.retain(|key, _| is_allowed_sandbox_env(key));
+	// explicitly known to influence rustc behavior, plus any value carrying a
+	// tangram artifact template (the typed shape produced by std.env.arg with
+	// dependencies like openssl() or pkgconf() — these are content-addressed
+	// so they do not destabilize the cache key, and they carry build-relevant
+	// LIBRARY_PATH / CPATH / PKG_CONFIG_PATH entries the linker needs).
+	// Everything else (host paths, jobserver fds, locale, terminal state,
+	// wrapper plumbing) drops out so it cannot poison the spawn-key cache or
+	// warn at runtime.
+	env.retain(|key, value| is_allowed_sandbox_env(key, value));
 
 	env.insert(
 		"TGRUSTC_DRIVER".to_owned(),
@@ -193,7 +198,7 @@ async fn checkout_outputs(build: &tg::Directory, out_dir: &Path) -> tg::Result<(
 /// every host-varied env var becomes part of the spawn key, and many leak
 /// host fds/paths that warn or fail at runtime. Add entries only when a
 /// failing fixture names a specific need.
-fn is_allowed_sandbox_env(key: &str) -> bool {
+fn is_allowed_sandbox_env(key: &str, value: &tg::Value) -> bool {
 	// `OUT_DIR` is rewritten to a content-addressed template by
 	// `rewrite_dir_env` so its value is sandbox-safe.
 	if key == "OUT_DIR" {
@@ -224,6 +229,12 @@ fn is_allowed_sandbox_env(key: &str) -> bool {
 		|| key.starts_with("CARGO_DEP_")
 		|| key.starts_with("CARGO_BIN_EXE_")
 	{
+		return true;
+	}
+	// Template values carry tangram artifact references; their content is
+	// content-addressed so passing them through preserves cache stability
+	// and lets build-env packages like openssl()/pkgconf() reach the linker.
+	if matches!(value, tg::Value::Template(_)) {
 		return true;
 	}
 	false
