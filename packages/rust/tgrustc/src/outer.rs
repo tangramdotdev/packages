@@ -40,10 +40,10 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	env.remove("TANGRAM_URL");
 	env.remove("RUSTC_WRAPPER");
 	env.remove("TANGRAM_OUTPUT");
-	env.remove("TGRUSTC_NEXT_SPAWN_LOG");
+	env.remove("TGRUSTC_SPAWN_LOG");
 	env.retain(|key, _| !key.starts_with("TANGRAM_INJECTION_"));
 
-	// `TGRUSTC_NEXT_SANDBOX_TOOLCHAIN` overrides the toolchain artifact used
+	// `TGRUSTC_SANDBOX_TOOLCHAIN` overrides the toolchain artifact used
 	// inside the sub-sandbox. Set by `cargo.run` so the host's bare rustup
 	// toolchain is replaced with a `std.wrap`-ed tangram-managed toolchain that
 	// runs without a system dynamic linker. When unset (the `cargo.build`
@@ -51,7 +51,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	// used directly, which is sandbox-safe because cargo runs in a tangram-
 	// managed env where the rustc on PATH is already wrapped.
 	let toolchain_artifact = match env
-		.remove("TGRUSTC_NEXT_SANDBOX_TOOLCHAIN")
+		.remove("TGRUSTC_SANDBOX_TOOLCHAIN")
 		.as_ref()
 		.and_then(extract_artifact)
 	{
@@ -72,11 +72,11 @@ pub async fn run(args: Args) -> tg::Result<()> {
 		}
 	};
 
-	// `TGRUSTC_NEXT_SANDBOX_SDK` provides a linker on PATH inside the sub-
+	// `TGRUSTC_SANDBOX_SDK` provides a linker on PATH inside the sub-
 	// sandbox. Without it, final-binary crates fail to link because rustc
 	// shells out to `cc` which the bare host env does not resolve.
 	if let Some(sdk) = env
-		.remove("TGRUSTC_NEXT_SANDBOX_SDK")
+		.remove("TGRUSTC_SANDBOX_SDK")
 		.as_ref()
 		.and_then(extract_artifact)
 	{
@@ -84,7 +84,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	}
 
 	env.insert(
-		"TGRUSTC_NEXT_DRIVER".to_owned(),
+		"TGRUSTC_DRIVER".to_owned(),
 		tg::Value::String("1".to_owned()),
 	);
 
@@ -115,10 +115,10 @@ pub async fn run(args: Args) -> tg::Result<()> {
 
 	let process: tg::Process = tg::Process::spawn(process_arg).await?;
 	let process_id = process.id().unwrap_right().clone();
-	// When `TGRUSTC_NEXT_SPAWN_LOG` points at a path, append each spawned
+	// When `TGRUSTC_SPAWN_LOG` points at a path, append each spawned
 	// process id. Used by test-remote-cache.nu to enumerate sandbox spawns
 	// without relying on the database (cache-hit spawns leave no fresh row).
-	if let Ok(log_path) = std::env::var("TGRUSTC_NEXT_SPAWN_LOG")
+	if let Ok(log_path) = std::env::var("TGRUSTC_SPAWN_LOG")
 		&& let Ok(mut f) = std::fs::OpenOptions::new()
 			.create(true)
 			.append(true)
@@ -137,7 +137,7 @@ pub async fn run(args: Args) -> tg::Result<()> {
 			forward_logs(&output_dir).await?;
 		}
 		eprintln!(
-			"tgrustc-next: sandbox exited {}. tangram log {process_id}",
+			"tgrustc: sandbox exited {}. tangram log {process_id}",
 			wait.exit
 		);
 		std::process::exit(wait.exit.into());

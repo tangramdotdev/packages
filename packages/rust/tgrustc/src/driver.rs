@@ -1,127 +1,93 @@
-use std::os::unix::process::CommandExt;
+use std::{
+	fs::{self, File},
+	os::unix::process::ExitStatusExt as _,
+	path::{Path, PathBuf},
+	process::Command,
+};
 use tangram_client::prelude::*;
 
-/// Placeholder for `OUT_DIR` in cached stdout; the outer runner substitutes cargo's actual `OUT_DIR` on replay.
-pub(crate) const RUNNER_OUT_DIR_PLACEHOLDER: &str = "@@TGRUSTC_OUT_DIR@@";
+/// Inside-sandbox entrypoint. The outer wrapper schedules a tangram process
+/// whose executable is this binary with `TGRUSTC_DRIVER=1`; tangram
+/// provides `TANGRAM_OUTPUT` as the sandbox's output directory. The driver
+/// creates `build/` and `log/` under that, redirects rustc's stdio into the
+/// log files, injects `--out-dir <build>`, runs the real rustc, then
+/// rewrites the leading depfile targets in any `.d` file rustc emitted so
+/// the per-process `/opt/tangram/output/<pid>/build/` prefix becomes
+/// stable across runs.
+pub fn run() -> tg::Result<()> {
+	let output =
+		std::env::var("TANGRAM_OUTPUT").map_err(|_| tg::error!("TANGRAM_OUTPUT is not set"))?;
+	let output = PathBuf::from(output);
 
-pub(crate) fn run_driver() -> tg::Result<()> {
-	tracing::info!("running in driver mode");
+	let build = output.join("build");
+	let log = output.join("log");
+	fs::create_dir_all(&build)
+		.map_err(|error| tg::error!("failed to create build dir: {error}"))?;
+	fs::create_dir_all(&log).map_err(|error| tg::error!("failed to create log dir: {error}"))?;
 
-	let tangram_output = crate::required_env("TANGRAM_OUTPUT")?;
-	let rustc_path = crate::required_env("TGRUSTC_RUSTC")?;
-	let source_dir = crate::required_env("TGRUSTC_SOURCE")?;
-	let out_dir_source = crate::required_env("TGRUSTC_OUT_DIR")?;
-
-	tracing::info!(
-		?tangram_output,
-		?rustc_path,
-		?source_dir,
-		?out_dir_source,
-		"driver mode environment"
-	);
-
-	let build_path = format!("{tangram_output}/build");
-	let log_path = format!("{tangram_output}/log");
-
-	std::fs::create_dir_all(&build_path)
-		.map_err(|e| tg::error!("failed to create {build_path}: {e}"))?;
-	std::fs::create_dir_all(&log_path)
-		.map_err(|e| tg::error!("failed to create {log_path}: {e}"))?;
-
-	let rustc_args: Vec<String> = std::env::args().skip(1).collect();
-
-	let stdout_file = std::fs::File::create(format!("{log_path}/stdout"))
-		.map_err(|e| tg::error!("failed to create stdout log: {e}"))?;
-	let stderr_file = std::fs::File::create(format!("{log_path}/stderr"))
-		.map_err(|e| tg::error!("failed to create stderr log: {e}"))?;
-
+	let stdout_file = File::create(log.join("stdout"))
+		.map_err(|error| tg::error!("failed to create stdout log: {error}"))?;
+	let stderr_file = File::create(log.join("stderr"))
+		.map_err(|error| tg::error!("failed to create stderr log: {error}"))?;
 	rustix::stdio::dup2_stdout(&stdout_file)
-		.map_err(|e| tg::error!("failed to redirect stdout: {e}"))?;
+		.map_err(|error| tg::error!("failed to redirect stdout: {error}"))?;
 	rustix::stdio::dup2_stderr(&stderr_file)
-		.map_err(|e| tg::error!("failed to redirect stderr: {e}"))?;
+		.map_err(|error| tg::error!("failed to redirect stderr: {error}"))?;
 
-	tracing::info!(?rustc_args, "executing rustc");
+	let mut argv = std::env::args().skip(1);
+	let rustc = argv
+		.next()
+		.ok_or_else(|| tg::error!("driver: expected rustc path as first argument"))?;
+	let rest: Vec<String> = argv.collect();
 
-	let error = std::process::Command::new(&rustc_path)
-		.args(&rustc_args)
-		.current_dir(&source_dir)
-		.env("OUT_DIR", &out_dir_source)
+	// `--remap-path-prefix` normalizes source-side paths in rustc's
+	// diagnostics, but does not rewrite the leading depfile target.
+	// The post-run sweep below handles the depfile case.
+	let remap = format!("{}=/build", build.display());
+	let status = Command::new(&rustc)
+		.args(&rest)
 		.arg("--out-dir")
-		.arg(&build_path)
-		.exec();
+		.arg(&build)
+		.arg("--remap-path-prefix")
+		.arg(&remap)
+		.status()
+		.map_err(|error| tg::error!("failed to spawn rustc {rustc}: {error}"))?;
 
-	// stderr is redirected, so write the error to a file.
-	let _ = std::fs::write(
-		format!("{tangram_output}/exec_error.txt"),
-		format!("exec failed: {error}"),
-	);
-	Err(tg::error!("failed to exec rustc {rustc_path}: {error}"))
+	// Stabilize the per-process build prefix inside every emitted `.d`
+	// file. Without this the leading depfile target embeds the sandbox
+	// pid and the output artifact id varies across runs.
+	rewrite_depfiles(&build)?;
+
+	let code = if let Some(code) = status.code() {
+		code
+	} else if let Some(signal) = status.signal() {
+		128 + signal
+	} else {
+		1
+	};
+	std::process::exit(code);
 }
 
-/// Run a build script inside the Tangram sandbox. See [`RUNNER_OUT_DIR_PLACEHOLDER`] for stdout rewriting.
-pub(crate) fn run_runner_driver() -> tg::Result<()> {
-	tracing::info!("running in runner driver mode");
-
-	let tangram_output = crate::required_env("TANGRAM_OUTPUT")?;
-	let source_dir = crate::required_env("TGRUSTC_RUNNER_SOURCE")?;
-
-	// Manifest subpath: source is the workspace root, crate dir is a subdirectory.
-	let manifest_dir = match std::env::var("TGRUSTC_RUNNER_MANIFEST_SUBPATH") {
-		Ok(subpath) if !subpath.is_empty() => format!("{source_dir}/{subpath}"),
-		_ => source_dir.clone(),
+fn rewrite_depfiles(build: &Path) -> tg::Result<()> {
+	let entries = match fs::read_dir(build) {
+		Ok(entries) => entries,
+		Err(_) => return Ok(()),
 	};
-
-	let out_dir_path = format!("{tangram_output}/{RUNNER_OUT_DIR_PLACEHOLDER}");
-	let log_path = format!("{tangram_output}/log");
-	std::fs::create_dir_all(&out_dir_path)
-		.map_err(|e| tg::error!("failed to create out dir: {e}"))?;
-	std::fs::create_dir_all(&log_path).map_err(|e| tg::error!("failed to create log dir: {e}"))?;
-
-	let script_binary = std::env::args()
-		.nth(1)
-		.ok_or_else(|| tg::error!("expected build script binary path as argument"))?;
-
-	tracing::info!(
-		?script_binary,
-		?source_dir,
-		?manifest_dir,
-		?out_dir_path,
-		"executing build script"
-	);
-
-	// bun checks TMPDIR / BUN_INSTALL_CACHE_DIR for writable locations.
-	let tmp_dir_path = format!("{tangram_output}/tmp");
-	std::fs::create_dir_all(&tmp_dir_path)
-		.map_err(|e| tg::error!("failed to create tmp dir: {e}"))?;
-
-	let output = std::process::Command::new(&script_binary)
-		.current_dir(&manifest_dir)
-		.env("OUT_DIR", &out_dir_path)
-		.env("CARGO_MANIFEST_DIR", &manifest_dir)
-		.env("TMPDIR", &tmp_dir_path)
-		.env("BUN_INSTALL_CACHE_DIR", &tmp_dir_path)
-		.env_remove("TGRUSTC_RUNNER_DRIVER_MODE")
-		.env_remove("TGRUSTC_RUNNER_SOURCE")
-		.env_remove("TGRUSTC_RUNNER_MANIFEST_SUBPATH")
-		.output()
-		.map_err(|e| tg::error!("failed to spawn build script ${script_binary}: {e}"))?;
-
-	let sandbox_prefix = format!("{tangram_output}/");
-	let stdout_text = String::from_utf8_lossy(&output.stdout);
-	let stdout_cleaned = stdout_text.replace(&sandbox_prefix, "");
-
-	// Clean up tmp so it stays out of the output artifact.
-	let _ = std::fs::remove_dir_all(&tmp_dir_path);
-
-	std::fs::write(format!("{log_path}/stdout"), stdout_cleaned.as_bytes())
-		.map_err(|e| tg::error!("failed to write stdout log: {e}"))?;
-	std::fs::write(format!("{log_path}/stderr"), &output.stderr)
-		.map_err(|e| tg::error!("failed to write stderr log: {e}"))?;
-
-	if !output.status.success() {
-		let code = output.status.code().unwrap_or(1);
-		std::process::exit(code);
+	let build_prefix = format!("{}/", build.display());
+	for entry in entries {
+		let entry = entry.map_err(|error| tg::error!("failed to read build entry: {error}"))?;
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("d") {
+			continue;
+		}
+		let contents = fs::read_to_string(&path)
+			.map_err(|error| tg::error!("failed to read depfile {}: {error}", path.display()))?;
+		let rewritten = contents.replace(&build_prefix, "/build/");
+		if rewritten != contents {
+			fs::write(&path, rewritten).map_err(|error| {
+				tg::error!("failed to write depfile {}: {error}", path.display())
+			})?;
+		}
 	}
-
 	Ok(())
 }

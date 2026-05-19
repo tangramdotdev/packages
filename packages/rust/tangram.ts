@@ -9,13 +9,13 @@ import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
 
 export {
-	runProcMacroDeps as runProxyNextProcMacroDeps,
-	testCodegen as testProxyNextCodegen,
-	testProbe as testProxyNext,
-	testProcMacroDeps as testProxyNextProcMacroDeps,
-	testWorkspace as testProxyNextWorkspace,
-	testWorkspaceMode2 as testProxyNextWorkspaceMode2,
-} from "./proxy_next.tg.ts";
+	runProcMacroDeps,
+	testCodegen,
+	testProbe,
+	testProcMacroDeps,
+	testWorkspace,
+	testWorkspaceMode2,
+} from "./proxy.tg.ts";
 
 import * as cargo_ from "./cargo.tg.ts";
 export * as cargo from "./cargo.tg.ts";
