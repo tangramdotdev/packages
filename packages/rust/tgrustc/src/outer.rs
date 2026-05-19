@@ -25,24 +25,6 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	let mut env = tg::process::env::env()?;
 	rewrite_dir_env(&mut env, "OUT_DIR").await?;
 
-	// Strip runtime/wrapper env that makes the spawn key unstable across
-	// machines but has no semantic effect on rustc inside the sandbox:
-	//   - `TANGRAM_URL`: client→server address; varies per server.
-	//   - `RUSTC_WRAPPER`: cargo's wrapper hint, exported as a rendered host
-	//     path; the sandbox spawns rustc directly so the value is unused. Two
-	//     servers with the same wrapper artifact still render different host
-	//     paths under their own data dirs.
-	//   - `TANGRAM_INJECTION_*`: std.wrap runtime injection state; the
-	//     wrapped rustc binary re-derives these on its own. Inherited values
-	//     are rendered host paths and vary per server.
-	//   - `TANGRAM_OUTPUT`: per-process tempdir; never stable. The driver
-	//     re-resolves its own output path inside the sub-sandbox.
-	env.remove("TANGRAM_URL");
-	env.remove("RUSTC_WRAPPER");
-	env.remove("TANGRAM_OUTPUT");
-	env.remove("TGRUSTC_SPAWN_LOG");
-	env.retain(|key, _| !key.starts_with("TANGRAM_INJECTION_"));
-
 	// `TGRUSTC_SANDBOX_TOOLCHAIN` overrides the toolchain artifact used
 	// inside the sub-sandbox. Set by `cargo.run` so the host's bare rustup
 	// toolchain is replaced with a `std.wrap`-ed tangram-managed toolchain that
@@ -82,6 +64,12 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	{
 		prepend_sdk_to_path(&mut env, sdk);
 	}
+
+	// Allowlist filter: the sub-sandbox sees only env vars whose names are
+	// explicitly known to influence rustc behavior. Everything else (host
+	// paths, jobserver fds, locale, terminal state, wrapper plumbing) drops
+	// out so it cannot poison the spawn-key cache or warn at runtime.
+	env.retain(|key, _| is_allowed_sandbox_env(key));
 
 	env.insert(
 		"TGRUSTC_DRIVER".to_owned(),
@@ -198,6 +186,47 @@ async fn checkout_outputs(build: &tg::Directory, out_dir: &Path) -> tg::Result<(
 		joined.map_err(|error| tg::error!("checkout task panicked: {error}"))??;
 	}
 	Ok(())
+}
+
+/// Allowlist for env vars that propagate into the sub-sandbox rustc
+/// invocation. Cache stability depends on minimizing what flows through:
+/// every host-varied env var becomes part of the spawn key, and many leak
+/// host fds/paths that warn or fail at runtime. Add entries only when a
+/// failing fixture names a specific need.
+fn is_allowed_sandbox_env(key: &str) -> bool {
+	// `OUT_DIR` is rewritten to a content-addressed template by
+	// `rewrite_dir_env` so its value is sandbox-safe.
+	if key == "OUT_DIR" {
+		return true;
+	}
+	// `PATH` is synthesized in `prepend_sdk_to_path` with sandbox-internal
+	// artifact paths.
+	if key == "PATH" {
+		return true;
+	}
+	// Cargo-set per-crate metadata that `env!` macros consume.
+	if matches!(
+		key,
+		"CARGO_CRATE_NAME"
+			| "CARGO_PRIMARY_PACKAGE"
+			| "CARGO_BIN_NAME"
+			| "CARGO_MANIFEST_LINKS"
+			| "RUSTFLAGS"
+			| "RUSTDOCFLAGS"
+			| "CARGO_ENCODED_RUSTFLAGS"
+	) {
+		return true;
+	}
+	// Cargo-set prefix families.
+	if key.starts_with("CARGO_PKG_")
+		|| key.starts_with("CARGO_CFG_")
+		|| key.starts_with("CARGO_FEATURE_")
+		|| key.starts_with("CARGO_DEP_")
+		|| key.starts_with("CARGO_BIN_EXE_")
+	{
+		return true;
+	}
+	false
 }
 
 /// If `env[key]` is a host-path string pointing at an existing directory,
