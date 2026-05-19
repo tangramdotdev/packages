@@ -3,6 +3,7 @@ import { $ } from "std" with { source: "../std" };
 import { libclang } from "llvm" with { source: "../llvm" };
 import openssl from "openssl" with { source: "../openssl.tg.ts" };
 import pkgconf from "pkgconf" with { source: "../pkgconf.tg.ts" };
+import xz from "xz" with { source: "../xz.tg.ts" };
 
 import { cargo, rustTriple, self, VERSION } from "./tangram.ts";
 
@@ -401,6 +402,434 @@ export const testBuildScriptFileDep = async () => {
 		(await out.text).includes("hello from config file"),
 		`unexpected output: ${await out.text}`,
 	);
+};
+
+/** Legacy fixture: cross-compile proc-macro (proc macros build for host; bin builds for target). */
+export const testProcMacroCross = async () => {
+	const hostTriple = std.triple.host();
+	const hostArch = std.triple.arch(hostTriple);
+	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
+	const targetTriple = std.triple.create(hostTriple, { arch: targetArch });
+
+	const result = await cargo.build({
+		source: tests.get("hello-proc-macro").then(tg.Directory.expect),
+		proxy: true,
+		target: targetTriple,
+	});
+	console.log("testProcMacroCross result", result.id);
+
+	const app = await result.get("bin/app").then(tg.File.expect);
+	tg.assert(app !== undefined, "cross-compiled bin/app should exist");
+	return result;
+};
+
+/** Legacy fixture: tangram.ts with external import does not break the proxy. */
+export const testExternalTsImport = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+	const sourceWithTangram = tg.directory(source, {
+		"tangram.ts": tg.file(`
+import foo from "foo" with { source: "../external-package/foo.tg.ts" };
+export default foo;
+`),
+	});
+
+	const result = await cargo.build({
+		source: sourceWithTangram,
+		proxy: true,
+	});
+
+	const out = await $`cli | tee ${tg.output}`.env(result).then(tg.File.expect);
+	tg.assert(
+		(await out.text).trim() === "Hello from a workspace!",
+		`unexpected output: ${await out.text}`,
+	);
+	return result;
+};
+
+/** Legacy fixture: passthrough mode + proxy. Old wrapper emitted "passthrough mode" /
+ *  "spawned process" trace lines; new wrapper does not, so the trace-text
+ *  assertions are dropped and only the binary output is checked. */
+export const testPassthrough = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+	const result = await cargo.build({
+		source,
+		proxy: true,
+		env: { TGRUSTC_PASSTHROUGH_PROJECT_DIR: tg`${source}` },
+	});
+
+	const out = await $`${result}/bin/cli | tee ${tg.output}`.then(tg.File.expect);
+	tg.assert(
+		(await out.text).trim() === "Hello from a workspace!",
+		`unexpected output: ${await out.text}`,
+	);
+	return result;
+};
+
+/** Legacy fixture: crossterm — exercises CARGO_MANIFEST_DIR for proc-macros. */
+export const testProxyCrossterm = async () => {
+	const result = await cargo.build({
+		source: tests.get("hello-crossterm").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testProxyCrossterm result", result.id);
+
+	const out = await $`hello-crossterm | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	tg.assert(
+		(await out.text).includes("crossterm"),
+		`unexpected output: ${await out.text}`,
+	);
+	return result;
+};
+
+/** Legacy fixture: -L native paths from xz must not reference outer-build tmp. */
+export const testXzNative = async () => {
+	const result = await cargo.build({
+		source: tests.get("xz-native").then(tg.Directory.expect),
+		proxy: true,
+		env: std.env.arg(xz()),
+	});
+	console.log("testXzNative result", result.id);
+	return result;
+};
+
+/** Legacy fixture: vendored transitive deps via hashbrown's deps. */
+export const testVendoredTransitiveDeps = async () => {
+	const result = await cargo.build({
+		source: tests.get("vendored-transitive").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testVendoredTransitiveDeps result", result.id);
+
+	const out = await $`vendored-transitive | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	tg.assert(
+		(await out.text).includes("Success!"),
+		`unexpected output: ${await out.text}`,
+	);
+	return result;
+};
+
+/** Legacy fixture: `--extern alias=lib...` where alias differs from crate name. */
+export const testAliasedExtern = async () => {
+	const result = await cargo.build({
+		source: tests.get("aliased-extern").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testAliasedExtern result", result.id);
+	return result;
+};
+
+/** Legacy fixture: `pub use crate as alias` re-export. */
+export const testPubUseReexport = async () => {
+	const result = await cargo.build({
+		source: tests.get("pub-use-reexport").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testPubUseReexport result", result.id);
+	return result;
+};
+
+/** Legacy fixture: vendored pub-use stress for parallel compilation. */
+export const testVendoredPubUse = async () => {
+	const result = await cargo.build({
+		source: tests.get("vendored-pub-use").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testVendoredPubUse result", result.id);
+
+	const out = await $`vendored-pub-use | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	tg.assert(
+		(await out.text).includes("all crates compiled successfully"),
+		`unexpected output: ${await out.text}`,
+	);
+	return result;
+};
+
+/** Legacy fixture: missing-externs fallback (old wrapper relied on TGRUSTC_TEST_SKIP_EXTERNS).
+ *  The new wrapper does not maintain externs sidecars; this test may need adaptation. */
+export const testMissingExternsFallback = async () => {
+	const result = await cargo.build({
+		source: tests.get("missing-externs").then(tg.Directory.expect),
+		proxy: true,
+	});
+	console.log("testMissingExternsFallback result", result.id);
+
+	const out = await $`top | tee ${tg.output}`.env(result).then(tg.File.expect);
+	tg.assert(
+		(await out.text).trim() === "result: 43",
+		`Expected "result: 43", got "${(await out.text).trim()}"`,
+	);
+	return result;
+};
+
+/** Per-spawn observability emitted by the wrapper. Currently unused — the
+ * new wrapper does not emit tracing lines, so `parseStats` returns undefined
+ * and tests that depend on it fail until cache-hit observability is added. */
+export type RustcStats = {
+	crate_name: string;
+	cached: boolean;
+	elapsed_ms: number;
+	process_id: string;
+	command_id: string;
+};
+
+export const parseStats = async (
+	result: tg.Directory,
+	eventName: string = "proxy_complete",
+): Promise<Array<RustcStats> | undefined> => {
+	const stderrLog = await result
+		.tryGet("cargo-stderr.log")
+		.then((a) => (a instanceof tg.File ? a : undefined));
+	if (!stderrLog) return undefined;
+
+	const text = await stderrLog.text;
+	const stats: Array<RustcStats> = [];
+	for (const line of text.split("\n")) {
+		if (!line.includes(eventName)) continue;
+		const crateMatch = /crate_name=(\S+)/.exec(line);
+		const cachedMatch = /cached=(true|false)/.exec(line);
+		const elapsedMatch = /elapsed_ms=(\d+)/.exec(line);
+		const processMatch = /process_id=(\S+)/.exec(line);
+		const commandMatch = /command_id=(\S+)/.exec(line);
+		if (crateMatch?.[1] && cachedMatch?.[1]) {
+			stats.push({
+				crate_name: crateMatch[1],
+				cached: cachedMatch[1] === "true",
+				elapsed_ms: elapsedMatch?.[1] ? parseInt(elapsedMatch[1], 10) : 0,
+				process_id: processMatch?.[1] ?? "",
+				command_id: commandMatch?.[1] ?? "",
+			});
+		}
+	}
+	return stats.length > 0 ? stats : undefined;
+};
+
+export const summarizeStats = (stats: Array<RustcStats>) => {
+	const hits = stats.filter((s) => s.cached).length;
+	const misses = stats.filter((s) => !s.cached).length;
+	const totalMs = stats.reduce((sum, s) => sum + s.elapsed_ms, 0);
+	return { hits, misses, totalMs, crates: stats.length };
+};
+
+export const buildWithStats = (...args: std.Args<cargo.Arg>) =>
+	cargo.build(...args, {
+		proxy: true,
+		captureStderr: true,
+	});
+
+const getCrateStatus = (stats: Array<RustcStats>, name: string) =>
+	stats.find((s) => s.crate_name === name);
+
+type CacheTestConfig = {
+	source: tg.Directory;
+	modifyPath: string;
+	expectations: Record<string, boolean>;
+	buildArgs?: std.Args<cargo.Arg>;
+	tag?: string;
+};
+
+const cacheTestArgs: cargo.Arg = {
+	proxy: true,
+	captureStderr: true,
+};
+
+const assertCacheHit = async (
+	config: CacheTestConfig,
+): Promise<{
+	first: Array<RustcStats>;
+	second: Array<RustcStats>;
+	secondResult: tg.Directory;
+}> => {
+	const { source, modifyPath, expectations, buildArgs = [], tag } = config;
+	const comment = `${tag ?? "cache test modification"} ${Date.now()}`;
+
+	const firstResult = await cargo.build(
+		{ source },
+		...buildArgs,
+		cacheTestArgs,
+	);
+	const firstStats = await parseStats(firstResult);
+
+	const originalText = await source
+		.get(modifyPath)
+		.then(tg.File.expect)
+		.then((f: tg.File) => f.text);
+	const modifiedSource = tg.directory(source, {
+		[modifyPath]: tg.file(`${originalText}\n// ${comment}\n`),
+	});
+
+	const secondResult = await cargo.build(
+		{ source: modifiedSource },
+		...buildArgs,
+		cacheTestArgs,
+	);
+	const secondStats = await parseStats(secondResult);
+
+	if (!secondStats) {
+		throw new Error("Rebuild should have stats.");
+	}
+	if (!firstStats) {
+		throw new Error("First build should have stats.");
+	}
+
+	for (const [crate_name, expectedCached] of Object.entries(expectations)) {
+		const status = getCrateStatus(secondStats, crate_name);
+		const label = expectedCached ? "cache hit" : "cache miss";
+		tg.assert(
+			status?.cached === expectedCached,
+			`${crate_name} should be a ${label}, got cached=${status?.cached}`,
+		);
+	}
+
+	return { first: firstStats, second: secondStats, secondResult };
+};
+
+export const testCacheHitVendoredDeps = async () => {
+	const source = await tests.get("parallel-deps").then(tg.Directory.expect);
+	await cargo.build({ source, proxy: true });
+	await buildWithStats({ source });
+	const { second, secondResult } = await assertCacheHit({
+		source,
+		modifyPath: "src/main.rs",
+		expectations: {
+			parallel_deps: false,
+			aho_corasick: true,
+			regex_syntax: true,
+			memchr: true,
+		},
+	});
+	tg.assert(summarizeStats(second).hits >= 2);
+	const out = await $`parallel-deps | tee ${tg.output}`
+		.env(secondResult)
+		.then(tg.File.expect);
+	tg.assert((await out.text).trim().length > 0);
+};
+
+export const testCacheHitSharedDepsAcrossProjects = async () => {
+	await buildWithStats({
+		source: tests.get("parallel-deps").then(tg.Directory.expect),
+	});
+
+	const baseSource = await tests.get("project-two").then(tg.Directory.expect);
+	const mainRs = await baseSource.get("src/main.rs").then(tg.File.expect);
+	const mainRsText = await mainRs.text;
+	const source = tg.directory(baseSource, {
+		src: { "main.rs": `${mainRsText}\n// ${Date.now()}\n` },
+	});
+
+	const result = await buildWithStats({ source });
+	const stats = await parseStats(result);
+	if (!stats) {
+		throw new Error("Project 2 build should have stats.");
+	}
+
+	const expectations: Record<string, boolean> = {
+		project_two: false,
+		aho_corasick: true,
+		regex_syntax: true,
+		memchr: true,
+	};
+	for (const [name, expectedCached] of Object.entries(expectations)) {
+		const status = getCrateStatus(stats, name);
+		const label = expectedCached ? "cache hit" : "cache miss";
+		tg.assert(
+			status?.cached === expectedCached,
+			`${name} should be a ${label}, got cached=${status?.cached}`,
+		);
+	}
+	tg.assert(summarizeStats(stats).hits >= 3);
+
+	const out = await $`project-two | tee ${tg.output}`
+		.env(result)
+		.then(tg.File.expect);
+	tg.assert((await out.text).includes("project 2"));
+};
+
+export const testCacheHitUnchangedWorkspaceCrates = async () => {
+	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
+	const { second, secondResult } = await assertCacheHit({
+		source,
+		modifyPath: "packages/cli/src/main.rs",
+		expectations: {
+			cli: false,
+			greeting: true,
+			bytes: true,
+		},
+	});
+	tg.assert(summarizeStats(second).hits >= 2);
+	const out = await $`cli | tee ${tg.output}`
+		.env(secondResult)
+		.then(tg.File.expect);
+	tg.assert((await out.text).trim() === "Hello from a workspace!");
+};
+
+export const testMultiVersionCacheHit = async () => {
+	const source = await tests.get("multi-version").then(tg.Directory.expect);
+	const { second } = await assertCacheHit({
+		source,
+		modifyPath: "crate-b/src/main.rs",
+		expectations: {
+			crate_a: true,
+			crate_b: false,
+		},
+	});
+	const unexpected = second.filter(
+		(s) => !s.cached && s.crate_name !== "crate_b",
+	);
+	tg.assert(
+		unexpected.length === 0,
+		`Expected all crates except crate_b to be cache hits, misses: ${unexpected.map((s) => s.crate_name).join(", ")}.`,
+	);
+};
+
+export const testCacheHitWithDepVars = async () => {
+	const source = await tests.get("dep-var-cache").then(tg.Directory.expect);
+	await assertCacheHit({
+		source,
+		modifyPath: "packages/app/src/main.rs",
+		expectations: {
+			app: false,
+			consumer: true,
+			lib_sys: true,
+		},
+	});
+};
+
+export const testCacheHitWithPreScript = async () => {
+	const source = await tests.get("vendor-cache-hit").then(tg.Directory.expect);
+	const nodeModulesBin = tg.directory({ ".gitkeep": tg.file("") });
+	const pre = tg`export PATH="$PATH:${nodeModulesBin}"`;
+	await assertCacheHit({
+		source,
+		modifyPath: "packages/app/src/main.rs",
+		expectations: {
+			app: false,
+			lib: true,
+			indexmap: true,
+			once_cell: true,
+			memchr: true,
+		},
+		buildArgs: [{ useCargoVendor: true, pre }],
+	});
+};
+
+export const testSysLinkCache = async () => {
+	const source = await tests.get("sys-link-cache").then(tg.Directory.expect);
+	await assertCacheHit({
+		source,
+		modifyPath: "packages/app/src/main.rs",
+		expectations: {
+			app: false,
+			consumer: true,
+			wrapper_sys: true,
+			"build_script_build(wrapper_sys)": true,
+		},
+	});
 };
 
 /** Legacy fixture: workspace with a build script in a workspace member. */
