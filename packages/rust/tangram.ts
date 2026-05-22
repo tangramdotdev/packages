@@ -8,6 +8,48 @@ export * as build from "./build.tg.ts";
 import * as proxy_ from "./proxy.tg.ts";
 export * as proxy from "./proxy.tg.ts";
 
+export {
+	runProcMacroDeps,
+	testBindgen,
+	testBuildScriptEnvDep,
+	testBuildScriptFileDep,
+	testCacheHitSharedDepsAcrossProjects,
+	testCacheHitUnchangedWorkspaceCrates,
+	testCacheHitVendoredDeps,
+	testCacheHitWithDepVars,
+	testCacheHitWithPreScript,
+	testAliasedExtern,
+	testCcRs,
+	testCodegen,
+	testExternalTsImport,
+	testHello,
+	testMissingExternsFallback,
+	testMultiVersionCacheHit,
+	testOpenSSL,
+	testPassthrough,
+	testPkgconfig,
+	testProbe,
+	testProcMacro,
+	testProcMacroCross,
+	testProcMacroDeps,
+	testProcMacroWithDeps,
+	testProxyCompiles,
+	testProxyCrossterm,
+	testPubUseReexport,
+	testRunnerBuildScript,
+	testRunnerCfgProbe,
+	testRunnerEnvPassthrough,
+	testRunnerPathExec,
+	testRunnerPathTools,
+	testSysLinkCache,
+	testVendoredPubUse,
+	testVendoredTransitiveDeps,
+	testXzNative,
+	testWorkspace,
+	testWorkspaceBuildScript,
+	testWorkspaceMode2,
+} from "./proxy.tg.ts";
+
 import * as cargo_ from "./cargo.tg.ts";
 export * as cargo from "./cargo.tg.ts";
 

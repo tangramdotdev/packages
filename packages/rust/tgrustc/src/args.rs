@@ -1,152 +1,67 @@
 use tangram_client::prelude::*;
 
-/// Input arguments to the rustc proxy.
 #[derive(Debug)]
-pub(crate) struct Args {
-	/// Build script output directory, from `OUT_DIR`.
-	pub(crate) cargo_out_directory: Option<String>,
-	/// The crate being compiled, from `--crate-name`.
-	pub(crate) crate_name: String,
-	/// Crate types from `--crate-type` args.
-	pub(crate) crate_types: Vec<String>,
-	/// Paths from `-L dependency=` args.
-	pub(crate) dependencies: Vec<String>,
-	/// Extern crate entries from `--extern name=path` args.
-	pub(crate) externs: Vec<(String, String)>,
-	/// All other rustc arguments not handled above.
-	pub(crate) remaining: Vec<String>,
-	/// Path to the real rustc binary.
-	pub(crate) rustc: String,
-	/// Output directory from `--out-dir`. Always provided by cargo for builds that reach `run_proxy`.
-	pub(crate) rustc_output_directory: Option<String>,
-	/// The crate's manifest directory, from `CARGO_MANIFEST_DIR` or inferred from source file paths.
-	pub(crate) source_directory: String,
-	/// Whether cargo is piping source via stdin.
-	pub(crate) stdin: bool,
+pub struct Args {
+	pub rustc: String,
+	pub out_dir: Option<String>,
+	pub crate_name: Option<String>,
+	pub extra_filename: Option<String>,
+	pub passthrough: Vec<String>,
 }
 
 impl Args {
-	pub(crate) fn parse() -> tg::Result<Self> {
-		let rustc = std::env::args()
-			.nth(1)
-			.ok_or(tg::error!("missing argument for rustc"))?;
-		let mut stdin = false;
-		let mut crate_name = None;
-		let mut crate_types = Vec::new();
-		let mut dependencies = Vec::new();
-		let mut externs = Vec::new();
-		let mut rustc_output_directory = None;
-		let mut remaining = Vec::new();
-		let cargo_out_directory = std::env::var("OUT_DIR").ok();
+	pub fn parse() -> tg::Result<Self> {
+		let mut all = std::env::args().skip(1);
+		let rustc = all
+			.next()
+			.ok_or_else(|| tg::error!("expected rustc binary as first argument"))?;
 
-		let mut arg_iter = std::env::args().skip(2).peekable();
-		while let Some(arg) = arg_iter.next() {
-			let value = if ARGS_WITH_VALUES.contains(&arg.as_str())
-				&& arg_iter.peek().is_some_and(|a| !a.starts_with('-'))
-			{
-				arg_iter.next()
-			} else {
-				None
-			};
-			match (arg.as_ref(), value) {
-				("--crate-name", Some(name)) => {
-					crate_name = Some(name.clone());
-					remaining.push(arg);
-					remaining.push(name);
-				},
-				("-L", Some(value)) if value.starts_with("dependency=") => {
-					dependencies.push(value.strip_prefix("dependency=").unwrap().into());
-				},
-				("--extern", Some(value)) => {
-					let (name, path) = match value.split_once('=') {
-						Some((n, p)) => (n, p),
-						None => (value.as_str(), ""),
-					};
-					externs.push((name.into(), path.into()));
-				},
-				("--crate-type", Some(value)) => {
-					crate_types.push(value.clone());
-					remaining.push(arg);
-					remaining.push(value);
-				},
-				("--out-dir", Some(value)) => rustc_output_directory = Some(value),
-				(arg, None) if arg.starts_with("--out-dir=") => {
-					rustc_output_directory = arg.strip_prefix("--out-dir=").map(Into::into);
-				},
-				("-", None) => {
-					stdin = true;
-					remaining.push("-".into());
-				},
-				(_, None) => remaining.push(arg),
-				(_, Some(value)) => {
-					remaining.push(arg);
-					remaining.push(value);
-				},
+		let mut out_dir = None;
+		let mut crate_name = None;
+		let mut extra_filename = None;
+		let mut passthrough = Vec::new();
+		while let Some(arg) = all.next() {
+			if arg == "--out-dir" {
+				out_dir = all.next();
+				continue;
 			}
+			if let Some(rest) = arg.strip_prefix("--out-dir=") {
+				out_dir = Some(rest.to_owned());
+				continue;
+			}
+			if arg == "--crate-name" {
+				let value = all
+					.next()
+					.ok_or_else(|| tg::error!("--crate-name was the last argument"))?;
+				crate_name = Some(value.clone());
+				passthrough.push(arg);
+				passthrough.push(value);
+				continue;
+			}
+			if let Some(rest) = arg.strip_prefix("--crate-name=") {
+				crate_name = Some(rest.to_owned());
+				passthrough.push(arg);
+				continue;
+			}
+			if arg == "-C"
+				&& let Some(next) = all.next()
+			{
+				if let Some(rest) = next.strip_prefix("extra-filename=") {
+					extra_filename = Some(rest.to_owned());
+				}
+				passthrough.push(arg);
+				passthrough.push(next);
+				continue;
+			}
+			passthrough.push(arg);
 		}
 
-		let source_directory = std::env::var("CARGO_MANIFEST_DIR").ok().unwrap_or_else(|| {
-			remaining
-				.iter()
-				.find(|arg| {
-					std::path::Path::new(arg)
-						.extension()
-						.is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
-				})
-				.and_then(|arg| {
-					std::path::Path::new(arg)
-						.parent()
-						.and_then(|p| p.to_str())
-						.map(ToOwned::to_owned)
-				})
-				.unwrap_or_else(|| ".".into())
-		});
-
 		Ok(Self {
-			cargo_out_directory,
-			crate_name: crate_name.unwrap_or_else(|| "unknown".into()),
-			crate_types,
-			dependencies,
-			externs,
-			remaining,
 			rustc,
-			rustc_output_directory,
-			source_directory,
-			stdin,
+			out_dir,
+			crate_name,
+			extra_filename,
+			passthrough,
 		})
 	}
 }
-
-const ARGS_WITH_VALUES: [&str; 31] = [
-	"--allow",
-	"--cap-lints",
-	"--cfg",
-	"--codegen",
-	"--color",
-	"--crate-name",
-	"--crate-type",
-	"--deny",
-	"--diagnostic-width",
-	"--edition",
-	"--emit",
-	"--error-format",
-	"--explain",
-	"--extern",
-	"--forbid",
-	"--force-warn",
-	"--json",
-	"--out-dir",
-	"--print",
-	"--remap-path-prefix",
-	"--sysroot",
-	"--target",
-	"--warn",
-	"-A",
-	"-C",
-	"-D",
-	"-F",
-	"-l",
-	"-L",
-	"-o",
-	"-W",
-];

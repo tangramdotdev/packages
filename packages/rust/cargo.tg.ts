@@ -66,14 +66,11 @@ export type Arg = CommonArg & {
 	/** By default, cargo builds compile "out-of-tree", creating build artifacts in a mutable working directory but referring to an immutable source. Enabling `buildInTree` will instead first copy the source directory into the working build directory. Default: false. */
 	buildInTree?: boolean;
 
-	/** Capture cargo stderr to a file in the output. Useful for parsing tgrustc tracing output in tests. Default: false. */
+	/** Capture cargo stderr to a file in the output. Useful for inspection in tests. Default: false. */
 	captureStderr?: boolean;
 
 	/** If the build requires network access, provide a checksum or the string "any" to accept any result. */
 	checksum?: tg.Checksum;
-
-	/** Disable the tgrustc per-build path→artifact-id cache. Default: false. */
-	disableCheckinCache?: boolean;
 
 	/** Should this build have network access? Must set a checksum to enable. Default: false. */
 	network?: boolean;
@@ -212,6 +209,11 @@ export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
 	const target = target_ ? rustTriple(target_) : rustHost;
 	const crossCompiling = target !== rustHost;
 
+	const detectedChannel = source
+		? await readToolchainChannel(source)
+		: undefined;
+	const effectiveChannel = channel_ ?? detectedChannel ?? "stable";
+
 	let vendorSetup: string | tg.Template = "";
 	if (cargoLock || useCargoVendor) {
 		let cargoConfig: tg.Template;
@@ -264,35 +266,18 @@ VENDORCFG`;
 		exports.push(`export CXX_${tripleToEnvVar(target)}="${target}-c++"`);
 	}
 
-	{
-		const effectiveJobs = parallelJobs ?? (proxy ? 256 : undefined);
-		if (effectiveJobs !== undefined) {
-			exports.push(`export CARGO_BUILD_JOBS="${effectiveJobs}"`);
-		}
+	if (parallelJobs !== undefined) {
+		exports.push(`export CARGO_BUILD_JOBS="${parallelJobs}"`);
 	}
 
 	// Lets the proxy detect workspace members and route them to passthrough;
 	// cargo sets cwd per-crate so current_dir alone is insufficient.
-	const passthroughSetup = proxy
-		? 'export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$PWD"'
-		: "";
+	const passthroughSetup =
+		proxy && passthrough ? 'export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$PWD"' : "";
 
 	let proxySetup: string | tg.Template = "";
 	if (proxy) {
 		const proxyDir = proxy_.proxy();
-		const proxyBin = proxyDir
-			.then((d) => d.get("bin/tgrustc"))
-			.then(tg.File.expect);
-		if (!channel_ && !source) {
-			throw new Error(
-				"When proxy mode is enabled, provide a 'source' directory or 'channel' argument to determine the Rust toolchain channel.",
-			);
-		}
-		const channel =
-			channel_ ??
-			(source ? await readToolchainChannel(source) : undefined) ??
-			"stable";
-		const toolchainDir = self({ host, channel });
 
 		const sdkArgs: Array<std.sdk.Arg> = [{ host: rustHost, target: rustHost }];
 		if (std.triple.os(rustHost) === "linux") {
@@ -300,18 +285,18 @@ VENDORCFG`;
 		}
 		const sandboxSdk = await tg.build(std.sdk, ...sdkArgs);
 
-		proxySetup = await tg`export RUSTC="${toolchainDir}/bin/rustc"
-export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
-export TGRUSTC_DRIVER_EXECUTABLE="${proxyBin}"
-export TGRUSTC_RUN_MODE=1
-export TGRUSTC_TANGRAM_RUSTC="${toolchainDir}/bin/rustc"
+		// The host's bare rustup toolchain is not sandbox-safe; the std.wrap-ed
+		// `self()` toolchain runs without a system dynamic linker. Pinning the
+		// same channel as the host means the two rustc binaries produce ABI-
+		// identical rlibs so cargo's per-crate fingerprint accepts both.
+		const toolchainDir = await tg.build(self, {
+			host: rustHost,
+			channel: effectiveChannel,
+		});
+		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
+export TGRUSTC_SANDBOX_TOOLCHAIN="${toolchainDir}"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
-export TGRUSTC_SOURCE_DIR="$PWD"
-export TGRUSTC_CARGO="${toolchainDir}/bin/cargo"
-export CARGO_HOST_RUNNER="${proxyDir}/bin/tgrustc runner"
-# Snapshot host env names so the proxy can identify cargo:rustc-env additions.
-export TGRUSTC_HOST_ENV_SNAPSHOT="$(mktemp)"
-env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
+export TGRUSTC_SOURCE_DIR="$PWD"`;
 	}
 
 	const featureFlags: Array<string> = [];
@@ -322,31 +307,10 @@ env | cut -d= -f1 > "$TGRUSTC_HOST_ENV_SNAPSHOT"`;
 		featureFlags.push(`--features "${features.join(",")}"`);
 	}
 
-	// Nightly cargo for -Zhost-config support (stable silently ignores -Z).
-	const os = std.triple.os(host);
-	const hostLinker = os === "darwin" ? "clang" : "gcc";
-	const cargoCmd = proxy
-		? `"$TGRUSTC_CARGO" -Zhost-config -Ztarget-applies-to-host --config 'target-applies-to-host = false' --config 'host.linker = "${hostLinker}"' --config "host.runner = '$CARGO_HOST_RUNNER'"`
-		: `cargo`;
-	// --target is required for host.runner to apply to build scripts.
-	const targetFlag = proxy ? `--target "$RUST_TARGET"` : "";
-	const insertedFlags = [targetFlag, ...featureFlags].filter(Boolean).join(" ");
-	// Symlink target/<triple>/<profile>/* into target/<profile>/ for plain-cargo compat.
+	const insertedFlags = featureFlags.join(" ");
 	const execLine = insertedFlags
-		? proxy
-			? `${cargoCmd} "$1" ${insertedFlags} "\${@:2}"
-__cargo_status=$?
-for __f in "target/$RUST_TARGET/debug/"* "target/$RUST_TARGET/release/"*; do
-  [ -f "$__f" ] && [ -x "$__f" ] || continue
-  __name=$(basename "$__f")
-  case "$__name" in *.*) continue;; esac
-  __rel=$(echo "$__f" | sed "s|^target/|../|")
-  __dir=$(dirname "$__f" | sed "s|^target/$RUST_TARGET/||")
-  ln -sf "$__rel" "target/$__dir/$__name" 2>/dev/null || true
-done
-exit $__cargo_status`
-			: `exec ${cargoCmd} "$1" ${insertedFlags} "\${@:2}"`
-		: `exec ${cargoCmd} "$@"`;
+		? `exec cargo "$1" ${insertedFlags} "\${@:2}"`
+		: `exec cargo "$@"`;
 
 	// Only "set" mutations; prefix/suffix would inherit `tg run` SDK PATH entries
 	// and break passthrough compilation.
@@ -366,6 +330,31 @@ exit $__cargo_status`
 
 	const preSetup = pre ? await tg`${pre}` : "";
 	const exportsBlock = exports.join("\n");
+	// When TGRUSTC_CARGO_RUN_ENV_LOG is set, dump the post-setup environment
+	// to that path. Set the variable to the same value across two `tg run`
+	// invocations to capture both for diffing — each run uses a suffix of
+	// `$$.<nanos>` so the two captures land in distinct files even when the
+	// base path matches. Diff the two to find tangram-resolved paths (or
+	// other env vars) that drift between runs and invalidate cargo's
+	// fingerprints.
+	const envCapture = `
+if [ -n "\${TGRUSTC_CARGO_RUN_ENV_LOG:-}" ]; then
+	_cap_dir=$(dirname "$TGRUSTC_CARGO_RUN_ENV_LOG")
+	_cap_base=$(basename "$TGRUSTC_CARGO_RUN_ENV_LOG")
+	mkdir -p "$_cap_dir"
+	_cap_path="$_cap_dir/$_cap_base.$$.$(date +%s%N)"
+	{
+		echo "# pid=$$ pwd=$PWD"
+		echo "# rustc=$(command -v rustc 2>/dev/null || echo MISSING)"
+		echo "# cargo=$(command -v cargo 2>/dev/null || echo MISSING)"
+		echo "# rustc -vV:"
+		rustc -vV 2>&1 | sed 's/^/#   /'
+		echo
+		env | LC_ALL=C sort
+	} > "$_cap_path"
+	echo "tgrustc: cargo.run env captured to $_cap_path" >&2
+fi
+`;
 	const script = tg`#!/usr/bin/env bash
 set -euo pipefail
 ${exportsBlock}
@@ -374,6 +363,7 @@ ${vendorSetup}
 ${proxySetup}
 ${passthroughSetup}
 ${preSetup}
+${envCapture}
 ${execLine}
 `;
 
@@ -392,7 +382,6 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 		captureStderr = false,
 		channel: channel_,
 		checksum,
-		disableCheckinCache = false,
 		disableDefaultFeatures = false,
 		env: env_,
 		features = [],
@@ -431,7 +420,9 @@ export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 
 	const sdk = await tg.build(std.sdk, ...sdkArgs);
 	envs.push(sdk);
-	// Nightly required for host.runner.
+	// `host.runner` requires `-Zhost-config`, a nightly-only cargo flag.
+	// Without nightly we still proxy rustc invocations but build scripts run
+	// on the host (no sandbox, no cache).
 	const channel = channel_ ?? (proxy ? "nightly" : "stable");
 	const rustArtifact = await tg.build(self, {
 		host: rustHost,
@@ -468,9 +459,27 @@ directory = "${vendoredDir}"`;
 
 	const proxyDir = proxy ? proxy_.proxy() : undefined;
 
-	if (proxy && proxyDir !== undefined) {
+	// Wire `host.runner` to the tgrustc runner subcommand so cargo invokes it
+	// for every build script. Nightly required: `target-applies-to-host = false`
+	// + `-Zhost-config` together let `host.linker`/`host.runner` apply to the
+	// build-script crate (a host artefact distinct from `--target`).
+	const isNightly = channel === "nightly" || channel.startsWith("nightly-");
+	const useHostRunner = proxy && proxyDir !== undefined && isNightly;
+	if (proxy && !isNightly) {
+		console.log(
+			`cargo.build warning: proxy enabled with channel="${channel}"; build-script sandboxing requires nightly (host.runner needs -Zhost-config). Build scripts will run unsandboxed on the host.`,
+		);
+	}
+	if (useHostRunner && proxyDir !== undefined) {
 		const hostLinker = os === "darwin" ? "clang" : "gcc";
-		cargoConfig = await tg`${cargoConfig}
+		// Bare keys must appear before any `[section]` (TOML rule); prepend
+		// `target-applies-to-host = false` rather than appending, otherwise
+		// it falls under the trailing `[source.vendored-sources]` table and
+		// cargo silently warns "unused config key" — leaving the [host]
+		// runner unreachable.
+		cargoConfig = await tg`target-applies-to-host = false
+
+${cargoConfig}
 
 [host]
 runner = ["${proxyDir}/bin/tgrustc", "runner"]
@@ -510,14 +519,17 @@ linker = "${hostLinker}"`;
 	}
 
 	const cargoArgString = tg.Template.join(" ", ...cargoArgs);
-	const cargoPrefix = proxy
+	// `-Zhost-config` + `-Ztarget-applies-to-host` are required to make
+	// `[host]` config sections apply to build-script crates; both are
+	// nightly-only, so emit them only when host.runner is wired.
+	const cargoCmd = useHostRunner
 		? "cargo -Zhost-config -Ztarget-applies-to-host"
 		: "cargo";
 	// Redirect + replay (not process substitution) to avoid tee being killed
 	// before flushing on Linux.
 	const buildCommand = captureStderr
-		? tg`${cargoPrefix} build ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
-		: tg`${cargoPrefix} build ${cargoArgString}`;
+		? tg`${cargoCmd} build ${cargoArgString} 2>"${tg.output}/cargo-stderr.log"; cat "${tg.output}/cargo-stderr.log" >&2`
+		: tg`${cargoCmd} build ${cargoArgString}`;
 	const buildScript = tg.Template.join(
 		"\n",
 		preparePaths,
@@ -563,17 +575,13 @@ linker = "${hostLinker}"`;
 	}
 
 	if (proxy && proxyDir !== undefined) {
-		const proxyBin = proxyDir
-			.then((d) => d.get("bin/tgrustc"))
-			.then(tg.File.expect);
+		const sandboxToolchain = rustArtifact;
+		const sandboxSdk = sdk;
 		const proxyEnv: tg.Unresolved<std.env.Arg> = {
 			RUSTC_WRAPPER: tg`${proxyDir}/bin/tgrustc`,
-			// Avoids self-checkin per invocation.
-			TGRUSTC_DRIVER_EXECUTABLE: proxyBin,
+			TGRUSTC_SANDBOX_TOOLCHAIN: sandboxToolchain,
+			TGRUSTC_SANDBOX_SDK: sandboxSdk,
 		};
-		if (disableCheckinCache) {
-			proxyEnv.TGRUSTC_DISABLE_CHECKIN_CACHE = "1";
-		}
 		envs.push(proxyEnv);
 	}
 
