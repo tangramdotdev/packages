@@ -293,7 +293,9 @@ VENDORCFG`;
 			host: rustHost,
 			channel: effectiveChannel,
 		});
+		const driverArtifact = await (await proxyDir).get("bin/tgrustc");
 		proxySetup = await tg`export RUSTC_WRAPPER="${proxyDir}/bin/tgrustc"
+export TGRUSTC_DRIVER_ARTIFACT="${driverArtifact}"
 export TGRUSTC_SANDBOX_TOOLCHAIN="${toolchainDir}"
 export TGRUSTC_SANDBOX_SDK="${sandboxSdk}"
 export TGRUSTC_SOURCE_DIR="$PWD"`;
@@ -577,8 +579,10 @@ linker = "${hostLinker}"`;
 	if (proxy && proxyDir !== undefined) {
 		const sandboxToolchain = rustArtifact;
 		const sandboxSdk = sdk;
+		const driverArtifact = await (await proxyDir).get("bin/tgrustc");
 		const proxyEnv: tg.Unresolved<std.env.Arg> = {
 			RUSTC_WRAPPER: tg`${proxyDir}/bin/tgrustc`,
+			TGRUSTC_DRIVER_ARTIFACT: driverArtifact,
 			TGRUSTC_SANDBOX_TOOLCHAIN: sandboxToolchain,
 			TGRUSTC_SANDBOX_SDK: sandboxSdk,
 		};

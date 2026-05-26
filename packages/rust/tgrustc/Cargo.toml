@@ -21,6 +21,7 @@ result_large_err = "allow"
 rustix = { version = "1", features = ["stdio"] }
 tangram_client = { default-features = false, git = "https://github.com/tangramdotdev/tangram", rev = "fb597c328f8e83f835f38da3b3831bd8d57e7bfb" }
 tokio = { version = "1", default-features = false, features = ["rt", "fs"] }
+toml_edit = { version = "0.25.11", default-features = false, features = ["parse"] }
 
 [profile.release]
 codegen-units = 1

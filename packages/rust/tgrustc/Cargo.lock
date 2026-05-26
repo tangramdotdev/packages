@@ -2282,6 +2282,7 @@ dependencies = [
  "rustix",
  "tangram_client",
  "tokio",
+ "toml_edit",
 ]
 
 [[package]]

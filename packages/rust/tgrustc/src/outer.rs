@@ -21,14 +21,13 @@ pub async fn run(args: Args) -> tg::Result<()> {
 	// spawn-key cache. Fall back to CWD when cargo is absent.
 	let source_dir =
 		std::env::var_os("CARGO_MANIFEST_DIR").map_or_else(|| cwd.clone(), PathBuf::from);
+	let t_src = Instant::now();
 	let source_artifact = checkin(&source_dir).await?;
-	let self_exe = std::env::current_exe()
-		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let driver_artifact = checkin(&self_exe).await?;
-	let executable: tg::command::Executable = driver_artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("the driver artifact must be a file"))?
-		.into();
+	eprintln!(
+		"TGRUSTC_PROBE source_checkin_ms={}",
+		t_src.elapsed().as_millis()
+	);
+	let executable = resolve_driver_executable().await?;
 
 	// `tg::process::env::env()` reconstitutes typed values from the parent's
 	// `TANGRAM_ENV_*` shadow vars; `std::env::vars()` would lose the typing.
@@ -616,6 +615,31 @@ pub(crate) fn prepend_sdk_to_path(env: &mut tg::value::Map, sdk: tg::Artifact) {
 		"PATH".to_owned(),
 		tg::Value::Template(tg::Template::with_components(components)),
 	);
+}
+
+pub(crate) async fn resolve_driver_executable() -> tg::Result<tg::command::Executable> {
+	let t = Instant::now();
+	let (source, artifact) = match driver_artifact_from_env()? {
+		Some(artifact) => ("env", artifact),
+		None => {
+			let self_exe = std::env::current_exe()
+				.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
+			("checkin", checkin(&self_exe).await?)
+		},
+	};
+	eprintln!(
+		"TGRUSTC_PROBE driver_source={source} driver_resolve_ms={}",
+		t.elapsed().as_millis()
+	);
+	artifact
+		.try_unwrap_file()
+		.map_err(|_| tg::error!("the driver artifact must be a file"))
+		.map(Into::into)
+}
+
+fn driver_artifact_from_env() -> tg::Result<Option<tg::Artifact>> {
+	let env = tg::process::env::env()?;
+	Ok(env.get("TGRUSTC_DRIVER_ARTIFACT").and_then(extract_artifact))
 }
 
 pub(crate) async fn checkin(path: &Path) -> tg::Result<tg::Artifact> {

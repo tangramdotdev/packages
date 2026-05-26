@@ -32,13 +32,7 @@ pub async fn run() -> tg::Result<()> {
 	let source_template =
 		tg::Template::with_components([tg::template::Component::Artifact(source_artifact)]);
 
-	let self_exe = std::env::current_exe()
-		.map_err(|error| tg::error!("failed to read current_exe: {error}"))?;
-	let driver_artifact = outer::checkin(&self_exe).await?;
-	let executable: tg::command::Executable = driver_artifact
-		.try_unwrap_file()
-		.map_err(|_| tg::error!("the driver artifact must be a file"))?
-		.into();
+	let executable = outer::resolve_driver_executable().await?;
 
 	let env = build_env(source_template, &manifest_subpath)?;
 
