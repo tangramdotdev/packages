@@ -43,16 +43,16 @@ export const metadata = {
 };
 
 /** Return the MAJ.MIN version of python, used by some installation scripts. */
-export const versionString = (version?: string) => {
+export function versionString(version?: string) {
 	const versionToUse = version ?? metadata.version;
 	const [maj, min, ..._] = versionToUse.split(".");
 	return `${maj}.${min}`;
-};
+}
 
 /** Return the source code for the specified Python version. */
-export const source = async (
+export async function source(
 	pythonVersion?: keyof typeof versions,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const versionKey = pythonVersion ?? defaultVersion;
 	const { version, checksum } = versions[versionKey];
 	const extension = ".tar.xz";
@@ -62,10 +62,10 @@ export const source = async (
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		bzip2: bzip2.build,
 		libffi: libffi.build,
 		libxcrypt: libxcrypt.build,
@@ -77,6 +77,7 @@ export const deps = () =>
 		zlib: zlib.build,
 		zstd: zstd.build,
 	});
+}
 
 export type Arg = std.autotools.Arg &
 	std.deps.Arg<typeof deps> & {
@@ -94,7 +95,7 @@ export type Arg = std.autotools.Arg &
 	};
 
 /** Build and create a python environment. */
-export const self = async (...args: std.Args<Arg>) => {
+export async function self(...args: std.Args<Arg>) {
 	// Extract custom options first.
 	const customOptions = await std.args.apply<Arg, Arg>({
 		args: args as std.Args<Arg>,
@@ -211,17 +212,17 @@ export const self = async (...args: std.Args<Arg>) => {
 	}
 
 	return python;
-};
+}
 
 export default self;
 
 /** Internal: wrap a directory containing a /bin subdirectory with python scripts. */
-export const wrapScripts = async (
+export async function wrapScripts(
 	pythonInterpreter: tg.Symlink | tg.File,
 	pythonPath: tg.Template.Arg,
 	artifact: tg.Directory,
 	pythonVersionStr?: string,
-) => {
+) {
 	const scripts = [];
 	let interpreterId;
 	if (pythonInterpreter instanceof tg.File) {
@@ -256,13 +257,13 @@ export const wrapScripts = async (
 	}
 
 	return artifact;
-};
+}
 
-const isPythonScript = (
+function isPythonScript(
 	metadata: std.file.ExecutableMetadata,
 	knownId?: string,
 	pythonVersionStr?: string,
-): boolean => {
+): boolean {
 	if (metadata.format === "shebang") {
 		const interpreter = metadata.interpreter;
 		const versionSuffix = pythonVersionStr
@@ -276,7 +277,7 @@ const isPythonScript = (
 	} else {
 		return false;
 	}
-};
+}
 
 /** Wrap a Python virtual environment directory to make its scripts executable.
  *
@@ -284,10 +285,10 @@ const isPythonScript = (
  * all the scripts in its bin/ directory so they can be executed properly. This
  * includes setting the correct interpreter and PYTHONHOME environment variable.
  */
-export const wrapVenv = async (
+export async function wrapVenv(
 	venvDir: tg.Directory,
 	pythonVersionStr?: string,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const venvBin = await venvDir.get("bin").then(tg.Directory.expect);
 
 	// Find the python interpreter in the venv.
@@ -331,7 +332,7 @@ export const wrapVenv = async (
 	return tg.directory(venvDir, {
 		bin: wrappedBin,
 	});
-};
+}
 
 export type BuildArg = {
 	/** The machine this package will build on. */
@@ -356,7 +357,7 @@ export type BuildArg = {
 	version?: string;
 };
 
-export const build = async (...args: std.Args<BuildArg>) => {
+export async function build(...args: std.Args<BuildArg>) {
 	const {
 		build: buildTriple_,
 		env,
@@ -457,7 +458,7 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	});
 
 	return output;
-};
+}
 
 type PyProjectToml = {
 	project?: {
@@ -470,11 +471,11 @@ type PyProjectToml = {
 };
 
 /** Given a parsed pyproject.toml, generate a directory of scripts corresponding to the configuration's scripts, entry-points, or console_scripts configuration. */
-export const generateScripts = (
+export function generateScripts(
 	pythonArtifact: tg.Directory,
 	pyproject?: PyProjectToml,
 	pythonVersionStr?: string,
-) => {
+) {
 	// Make sure that there is a [project] field in the pyproject.toml.
 	const project = pyproject?.project;
 	if (!project) {
@@ -529,10 +530,10 @@ export const generateScripts = (
 	}
 
 	return bin;
-};
+}
 
 /** Run tests for a specific Python version. */
-const testVersion = async (pythonVersion?: keyof typeof versions) => {
+async function testVersion(pythonVersion?: keyof typeof versions) {
 	const versionKey = pythonVersion ?? defaultVersion;
 	const versionInfo = versions[versionKey];
 	console.log(`Testing Python ${versionInfo.version}...`);
@@ -631,19 +632,19 @@ except ImportError as e:
 
 	console.log(`✓ Python ${versionInfo.version} tests passed`);
 	return true;
-};
+}
 
 /** Test the default Python version. */
-export const test = async () => {
+export async function test() {
 	return await testVersion();
-};
+}
 
 /** Test Python 3.13. */
-export const test313 = async () => {
+export async function test313() {
 	return await testVersion("3.13");
-};
+}
 
 /** Test Python 3.14. */
-export const test314 = async () => {
+export async function test314() {
 	return await testVersion("3.14");
-};
+}

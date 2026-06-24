@@ -9,7 +9,7 @@ export const metadata = {
 	tag: "attr/2.5.2",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
@@ -20,7 +20,7 @@ export const source = async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, basenamePatch));
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -33,7 +33,7 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -91,12 +91,12 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		sdk,
 		source: sourceDir,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, bootstrap: true, env: sdk });
-};
+}

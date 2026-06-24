@@ -13,21 +13,22 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc";
 	return std.download.fromGnu({ name, version, checksum });
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		ncurses: ncurses.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			deps,
@@ -55,11 +56,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 
 	return std.autotools.build({ ...arg, phases });
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec: std.assert.PackageSpec = {
 		...std.assert.defaultSpec(metadata),
 		libraries: std.assert.allLibraries(["history", "readline"], {
@@ -67,4 +68,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

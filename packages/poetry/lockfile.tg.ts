@@ -8,7 +8,7 @@ export type RequirementsArg = {
 	exclude?: Array<string>;
 };
 
-export const requirements = async (arg: tg.File | RequirementsArg) => {
+export async function requirements(arg: tg.File | RequirementsArg) {
 	const { lockFile, groups, exclude } =
 		arg instanceof tg.File
 			? { lockFile: arg, groups: undefined, exclude: undefined }
@@ -65,7 +65,7 @@ export const requirements = async (arg: tg.File | RequirementsArg) => {
 	}
 
 	return tg.file(text);
-};
+}
 
 type LockFile = {
 	package: Array<{

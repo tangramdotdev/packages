@@ -303,7 +303,7 @@ export class StdProcessBuilder {
 }
 
 /** Test the non-template `build` overload with a string executable path. */
-export const testBuildNonTemplateString = async () => {
+export async function testBuildNonTemplateString() {
 	const output = await build({
 		executable: "/bin/sh",
 		args: ["-c", tg`echo "hello" > ${tg.output}`],
@@ -312,10 +312,10 @@ export const testBuildNonTemplateString = async () => {
 	const expected = "hello\n";
 	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
 	return true;
-};
+}
 
 /** Test the non-template `build` overload with an artifact executable. */
-export const testBuildNonTemplateArtifact = async () => {
+export async function testBuildNonTemplateArtifact() {
 	const bashDir = await std.utils.bash.build({ env: std.sdk() });
 	const bashExe = await bashDir.get("bin/bash").then(tg.File.expect);
 	const output = await build({
@@ -326,10 +326,10 @@ export const testBuildNonTemplateArtifact = async () => {
 	const expected = "artifact\n";
 	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
 	return true;
-};
+}
 
 /** Test the non-template `build` overload with an env containing an SDK. */
-export const testBuildNonTemplateEnv = async () => {
+export async function testBuildNonTemplateEnv() {
 	const env = await std.env.arg(std.sdk());
 	const output = await build({
 		executable: "/bin/sh",
@@ -339,16 +339,16 @@ export const testBuildNonTemplateEnv = async () => {
 	const actual = await output.text;
 	tg.assert(actual.length > 0, "expected non-empty compiler version output");
 	return true;
-};
+}
 
-export const testBuildAll = async () => {
+export async function testBuildAll() {
 	await testBuildNonTemplateString();
 	await testBuildNonTemplateArtifact();
 	await testBuildNonTemplateEnv();
 	return true;
-};
+}
 
-export const testDollar = async () => {
+export async function testDollar() {
 	const f = tg.file`hello there!!!\n`;
 	const output = await $`cat ${f} > ${tg.output}
 		echo $NAME >> ${tg.output}
@@ -361,9 +361,9 @@ export const testDollar = async () => {
 	const expected = "hello there!!!\nben L.\ntangram\n";
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;
-};
+}
 
-export const testDollarBootstrap = async () => {
+export async function testDollarBootstrap() {
 	const f = tg.file`hello there!!!\n`;
 	const utils = std.bootstrap.sdk.prepareBootstrapUtils();
 	const output = await $`cat ${f} > ${tg.output}
@@ -379,10 +379,10 @@ export const testDollarBootstrap = async () => {
 	const expected = "hello there!!!\nben L.\ntangram\n";
 	tg.assert(actual === expected, `expected ${actual} to equal ${expected}`);
 	return true;
-};
+}
 
 /** Test the non-template `run` overload with a string executable path. */
-export const testRunNonTemplateString = async () => {
+export async function testRunNonTemplateString() {
 	const output = await run({
 		executable: "/bin/sh",
 		args: ["-c", tg`echo "hello" > ${tg.output}`],
@@ -391,10 +391,10 @@ export const testRunNonTemplateString = async () => {
 	const expected = "hello\n";
 	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
 	return true;
-};
+}
 
 /** Test the non-template `run` overload with an artifact executable. */
-export const testRunNonTemplateArtifact = async () => {
+export async function testRunNonTemplateArtifact() {
 	const bashDir = await std.utils.bash.build({ env: std.sdk() });
 	const bashExe = await bashDir.get("bin/bash").then(tg.File.expect);
 	const output = await run({
@@ -405,10 +405,10 @@ export const testRunNonTemplateArtifact = async () => {
 	const expected = "artifact\n";
 	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
 	return true;
-};
+}
 
 /** Test the non-template `run` overload with an env containing an SDK. */
-export const testRunNonTemplateEnv = async () => {
+export async function testRunNonTemplateEnv() {
 	const env = await std.env.arg(std.sdk());
 	const output = await run({
 		executable: "/bin/sh",
@@ -418,9 +418,9 @@ export const testRunNonTemplateEnv = async () => {
 	const actual = await output.text;
 	tg.assert(actual.length > 0, "expected non-empty compiler version output");
 	return true;
-};
+}
 
-export const testEnvClear = async () => {
+export async function testEnvClear() {
 	const output = await $`/usr/bin/env > ${tg.output}`
 		.bootstrap(true)
 		.env({ FOO: "foo!" })
@@ -432,9 +432,9 @@ export const testEnvClear = async () => {
 	tg.assert(actual.includes("baz!"), "expected output to contain `baz!`");
 	tg.assert(!actual.includes("foo!"), "expected output to not contain `foo!`");
 	return true;
-};
+}
 
-export const testRunAll = async () => {
+export async function testRunAll() {
 	await testDollar();
 	await testDollarBootstrap();
 	await testRunNonTemplateString();
@@ -442,4 +442,4 @@ export const testRunAll = async () => {
 	await testRunNonTemplateEnv();
 	await testEnvClear();
 	return true;
-};
+}

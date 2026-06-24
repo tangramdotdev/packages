@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const owner = "seccomp";
 	const repo = name;
@@ -30,16 +30,17 @@ export const source = async () => {
 		tag,
 		version,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		gperf: { build: gperf.build, kind: "buildtime" },
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -52,11 +53,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 	std.assert.supportedHost(arg.host, metadata);
 	return std.autotools.build(arg);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
@@ -66,4 +67,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

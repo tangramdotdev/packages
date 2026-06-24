@@ -6,25 +6,25 @@ import { $ } from "bun";
 const separator = "-".repeat(50);
 
 /** Unified logging */
-const log = (...data: unknown[]) => {
+function log(...data: unknown[]) {
 	const timestamp = `[${new Date().toUTCString()}]`;
 	console.log(timestamp, ...data);
-};
+}
 
 /** Extract error message from various error types */
-const extractErrorMessage = (err: unknown): string => {
+function extractErrorMessage(err: unknown): string {
 	if (err && typeof err === "object") {
 		const e = err as { stderr?: { toString(): string }; message?: string };
 		return e.stderr?.toString() || e.message || String(err);
 	}
 	return String(err);
-};
+}
 
 /** Check if error indicates unsupported host */
-const isUnsupportedHostError = (err: unknown): boolean => {
+function isUnsupportedHostError(err: unknown): boolean {
 	const message = extractErrorMessage(err);
 	return message.includes("not found in supported hosts");
-};
+}
 
 /** Tangram CLI client for all tangram operations */
 class TangramClient {
@@ -134,7 +134,7 @@ class TangramClient {
 	}
 }
 
-const entrypoint = async () => {
+async function entrypoint() {
 	try {
 		const config = parseFromArgs();
 		await config.validateTangram();
@@ -150,7 +150,7 @@ const entrypoint = async () => {
 		log("Error:", error.message);
 		process.exit(1);
 	}
-};
+}
 
 interface PackageFilter {
 	include?: string[];
@@ -821,14 +821,14 @@ class PackageExecutor {
 		// Build set of actions to run, including all dependencies (transitively)
 		const actionsToRun = new Set<string>();
 
-		const addActionWithDeps = (action: string) => {
+		function addActionWithDeps(action: string) {
 			if (actionsToRun.has(action)) return;
 			actionsToRun.add(action);
 			const deps = ACTION_DEPENDENCIES[action] || [];
 			for (const dep of deps) {
 				addActionWithDeps(dep);
 			}
-		};
+		}
 
 		for (const action of this.config.actions) {
 			addActionWithDeps(action);
@@ -964,10 +964,12 @@ class ProcessTracker {
 	}
 }
 
-const packagesPath = () => path.join(path.dirname(import.meta.dir), "packages");
+function packagesPath() {
+	return path.join(path.dirname(import.meta.dir), "packages");
+}
 
 /** Returns the package path, or null if the package does not exist */
-export const getPackagePath = (name: string): string | null => {
+export function getPackagePath(name: string): string | null {
 	const pkgPath = packagesPath();
 	// Check for single-file package
 	const filePath = path.join(pkgPath, `${name}.tg.ts`);
@@ -980,7 +982,7 @@ export const getPackagePath = (name: string): string | null => {
 		return dirPath;
 	}
 	return null;
-};
+}
 
 if (import.meta.main) {
 	entrypoint().catch((error) => {

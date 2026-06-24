@@ -21,7 +21,7 @@ export const metadata = {
 // NOTE - patches lifted from MacPorts and combined: https://github.com/macports/macports-ports/tree/master/archivers/xar/files
 import patches from "./patches" with { type: "directory" };
 
-const source = async () => {
+async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9cee4f80b96cf592ccc545a4fdd51e4da4a5bd3b4734901637d67b043eff3c75";
@@ -39,20 +39,21 @@ const source = async () => {
 		.then((d) => d.get(name))
 		.then(tg.Directory.expect)
 		.then((d) => std.patch(d, patches));
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		libiconv: libiconv.build,
 		libxml2: { build: libxml2.build, kind: "full" },
 		openssl: openssl.build,
 		xz: xz.build,
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -71,11 +72,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 	std.assert.supportedHost(arg.host, metadata);
 	return std.autotools.build(arg);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: [
@@ -86,4 +87,4 @@ export const test = async () => {
 		],
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

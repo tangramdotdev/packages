@@ -8,7 +8,7 @@ export const metadata = {
 	tag: "musl/1.2.5",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -19,7 +19,7 @@ export const source = async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, muslPermissionPatch));
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -31,7 +31,7 @@ export type Arg = {
 	libcc?: tg.File;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const {
 		bootstrap: bootstrap_ = false,
@@ -103,20 +103,20 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		sdk,
 		source: source_ ?? source(),
 	});
-};
+}
 
 export default build;
 
-export const interpreterPath = (triple: string) => {
+export function interpreterPath(triple: string) {
 	return `${triple}/lib/${interpreterName(triple)}`;
-};
+}
 
-export const interpreterName = (triple: string) => {
+export function interpreterName(triple: string) {
 	const arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;
-};
+}
 
-export const linkerPath = (system: string) => {
+export function linkerPath(system: string) {
 	const triple = std.triple.create(system, { environment: "musl" });
 	return `${triple}/bin/ld`;
-};
+}

@@ -38,9 +38,9 @@ export type ToolchainArg = {
 	host?: string;
 };
 
-export const self = async (
+export async function self(
 	arg?: tg.Unresolved<ToolchainArg>,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const resolved = await tg.resolve(arg);
 	const host = resolved?.host ?? std.triple.host();
 	const system = std.triple.archAndOs(host);
@@ -74,7 +74,7 @@ export const self = async (
 	}
 
 	return artifact;
-};
+}
 
 export default self;
 
@@ -154,7 +154,7 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
 };
 
 /** Resolve go args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
-export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
+export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 	const collect = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (arg) => arg,
@@ -205,9 +205,9 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 		env,
 		...rest,
 	};
-};
+}
 
-export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
+export async function build(...args: std.Args<Arg>): Promise<tg.Directory> {
 	const resolved = await arg(...args);
 	const {
 		build: build_,
@@ -398,7 +398,7 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.Directory> => {
 	return tg.directory(source, {
 		["bin"]: binDir,
 	});
-};
+}
 
 export type VendorArgs = {
 	source: tg.Directory;
@@ -406,10 +406,10 @@ export type VendorArgs = {
 	command?: tg.Unresolved<tg.Template.Arg>;
 };
 
-export const vendor = async ({
+export async function vendor({
 	command: optionalCommand,
 	source,
-}: VendorArgs): Promise<tg.Directory> => {
+}: VendorArgs): Promise<tg.Directory> {
 	const pruned = source;
 
 	const command = optionalCommand ?? "go mod vendor -v";
@@ -429,7 +429,7 @@ export const vendor = async ({
 		.checksum("sha256:any")
 		.network(true)
 		.then(tg.Directory.expect);
-};
+}
 
 type GoModule = {
 	path: string;
@@ -441,9 +441,9 @@ type GoModule = {
  * go.sum contains ALL dependencies including transitive ones, making it the
  * complete source of truth for what needs to be vendored.
  */
-export const parseGoSum = async (
+export async function parseGoSum(
 	goSumFile: tg.File,
-): Promise<{ checksums: Map<string, string>; modules: Array<GoModule> }> => {
+): Promise<{ checksums: Map<string, string>; modules: Array<GoModule> }> {
 	const content = await goSumFile.text;
 	const checksums = new Map<string, string>();
 	const modulesSet = new Map<string, GoModule>();
@@ -470,7 +470,7 @@ export const parseGoSum = async (
 		checksums,
 		modules: Array.from(modulesSet.values()),
 	};
-};
+}
 
 /** Parse go.mod file to extract list of required dependencies.
  * Returns all modules that appear in require blocks in go.mod.
@@ -478,7 +478,7 @@ export const parseGoSum = async (
  * regardless of whether they have the "// indirect" comment or not.
  * Only modules that appear ONLY in go.sum (not in go.mod) should lack the explicit marker.
  */
-export const parseGoMod = async (goModFile: tg.File): Promise<Set<string>> => {
+export async function parseGoMod(goModFile: tg.File): Promise<Set<string>> {
 	const content = await goModFile.text;
 	const modulePaths = new Set<string>();
 	let inRequireBlock = false;
@@ -511,7 +511,7 @@ export const parseGoMod = async (goModFile: tg.File): Promise<Set<string>> => {
 	}
 
 	return modulePaths;
-};
+}
 
 /** Encode a module path for use with the Go module proxy.
  * The proxy uses case-insensitive encoding where uppercase letters are
@@ -519,20 +519,20 @@ export const parseGoMod = async (goModFile: tg.File): Promise<Set<string>> => {
  * This is required because some filesystems are case-insensitive.
  * See https://go.dev/ref/mod#goproxy-protocol
  */
-const encodeModulePath = (path: string): string => {
+function encodeModulePath(path: string): string {
 	// Replace each uppercase letter with "!" followed by the lowercase version
 	return path.replace(/[A-Z]/g, (letter) => `!${letter.toLowerCase()}`);
-};
+}
 
 /** Download Go modules from proxy.golang.org using h1 checksums from go.sum.
  * Downloads modules with network access and verifies content integrity using
  * the h1 hashes in go.sum (which verify normalized module contents).
  * This matches how the Go toolchain itself handles module downloads.
  */
-export const vendorDependencies = async (
+export async function vendorDependencies(
 	goModArg: tg.Unresolved<tg.File>,
 	goSumArg: tg.Unresolved<tg.File>,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const goMod = await tg.resolve(goModArg);
 	const goSum = await tg.resolve(goSumArg);
 
@@ -664,12 +664,12 @@ export const vendorDependencies = async (
 	});
 
 	return vendorDir;
-};
+}
 
 /** Extract go version from a go.mod file. */
-const extractGoVersion = async (
+async function extractGoVersion(
 	goModFile: tg.File,
-): Promise<string | undefined> => {
+): Promise<string | undefined> {
 	const content = await goModFile.text;
 	for (const line of content.split("\n")) {
 		const trimmed = line.trim();
@@ -682,14 +682,14 @@ const extractGoVersion = async (
 		}
 	}
 	return undefined;
-};
+}
 
 /** Recursively find all Go packages in a module directory. */
-const findGoPackages = async (
+async function findGoPackages(
 	modulePath: string,
 	dir: tg.Directory,
 	prefix = "",
-): Promise<string[]> => {
+): Promise<string[]> {
 	const entries = await dir.entries;
 	const packages: string[] = [];
 
@@ -714,21 +714,21 @@ const findGoPackages = async (
 	}
 
 	return packages;
-};
+}
 
 /** Generate vendor/modules.txt file content with all packages.
  * Marks modules as "## explicit" if they appear in ANY require block in go.mod,
  * regardless of whether they have the "// indirect" comment.
  * Only modules that appear ONLY in go.sum (not in go.mod) lack the explicit marker.
  */
-const createModulesTxt = async (
+async function createModulesTxt(
 	modulesWithPackages: Array<{
 		module: GoModule;
 		packages: string[];
 		goVersion?: string;
 	}>,
 	explicitModules: Set<string>,
-): Promise<string> => {
+): Promise<string> {
 	let content = "";
 
 	for (const { module, packages, goVersion } of modulesWithPackages) {
@@ -754,13 +754,13 @@ const createModulesTxt = async (
 	}
 
 	return content;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	await Promise.all([testCgo(), testPlain(), testNativeVendor()]);
-};
+}
 
-export const testVendorStructure = async () => {
+export async function testVendorStructure() {
 	// Test that vendor directory structure is correct with all dependencies
 	const source = await tg.directory({
 		["go.mod"]: tg.file(`
@@ -803,9 +803,9 @@ export const testVendorStructure = async () => {
 	// golang.org/x/text has subpackages - verify it has the expected structure
 	const language = await text.tryGet("language");
 	tg.assert(language !== undefined, "Expected language subpackage in vendor");
-};
+}
 
-export const testCgo = async () => {
+export async function testCgo() {
 	const source = tg.directory({
 		["main.go"]: tg.file(`
 			package main
@@ -884,9 +884,9 @@ export const testCgo = async () => {
 		output.includes("CGO is working!"),
 		`Expected output to contain "CGO is working!", got: ${output}`,
 	);
-};
+}
 
-export const testPlain = async () => {
+export async function testPlain() {
 	const source = tg.directory({
 		["main.go"]: tg.file`
 			package main
@@ -919,9 +919,9 @@ export const testPlain = async () => {
 		output.includes("hello world"),
 		`Expected output to contain "hello world", got: ${output}`,
 	);
-};
+}
 
-export const testNativeVendor = async () => {
+export async function testNativeVendor() {
 	// Make sure the vendor structure is correct.
 	await testVendorStructure();
 
@@ -988,4 +988,4 @@ export const testNativeVendor = async () => {
 		output.includes("Hello, world"),
 		`Expected output to contain "Hello, world", got: ${output}`,
 	);
-};
+}

@@ -15,17 +15,17 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const compression = "xz";
 	const checksum =
 		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
 	return std.download.fromGnu({ name, version, checksum, compression });
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 	let output = await std.autotools.build(arg);
 
@@ -42,11 +42,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		// The locate binary calls setgid() to drop group privileges before
@@ -56,4 +56,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

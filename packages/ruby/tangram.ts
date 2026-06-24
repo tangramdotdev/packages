@@ -36,7 +36,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { version } = metadata;
 	const checksum =
 		"sha256:3924be2d05db30f4e35f859bf028be85f4b7dd01714142fd823e4af5de2faf9d";
@@ -47,7 +47,7 @@ export const source = async () => {
 		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg & {
 	dependencies?: {
@@ -61,7 +61,7 @@ export type Arg = std.autotools.Arg & {
 	};
 };
 
-export const self = async (...args: std.Args<Arg>) => {
+export async function self(...args: std.Args<Arg>) {
 	// Extract custom dependency options.
 	const {
 		dependencies: {
@@ -197,7 +197,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		include: tg.symlink(tg`${ruby}/include`),
 		lib: tg.symlink(tg`${ruby}/lib`),
 	});
-};
+}
 
 export default self;
 
@@ -213,7 +213,7 @@ export type DownloadGemArg = {
 };
 
 /** Download and extract a .gem file from rubygems.org. */
-export const downloadGem = (arg: DownloadGemArg) => {
+export function downloadGem(arg: DownloadGemArg) {
 	const gemFile = std
 		.download({
 			url: `https://rubygems.org/downloads/${arg.name}-${arg.version}.gem`,
@@ -224,16 +224,16 @@ export const downloadGem = (arg: DownloadGemArg) => {
 	return tg.directory({
 		[`${arg.name}-${arg.version}.gem`]: gemFile,
 	});
-};
+}
 
 /** Libraries are installed under `x.y.0`. */
-const libraryVersion = (version: string) => {
+function libraryVersion(version: string) {
 	const [major, minor] = version.split(".");
 	return `${major}.${minor}.0`;
-};
+}
 
 /** These are the gems required by the ruby build itself and installed by default. See `https://stdgems.org`. */
-const bundledGems = (): PromiseLike<tg.Directory> => {
+function bundledGems(): PromiseLike<tg.Directory> {
 	const args: Array<{ name: string; version: string; checksum: tg.Checksum }> =
 		[
 			{
@@ -311,11 +311,12 @@ const bundledGems = (): PromiseLike<tg.Directory> => {
 		];
 
 	return tg.directory(...args.map(downloadGem));
-};
+}
 
-export const test = async () => {
-	const hasVersion = (name: string, version: string) =>
-		std.assert.binary(name, { snapshot: version });
+export async function test() {
+	function hasVersion(name: string, version: string) {
+		return std.assert.binary(name, { snapshot: version });
+	}
 
 	const binaries = [
 		hasVersion("bundle", "4.0.3"),
@@ -342,4 +343,4 @@ export const test = async () => {
 	tg.assert(output.includes("Hello, tangram!"));
 
 	return true;
-};
+}

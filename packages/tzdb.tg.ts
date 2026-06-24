@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = async (): Promise<tg.Directory> => {
+export async function source(): Promise<tg.Directory> {
 	const { version } = metadata;
 	const checksum =
 		"sha256:d970fb6753529583226fb1bb9df6237e5e968ea7d70a8bd0df2f3394c86f7ac4";
@@ -30,11 +30,11 @@ export const source = async (): Promise<tg.Directory> => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -78,11 +78,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
@@ -91,4 +91,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

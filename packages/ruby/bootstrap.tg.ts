@@ -1,7 +1,7 @@
 import * as std from "std" with { source: "../std" };
 
 /** Source code for the version of Ruby to bootstrap. */
-export const source = async () => {
+export async function source() {
 	return await std.download
 		.extractArchive({
 			url: "https://cache.ruby-lang.org/pub/ruby/3.1/ruby-3.1.6.tar.gz",
@@ -10,10 +10,10 @@ export const source = async () => {
 		})
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 /** Returns an older version of Ruby that is only used to bootstrap it. */
-export const ruby = async (host: string) => {
+export async function ruby(host: string) {
 	const build = await std.autotools.build({
 		env: {
 			CFLAGS: tg.Mutation.suffix("-std=gnu17", " "),
@@ -55,4 +55,4 @@ export const ruby = async (host: string) => {
 			},
 		}),
 	});
-};
+}

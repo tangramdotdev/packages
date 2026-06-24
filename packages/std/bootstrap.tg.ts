@@ -21,7 +21,7 @@ export type Arg = {
 };
 
 /** Download all bootstrap components for a host, or a single component. */
-export const bootstrap = async (arg?: Arg) => {
+export async function bootstrap(arg?: Arg) {
 	const host = normalizeHost(arg?.host);
 	if (!arg?.component) {
 		const components = componentList(host);
@@ -37,25 +37,28 @@ export const bootstrap = async (arg?: Arg) => {
 		? arg.component
 		: `${arg.component}_${host.replace("-", "_")}`;
 	return remoteComponent(name);
-};
+}
 
 export default bootstrap;
 
 /** Retrieve just the toolchain component. */
-export const toolchain = (host?: string) =>
-	bootstrap({ host, component: "toolchain" });
+export function toolchain(host?: string) {
+	return bootstrap({ host, component: "toolchain" });
+}
 
 /** Retrieve just the utils component. */
-export const utils = (host?: string) => bootstrap({ host, component: "utils" });
+export function utils(host?: string) {
+	return bootstrap({ host, component: "utils" });
+}
 
 /** Retrieve a macOS SDK wrapped under a `MacOSX.sdk/` subdirectory. */
-export const macOsSdk = async (version: SdkVersion = LatestSdkVersion) => {
+export async function macOsSdk(version: SdkVersion = LatestSdkVersion) {
 	const inner = await bootstrap({ component: `macos_sdk_${version}` });
 	return tg.directory({ "MacOSX.sdk": inner });
-};
+}
 
 /** The build triple string of the bundled Linux toolchain. */
-export const toolchainTriple = (host?: string) => {
+export function toolchainTriple(host?: string) {
 	const system = std.triple.archAndOs(host ?? std.triple.host());
 	const arch = std.triple.arch(system);
 	const os = std.triple.os(system);
@@ -67,10 +70,10 @@ export const toolchainTriple = (host?: string) => {
 		default:
 			return tg.unreachable();
 	}
-};
+}
 
 /** Get the interpreter name for a given host. */
-export const interpreterName = (host?: string) => {
+export function interpreterName(host?: string) {
 	const system = std.triple.archAndOs(host ?? std.triple.host());
 	const arch = std.triple.arch(system);
 	const os = std.triple.os(system);
@@ -82,13 +85,13 @@ export const interpreterName = (host?: string) => {
 		default:
 			return tg.unreachable();
 	}
-};
+}
 
 /** Apply one or more patches to a directory using the bootstrap utils. */
-export const patch = async (
+export async function patch(
 	source: tg.Unresolved<tg.Directory>,
 	...patches: Array<tg.Unresolved<tg.File | tg.Symlink>>
-) => {
+) {
 	const source_ = await tg.resolve(source);
 	const patches_ = await Promise.all(patches.map(tg.resolve));
 	const host = std.triple.host();
@@ -105,26 +108,26 @@ export const patch = async (
 		.bootstrap(true)
 		.env(utils(host), { utils: false })
 		.then(tg.Directory.expect);
-};
+}
 
 /** Download a component tarball from the remote host. */
-export const remoteComponent = async (name: string) => {
+export async function remoteComponent(name: string) {
 	const checksum = checksums[name];
 	tg.assert(checksum, `Unknown component: ${name}.`);
 	const url = `https://github.com/tangramdotdev/bootstrap/releases/download/${version}/${name}.tar.zst`;
 	return std.download
 		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect);
-};
+}
 
 /** Normalize a host triple to the canonical form used for component names. */
-const normalizeHost = (host?: string) => {
+function normalizeHost(host?: string) {
 	const h = std.triple.archAndOs(host ?? std.triple.host());
 	return std.triple.os(h) === "darwin" ? "universal_darwin" : h;
-};
+}
 
 /** Enumerate the full set of components for a host. */
-export const componentList = (host?: string): Array<string> | undefined => {
+export function componentList(host?: string): Array<string> | undefined {
 	const h = host ?? normalizeHost();
 	switch (h) {
 		case "aarch64-linux":
@@ -145,9 +148,9 @@ export const componentList = (host?: string): Array<string> | undefined => {
 		default:
 			return undefined;
 	}
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const host = std.triple.host();
 	const components = componentList(host);
 	if (!components) {
@@ -162,7 +165,7 @@ export const test = async () => {
 		tg.assert(Object.keys(entries).length > 0, `Empty component: ${name}.`);
 	}
 	return true;
-};
+}
 
 const checksums: Record<string, tg.Checksum> = {
 	"macos_sdk_12.1":

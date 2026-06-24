@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-const source = async () => {
+async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:91eb74caed0ee6655b669711a4f350c25579778694df248e28363318e03c7fc4";
@@ -30,11 +30,11 @@ const source = async () => {
 			version,
 		})
 		.then(tg.Directory.expect);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -63,11 +63,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		});
 	}
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

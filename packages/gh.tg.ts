@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { version } = metadata;
 	const checksum =
 		"sha256:999bdea5c8baf3d03fe0314127c2c393d6c0f7a504a573ad0c107072973af973";
@@ -24,12 +24,12 @@ export const source = () => {
 		source: "tag",
 		tag: `v${version}`,
 	});
-};
+}
 
 export type Arg = go.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	go.build(
+export function build(...args: std.Args<Arg>) {
+	return go.build(
 		{
 			source: source(),
 			cgo: false,
@@ -41,10 +41,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
@@ -52,4 +53,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:01a7b881bd220bfdf615f97b8718f80bdfd3f6add385b993dcf6efd14e8c0ac6";
@@ -22,7 +22,7 @@ const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 const scriptNames = [
 	"gunzip",
@@ -41,7 +41,7 @@ const scriptNames = [
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	let output = await std.autotools.build(
 		{
 			source: source(),
@@ -59,12 +59,12 @@ export const build = async (...args: std.Args<Arg>) => {
 		});
 	}
 	return output;
-};
+}
 
 export default build;
 
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
-export const changeShebang = async (scriptFile: tg.File) => {
+export async function changeShebang(scriptFile: tg.File) {
 	// Ensure the file has a shebang.
 	const metadata = await std.file.executableMetadata(scriptFile);
 	tg.assert(metadata.format === "shebang");
@@ -81,9 +81,9 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	const newFileContents = `#!/usr/bin/env bash\n${fileWithoutShebangLine}`;
 	const newFile = tg.file({ contents: newFileContents, executable: true });
 	return newFile;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -15,7 +15,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const plain = async (arg: tg.Unresolved<Arg>) => {
+export async function plain(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, source } = resolved;
 
@@ -33,7 +33,7 @@ export const plain = async (arg: tg.Unresolved<Arg>) => {
 		interpreter,
 		env: env_,
 	});
-};
+}
 
 export default plain;
 
@@ -42,9 +42,9 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = async (arg: tg.Unresolved<EnvArg>) => {
+export async function env(arg: tg.Unresolved<EnvArg>) {
 	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
 	return std.env(ruby.self({ ...std.triple.rotate({ build, host }) }));
-};
+}

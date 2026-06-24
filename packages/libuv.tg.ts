@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { version } = metadata;
 	const checksum =
 		"sha256:27e55cf7083913bfb6826ca78cde9de7647cded648d35f24163f2d31bb9f51cd";
@@ -27,12 +27,12 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = cmake.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	cmake.build(
+export function build(...args: std.Args<Arg>) {
+	return cmake.build(
 		{
 			source: source(),
 			phases: {
@@ -43,10 +43,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

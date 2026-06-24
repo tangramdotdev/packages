@@ -7,7 +7,7 @@ export const metadata = {
 	tag: "gawk/5.4.0",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3dd430f0cd3b4428c6c3f6afc021b9cd3c1f8c93f7a688dc268ca428a90b4ac1";
@@ -17,7 +17,7 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -28,7 +28,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: Arg) => {
+export async function build(arg?: Arg) {
 	const {
 		bootstrap = false,
 		build: build_,
@@ -60,14 +60,14 @@ export const build = async (arg?: Arg) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, bootstrap: true, env: sdk });
-};
+}

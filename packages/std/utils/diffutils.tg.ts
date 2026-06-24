@@ -6,7 +6,7 @@ const metadata = {
 	version: "3.12",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:7c8b7f9fc8609141fdea9cece85249d308624391ff61dedaf528fcb337727dfd";
@@ -16,7 +16,7 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -27,7 +27,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -58,14 +58,14 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, bootstrap: true, env: sdk });
-};
+}

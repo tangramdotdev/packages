@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { version } = metadata;
 	const owner = "nats-io";
 	const repo = "natscli";
@@ -27,12 +27,12 @@ export const source = () => {
 		tag,
 		source: "tag",
 	});
-};
+}
 
 export type Arg = go.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	go.build(
+export function build(...args: std.Args<Arg>) {
+	return go.build(
 		{
 			source: source(),
 			cgo: false,
@@ -43,10 +43,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -13,7 +13,7 @@ export const metadata = {
 	tag: "esbuild/0.25.2",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:01a6c0a5949e5c2d53e19be52aec152b3186f8bbcf98df6996a20a972a78c330";
@@ -27,7 +27,7 @@ export const source = async () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = std.args.BasePackageArg & {
 	dependencies?: {
@@ -36,7 +36,7 @@ export type Arg = std.args.BasePackageArg & {
 	};
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		dependencies: { go: goArg = {}, nodejs: nodejsArg = {} } = {},
 		env: env_,
@@ -75,11 +75,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		.checksum("sha256:any")
 		.network(true)
 		.then(tg.Directory.expect);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

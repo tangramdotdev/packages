@@ -39,11 +39,11 @@ export namespace download {
 	};
 
 	/** Wrapper for `std.download` that always extracts. */
-	export const extractArchive = async (
+	export async function extractArchive(
 		arg: ExtractArchiveArg,
-	): Promise<tg.Artifact> => {
+	): Promise<tg.Artifact> {
 		return await download({ ...arg, mode: "extract" }).then(tg.Artifact.expect);
-	};
+	}
 
 	export type fromGitHubArg = GithubSource & {
 		archiveFormat?: tg.ArchiveFormat | undefined;
@@ -66,7 +66,7 @@ export namespace download {
 	};
 
 	/** Download and extract an archive from a Github tag or release. */
-	export const fromGithub = async (arg: fromGitHubArg) => {
+	export async function fromGithub(arg: fromGitHubArg) {
 		const {
 			archiveFormat = "tar",
 			checksum,
@@ -105,7 +105,7 @@ export namespace download {
 			})
 			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
-	};
+	}
 
 	export type FromGnuArg = {
 		checksum: tg.Checksum;
@@ -117,12 +117,14 @@ export namespace download {
 	const gnuHosts = ["ftpmirror.gnu.org", "ftp.gnu.org"];
 
 	/** Download and extract a source package hosted in the GNU FTP repository. Tries ftpmirror.gnu.org first, then falls back to ftp.gnu.org. */
-	export const fromGnu = async (arg: FromGnuArg) => {
+	export async function fromGnu(arg: FromGnuArg) {
 		const { checksum, compression = "gz", name, version } = arg;
 		const archiveFormat = "tar" as tg.ArchiveFormat;
 		const extension = `.${archiveFormat}.${compression}`;
 		const archive = packageArchive({ extension, name, version });
-		const gnuUrl = (host: string) => `http://${host}/gnu/${name}/${archive}`;
+		function gnuUrl(host: string) {
+			return `http://${host}/gnu/${name}/${archive}`;
+		}
 		const primaryHost = gnuHosts[0];
 		tg.assert(primaryHost, "Expected at least one GNU host.");
 		const url = gnuUrl(primaryHost);
@@ -132,7 +134,7 @@ export namespace download {
 			.extractArchive({ checksum, url })
 			.then(tg.Directory.expect);
 		return download.unwrapDirectory(outer);
-	};
+	}
 
 	export type BuildUrlArg =
 		| (PackageArchiveArg & {
@@ -147,13 +149,13 @@ export namespace download {
 	 * 3. `${base}/${packageArchive}`
 	 * 4. `${url}`
 	 */
-	export const buildUrl = (arg: BuildUrlArg): string => {
+	export function buildUrl(arg: BuildUrlArg): string {
 		if ("url" in arg) {
 			return arg.url;
 		}
 		const { base, ...rest } = arg;
 		return `${base}/${packageArchive(rest)}`;
-	};
+	}
 
 	export type PackageArchiveArg =
 		| (PackageNameArg & {
@@ -162,13 +164,13 @@ export namespace download {
 		| { packageArchive: string };
 
 	/** Combine a packageName with an extension. */
-	export const packageArchive = (arg: PackageArchiveArg) => {
+	export function packageArchive(arg: PackageArchiveArg) {
 		if ("packageArchive" in arg) {
 			return arg.packageArchive;
 		}
 		const { extension, ...rest } = arg;
 		return `${packageName(rest)}${extension}`;
-	};
+	}
 
 	export type PackageNameArg =
 		| {
@@ -178,15 +180,16 @@ export namespace download {
 		| { packageName: string };
 
 	/** Get the package name string for a name and optional version. */
-	export const packageName = (arg: PackageNameArg) =>
-		"packageName" in arg
+	export function packageName(arg: PackageNameArg) {
+		return "packageName" in arg
 			? arg.packageName
 			: `${arg.name}${arg.version ? `-${arg.version}` : ""}`;
+	}
 
 	/** If the given directory contains a single child directory, return the inner child. */
-	export const unwrapDirectory = async (
+	export async function unwrapDirectory(
 		directory: tg.Directory,
-	): Promise<tg.Directory> => {
+	): Promise<tg.Directory> {
 		const iterator = directory[Symbol.asyncIterator]();
 		const inner = await iterator.next();
 		tg.assert(
@@ -199,25 +202,25 @@ export namespace download {
 			"Expected the entry to be a directory.",
 		);
 		return ret;
-	};
+	}
 }
 
-export const test = async () => {
+export async function test() {
 	return await Promise.all([testTgDownload(), testStdDownload()]);
-};
+}
 
-export const testTgDownload = async () => {
+export async function testTgDownload() {
 	return await tg.download(
 		"https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
 		"sha256:d522cdef681f13a0f66e78a69db00e08b7c00bd2e65b967d52aa39e73b890add",
 	);
-};
+}
 
-export const testStdDownload = async () => {
+export async function testStdDownload() {
 	return await download({
 		url: "https://github.com/tangramdotdev/bootstrap/releases/download/v2024.06.20/dash_universal_darwin.tar.zst",
 		checksum:
 			"sha256:d522cdef681f13a0f66e78a69db00e08b7c00bd2e65b967d52aa39e73b890add",
 		mode: "extract",
 	});
-};
+}

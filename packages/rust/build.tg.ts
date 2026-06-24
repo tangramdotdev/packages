@@ -69,7 +69,7 @@ export type RustDependency = {
 	checksum?: tg.Checksum;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		crateName: crateName_,
 		crateType: crateType_,
@@ -174,12 +174,12 @@ export const build = async (...args: std.Args<Arg>) => {
 		.then(tg.Directory.expect);
 
 	return result;
-};
+}
 
 /** Produce a --extern flag for the given dependency */
-export const flagForDependency = async (
+export async function flagForDependency(
 	dep: RustDependency,
-): Promise<tg.Template.Arg> => {
+): Promise<tg.Template.Arg> {
 	// Obtain the source for the dependency.
 	let source = undefined;
 	if (dep.artifact) {
@@ -218,9 +218,9 @@ export const flagForDependency = async (
 
 	// Construct the --extern flag.
 	return tg`--extern ${dep.name}=${builtDependency}/lib/lib${dep.name}.rlib`;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const tests = [];
 
 	tests.push(testBasicExe());
@@ -235,9 +235,9 @@ export const test = async () => {
 	tg.assert(results.every((r) => r === true));
 
 	return true;
-};
+}
 
-export const testBasicExe = async () => {
+export async function testBasicExe() {
 	const crateName = "native_basic_exe";
 	const basicExe = await build({
 		crateName,
@@ -250,9 +250,9 @@ export const testBasicExe = async () => {
 	tg.assert(basicExeText.trim() === "Hello, native world!");
 
 	return true;
-};
+}
 
-export const testBasicLib = async () => {
+export async function testBasicLib() {
 	const crateName = "native_basic_lib";
 	const basicLib = await build({
 		crateName,
@@ -262,9 +262,9 @@ export const testBasicLib = async () => {
 	tg.assert(rlib !== undefined);
 
 	return true;
-};
+}
 
-export const testBasicExeModules = async () => {
+export async function testBasicExeModules() {
 	const crateName = "native_basic_exe_modules";
 	const basicExeModules = await build({
 		crateName,
@@ -277,9 +277,9 @@ export const testBasicExeModules = async () => {
 	tg.assert(basicExeModulesText.trim() === "Hello from a module!");
 
 	return true;
-};
+}
 
-export const testBasicExeWithLib = async () => {
+export async function testBasicExeWithLib() {
 	const crateName = "native_basic_exe_with_lib";
 	const depName = "native_basic_lib";
 	const basicExeWithLib = await build({
@@ -299,9 +299,9 @@ export const testBasicExeWithLib = async () => {
 	tg.assert(basicExeWithLibText.trim() === "Hello from a library!");
 
 	return true;
-};
+}
 
-export const testExeWithCratesIoDependency = async () => {
+export async function testExeWithCratesIoDependency() {
 	const crateName = "native_deps_exe";
 	const depsExe = await build({
 		crateName,
@@ -321,9 +321,9 @@ export const testExeWithCratesIoDependency = async () => {
 	const depsExeText = await depsExeOutput.text;
 	tg.assert(depsExeText.trim() === 'b"Hello using the bytes crate!"');
 	return true;
-};
+}
 
-export const testConditionalCompilation = async () => {
+export async function testConditionalCompilation() {
 	const crateName = "native_cfg_exe";
 	// Test without the optional feature.
 	const cfgDisabled = await build({
@@ -350,11 +350,11 @@ export const testConditionalCompilation = async () => {
 	tg.assert(cfgEnabledText.trim() === "optional feature enabled");
 
 	return true;
-};
+}
 
 import * as ncurses from "ncurses" with { source: "../ncurses.tg.ts" };
 import * as readline from "readline" with { source: "../readline.tg.ts" };
-export const testLinkReadline = async () => {
+export async function testLinkReadline() {
 	const crateName = "native_exe_readline";
 
 	// Obtain dependencies. Readline transitively requires ncurses.
@@ -384,4 +384,4 @@ export const testLinkReadline = async () => {
 	tg.assert(exeText.trim().includes(readline.metadata.version));
 
 	return true;
-};
+}

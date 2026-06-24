@@ -21,7 +21,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
@@ -31,7 +31,7 @@ export const source = () => {
 		checksum,
 		compression: "xz",
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -45,7 +45,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg: tg.Unresolved<Arg>) => {
+export async function build(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const {
 		bootstrap = false,
@@ -169,12 +169,12 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		["bin"]: binDirectory,
 	});
 	return output;
-};
+}
 
-export const patchAutom4teCfg = async (
+export async function patchAutom4teCfg(
 	autoconf: tg.Directory,
 	arg: Arg,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
 	tg.assert(autom4teCfg instanceof tg.File);
 
@@ -199,6 +199,6 @@ export const patchAutom4teCfg = async (
 	return tg.directory(autoconf, {
 		["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
 	});
-};
+}
 
 export default build;

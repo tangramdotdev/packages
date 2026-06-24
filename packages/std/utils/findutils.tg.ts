@@ -9,7 +9,7 @@ export const metadata = {
 	tag: "findutils/4.10.0",
 };
 
-export const source = async (os: string) => {
+export async function source(os: string) {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5";
@@ -25,7 +25,7 @@ export const source = async (os: string) => {
 		source = await bootstrap.patch(source, disableLocatePatch);
 	}
 	return source;
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -36,7 +36,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -73,12 +73,12 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, bootstrap: true, env: sdk });
-};
+}

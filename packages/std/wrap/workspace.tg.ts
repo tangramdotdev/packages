@@ -20,9 +20,9 @@ export type Arg = {
 };
 
 /** Build the binaries that enable Tangram's wrapping and environment composition strategy. */
-export const workspace = async (
+export async function workspace(
 	arg?: tg.Unresolved<Arg>,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const {
 		build: build_,
 		host: host_,
@@ -58,16 +58,16 @@ export const workspace = async (
 			verbose,
 		})
 		.named("workspace");
-};
+}
 
 /** Check if the resolved arguments match the defaults and should use the default workspace for cache optimization. */
-const shouldUseDefaultWorkspace = async (arg: {
+async function shouldUseDefaultWorkspace(arg: {
 	build: string | undefined;
 	host: string | undefined;
 	release: boolean;
 	source: tg.Directory | undefined;
 	verbose: boolean;
-}): Promise<boolean> => {
+}): Promise<boolean> {
 	const detectedHost = std.triple.host();
 	const host = arg.host ?? detectedHost;
 	const build = arg.build ?? host;
@@ -79,9 +79,9 @@ const shouldUseDefaultWorkspace = async (arg: {
 		arg.source === undefined &&
 		arg.verbose === false
 	);
-};
+}
 
-export const ccProxy = async (arg: tg.Unresolved<Arg>) => {
+export async function ccProxy(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
 
@@ -99,9 +99,9 @@ export const ccProxy = async (arg: tg.Unresolved<Arg>) => {
 		.named("workspace")
 		.then((dir) => dir.get("bin/tgcc"))
 		.then(tg.File.expect);
-};
+}
 
-export const ldProxy = async (arg: tg.Unresolved<Arg>) => {
+export async function ldProxy(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
 
@@ -119,7 +119,7 @@ export const ldProxy = async (arg: tg.Unresolved<Arg>) => {
 		.named("workspace")
 		.then((dir) => dir.get("bin/tgld"))
 		.then(tg.File.expect);
-};
+}
 
 export type WrapOutput = {
 	manifest?: std.wrap.Manifest | undefined;
@@ -131,7 +131,7 @@ export type FileLocation = {
 	length: number;
 };
 
-export const wrap = async (arg: tg.Unresolved<Arg>) => {
+export async function wrap(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
 	if (
@@ -147,9 +147,9 @@ export const wrap = async (arg: tg.Unresolved<Arg>) => {
 		.named("workspace")
 		.then((dir) => dir.get("bin/wrap"))
 		.then(tg.File.expect);
-};
+}
 
-export const stripProxy = async (arg: tg.Unresolved<Arg>) => {
+export async function stripProxy(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
 
@@ -167,9 +167,9 @@ export const stripProxy = async (arg: tg.Unresolved<Arg>) => {
 		.named("workspace")
 		.then((dir) => dir.get("bin/tgstrip"))
 		.then(tg.File.expect);
-};
+}
 
-export const wrapper = async (arg: tg.Unresolved<Arg>) => {
+export async function wrapper(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
 
@@ -184,9 +184,9 @@ export const wrapper = async (arg: tg.Unresolved<Arg>) => {
 		.named("workspace")
 		.then((dir) => dir.get("bin/wrapper.exe"))
 		.then(tg.File.expect);
-};
+}
 
-export const wrapperBinary = async (arg: tg.Unresolved<Arg>) => {
+export async function wrapperBinary(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg ?? {});
 	const { build, host, release = true, source, verbose = false } = resolved;
 
@@ -201,47 +201,47 @@ export const wrapperBinary = async (arg: tg.Unresolved<Arg>) => {
 		.named("workspace")
 		.then((dir) => dir.get("bin/wrapper.bin"))
 		.then(tg.File.expect);
-};
+}
 
 /** The default workspace built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
-export const defaultWorkspace = async () => {
+export async function defaultWorkspace() {
 	const host = std.triple.host();
 	return tg.build(workspace, { host }).named("default workspace");
-};
+}
 
 /** The default wrapper built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
-export const defaultWrapper = async () => {
+export async function defaultWrapper() {
 	const workspace = await tg
 		.build(std.buildDefaultWorkspace)
 		.named("default workspace");
 	return workspace.get("bin/wrapper.exe").then(tg.File.expect);
-};
+}
 
 /** The default wrapper binary built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
-export const defaultWrapperBinary = async () => {
+export async function defaultWrapperBinary() {
 	const workspace = await tg
 		.build(std.buildDefaultWorkspace)
 		.named("default workspace");
 	return workspace.get("bin/wrapper.bin").then(tg.File.expect);
-};
+}
 
 /** Release helper - builds defaultWrapper with a referent to this file for cache hits. */
-export const buildDefaultWrapper = async () => {
+export async function buildDefaultWrapper() {
 	return tg.build(defaultWrapper).named("default wrapper");
-};
+}
 
 /** Release helper - builds defaultWrapperBinary with a referent to this file for cache hits. */
-export const buildDefaultWrapperBin = async () => {
+export async function buildDefaultWrapperBin() {
 	return tg.build(defaultWrapperBinary).named("default wrapper binary");
-};
+}
 
 type ToolchainArg = {
 	target?: string;
 };
 
-export const rust = async (
+export async function rust(
 	arg?: tg.Unresolved<ToolchainArg>,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const resolved = await tg.resolve(arg);
 	const host = standardizeTriple(std.triple.host());
 	const target = standardizeTriple(resolved?.target ?? host);
@@ -303,7 +303,7 @@ export const rust = async (
 		.env(env)
 		.named("rust toolchain install")
 		.then(tg.Directory.expect);
-};
+}
 
 type RustupManifest = {
 	"manifest-version": "2";
@@ -355,7 +355,7 @@ type BuildArg = {
 	verbose?: boolean;
 };
 
-export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
+export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	const arg = await tg.resolve(unresolved);
 	const enableTracing = arg.enableTracingFeature ?? true;
 	const release = arg.release ?? true;
@@ -580,10 +580,10 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 
 	// Combine and return.
 	return tg.directory(crates, wrapper);
-};
+}
 
 /* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */
-const standardizeTriple = (triple: string): string => {
+function standardizeTriple(triple: string): string {
 	const components = std.triple.components(triple);
 	const os = components.os;
 
@@ -601,18 +601,18 @@ const standardizeTriple = (triple: string): string => {
 	} else {
 		return tg.unreachable();
 	}
-};
+}
 
-const tripleToEnvVar = (triple: string, upcase?: boolean) => {
+function tripleToEnvVar(triple: string, upcase?: boolean) {
 	const allCaps = upcase ?? false;
 	let result = triple.replace(/-/g, "_");
 	if (allCaps) {
 		result = result.toUpperCase();
 	}
 	return result;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	// Detect the host triple.
 	const host = bootstrap.toolchainTriple();
 
@@ -648,9 +648,9 @@ export const test = async () => {
 		return tg.unreachable();
 	}
 	return nativeWorkspace;
-};
+}
 
-export const testCross = async () => {
+export async function testCross() {
 	// Detect the host triple.
 	const host = std.triple.host();
 
@@ -676,9 +676,9 @@ export const testCross = async () => {
 	tg.assert(crossMetadata.format === "elf");
 	tg.assert(crossMetadata.arch === targetArch);
 	return true;
-};
+}
 
-export const rcodesign = async (host?: string) => {
+export async function rcodesign(host?: string) {
 	const host_ = host ?? std.triple.host();
 	let target = undefined;
 	const checksums: Record<string, tg.Checksum> = {
@@ -719,4 +719,4 @@ export const rcodesign = async (host?: string) => {
 	return release
 		.get(`apple-codesign-${version}-${target}/rcodesign`)
 		.then(tg.File.expect);
-};
+}

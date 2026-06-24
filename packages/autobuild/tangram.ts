@@ -35,7 +35,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (unresolvedArg: tg.Unresolved<Arg>) => {
+export async function build(unresolvedArg: tg.Unresolved<Arg>) {
 	const arg = await tg.resolve(unresolvedArg);
 	const { env: envArg, source } = arg;
 	const sourceId = source.id;
@@ -87,7 +87,7 @@ export const build = async (unresolvedArg: tg.Unresolved<Arg>) => {
 			);
 		}
 	}
-};
+}
 
 export default build;
 
@@ -97,7 +97,7 @@ export type EnvArg = {
 	source: tg.Directory;
 };
 
-export const env = async (unresolvedArg: tg.Unresolved<EnvArg>) => {
+export async function env(unresolvedArg: tg.Unresolved<EnvArg>) {
 	const arg = await tg.resolve(unresolvedArg);
 	const { build, host, source } = arg;
 	const sourceId = source.id;
@@ -138,7 +138,7 @@ export const env = async (unresolvedArg: tg.Unresolved<EnvArg>) => {
 			);
 		}
 	}
-};
+}
 
 export type Kind =
 	| "cc-autotools"
@@ -153,20 +153,28 @@ export type Kind =
 	| "rust-cargo"
 	| "rust-plain";
 
-export const detectKind = async (source: tg.Directory): Promise<Kind> => {
+export async function detectKind(source: tg.Directory): Promise<Kind> {
 	const entries = await source.entries;
-	const hasFile = (name: string) =>
-		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
-	const hasExecutableFile = async (name: string) =>
-		entries.hasOwnProperty(name) &&
-		entries[name] instanceof tg.File &&
-		(await entries[name].executable);
-	const hasDir = (name: string) =>
-		entries.hasOwnProperty(name) && entries[name] instanceof tg.Directory;
-	const hasFileWithExtension = (ext: string) =>
-		Object.entries(entries).some(
+	function hasFile(name: string) {
+		return entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
+	}
+	async function hasExecutableFile(name: string) {
+		return (
+			entries.hasOwnProperty(name) &&
+			entries[name] instanceof tg.File &&
+			(await entries[name].executable)
+		);
+	}
+	function hasDir(name: string) {
+		return (
+			entries.hasOwnProperty(name) && entries[name] instanceof tg.Directory
+		);
+	}
+	function hasFileWithExtension(ext: string) {
+		return Object.entries(entries).some(
 			([name, artifact]) => artifact instanceof tg.File && name.endsWith(ext),
 		);
+	}
 
 	if (hasFile("Cargo.toml")) return "rust-cargo";
 	if (hasFile("CMakeLists.txt")) return "cmake";
@@ -184,9 +192,9 @@ export const detectKind = async (source: tg.Directory): Promise<Kind> => {
 
 	// We didn't match any known types.
 	throw new Error("failed to detect project kind");
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const allKinds: Array<Kind> = [
 		"cc-autotools",
 		"cmake",
@@ -201,7 +209,7 @@ export const test = async () => {
 	await Promise.all(allKinds.map((variant) => testKind(variant)));
 
 	return true;
-};
+}
 
 type TestFnArg = {
 	testFile: (buildOutput: tg.Directory) => PromiseLike<tg.Template>;
@@ -214,7 +222,7 @@ const defaultTestArg: TestFnArg = {
 	expectedStdout: "Hello, world!",
 };
 
-const testParamaters = (): Record<Kind, TestFnArg> => {
+function testParamaters(): Record<Kind, TestFnArg> {
 	return {
 		"cc-autotools": defaultTestArg,
 		cmake: defaultTestArg,
@@ -248,9 +256,9 @@ const testParamaters = (): Record<Kind, TestFnArg> => {
 				tg`${buildOutput}/bin/main`,
 		},
 	};
-};
+}
 
-const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
+async function testDirs(): Promise<Record<Kind, tg.Directory>> {
 	return {
 		"cc-autotools": ccAutotoolsTest,
 		cmake: cmakeTest,
@@ -264,9 +272,9 @@ const testDirs = async (): Promise<Record<Kind, tg.Directory>> => {
 		"rust-cargo": rustCargoTest,
 		"rust-plain": rustPlainTest,
 	};
-};
+}
 
-export const testKind = async (kind: Kind) => {
+export async function testKind(kind: Kind) {
 	console.log(`testing ${kind}...`);
 	const dirs = await testDirs();
 	const source = dirs[kind];
@@ -279,7 +287,7 @@ export const testKind = async (kind: Kind) => {
 	// Test build
 	const buildOutput = await build({ source }).then(tg.Directory.expect);
 	console.log("buildOutput", buildOutput.id);
-	const testStdout = async (arg: TestFnArg): Promise<boolean> => {
+	async function testStdout(arg: TestFnArg): Promise<boolean> {
 		const stdout = await $`${arg.testFile(buildOutput)} > ${tg.output}`
 			.then(tg.File.expect)
 			.then((t) => t.text)
@@ -289,7 +297,7 @@ export const testKind = async (kind: Kind) => {
 			`expected ${arg.expectedStdout}, received ${stdout}`,
 		);
 		return true;
-	};
+	}
 	await testStdout(testParamaters()[kind]);
 	return true;
-};
+}

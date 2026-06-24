@@ -9,7 +9,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2";
@@ -19,11 +19,11 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	let output = await std.autotools.build(
 		{
 			source: source(),
@@ -62,10 +62,10 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await build();
-};
+}

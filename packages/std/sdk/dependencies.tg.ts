@@ -86,7 +86,7 @@ type ResolvedConfig = {
 };
 
 /** Apply preset defaults, then override with individual flags */
-const resolveConfig = (arg: BuildToolsArg): ResolvedConfig => {
+function resolveConfig(arg: BuildToolsArg): ResolvedConfig {
 	// Base defaults - everything off except pkgConfig
 	let config: ResolvedConfig = {
 		pkgConfig: true,
@@ -159,12 +159,10 @@ const resolveConfig = (arg: BuildToolsArg): ResolvedConfig => {
 	if (arg.automake !== undefined) config.automake = arg.automake;
 
 	return config;
-};
+}
 
 /** An env containing build-time tools. Use presets or individual flags to control which tools are included. */
-export const buildTools = async (
-	unresolvedArg?: tg.Unresolved<BuildToolsArg>,
-) => {
+export async function buildTools(unresolvedArg?: tg.Unresolved<BuildToolsArg>) {
 	const resolved = unresolvedArg ? await tg.resolve(unresolvedArg) : {};
 	const { host: host_, buildToolchain: buildToolchain_ } = resolved;
 
@@ -414,10 +412,10 @@ export const buildTools = async (
 	}
 
 	return std.env.arg(...retEnvs);
-};
+}
 
 /** The autotools build tools built with the default SDK and utils for the detected host. This version uses the default SDK to ensure cache hits when used in autotools.build and the package automation script. */
-export const autotoolsBuildTools = async () => {
+export async function autotoolsBuildTools() {
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	const sdk = await tg.build(std.sdk, { host }).named("sdk");
 	const utils = await tg.build(std.buildDefaultEnv).named("default env");
@@ -428,12 +426,12 @@ export const autotoolsBuildTools = async () => {
 			preset: "autotools",
 		})
 		.named("autotools build tools");
-};
+}
 
 /** Release helper - builds autotoolsBuildTools with a referent to this file for cache hits. */
-export const buildAutotoolsBuildTools = async () => {
+export async function buildAutotoolsBuildTools() {
 	return tg.build(autotoolsBuildTools).named("autotools build tools");
-};
+}
 
 export type HostLibrariesArg = {
 	host: string;
@@ -469,9 +467,9 @@ type ResolvedHostLibrariesConfig = {
 };
 
 /** Apply preset defaults, then override with individual flags */
-const resolveHostLibrariesConfig = (
+function resolveHostLibrariesConfig(
 	arg: HostLibrariesArg,
-): ResolvedHostLibrariesConfig => {
+): ResolvedHostLibrariesConfig {
 	// Base defaults - only zlib.
 	let config: ResolvedHostLibrariesConfig = {
 		zlib: true,
@@ -526,10 +524,10 @@ const resolveHostLibrariesConfig = (
 	if (arg.mpc !== undefined) config.mpc = arg.mpc;
 
 	return config;
-};
+}
 
 /** An env containing libraries built for the given host. Use presets or individual flags to control which libraries are included. Assumes the incoming env contains a toolchain plus the build tools (m4 is required for gmp/isl/mpfr/mpc). */
-export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
+export async function hostLibraries(arg: tg.Unresolved<HostLibrariesArg>) {
 	const resolved = await tg.resolve(arg);
 	const { host, buildToolchain } = resolved;
 	const config = resolveHostLibrariesConfig(resolved);
@@ -603,4 +601,4 @@ export const hostLibraries = async (arg: tg.Unresolved<HostLibrariesArg>) => {
 	}
 
 	return await std.env.arg(...ret, { utils: false });
-};
+}

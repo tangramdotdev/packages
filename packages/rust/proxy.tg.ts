@@ -16,8 +16,8 @@ import probeFixture from "./tgrustc/tests/probe" with { type: "directory" };
 import tests from "./tests" with { type: "directory" };
 
 /** `../../std` from tgrustc's Cargo.toml resolves to the std Rust workspace. */
-export const source = async () =>
-	tg.directory({
+export async function source() {
+	return tg.directory({
 		"rust/tgrustc": {
 			"Cargo.toml": cargoToml,
 			"Cargo.lock": cargoLock,
@@ -25,9 +25,10 @@ export const source = async () =>
 		},
 		std: std.rustSource,
 	});
+}
 
-export const proxy = async (...args: std.Args<cargo.Arg>) =>
-	cargo.build(
+export async function proxy(...args: std.Args<cargo.Arg>) {
+	return cargo.build(
 		{
 			source: source(),
 			manifestSubdir: "rust/tgrustc",
@@ -37,6 +38,7 @@ export const proxy = async (...args: std.Args<cargo.Arg>) =>
 		},
 		...args,
 	);
+}
 
 /** Cargo run command that wires tgrustc as RUSTC_WRAPPER over the
  *  hello-proc-macro-deps fixture. Used by test-remote-cache.nu: cargo runs on
@@ -49,7 +51,7 @@ export const proxy = async (...args: std.Args<cargo.Arg>) =>
  *  sandbox-safe (its rustc has a host-system ELF interpreter); the
  *  `std.wrap`-ed `self()` toolchain is. The SDK provides `cc` for rustc's
  *  linker step on final binaries. */
-export const runProcMacroDeps = async () => {
+export async function runProcMacroDeps() {
 	const wrapper = await proxy();
 	const source = await tests
 		.get("hello-proc-macro-deps")
@@ -72,10 +74,10 @@ export const runProcMacroDeps = async () => {
 		},
 		pre: 'export TGRUSTC_PASSTHROUGH_PROJECT_DIR="$PWD"',
 	});
-};
+}
 
 /** Phase-4: workspace with proc-macro crate + crates.io deps. */
-export const testProcMacroDeps = async () => {
+export async function testProcMacroDeps() {
 	const wrapper = await proxy();
 	const source = await tests
 		.get("hello-proc-macro-deps")
@@ -99,10 +101,10 @@ export const testProcMacroDeps = async () => {
 		`unexpected output: ${text}`,
 	);
 	return result;
-};
+}
 
 /** Phase-3: single crate with build.rs that writes generated.rs into OUT_DIR. */
-export const testCodegen = async () => {
+export async function testCodegen() {
 	const wrapper = await proxy();
 	const source = await tests.get("hello-codegen").then(tg.Directory.expect);
 
@@ -124,10 +126,10 @@ export const testCodegen = async () => {
 		`unexpected output: ${text}`,
 	);
 	return result;
-};
+}
 
 /** Phase-5: hello-workspace with proxy + passthrough. Workspace members compile via passthrough on host rustc; vendored deps go through tangram sandbox processes. */
-export const testWorkspaceMode2 = async () => {
+export async function testWorkspaceMode2() {
 	const wrapper = await proxy();
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
 
@@ -158,10 +160,10 @@ export const testWorkspaceMode2 = async () => {
 		`unexpected output: ${text}`,
 	);
 	return result;
-};
+}
 
 /** Phase-2: workspace with cli + greeting lib. Exercises --extern and -L. */
-export const testWorkspace = async () => {
+export async function testWorkspace() {
 	const wrapper = await proxy();
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
 
@@ -191,10 +193,10 @@ export const testWorkspace = async () => {
 		`unexpected output: ${text}`,
 	);
 	return result;
-};
+}
 
 /** Phase-1 probe: build a tiny single-bin cargo project with tgrustc as RUSTC_WRAPPER. */
-export const testProbe = async () => {
+export async function testProbe() {
 	const wrapper = await proxy();
 
 	const result = await cargo.build({
@@ -212,10 +214,10 @@ export const testProbe = async () => {
 	const text = await out.text;
 	tg.assert(text.trim() === "hi from tgrustc", `unexpected output: ${text}`);
 	return result;
-};
+}
 
 /** Legacy fixture: hello-world with build.rs, OUT_DIR, include_bytes!, itoa vendored. */
-export const testHello = async () => {
+export async function testHello() {
 	const result = await cargo.build({
 		source: tests.get("hello-world").then(tg.Directory.expect),
 		proxy: true,
@@ -230,10 +232,10 @@ export const testHello = async () => {
 		text.trim() === "hello, proxy!\n128\nHello, build!",
 		`unexpected output: ${text}`,
 	);
-};
+}
 
 /** Legacy fixture: single proc-macro crate (no external deps). */
-export const testProcMacro = async () => {
+export async function testProcMacro() {
 	const result = await cargo.build({
 		source: tests.get("hello-proc-macro").then(tg.Directory.expect),
 		proxy: true,
@@ -246,10 +248,10 @@ export const testProcMacro = async () => {
 		text.trim() === "Hello from Greeter!",
 		`unexpected output: ${text}`,
 	);
-};
+}
 
 /** Legacy fixture: same as testProcMacroDeps but via the proxy=true flow. */
-export const testProcMacroWithDeps = async () => {
+export async function testProcMacroWithDeps() {
 	const result = await cargo.build({
 		source: tests.get("hello-proc-macro-deps").then(tg.Directory.expect),
 		proxy: true,
@@ -262,10 +264,10 @@ export const testProcMacroWithDeps = async () => {
 		text.trim() === "Hello from Greeter!",
 		`unexpected output: ${text}`,
 	);
-};
+}
 
 /** Legacy smoke test: invoke the wrapper directly to print rustc --version. */
-export const testProxyCompiles = async () => {
+export async function testProxyCompiles() {
 	const version = await $`tgrustc rustc - --version | tee ${tg.output}`
 		.env(proxy())
 		.env(self())
@@ -275,10 +277,10 @@ export const testProxyCompiles = async () => {
 		versionText.trim().includes(VERSION),
 		`unexpected version output: ${versionText}`,
 	);
-};
+}
 
 /** Legacy fixture: links against a custom pkgconfig-provided dylib. */
-export const testPkgconfig = async () => {
+export async function testPkgconfig() {
 	const host = std.triple.host();
 	const os = std.triple.os(host);
 	const dylibExt = os === "darwin" ? "dylib" : "so";
@@ -325,10 +327,10 @@ export const testPkgconfig = async () => {
 		text.trim() === "You passed the number: 42",
 		`unexpected output: ${text}`,
 	);
-};
+}
 
 /** Legacy fixture: links against system openssl via openssl-sys. */
-export const testOpenSSL = async () => {
+export async function testOpenSSL() {
 	const result = await cargo.build({
 		source: tests.get("hello-openssl").then(tg.Directory.expect),
 		env: std.env.arg(openssl(), pkgconf()),
@@ -346,10 +348,10 @@ export const testOpenSSL = async () => {
 		text.trim() === "Hello, from a crate that links against libssl!",
 		`unexpected output: ${text}`,
 	);
-};
+}
 
 /** Legacy fixture: bindgen requires libclang from LLVM. */
-export const testBindgen = async () => {
+export async function testBindgen() {
 	const result = await cargo.build({
 		source: tests.get("hello-bindgen").then(tg.Directory.expect),
 		proxy: true,
@@ -362,10 +364,10 @@ export const testBindgen = async () => {
 		.then(tg.File.expect);
 	const text = await out.text;
 	tg.assert(text.trim() === "6 * 7 = 42", `unexpected output: ${text}`);
-};
+}
 
 /** Legacy fixture: build script reads MY_BUILD_VAR; different values bust cache. */
-export const testBuildScriptEnvDep = async () => {
+export async function testBuildScriptEnvDep() {
 	const source = await tests.get("hello-env-dep").then(tg.Directory.expect);
 	const build1 = await cargo.build({
 		source,
@@ -394,10 +396,10 @@ export const testBuildScriptEnvDep = async () => {
 		(await out2.text).includes("second_value"),
 		"second_value not present in build2 output",
 	);
-};
+}
 
 /** Legacy fixture: build script reads a file from the source tree. */
-export const testBuildScriptFileDep = async () => {
+export async function testBuildScriptFileDep() {
 	const result = await cargo.build({
 		source: tests.get("hello-file-dep").then(tg.Directory.expect),
 		proxy: true,
@@ -411,10 +413,10 @@ export const testBuildScriptFileDep = async () => {
 		(await out.text).includes("hello from config file"),
 		`unexpected output: ${await out.text}`,
 	);
-};
+}
 
 /** Legacy fixture: cross-compile proc-macro (proc macros build for host; bin builds for target). */
-export const testProcMacroCross = async () => {
+export async function testProcMacroCross() {
 	const hostTriple = std.triple.host();
 	const hostArch = std.triple.arch(hostTriple);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
@@ -430,10 +432,10 @@ export const testProcMacroCross = async () => {
 	const app = await result.get("bin/app").then(tg.File.expect);
 	tg.assert(app !== undefined, "cross-compiled bin/app should exist");
 	return result;
-};
+}
 
 /** Legacy fixture: tangram.ts with external import does not break the proxy. */
-export const testExternalTsImport = async () => {
+export async function testExternalTsImport() {
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
 	const sourceWithTangram = tg.directory(source, {
 		"tangram.ts": tg.file(`
@@ -453,12 +455,12 @@ export default foo;
 		`unexpected output: ${await out.text}`,
 	);
 	return result;
-};
+}
 
 /** Legacy fixture: passthrough mode + proxy. Old wrapper emitted "passthrough mode" /
  *  "spawned process" trace lines; new wrapper does not, so the trace-text
  *  assertions are dropped and only the binary output is checked. */
-export const testPassthrough = async () => {
+export async function testPassthrough() {
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
 	const result = await cargo.build({
 		source,
@@ -474,10 +476,10 @@ export const testPassthrough = async () => {
 		`unexpected output: ${await out.text}`,
 	);
 	return result;
-};
+}
 
 /** Legacy fixture: crossterm — exercises CARGO_MANIFEST_DIR for proc-macros. */
-export const testProxyCrossterm = async () => {
+export async function testProxyCrossterm() {
 	const result = await cargo.build({
 		source: tests.get("hello-crossterm").then(tg.Directory.expect),
 		proxy: true,
@@ -492,10 +494,10 @@ export const testProxyCrossterm = async () => {
 		`unexpected output: ${await out.text}`,
 	);
 	return result;
-};
+}
 
 /** Legacy fixture: -L native paths from xz must not reference outer-build tmp. */
-export const testXzNative = async () => {
+export async function testXzNative() {
 	const result = await cargo.build({
 		source: tests.get("xz-native").then(tg.Directory.expect),
 		proxy: true,
@@ -503,10 +505,10 @@ export const testXzNative = async () => {
 	});
 	console.log("testXzNative result", result.id);
 	return result;
-};
+}
 
 /** Legacy fixture: vendored transitive deps via hashbrown's deps. */
-export const testVendoredTransitiveDeps = async () => {
+export async function testVendoredTransitiveDeps() {
 	const result = await cargo.build({
 		source: tests.get("vendored-transitive").then(tg.Directory.expect),
 		proxy: true,
@@ -521,30 +523,30 @@ export const testVendoredTransitiveDeps = async () => {
 		`unexpected output: ${await out.text}`,
 	);
 	return result;
-};
+}
 
 /** Legacy fixture: `--extern alias=lib...` where alias differs from crate name. */
-export const testAliasedExtern = async () => {
+export async function testAliasedExtern() {
 	const result = await cargo.build({
 		source: tests.get("aliased-extern").then(tg.Directory.expect),
 		proxy: true,
 	});
 	console.log("testAliasedExtern result", result.id);
 	return result;
-};
+}
 
 /** Legacy fixture: `pub use crate as alias` re-export. */
-export const testPubUseReexport = async () => {
+export async function testPubUseReexport() {
 	const result = await cargo.build({
 		source: tests.get("pub-use-reexport").then(tg.Directory.expect),
 		proxy: true,
 	});
 	console.log("testPubUseReexport result", result.id);
 	return result;
-};
+}
 
 /** Legacy fixture: vendored pub-use stress for parallel compilation. */
-export const testVendoredPubUse = async () => {
+export async function testVendoredPubUse() {
 	const result = await cargo.build({
 		source: tests.get("vendored-pub-use").then(tg.Directory.expect),
 		proxy: true,
@@ -559,11 +561,11 @@ export const testVendoredPubUse = async () => {
 		`unexpected output: ${await out.text}`,
 	);
 	return result;
-};
+}
 
 /** Legacy fixture: missing-externs fallback (old wrapper relied on TGRUSTC_TEST_SKIP_EXTERNS).
  *  The new wrapper does not maintain externs sidecars; this test may need adaptation. */
-export const testMissingExternsFallback = async () => {
+export async function testMissingExternsFallback() {
 	const result = await cargo.build({
 		source: tests.get("missing-externs").then(tg.Directory.expect),
 		proxy: true,
@@ -576,7 +578,7 @@ export const testMissingExternsFallback = async () => {
 		`Expected "result: 43", got "${(await out.text).trim()}"`,
 	);
 	return result;
-};
+}
 
 /** Per-spawn observability emitted by the wrapper. Currently unused — the
  * new wrapper does not emit tracing lines, so `parseStats` returns undefined
@@ -589,10 +591,10 @@ export type RustcStats = {
 	command_id: string;
 };
 
-export const parseStats = async (
+export async function parseStats(
 	result: tg.Directory,
 	eventName: string = "proxy_complete",
-): Promise<Array<RustcStats> | undefined> => {
+): Promise<Array<RustcStats> | undefined> {
 	const stderrLog = await result
 		.tryGet("cargo-stderr.log")
 		.then((a) => (a instanceof tg.File ? a : undefined));
@@ -618,23 +620,25 @@ export const parseStats = async (
 		}
 	}
 	return stats.length > 0 ? stats : undefined;
-};
+}
 
-export const summarizeStats = (stats: Array<RustcStats>) => {
+export function summarizeStats(stats: Array<RustcStats>) {
 	const hits = stats.filter((s) => s.cached).length;
 	const misses = stats.filter((s) => !s.cached).length;
 	const totalMs = stats.reduce((sum, s) => sum + s.elapsed_ms, 0);
 	return { hits, misses, totalMs, crates: stats.length };
-};
+}
 
-export const buildWithStats = (...args: std.Args<cargo.Arg>) =>
-	cargo.build(...args, {
+export function buildWithStats(...args: std.Args<cargo.Arg>) {
+	return cargo.build(...args, {
 		proxy: true,
 		captureStderr: true,
 	});
+}
 
-const getCrateStatus = (stats: Array<RustcStats>, name: string) =>
-	stats.find((s) => s.crate_name === name);
+function getCrateStatus(stats: Array<RustcStats>, name: string) {
+	return stats.find((s) => s.crate_name === name);
+}
 
 type CacheTestConfig = {
 	source: tg.Directory;
@@ -649,13 +653,11 @@ const cacheTestArgs: cargo.Arg = {
 	captureStderr: true,
 };
 
-const assertCacheHit = async (
-	config: CacheTestConfig,
-): Promise<{
+async function assertCacheHit(config: CacheTestConfig): Promise<{
 	first: Array<RustcStats>;
 	second: Array<RustcStats>;
 	secondResult: tg.Directory;
-}> => {
+}> {
 	const { source, modifyPath, expectations, buildArgs = [], tag } = config;
 	const comment = `${tag ?? "cache test modification"} ${Date.now()}`;
 
@@ -698,9 +700,9 @@ const assertCacheHit = async (
 	}
 
 	return { first: firstStats, second: secondStats, secondResult };
-};
+}
 
-export const testCacheHitVendoredDeps = async () => {
+export async function testCacheHitVendoredDeps() {
 	const source = await tests.get("parallel-deps").then(tg.Directory.expect);
 	await cargo.build({ source, proxy: true });
 	await buildWithStats({ source });
@@ -719,9 +721,9 @@ export const testCacheHitVendoredDeps = async () => {
 		.env(secondResult)
 		.then(tg.File.expect);
 	tg.assert((await out.text).trim().length > 0);
-};
+}
 
-export const testCacheHitSharedDepsAcrossProjects = async () => {
+export async function testCacheHitSharedDepsAcrossProjects() {
 	await buildWithStats({
 		source: tests.get("parallel-deps").then(tg.Directory.expect),
 	});
@@ -759,9 +761,9 @@ export const testCacheHitSharedDepsAcrossProjects = async () => {
 		.env(result)
 		.then(tg.File.expect);
 	tg.assert((await out.text).includes("project 2"));
-};
+}
 
-export const testCacheHitUnchangedWorkspaceCrates = async () => {
+export async function testCacheHitUnchangedWorkspaceCrates() {
 	const source = await tests.get("hello-workspace").then(tg.Directory.expect);
 	const { second, secondResult } = await assertCacheHit({
 		source,
@@ -777,9 +779,9 @@ export const testCacheHitUnchangedWorkspaceCrates = async () => {
 		.env(secondResult)
 		.then(tg.File.expect);
 	tg.assert((await out.text).trim() === "Hello from a workspace!");
-};
+}
 
-export const testMultiVersionCacheHit = async () => {
+export async function testMultiVersionCacheHit() {
 	const source = await tests.get("multi-version").then(tg.Directory.expect);
 	const { second } = await assertCacheHit({
 		source,
@@ -796,9 +798,9 @@ export const testMultiVersionCacheHit = async () => {
 		unexpected.length === 0,
 		`Expected all crates except crate_b to be cache hits, misses: ${unexpected.map((s) => s.crate_name).join(", ")}.`,
 	);
-};
+}
 
-export const testCacheHitWithDepVars = async () => {
+export async function testCacheHitWithDepVars() {
 	const source = await tests.get("dep-var-cache").then(tg.Directory.expect);
 	await assertCacheHit({
 		source,
@@ -809,9 +811,9 @@ export const testCacheHitWithDepVars = async () => {
 			lib_sys: true,
 		},
 	});
-};
+}
 
-export const testCacheHitWithPreScript = async () => {
+export async function testCacheHitWithPreScript() {
 	const source = await tests.get("vendor-cache-hit").then(tg.Directory.expect);
 	const nodeModulesBin = tg.directory({ ".gitkeep": tg.file("") });
 	const pre = tg`export PATH="$PATH:${nodeModulesBin}"`;
@@ -827,9 +829,9 @@ export const testCacheHitWithPreScript = async () => {
 		},
 		buildArgs: [{ useCargoVendor: true, pre }],
 	});
-};
+}
 
-export const testSysLinkCache = async () => {
+export async function testSysLinkCache() {
 	const source = await tests.get("sys-link-cache").then(tg.Directory.expect);
 	await assertCacheHit({
 		source,
@@ -841,10 +843,10 @@ export const testSysLinkCache = async () => {
 			"build_script_build(wrapper_sys)": true,
 		},
 	});
-};
+}
 
 /** Legacy fixture: workspace with a build script in a workspace member. */
-export const testWorkspaceBuildScript = async () => {
+export async function testWorkspaceBuildScript() {
 	const result = await cargo.build({
 		source: tests.get("workspace-build-script").then(tg.Directory.expect),
 		proxy: true,
@@ -857,10 +859,10 @@ export const testWorkspaceBuildScript = async () => {
 		`unexpected output: ${await out.text}`,
 	);
 	return result;
-};
+}
 
 /** Legacy fixture: cc-rs C-compile build script. */
-export const testCcRs = async () => {
+export async function testCcRs() {
 	const result = await cargo.build({
 		source: tests.get("hello-cc-rs").then(tg.Directory.expect),
 		proxy: true,
@@ -872,12 +874,12 @@ export const testCcRs = async () => {
 		.then(tg.File.expect);
 	const text = await out.text;
 	tg.assert(text.trim() === "10 + 32 = 42", `unexpected output: ${text}`);
-};
+}
 
 /** Runner: build scripts execute inside a tangram sandbox via `host.runner`.
  *  Asserts cache stability — modifying main.rs (not the build script or its
  *  inputs) must keep the runner_complete entry for cc-rs a cache hit. */
-export const testRunnerBuildScript = async () => {
+export async function testRunnerBuildScript() {
 	const source = await tests.get("hello-cc-rs").then(tg.Directory.expect);
 
 	const firstResult = await buildWithStats({ source });
@@ -920,10 +922,10 @@ export const testRunnerBuildScript = async () => {
 		.env(secondResult)
 		.then(tg.File.expect);
 	tg.assert((await secondOutput.text).trim() === "10 + 32 = 42");
-};
+}
 
 /** Regression: NODE_PATH must reach build scripts unmangled. */
-export const testRunnerEnvPassthrough = async () => {
+export async function testRunnerEnvPassthrough() {
 	// Unique source per invocation — a cached result would be a false negative.
 	const baseSource = await tests
 		.get("runner-env-passthrough")
@@ -951,12 +953,12 @@ export const testRunnerEnvPassthrough = async () => {
 		text.includes("NODE_PATH was:"),
 		"Build script should have received NODE_PATH.",
 	);
-};
+}
 
 /** Regression: tools at `$NODE_PATH/.bin/<tool>` (a npm/bun pattern) must be
  *  reachable from a build script via PATH, and symlinks inside that dir must
  *  resolve through the checkin. */
-export const testRunnerPathTools = async () => {
+export async function testRunnerPathTools() {
 	// Fake `node_modules` with a `.bin` symlink, mimicking npm/bun layout.
 	const toolFile = tg.file("tool output from my-tool\n");
 	const nodeModules = tg.directory({
@@ -993,11 +995,11 @@ export const testRunnerPathTools = async () => {
 		text.includes("tool output from my-tool"),
 		"Build script should have run my-tool from NODE_PATH/.bin.",
 	);
-};
+}
 
 /** Regression: rustc cfg probes via RUSTC_WRAPPER must work from a build
  *  script (rustix/getrandom/etc. use `cargo:rustc-cfg=...` after probing). */
-export const testRunnerCfgProbe = async () => {
+export async function testRunnerCfgProbe() {
 	const baseSource = await tests
 		.get("runner-cfg-probe")
 		.then(tg.Directory.expect);
@@ -1021,11 +1023,11 @@ export const testRunnerCfgProbe = async () => {
 		text.includes("probe passed"),
 		"Build script cfg probe via RUSTC_WRAPPER should succeed in runner mode.",
 	);
-};
+}
 
 /** Regression: runner sandbox lacks /usr/bin/env; std.wrap'd binaries with an
  *  explicit interpreter must still resolve via PATH. */
-export const testRunnerPathExec = async () => {
+export async function testRunnerPathExec() {
 	const host = await std.triple.host();
 	const dashBin = await dash({ host })
 		.then((d) => d.get("bin/dash"))
@@ -1062,12 +1064,12 @@ export const testRunnerPathExec = async () => {
 		text.includes("hello from exec tool"),
 		"Build script should have executed the tool from PATH.",
 	);
-};
+}
 
 /** Build script in a workspace member reads a sibling workspace file via
  *  `CARGO_MANIFEST_DIR/..`. The runner sandbox must expose the workspace root,
  *  not only the per-crate manifest dir. */
-export const testRunnerWorkspaceRootAccess = async () => {
+export async function testRunnerWorkspaceRootAccess() {
 	const source = await tests
 		.get("workspace-root-access")
 		.then(tg.Directory.expect);
@@ -1082,11 +1084,11 @@ export const testRunnerWorkspaceRootAccess = async () => {
 		text.includes("workspace-level shared configuration"),
 		`expected output to include workspace config, got: ${text}`,
 	);
-};
+}
 
 /** Modifying a workspace member must not invalidate the runner cache for
  *  unrelated sibling crates. */
-export const testRunnerCacheHitWorkspace = async () => {
+export async function testRunnerCacheHitWorkspace() {
 	const source = await tests
 		.get("workspace-runner-cache")
 		.then(tg.Directory.expect);
@@ -1097,9 +1099,9 @@ export const testRunnerCacheHitWorkspace = async () => {
 			lib: true,
 		},
 	});
-};
+}
 
-export const test = async () => {
+export async function test() {
 	await Promise.all([
 		testProbe(),
 		testWorkspace(),
@@ -1125,4 +1127,4 @@ export const test = async () => {
 		testRunnerCacheHitWorkspace(),
 	]);
 	return true;
-};
+}

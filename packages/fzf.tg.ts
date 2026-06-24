@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:a99e0df4dfb6228c8af63a2f99f39f7476b7da614833141be30a6b3a3f9d440f";
@@ -25,16 +25,17 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = go.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	go.build({ source: source() }, ...args);
+export function build(...args: std.Args<Arg>) {
+	return go.build({ source: source() }, ...args);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
 	const spec = {
 		...std.assert.defaultSpec(metadata),
@@ -43,4 +44,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

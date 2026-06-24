@@ -18,7 +18,7 @@ export const metadata = {
 	tag: "llvm/21.1.8",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:4633a23617fa31a3ea51242586ea7fb1da7140e426bd62fc164261fe036aa142";
@@ -31,7 +31,7 @@ export const source = async () => {
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type LLVMArg = {
 	build?: string;
@@ -43,7 +43,7 @@ export type LLVMArg = {
 };
 
 /** Produce a complete clang+lld distribution using a 2-stage bootstrapping build. */
-export const toolchain = async (arg?: LLVMArg) => {
+export async function toolchain(arg?: LLVMArg) {
 	const {
 		build: build_,
 		env: env_,
@@ -183,7 +183,7 @@ export const toolchain = async (arg?: LLVMArg) => {
 	});
 
 	return llvmArtifact;
-};
+}
 
 export default toolchain;
 
@@ -191,7 +191,7 @@ type PrebuiltArg = {
 	host?: string;
 };
 
-export const prebuilt = async (arg?: PrebuiltArg) => {
+export async function prebuilt(arg?: PrebuiltArg) {
 	const { host: host_ } = arg ?? {};
 	const { version } = metadata;
 	const host = host_ ?? std.triple.host();
@@ -244,10 +244,10 @@ export const prebuilt = async (arg?: PrebuiltArg) => {
 	}
 
 	return output;
-};
+}
 
 /** Build libclang only. */
-export const libclang = async (arg?: LLVMArg) => {
+export async function libclang(arg?: LLVMArg) {
 	const {
 		build: build_,
 		env: env_,
@@ -292,10 +292,10 @@ export const libclang = async (arg?: LLVMArg) => {
 		sdk,
 		source: tg`${sourceDir}/llvm`,
 	});
-};
+}
 
 /** Build LLD only, without the 2-stage bootstrap. */
-export const lld = async (arg?: LLVMArg) => {
+export async function lld(arg?: LLVMArg) {
 	const {
 		build: build_,
 		env: env_,
@@ -336,11 +336,11 @@ export const lld = async (arg?: LLVMArg) => {
 		sdk,
 		source: tg`${sourceDir}/llvm`,
 	});
-};
+}
 
-export const llvmMajorVersion = () => {
+export function llvmMajorVersion() {
 	return metadata.version.split(".")[0];
-};
+}
 
 type WrapArgsArg = {
 	host: string;
@@ -349,7 +349,7 @@ type WrapArgsArg = {
 };
 
 /** Produce the flags and environment required to properly proxy this toolchain. */
-export const wrapArgs = async (arg: WrapArgsArg) => {
+export async function wrapArgs(arg: WrapArgsArg) {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
 	const version = llvmMajorVersion();
@@ -377,9 +377,9 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	clangxxArgs = clangxxArgs.concat(commonFlags, cxxFlags);
 
 	return { clangArgs, clangxxArgs, env };
-};
+}
 
-export const test = async () => {
+export async function test() {
 	// Build a triple for the detected host.
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	const hostArch = std.triple.arch(host);
@@ -461,4 +461,4 @@ export const test = async () => {
 	}
 
 	return directory;
-};
+}

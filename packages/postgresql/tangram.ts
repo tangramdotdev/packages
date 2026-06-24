@@ -60,7 +60,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ff86675c336c46e98ac991ebb306d1b67621ece1d06787beaade312c2c915d54";
@@ -72,10 +72,10 @@ export const source = async () => {
 		.then(std.directory.unwrap);
 	// return output;
 	return await std.patch(output, patches);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		flex: { build: flex.build, kind: "buildtime" },
 		icu: icu.build,
 		lz4: lz4.build,
@@ -85,10 +85,11 @@ export const deps = () =>
 		zlib: zlib.build,
 		zstd: zstd.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -171,11 +172,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		phases,
 		setRuntimeLibraryPath: true,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -58,11 +58,11 @@ type BenchmarkResult = {
 };
 
 /** Create a source variant by appending a unique comment to the leaf crate source. */
-const createWarmVariant = async (
+async function createWarmVariant(
 	source: tg.Directory,
 	leafPath: string,
 	tag: string,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const original = await source
 		.get(leafPath)
 		.then(tg.File.expect)
@@ -70,7 +70,7 @@ const createWarmVariant = async (
 	return tg.directory(source, {
 		[leafPath]: tg.file(`${original}\n// benchmark-variant: ${tag}\n`),
 	});
-};
+}
 
 /** Shell script that wraps rustc to measure per-crate compilation duration.
  *
@@ -114,9 +114,9 @@ export RUSTC_WRAPPER=/tmp/timing-wrapper.sh
  * Looks for `baseline_timing crate_name=<name> elapsed_ms=<ms>` lines
  * emitted by the timing wrapper.
  */
-const parseBaselineTimings = async (
+async function parseBaselineTimings(
 	result: tg.Directory,
-): Promise<Array<BaselineTiming> | undefined> => {
+): Promise<Array<BaselineTiming> | undefined> {
 	const stderrLog = await result
 		.tryGet("cargo-stderr.log")
 		.then((a) => (a instanceof tg.File ? a : undefined));
@@ -140,12 +140,10 @@ const parseBaselineTimings = async (
 	}
 
 	return timings.length > 0 ? timings : undefined;
-};
+}
 
 /** Run all benchmark scenarios for a single project. */
-const runScenarios = async (
-	config: BenchmarkConfig,
-): Promise<BenchmarkResult> => {
+async function runScenarios(config: BenchmarkConfig): Promise<BenchmarkResult> {
 	const { name, leafPath, cargoArgs = {} } = config;
 	const source = await tg.resolve(config.source);
 
@@ -201,16 +199,16 @@ const runScenarios = async (
 		warmStats,
 		warmSummary,
 	};
-};
+}
 
 /** Format a summary row for the report table. */
-const formatSummaryRow = (
+function formatSummaryRow(
 	label: string,
 	totalMs: number | undefined,
 	crates: number | undefined,
 	hits: number | undefined,
 	misses: number | undefined,
-): string => {
+): string {
 	if (totalMs === undefined) {
 		return `  ${label.padEnd(15)}    n/a            n/a          n/a              n/a`;
 	}
@@ -222,10 +220,10 @@ const formatSummaryRow = (
 			? ((hits / crates) * 100).toFixed(1)
 			: "n/a";
 	return `  ${label.padEnd(15)}  ${String(totalMs).padStart(7)} ms    ${crateStr}      ${hitsStr} / ${missStr}    ${hitRate}${hitRate !== "n/a" ? "%" : ""}`;
-};
+}
 
 /** Format a single benchmark result as a text report section. */
-const formatResultSection = (result: BenchmarkResult): string => {
+function formatResultSection(result: BenchmarkResult): string {
 	const lines: Array<string> = [];
 	const {
 		name,
@@ -331,10 +329,10 @@ const formatResultSection = (result: BenchmarkResult): string => {
 	}
 
 	return lines.join("\n");
-};
+}
 
 /** Format a complete benchmark report from multiple results. */
-const formatReport = (results: Array<BenchmarkResult>): string => {
+function formatReport(results: Array<BenchmarkResult>): string {
 	const lines: Array<string> = [];
 	lines.push("=== tgrustc Performance Benchmark Report ===");
 	lines.push("");
@@ -345,16 +343,16 @@ const formatReport = (results: Array<BenchmarkResult>): string => {
 	}
 
 	return lines.join("\n");
-};
+}
 
 /** Format benchmark results as JSON for programmatic consumption. */
-const formatJson = (results: Array<BenchmarkResult>): string => {
+function formatJson(results: Array<BenchmarkResult>): string {
 	return JSON.stringify(results, null, 2);
-};
+}
 
 // --- Individual benchmark exports ---
 
-export const benchmarkParallelDeps = async () => {
+export async function benchmarkParallelDeps() {
 	const result = await runScenarios({
 		name: "parallel-deps",
 		source: tests.get("parallel-deps").then(tg.Directory.expect),
@@ -363,9 +361,9 @@ export const benchmarkParallelDeps = async () => {
 	const report = formatReport([result]);
 	console.log(report);
 	return tg.file(report);
-};
+}
 
-export const benchmarkVendoredPubUse = async () => {
+export async function benchmarkVendoredPubUse() {
 	const result = await runScenarios({
 		name: "vendored-pub-use",
 		source: tests.get("vendored-pub-use").then(tg.Directory.expect),
@@ -374,9 +372,9 @@ export const benchmarkVendoredPubUse = async () => {
 	const report = formatReport([result]);
 	console.log(report);
 	return tg.file(report);
-};
+}
 
-export const benchmarkHelloWorkspace = async () => {
+export async function benchmarkHelloWorkspace() {
 	const result = await runScenarios({
 		name: "hello-workspace",
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
@@ -385,9 +383,9 @@ export const benchmarkHelloWorkspace = async () => {
 	const report = formatReport([result]);
 	console.log(report);
 	return tg.file(report);
-};
+}
 
-export const benchmarkMultiVersion = async () => {
+export async function benchmarkMultiVersion() {
 	const result = await runScenarios({
 		name: "multi-version",
 		source: tests.get("multi-version").then(tg.Directory.expect),
@@ -396,10 +394,10 @@ export const benchmarkMultiVersion = async () => {
 	const report = formatReport([result]);
 	console.log(report);
 	return tg.file(report);
-};
+}
 
 /** Run all benchmarks and produce a combined report. */
-export const benchmarkAll = async () => {
+export async function benchmarkAll() {
 	const results = await Promise.all([
 		runScenarios({
 			name: "parallel-deps",
@@ -430,4 +428,4 @@ export const benchmarkAll = async () => {
 		"report.txt": tg.file(textReport),
 		"report.json": tg.file(jsonReport),
 	});
-};
+}

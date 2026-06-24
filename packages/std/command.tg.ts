@@ -16,10 +16,10 @@ export function command(...args: any): any {
 }
 
 /** Resolve std shell and env for a command template literal. */
-const stdCommandArg = async (
+async function stdCommandArg(
 	strings: TemplateStringsArray,
 	...placeholders: std.Args<tg.Template.Arg>
-) => {
+) {
 	const host = std.triple.host();
 	const env = await tg
 		.build(std.utils.env, { host, env: std.sdk() })
@@ -38,7 +38,7 @@ const stdCommandArg = async (
 		env,
 		host,
 	};
-};
+}
 
 /** The internal arg type shared by process wrappers. */
 export type ProcessArgObject = {
@@ -56,9 +56,9 @@ export type ProcessArgObject = {
 };
 
 /** Merge an array of ProcessArgObjects into a single one. */
-export const mergeArgs = async (
+export async function mergeArgs(
 	...args: std.Args<ProcessArgObject>
-): Promise<ProcessArgObject> => {
+): Promise<ProcessArgObject> {
 	return await std.args.apply<ProcessArgObject, ProcessArgObject>({
 		args,
 		map: async (arg) => {
@@ -94,36 +94,36 @@ export const mergeArgs = async (
 			env: (a, b) => std.env.arg(a, b, { utils: false }),
 		},
 	});
-};
+}
 
 /** Provide a default env arg with utils and SDK for non-template overloads. */
-export const defaultEnvArg = async (hostArg?: tg.Unresolved<string>) => {
+export async function defaultEnvArg(hostArg?: tg.Unresolved<string>) {
 	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 	const defaultEnv = await tg
 		.build(std.utils.env, { host, env: std.sdk() })
 		.named("utils");
 	return { env: defaultEnv };
-};
+}
 
 /** Build the default shell, returning the file directly. */
-export const buildDefaultBash = async (hostArg?: tg.Unresolved<string>) => {
+export async function buildDefaultBash(hostArg?: tg.Unresolved<string>) {
 	const host = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 	return await tg
 		.build(std.utils.bash.build, { host })
 		.named("bash")
 		.then((dir) => dir.get("bin/bash"))
 		.then(tg.File.expect);
-};
+}
 
-export const test = async () => {
+export async function test() {
 	await testCommandNonTemplateString();
 	await testCommandNonTemplateArtifact();
 	await testCommandNonTemplateEnv();
 	return true;
-};
+}
 
 /** Test the non-template `command` overload with a string executable path. */
-export const testCommandNonTemplateString = async () => {
+export async function testCommandNonTemplateString() {
 	const cmd = await command({
 		executable: "/bin/sh",
 		args: ["-c", tg`echo "hello" > ${tg.output}`],
@@ -133,10 +133,10 @@ export const testCommandNonTemplateString = async () => {
 	const expected = "hello\n";
 	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
 	return true;
-};
+}
 
 /** Test the non-template `command` overload with an artifact executable. */
-export const testCommandNonTemplateArtifact = async () => {
+export async function testCommandNonTemplateArtifact() {
 	const bashDir = await std.utils.bash.build({ env: std.sdk() });
 	const bashExe = await bashDir.get("bin/bash").then(tg.File.expect);
 	const cmd = await command({
@@ -148,10 +148,10 @@ export const testCommandNonTemplateArtifact = async () => {
 	const expected = "artifact\n";
 	tg.assert(actual === expected, `expected ${expected} but got ${actual}`);
 	return true;
-};
+}
 
 /** Test the non-template `command` overload with an env containing an SDK. */
-export const testCommandNonTemplateEnv = async () => {
+export async function testCommandNonTemplateEnv() {
 	const env = await std.env.arg(std.sdk());
 	const cmd = await command({
 		executable: "/bin/sh",
@@ -162,4 +162,4 @@ export const testCommandNonTemplateEnv = async () => {
 	const actual = await output.text;
 	tg.assert(actual.length > 0, "expected non-empty compiler version output");
 	return true;
-};
+}

@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:046fa01a216793b8bd2750f9d68d4ad43986eb9c0d6122600f993906012972e8";
@@ -27,24 +27,26 @@ export const source = async () => {
 		source: "tag",
 		tag: version,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		pcre2: pcre2.build,
 	});
+}
 
 export type Arg = cargo.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) =>
-	cargo.build(
+export async function build(...args: std.Args<Arg>) {
+	return cargo.build(
 		{ deps, source: source(), features: ["pcre2"], proxy: true },
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

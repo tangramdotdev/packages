@@ -12,7 +12,7 @@ export const metadata = {
 	tag: "coreutils/9.10",
 };
 
-export const source = async (os: string) => {
+export async function source(os: string) {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:16535a9adf0b10037364e2d612aad3d9f4eca3a344949ced74d12faf4bd51d25";
@@ -34,7 +34,7 @@ export const source = async (os: string) => {
 	}
 
 	return source;
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -47,7 +47,7 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -149,12 +149,12 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	}
 
 	return output;
-};
+}
 
 export default build;
 
 /** Build bootstrap coreutils with consistent, normalized args. This is the shared entry point used by both gnuEnv() and prerequisites() to ensure cache hits. */
-export const bootstrapBuild = async (hostArg?: string) => {
+export async function bootstrapBuild(hostArg?: string) {
 	const host = bootstrap.toolchainTriple(hostArg ?? std.triple.host());
 	const env = std.env.arg(
 		tg.build(bootstrap.sdk, host),
@@ -169,20 +169,20 @@ export const bootstrapBuild = async (hostArg?: string) => {
 			usePrerequisites: false,
 		})
 		.named("bootstrap coreutils");
-};
+}
 
 /** Obtain just the `env` binary. */
-export const gnuEnv = async () => {
+export async function gnuEnv() {
 	const coreutils = await bootstrapBuild();
 	return tg.File.expect(await coreutils.get("bin/env"));
-};
+}
 
 /** Release helper - builds gnuEnv with a referent to this file for cache hits. */
-export const buildGnuEnv = async () => {
+export async function buildGnuEnv() {
 	return tg.build(gnuEnv).named("gnu env");
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const system = std.triple.archAndOs(host);
 	const os = std.triple.os(system);
@@ -266,4 +266,4 @@ export const test = async () => {
 	const contents = (await output.text).trim();
 	tg.assert(contents === expected);
 	return coreutils;
-};
+}

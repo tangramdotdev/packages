@@ -73,7 +73,7 @@ export type ToolchainArg = {
 	targets?: Array<string>;
 };
 
-export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
+export async function self(unresolvedArg?: tg.Unresolved<ToolchainArg>) {
 	const arg = await tg.resolve(unresolvedArg);
 	// Determine the list of target triples to support other than the inferred host.
 	const detectedHost = std.triple.host();
@@ -215,7 +215,7 @@ export const self = async (unresolvedArg?: tg.Unresolved<ToolchainArg>) => {
 	}
 
 	return artifact;
-};
+}
 
 export default self;
 
@@ -226,9 +226,9 @@ type ProxyRustObjcopyArg = {
 	rustInstall: tg.Directory;
 };
 
-export const proxyRustObjcopy = async (
+export async function proxyRustObjcopy(
 	arg: ProxyRustObjcopyArg,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const { build, buildToolchain, host, rustInstall } = arg;
 
 	// Get the rust-objcopy executable.
@@ -250,7 +250,7 @@ export const proxyRustObjcopy = async (
 	return tg.directory(rustInstall, {
 		[rustObjcopySubpath]: wrappedRustObjcopyExe,
 	});
-};
+}
 
 type RustupManifestV2 = {
 	"manifest-version": "2";
@@ -293,7 +293,7 @@ type RustupManifestV2 = {
 	};
 };
 
-export const rustTriple = (triple: string): string => {
+export function rustTriple(triple: string): string {
 	const components = std.triple.components(std.triple.normalize(triple));
 	if (components.os === "darwin") {
 		return std.triple.create({
@@ -308,9 +308,9 @@ export const rustTriple = (triple: string): string => {
 	} else {
 		throw new Error(`Unsupported OS: ${components.os}`);
 	}
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const tests = [];
 
 	tests.push(testHostToolchain());
@@ -322,16 +322,16 @@ export const test = async () => {
 	tg.assert(results.every((r) => r));
 
 	return true;
-};
+}
 
-export const testHostToolchain = async () => {
+export async function testHostToolchain() {
 	const rustArtifact = await self();
 	console.log("RUST", await rustArtifact.store());
 	await $`rustc --version && cargo --version`.env(rustArtifact);
 	return rustArtifact;
-};
+}
 
-export const testCrossToolchain = async () => {
+export async function testCrossToolchain() {
 	// Detect the host triple.
 	const host = std.triple.host();
 
@@ -349,16 +349,16 @@ export const testCrossToolchain = async () => {
 
 	await $`rustc --version && cargo --version`.env(crossRust);
 	return crossRust;
-};
+}
 
-export const testCargo = async () => {
+export async function testCargo() {
 	return await cargo_.test();
-};
+}
 
-export const testCargoProxy = async () => {
+export async function testCargoProxy() {
 	return await proxy_.test();
-};
+}
 
-export const testNativeBuild = async () => {
+export async function testNativeBuild() {
 	return await build_.test();
-};
+}

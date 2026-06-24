@@ -23,16 +23,16 @@ export type BuildCommand<T extends MinimalPackageArg = MinimalPackageArg> =
 	tg.Command & { readonly __packageArg?: T };
 
 /** Evaluate the build function or command with a single arg. Works with both functions and BuildCommands. */
-export const buildCommandOutput = async <T extends MinimalPackageArg>(
+export async function buildCommandOutput<T extends MinimalPackageArg>(
 	cmd: BuildFn<T> | BuildCommand<T>,
 	arg: T,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	if (typeof cmd === "function") {
 		return await (cmd as (...args: Array<T>) => PromiseLike<tg.Directory>)(arg);
 	}
 	// For BuildCommand (tg.Command), use .build() method and expect a Directory.
 	return tg.Directory.expect(await (cmd as tg.Command).build(arg));
-};
+}
 
 /** After application, the resulting type always has concrete values for build, host, and sdk. */
 export type ResolvedPackageArg<T extends BasePackageArg> = Omit<
@@ -59,9 +59,9 @@ export type ResolvedDependencyArgs = {
 };
 
 /** Produce a single argument object from a variadic list of arguments with mutation handling. */
-export const applyArgs = async <T extends PackageArg>(
+export async function applyArgs<T extends PackageArg>(
 	...args: std.Args<T>
-): Promise<ResolvedPackageArg<T>> => {
+): Promise<ResolvedPackageArg<T>> {
 	type Collect = std.args.MakeArrayKeys<T, "dependencies">;
 	const arg = await std.args.apply<T, Collect>({
 		args,
@@ -178,7 +178,7 @@ export const applyArgs = async <T extends PackageArg>(
 		subtreeEnv,
 		subtreeSdk,
 	} as ResolvedPackageArg<T>;
-};
+}
 
 /**
  * Create a deps Config from build functions.
@@ -226,13 +226,13 @@ export namespace deps {
 	export type Spec = BuildCommand<any> | FullSpec;
 
 	/** Normalize a Spec to a FullSpec. */
-	export const normalizeSpec = (spec: Spec): FullSpec => {
+	export function normalizeSpec(spec: Spec): FullSpec {
 		// A FullSpec has a 'kind' property; a plain BuildCommand does not.
 		if ("kind" in spec) {
 			return spec as FullSpec;
 		}
 		return { build: spec as BuildCommand, kind: "runtime" };
-	};
+	}
 
 	/** A mapping of dependency names to their specifications. */
 	export type Config = {
@@ -289,9 +289,9 @@ export namespace deps {
 	};
 
 	/** Resolve a ConfigArg to a Config. */
-	export const resolveConfig = async (
+	export async function resolveConfig(
 		configArg: tg.Unresolved<ConfigArg> | undefined,
-	): Promise<Config | undefined> => {
+	): Promise<Config | undefined> {
 		if (configArg === undefined) {
 			return undefined;
 		}
@@ -300,13 +300,13 @@ export namespace deps {
 			return (await resolved.build()) as Config;
 		}
 		return resolved as Config;
-	};
+	}
 
 	/** Resolve a deps config to a combined env. */
-	export const env = async (
+	export async function env(
 		configArg: tg.Unresolved<ConfigArg>,
 		ctx: Context,
-	): Promise<std.env.EnvObject> => {
+	): Promise<std.env.EnvObject> {
 		const config = await resolveConfig(configArg);
 		if (!config) {
 			return std.env.arg(ctx.env);
@@ -316,13 +316,13 @@ export namespace deps {
 			(v): v is tg.Directory => v !== undefined,
 		);
 		return std.env.arg(...artifactList, ctx.env);
-	};
+	}
 
 	/** Resolve a deps config to individual artifacts by name. */
-	export const artifacts = async <T extends Config>(
+	export async function artifacts<T extends Config>(
 		configArg: tg.Unresolved<T | ConfigArg>,
 		ctx: Context,
-	): Promise<ArtifactsFrom<T>> => {
+	): Promise<ArtifactsFrom<T>> {
 		const config = (await resolveConfig(
 			configArg as tg.Unresolved<ConfigArg>,
 		)) as T;
@@ -393,7 +393,7 @@ export namespace deps {
 		}
 
 		return artifactMap as ArtifactsFrom<T>;
-	};
+	}
 
 	/** Input spec for a single dependency - either a build function or full spec with options. */
 	export type InputSpec<T extends MinimalPackageArg = MinimalPackageArg> =

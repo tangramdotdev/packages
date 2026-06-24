@@ -13,9 +13,9 @@ export type WrapScriptsArg = std.wrap.ArgObject & {
 };
 
 /** Wrap all the scripts with a given extension to use the given interpreter */
-export const wrapScripts = async (
+export async function wrapScripts(
 	arg: tg.Unresolved<WrapScriptsArg>,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const resolved = await tg.resolve(arg);
 	const { directory, env, extension, ...wrapArg } = resolved;
 	let ret = resolved.directory;
@@ -27,4 +27,4 @@ export const wrapScripts = async (
 		}
 	}
 	return ret;
-};
+}

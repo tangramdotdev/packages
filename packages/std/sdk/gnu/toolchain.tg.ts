@@ -18,7 +18,7 @@ export type ToolchainArg = {
 };
 
 /** Construct a complete binutils + libc + gcc toolchain. */
-export const toolchain = async (arg: ToolchainArg) => {
+export async function toolchain(arg: ToolchainArg) {
 	const { host: host_, target: target_ } = arg;
 	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const target = std.sdk.canonicalTriple(target_ ?? host);
@@ -76,14 +76,14 @@ export const toolchain = async (arg: ToolchainArg) => {
 	});
 
 	return crossGcc;
-};
+}
 
 type CanadianCrossArg = {
 	host?: string;
 	env?: std.env.EnvObject;
 };
 
-export const canadianCross = async (arg?: CanadianCrossArg) => {
+export async function canadianCross(arg?: CanadianCrossArg) {
 	const { host: host_, env: env_ } = arg ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 
@@ -159,11 +159,11 @@ export const canadianCross = async (arg?: CanadianCrossArg) => {
 		.named("native gcc");
 
 	return nativeGcc;
-};
+}
 
-export const buildToHostCrossToolchain = async (
+export async function buildToHostCrossToolchain(
 	arg?: tg.Unresolved<CanadianCrossArg>,
-) => {
+) {
 	const { host: host_, env } = (await tg.resolve(arg)) ?? {};
 	const host = std.sdk.canonicalTriple(host_ ?? std.triple.host());
 	const build = bootstrap.toolchainTriple(host);
@@ -178,7 +178,7 @@ export const buildToHostCrossToolchain = async (
 		target: host,
 		variant: "stage1_limited",
 	});
-};
+}
 
 export type CrossToolchainArg = {
 	build?: string;
@@ -193,7 +193,7 @@ export type CrossToolchainArg = {
 	variant?: gcc.Variant;
 };
 
-export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
+export async function crossToolchain(arg: tg.Unresolved<CrossToolchainArg>) {
 	const {
 		buildToolchain,
 		build: build_,
@@ -260,7 +260,7 @@ export const crossToolchain = async (arg: tg.Unresolved<CrossToolchainArg>) => {
 		crossGcc,
 		sysroot,
 	};
-};
+}
 
 export type BuildSysrootArg = {
 	build?: string;
@@ -272,7 +272,7 @@ export type BuildSysrootArg = {
 	targetBinutils?: tg.Directory;
 };
 
-export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
+export async function buildSysroot(arg: tg.Unresolved<BuildSysrootArg>) {
 	const {
 		build: build_,
 		buildToolchain,
@@ -338,57 +338,57 @@ export const buildSysroot = async (arg: tg.Unresolved<BuildSysrootArg>) => {
 		env: std.env.arg(env, initialGccDir, { utils: false }),
 		sdk,
 	});
-};
+}
 
-export const extractSysroot = async (hostArg?: string) => {
+export async function extractSysroot(hostArg?: string) {
 	const host = hostArg ?? std.triple.host();
 	const fullToolchain = await canadianCross({ host });
 	const include = fullToolchain.get("include").then(tg.Directory.expect);
 	const lib = fullToolchain.get("lib").then(tg.Directory.expect);
 	const filtered = await tg.directory({ include, lib });
 	return filtered;
-};
+}
 
-export const extractSysrootGlibc = async () => {
+export async function extractSysrootGlibc() {
 	const detectedHost = std.triple.host();
 	const triple = std.triple.normalize(
 		std.triple.create(detectedHost, { environment: "gnu" }),
 	);
 	return await extractSysroot(triple);
-};
+}
 
-export const extractSysrootMusl = async () => {
+export async function extractSysrootMusl() {
 	const detectedHost = std.triple.host();
 	const triple = std.triple.normalize(
 		std.triple.create(detectedHost, { environment: "musl" }),
 	);
 	return await extractSysroot(triple);
-};
+}
 
-export const testCanadianCross = async () => {
+export async function testCanadianCross() {
 	const toolchainDir = await canadianCross();
 	return toolchainDir;
-};
+}
 
-export const testCross = async () => {
+export async function testCross() {
 	const host = std.triple.host();
 	const hostArch = std.triple.arch(host);
 	const targetArch = hostArch === "x86_64" ? "aarch64" : "x86_64";
 	const target = std.triple.create(host, { arch: targetArch });
 	const dir = await toolchain({ host, target });
 	return dir;
-};
+}
 
-export const testCrossMips = async () => {
+export async function testCrossMips() {
 	const host = std.triple.host();
 	const target = "mips-unknown-linux-gnu";
 	const dir = await toolchain({ host, target });
 	return dir;
-};
+}
 
-export const testCrossRpi = async () => {
+export async function testCrossRpi() {
 	const host = std.triple.host();
 	const target = "armv7l-linux-gnueabihf";
 	const dir = await toolchain({ host, target });
 	return dir;
-};
+}

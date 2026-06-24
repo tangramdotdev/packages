@@ -14,7 +14,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (arg: tg.Unresolved<Arg>) => {
+export async function build(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, ...rest } = resolved;
 
@@ -24,7 +24,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	const arg_ = { ...rest, env: env_ };
 
 	return cmake.build(arg_);
-};
+}
 
 export default build;
 
@@ -33,7 +33,7 @@ type EnvArg = {
 	host?: string | undefined;
 };
 
-export const env = async (arg: tg.Unresolved<EnvArg>) => {
+export async function env(arg: tg.Unresolved<EnvArg>) {
 	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
@@ -41,4 +41,4 @@ export const env = async (arg: tg.Unresolved<EnvArg>) => {
 		cmake.self({ ...std.triple.rotate({ build, host }) }),
 		cmake.ninja.build({ ...std.triple.rotate({ build, host }) }),
 	);
-};
+}

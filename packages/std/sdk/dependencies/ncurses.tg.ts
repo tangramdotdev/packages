@@ -8,16 +8,16 @@ export const metadata = {
 	tag: "ncurses/6.6",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11";
 	return std.download.fromGnu({ name, version, checksum });
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -109,10 +109,10 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await build();
-};
+}

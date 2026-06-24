@@ -25,7 +25,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { version } = metadata;
 	const checksum =
 		"sha256:e3cde3ca83dc2d3212105326b8f1b565116be808394384007e7ef1c253af6caa";
@@ -42,10 +42,10 @@ export const source = async () => {
 			version,
 		})
 		.then((source) => std.patch(source, patches));
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		curl: curl.build,
 		libiconv: {
 			build: libiconv.build,
@@ -58,11 +58,12 @@ export const deps = () =>
 		zlib: zlib.build,
 		zstd: zstd.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
 /** Build `cmake`. */
-export const self = async (...args: std.Args<Arg>) => {
+export async function self(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{ source: source(), deps, setRuntimeLibraryPath: true },
 		...args,
@@ -118,7 +119,7 @@ export const self = async (...args: std.Args<Arg>) => {
 	}
 
 	return result;
-};
+}
 
 export default self;
 
@@ -227,9 +228,7 @@ export type ResolvedArg = Omit<
 };
 
 /** Resolve cmake args to a mutable arg object. Returns a BuildArg with build, host, and source guaranteed to be resolved. */
-export const arg = async (
-	...args: std.Args<BuildArg>
-): Promise<ResolvedArg> => {
+export async function arg(...args: std.Args<BuildArg>): Promise<ResolvedArg> {
 	type Collect = std.args.MakeArrayKeys<BuildArg, "phases">;
 	const collect = await std.args.apply<BuildArg, Collect>({
 		args,
@@ -292,10 +291,10 @@ export const arg = async (
 		phases: mergedPhases,
 		...rest,
 	};
-};
+}
 
 /** Construct a cmake package build target. */
-export const build = async (...args: std.Args<BuildArg>) => {
+export async function build(...args: std.Args<BuildArg>) {
 	const resolved = await arg(...args);
 	const {
 		build: build_,
@@ -451,13 +450,13 @@ export const build = async (...args: std.Args<BuildArg>) => {
 	}
 
 	return output;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(self, spec);
 
 	await ninja.test();
 
 	return true;
-};
+}

@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467";
@@ -24,11 +24,11 @@ export const source = async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 
 	// Configure args based on OS.
@@ -57,11 +57,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		env: std.env.arg(coreutilsArtifact),
 	});
 	return tg.directory(output, { ["bin/fftw-wisdom-to-conf"]: wrapped });
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

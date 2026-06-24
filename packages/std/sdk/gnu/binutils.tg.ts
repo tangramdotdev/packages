@@ -10,7 +10,7 @@ export const metadata = {
 	tag: "binutils/2.46.0",
 };
 
-export const source = async (build: string) => {
+export async function source(build: string) {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:8ba6a3c4d29eae4dc1bdffb29d1e99b2a658c3f4c6a23ea1c507e9fa47db2898";
@@ -20,7 +20,7 @@ export const source = async (build: string) => {
 		compression: "zst",
 		checksum,
 	});
-};
+}
 
 export type Arg = Omit<std.autotools.Arg, "deps"> & {
 	bootstrap?: boolean;
@@ -28,7 +28,7 @@ export type Arg = Omit<std.autotools.Arg, "deps"> & {
 };
 
 /** Obtain the GNU binutils. */
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// First collect args to extract target before passing to autotools.arg.
 	// biome-ignore lint/suspicious/noExplicitAny: Arg contains fields not in autotools.Arg.
 	const collected = await std.args.apply<any, any>({
@@ -103,11 +103,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 
@@ -125,4 +125,4 @@ export const test = async () => {
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries, metadata });
 	return true;
-};
+}

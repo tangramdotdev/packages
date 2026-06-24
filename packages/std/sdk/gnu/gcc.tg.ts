@@ -16,7 +16,7 @@ export const metadata = {
 };
 
 /** Produce a GCC source directory with the gmp, mpfr, isl, and mpc sources optionally included. */
-export const source = (bundledSources?: boolean) => {
+export function source(bundledSources?: boolean) {
 	const { name, version } = metadata;
 
 	// Download and unpack the GCC source.
@@ -40,7 +40,7 @@ export const source = (bundledSources?: boolean) => {
 		});
 	}
 	return sourceDir;
-};
+}
 
 export type Arg = Omit<std.autotools.Arg, "deps" | "source"> & {
 	/** If this is true, add the gmp, mpfr, mpc, and isl source directories to the GCC source and build them all together. If false, these libraries must be available for the host in the env. */
@@ -62,7 +62,7 @@ export type Variant =
 	| "stage2_full"; // Everything enabled.
 
 /* Produce a GCC toolchain capable of compiling C and C++ code. */
-export const build = async (arg: tg.Unresolved<Arg>) => {
+export async function build(arg: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -122,7 +122,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	];
 
 	// Define the args for each variant.
-	const variantConfigureArgs = (variant: Variant) => {
+	function variantConfigureArgs(variant: Variant) {
 		switch (variant) {
 			case "stage1_bootstrap": {
 				const args = [
@@ -164,7 +164,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 					"--enable-initfini-array",
 				];
 		}
-	};
+	}
 
 	// NOTE: Usually any `tg.Template.Arg` could be a valid configure arg. We restrict to strings here to avoid accidentally hardcoding a runtime dependency on a Tangram artifact instead of components included in this installation prefix.
 	const configureArgs: Array<string> = [
@@ -247,14 +247,15 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	}
 
 	return result;
-};
+}
 
 export default build;
 
 export { interpreterName } from "../libc.tg.ts";
 
-export const interpreterPath = (target: string, isCross?: boolean) =>
-	`${isCross ? `/${target}/sysroot` : "/"}lib/${interpreterName(target)}`;
+export function interpreterPath(target: string, isCross?: boolean) {
+	return `${isCross ? `/${target}/sysroot` : "/"}lib/${interpreterName(target)}`;
+}
 
 type WrapArgsArg = {
 	host: string;
@@ -263,7 +264,7 @@ type WrapArgsArg = {
 };
 
 /** Produce the set of flags required to enable proxying a statically-linked toolchain dir. */
-export const wrapArgs = async (arg: WrapArgsArg) => {
+export async function wrapArgs(arg: WrapArgsArg) {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
 	const hostOs = std.triple.os(host);
@@ -292,7 +293,7 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	const cxxArgs = ccArgs;
 
 	return { ccArgs, cxxArgs, fortranArgs };
-};
+}
 
 async function getGccVersion(
 	env: std.env.EnvObject,

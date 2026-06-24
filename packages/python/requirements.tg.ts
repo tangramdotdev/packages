@@ -6,10 +6,10 @@ import * as libffi from "libffi" with { source: "../libffi.tg.ts" };
 import { versionString, wrapScripts } from "./tangram.ts";
 export type Arg = tg.File;
 
-export const install = async (
+export async function install(
 	pythonArtifactArg: tg.Unresolved<tg.Directory>,
 	requirementsArg: tg.Unresolved<Arg>,
-) => {
+) {
 	const pythonArtifact = await tg.resolve(pythonArtifactArg);
 	const requirements = await tg.resolve(requirementsArg);
 	// Construct an env with the standard C/C++ sdks, the Rust toolchain, Python, and libffi (needed by cffi, a common native extension build dependency).
@@ -118,10 +118,10 @@ export const install = async (
 		await tg`${installed}/lib/python3/site-packages`,
 		installed,
 	);
-};
+}
 
 /** Detect any potentially conflicting installations in a site-packages directory and merge if necessary. */
-const mergeSitePackages = async (output: tg.Directory, input: tg.Directory) => {
+async function mergeSitePackages(output: tg.Directory, input: tg.Directory) {
 	for await (const [name, artifact] of input) {
 		// Resolve symlinks.
 		let installed = await output.tryGet(name);
@@ -141,4 +141,4 @@ const mergeSitePackages = async (output: tg.Directory, input: tg.Directory) => {
 	}
 
 	return output;
-};
+}

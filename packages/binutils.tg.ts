@@ -26,7 +26,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 
 	const checksum =
@@ -38,12 +38,13 @@ export const source = async () => {
 		compression: "zst",
 		checksum,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		texinfo: { build: texinfo.build, kind: "buildtime" },
 	});
+}
 
 export type Arg = std.autotools.Arg &
 	std.deps.Arg<typeof deps> & {
@@ -51,7 +52,7 @@ export type Arg = std.autotools.Arg &
 		target?: string;
 	};
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Extract custom options first.
 	const customOptions = await std.args.apply<Arg, Arg>({
 		args: args as std.Args<Arg>,
@@ -131,11 +132,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

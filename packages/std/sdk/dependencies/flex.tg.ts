@@ -9,7 +9,7 @@ export const metadata = {
 	tag: "flex/2.6.4",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:e87aae032bf07c26f85ac0ed3250998c37621d95f8bd748b31f15b33c45ee995";
@@ -24,11 +24,11 @@ export const source = () => {
 		tag,
 		version,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
@@ -44,10 +44,10 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await build();
-};
+}

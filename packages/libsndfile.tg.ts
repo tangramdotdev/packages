@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3799ca9924d3125038880367bf1468e53a1b7e3686a934f098b7e1d286cdb80e";
@@ -33,35 +33,38 @@ export const source = () => {
 		tag,
 		version,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		flac: flac.build,
 		ogg: ogg.build,
 		opus: opus.build,
 		vorbis: vorbis.build,
 	});
+}
 
 export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	cmake.build(
+export function build(...args: std.Args<Arg>) {
+	return cmake.build(
 		{
 			source: source(),
 			deps,
 		},
 		...args,
 	);
+}
 
-export const env = () =>
-	std.env.arg({
+export function env() {
+	return std.env.arg({
 		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib/pkgconfig`, ":"),
 	});
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

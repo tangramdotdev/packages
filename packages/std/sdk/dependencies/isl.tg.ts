@@ -7,7 +7,7 @@ export const metadata = {
 	tag: "isl/0.27",
 };
 
-export const source = async () => {
+export async function source() {
 	const { homepage, name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
@@ -16,11 +16,11 @@ export const source = async () => {
 		.extractArchive({ checksum, base: homepage, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
@@ -34,10 +34,10 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await build();
-};
+}

@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:5a9a996dc292cc24dcf411cee87e92f6aae5b8d13bd9c6819b4c7a9dce0818ab";
@@ -24,10 +24,10 @@ export const source = () => {
 	// C23 _Generic fix (gnulib commit df17f4f3, Nov 2025). Parenthesize
 	// function names in gnulib replacement headers to prevent macro expansion.
 	return std.patch(source, c23ConstGenericPatch);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		gettext: { build: gettext.build, kind: "buildtime" },
 		libiconv: {
 			build: libiconv.build,
@@ -35,11 +35,12 @@ export const deps = () =>
 			when: (ctx) => std.triple.os(ctx.host) === "darwin",
 		},
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			deps,
@@ -49,10 +50,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

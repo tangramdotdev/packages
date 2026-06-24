@@ -11,7 +11,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	std.download;
 	const { name, version } = metadata;
 	const checksum =
@@ -24,16 +24,17 @@ export const source = async () => {
 		})
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build({ source: source() }, ...args);
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build({ source: source() }, ...args);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	// nasm and ndisasm use -v for version, not --version.
 	return await std.assert.pkg(build, {
 		binaries: [
@@ -41,4 +42,4 @@ export const test = async () => {
 			{ name: "ndisasm", testArgs: ["-v"], snapshot: metadata.version },
 		],
 	});
-};
+}

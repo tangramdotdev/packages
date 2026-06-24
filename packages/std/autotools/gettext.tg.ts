@@ -37,7 +37,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:71132a3fb71e68245b8f2ac4e9e97137d3e5c02f415636eb508ae607bc01add7";
@@ -48,7 +48,7 @@ export const source = () => {
 		compression: "xz",
 	});
 	return bootstrap.patch(source, progrelocFix);
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -59,7 +59,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build,
@@ -105,6 +105,6 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		sdk,
 		source: source_ ?? source(),
 	});
-};
+}
 
 export default build;

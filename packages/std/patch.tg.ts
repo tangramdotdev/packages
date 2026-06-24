@@ -1,10 +1,10 @@
 import { $ } from "./tangram.ts";
 
 /** Apply one or more patches to a directory. Files and symlinks are assumed to be patchfiles, directories are recursively walked and any patchfiles found are added. */
-export const patch = async (
+export async function patch(
 	source: tg.Unresolved<tg.Directory>,
 	...args: Array<tg.Unresolved<tg.Artifact> | { stripCount?: number }>
-) => {
+) {
 	// Separate options from patches
 	const options =
 		args.find(
@@ -40,4 +40,4 @@ export const patch = async (
 	return await $`cp -R ${source} ${tg.output} && chmod -R u+w ${tg.output} && cat ${allPatchFiles} | patch -p${stripCount} -d ${tg.output}`.then(
 		tg.Directory.expect,
 	);
-};
+}

@@ -1,10 +1,10 @@
 import * as std from "./tangram.ts";
 
 /** Filter the contents of a directory according to a predicate. */
-export const filter = async (
+export async function filter(
 	directory: tg.Unresolved<tg.Directory>,
 	predicate: (name: string, artifact: tg.Artifact) => boolean,
-) => {
+) {
 	const dir = await tg.resolve(directory);
 	let ret = dir;
 	for await (const [name, artifact] of dir) {
@@ -13,29 +13,29 @@ export const filter = async (
 		}
 	}
 	return ret;
-};
+}
 
 /** Produce a directory containing only the named subdirectories if present. */
-export const keepSubdirectories = async (
+export async function keepSubdirectories(
 	directory: tg.Unresolved<tg.Directory>,
 	...subdirectories: Array<string>
-) => {
+) {
 	return filter(
 		directory,
 		(name: string, artifact: tg.Artifact) =>
 			subdirectories.includes(name) && artifact instanceof tg.Directory,
 	);
-};
+}
 
 /** If the given directory contains a single child directory, return the inner child. */
-export const unwrap = async (directory: tg.Directory) => {
+export async function unwrap(directory: tg.Directory) {
 	return await std.download.unwrapDirectory(directory);
-};
+}
 
 /** Generate a `std.assert.Provides` object for a given directory. */
-export const provides = async (
+export async function provides(
 	directory: tg.Directory,
-): Promise<std.assert.Provides> => {
+): Promise<std.assert.Provides> {
 	const binaries: Array<string> = [];
 	const headers: Array<string> = [];
 	const libraries: Array<std.assert.LibrarySpec> = [];
@@ -53,10 +53,10 @@ export const provides = async (
 	// Collect headers.
 	const includeDir = await directory.tryGet("include");
 	if (includeDir !== undefined && includeDir instanceof tg.Directory) {
-		const collectHeaders = async (
+		async function collectHeaders(
 			dir: tg.Directory,
 			prefix: string = "",
-		): Promise<void> => {
+		): Promise<void> {
 			for await (let [name, artifact] of dir) {
 				if (artifact instanceof tg.File && name.endsWith(".h")) {
 					headers.push(prefix ? `${prefix}/${name}` : name);
@@ -64,7 +64,7 @@ export const provides = async (
 					await collectHeaders(artifact, prefix ? `${prefix}/${name}` : name);
 				}
 			}
-		};
+		}
 		await collectHeaders(includeDir);
 	}
 
@@ -143,13 +143,13 @@ export const provides = async (
 		...(headers.length > 0 && { headers }),
 		...(libraries.length > 0 && { libraries }),
 	};
-};
+}
 
-export const test = async () => {
+export async function test() {
 	await testKeepSubdirectories();
-};
+}
 
-export const testKeepSubdirectories = async () => {
+export async function testKeepSubdirectories() {
 	let orig = await tg.directory({
 		a: tg.directory(),
 		b: tg.directory(),
@@ -172,4 +172,4 @@ export const testKeepSubdirectories = async () => {
 
 	let maybeC = await filtered.tryGet("c");
 	tg.assert(maybeC !== undefined && maybeC instanceof tg.Directory);
-};
+}

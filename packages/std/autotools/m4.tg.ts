@@ -6,7 +6,7 @@ export const metadata = {
 	tag: "m4/1.4.21",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f25c6ab51548a73a75558742fb031e0625d6485fe5f9155949d6486a2408ab66";
@@ -16,7 +16,7 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -27,7 +27,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build,
@@ -56,16 +56,16 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries: ["m4"], metadata });
 	return true;
-};
+}

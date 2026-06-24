@@ -99,7 +99,7 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "source"> & {
 };
 
 /** Resolve cargo args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
-export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
+export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 	const collect = await std.args.apply<Arg, Arg>({
 		args,
 		map: async (arg) => arg,
@@ -125,7 +125,7 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 		source,
 		...rest,
 	};
-};
+}
 
 export type RunArg = CommonArg & {
 	/** Cargo.lock file for vendoring (alternative to providing full source). */
@@ -142,9 +142,9 @@ export type ResolvedRunArg = Omit<RunArg, "build" | "host"> & {
 };
 
 /** Resolve run args to a mutable arg object. Returns a RunArg with build and host guaranteed to be resolved. */
-export const runArg = async (
+export async function runArg(
 	...args: std.Args<RunArg>
-): Promise<ResolvedRunArg> => {
+): Promise<ResolvedRunArg> {
 	const collect = await std.args.apply<RunArg, RunArg>({
 		args,
 		map: async (arg) => arg,
@@ -167,12 +167,12 @@ export const runArg = async (
 		host,
 		...rest,
 	};
-};
+}
 
 /** Resolve deps configuration to env, merging with any existing env arg. */
-const resolveDepsEnv = async (
+async function resolveDepsEnv(
 	resolved: CommonArg & { build: string; host: string },
-) => {
+) {
 	const depsConfig = await std.deps.resolveConfig(resolved.deps);
 	if (!depsConfig) return resolved.env;
 	return std.deps.env(depsConfig, {
@@ -184,7 +184,7 @@ const resolveDepsEnv = async (
 		subtreeEnv: resolved.subtreeEnv,
 		subtreeSdk: resolved.subtreeSdk,
 	});
-};
+}
 
 export async function run(...args: std.Args<RunArg>): Promise<tg.Command> {
 	const resolved = await runArg(...args);
@@ -665,9 +665,9 @@ export type VendoredSourcesArg = {
 	useCargoVendor?: boolean;
 };
 
-export const vendoredSources = async (
+export async function vendoredSources(
 	arg: VendoredSourcesArg,
-): Promise<tg.Template> => {
+): Promise<tg.Template> {
 	const { rustTarget, manifestSubdir, source, useCargoVendor = false } = arg;
 	if (useCargoVendor) {
 		const cargoVendorArg: CargoVendorArg = { source };
@@ -703,7 +703,7 @@ replace-with = "vendored-sources"
 [source.vendored-sources]
 directory = "${vendoredSources}"`;
 	}
-};
+}
 
 export type CargoVendorArg = {
 	rustTarget?: string;
@@ -712,18 +712,18 @@ export type CargoVendorArg = {
 };
 
 /** Extract only Cargo manifest files (Cargo.toml and Cargo.lock) from a source directory. */
-export const extractCargoManifests = async (
+export async function extractCargoManifests(
 	source: tg.Directory,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	// Satisfies cargo's target validation.
 	const placeholderFile = tg.file(
 		"// Placeholder for cargo manifest validation\n",
 	);
 
-	const extractManifests = async (
+	async function extractManifests(
 		dir: tg.Directory,
 		path: string,
-	): Promise<tg.Directory> => {
+	): Promise<tg.Directory> {
 		let result = await tg.directory();
 		let hasCargoToml = false;
 
@@ -758,15 +758,15 @@ export const extractCargoManifests = async (
 		}
 
 		return result;
-	};
+	}
 
 	return extractManifests(source, "");
-};
+}
 
 /** Run `cargo vendor` to download dependencies. */
-export const cargoVendor = async (
+export async function cargoVendor(
 	unresolvedArg: tg.Unresolved<CargoVendorArg>,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const arg = await tg.resolve(unresolvedArg);
 	const { rustTarget: rustTarget_, manifestSubdir, source } = arg;
 	const rustTarget = rustTarget_ ?? std.triple.host();
@@ -798,12 +798,10 @@ export const cargoVendor = async (
 			SSL_CERT_FILE: certFile,
 		})
 		.then(tg.Directory.expect);
-};
+}
 
 /** Implementation of `cargo vendor` in tg typescript. */
-export const vendorDependencies = async (
-	cargoLockArg: tg.Unresolved<tg.File>,
-) => {
+export async function vendorDependencies(cargoLockArg: tg.Unresolved<tg.File>) {
 	const cargoLock = await tg.resolve(cargoLockArg);
 	type CargoLock = {
 		package: Array<{
@@ -842,13 +840,13 @@ export const vendorDependencies = async (
 		});
 
 	return tg.directory(...downloads);
-};
+}
 
 /** Strip extraneous files from a downloaded crate and generate .cargo-checksum.json. */
-export const vendorPackage = async (
+export async function vendorPackage(
 	pkg: tg.Directory,
 	checksum: tg.Checksum,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	type CargoChecksum = {
 		files: Record<string, string>;
 		package: string;
@@ -885,12 +883,12 @@ export const vendorPackage = async (
 	return tg.directory(pkg, {
 		[".cargo-checksum.json"]: tg.file(JSON.stringify(cargoChecksum)),
 	});
-};
+}
 
 /** Read the toolchain channel from rust-toolchain.toml if present in a source directory. */
-const readToolchainChannel = async (
+async function readToolchainChannel(
 	dir: tg.Directory,
-): Promise<string | undefined> => {
+): Promise<string | undefined> {
 	const file = await dir
 		.tryGet("rust-toolchain.toml")
 		.then((a) => (a instanceof tg.File ? a : undefined));
@@ -900,20 +898,20 @@ const readToolchainChannel = async (
 		toolchain?: { channel?: string };
 	};
 	return toml.toolchain?.channel;
-};
+}
 
-const tripleToEnvVar = (triple: string, upcase?: boolean) => {
+function tripleToEnvVar(triple: string, upcase?: boolean) {
 	const allCaps = upcase ?? false;
 	let result = triple.replace(/-/g, "_");
 	if (allCaps) {
 		result = result.toUpperCase();
 	}
 	return result;
-};
+}
 
 import tests from "./tests" with { type: "directory" };
 
-export const test = async () => {
+export async function test() {
 	const tests = [];
 
 	tests.push(testUnproxiedWorkspace());
@@ -921,9 +919,9 @@ export const test = async () => {
 	await Promise.all(tests);
 
 	return true;
-};
+}
 
-export const testUnproxiedWorkspace = async () => {
+export async function testUnproxiedWorkspace() {
 	const helloWorkspace = build({
 		source: tests.get("hello-workspace").then(tg.Directory.expect),
 		env: {
@@ -956,9 +954,9 @@ export const testUnproxiedWorkspace = async () => {
 		openSslText.trim() === "Hello, from a crate that links against libssl!",
 	);
 	return true;
-};
+}
 
-export const testUnproxiedWorkspaceCross = async () => {
+export async function testUnproxiedWorkspaceCross() {
 	const helloWorkspace = build({
 		host: "aarch64-unknown-linux-gnu",
 		target: "x86_64-unknown-linux-gnu",
@@ -971,10 +969,10 @@ export const testUnproxiedWorkspaceCross = async () => {
 		verbose: true,
 	});
 	return helloWorkspace;
-};
+}
 
 // Compare the results of cargo vendor and vendorDependencies.
-export const testVendorDependencies = async () => {
+export async function testVendorDependencies() {
 	const sourceDirectory = await tests
 		.get("hello-openssl")
 		.then(tg.Directory.expect);
@@ -989,4 +987,4 @@ export const testVendorDependencies = async () => {
 	console.log("tgVendored", (await tgVendored).id);
 	console.log("cargoVendored", await cargoVendored);
 	return true;
-};
+}

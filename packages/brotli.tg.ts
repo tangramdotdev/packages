@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec";
@@ -28,11 +28,11 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = cmake.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	let output = await cmake.build(
 		{
 			source: source(),
@@ -52,11 +52,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	let env = {};
 	if (std.triple.os(std.triple.host()) === "linux") {
 		env = { LD_LIBRARY_PATH: await tg`${build()}/lib` };
@@ -73,4 +73,4 @@ export const test = async () => {
 		),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

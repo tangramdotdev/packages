@@ -15,9 +15,9 @@ export type ElfExecutableMetadata = {
 	needed?: Array<string> | undefined;
 };
 
-export const elfExecutableMetadata = async (
+export async function elfExecutableMetadata(
 	file: tg.File,
-): Promise<ElfExecutableMetadata> => {
+): Promise<ElfExecutableMetadata> {
 	const parsed = await parse(file);
 	let isLittleEndian = parsed.header.ei_data === DATA_LE;
 
@@ -150,7 +150,7 @@ export const elfExecutableMetadata = async (
 		needed,
 		soname,
 	};
-};
+}
 
 export type File = {
 	magic: typeof MAGIC;
@@ -280,21 +280,21 @@ export async function parse(file: tg.File): Promise<File> {
 
 	let offset = 16;
 
-	const u16 = () => {
+	function u16() {
 		const value = headerView.getUint16(offset, isLe);
 		offset += 2;
 		return value;
-	};
-	const u32 = () => {
+	}
+	function u32() {
 		const value = headerView.getUint32(offset, isLe);
 		offset += 4;
 		return value;
-	};
-	const u64 = () => {
+	}
+	function u64() {
 		const value = headerView.getBigUint64(offset, isLe);
 		offset += 8;
 		return value;
-	};
+	}
 	const header: Header = !is64
 		? {
 				ei_class,
@@ -349,16 +349,16 @@ export async function parse(file: tg.File): Promise<File> {
 	);
 
 	let programHeadersOffset = 0;
-	const ph_u32 = () => {
+	function ph_u32() {
 		const value = programHeadersView.getUint32(programHeadersOffset, isLe);
 		programHeadersOffset += 4;
 		return value;
-	};
-	const ph_u64 = () => {
+	}
+	function ph_u64() {
 		const value = programHeadersView.getBigUint64(programHeadersOffset, isLe);
 		programHeadersOffset += 8;
 		return value;
-	};
+	}
 
 	for (let i = 0; i < header.e_phnum; i++) {
 		programHeadersOffset = i * header.e_phentsize;
@@ -401,16 +401,16 @@ export async function parse(file: tg.File): Promise<File> {
 	);
 
 	let sectionHeadersOffset = 0;
-	const sh_u32 = () => {
+	function sh_u32() {
 		const value = sectionHeadersView.getUint32(sectionHeadersOffset, isLe);
 		sectionHeadersOffset += 4;
 		return value;
-	};
-	const sh_u64 = () => {
+	}
+	function sh_u64() {
 		const value = sectionHeadersView.getBigUint64(sectionHeadersOffset, isLe);
 		sectionHeadersOffset += 8;
 		return value;
-	};
+	}
 
 	for (let i = 0; i < header.e_shnum; i++) {
 		sectionHeadersOffset = i * header.e_shentsize;

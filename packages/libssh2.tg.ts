@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:9954cb54c4f548198a7cbebad248bdc87dd64bd26185708a294b2b50771e3769";
@@ -30,22 +30,24 @@ export const source = async () => {
 		tag,
 		version,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		openssl: openssl.build,
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build({ source: source(), deps }, ...args);
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build({ source: source(), deps }, ...args);
+}
 
 export default build;
 
-export let test = async () => {
+export async function test() {
 	return await std.assert.pkg(build, {
 		...std.assert.defaultSpec(metadata),
 		libraries: [
@@ -55,4 +57,4 @@ export let test = async () => {
 			},
 		],
 	});
-};
+}

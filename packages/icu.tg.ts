@@ -25,7 +25,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const owner = "unicode-org";
 	const repo = name;
@@ -38,12 +38,13 @@ export const source = async () => {
 		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		python: { build: python.self, kind: "buildtime" },
 	});
+}
 
 export type Arg = std.autotools.Arg &
 	std.deps.Arg<typeof deps> & {
@@ -51,7 +52,7 @@ export type Arg = std.autotools.Arg &
 		skipInstall?: boolean;
 	};
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Extract custom options first.
 	const customOptions = await std.args.apply<Arg, Arg>({
 		args: args as std.Args<Arg>,
@@ -105,11 +106,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const hasUsage = { testArgs: ["--help"], snapshot: "Usage:" };
 	const spec = {
 		...std.assert.defaultSpec(metadata),
@@ -132,4 +133,4 @@ export const test = async () => {
 		],
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -7,7 +7,7 @@ export const metadata = {
 	tag: "libbsd/0.12.2",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const url = `https://libbsd.freedesktop.org/releases/${name}-${version}.tar.xz`;
 	const checksum =
@@ -16,12 +16,13 @@ export const source = async () => {
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
-export const build = async () =>
-	std.autotools.build({
+export async function build() {
+	return std.autotools.build({
 		env: libmd(),
 		source: source(),
 	});
+}
 
 export default build;

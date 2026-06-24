@@ -6,7 +6,7 @@ const metadata = {
 	version: "2.53.0",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const base = `https://mirrors.edge.kernel.org/pub/software/scm/git`;
@@ -16,11 +16,11 @@ export const source = async () => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const buildPhase = `make NO_GETTEXT=1 -j "$(nproc)"`;
 
 	const configure = {
@@ -45,6 +45,6 @@ export const build = async (...args: std.Args<Arg>) => {
 		...args,
 	);
 	return result;
-};
+}
 
 export default build;

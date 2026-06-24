@@ -21,7 +21,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const build = async (arg: tg.Unresolved<Arg>) => {
+export async function build(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, ...rest } = resolved ?? {};
 	const env_ = envArg ?? env({ build: resolved.build, host: resolved.host });
@@ -33,21 +33,22 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 
 	const arg_ = { ...rest, env: env_, source };
 	return std.autotools.build(arg_);
-};
+}
 
 export default build;
 
-export const needsReconf = async (
+export async function needsReconf(
 	sourceArg: tg.Unresolved<tg.Directory>,
-): Promise<boolean> => {
+): Promise<boolean> {
 	const source = await tg.resolve(sourceArg);
 	const entries = await source.entries;
-	const hasFile = (name: string) =>
-		entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
+	function hasFile(name: string) {
+		return entries.hasOwnProperty(name) && entries[name] instanceof tg.File;
+	}
 	return hasFile("configure.ac") && !hasFile("configure");
-};
+}
 
-export const reconfigure = async (source: tg.Unresolved<tg.Directory>) => {
+export async function reconfigure(source: tg.Unresolved<tg.Directory>) {
 	return $`cp -R ${source} ${tg.output}
 			chmod -R u+w ${tg.output}
 			cd ${tg.output}
@@ -55,14 +56,14 @@ export const reconfigure = async (source: tg.Unresolved<tg.Directory>) => {
 		.env(autoconf())
 		.env(automake())
 		.then(tg.Directory.expect);
-};
+}
 
 export type EnvArg = {
 	build?: string | undefined;
 	host?: string | undefined;
 };
 
-export const env = async (arg: tg.Unresolved<EnvArg>) => {
+export async function env(arg: tg.Unresolved<EnvArg>) {
 	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
@@ -74,4 +75,4 @@ export const env = async (arg: tg.Unresolved<EnvArg>) => {
 		perl({ build, host: build }),
 		texinfo({ build, host: build }),
 	);
-};
+}

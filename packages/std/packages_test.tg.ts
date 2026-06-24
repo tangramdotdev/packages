@@ -1,28 +1,25 @@
 import * as std from "./tangram.ts";
 
-const assertPhase = (
+function assertPhase(
 	phase: std.phases.Phase | undefined,
 	name: string,
-): std.phases.Phase => {
+): std.phases.Phase {
 	tg.assert(phase !== undefined, `${name} phase should exist`);
 	return phase;
-};
+}
 
-const readFileText = async (
-	dir: tg.Directory,
-	path: string,
-): Promise<string> => {
+async function readFileText(dir: tg.Directory, path: string): Promise<string> {
 	return dir
 		.get(path)
 		.then(tg.File.expect)
 		.then((f) => f.text);
-};
+}
 
-const templateText = (template: tg.Template): string => {
+function templateText(template: tg.Template): string {
 	return template.components
 		.map((c) => (typeof c === "string" ? c : ""))
 		.join("");
-};
+}
 
 // Simulated builder arg type (like go.Arg or autotools.Arg).
 export type MockBuilderArg = {
@@ -31,12 +28,12 @@ export type MockBuilderArg = {
 };
 
 // Shared builder (like go.build or autotools.build).
-const mockBuilderBuild = (arg: MockBuilderArg = {}) => {
+function mockBuilderBuild(arg: MockBuilderArg = {}) {
 	const libFiles: Record<string, tg.Unresolved<tg.File>> = {};
 	if (arg.flags) libFiles.flags = tg.file(arg.flags.join(","));
 	if (arg.prefix) libFiles.prefix = tg.file(arg.prefix);
 	return tg.directory({ lib: tg.directory(libFiles) });
-};
+}
 
 // PkgA: distinct package that uses the shared builder.
 export type PkgAArg = std.args.BasePackageArg & {
@@ -44,7 +41,7 @@ export type PkgAArg = std.args.BasePackageArg & {
 	pkgAOption?: string;
 };
 
-export const pkgABuild = async (...args: std.Args<PkgAArg>) => {
+export async function pkgABuild(...args: std.Args<PkgAArg>) {
 	const { mockBuilder = {}, pkgAOption } =
 		await std.packages.applyArgs<PkgAArg>(...args);
 	const base = await mockBuilderBuild(mockBuilder);
@@ -54,7 +51,7 @@ export const pkgABuild = async (...args: std.Args<PkgAArg>) => {
 		});
 	}
 	return base;
-};
+}
 
 // PkgB: another distinct package that uses the same builder.
 export type PkgBArg = std.args.BasePackageArg & {
@@ -62,7 +59,7 @@ export type PkgBArg = std.args.BasePackageArg & {
 	pkgBOption?: string;
 };
 
-export const pkgBBuild = async (...args: std.Args<PkgBArg>) => {
+export async function pkgBBuild(...args: std.Args<PkgBArg>) {
 	const { mockBuilder = {}, pkgBOption } =
 		await std.packages.applyArgs<PkgBArg>(...args);
 	const base = await mockBuilderBuild(mockBuilder);
@@ -72,12 +69,10 @@ export const pkgBBuild = async (...args: std.Args<PkgBArg>) => {
 		});
 	}
 	return base;
-};
+}
 
 // FullDep: outputs bin/lib/include for kind filtering tests.
-export const fullDepBuild = async (
-	...args: std.Args<std.args.BasePackageArg>
-) => {
+export async function fullDepBuild(...args: std.Args<std.args.BasePackageArg>) {
 	const resolved = await std.packages.applyArgs<std.args.BasePackageArg>(
 		...args,
 	);
@@ -88,7 +83,7 @@ export const fullDepBuild = async (
 		lib: tg.directory({ "lib.a": tg.file("library") }),
 		include: tg.directory({ "header.h": tg.file("header") }),
 	});
-};
+}
 
 // Deps: distinct packages with shared builder pattern, plus kind testing.
 const mockDeps = std.deps({
@@ -107,9 +102,9 @@ const leafDeps = std.deps({ leaf: pkgABuild });
 export type ParentArg = std.args.BasePackageArg &
 	std.deps.Arg<typeof leafDeps> & { parentOption?: string };
 
-export const parentBuild = async (
+export async function parentBuild(
 	...args: std.Args<ParentArg>
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const resolved = await std.packages.applyArgs<ParentArg>(...args);
 	const libFiles: Record<string, tg.Unresolved<tg.File>> = {};
 	if (resolved.parentOption)
@@ -124,7 +119,7 @@ export const parentBuild = async (
 		}
 	}
 	return tg.directory({ lib: tg.directory(libFiles) });
-};
+}
 
 const transitiveDeps = std.deps({ parent: parentBuild });
 
@@ -133,7 +128,7 @@ type TransitiveArg = std.args.BasePackageArg &
 
 // Tests
 
-const testOptionsPassToArtifacts = async () => {
+async function testOptionsPassToArtifacts() {
 	const resolved = await std.packages.applyArgs<MockDepsArg>(
 		{ host: "aarch64-apple-darwin" },
 		{
@@ -174,9 +169,9 @@ const testOptionsPassToArtifacts = async () => {
 	tg.assert(flagsB === "--enable-b", `pkgB flags: ${flagsB}`);
 	const prefixB = await readFileText(pkgB, "lib/prefix");
 	tg.assert(prefixB === "/opt/b", `pkgB prefix: ${prefixB}`);
-};
+}
 
-const testBaseFieldsPreserved = async () => {
+async function testBaseFieldsPreserved() {
 	// Verify sdk, env, and source fields on dep args are preserved through applyArgs.
 	const overrideSource = tg.directory({ "test.txt": tg.file("override") });
 	const resolved = await std.packages.applyArgs<MockDepsArg>(
@@ -197,9 +192,9 @@ const testBaseFieldsPreserved = async () => {
 	tg.assert(pkgAArg.sdk !== undefined, "sdk preserved");
 	tg.assert(pkgAArg.env !== undefined, "env preserved");
 	tg.assert(pkgAArg.source !== undefined, "source preserved");
-};
+}
 
-const testTransitiveDependencyArgs = async () => {
+async function testTransitiveDependencyArgs() {
 	const resolved = await std.packages.applyArgs<TransitiveArg>(
 		{ host: "aarch64-apple-darwin" },
 		{
@@ -223,9 +218,9 @@ const testTransitiveDependencyArgs = async () => {
 		leafOption === "transitive-leaf-value",
 		`leafOption: ${leafOption}`,
 	);
-};
+}
 
-const testKindSubdirectoryFiltering = async () => {
+async function testKindSubdirectoryFiltering() {
 	const resolved = await std.packages.applyArgs<MockDepsArg>({
 		build: "x86_64-unknown-linux-gnu",
 		host: "aarch64-unknown-linux-gnu",
@@ -254,9 +249,9 @@ const testKindSubdirectoryFiltering = async () => {
 	tg.assert((await full.tryGet("bin")) !== undefined, "full has bin");
 	tg.assert((await full.tryGet("lib")) !== undefined, "full has lib");
 	tg.assert((await full.tryGet("include")) !== undefined, "full has include");
-};
+}
 
-const testBuildtimeKindSetsBuildAsHost = async () => {
+async function testBuildtimeKindSetsBuildAsHost() {
 	const resolved = await std.packages.applyArgs<MockDepsArg>({
 		build: "x86_64-unknown-linux-gnu",
 		host: "aarch64-unknown-linux-gnu",
@@ -278,9 +273,9 @@ const testBuildtimeKindSetsBuildAsHost = async () => {
 		fullContent.includes("host=aarch64-unknown-linux-gnu"),
 		`full keeps original host: ${fullContent}`,
 	);
-};
+}
 
-const testDepsEnv = async () => {
+async function testDepsEnv() {
 	const resolved = await std.packages.applyArgs<MockDepsArg>({
 		host: "x86_64-unknown-linux-gnu",
 		dependencies: { pkgA: { pkgAOption: "test-env" } },
@@ -288,9 +283,9 @@ const testDepsEnv = async () => {
 	const env = await std.deps.env(mockDeps, resolved);
 	tg.assert(env !== undefined, "deps.env returns env object");
 	tg.assert(typeof env === "object", "env is an object");
-};
+}
 
-const testBooleanFlags = async () => {
+async function testBooleanFlags() {
 	// false disables dependency.
 	const resolved1 = await std.packages.applyArgs<MockDepsArg>({
 		host: "x86_64-unknown-linux-gnu",
@@ -317,9 +312,9 @@ const testBooleanFlags = async () => {
 		resolved3.dependencies?.runtimeDep === false,
 		"later false overrides true",
 	);
-};
+}
 
-const testMergeOrder = async () => {
+async function testMergeOrder() {
 	const resolved = await std.packages.applyArgs<MockDepsArg>(
 		{ dependencies: { pkgA: { pkgAOption: "first" } } },
 		{ dependencies: { pkgA: { pkgAOption: "second" } } },
@@ -357,9 +352,9 @@ const testMergeOrder = async () => {
 		(pkgA3 as PkgAArg).pkgAOption === "after-missing",
 		"missing dependencies handled, later arg applied",
 	);
-};
+}
 
-const testBuildDefaultsToHost = async () => {
+async function testBuildDefaultsToHost() {
 	const resolved = await std.packages.applyArgs<std.args.BasePackageArg>({
 		host: "aarch64-apple-darwin",
 	});
@@ -370,11 +365,11 @@ const testBuildDefaultsToHost = async () => {
 
 	const resolved2 = await std.packages.applyArgs<std.args.BasePackageArg>({});
 	tg.assert(resolved2.build === resolved2.host, "both match when unspecified");
-};
+}
 
 // Phase tests
 
-const testTopLevelPhases = async () => {
+async function testTopLevelPhases() {
 	const resolved = await std.packages.applyArgs<std.args.BasePackageArg>(
 		{ host: "x86_64-unknown-linux-gnu" },
 		{ phases: { configure: { pre: tg`echo "pre-configure"` } } },
@@ -382,18 +377,18 @@ const testTopLevelPhases = async () => {
 	const phases = resolved.phases as std.phases.Phases;
 	const configure = assertPhase(phases.configure, "configure");
 	tg.assert(configure.pre !== undefined, "pre hook preserved");
-};
+}
 
-const testScriptBody = async () => {
+async function testScriptBody() {
 	const resolved = await std.packages.applyArgs<std.args.BasePackageArg>({
 		phases: { build: tg`make -f Makefile.custom` },
 	});
 	const phases = resolved.phases as std.phases.Phases;
 	const build = assertPhase(phases.build, "build");
 	tg.assert(std.phases.isScriptBody(build.body), "body is script");
-};
+}
 
-const testCommandBody = async () => {
+async function testCommandBody() {
 	const resolved = await std.packages.applyArgs<std.args.BasePackageArg>(
 		{
 			phases: {
@@ -407,9 +402,9 @@ const testCommandBody = async () => {
 	tg.assert(std.phases.isCommandBody(configure.body), "body is command");
 	const body = configure.body as std.phases.CommandBody;
 	tg.assert(body.args?.length === 2, `args merged: ${body.args?.length}`);
-};
+}
 
-const testMutations = async () => {
+async function testMutations() {
 	// Suffix
 	const resolved1 = await std.packages.applyArgs<std.args.BasePackageArg>(
 		{ phases: { build: tg`make` } },
@@ -445,9 +440,9 @@ const testMutations = async () => {
 	const phases3 = resolved3.phases as std.phases.Phases;
 	tg.assert(phases3.configure !== undefined, "configure exists");
 	tg.assert(phases3.check === undefined, "check unset");
-};
+}
 
-const testPhaseHooks = async () => {
+async function testPhaseHooks() {
 	const resolved = await std.packages.applyArgs<std.args.BasePackageArg>({
 		phases: {
 			configure: {
@@ -464,9 +459,9 @@ const testPhaseHooks = async () => {
 	tg.assert(configure.pre !== undefined, "pre exists");
 	tg.assert(configure.post !== undefined, "post exists");
 	tg.assert(std.phases.isCommandBody(configure.body), "body is command");
-};
+}
 
-const testPhaseMerge = async () => {
+async function testPhaseMerge() {
 	// Args-only phase preserves command from defaults.
 	const argsOnly: std.phases.PhasesArg = {
 		configure: { args: ["--with-shared"] },
@@ -508,9 +503,9 @@ const testPhaseMerge = async () => {
 		templateText(threeWayBody.command) === "./configure",
 		"command preserved in three-way",
 	);
-};
+}
 
-export const test = async () => {
+export async function test() {
 	await Promise.all([
 		testOptionsPassToArtifacts(),
 		testBaseFieldsPreserved(),
@@ -529,4 +524,4 @@ export const test = async () => {
 		testPhaseMerge(),
 	]);
 	return true;
-};
+}

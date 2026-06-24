@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:6d76165e3a52384ed982889672751bf3d96f3126b57c47c04f66925b35dd7374";
@@ -28,7 +28,7 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 type Arg = {
 	build?: string;
@@ -36,7 +36,7 @@ type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		build,
 		host,
@@ -52,11 +52,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		exclude: ["untokenize"],
 		sitePackages: { "untokenize.py": untokenizeModule },
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -13,7 +13,7 @@ export const metadata = {
 	tag: "mold/2.40.4",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:69414c702ec1084e1fa8ca16da24f167f549e5e11e9ecd5d70a8dcda6f08c249";
@@ -27,7 +27,7 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = {
 	build?: string | undefined;
@@ -37,7 +37,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const mold = async (arg?: Arg) => {
+export async function mold(arg?: Arg) {
 	const {
 		build: build_,
 		env: env_,
@@ -70,12 +70,12 @@ export const mold = async (arg?: Arg) => {
 	});
 
 	return result;
-};
+}
 
 export default mold;
 
-export const test = async () => {
+export async function test() {
 	// FIXME
 	// await std.assert.pkg({ buildFn: mold, binaries: ["mold"], metadata });
 	return true;
-};
+}

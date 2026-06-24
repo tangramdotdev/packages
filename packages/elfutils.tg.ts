@@ -37,7 +37,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:09e2ff033d39baa8b388a2d7fbc5390bfde99ae3b7c67c7daaf7433fbcf0f01e";
@@ -48,20 +48,21 @@ export const source = async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 	return std.patch(source, constFix);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		bzip2: bzip2.build,
 		libarchive: libarchive.build,
 		openssl: openssl.build,
 		xz: xz.build,
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -103,11 +104,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return std.autotools.build({ ...arg, env });
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const runtimeDeps = [zlib.build(), xz.build(), bzip2.build()];
 	return await std.assert.pkg(build, {
 		...std.assert.defaultSpec(metadata),
@@ -117,4 +118,4 @@ export const test = async () => {
 			{ name: "asm", runtimeDeps },
 		],
 	});
-};
+}

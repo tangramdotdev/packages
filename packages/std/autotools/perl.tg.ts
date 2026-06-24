@@ -8,7 +8,7 @@ export const metadata = {
 	tag: "perl/5.42.0",
 };
 
-export const source = async (os: string) => {
+export async function source(os: string) {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -20,7 +20,7 @@ export const source = async (os: string) => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, ...patches));
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: buildTriple_,
@@ -133,14 +133,14 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	return tg.directory(perlArtifact, {
 		["bin/perl"]: wrappedPerl,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries: ["perl"], metadata });
 	return true;
-};
+}

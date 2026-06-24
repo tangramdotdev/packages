@@ -11,7 +11,7 @@ export const metadata = {
 	tag: "patch/2.8",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f87cee69eec2b4fcbf60a396b030ad6aa3415f192aa5f7ee84cad5e11f7f5ae3";
@@ -21,7 +21,7 @@ export const source = async () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -32,7 +32,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: Arg) => {
+export async function build(arg?: Arg) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -76,11 +76,11 @@ export const build = async (arg?: Arg) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = toolchainTriple(std.triple.host());
 	const sdk = await bootstrapSdk(host);
 	const system = std.triple.archAndOs(host);
@@ -175,4 +175,4 @@ export const test = async () => {
 	tg.assert(contents === expected);
 
 	return patchArtifact;
-};
+}

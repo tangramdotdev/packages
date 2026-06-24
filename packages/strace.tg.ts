@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const owner = name;
 	const repo = name;
@@ -29,11 +29,11 @@ export const source = async () => {
 		source: "release",
 		version,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -45,11 +45,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 	std.assert.supportedHost(arg.host, metadata);
 	return std.autotools.build(arg);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -7,7 +7,7 @@
  * - libdir=${exec_prefix}/lib or ${exec_prefix}/lib64
  * - includedir=${prefix}/include
  */
-export const shellNormalizeCommand = (): PromiseLike<tg.Template> => {
+export function shellNormalizeCommand(): PromiseLike<tg.Template> {
 	// The sed command normalizes all path-related variables.
 	// Note: We use ${pcfiledir} which pkg-config expands to the directory containing the .pc file.
 	// The /../.. assumes .pc files are in lib/pkgconfig/ relative to prefix.
@@ -19,19 +19,19 @@ export const shellNormalizeCommand = (): PromiseLike<tg.Template> => {
   -e 's|^libdir=.*/lib$|libdir=$'"{exec_prefix}"'/lib|' \
   -e 's|^includedir=.*/include$|includedir=$'"{prefix}"'/include|' \
   {} \\;`;
-};
+}
 
 /** Apply normalization to .pc file content. Used for testing. */
-const normalizeContent = (content: string): string => {
+function normalizeContent(content: string): string {
 	return content
 		.replace(/^prefix=.*/m, "prefix=${pcfiledir}/../..")
 		.replace(/^exec_prefix=.*/m, "exec_prefix=${prefix}")
 		.replace(/^libdir=.*\/lib64$/m, "libdir=${exec_prefix}/lib64")
 		.replace(/^libdir=.*\/lib$/m, "libdir=${exec_prefix}/lib")
 		.replace(/^includedir=.*\/include$/m, "includedir=${prefix}/include");
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const input = `prefix=/opt/.tangram/tmp/abc123/output
 exec_prefix=/opt/.tangram/tmp/abc123/output
 libdir=/opt/.tangram/tmp/abc123/output/lib
@@ -43,7 +43,9 @@ Version: 1.0.0`;
 	const output = normalizeContent(input);
 	const lines = output.split("\n");
 
-	const get = (key: string) => lines.find((l) => l.startsWith(`${key}=`));
+	function get(key: string) {
+		return lines.find((l) => l.startsWith(`${key}=`));
+	}
 
 	tg.assert(
 		get("prefix") === "prefix=${pcfiledir}/../..",
@@ -72,4 +74,4 @@ Version: 1.0.0`;
 
 	console.log("pkgconfig normalization tests passed");
 	return true;
-};
+}

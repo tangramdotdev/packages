@@ -7,12 +7,12 @@ export const metadata = {
 	tag: "libiconv/1.19",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6";
 	return std.download.fromGnu({ name, version, checksum });
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -24,7 +24,7 @@ export type Arg = {
 	usePrerequisites?: boolean;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -60,14 +60,14 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
 import * as bootstrap from "../bootstrap.tg.ts";
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({ host, bootstrap: true, env: sdk });
-};
+}
