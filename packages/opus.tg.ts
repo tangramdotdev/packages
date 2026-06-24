@@ -11,7 +11,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1";
@@ -23,26 +23,28 @@ export const source = async () => {
 		})
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = cmake.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	cmake.build(
+export function build(...args: std.Args<Arg>) {
+	return cmake.build(
 		{
 			source: source(),
 		},
 		...args,
 	);
+}
 
-export const env = () =>
-	std.env.arg({
+export function env() {
+	return std.env.arg({
 		PKG_CONFIG_PATH: tg.Mutation.suffix(tg`${build()}/lib/pkgconfig`, ":"),
 	});
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

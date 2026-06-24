@@ -21,16 +21,16 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba";
 	let source = await std.download.fromGnu({ name, version, checksum });
 	source = await bootstrap.patch(source, envRestorePatch);
 	return source;
-};
+}
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -105,11 +105,11 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return output;
-};
+}
 
 export default build;
 
-const providesNcurses = async (env: std.env.EnvObject): Promise<boolean> => {
+async function providesNcurses(env: std.env.EnvObject): Promise<boolean> {
 	for await (const [_, dir] of std.env.dirsInVar({
 		env,
 		key: "LIBRARY_PATH",
@@ -121,9 +121,9 @@ const providesNcurses = async (env: std.env.EnvObject): Promise<boolean> => {
 		}
 	}
 	return false;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 
@@ -140,4 +140,4 @@ export const test = async () => {
 	console.log(`Total dependencies: ${totalDeps}`);
 	tg.assert(totalDeps > 0, "expected depdendencies to be set");
 	return bashDir;
-};
+}

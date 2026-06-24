@@ -4,13 +4,14 @@ import * as perl from "perl" with { source: "./perl" };
 import * as std from "std" with { source: "./std" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		autoconf: { build: autoconf.build, kind: "full" },
 		help2man: { build: help2man.build, kind: "buildtime" },
 		perl: { build: perl.build, kind: "full" },
 		zlib: zlib.build,
 	});
+}
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/automake/",
@@ -24,7 +25,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:5bdccca96b007a7e344c24204b9b9ac12ecd17f5971931a9063bdee4887f4aaf";
@@ -34,11 +35,11 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -108,11 +109,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory({
 		["bin"]: binDirectory,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

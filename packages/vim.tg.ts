@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const owner = name;
 	const repo = name;
@@ -28,17 +28,18 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		ncurses: ncurses.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			deps,
@@ -50,10 +51,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const majorMinor = metadata.version.split(".").slice(0, 2).join(".");
 	const spec = {
 		...std.assert.defaultSpec(metadata),
@@ -62,4 +64,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

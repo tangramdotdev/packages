@@ -40,7 +40,7 @@ export type Arg = {
 };
 
 /** A basic set of GNU system utilites. */
-export const env = async (arg?: tg.Unresolved<Arg>) => {
+export async function env(arg?: tg.Unresolved<Arg>) {
 	const {
 		build,
 		env: env_,
@@ -81,24 +81,24 @@ export const env = async (arg?: tg.Unresolved<Arg>) => {
 		]),
 	);
 	return await std.env.arg(...utils, { utils: false });
-};
+}
 
 export default env;
 
 /** The standard utils built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
-export const defaultEnv = async () => {
+export async function defaultEnv() {
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	const sdk = await tg.build(std.sdk, { host }).named("sdk");
 	return tg.build(env, { host, env: sdk }).named("default utils");
-};
+}
 
 /** Release helper - builds defaultEnv with a referent to this file for cache hits. */
-export const buildDefaultEnv = async () => {
+export async function buildDefaultEnv() {
 	return tg.build(defaultEnv).named("default env");
-};
+}
 
 /** All utils builds must begin with these prerequisites in the build environment, which include patched `cp` and `install` commands that always preseve extended attributes.*/
-export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
+export async function prerequisites(hostArg?: tg.Unresolved<string>) {
 	const rawHost = hostArg ? await tg.resolve(hostArg) : std.triple.host();
 	const host = bootstrap.toolchainTriple(rawHost);
 
@@ -119,7 +119,7 @@ export const prerequisites = async (hostArg?: tg.Unresolved<string>) => {
 	];
 
 	return std.env.arg(...components, { utils: false });
-};
+}
 
 export type BuildUtilArg = Omit<std.autotools.Arg, "deps"> & {
 	/** Wrap the scripts in the output at the specified paths with bash as the interpreter. */
@@ -127,7 +127,7 @@ export type BuildUtilArg = Omit<std.autotools.Arg, "deps"> & {
 };
 
 /** Build a util. This wraps std.phases.autotools.build(), adding the wrapBashScriptPaths post-process step and disabling extra tools. */
-export const autotoolsInternal = async (arg: tg.Unresolved<BuildUtilArg>) => {
+export async function autotoolsInternal(arg: tg.Unresolved<BuildUtilArg>) {
 	const {
 		bootstrap = false,
 		extended = false,
@@ -150,10 +150,10 @@ export const autotoolsInternal = async (arg: tg.Unresolved<BuildUtilArg>) => {
 		});
 	}
 	return output;
-};
+}
 
 /** Given a file containing a shell script, change the given shebang to use /usr/bin/env.  The SDK will place bash on the path.  */
-export const changeShebang = async (scriptFile: tg.File) => {
+export async function changeShebang(scriptFile: tg.File) {
 	// Ensure the file has a shebang.
 	const metadata = await std.file.executableMetadata(scriptFile);
 	tg.assert(metadata.format === "shebang");
@@ -170,16 +170,16 @@ export const changeShebang = async (scriptFile: tg.File) => {
 	const newFileContents = `#!/usr/bin/env bash\n${fileWithoutShebangLine}`;
 	const newFile = tg.file({ contents: newFileContents, executable: true });
 	return newFile;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const utilsEnv = await env({ host, env: bootstrap.sdk() });
 	tg.assert(await std.env.providesUtils(utilsEnv));
 	return utilsEnv;
-};
+}
 
-export const testPrerequisites = async () => {
+export async function testPrerequisites() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	return await prerequisites(host);
-};
+}

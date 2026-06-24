@@ -7,16 +7,16 @@ export const metadata = {
 	tag: "mpc/1.3.1",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8";
 	return std.download.fromGnu({ checksum, name, version });
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
@@ -28,10 +28,10 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await build();
-};
+}

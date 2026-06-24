@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const base = `https://pkgconfig.freedesktop.org/releases`;
@@ -23,19 +23,20 @@ export const source = async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg &
 	std.deps.Arg<typeof deps> & {
 		proxy?: boolean;
 	};
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			deps,
@@ -102,13 +103,13 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory(pkgConfigBuild, {
 		["bin/pkg-config"]: wrappedBin,
 	});
-};
+}
 
 export default build;
 
-export const path = async (
+export async function path(
 	dependencies: Array<tg.Artifact>,
-): Promise<tg.Template | undefined> => {
+): Promise<tg.Template | undefined> {
 	const standardPaths = [
 		"",
 		"/lib",
@@ -125,9 +126,9 @@ export const path = async (
 	}
 
 	return tg.Template.join(":", ...allPaths);
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

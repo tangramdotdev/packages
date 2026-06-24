@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181";
@@ -22,12 +22,12 @@ const source = () => {
 		checksum,
 		compression: "xz",
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			phases: {
@@ -36,10 +36,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

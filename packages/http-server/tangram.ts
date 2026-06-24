@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:55eabb10a644d593f447daa1872d29cdb4a231b32c86db75c7db96a3027e6564";
@@ -30,13 +30,13 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = std.args.BasePackageArg & {
 	nodejs?: Omit<nodejs.Arg, "deps">;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		build,
 		host,
@@ -53,11 +53,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		nodeArgs,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

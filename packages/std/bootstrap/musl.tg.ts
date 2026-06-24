@@ -12,7 +12,7 @@ export const metadata = {
 	tag: "musl/1.2.5",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4";
@@ -22,7 +22,7 @@ export const source = async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => bootstrap.patch(source, muslPermissionPatch));
-};
+}
 
 export type Arg = {
 	build?: string | undefined;
@@ -32,7 +32,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: Arg) => {
+export async function build(arg?: Arg) {
 	const host = arg?.host ?? std.triple.host();
 	const hostSystem = std.triple.archAndOs(host);
 
@@ -72,19 +72,20 @@ export const build = async (arg?: Arg) => {
 		processName: metadata.name,
 		source: source(),
 	});
-};
+}
 
 export default build;
 
-export const interpreterPath = (triple: string) =>
-	`lib/${interpreterName(triple)}`;
+export function interpreterPath(triple: string) {
+	return `lib/${interpreterName(triple)}`;
+}
 
-export const interpreterName = (triple: string) => {
+export function interpreterName(triple: string) {
 	const arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;
-};
+}
 
-export const linkerPath = (triple: string) => {
+export function linkerPath(triple: string) {
 	std.triple.assert(triple);
 	return `${triple}/bin/ld`;
-};
+}

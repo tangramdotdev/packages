@@ -22,7 +22,7 @@ export const metadata = {
 // Generated using pip-tools/pip-compile: https://pypi.org/project/pip-tools
 import requirements from "./requirements.txt" with { type: "file" };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:94cd09fa065b819dcc40de329441d53710cf51f6857b39ce20840bb2b5d3ec78";
@@ -36,11 +36,11 @@ export const source = () => {
 		checksum,
 		source: "tag",
 	});
-};
+}
 
 export type Arg = std.args.BasePackageArg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		build,
 		host,
@@ -55,11 +55,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: sourceArtifact,
 		python: { requirements },
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

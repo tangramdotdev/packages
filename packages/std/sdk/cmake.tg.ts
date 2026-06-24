@@ -11,7 +11,7 @@ export const metadata = {
 	tag: "cmake/3.31.8",
 };
 
-export const source = () => {
+export function source() {
 	const { version } = metadata;
 	const checksum =
 		"sha256:e3cde3ca83dc2d3212105326b8f1b565116be808394384007e7ef1c253af6caa";
@@ -26,7 +26,7 @@ export const source = () => {
 		tag,
 		version,
 	});
-};
+}
 
 export type Arg = {
 	build?: string | undefined;
@@ -36,7 +36,7 @@ export type Arg = {
 };
 
 /** Build `cmake`. */
-export const cmake = async (arg?: tg.Unresolved<Arg>) => {
+export async function cmake(arg?: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const {
 		build: build_,
@@ -88,7 +88,7 @@ export const cmake = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return result;
-};
+}
 
 export default cmake;
 
@@ -167,7 +167,7 @@ export type BuildArg = {
 };
 
 /** Construct a cmake package build target. */
-export const build = async (...args: std.Args<BuildArg>) => {
+export async function build(...args: std.Args<BuildArg>) {
 	type Collect = std.args.MakeArrayKeys<BuildArg, "phases">;
 	const {
 		bootstrap = false,
@@ -320,10 +320,10 @@ export const build = async (...args: std.Args<BuildArg>) => {
 			...(order !== undefined ? { order } : {}),
 		})
 		.then(tg.Directory.expect);
-};
+}
 
-export const test = async () => {
+export async function test() {
 	// FIXME
 	// await std.assert.pkg({ buildFn: cmake, binaries: ["cmake"], metadata });
 	return true;
-};
+}

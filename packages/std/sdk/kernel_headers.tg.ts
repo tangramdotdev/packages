@@ -10,7 +10,7 @@ export const metadata = {
 	tag: "linux/6.12.74",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3b56eeb1dc9a437f189ca56b823be3769994f59a4ea0895b08ec0d20acaca13e";
@@ -21,7 +21,7 @@ export const source = async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -33,7 +33,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
+export async function kernelHeaders(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -106,11 +106,11 @@ export const kernelHeaders = async (arg?: tg.Unresolved<Arg>) => {
 	);
 
 	return result;
-};
+}
 
 export default kernelHeaders;
 
-export const test = async () => {
+export async function test() {
 	const detectedHost = std.triple.host();
 	const host = bootstrap.toolchainTriple(detectedHost);
 	if (std.triple.os(host) !== "linux") {
@@ -127,9 +127,9 @@ export const test = async () => {
 	await testKernelHeaders(host, target);
 
 	return true;
-};
+}
 
-export const testKernelHeaders = async (host: string, target?: string) => {
+export async function testKernelHeaders(host: string, target?: string) {
 	const target_ = target ?? host;
 	const buildEnv = std.env.arg(
 		bootstrap.sdk(host),
@@ -148,4 +148,4 @@ export const testKernelHeaders = async (host: string, target?: string) => {
 	const kernelH = tg.File.expect(await headers.get("linux/kernel.h"));
 	const kernelHContents = await kernelH.text;
 	tg.assert(kernelHContents.includes("#ifndef _LINUX_KERNEL_H"));
-};
+}

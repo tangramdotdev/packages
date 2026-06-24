@@ -17,7 +17,7 @@ export type Arg = {
 };
 
 /** Download a pre-compiled binary and wrap it. */
-export const self = async (...args: std.Args<Arg>) => {
+export async function self(...args: std.Args<Arg>) {
 	const { host: host_ } = await std.packages.applyArgs<Arg>(...args);
 	const { name, version } = metadata;
 	const tag = `${name}-v${version}`;
@@ -45,7 +45,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		"bin/bun": std.wrap(bun),
 		"bin/bunx": tg.symlink("bun"),
 	});
-};
+}
 
 export default self;
 
@@ -61,7 +61,7 @@ const binaryChecksums: { [key: string]: tg.Checksum } = {
 		"sha256:4183df3374623e5bab315c547cfa0974533cd457d86b73b639f7a87974cd6633",
 };
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);
-};
+}

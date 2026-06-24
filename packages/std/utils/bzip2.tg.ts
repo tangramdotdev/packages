@@ -9,7 +9,7 @@ export const metadata = {
 	tag: "bzip2/1.0.8",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:db106b740252669664fd8f3a1c69fe7f689d5cd4b132f82ba82b9afba27627df";
@@ -23,7 +23,7 @@ export const source = async () => {
 		owner,
 		source: "tag",
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -34,7 +34,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg?: tg.Unresolved<Arg>) => {
+export async function build(arg?: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		build: build_,
@@ -73,11 +73,11 @@ export const build = async (arg?: tg.Unresolved<Arg>) => {
 		source: sourceDir,
 		wrapBashScriptPaths: ["bin/bzdiff", "bin/bzgrep", "bin/bzmore"],
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdk = await bootstrap.sdk(host);
 	return build({
@@ -85,4 +85,4 @@ export const test = async () => {
 		bootstrap: true,
 		env: std.env.arg(sdk, { utils: false }),
 	});
-};
+}

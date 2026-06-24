@@ -7,7 +7,7 @@ export const metadata = {
 	tag: "ninja/1.13.2",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:974d6b2f4eeefa25625d34da3cb36bdcebe7fbce40f4c16ac0835fd1c0cbae17";
@@ -21,7 +21,7 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = {
 	build?: string | undefined;
@@ -31,7 +31,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const ninja = async (arg?: tg.Unresolved<Arg>) => {
+export async function ninja(arg?: tg.Unresolved<Arg>) {
 	const {
 		build: build_,
 		host: host_,
@@ -55,12 +55,12 @@ export const ninja = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return result;
-};
+}
 
 export default ninja;
 
-export const test = async () => {
+export async function test() {
 	// FIXME
 	// await std.assert.pkg({ buildFn: ninja, binaries: ["ninja"], metadata });
 	return true;
-};
+}

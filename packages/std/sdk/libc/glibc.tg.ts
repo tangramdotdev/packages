@@ -25,7 +25,7 @@ export const metadata = {
 	name: "glibc",
 };
 
-export const source = (version?: GlibcVersion) => {
+export function source(version?: GlibcVersion) {
 	const { name } = metadata;
 	const version_ = version ?? defaultGlibcVersion;
 
@@ -38,7 +38,7 @@ export const source = (version?: GlibcVersion) => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -50,7 +50,7 @@ export type Arg = {
 	linuxHeaders: tg.Directory;
 };
 
-export const build = async (arg: tg.Unresolved<Arg>) => {
+export async function build(arg: tg.Unresolved<Arg>) {
 	const {
 		bootstrap = false,
 		build: build_,
@@ -149,7 +149,7 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 	});
 
 	return result;
-};
+}
 
 export default build;
 
@@ -159,7 +159,7 @@ type SysrootFixArg = {
 };
 
 /** Some linker scripts need a small patch to work properly with `ld`'s sysroot replacement, prepending a `=` character to paths that need to resolve relative to the sysroot rather than absolute. This target modifies the script with the given name in the given directory. */
-export const applySysrootFix = async (arg: SysrootFixArg) => {
+export async function applySysrootFix(arg: SysrootFixArg) {
 	let { directory, filePath } = arg;
 	const linkerScript = await arg.directory
 		.get(arg.filePath)
@@ -184,18 +184,19 @@ export const applySysrootFix = async (arg: SysrootFixArg) => {
 		});
 	}
 	return directory;
-};
+}
 
-export const interpreterName = (triple: string) => {
+export function interpreterName(triple: string) {
 	const arch = std.triple.arch(triple);
 	const soVersion = arch === "x86_64" ? "2" : "1";
 	const soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;
-};
+}
 
-const splitVersionFromHost = (
-	host: string,
-): { host: string; version: GlibcVersion } => {
+function splitVersionFromHost(host: string): {
+	host: string;
+	version: GlibcVersion;
+} {
 	const environmentVersion = std.triple.environmentVersion(host);
 	if (environmentVersion) {
 		tg.assert(
@@ -209,7 +210,7 @@ const splitVersionFromHost = (
 	} else {
 		return { host, version: defaultGlibcVersion };
 	}
-};
+}
 
 const checksums: Map<GlibcVersion, tg.Checksum> = new Map([
 	[

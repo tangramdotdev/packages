@@ -33,7 +33,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:16535a9adf0b10037364e2d612aad3d9f4eca3a344949ced74d12faf4bd51d25";
@@ -49,10 +49,10 @@ export const source = async () => {
 	source = await std.patch(source, alwaysPreserveXattrsPatch);
 
 	return source;
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		acl: {
 			build: acl.build,
 			kind: "runtime",
@@ -74,11 +74,12 @@ export const deps = () =>
 			when: (ctx) => std.triple.os(ctx.host) === "darwin",
 		},
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			deps,
@@ -86,10 +87,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

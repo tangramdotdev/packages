@@ -4,12 +4,13 @@ import * as std from "std" with { source: "./std" };
 import * as texinfo from "texinfo" with { source: "./texinfo.tg.ts" };
 import * as zlib from "zlib-ng" with { source: "./zlib-ng.tg.ts" };
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		autoconf: autoconf.build,
 		perl: { build: perl.build, kind: "buildtime" },
 		zlib: zlib.build,
 	});
+}
 
 export const metadata = {
 	homepage: "https://www.gnu.org/software/help2man/",
@@ -23,7 +24,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:4d7e4fdef2eca6afe07a2682151cea78781e0a4e8f9622142d9f70c083a2fd4f";
@@ -33,11 +34,11 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Get build triple first for texinfo (buildtime only).
 	const options = await std.args.apply<Arg, Arg>({
 		args: args as std.Args<Arg>,
@@ -79,11 +80,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory({
 		["bin/help2man"]: wrappedScript,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

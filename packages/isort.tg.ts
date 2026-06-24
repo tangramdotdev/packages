@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0c6f8dc203df5d4d16c94fc3607299940026c3f5a1751e94fe23bbdb35280145";
@@ -28,11 +28,11 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = std.args.BasePackageArg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		build,
 		host,
@@ -45,11 +45,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		source: source_ ?? (await source()),
 		version: metadata.version,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

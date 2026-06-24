@@ -6,7 +6,7 @@ export const metadata = {
 	tag: "file_cmds/457.120.3",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0a3f9b5bbf4dcd3d7a2f76f3fb4f0671eadaa0603341ef6be34796f847c9a5fa";
@@ -20,7 +20,7 @@ export const source = async () => {
 		repo,
 		tag,
 	});
-};
+}
 
 export type Arg = {
 	build?: string | undefined;
@@ -31,7 +31,7 @@ export type Arg = {
 };
 
 /** Produce `cp`, `install`, and `xattr` executables that preserve xattrs on macOS, to include with the coreutils. */
-export const macOsXattrCmds = async (arg?: tg.Unresolved<Arg>) => {
+export async function macOsXattrCmds(arg?: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const build = resolved?.build ?? std.triple.host();
 	const os = std.triple.os(build);
@@ -78,7 +78,7 @@ export const macOsXattrCmds = async (arg?: tg.Unresolved<Arg>) => {
 	});
 
 	return result;
-};
+}
 
 export default macOsXattrCmds;
 
@@ -90,7 +90,7 @@ type UtilArg = Arg & {
 	utilName: string;
 };
 
-export const compileUtil = async (arg: tg.Unresolved<UtilArg>) => {
+export async function compileUtil(arg: tg.Unresolved<UtilArg>) {
 	const resolved = await tg.resolve(arg);
 	tg.assert(resolved.env);
 	const { destDir, extraArgs = [], fileName, utilName, utilSource } = resolved;
@@ -109,4 +109,4 @@ export const compileUtil = async (arg: tg.Unresolved<UtilArg>) => {
 	return tg.directory(destDir, {
 		[`bin/${utilName}`]: util,
 	});
-};
+}

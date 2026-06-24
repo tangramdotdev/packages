@@ -56,12 +56,12 @@ export const metadata = {
 };
 
 /** The default SDK for the detected host. */
-export const default_ = async () => {
+export async function default_() {
 	return await stdEnv(
 		sdk.sdk(), // FIXME - defaultEnv?
 		await tg.build(buildAutotoolsBuildTools).named("autotools build tools"),
 	);
-};
+}
 
 export default default_;
 
@@ -76,7 +76,7 @@ export const rustSource = tg.directory({
 });
 
 /** Mapping of strings to pass to "test" to the test targets they run. */
-const testActions = (): Record<string, () => any> => {
+function testActions(): Record<string, () => any> {
 	return {
 		hostSystem: triple.host,
 		triple: triple.test,
@@ -196,7 +196,7 @@ const testActions = (): Record<string, () => any> => {
 		stdRun: process_.testRunAll,
 		stdCommand: command_.test,
 	};
-};
+}
 
 /** A subset of all defined tests to run in the correct order. */
 const defaultTests = [
@@ -215,7 +215,7 @@ const defaultTests = [
 ];
 
 /** With no arguments, runs a set of default tests. Pass test names to run individual component tests. */
-export const test = async (...tests: Array<string>) => {
+export async function test(...tests: Array<string>) {
 	if (tests.length === 0) {
 		tests = defaultTests;
 	}
@@ -235,10 +235,10 @@ export const test = async (...tests: Array<string>) => {
 	}
 
 	return results;
-};
+}
 
 /** Returns a deduplicated array of the tests passed in. Throws if any are unrecognized. */
-const validateTestNames = (...testNames: Array<string>) => {
+function validateTestNames(...testNames: Array<string>) {
 	const validNames = new Set(Object.keys(testActions()));
 	const uniqueTests = new Set(testNames);
 	const invalidTests = testNames.filter((name) => !validNames.has(name));
@@ -246,43 +246,43 @@ const validateTestNames = (...testNames: Array<string>) => {
 		throw new Error(`unrecognized test names: ${invalidTests.join(", ")}`);
 	}
 	return [...uniqueTests];
-};
+}
 
-export const buildGnuEnv = async () => {
+export async function buildGnuEnv() {
 	return coreutils.gnuEnv();
-};
+}
 
-export const buildDefaultEnv = async () => {
+export async function buildDefaultEnv() {
 	return utils.defaultEnv();
-};
+}
 
-export const buildDefaultInjection = async () => {
+export async function buildDefaultInjection() {
 	return injection.defaultInjection();
-};
+}
 
-export const buildDefaultWorkspace = async () => {
+export async function buildDefaultWorkspace() {
 	return workspace.defaultWorkspace();
-};
+}
 
-export const buildDefaultWrapper = async () => {
+export async function buildDefaultWrapper() {
 	return workspace.defaultWrapper();
-};
+}
 
-export const buildBootstrapSdkEnv = async () => {
+export async function buildBootstrapSdkEnv() {
 	return bootstrap.sdk.env(triple.host());
-};
+}
 
-export const buildAutotoolsBuildTools = async () => {
+export async function buildAutotoolsBuildTools() {
 	return dependencies.autotoolsBuildTools();
-};
+}
 
-export const buildSdk = async () => {
+export async function buildSdk() {
 	const host = sdk.sdk.canonicalTriple(triple.host());
 	const resolved = await sdk.sdk.arg({ host });
 	return sdk.sdkInner(resolved);
-};
+}
 
-export const buildCrossSdk = async () => {
+export async function buildCrossSdk() {
 	const host = sdk.sdk.canonicalTriple(triple.host());
 	const os = triple.os(host);
 	if (os !== "linux") {
@@ -293,4 +293,4 @@ export const buildCrossSdk = async () => {
 	const crossTarget = sdk.sdk.canonicalTriple(`${crossArch}-linux`);
 	const resolved = await sdk.sdk.arg({ host, target: crossTarget });
 	return sdk.sdkInner(resolved);
-};
+}

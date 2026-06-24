@@ -16,7 +16,7 @@ export type Arg = {
 	source: tg.Directory;
 };
 
-export const cargo = async (arg: tg.Unresolved<Arg>) => {
+export async function cargo(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, ...rest } = resolved;
 
@@ -26,11 +26,11 @@ export const cargo = async (arg: tg.Unresolved<Arg>) => {
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.cargo.build(arg_);
-};
+}
 
 export default cargo;
 
-export const plain = async (arg: tg.Unresolved<Arg>) => {
+export async function plain(arg: tg.Unresolved<Arg>) {
 	const resolved = await tg.resolve(arg);
 	const { env: envArg, ...rest } = resolved;
 
@@ -38,14 +38,14 @@ export const plain = async (arg: tg.Unresolved<Arg>) => {
 	const arg_ = { ...rest, env: env_ };
 
 	return await rust.build.build(arg_);
-};
+}
 
 type EnvArg = {
 	build?: string | undefined;
 	host?: string | undefined;
 };
 
-export const env = async (arg?: tg.Unresolved<EnvArg>) => {
+export async function env(arg?: tg.Unresolved<EnvArg>) {
 	const { build: build_, host: host_ } = arg ? await tg.resolve(arg) : {};
 	const host = host_ ?? std.triple.host();
 	const build = build_ ?? host;
@@ -54,4 +54,4 @@ export const env = async (arg?: tg.Unresolved<EnvArg>) => {
 		cmake({ ...std.triple.rotate({ build, host }) }),
 		openssl({ build, host }),
 	);
-};
+}

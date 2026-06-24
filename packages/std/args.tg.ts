@@ -69,12 +69,10 @@ type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
 			}
 		: never;
 
-export const apply = async <
+export async function apply<
 	T extends tg.Value,
 	O extends { [key: string]: tg.Value },
->(
-	input: Input<T, O>,
-): Promise<O> => {
+>(input: Input<T, O>): Promise<O> {
 	let { args, map, reduce } = input;
 	let resolved = (await Promise.all(args.map(tg.resolve))) as Array<
 		ValueOrMaybeMutationMap<T>
@@ -139,21 +137,21 @@ export const apply = async <
 		}
 	}
 	return output as O;
-};
+}
 
 /** Determine whether a value is a `tg.Template.Arg`. */
-export const isTemplateArg = (arg: unknown): arg is tg.Template.Arg => {
+export function isTemplateArg(arg: unknown): arg is tg.Template.Arg {
 	return (
 		typeof arg === "string" || tg.Artifact.is(arg) || arg instanceof tg.Template
 	);
-};
+}
 
 /** Merge mutations if possible. By default, it will not merge template or array mutations where one is a prepend and the other is an append. Set `aggressive` to `true` to merge these cases as well. */
-export const mergeMutations = async (
+export async function mergeMutations(
 	a: tg.Mutation,
 	b: tg.Mutation,
 	aggressive = false,
-): Promise<Array<tg.Mutation>> => {
+): Promise<Array<tg.Mutation>> {
 	if (a.inner.kind === "unset" && b.inner.kind === "unset") {
 		return [b];
 	}
@@ -384,4 +382,4 @@ export const mergeMutations = async (
 		return [a, b];
 	}
 	return tg.unreachable();
-};
+}

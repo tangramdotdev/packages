@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-export const source = async (): Promise<tg.Directory> => {
+export async function source(): Promise<tg.Directory> {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:3fb73364a5a30efe615046d07e6db9d09fd2b41c763c5f7d3bfb121cd5c5ac5a";
@@ -30,12 +30,12 @@ export const source = async (): Promise<tg.Directory> => {
 		source: "tag",
 		tag: version,
 	});
-};
+}
 
 export type Arg = cmake.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	cmake.build(
+export function build(...args: std.Args<Arg>) {
+	return cmake.build(
 		{
 			source: source(),
 			phases: {
@@ -46,10 +46,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
@@ -59,4 +60,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -6,7 +6,7 @@ export const metadata = {
 	tag: "zlib-ng/2.3.3",
 };
 
-export const source = () => {
+export function source() {
 	const { version } = metadata;
 	const checksum =
 		"sha256:f9c65aa9c852eb8255b636fd9f07ce1c406f061ec19a2e7d508b318ca0c907d1";
@@ -20,11 +20,11 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Resolve args first to access build/host for cross-compilation.
 	const resolved = await std.autotools.arg({ source: source() }, ...args);
 	const host = resolved.host ?? std.triple.host();
@@ -46,6 +46,6 @@ export const build = async (...args: std.Args<Arg>) => {
 			},
 		},
 	});
-};
+}
 
 export default build;

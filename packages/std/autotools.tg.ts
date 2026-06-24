@@ -323,7 +323,7 @@ export type ResolvedArg = Omit<Arg, "build" | "host" | "phases" | "source"> & {
 };
 
 /** Resolve autotools args to a mutable arg object. Returns an arg with build, host, and source guaranteed to be resolved. */
-export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
+export async function arg(...args: std.Args<Arg>): Promise<ResolvedArg> {
 	type Collect = std.args.MakeArrayKeys<Arg, "phases">;
 	const collect = await std.args.apply<Arg, Collect>({
 		args,
@@ -372,4 +372,4 @@ export const arg = async (...args: std.Args<Arg>): Promise<ResolvedArg> => {
 		source,
 		...rest,
 	};
-};
+}

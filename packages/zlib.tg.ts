@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { homepage, name, version } = metadata;
 	const checksum =
 		"sha256:d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3";
@@ -21,11 +21,11 @@ export const source = async () => {
 		.extractArchive({ checksum, base: homepage, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{ source: source(), defaultCrossArgs: false, defaultCrossEnv: false },
 		...args,
@@ -51,11 +51,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		...arg,
 		env: std.env.arg(packageEnv, arg.env),
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

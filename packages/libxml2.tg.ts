@@ -18,7 +18,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:c008bac08fd5c7b4a87f7b8a71f283fa581d80d80ff8d2efd3b26224c39bc54c";
@@ -29,20 +29,21 @@ export const source = async () => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		ncurses: ncurses.build,
 		python: { build: python.self, kind: "buildtime" },
 		readline: readline.build,
 		xz: xz.build,
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -72,11 +73,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return std.autotools.build({ ...arg, env });
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.binaries(metadata.provides.binaries, {
@@ -85,4 +86,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

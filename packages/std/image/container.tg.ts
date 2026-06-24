@@ -65,7 +65,7 @@ export type ImageFormat = "docker" | "oci";
 
 export type LayerCompressionFormat = "gz" | "zst";
 
-export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
+export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 	const arg = await std.args.apply<Arg, ArgObject>({
 		args,
 		map: async (arg) => {
@@ -295,12 +295,12 @@ export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
 	} else {
 		throw new Error(`Unsupported image format: ${format}`);
 	}
-};
+}
 
-export const dockerImageFromLayers = async (
+export async function dockerImageFromLayers(
 	config: ImageConfigV1,
 	...layers: Array<Layer>
-): Promise<tg.File> => {
+): Promise<tg.File> {
 	// Create an empty image directory.
 	let image = tg.directory();
 
@@ -364,23 +364,23 @@ export const dockerImageFromLayers = async (
 
 	// Create a `.tar` file of the Docker image. This is the format that `docker load` expects.
 	return await createTarball(image);
-};
+}
 
-export const ociImageFromLayers = async (
+export async function ociImageFromLayers(
 	config: ImageConfigV1,
 	layerCompression: LayerCompressionFormat,
 	...layers: Array<Layer>
-): Promise<tg.File> => {
+): Promise<tg.File> {
 	let blobs = tg.directory();
 
-	const addBlob = async (file: tg.File) => {
+	async function addBlob(file: tg.File) {
 		const bytes = await file.bytes;
 		const checksum = await tg.checksum(bytes, "sha256");
 		blobs = tg.directory(blobs, {
 			[checksum.replace(":", "/")]: file,
 		});
 		return { digest: checksum, size: bytes.length };
-	};
+	}
 
 	const platform: Platform = {
 		os: config.os,
@@ -449,7 +449,7 @@ export const ociImageFromLayers = async (
 
 	// Tar the result and return it.
 	return await createTarball(directory);
-};
+}
 
 /**
  * Specification: https://github.com/opencontainers/image-spec/blob/main/manifest.md#image-manifest-property-descriptions
@@ -479,10 +479,10 @@ export type Layer = {
 	diffId: string;
 };
 
-export const layer = async (
+export async function layer(
 	directory: tg.Directory,
 	compressionFormat?: LayerCompressionFormat,
-): Promise<Layer> => {
+): Promise<Layer> {
 	const bundle = await tg.bundle(directory).then(tg.Directory.expect);
 	await bundle.store();
 	const tarball = await createTarball(bundle, compressionFormat);
@@ -490,15 +490,15 @@ export const layer = async (
 	const bytes = await tarball.bytes;
 	const diffId = await tg.checksum(bytes, "sha256");
 	return { tarball, diffId };
-};
+}
 
-export const createTarball = async (
+export async function createTarball(
 	directory: tg.Unresolved<tg.Directory>,
 	compressionFormat?: LayerCompressionFormat,
-): Promise<tg.File> => {
+): Promise<tg.File> {
 	const resolved = await tg.resolve(directory);
 	return await tg.archive(resolved, "tar", compressionFormat).then(tg.file);
-};
+}
 
 export type Platform = {
 	architecture: string;
@@ -509,7 +509,7 @@ export type Platform = {
 	features?: Array<string> | undefined;
 };
 
-export const platform = (system: string): Platform => {
+export function platform(system: string): Platform {
 	switch (std.triple.archAndOs(system)) {
 		case "x86_64-linux":
 			return {
@@ -524,7 +524,7 @@ export const platform = (system: string): Platform => {
 		default:
 			throw new Error(`Unsupported system for OCI image: ${system}`);
 	}
-};
+}
 
 /** The JSON configuration schema for a container image. This format is shared by both the OCI container image spec and the Docker image spec. */
 export type ImageConfigV1 = Platform & {
@@ -562,13 +562,13 @@ export type ImageHistory = {
 	empty_layer?: boolean;
 };
 
-const createUserLayer = async (username: string): Promise<tg.Directory> => {
+async function createUserLayer(username: string): Promise<tg.Directory> {
 	return createUsersLayer([username]);
-};
+}
 
-const createUsersLayer = async (
+async function createUsersLayer(
 	userSpecs: Array<string | UserSpec>,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const passwdEntries: Array<string> = [];
 	const groupEntries: Array<string> = [];
 	const homeDirs: Record<string, tg.Directory> = {};
@@ -634,7 +634,7 @@ const createUsersLayer = async (
 	});
 
 	return userDir;
-};
+}
 
 export namespace MediaTypeV1 {
 	export const descriptor = "application/vnd.oci.descriptor.v1+json";

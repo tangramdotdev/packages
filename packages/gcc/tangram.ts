@@ -22,19 +22,20 @@ export const metadata = {
 };
 
 /* This function produces a GCC source directory with the gmp, mpfr, isl, and mpc sources included. */
-export const source = () =>
-	tg.directory(gccSource(), {
+export function source() {
+	return tg.directory(gccSource(), {
 		gmp: std.dependencies.gmp.source(),
 		isl: std.dependencies.isl.source(),
 		mpfr: std.dependencies.mpfr.source(),
 		mpc: std.dependencies.mpc.source(),
 	});
+}
 
 export type Arg = std.autotools.Arg & {
 	target?: string;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 
 	const host = std.sdk.canonicalTriple(arg.host);
@@ -123,11 +124,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 
 	return result;
-};
+}
 
 export default build;
 
-export const libgcc = async (...args: std.Args<Arg>) => {
+export async function libgcc(...args: std.Args<Arg>) {
 	// FIXME - write in terms of gcc above, pass phases down.
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 
@@ -215,9 +216,9 @@ export const libgcc = async (...args: std.Args<Arg>) => {
 	const libgccFile = tg.File.expect(await result.get("lib/libgcc_s.so"));
 
 	return libgccFile;
-};
+}
 
-export const gccSource = async () => {
+export async function gccSource() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
@@ -228,10 +229,10 @@ export const gccSource = async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
 	return std.patch(source, libgompConstFix);
-};
+}
 
 /** Select the correct libc sysroot for the host. Returns a directory with headers and libraries at the root level (include/, lib/). */
-export const libc = async (host: string) => {
+export async function libc(host: string) {
 	const environment = std.triple.environment(std.triple.normalize(host));
 	switch (environment) {
 		case "musl":
@@ -245,10 +246,10 @@ export const libc = async (host: string) => {
 		default:
 			throw new Error(`Unsupported environment: ${environment}`);
 	}
-};
+}
 
 /** Merge all lib and lib64 directories into a single lib directory, leaving a symlink. */
-export const mergeLibDirs = async (dir: tg.Directory) => {
+export async function mergeLibDirs(dir: tg.Directory) {
 	for await (const [name, artifact] of dir) {
 		// If we find a lib64, merge it with the adjacent lib.
 		if (artifact instanceof tg.Directory) {
@@ -281,9 +282,9 @@ export const mergeLibDirs = async (dir: tg.Directory) => {
 		}
 	}
 	return dir;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

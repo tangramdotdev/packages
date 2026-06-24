@@ -15,16 +15,16 @@ type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export const image = (arg?: Arg) => std.image(env(arg), { cmd: ["bash"] });
+export function image(arg?: Arg) { return std.image(env(arg), { cmd: ["bash"] }); }
 
-export const env = (arg?: Arg) => std.env(...packages(arg));
+export function env(arg?: Arg) { return std.env(...packages(arg)); }
 
-export const executable = (arg?: Arg) => std.wrap(script, { env: env(arg) });
+export function executable(arg?: Arg) { return std.wrap(script, { env: env(arg) }); }
 
-const packages = (arg?: Arg) => {
+function packages(arg?: Arg) {
 	const arg_ = arg ?? {};
 	return [nodejs.toolchain(arg_), postgresql.build(arg_), ripgrep.build(arg_)];
-};
+}
 
 export const script = tg`
 	echo "Node.js version: $(node --version)" | tee -a ${tg.output}
@@ -32,50 +32,50 @@ export const script = tg`
 	echo "PostgreSQL version: $(psql --version)" | tee -a ${tg.output}
 `;
 
-export const test = async () => {
+export async function test() {
 	return await $`${executable()}`.then(tg.File.expect);
-};
+}
 
-export const testGccMusl = async () => {
+export async function testGccMusl() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
 	const muslHost = std.triple.create(host, { environment: "musl" });
 	return $`${executable({ build: muslHost, host: muslHost })}`;
-};
+}
 
-export const testGccMold = async () => {
+export async function testGccMold() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
 	return $`${executable({ sdk: { linker: "mold" } })}`;
-};
+}
 
-export const testLlvm = async () => {
+export async function testLlvm() {
 	// NOTE - this is the default on macOS.
 	return $`${executable({ sdk: { toolchain: "llvm" } })}`;
-};
+}
 
-export const testLlvmMusl = async () => {
+export async function testLlvmMusl() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Musl-based SDKs are only available on Linux");
 	}
 	const muslHost = std.triple.create(host, { environment: "musl" });
 	return $`${executable({ host: muslHost, sdk: { toolchain: "llvm" } })}`;
-};
+}
 
-export const testLlvmMold = async () => {
+export async function testLlvmMold() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error("Mold SDKs are only available on Linux");
 	}
 	return await $`${executable({ sdk: { toolchain: "llvm", linker: "mold" } })}`;
-};
+}
 
-export const testLinuxCross = async () => {
+export async function testLinuxCross() {
 	const build = std.triple.host();
 	if (std.triple.os(build) !== "linux") {
 		throw new Error("Linux cross-compilation is only available on Linux");
@@ -85,9 +85,9 @@ export const testLinuxCross = async () => {
 	const host = std.triple.create(build, { arch: crossArch });
 
 	return $`${executable({ build: build, host: host })}`;
-};
+}
 
-export const testLinuxToDarwinCross = async () => {
+export async function testLinuxToDarwinCross() {
 	const build = std.triple.host();
 	if (std.triple.os(build) !== "linux") {
 		throw new Error("Linux cross-compilation is only available on Linux");
@@ -97,4 +97,4 @@ export const testLinuxToDarwinCross = async () => {
 
 	return $`
 		${executable({ build: build, host: host, sdk: { toolchain: "llvm" } })}`;
-};
+}

@@ -17,7 +17,7 @@ export type Arg = {
 	host?: string;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const { host: host_ } = await std.packages.applyArgs<Arg>(...args);
 	const host = host_ ?? std.triple.host();
 	std.assert.supportedHost(host, metadata);
@@ -73,7 +73,7 @@ export const build = async (...args: std.Args<Arg>) => {
 			nodetool,
 		},
 	});
-};
+}
 
 export default build;
 
@@ -84,7 +84,7 @@ const linuxChecksums: { [key: string]: tg.Checksum } = {
 		"sha256:3431416c4f7d332b67dae00999a0e73f4499550b544c75f5a1ec931f0dad4c19",
 };
 
-export const test = async () => {
+export async function test() {
 	const host = std.triple.host();
 	const os = std.triple.os(host);
 
@@ -102,4 +102,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

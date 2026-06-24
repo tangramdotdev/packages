@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const owner = "besser82";
 	const repo = name;
@@ -31,12 +31,12 @@ const source = () => {
 		version,
 	});
 	return std.patch(source, strchrConstFix);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			phases: {
@@ -45,10 +45,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

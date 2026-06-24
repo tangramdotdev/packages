@@ -7,7 +7,7 @@ export const metadata = {
 	tag: "mpfr/4.2.2",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:b67ba0383ef7e8a8563734e2e889ef5ec3c3b898a01d00fa0a6869ad81c6ce01";
@@ -17,11 +17,11 @@ export const source = async () => {
 		version,
 		compression: "xz",
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
@@ -33,10 +33,10 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await build();
-};
+}

@@ -11,7 +11,7 @@ export const metadata = {
 	tag: "libxcrypt/4.5.2",
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const owner = "besser82";
 	const repo = name;
@@ -29,11 +29,11 @@ export const source = () => {
 			version,
 		})
 		.then((dir) => bootstrap.patch(dir, strchrConstFix));
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
@@ -45,14 +45,14 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ metadata, buildFn: build, libraries: ["xcrypt"] });
 	return true;
-};
+}

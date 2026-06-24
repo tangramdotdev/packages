@@ -13,7 +13,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const base = `https://distfiles.ariadne.space/pkgconf`;
@@ -23,7 +23,7 @@ export const source = async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -35,7 +35,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg: tg.Unresolved<Arg>) => {
+export async function build(arg: tg.Unresolved<Arg>) {
 	const {
 		bootstrap: bootstrap_ = false,
 		bashExe,
@@ -99,6 +99,6 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		["bin/pkgconf"]: wrappedBin,
 		["bin/pkg-config"]: tg.symlink("pkgconf"),
 	});
-};
+}
 
 export default build;

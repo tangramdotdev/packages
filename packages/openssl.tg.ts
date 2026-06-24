@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99";
@@ -29,11 +29,11 @@ const source = () => {
 		tag,
 		version,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -100,11 +100,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		["bin/c_rehash"]: std.wrap(origCRehash, { interpreter: perlInterpreter }),
 		["share/pkgconfig"]: tg.symlink("../lib/pkgconfig"),
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.binaries(metadata.provides.binaries, {
@@ -112,4 +112,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

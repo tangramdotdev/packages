@@ -28,7 +28,7 @@ export const metadata = {
 	tag: "llvm/21.1.8",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:4633a23617fa31a3ea51242586ea7fb1da7140e426bd62fc164261fe036aa142";
@@ -41,7 +41,7 @@ export const source = async () => {
 		.extractArchive({ checksum, url })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type LLVMArg = {
 	build?: string;
@@ -55,7 +55,7 @@ export type LLVMArg = {
 };
 
 /** Produce a complete clang+lld distribution. */
-export const toolchain = async (arg?: LLVMArg) => {
+export async function toolchain(arg?: LLVMArg) {
 	const {
 		build: build_,
 		env: env_,
@@ -255,18 +255,18 @@ export const toolchain = async (arg?: LLVMArg) => {
 	});
 
 	return llvmArtifact;
-};
+}
 
 /** Grab the LLD linker from the toolchain. */
-export const lld = async (arg?: LLVMArg) => {
+export async function lld(arg?: LLVMArg) {
 	const toolchainDir = await toolchain(arg);
 	tg.assert(toolchainDir instanceof tg.Directory);
 	// Use a template instead of the file directly so the linker proxy invokes the linker by its full name.
 	return tg`${toolchainDir}/bin/ld.lld`;
-};
+}
 
 /** Build LLD only, without the 2-stage bootstrap. */
-export const buildLld = async (arg?: LLVMArg) => {
+export async function buildLld(arg?: LLVMArg) {
 	const {
 		build: build_,
 		env: env_,
@@ -321,7 +321,7 @@ export const buildLld = async (arg?: LLVMArg) => {
 
 	// Wrap lld with zlib.
 	return output;
-};
+}
 
 type LinuxToDarwinArg = {
 	host: string;
@@ -330,7 +330,7 @@ type LinuxToDarwinArg = {
 
 /** Produce a linux to darwin toolchain. */
 import testSource from "../wrap/test/inspectProcess.c" with { type: "file" };
-export const linuxToDarwin = async (arg?: LinuxToDarwinArg) => {
+export async function linuxToDarwin(arg?: LinuxToDarwinArg) {
 	const { host, target: target_ } = arg ?? {
 		host: std.triple.host(),
 		target: "aarch64-apple-darwin",
@@ -361,9 +361,9 @@ export const linuxToDarwin = async (arg?: LinuxToDarwinArg) => {
 
 	// Return the combined environment.
 	return await std.env.arg(clangToolchain, cctoolsForTarget, { utils: false });
-};
+}
 
-export const testLinuxToDarwin = async (arg?: LinuxToDarwinArg) => {
+export async function testLinuxToDarwin(arg?: LinuxToDarwinArg) {
 	const { target } = arg ?? {
 		host: std.triple.host(),
 		target: "aarch64-apple-darwin",
@@ -377,11 +377,11 @@ export const testLinuxToDarwin = async (arg?: LinuxToDarwinArg) => {
 		.env(combined)
 		.then(tg.File.expect);
 	return f;
-};
+}
 
-export const llvmMajorVersion = () => {
+export function llvmMajorVersion() {
 	return metadata.version.split(".")[0];
-};
+}
 
 type WrapArgsArg = {
 	host: string;
@@ -390,7 +390,7 @@ type WrapArgsArg = {
 };
 
 /** Produce the flags and environment required to properly proxy this toolchain. */
-export const wrapArgs = async (arg: WrapArgsArg) => {
+export async function wrapArgs(arg: WrapArgsArg) {
 	const { host, target: target_, toolchainDir } = arg;
 	const target = target_ ?? host;
 
@@ -430,11 +430,9 @@ export const wrapArgs = async (arg: WrapArgsArg) => {
 	}
 
 	return { clangArgs, clangxxArgs, env };
-};
+}
 
-export const getLinuxSysroot = async (
-	target: string,
-): Promise<tg.Directory> => {
+export async function getLinuxSysroot(target: string): Promise<tg.Directory> {
 	const url = `https://github.com/tangramdotdev/bootstrap/releases/download/v2024.10.03/${target}-sysroot.tar.zst`;
 
 	const checksums: Record<string, tg.Checksum> = {
@@ -452,9 +450,9 @@ export const getLinuxSysroot = async (
 	return await tg
 		.download(url, checksum, { mode: "extract" })
 		.then(tg.Directory.expect);
-};
+}
 
-export const test = async () => {
+export async function test() {
 	// Build a triple for the detected host.
 	const host = std.sdk.canonicalTriple(std.triple.host());
 	const hostArch = std.triple.arch(host);
@@ -539,4 +537,4 @@ export const test = async () => {
 	}
 
 	return directory;
-};
+}

@@ -18,7 +18,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:e9274a5f8ab5271c0e0e6762d2fce194d5f98acc568e4ce816845b2dcc0cf88f";
@@ -33,20 +33,21 @@ export const source = () => {
 		source: "release",
 		version,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		libpsl: libpsl.build,
 		openssl: openssl.build,
 		zlib: zlib.build,
 		zstd: zstd.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			deps,
 			source: source(),
@@ -65,10 +66,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec: std.assert.PackageSpec = {
 		...std.assert.defaultSpec(metadata),
 		libraries: std.assert.allLibraries(["curl"], {
@@ -109,4 +111,4 @@ export const test = async () => {
 	tg.assert(tangramContents.length > 0);
 	tg.assert(tangramContents.startsWith("<!DOCTYPE html>"));
 	return true;
-};
+}

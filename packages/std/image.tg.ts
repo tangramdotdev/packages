@@ -6,15 +6,15 @@ export type Arg = string | tg.Template | tg.Artifact | ArgObject;
 export type ArgObject = container.Arg;
 
 /** Create an image file comprised of Tangram artifacts. */
-export const image = async (...args: std.Args<Arg>): Promise<tg.File> => {
+export async function image(...args: std.Args<Arg>): Promise<tg.File> {
 	return container.image(...args);
-};
+}
 
 export default image;
 
 import * as bootstrap from "./bootstrap.tg.ts";
 
-export const test = async () => {
+export async function test() {
 	const tests = [
 		testWrappedEntrypoint(),
 		testBasicRootfs(),
@@ -26,15 +26,15 @@ export const test = async () => {
 	];
 	await Promise.all(tests);
 	return true;
-};
+}
 
-export const bootstrapBuildToolchain = async () => {
+export async function bootstrapBuildToolchain() {
 	return await std.env.arg(bootstrap.sdk(), bootstrap.make.build(), {
 		utils: false,
 	});
-};
+}
 
-export const testWrappedEntrypoint = async () => {
+export async function testWrappedEntrypoint() {
 	const script = `echo "Hello, world!"`;
 	const buildToolchain = await bootstrapBuildToolchain();
 	const exe = await std.wrap(script, { buildToolchain });
@@ -42,9 +42,9 @@ export const testWrappedEntrypoint = async () => {
 	console.log("exe", exe.id);
 	const imageFile = await image(exe, { buildToolchain });
 	return imageFile;
-};
+}
 
-export const testWrappedEntrypointWithEnv = async () => {
+export async function testWrappedEntrypointWithEnv() {
 	const script = `echo "Hello, $NAME!"`;
 	const buildToolchain = await bootstrapBuildToolchain();
 	const env = { NAME: "Tangram" };
@@ -56,9 +56,9 @@ export const testWrappedEntrypointWithEnv = async () => {
 	console.log("exe", exe.id);
 	const imageFile = await image(exe, { buildToolchain });
 	return imageFile;
-};
+}
 
-export const testBasicRootfs = async () => {
+export async function testBasicRootfs() {
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
@@ -69,9 +69,9 @@ export const testBasicRootfs = async () => {
 	});
 
 	return imageFile;
-};
+}
 
-export const testBasicRootfsWithEnv = async () => {
+export async function testBasicRootfsWithEnv() {
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
@@ -84,9 +84,9 @@ export const testBasicRootfsWithEnv = async () => {
 	});
 
 	return imageFile;
-};
+}
 
-export const testBasicRootfsWithEnvAndEntrypoint = async () => {
+export async function testBasicRootfsWithEnvAndEntrypoint() {
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const rootFs = tg.directory(utils, {
 		"hello.txt": tg.file`Hello, world!`,
@@ -100,9 +100,9 @@ export const testBasicRootfsWithEnvAndEntrypoint = async () => {
 	});
 
 	return imageFile;
-};
+}
 
-export const testBootstrapEnv = async () => {
+export async function testBootstrapEnv() {
 	const utils = bootstrap.sdk.prepareBootstrapUtils();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const bootstrapEnvArg = await std.env.arg(
@@ -118,9 +118,9 @@ export const testBootstrapEnv = async () => {
 		},
 	);
 	return tg.directory({ env: bootstrapEnv });
-};
+}
 
-export const testBootstrapEnvImageDocker = async () => {
+export async function testBootstrapEnvImageDocker() {
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -128,9 +128,9 @@ export const testBootstrapEnvImageDocker = async () => {
 		cmd: ["sh"],
 	});
 	return imageFile;
-};
+}
 
-export const testBootstrapEnvImageDockerAlt = async () => {
+export async function testBootstrapEnvImageDockerAlt() {
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image("sh", {
@@ -138,9 +138,9 @@ export const testBootstrapEnvImageDockerAlt = async () => {
 		env: bootstrapEnv,
 	});
 	return imageFile;
-};
+}
 
-export const testBootstrapEnvImageDockerUser = async () => {
+export async function testBootstrapEnvImageDockerUser() {
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -149,9 +149,9 @@ export const testBootstrapEnvImageDockerUser = async () => {
 		user: "ben",
 	});
 	return imageFile;
-};
+}
 
-export const testBootstrapEnvImageDockerMultipleUsers = async () => {
+export async function testBootstrapEnvImageDockerMultipleUsers() {
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -160,9 +160,9 @@ export const testBootstrapEnvImageDockerMultipleUsers = async () => {
 		users: ["postgres", "redis:redis:999:999", "app:app:1001:1001"],
 	});
 	return imageFile;
-};
+}
 
-export const testBootstrapEnvImageDockerUsersWithDefault = async () => {
+export async function testBootstrapEnvImageDockerUsersWithDefault() {
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -172,9 +172,9 @@ export const testBootstrapEnvImageDockerUsersWithDefault = async () => {
 		user: "app", // This will be the default user AND create an additional user
 	});
 	return imageFile;
-};
+}
 
-export const testBootstrapEnvImageDockerUsersWithSpecs = async () => {
+export async function testBootstrapEnvImageDockerUsersWithSpecs() {
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(bootstrapEnv, {
@@ -187,9 +187,9 @@ export const testBootstrapEnvImageDockerUsersWithSpecs = async () => {
 		],
 	});
 	return imageFile;
-};
+}
 
-export const testBootstrapEnvImageOci = async () => {
+export async function testBootstrapEnvImageOci() {
 	const basicEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
@@ -198,9 +198,9 @@ export const testBootstrapEnvImageOci = async () => {
 		format: "oci",
 	});
 	return imageFile;
-};
+}
 
-export const testBasicEnv = async () => {
+export async function testBasicEnv() {
 	const detectedHost = std.triple.host();
 	const host = bootstrap.toolchainTriple(detectedHost);
 	const utils = await std.utils.env({
@@ -221,9 +221,9 @@ export const testBasicEnv = async () => {
 		},
 	);
 	return basicEnv;
-};
+}
 
-export const testBasicEnvImageDocker = async () => {
+export async function testBasicEnvImageDocker() {
 	const basicEnv = await testBasicEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
@@ -231,9 +231,9 @@ export const testBasicEnvImageDocker = async () => {
 		cmd: ["bash"],
 	});
 	return imageFile;
-};
+}
 
-export const testBasicEnvImageOci = async () => {
+export async function testBasicEnvImageOci() {
 	const basicEnv = await testBasicEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const imageFile = await image(basicEnv, {
@@ -242,9 +242,9 @@ export const testBasicEnvImageOci = async () => {
 		format: "oci",
 	});
 	return imageFile;
-};
+}
 
-export const testLabelsFeature = async () => {
+export async function testLabelsFeature() {
 	const bootstrapEnv = await testBootstrapEnv();
 	const buildToolchain = await bootstrapBuildToolchain();
 	const labels = {
@@ -259,4 +259,4 @@ export const testLabelsFeature = async () => {
 		labels,
 	});
 	return imageFile;
-};
+}

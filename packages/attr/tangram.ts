@@ -17,7 +17,7 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b";
@@ -28,11 +28,11 @@ const source = () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => std.patch(source, patches));
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -50,11 +50,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	);
 	std.assert.supportedHost(arg.host, metadata);
 	return std.autotools.build(arg);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...metadata.provides,
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
@@ -65,4 +65,4 @@ export const test = async () => {
 		metadata,
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

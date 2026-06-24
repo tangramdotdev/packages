@@ -276,21 +276,21 @@ export async function parse(file: tg.File): Promise<File | FatFile> {
 		archesBytes.byteLength,
 	);
 	let archesOffset = 0;
-	const i32 = () => {
+	function i32() {
 		let value = archesView.getInt32(archesOffset, false);
 		archesOffset += 4;
 		return value;
-	};
-	const u32 = () => {
+	}
+	function u32() {
 		let value = archesView.getUint32(archesOffset, false);
 		archesOffset += 4;
 		return value;
-	};
-	const u64 = () => {
+	}
+	function u64() {
 		let value = archesView.getBigUint64(archesOffset, false);
 		archesOffset += 8;
 		return value;
-	};
+	}
 	const arches: Array<FatArch> = [];
 	const files: Array<File> = [];
 	for (let i = 0; i < nfat_arch; i++) {
@@ -370,16 +370,16 @@ async function parseInner(file: tg.File, offset: number): Promise<File> {
 		}
 	}
 	let headerOffset = 4;
-	const headerI32 = () => {
+	function headerI32() {
 		let value = headerView.getInt32(headerOffset, isLe);
 		headerOffset += 4;
 		return value;
-	};
-	const headerU32 = () => {
+	}
+	function headerU32() {
 		let value = headerView.getUint32(headerOffset, isLe);
 		headerOffset += 4;
 		return value;
-	};
+	}
 	const header: Header = !is64
 		? {
 				magic: magic as typeof MAGIC | typeof CIGAM,
@@ -412,22 +412,22 @@ async function parseInner(file: tg.File, offset: number): Promise<File> {
 		loadCommandsBytes.byteLength,
 	);
 	let loadCommandsOffset = 0;
-	const i32 = () => {
+	function i32() {
 		const value = loadCommandsView.getInt32(loadCommandsOffset, isLe);
 		loadCommandsOffset += 4;
 		return value;
-	};
-	const u32 = () => {
+	}
+	function u32() {
 		const value = loadCommandsView.getUint32(loadCommandsOffset, isLe);
 		loadCommandsOffset += 4;
 		return value;
-	};
-	const u64 = () => {
+	}
+	function u64() {
 		const value = loadCommandsView.getBigUint64(loadCommandsOffset, isLe);
 		loadCommandsOffset += 8;
 		return value;
-	};
-	const str = (n: number) => {
+	}
+	function str(n: number) {
 		const bytes = loadCommandsBytes.subarray(
 			loadCommandsOffset,
 			loadCommandsOffset + n,
@@ -438,7 +438,7 @@ async function parseInner(file: tg.File, offset: number): Promise<File> {
 		);
 		loadCommandsOffset += n;
 		return value;
-	};
+	}
 
 	const loadCommands: Array<LoadCommand> = [];
 	for (let i = 0; i < header.ncmds; i++) {

@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 
 	// Download raw source.
@@ -29,17 +29,18 @@ export const source = async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => std.patch(source, patches));
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		libffi: libffi.build,
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Build configure args, including OS-specific flags.
 	const host =
 		(
@@ -137,12 +138,12 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory(perlArtifact, {
 		["bin/perl"]: wrappedPerl,
 	});
-};
+}
 
 export default build;
 
 /** Wrap a shebang'd perl script to use this package's bach as the interpreter.. */
-export const wrapScript = async (script: tg.File) => {
+export async function wrapScript(script: tg.File) {
 	const scriptMetadata = await std.file.executableMetadata(script);
 	if (
 		scriptMetadata?.format !== "shebang" ||
@@ -152,9 +153,9 @@ export const wrapScript = async (script: tg.File) => {
 	}
 	const interpreter = tg.File.expect(await (await build()).get("bin/bash"));
 	return std.wrap(script, { interpreter });
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	await std.assert.pkg(build, spec);
 
@@ -165,4 +166,4 @@ export const test = async () => {
 	tg.assert(output === "hello\n");
 
 	return true;
-};
+}

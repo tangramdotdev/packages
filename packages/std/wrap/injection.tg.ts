@@ -11,7 +11,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const injection = async (unresolved?: tg.Unresolved<Arg>) => {
+export async function injection(unresolved?: tg.Unresolved<Arg>) {
 	const arg = await tg.resolve(unresolved);
 
 	const host = arg?.host ?? std.triple.host();
@@ -56,7 +56,7 @@ export const injection = async (unresolved?: tg.Unresolved<Arg>) => {
 	} else {
 		return tg.unreachable();
 	}
-};
+}
 
 type MacOsInjectionArg = {
 	buildToolchain?: std.env.Arg;
@@ -65,7 +65,7 @@ type MacOsInjectionArg = {
 	source: tg.Directory;
 };
 
-export const macOsInjection = async (arg: MacOsInjectionArg) => {
+export async function macOsInjection(arg: MacOsInjectionArg) {
 	const host = arg.host ?? std.triple.host();
 	const os = std.triple.os(host);
 	if (os !== "darwin") {
@@ -120,7 +120,7 @@ export const macOsInjection = async (arg: MacOsInjectionArg) => {
 			.named("universal injection")
 			.then(tg.File.expect);
 	return injection;
-};
+}
 
 type DylibArg = {
 	additionalArgs: Array<string | tg.Template>;
@@ -131,7 +131,7 @@ type DylibArg = {
 	source: tg.Directory;
 };
 
-export const dylib = async (arg: DylibArg): Promise<tg.File> => {
+export async function dylib(arg: DylibArg): Promise<tg.File> {
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const os = std.triple.os(std.triple.archAndOs(build));
@@ -230,9 +230,9 @@ export const dylib = async (arg: DylibArg): Promise<tg.File> => {
 			.host(system)
 			.then(tg.File.expect);
 	return output;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const detectedHost = std.triple.host();
 	const hostArch = std.triple.arch(detectedHost);
 	tg.assert(hostArch);
@@ -269,10 +269,10 @@ export const test = async () => {
 		return tg.unreachable();
 	}
 	return nativeInjection;
-};
+}
 
 /** The default injection library built with the default SDK for the detected host. This version uses the default SDK to ensure cache hits when used throughout the codebase. */
-export const defaultInjection = async () => {
+export async function defaultInjection() {
 	const host = std.triple.host();
 	const buildToolchain = await bootstrap.sdk.env(host);
 	return tg
@@ -281,14 +281,14 @@ export const defaultInjection = async () => {
 			host,
 		})
 		.named("default injection");
-};
+}
 
 /** Release helper - builds defaultInjection with a referent to this file for cache hits. */
-export const buildDefaultInjection = async () => {
+export async function buildDefaultInjection() {
 	return tg.build(defaultInjection).named("default injection");
-};
+}
 
-export const testCross = async () => {
+export async function testCross() {
 	const detectedHost = std.triple.host();
 	if (std.triple.os(detectedHost) === "darwin") {
 		console.log("Skipping cross test on darwin");
@@ -332,4 +332,4 @@ export const testCross = async () => {
 	} else {
 		return tg.unreachable();
 	}
-};
+}

@@ -9,7 +9,7 @@ export const metadata = {
 	tag: "gmp/6.3.0",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898";
@@ -21,21 +21,21 @@ export const source = async () => {
 			checksum,
 		})
 		.then((dir) => bootstrap.patch(dir, gcc15Patch));
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	return std.autotools.build(
 		{
 			source: source(),
 		},
 		...args,
 	);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await build();
-};
+}

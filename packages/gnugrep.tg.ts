@@ -12,17 +12,17 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:badda546dfc4b9d97e992e2c35f3b5c7f20522ffcbe2f01ba1e9cdcbe7644cdc";
 	return std.download.fromGnu({ name, version, checksum });
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			phases: {
@@ -31,10 +31,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

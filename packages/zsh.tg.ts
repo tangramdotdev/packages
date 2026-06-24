@@ -14,7 +14,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const url = `https://sourceforge.net/projects/zsh/files/zsh/5.9/${name}-${version}.tar.xz/download`;
 	const checksum =
@@ -23,18 +23,19 @@ export const source = async () => {
 		.extractArchive({ url, checksum })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		ncurses: ncurses.build,
 		pcre2: pcre2.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			deps,
@@ -54,11 +55,12 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
 /** Wrap a shebang'd bash script to use this package's bach as the interpreter.. */
-export const wrapScript = async (script: tg.File) => {
+export async function wrapScript(script: tg.File) {
 	const scriptMetadata = await std.file.executableMetadata(script);
 	if (
 		scriptMetadata?.format !== "shebang" ||
@@ -68,9 +70,9 @@ export const wrapScript = async (script: tg.File) => {
 	}
 	const interpreter = tg.File.expect(await (await build()).get("bin/zsh"));
 	return std.wrap(script, { interpreter });
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

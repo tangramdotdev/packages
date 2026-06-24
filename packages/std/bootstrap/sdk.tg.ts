@@ -8,17 +8,17 @@ export async function sdk(host?: string) {
 
 export namespace sdk {
 	/** Produce the arg object to create a bootstrap-only SDK. */
-	export const arg = async (hostArg?: string): Promise<std.sdk.Arg> => {
+	export async function arg(hostArg?: string): Promise<std.sdk.Arg> {
 		const host = bootstrap.toolchainTriple(hostArg);
 		const toolchain = await env(host);
 		return { host, toolchain };
-	};
+	}
 
 	/** Build a thin `bin/` directory utilizing symlinks to their respective artifacts. */
-	const thinBin = async (
+	async function thinBin(
 		sources: Array<tg.Directory>,
 		extras: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {},
-	): Promise<tg.Directory> => {
+	): Promise<tg.Directory> {
 		const entries: Record<string, tg.Unresolved<tg.Artifact | undefined>> = {};
 		for (const src of sources) {
 			const srcEntries = await src.entries;
@@ -32,10 +32,10 @@ export namespace sdk {
 			}
 		}
 		return tg.directory({ ...entries, ...extras });
-	};
+	}
 
 	/** Get the bootstrap toolchain directory, with darwin gcc/g++ symlink fixups applied. Does not include utils. */
-	export const toolchain = async (hostArg: string) => {
+	export async function toolchain(hostArg: string) {
 		const host = hostArg ?? std.triple.host();
 		const raw = await bootstrap.toolchain(host);
 		if (std.triple.os(host) !== "darwin") return raw;
@@ -49,10 +49,10 @@ export namespace sdk {
 			if (name !== "bin") overlay[name] = tg.symlink(tg`${raw}/${name}`);
 		}
 		return tg.directory(overlay);
-	};
+	}
 
 	/** Get a build environment containing only the components from the pre-built bootstrap artifacts with no proxies. Instead of using this env directly, consider using `std.sdk({ bootstrapMode: true })`, which can optionally include the linker and/or cc proxies. */
-	export const env = async (hostArg: string) => {
+	export async function env(hostArg: string) {
 		const t = await toolchain(hostArg);
 		const bootstrapHost = bootstrap.toolchainTriple(
 			hostArg ?? std.triple.host(),
@@ -77,18 +77,18 @@ export namespace sdk {
 			}
 		}
 		return tg.directory(overlay);
-	};
+	}
 
 	/** Get the busybox/toybox utils artifact from the bootstrap. */
-	export const prepareBootstrapUtils = async (hostArg?: string) => {
+	export async function prepareBootstrapUtils(hostArg?: string) {
 		const host = hostArg ?? std.triple.host();
 		return bootstrap.utils(host);
-	};
+	}
 }
 
-export const test = async () => {
+export async function test() {
 	const sdkEnv = await sdk();
 	const arg = await sdk.arg();
 	await std.sdk.assertValid(sdkEnv, arg);
 	return sdkEnv;
-};
+}

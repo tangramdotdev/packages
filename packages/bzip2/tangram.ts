@@ -20,7 +20,7 @@ export const metadata = {
 	},
 };
 
-const source = () => {
+function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:db106b740252669664fd8f3a1c69fe7f689d5cd4b132f82ba82b9afba27627df";
@@ -35,11 +35,11 @@ const source = () => {
 		source: "tag",
 	});
 	return std.patch(source, dylibDetectOsPatch);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -64,11 +64,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		});
 	}
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = {
 		...std.assert.defaultSpec(metadata),
 		binaries: std.assert.allBinaries(metadata.provides.binaries, {
@@ -76,4 +76,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}

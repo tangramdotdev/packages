@@ -93,7 +93,7 @@ const submodules: Record<string, { commit: string; url: string }> = {
 };
 
 /** Download and assemble the full rusty_v8 source tree with all submodules. */
-export const source = async (): Promise<tg.Directory> => {
+export async function source(): Promise<tg.Directory> {
 	const mainSource = await downloadGithubArchive(
 		"tangramdotdev",
 		"rusty_v8",
@@ -113,27 +113,27 @@ export const source = async (): Promise<tg.Directory> => {
 	}
 
 	return tg.directory(mainSource, tree);
-};
+}
 
 /** Download a GitHub archive and unwrap the top-level directory. */
-const downloadGithubArchive = async (
+async function downloadGithubArchive(
 	owner: string,
 	repo: string,
 	commit: string,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const checksum = "sha256:any" as tg.Checksum;
 	const url = `https://github.com/${owner}/${repo}/archive/${commit}.tar.gz`;
 	return await std
 		.download({ checksum, url, mode: "extract" })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 /** GitHub archives nest under a top-level dir; googlesource archives are flat. */
-const downloadSubmodule = async (
+async function downloadSubmodule(
 	url: string,
 	commit: string,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const checksum = "sha256:any" as tg.Checksum;
 	if (url.includes("github.com")) {
 		const archiveUrl = `${url}/archive/${commit}.tar.gz`;
@@ -147,13 +147,13 @@ const downloadSubmodule = async (
 			.download({ checksum, url: archiveUrl, mode: "extract" })
 			.then(tg.Directory.expect);
 	}
-};
+}
 
-const setNestedPath = (
+function setNestedPath(
 	obj: Record<string, tg.Unresolved<tg.Artifact>>,
 	path: string,
 	value: tg.Directory,
-): Record<string, tg.Unresolved<tg.Artifact>> => {
+): Record<string, tg.Unresolved<tg.Artifact>> {
 	const parts = path.split("/");
 	if (parts.length === 1) {
 		obj[parts[0]!] = value;
@@ -172,7 +172,7 @@ const setNestedPath = (
 		obj[key] = val;
 	}
 	return obj;
-};
+}
 
 export type Arg = {
 	build?: string;
@@ -182,7 +182,7 @@ export type Arg = {
 };
 
 /** Build librusty_v8.a.gz from source. Returns a tg.File containing the gzipped static library. */
-export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
+export async function build(...args: std.Args<Arg>): Promise<tg.File> {
 	const {
 		build: build_,
 		env: env_,
@@ -263,6 +263,6 @@ export const build = async (...args: std.Args<Arg>): Promise<tg.File> => {
 		.then(tg.File.expect);
 
 	return output;
-};
+}
 
 export default build;

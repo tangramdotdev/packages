@@ -25,7 +25,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a";
@@ -35,17 +35,18 @@ export const source = () => {
 		checksum,
 		compression: "xz",
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		perl: { build: perl.build, kind: "buildtime" },
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -159,12 +160,12 @@ export const build = async (...args: std.Args<Arg>) => {
 		["bin"]: binDirectory,
 	});
 	return output;
-};
+}
 
-export const patchAutom4teCfg = async (
+export async function patchAutom4teCfg(
 	autoconf: tg.Directory,
 	arg?: { env?: tg.Unresolved<std.env.Arg>; sdk?: std.sdk.Arg },
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const autom4teCfg = await autoconf.get("share/autoconf/autom4te.cfg");
 	tg.assert(autom4teCfg instanceof tg.File);
 
@@ -190,11 +191,11 @@ export const patchAutom4teCfg = async (
 	return tg.directory(autoconf, {
 		["share/autoconf/autom4te.cfg"]: patchedAutom4teCfg,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

@@ -21,7 +21,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:8cb1bb8cfa9aeae13279b4da42ae8307ae6777456d4270f2e603c95aa08ca8ef";
@@ -35,17 +35,18 @@ export const source = () => {
 		checksum,
 		source: "tag",
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		nasm: { build: nasm.build, kind: "buildtime" },
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = (...args: std.Args<Arg>) =>
-	std.autotools.build(
+export function build(...args: std.Args<Arg>) {
+	return std.autotools.build(
 		{
 			source: source(),
 			deps,
@@ -55,10 +56,11 @@ export const build = (...args: std.Args<Arg>) =>
 		},
 		...args,
 	);
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await std.assert.pkg(build, {
 		// ffmpeg uses -version (single dash), not --version.
 		binaries: std.assert.allBinaries(["ffmpeg", "ffprobe"], {
@@ -68,4 +70,4 @@ export const test = async () => {
 		// Static-only libs need `pkg-config --libs --static` for transitive deps;
 		// the test framework uses `--libs` without `--static`, so skip link tests.
 	});
-};
+}

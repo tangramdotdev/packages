@@ -20,7 +20,7 @@ export type ToolchainArg = {
 
 // URLs taken from `https://nodejs.org/dist/v${version}/`.
 // Hashes taken from `https://nodejs.org/dist/v${version}/SHASUMS256.txt.asc`.
-const source = async (): Promise<tg.Directory> => {
+async function source(): Promise<tg.Directory> {
 	// Known versions of NodeJS.
 	const version = metadata.version;
 	const target = std.triple.host();
@@ -67,9 +67,9 @@ const source = async (): Promise<tg.Directory> => {
 	const node = await std.directory.unwrap(download);
 	tg.assert(node instanceof tg.Directory);
 	return node;
-};
+}
 
-export const self = async (args?: tg.Unresolved<ToolchainArg>) => {
+export async function self(args?: tg.Unresolved<ToolchainArg>) {
 	const resolved = await tg.resolve(args);
 	// Download Node
 	const artifact = source();
@@ -90,9 +90,9 @@ export const self = async (args?: tg.Unresolved<ToolchainArg>) => {
 	return tg.directory(artifact, {
 		["bin/node"]: wrapped,
 	});
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const node = self();
 	return await $`
 		set -x
@@ -102,7 +102,7 @@ export const test = async () => {
 		echo "Checking if we can run node scripts."
 		node -e 'console.log("Hello, world!!!")'
 	`.env(node);
-};
+}
 
 type PackageJson = {
 	bin?: Record<string, string>;
@@ -154,8 +154,7 @@ export type ResolvedArg = Omit<Arg, "deps" | "env"> & {
 };
 
 /** Resolve nodejs args to a mutable arg object. Returns an Arg with build, host, and source guaranteed to be resolved. */
-// biome-ignore lint/suspicious/noExplicitAny: Args are contravariant, requiring type erasure here.
-export const arg = async (...args: std.Args<any>): Promise<ResolvedArg> => {
+export async function arg(...args: std.Args<any>): Promise<ResolvedArg> {
 	// biome-ignore lint/suspicious/noExplicitAny: Arg contains non-Value types (deps).
 	const collect = await std.args.apply<any, any>({
 		args,
@@ -206,10 +205,10 @@ export const arg = async (...args: std.Args<any>): Promise<ResolvedArg> => {
 		env,
 		...rest,
 	};
-};
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: Args are contravariant, requiring type erasure here.
-export const build = async (...args: std.Args<any>) => {
+export async function build(...args: std.Args<any>) {
 	const resolved = await arg(...args);
 	const {
 		build,
@@ -300,7 +299,7 @@ export const build = async (...args: std.Args<any>) => {
 	else {
 		return built;
 	}
-};
+}
 
 type PackageLockJson = {
 	packages: Record<
@@ -314,9 +313,9 @@ type PackageLockJson = {
 	>;
 };
 
-export const install = async (
+export async function install(
 	packageLockJson: tg.File,
-): Promise<[tg.Directory, tg.Directory, Set<string>]> => {
+): Promise<[tg.Directory, tg.Directory, Set<string>]> {
 	// Parse the package-lock.json.
 	const packageLock = tg.encoding.json.decode(
 		await packageLockJson.text,
@@ -333,15 +332,15 @@ export const install = async (
 		await installPackages(downloads, true),
 		downloadedPaths,
 	];
-};
+}
 
 /** Wrap any scripts pointed to by the "bin" field in the package.json. */
-export const wrapBin = async (
+export async function wrapBin(
 	nodeArg: tg.Unresolved<tg.Directory>,
 	argArg: tg.Unresolved<tg.Directory>,
 	binsArg: tg.Unresolved<Record<string, string>>,
 	dependenciesArg: tg.Unresolved<tg.Directory>,
-) => {
+) {
 	const node = await tg.resolve(nodeArg);
 	const arg = await tg.resolve(argArg);
 	const bins = await tg.resolve(binsArg);
@@ -367,12 +366,12 @@ export const wrapBin = async (
 	}
 
 	return tg.directory({ bin });
-};
+}
 
 /** Given a package-lock.json, return a list of the paths to install and tarballs to use. */
-const downloadPackages = async (
+async function downloadPackages(
 	packageLock: PackageLockJson,
-): Promise<Array<[string, tg.Directory, boolean]>> => {
+): Promise<Array<[string, tg.Directory, boolean]>> {
 	const dls = Object.entries(packageLock.packages).filter(([name, data]) => {
 		return name.length !== 0 && data.resolved && data.integrity;
 	});
@@ -408,13 +407,13 @@ const downloadPackages = async (
 	return results.filter(
 		(r): r is [string, tg.Directory, boolean] => r !== undefined,
 	);
-};
+}
 
 /** Install a list of packages to the paths specified by package-lock.json. */
-const installPackages = async (
+async function installPackages(
 	packages: Array<[string, tg.Directory, boolean]>,
 	installDev: boolean,
-): Promise<tg.Directory> => {
+): Promise<tg.Directory> {
 	const directories = await Promise.all(
 		packages.map(async ([path, dir, isDev]) => {
 			// Skip dev dependencies if installDev is false.
@@ -435,4 +434,4 @@ const installPackages = async (
 	}
 
 	return nodeModules;
-};
+}

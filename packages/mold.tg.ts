@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:28c7976c39e53ee440217b6b9f036a8cf13e3b2f93e8da83e19c66f4fc9a774c";
@@ -29,20 +29,21 @@ export const source = () => {
 		source: "tag",
 		tag,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		zstd: {
 			build: zstd.build,
 			kind: "runtime",
 			when: (ctx) => std.triple.os(ctx.host) === "linux",
 		},
 	});
+}
 
 export type Arg = cmake.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const resolved = await cmake.arg(
 		{
 			source: source(),
@@ -58,11 +59,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	std.assert.supportedHost(resolved.host, metadata);
 
 	return cmake.build(resolved);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

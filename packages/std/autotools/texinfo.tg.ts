@@ -21,7 +21,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:0329d7788fbef113fa82cb80889ca197a344ce0df7646fe000974c5d714363a6";
@@ -31,7 +31,7 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = {
 	bootstrap?: boolean;
@@ -43,7 +43,7 @@ export type Arg = {
 	source?: tg.Directory;
 };
 
-export const build = async (arg: tg.Unresolved<Arg>) => {
+export async function build(arg: tg.Unresolved<Arg>) {
 	const {
 		bootstrap = false,
 		build,
@@ -107,6 +107,6 @@ export const build = async (arg: tg.Unresolved<Arg>) => {
 		},
 		{ utils: false },
 	);
-};
+}
 
 export default build;

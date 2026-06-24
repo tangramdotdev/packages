@@ -32,9 +32,9 @@ export type ExecutableMetadata =
 	| MachOExecutableMetadata
 	| ShebangExecutableMetadata;
 
-export const detectExecutableKind = async (
+export async function detectExecutableKind(
 	file: tg.File,
-): Promise<ExecutableKind> => {
+): Promise<ExecutableKind> {
 	const bytes = await file.read({ length: 4 });
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 	const magic = view.getUint32(0, false);
@@ -57,24 +57,24 @@ export const detectExecutableKind = async (
 		return "shebang";
 	}
 	return "unknown";
-};
+}
 
 /** Attempt to get executable metadata. Returns undefined if unable. */
-export const tryExecutableMetadata = async (
+export async function tryExecutableMetadata(
 	file: tg.File,
-): Promise<ExecutableMetadata | undefined> => {
+): Promise<ExecutableMetadata | undefined> {
 	try {
 		const metadata = await executableMetadata(file);
 		return metadata;
 	} catch (_) {
 		return undefined;
 	}
-};
+}
 
 /** Get metadata from an executable. */
-export const executableMetadata = async (
+export async function executableMetadata(
 	file: tg.File,
-): Promise<ExecutableMetadata> => {
+): Promise<ExecutableMetadata> {
 	tg.assert(file.executable);
 	const kind = await detectExecutableKind(file);
 	if (kind === "elf") {
@@ -86,12 +86,12 @@ export const executableMetadata = async (
 	} else {
 		throw new Error("unable to determine the executable kind");
 	}
-};
+}
 
 /** Attempt to determine the hosts an executable is able to run on. */
-export const executableTriples = async (
+export async function executableTriples(
 	file: tg.File,
-): Promise<Array<string> | undefined> => {
+): Promise<Array<string> | undefined> {
 	const metadata = await executableMetadata(file);
 	let arches: Array<string>;
 	let os: string;
@@ -105,13 +105,13 @@ export const executableTriples = async (
 		return undefined;
 	}
 	return arches.map((arch) => std.triple.create({ arch, os }));
-};
+}
 
-export const test = async () => {
+export async function test() {
 	await Promise.all([testBinary(), testShebang()]);
-};
+}
 
-export const testBinary = async () => {
+export async function testBinary() {
 	// Set up platform details.
 	const bootstrapSDK = await bootstrap.sdk();
 	const host = std.triple.host();
@@ -227,9 +227,9 @@ export const testBinary = async () => {
 	}
 
 	return true;
-};
+}
 
-export const testShebang = async () => {
+export async function testShebang() {
 	const file = await tg.file("#!/bin/sh\n#command\necho 'test'\n", {
 		executable: true,
 	});
@@ -243,4 +243,4 @@ export const testShebang = async () => {
 		}
 	`,
 	);
-};
+}

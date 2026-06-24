@@ -12,7 +12,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const base = `https://distfiles.ariadne.space/pkgconf`;
@@ -22,13 +22,13 @@ export const source = async () => {
 		.extractArchive({ checksum, base, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg & {
 	proxy?: boolean;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg(
 		{
 			source: source(),
@@ -88,11 +88,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		["bin/pkgconf"]: wrappedBin,
 		["bin/pkg-config"]: tg.symlink("pkgconf"),
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

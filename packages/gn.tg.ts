@@ -18,14 +18,14 @@ export const metadata = {
 // Pinned commit compatible with V8 146.
 const commit = "20a26907f754fed7927e5c5fd103a23a3a528cdf";
 
-export const source = async () => {
+export async function source() {
 	const checksum = "sha256:any";
 	const url = `https://gn.googlesource.com/gn/+archive/${commit}.tar.gz`;
 	// googlesource archives are flat (no top-level directory).
 	return await std
 		.download({ checksum, url, mode: "extract" })
 		.then(tg.Directory.expect);
-};
+}
 
 export type Arg = {
 	build?: string;
@@ -34,7 +34,7 @@ export type Arg = {
 	sdk?: std.sdk.Arg;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const {
 		build: build_,
 		env: env_,
@@ -71,11 +71,11 @@ export const build = async (...args: std.Args<Arg>) => {
 		.checksum("sha256:any")
 		.env(env)
 		.then(tg.Directory.expect);
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

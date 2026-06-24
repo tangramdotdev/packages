@@ -18,7 +18,7 @@ export const metadata = {
 	},
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -28,10 +28,10 @@ export const source = async () => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		libseccomp: {
 			build: libseccomp.build,
 			kind: "runtime",
@@ -39,10 +39,11 @@ export const deps = () =>
 		},
 		zlib: zlib.build,
 	});
+}
 
 export type Arg = std.autotools.Arg & std.deps.Arg<typeof deps>;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const output = await std.autotools.build(
 		{
 			source: source(),
@@ -70,11 +71,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory(output, {
 		"bin/file": wrappedFile,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	return await std.assert.pkg(build, {
 		...std.assert.defaultSpec(metadata),
 		libraries: [
@@ -91,4 +92,4 @@ export const test = async () => {
 			},
 		],
 	});
-};
+}

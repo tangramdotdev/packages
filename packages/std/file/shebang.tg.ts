@@ -6,9 +6,9 @@ export type ShebangExecutableMetadata = {
 	interpreter: string;
 };
 
-export const shebangExecutableMetadata = async (
+export async function shebangExecutableMetadata(
 	file: tg.File,
-): Promise<ShebangExecutableMetadata> => {
+): Promise<ShebangExecutableMetadata> {
 	let bytes = await file.read({ length: 128 });
 	const index = bytes.indexOf("\n".charCodeAt(0));
 	if (index !== -1) {
@@ -18,4 +18,4 @@ export const shebangExecutableMetadata = async (
 	const interpreter = text.match(/^#!\s*(\S+)/)?.[1];
 	tg.assert(interpreter);
 	return { format: "shebang", interpreter };
-};
+}

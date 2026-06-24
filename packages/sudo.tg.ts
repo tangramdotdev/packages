@@ -11,7 +11,7 @@ export const metadata = {
 	tag: "sudo/1.9.17p1",
 };
 
-export const source = async (): Promise<tg.Directory> => {
+export async function source(): Promise<tg.Directory> {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:ff607ea717072197738a78f778692cd6df9a7e3e404565f51de063ca27455d32";
@@ -26,20 +26,21 @@ export const source = async (): Promise<tg.Directory> => {
 		tag,
 		version,
 	});
-};
+}
 
-export const deps = () =>
-	std.deps({
+export function deps() {
+	return std.deps({
 		coreutils: { build: coreutils.build, kind: "buildtime" },
 		tzdb: { build: tzdb.build, kind: "full" },
 	});
+}
 
 export type Arg = std.autotools.Arg &
 	std.deps.Arg<typeof deps> & {
 		keepPath?: boolean;
 	};
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Extract custom options first.
 	const customOptions = await std.args.apply<Arg, Arg>({
 		args: args as std.Args<Arg>,
@@ -114,16 +115,16 @@ export const build = async (...args: std.Args<Arg>) => {
 	}
 
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}
 
-export const image = async () => {
+export async function image() {
 	const sudoArtifact = await build();
 	const sudoEtc = await sudoArtifact.get("etc").then(tg.Directory.expect);
 	const env = std.env(sudoArtifact);
@@ -134,4 +135,4 @@ export const image = async () => {
 		users: ["root:root:0:0", "tangram"],
 	});
 	return image;
-};
+}

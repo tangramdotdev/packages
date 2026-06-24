@@ -14,19 +14,19 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3";
 	return std.download.fromGnu({ name, version, checksum });
-};
+}
 
 export type Arg = {
 	host?: string;
 	embedWrapper?: boolean | undefined;
 };
 
-export const build = async (arg?: Arg) => {
+export async function build(arg?: Arg) {
 	const host = arg?.host ?? std.triple.host();
 	const embedWrapper = arg?.embedWrapper ?? std.triple.os(host) === "linux";
 
@@ -61,11 +61,11 @@ export const build = async (arg?: Arg) => {
 		source: source(),
 	});
 	return output;
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	// const spec = {
 	// 	...std.assert.defaultSpec(metadata),
 	// 	bootstrapMode: true,
@@ -73,4 +73,4 @@ export const test = async () => {
 	// FIXME - must be args to use std.assert.pkg.
 	// return await std.assert.pkg(build, spec);
 	return await build();
-};
+}

@@ -15,7 +15,7 @@ export const metadata = {
 	},
 };
 
-const source = async () => {
+async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.gz";
 	const checksum =
@@ -26,19 +26,19 @@ const source = async () => {
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap)
 		.then((source) => std.patch(source, muslPermissionPatch));
-};
+}
 
-export const interpreterName = (triple: string) => {
+export function interpreterName(triple: string) {
 	const arch = std.triple.arch(triple);
 	return `ld-musl-${arch}.so.1`;
-};
+}
 
 export type Arg = std.autotools.Arg & {
 	/** Optionally point to a specific implementation of libcc. */
 	libcc?: tg.File;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Extract libcc from raw args since std.autotools.arg doesn't know about it.
 	const libccArg = (await Promise.all(args.map(tg.resolve))).find(
 		(a): a is { libcc?: tg.File } =>
@@ -89,11 +89,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	return tg.directory(output, {
 		[`lib/${interpreterName(arg.host)}`]: tg.symlink("libc.so"),
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(build, spec);
-};
+}

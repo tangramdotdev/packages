@@ -30,7 +30,7 @@ export type Arg = {
 };
 
 /** Add a proxy to an env that provides a toolchain. */
-export const env = async (arg?: Arg): Promise<tg.Directory> => {
+export async function env(arg?: Arg): Promise<tg.Directory> {
 	if (arg === undefined) {
 		throw new Error("Cannot proxy an undefined env");
 	}
@@ -246,7 +246,7 @@ export const env = async (arg?: Arg): Promise<tg.Directory> => {
 		}
 	}
 	return tg.directory(overlayEntries);
-};
+}
 
 export default env;
 
@@ -255,7 +255,7 @@ type CcProxyArg = {
 	host?: string;
 };
 
-const ccProxy = async (arg: CcProxyArg) => {
+async function ccProxy(arg: CcProxyArg) {
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
 	const tgcc = workspace.ccProxy({
@@ -272,7 +272,7 @@ const ccProxy = async (arg: CcProxyArg) => {
 		[`bin/${prefix}c++`]: tgcc,
 		[`bin/${prefix}g++`]: tgcc,
 	});
-};
+}
 
 type LdProxyArg = {
 	buildToolchain: tg.Directory;
@@ -285,7 +285,7 @@ type LdProxyArg = {
 	host?: string;
 };
 
-const ldProxy = async (arg: LdProxyArg) => {
+async function ldProxy(arg: LdProxyArg) {
 	// Prepare the Tangram tools.
 	const host = arg.host ?? std.triple.host();
 	const build = arg.build ?? host;
@@ -374,7 +374,7 @@ const ldProxy = async (arg: LdProxyArg) => {
 		host: build,
 	});
 	return p;
-};
+}
 
 type StripProxyArg = {
 	build?: string;
@@ -384,7 +384,7 @@ type StripProxyArg = {
 	runtimeLibraryPath?: tg.Directory | tg.Template | undefined;
 };
 
-export const stripProxy = async (arg: tg.Unresolved<StripProxyArg>) => {
+export async function stripProxy(arg: tg.Unresolved<StripProxyArg>) {
 	const {
 		build: build_,
 		buildToolchain,
@@ -434,9 +434,9 @@ export const stripProxy = async (arg: tg.Unresolved<StripProxyArg>) => {
 		buildToolchain,
 		env: std.env.arg(...envs, { utils: false }),
 	});
-};
+}
 
-export const test = async () => {
+export async function test() {
 	const tests = [
 		testBasic(),
 		testTransitiveAll(),
@@ -450,10 +450,10 @@ export const test = async () => {
 	];
 	await Promise.all(tests);
 	return true;
-};
+}
 
 /** This test ensures the proxy produces a correct wrapper for a basic case with no transitive dynamic dependencies. */
-export const testBasic = async (target?: string) => {
+export async function testBasic(target?: string) {
 	const buildToolchain = target ? std.sdk({ target }) : await bootstrap.sdk();
 	const helloSource = await tg.file`
 		#include <stdio.h>
@@ -498,7 +498,7 @@ export const testBasic = async (target?: string) => {
 		);
 	}
 	return tg.directory({ output });
-};
+}
 
 type MakeSharedArg = {
 	flags?: Array<tg.Template.Arg>;
@@ -508,7 +508,7 @@ type MakeSharedArg = {
 	target?: string | undefined;
 };
 
-const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
+async function makeShared(arg: tg.Unresolved<MakeSharedArg>) {
 	const {
 		flags: flagArgs = [],
 		libName,
@@ -532,9 +532,9 @@ const makeShared = async (arg: tg.Unresolved<MakeSharedArg>) => {
 			),
 		)
 		.then(tg.Directory.expect);
-};
+}
 
-export const testSharedLibraryWithDep = async (target?: string) => {
+export async function testSharedLibraryWithDep(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
@@ -600,11 +600,11 @@ export const testSharedLibraryWithDep = async (target?: string) => {
 	await output.store();
 	console.log("SHARED LIBRARY WITH DEP OUTPUT", output.id);
 	return output;
-};
+}
 
 type OptLevel = "none" | "filter" | "resolve" | "isolate" | "combine";
 
-export const testTransitiveAll = async (target?: string) => {
+export async function testTransitiveAll(target?: string) {
 	return await Promise.all([
 		testTransitive(undefined, target),
 		testTransitiveNone(target),
@@ -612,18 +612,22 @@ export const testTransitiveAll = async (target?: string) => {
 		testTransitiveIsolate(target),
 		testTransitiveCombine(target),
 	]);
-};
-export const testTransitiveNone = (target?: string) =>
-	testTransitive("none", target);
-export const testTransitiveResolve = (target?: string) =>
-	testTransitive("resolve", target);
-export const testTransitiveIsolate = (target?: string) =>
-	testTransitive("isolate", target);
-export const testTransitiveCombine = (target?: string) =>
-	testTransitive("combine", target);
+}
+export function testTransitiveNone(target?: string) {
+	return testTransitive("none", target);
+}
+export function testTransitiveResolve(target?: string) {
+	return testTransitive("resolve", target);
+}
+export function testTransitiveIsolate(target?: string) {
+	return testTransitive("isolate", target);
+}
+export function testTransitiveCombine(target?: string) {
+	return testTransitive("combine", target);
+}
 
 /** Test cross-compilation scenarios for LD proxy */
-export const testCrossGccLdProxy = async () => {
+export async function testCrossGccLdProxy() {
 	const detectedHost = std.triple.host();
 	const detectedOs = std.triple.os(detectedHost);
 	if (detectedOs === "darwin") {
@@ -635,28 +639,28 @@ export const testCrossGccLdProxy = async () => {
 		std.triple.create(detectedHost, { arch: crossArch }),
 	);
 	return await testTransitive(undefined, crossTarget);
-};
+}
 
-export const testDarwinToLinuxLdProxy = async () => {
+export async function testDarwinToLinuxLdProxy() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "darwin") {
 		throw new Error(`This test is only valid on Darwin`);
 	}
 	const target = "x86_64-unknown-linux-gnu";
 	return await testTransitive(undefined, target);
-};
+}
 
-export const testLinuxToDarwinLdProxy = async () => {
+export async function testLinuxToDarwinLdProxy() {
 	const host = std.triple.host();
 	if (std.triple.os(host) !== "linux") {
 		throw new Error(`This test is only valid on Linux`);
 	}
 	const target = "aarch64-apple-darwin";
 	return await testTransitive(undefined, target);
-};
+}
 
 /** This test further exercises the the proxy by providing transitive dynamic dependencies both via -L and via -Wl,-rpath. */
-export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
+export async function testTransitive(optLevel?: OptLevel, target?: string) {
 	const opt = optLevel ?? "filter";
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
@@ -920,10 +924,10 @@ export const testTransitive = async (optLevel?: OptLevel, target?: string) => {
 	);
 
 	return output;
-};
+}
 
 /** This test checks that the common case of linking against a library in the working directory still works post-install. */
-export const testSamePrefix = async (target?: string) => {
+export async function testSamePrefix(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
@@ -978,10 +982,10 @@ export const testSamePrefix = async (target?: string) => {
 
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
-};
+}
 
 /** This test checks that the less-common case of linking against a library in the working directory by name instead of library path still works post-install. */
-export const testSamePrefixDirect = async (target?: string) => {
+export async function testSamePrefixDirect(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
@@ -1033,10 +1037,10 @@ export const testSamePrefixDirect = async (target?: string) => {
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
-};
+}
 
 /** This test checks that the less-common case of linking against a library in a different Tangram artifact by name instead of library path still works post-install. */
-export const testDifferentPrefixDirect = async (target?: string) => {
+export async function testDifferentPrefixDirect(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
@@ -1101,11 +1105,11 @@ export const testDifferentPrefixDirect = async (target?: string) => {
 		.then(tg.File.expect);
 	await std.assert.stdoutIncludes(output, "Hello from the shared library!");
 	return output;
-};
+}
 
 import inspectProcessSource from "../wrap/test/inspectProcess.c" with { type: "file" };
 
-export const testStrip = async (target?: string) => {
+export async function testStrip(target?: string) {
 	const host = std.triple.host();
 	const sdkArg = target ? { host, target } : undefined;
 	const toolchain = target ? await sdk.sdk(sdkArg) : await bootstrap.sdk();
@@ -1126,10 +1130,10 @@ export const testStrip = async (target?: string) => {
 		)
 		.then(tg.File.expect);
 	return output;
-};
+}
 
 /** This test verifies that strip can handle multiple files in a single invocation, like `strip foo bar baz`. */
-export const testStripMultipleFiles = async () => {
+export async function testStripMultipleFiles() {
 	const toolchain = await bootstrap.sdk();
 
 	const sourceA = await tg.file`
@@ -1195,10 +1199,10 @@ export const testStripMultipleFiles = async () => {
 	tg.assert(manifestC !== undefined, "progC should have a manifest");
 
 	return output;
-};
+}
 
 /** Test that TGLD discovers transitive dependencies when only the top-level library is explicitly linked. This mirrors the ncurses case where multiple libraries are in the same directory, but only one is explicitly linked. This test would catch the bug where TGLD returns early before analyzing libraries for their dependencies. */
-export const testTransitiveDiscovery = async (target?: string) => {
+export async function testTransitiveDiscovery(target?: string) {
 	const host = std.triple.host();
 	const targetTriple = target ?? host;
 	const sdkArg = target ? { host, target } : undefined;
@@ -1300,4 +1304,4 @@ export const testTransitiveDiscovery = async (target?: string) => {
 	await std.assert.stdoutIncludes(output, "Hello from bottom library!");
 
 	return true;
-};
+}

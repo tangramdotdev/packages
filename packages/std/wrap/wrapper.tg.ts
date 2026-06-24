@@ -23,7 +23,7 @@ type BuildArg = {
 	verbose?: boolean;
 };
 
-export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
+export async function build(unresolved: tg.Unresolved<BuildArg>) {
 	const arg = await tg.resolve(unresolved);
 	const release = arg.release ?? true;
 	let host_ = arg.host ?? std.triple.host();
@@ -157,10 +157,10 @@ export const build = async (unresolved: tg.Unresolved<BuildArg>) => {
 		.named("compile wrapper")
 		.then(tg.Directory.expect);
 	return tg.directory({ bin });
-};
+}
 
 /* Ensure the passed triples are what we expect, musl on linux and standard for macOS. */
-const standardizeTriple = (triple: string): string => {
+function standardizeTriple(triple: string): string {
 	const components = std.triple.components(triple);
 	const os = components.os;
 
@@ -178,9 +178,9 @@ const standardizeTriple = (triple: string): string => {
 	} else {
 		return tg.unreachable();
 	}
-};
+}
 
-export const workspace = async (arg?: WorkspaceArg) => {
+export async function workspace(arg?: WorkspaceArg) {
 	const arg_ = arg ?? {};
 	const {
 		target: target_,
@@ -203,18 +203,18 @@ export const workspace = async (arg?: WorkspaceArg) => {
 		source,
 		release,
 	}).then(tg.Directory.expect);
-};
+}
 
-const tripleToEnvVar = (triple: string, upcase?: boolean) => {
+function tripleToEnvVar(triple: string, upcase?: boolean) {
 	const allCaps = upcase ?? false;
 	let result = triple.replace(/-/g, "_");
 	if (allCaps) {
 		result = result.toUpperCase();
 	}
 	return result;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	// Detect the host triple.
 	const host = std.triple.host();
 
@@ -224,9 +224,9 @@ export const test = async () => {
 
 	// const buildToolchain = await bootstrap.sdk.env(host);
 	return workspace({ host, release: true });
-};
+}
 
-export const testCompile = async () => {
+export async function testCompile() {
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
 		"main.c": tg.file(`
@@ -258,9 +258,9 @@ export const testCompile = async () => {
 			},
 		)
 		.then(tg.File.expect);
-};
+}
 
-export const testFull = async () => {
+export async function testFull() {
 	const toolchain = std.sdk();
 	const source = tg.directory({
 		"main.c": tg.file(`
@@ -287,9 +287,9 @@ export const testFull = async () => {
 	return std.wrap(file, {
 		env: { CUSTOM_ENV: "true", TANGRAM_SUPPRESS_ENV: "true" },
 	});
-};
+}
 
-export const testStrip = async () => {
+export async function testStrip() {
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
 		"main.c": tg.file(`
@@ -326,9 +326,9 @@ export const testStrip = async () => {
 				TGSTRIP_TRACING: "tgstrip=trace",
 			},
 		);
-};
+}
 
-export const testPrintManifest = async () => {
+export async function testPrintManifest() {
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
 		"main.c": tg.file(`
@@ -383,9 +383,9 @@ export const testPrintManifest = async () => {
 	tg.assert("args" in manifest, "Expected manifest to contain an args field");
 
 	return true;
-};
+}
 
-export const testWrapperValues = async () => {
+export async function testWrapperValues() {
 	const toolchain = std.bootstrap.sdk();
 	const source = tg.directory({
 		"main.c": tg.file(`
@@ -438,9 +438,9 @@ export const testWrapperValues = async () => {
 		"Expected env: CUSTOM=custom in output",
 	);
 	return true;
-};
+}
 
-export const testModify = async () => {
+export async function testModify() {
 	let file = await tg.file("nothing to see here\n");
 	return std.run`
 		ls -al /.tangram/artifacts
@@ -449,9 +449,9 @@ export const testModify = async () => {
 	`
 		.bootstrap(true)
 		.env({ utils: true });
-};
+}
 
-export const testPreloadIsolation = async () => {
+export async function testPreloadIsolation() {
 	const toolchain = await bootstrap.sdk();
 
 	const sources = await tg.directory({
@@ -511,4 +511,4 @@ export const testPreloadIsolation = async () => {
 		`expected "outerinner" but got ${JSON.stringify(text)} (preload may be leaking from outer to inner)`,
 	);
 	return true;
-};
+}

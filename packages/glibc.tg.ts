@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:d9c86c6b5dbddb43a3e08270c5844fc5177d19442cf5b8df4be7c07cd5fa3831";
@@ -26,13 +26,13 @@ export const source = () => {
 		compression: "xz",
 		checksum,
 	});
-};
+}
 
 export type Arg = std.autotools.Arg & {
 	linuxHeaders?: tg.Directory;
 };
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const arg = await std.autotools.arg({ source: source() }, ...args);
 	const { host, build } = arg;
 	std.assert.supportedHost(host, metadata);
@@ -109,7 +109,7 @@ export const build = async (...args: std.Args<Arg>) => {
 	});
 
 	return result;
-};
+}
 
 export default build;
 
@@ -128,7 +128,7 @@ export type LibCArg = {
 };
 
 /** Construct a sysroot containing the libc and the linux headers. */
-export const sysroot = async (unresolvedArg?: tg.Unresolved<LibCArg>) => {
+export async function sysroot(unresolvedArg?: tg.Unresolved<LibCArg>) {
 	const arg =
 		unresolvedArg !== undefined ? await tg.resolve(unresolvedArg) : {};
 	const host = arg.host ?? std.triple.host();
@@ -143,10 +143,10 @@ export const sysroot = async (unresolvedArg?: tg.Unresolved<LibCArg>) => {
 	return tg.directory(cLibrary, {
 		[`${host}/include`]: tg.directory(cLibInclude, linuxHeaders),
 	});
-};
+}
 
 /** Some linker scripts need a small patch to work properly with `ld`'s sysroot replacement, prepending a `=` character to paths that need to resolve relative to the sysroot rather than absolute. This target modifies the script with the given name in the given directory. */
-export const applySysrootFix = async (arg: SysrootFixArg) => {
+export async function applySysrootFix(arg: SysrootFixArg) {
 	let { directory, filePath } = arg;
 	const linkerScript = await arg.directory
 		.get(arg.filePath)
@@ -171,16 +171,16 @@ export const applySysrootFix = async (arg: SysrootFixArg) => {
 		});
 	}
 	return directory;
-};
+}
 
-export const interpreterName = (triple: string) => {
+export function interpreterName(triple: string) {
 	const arch = std.triple.arch(triple);
 	const soVersion = arch === "x86_64" ? "2" : "1";
 	const soArch = arch === "x86_64" ? "x86-64" : arch;
 	return `ld-linux-${soArch}.so.${soVersion}`;
-};
+}
 
-export const test = async () => {
+export async function test() {
 	// Use the same host triple that autotools.arg() resolves, so paths match the DESTDIR output.
 	const host = std.triple.host();
 	const directory = await build();
@@ -195,4 +195,4 @@ export const test = async () => {
 		subpath: `${host}/lib/libc.a`,
 	});
 	return directory;
-};
+}

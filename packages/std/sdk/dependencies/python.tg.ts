@@ -7,7 +7,7 @@ export const metadata = {
 	tag: "Python/3.14.3",
 };
 
-export const source = async () => {
+export async function source() {
 	const { name, version } = metadata;
 	const extension = ".tar.xz";
 	const checksum =
@@ -17,11 +17,11 @@ export const source = async () => {
 		.extractArchive({ base, checksum, name, version, extension })
 		.then(tg.Directory.expect)
 		.then(std.directory.unwrap);
-};
+}
 
 export type Arg = std.autotools.Arg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	// Resolve args first to access build/host for OS detection.
 	const resolved = await std.autotools.arg({ source: source() }, ...args);
 	const host = resolved.host ?? std.triple.host();
@@ -64,14 +64,14 @@ export const build = async (...args: std.Args<Arg>) => {
 		},
 		setRuntimeLibraryPath: true,
 	});
-};
+}
 
 export default build;
 
-export const test = async () => {
+export async function test() {
 	const host = bootstrap.toolchainTriple(std.triple.host());
 	const sdkArg = await bootstrap.sdk.arg(host);
 	// FIXME
 	// await std.assert.pkg({ buildFn: build, binaries: ["python3"], metadata });
 	return true;
-};
+}

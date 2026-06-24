@@ -16,7 +16,7 @@ export const metadata = {
 	},
 };
 
-export const source = () => {
+export function source() {
 	const { name, version } = metadata;
 	const checksum =
 		"sha256:6e81526ae99a4f07f75174600bfe8b73e74c786dc18c9d1ce1800dd6f807414b";
@@ -32,14 +32,14 @@ export const source = () => {
 		version,
 		checksum,
 	});
-};
+}
 
 export type Arg = std.args.BasePackageArg & {
 	requirements?: tg.File;
 };
 
 /** Create an environment with poetry installed. */
-export const self = async (...args: std.Args<Arg>) => {
+export async function self(...args: std.Args<Arg>) {
 	const {
 		build,
 		host,
@@ -50,7 +50,7 @@ export const self = async (...args: std.Args<Arg>) => {
 		source: await source(),
 		python: { build, host, requirements },
 	});
-};
+}
 
 export default self;
 
@@ -77,7 +77,7 @@ export type BuildArgs = {
 };
 
 /** Build a poetry project. */
-export const build = async (args: BuildArgs) => {
+export async function build(args: BuildArgs) {
 	const host = args.host ?? std.triple.host();
 	const buildTriple = args.build ?? host;
 
@@ -211,7 +211,7 @@ export const build = async (args: BuildArgs) => {
 			tg`${installed}/lib/python3/site-packages`,
 		),
 	});
-};
+}
 
 type PoetryPyProjectToml = {
 	tool?: {
@@ -224,7 +224,7 @@ type PoetryPyProjectToml = {
 	};
 };
 
-export const test = async () => {
+export async function test() {
 	const spec = std.assert.defaultSpec(metadata);
 	return await std.assert.pkg(self, spec);
-};
+}

@@ -91,14 +91,11 @@ export type Metadata = {
 };
 
 /** Assert a package contains the specified contents in the conventional locations.  As a packager, it's your responsibility to post-process your package's results to conform to this convention for use in the Tangram ecosystem. */
-export const pkg = async <T extends std.packages.MinimalPackageArg>(
-	/** The function or command that builds the package directory. */
+export async function pkg<T extends std.packages.MinimalPackageArg>(
 	buildCmd: std.packages.BuildFn<T> | std.packages.BuildCommand<T>,
-	/** The spec for the package produced when run with no arguments. */
 	defaultSpec: PackageSpec,
-	/** Additional arguments with their corresponding package specs to test, if any. */
 	...buildVariants: Array<[T, PackageSpec]>
-) => {
+) {
 	const currentHost = std.triple.host();
 
 	// Determine the set of arguments to test. Always test the command with no args against the default spec.
@@ -120,10 +117,10 @@ export const pkg = async <T extends std.packages.MinimalPackageArg>(
 	);
 
 	return results.every((result) => result);
-};
+}
 
 /** Utility to produce the default spec from a `PackageProvides`. In addition to existence checks, it will also test that all binaries report the expected version when executed with the `--version` flag. */
-export const defaultSpec = (metadata: Metadata): PackageSpec => {
+export function defaultSpec(metadata: Metadata): PackageSpec {
 	const { provides } = metadata;
 	return {
 		...provides,
@@ -133,13 +130,13 @@ export const defaultSpec = (metadata: Metadata): PackageSpec => {
 			),
 		}),
 	};
-};
+}
 
-const singlePackageArg = async (
+async function singlePackageArg(
 	directory: tg.Directory,
 	host: string,
 	spec: PackageSpec,
-) => {
+) {
 	const env = spec.env ?? {};
 	// Collect tests to run in parallel. To start, always assert the package directory is non-empty.
 	const tests = [nonEmpty(directory)];
@@ -176,14 +173,14 @@ const singlePackageArg = async (
 
 	await Promise.all(tests);
 	return true;
-};
+}
 
 /** Assert the provided directory has contents. */
-export const nonEmpty = async (dir: tg.Directory) => {
+export async function nonEmpty(dir: tg.Directory) {
 	const entries = await dir.entries;
 	tg.assert(Object.keys(entries).length > 0, "Directory is empty.");
 	return true;
-};
+}
 
 type FileExistsArg = {
 	directory: tg.Directory;
@@ -191,12 +188,12 @@ type FileExistsArg = {
 };
 
 /** Assert the provided path exists and refers to a file. */
-export const fileExists = async (arg: FileExistsArg) => {
+export async function fileExists(arg: FileExistsArg) {
 	const maybeFile = await arg.directory.tryGet(arg.subpath);
 	tg.assert(maybeFile, `Path ${arg.subpath} does not exist.`);
 	tg.File.assert(maybeFile);
 	return true;
-};
+}
 
 type FileExistsOneOfArg = {
 	directory: tg.Directory;
@@ -204,7 +201,7 @@ type FileExistsOneOfArg = {
 };
 
 /** Assert at least one of the provided paths exists in the directory. Useful for heuristic checks with multiple possible locations. */
-export const fileExistsOneOf = async (arg: FileExistsOneOfArg) => {
+export async function fileExistsOneOf(arg: FileExistsOneOfArg) {
 	for (const subpath of arg.subpaths) {
 		const maybeFile = await arg.directory.tryGet(subpath);
 		if (maybeFile !== undefined && maybeFile instanceof tg.File) {
@@ -215,7 +212,7 @@ export const fileExistsOneOf = async (arg: FileExistsOneOfArg) => {
 		false,
 		`None of the following paths exist: ${arg.subpaths.join(", ")}`,
 	);
-};
+}
 
 type RunnableBinArg = {
 	directory: tg.Directory;
@@ -225,7 +222,7 @@ type RunnableBinArg = {
 };
 
 /** Assert the directory contains a binary conforming to the provided spec. */
-export const runnableBin = async (arg: RunnableBinArg) => {
+export async function runnableBin(arg: RunnableBinArg) {
 	if (std.triple.archAndOs(std.triple.host()) !== arg.host) {
 		return true;
 	}
@@ -319,12 +316,12 @@ export const runnableBin = async (arg: RunnableBinArg) => {
 		);
 	}
 	return true;
-};
+}
 
-export const assertFileReferences = async (
+export async function assertFileReferences(
 	file: tg.File,
 	interpreterKind: "normal" | "ld-musl" | "ld-linux",
-) => {
+) {
 	// Only ELF and Mach-O binaries can have embedded manifests.
 	const kind = await std.file.detectExecutableKind(file);
 	tg.assert(
@@ -367,7 +364,7 @@ export const assertFileReferences = async (
 		}
 	}
 	tg.assert(foundFile, "Could not find interpreter in file dependencies.");
-};
+}
 
 type HeaderArg = {
 	directory: tg.Directory;
@@ -376,7 +373,7 @@ type HeaderArg = {
 };
 
 /** Assert the directory contains a header file with the provided name. */
-export const headerCanBeIncluded = async (arg: HeaderArg) => {
+export async function headerCanBeIncluded(arg: HeaderArg) {
 	// Ensure the file exists.
 	await fileExists({
 		directory: arg.directory,
@@ -399,7 +396,7 @@ export const headerCanBeIncluded = async (arg: HeaderArg) => {
 	// Run the program.
 	await $`${program}`;
 	return true;
-};
+}
 
 type LibraryArg = {
 	directory: tg.Directory;
@@ -410,7 +407,7 @@ type LibraryArg = {
 };
 
 /** Assert the directory contains a library conforming to the provided spec. */
-export const linkableLib = async (arg: LibraryArg) => {
+export async function linkableLib(arg: LibraryArg) {
 	// Set up parameters.
 	let name: string | undefined;
 	let pkgConfigName: string | undefined;
@@ -455,7 +452,9 @@ export const linkableLib = async (arg: LibraryArg) => {
 	const hostOs = std.triple.os(std.triple.host());
 	const dylibExtension = hostOs === "darwin" ? "dylib" : "so";
 
-	const dylibName = (name: string) => `lib${name}.${dylibExtension}`;
+	function dylibName(name: string) {
+		return `lib${name}.${dylibExtension}`;
+	}
 
 	// Resolve the actual pkg-config name by checking which file exists.
 	let resolvedPkgConfigName = pkgConfigName;
@@ -536,13 +535,13 @@ export const linkableLib = async (arg: LibraryArg) => {
 
 	await Promise.all(tests);
 	return true;
-};
+}
 
 /** Helper to get pkg-config flags for a library. Returns undefined if pkg-config fails. */
-const getPkgConfigFlags = async (
+async function getPkgConfigFlags(
 	pkgConfigName: string,
 	env: tg.Unresolved<std.env.Arg>,
-): Promise<string | undefined> => {
+): Promise<string | undefined> {
 	try {
 		const flags =
 			await $`pkg-config --cflags --libs ${pkgConfigName} > ${tg.output}`
@@ -554,7 +553,7 @@ const getPkgConfigFlags = async (
 	} catch {
 		return undefined;
 	}
-};
+}
 
 type TestDylibArg = {
 	directory: tg.Directory;
@@ -568,7 +567,7 @@ type TestDylibArg = {
 };
 
 /** Compile, link, and run a program against a dynamic library. */
-export const testDylib = async (arg: TestDylibArg) => {
+export async function testDylib(arg: TestDylibArg) {
 	if (arg.host != std.triple.host()) {
 		throw new Error("unsupported");
 	}
@@ -670,7 +669,7 @@ export const testDylib = async (arg: TestDylibArg) => {
 	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);
 
 	return true;
-};
+}
 
 type TestStaticlibArg = {
 	directory: tg.Directory;
@@ -684,7 +683,7 @@ type TestStaticlibArg = {
 };
 
 /** Compile, link, and run a program against a static library. */
-export const testStaticlib = async (arg: TestStaticlibArg) => {
+export async function testStaticlib(arg: TestStaticlibArg) {
 	if (arg.host != std.triple.host()) {
 		throw new Error("unsupported");
 	}
@@ -742,29 +741,29 @@ export const testStaticlib = async (arg: TestStaticlibArg) => {
 	await $`${program}`.bootstrap(true).env(arg.env).host(arg.host);
 
 	return true;
-};
+}
 
 /** Given a library filename, get the basename to pass to a compiler. Throws if no match. */
-export const baseName = (lib: string): string => {
+export function baseName(lib: string): string {
 	const maybeBaseName = tryBaseName(lib);
 	tg.assert(
 		maybeBaseName,
 		`Library name ${lib} does not match expected pattern.`,
 	);
 	return maybeBaseName;
-};
+}
 
 /** Given a library filename, get the basename to pass to a compiler. Returns undefined if no match. */
-export const tryBaseName = (lib: string): string | undefined => {
+export function tryBaseName(lib: string): string | undefined {
 	const match = lib.match(/^lib(.*)\.(a|so|dylib)$/);
 	if (!match) {
 		return undefined;
 	}
 	return match[1];
-};
+}
 
 /** Ensure the given host is supported according to the metadata. */
-export const supportedHost = (currentHost: string, metadata?: Metadata) => {
+export function supportedHost(currentHost: string, metadata?: Metadata) {
 	const supportedHosts = metadata?.hostPlatforms ?? std.triple.allHosts;
 	const currentArchOs = std.triple.archAndOs(currentHost);
 	const isSupported = supportedHosts.some(
@@ -774,13 +773,13 @@ export const supportedHost = (currentHost: string, metadata?: Metadata) => {
 		isSupported,
 		`current host ${currentHost} not found in supported hosts: ${supportedHosts}.`,
 	);
-};
+}
 
 /** Execute the given file and assert the resulting `stdout` includes the provided string. */
-export const stdoutIncludes = async (
+export async function stdoutIncludes(
 	file: tg.Unresolved<tg.File>,
 	expected: string,
-) => {
+) {
 	const stdout = await $`${file} > ${tg.output}`
 		.bootstrap(true)
 		.env({
@@ -789,16 +788,16 @@ export const stdoutIncludes = async (
 		.then(tg.File.expect)
 		.then((f) => f.text);
 	tg.assert(stdout.includes(expected));
-};
+}
 
 /** Spec helper to assert the given package displays the given version. */
-export const displaysVersion = (name: string, version: string) => {
+export function displaysVersion(name: string, version: string) {
 	return {
 		name,
 		testArgs: ["--version"],
 		snapshot: version,
 	};
-};
+}
 
 /** Helper to create a binary spec without redundantly specifying the name field. */
 export function binary(name: string): string;
@@ -839,7 +838,7 @@ export function binary(
 }
 
 /** Helper to create binary specs from a list of names with selective overrides. */
-export const binaries = (
+export function binaries(
 	names: Array<string>,
 	overrides?: Record<
 		string,
@@ -851,15 +850,15 @@ export const binaries = (
 			testArgs?: Array<string>;
 		}
 	>,
-): Array<BinarySpec> => {
+): Array<BinarySpec> {
 	return names.map((name) => {
 		const override = overrides?.[name];
 		return override ? { name, ...override } : name;
 	});
-};
+}
 
 /** Helper to create binary specs from a list of names, applying the same override to all. */
-export const allBinaries = (
+export function allBinaries(
 	names: Array<string>,
 	override: {
 		exitOnErr?: boolean;
@@ -868,9 +867,9 @@ export const allBinaries = (
 		snapshot?: string;
 		testArgs?: Array<string>;
 	},
-): Array<BinarySpec> => {
+): Array<BinarySpec> {
 	return names.map((name) => ({ name, ...override }));
-};
+}
 
 /** Helper to create a library spec without redundantly specifying the name field. */
 export function library(name: string): string;
@@ -911,7 +910,7 @@ export function library(
 }
 
 /** Helper to create library specs from a list of names with selective overrides. */
-export const libraries = (
+export function libraries(
 	names: Array<string>,
 	overrides?: Record<
 		string,
@@ -923,15 +922,15 @@ export const libraries = (
 			symbols?: Array<string>;
 		}
 	>,
-): Array<LibrarySpec> => {
+): Array<LibrarySpec> {
 	return names.map((name) => {
 		const override = overrides?.[name];
 		return override ? { name, ...override } : name;
 	});
-};
+}
 
 /** Helper to create library specs from a list of names, applying the same configuration to all. */
-export const allLibraries = (
+export function allLibraries(
 	names: Array<string>,
 	config: {
 		pkgConfigName?: boolean | string;
@@ -940,12 +939,12 @@ export const allLibraries = (
 		runtimeDeps?: Array<tg.Unresolved<tg.Directory>>;
 		symbols?: Array<string>;
 	},
-): Array<LibrarySpec> => {
+): Array<LibrarySpec> {
 	return names.map((name) => ({ name, ...config }));
-};
+}
 
 /** Normalize a string by removing common leading whitespace from all lines. */
-const normalizeString = (input: string): string => {
+function normalizeString(input: string): string {
 	// Split the lines.
 	let lines = input.split("\n");
 
@@ -973,12 +972,12 @@ const normalizeString = (input: string): string => {
 	return lines
 		.map((line) => line.slice(leadingWhitespaceCount).replace(/\t/g, "  "))
 		.join("\n");
-};
+}
 
-export const dedent = (
+export function dedent(
 	strings: TemplateStringsArray,
 	...placeholders: Array<string>
-): string => {
+): string {
 	// Concatenate the strings and placeholders.
 	let string = "";
 	let i = 0;
@@ -991,15 +990,15 @@ export const dedent = (
 	string += strings[i];
 
 	return normalizeString(string);
-};
+}
 
 /** Normalize a snapshot string for comparison by removing common leading whitespace. */
-export const normalizeSnapshot = (snapshot: string): string => {
+export function normalizeSnapshot(snapshot: string): string {
 	return normalizeString(snapshot);
-};
+}
 
 /** Sort object keys recursively for consistent comparison */
-const sortKeys = (obj: unknown): unknown => {
+function sortKeys(obj: unknown): unknown {
 	if (obj === null || typeof obj !== "object") {
 		return obj;
 	}
@@ -1016,14 +1015,14 @@ const sortKeys = (obj: unknown): unknown => {
 		sorted[key] = sortKeys((obj as Record<string, unknown>)[key]);
 	}
 	return sorted;
-};
+}
 
 /** Assert that a value matches a JSON snapshot. Compares structure by parsing and normalizing both sides. */
-export const assertJsonSnapshot = (
+export function assertJsonSnapshot(
 	actual: unknown,
 	expected: string,
 	message?: string,
-) => {
+) {
 	// Parse the expected snapshot as JSON to compare structure, not formatting
 	const expectedParsed = JSON.parse(normalizeSnapshot(expected));
 
@@ -1040,7 +1039,7 @@ export const assertJsonSnapshot = (
 		message ??
 			`JSON snapshot mismatch.\n\nExpected:\n${expectedJson}\n\nActual:\n${actualJson}`,
 	);
-};
+}
 
 const allPlatforms = [
 	"aarch64-linux",
@@ -1049,7 +1048,7 @@ const allPlatforms = [
 	"x86_64-linux",
 ];
 
-const allBuildHostPairs = (metadata: Metadata): Array<std.args.PackageArg> => {
+function allBuildHostPairs(metadata: Metadata): Array<std.args.PackageArg> {
 	const buildPlatforms = metadata.buildPlatforms ?? allPlatforms;
 	const hostPlatforms = metadata.hostPlatforms ?? allPlatforms;
 	const results: Array<std.args.PackageArg> = [];
@@ -1059,7 +1058,7 @@ const allBuildHostPairs = (metadata: Metadata): Array<std.args.PackageArg> => {
 		}
 	}
 	return results;
-};
+}
 
 // Some options for tuning the generation - this can generate huge matrices quickly.
 type GenerateArgsOptions = {
@@ -1074,9 +1073,9 @@ type GenerateArgsOptions = {
 };
 
 /** Generate all permutations of package arg. */
-const generatePackageArgs = <T extends std.packages.MinimalPackageArg>(
+function generatePackageArgs<T extends std.packages.MinimalPackageArg>(
 	metadata: std.assert.Metadata,
 	options?: GenerateArgsOptions,
-): Array<T> => {
+): Array<T> {
 	return tg.unimplemented();
-};
+}

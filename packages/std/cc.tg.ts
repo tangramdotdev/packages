@@ -46,7 +46,7 @@ export type FlagsArg = {
  * - Strip flags for smaller binaries
  * - RELRO for GOT protection on Linux
  */
-export const flags = (arg: FlagsArg, envs: std.Args<std.env.Arg>): void => {
+export function flags(arg: FlagsArg, envs: std.Args<std.env.Arg>): void {
 	const {
 		host,
 		fortifySource: fortifySource_ = 2,
@@ -128,7 +128,7 @@ export const flags = (arg: FlagsArg, envs: std.Args<std.env.Arg>): void => {
 		const extraLdFlags = `-Wl,-z,relro${fullRelroString} -Wl,--as-needed`;
 		envs.push({ LDFLAGS: tg.Mutation.suffix(extraLdFlags, " ") });
 	}
-};
+}
 
 /** Arguments for complete C/C++ environment setup. */
 export type EnvArg = FlagsArg & {
@@ -164,7 +164,7 @@ export type EnvArg = FlagsArg & {
  * - Compiler flags from `flags()`
  * - User-provided environment (highest precedence)
  */
-export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
+export async function env(arg: EnvArg): Promise<std.env.Arg> {
 	const {
 		bootstrap = false,
 		build: build_,
@@ -262,4 +262,4 @@ export const env = async (arg: EnvArg): Promise<std.env.Arg> => {
 
 	// Include any user-defined env with higher precedence.
 	return std.env.arg(...envs, userEnv, { utils: false });
-};
+}

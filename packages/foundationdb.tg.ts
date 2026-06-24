@@ -22,7 +22,7 @@ export const metadata = {
 
 export type Arg = std.args.BasePackageArg;
 
-export const build = async (...args: std.Args<Arg>) => {
+export async function build(...args: std.Args<Arg>) {
 	const { build, host } = await std.packages.applyArgs<Arg>(...args);
 	const os = std.triple.os(host);
 	if (os === "linux") {
@@ -32,11 +32,11 @@ export const build = async (...args: std.Args<Arg>) => {
 	} else {
 		return tg.unreachable(`unrecognized os ${os}`);
 	}
-};
+}
 
 export default build;
 
-export const downloadLinuxPrebuilt = async (build: string, host: string) => {
+export async function downloadLinuxPrebuilt(build: string, host: string) {
 	const { repository, version } = metadata;
 	const build_ = std.triple.create(std.triple.normalize(build), {
 		environment: "gnu",
@@ -84,9 +84,9 @@ export const downloadLinuxPrebuilt = async (build: string, host: string) => {
 			["libfdb_c.so"]: libraryFile,
 		},
 	});
-};
+}
 
-export const downloadMacosPrebuilt = async (build: string, host: string) => {
+export async function downloadMacosPrebuilt(build: string, host: string) {
 	const { repository, version } = metadata;
 	const arch = std.triple.arch(host) === "aarch64" ? "arm64" : "x86_64";
 	const checksum =
@@ -140,7 +140,7 @@ export const downloadMacosPrebuilt = async (build: string, host: string) => {
 			`
 		.env(libarchive({ host }), xar({ host }))
 		.then(tg.Directory.expect);
-};
+}
 
 const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	["aarch64-linux"]: {
@@ -173,7 +173,7 @@ const linuxChecksums: { [key: string]: { [key: string]: tg.Checksum } } = {
 	},
 };
 
-export const test = async () => {
+export async function test() {
 	const host = std.triple.host();
 	const os = std.triple.os(host);
 
@@ -191,4 +191,4 @@ export const test = async () => {
 		}),
 	};
 	return await std.assert.pkg(build, spec);
-};
+}
