@@ -567,7 +567,7 @@ pub fn collect_dependencies_from_value_data(
 	dependencies: &mut BTreeMap<tg::Reference, Option<tg::file::Dependency>>,
 ) {
 	match value {
-		tg::value::Data::Object(id) => match id {
+		tg::value::Data::Object(id) => match id.as_ref().map_right(|wt| &wt.id).into_inner() {
 			tg::object::Id::File(id) => {
 				let id = tg::object::Id::from(id.clone());
 				dependencies.insert(
@@ -617,6 +617,7 @@ pub fn collect_dependencies_from_template_data(
 ) {
 	for component in &value.components {
 		if let tg::template::data::Component::Artifact(id) = component {
+			let id = id.as_ref().map_right(|wt| &wt.id).into_inner();
 			let id = tg::object::Id::from(id.clone());
 			dependencies.insert(
 				tg::Reference::with_object(id.clone()),

@@ -12,41 +12,26 @@ pub mod tracing;
 
 pub mod error;
 
-/// Convert a [`tg::template::Data`] to its corresponding [`tg::symlink::Data`] object.
-pub fn template_data_to_symlink_data(
-	template: tg::template::Data,
-) -> tg::Result<tg::symlink::Data> {
-	let components = template.components;
-	match components.as_slice() {
-		[tg::template::data::Component::String(s)] => {
-			Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-				artifact: None,
-				path: Some(s.into()),
-			}))
+/// Interpret a [`tg::Template`] as its corresponding [`tg::Symlink`].
+pub fn template_to_symlink(template: &tg::Template) -> tg::Result<tg::Symlink> {
+	use tg::template::Component;
+	match template.components() {
+		[Component::String(s)] => Ok(tg::Symlink::with_path(s.into())),
+		[Component::Artifact(artifact)]
+		| [Component::String(_), Component::Artifact(artifact)] => {
+			Ok(tg::Symlink::with_artifact(artifact.clone()))
 		},
-		[tg::template::data::Component::Artifact(id)]
+		[Component::Artifact(artifact), Component::String(s)]
 		| [
-			tg::template::data::Component::String(_),
-			tg::template::data::Component::Artifact(id),
-		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-			artifact: Some(tg::graph::data::Edge::Object(id.clone())),
-			path: None,
-		})),
-		[
-			tg::template::data::Component::Artifact(artifact_id),
-			tg::template::data::Component::String(s),
-		]
-		| [
-			tg::template::data::Component::String(_),
-			tg::template::data::Component::Artifact(artifact_id),
-			tg::template::data::Component::String(s),
-		] => Ok(tg::symlink::Data::Node(tg::symlink::data::Node {
-			artifact: Some(tg::graph::data::Edge::Object(artifact_id.clone())),
-			path: Some(s.chars().skip(1).collect::<String>().into()),
-		})),
-		_ => Err(tg::error!(
-			"expected a template with 1-3 components, got {:?}",
-			components
+			Component::String(_),
+			Component::Artifact(artifact),
+			Component::String(s),
+		] => Ok(tg::Symlink::with_artifact_and_path(
+			artifact.clone(),
+			s.chars().skip(1).collect::<String>().into(),
+		)),
+		components => Err(tg::error!(
+			"expected a template with 1-3 components, got {components:?}"
 		)),
 	}
 }
@@ -138,6 +123,7 @@ pub fn render_template_data(data: &tg::template::Data) -> tg::Result<String> {
 		.map(|component| match component {
 			tg::template::data::Component::String(string) => Ok(string.clone()),
 			tg::template::data::Component::Artifact(artifact_id) => {
+				let artifact_id = artifact_id.as_ref().map_right(|wt| &wt.id).into_inner();
 				let path = artifact_path_for(artifact_id).ok_or_else(|| {
 					tg::error!("artifact {artifact_id} not present in any artifact root")
 				})?;

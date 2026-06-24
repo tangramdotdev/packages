@@ -476,16 +476,12 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 		.into_iter()
 		.chain(
 			futures::future::try_join_all(options.library_paths.iter().map(|library_path| async {
-				let symlink_data = common::template_data_to_symlink_data(
-					common::unrender(library_path)?.to_data(),
-				)?;
-				let artifact_path = match symlink_data.clone() {
-					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
-						artifact: Some(tg::graph::data::Edge::Object(artifact_id)),
-						path,
-					}) => {
-						tracing::debug!(?artifact_id, ?path, "checking for entries");
-						let artifact = tg::Artifact::with_id(artifact_id.clone());
+				let symlink = common::template_to_symlink(&common::unrender(library_path)?)?;
+				let artifact = symlink.artifact().await?;
+				let path = symlink.path().await?;
+				let artifact_path = match (artifact, path) {
+					(Some(artifact), path) => {
+						tracing::debug!(?artifact, ?path, "checking for entries");
 						if let Ok(directory) = artifact.try_unwrap_directory() {
 							let entries = if let Some(ref subpath) = path {
 								if let Ok(subdirectory) =
@@ -501,11 +497,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 							if entries.is_empty() {
 								None
 							} else {
-								tracing::debug!(
-									?artifact_id,
-									?path,
-									"found a directory with entries"
-								);
+								tracing::debug!(?path, "found a directory with entries");
 								let dir_with_subpath =
 									dir_with_subpath_from_directory(&directory, path).await?;
 								Some(dir_with_subpath)
@@ -514,10 +506,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 							None
 						}
 					},
-					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
-						artifact: None,
-						path: Some(path),
-					}) => {
+					(None, Some(path)) => {
 						tracing::debug!(
 							"Library path points into working directory: {:?}. Creating directory.",
 							path
@@ -531,14 +520,7 @@ async fn create_wrapper(options: &Options) -> tg::Result<()> {
 							None
 						}
 					},
-					tg::symlink::data::Symlink::Node(tg::symlink::data::Node {
-						artifact: None,
-						path: None,
-					}) => None,
-					_ => {
-						tracing::warn!(?symlink_data, "ecountered a graph object");
-						None
-					},
+					(None, None) => None,
 				};
 				Ok::<_, tg::Error>(artifact_path)
 			}))
@@ -1265,6 +1247,7 @@ async fn resolve_directories<H: BuildHasher + Default>(
 		futures::future::try_join_all(unresolved_paths.iter().map(|dir_with_subpath| async {
 			let resolved_dir_with_subpath = if let Some(subpath) = &dir_with_subpath.subpath {
 				let directory = tg::Directory::with_id(dir_with_subpath.id.clone());
+				directory.state().set_token(dir_with_subpath.token.clone());
 				let Some(inner) = directory.try_get(subpath).await? else {
 					return Err(
 						tg::error!(directory = %dir_with_subpath.id, subpath = %subpath.display(), "unable to retrieve subpath from directory"),
@@ -1558,6 +1541,7 @@ pub async fn directory_from_dir_with_subpath(
 	dir_with_subpath: &DirectoryWithSubpath,
 ) -> tg::Result<tg::Directory> {
 	let outer = tg::Directory::with_id(dir_with_subpath.id.clone());
+	outer.state().set_token(dir_with_subpath.token.clone());
 	let directory = if let Some(ref subpath) = dir_with_subpath.subpath {
 		let Some(inner) = outer.try_get(subpath).await? else {
 			return Err(
@@ -1578,14 +1562,36 @@ pub async fn dir_with_subpath_from_directory(
 ) -> tg::Result<DirectoryWithSubpath> {
 	directory.store().await?;
 	let id = directory.id();
-	let ret = DirectoryWithSubpath { id, subpath };
+	let token = directory.state().token();
+	let ret = DirectoryWithSubpath {
+		id,
+		subpath,
+		token,
+	};
 	Ok(ret)
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct DirectoryWithSubpath {
 	id: tg::directory::Id,
 	subpath: Option<PathBuf>,
+	// Excluded from equality and hashing, since it does not change which directory is referenced.
+	token: Option<tg::grant::Token>,
+}
+
+impl PartialEq for DirectoryWithSubpath {
+	fn eq(&self, other: &Self) -> bool {
+		self.id == other.id && self.subpath == other.subpath
+	}
+}
+
+impl Eq for DirectoryWithSubpath {}
+
+impl std::hash::Hash for DirectoryWithSubpath {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.id.hash(state);
+		self.subpath.hash(state);
+	}
 }
 
 #[cfg(test)]
