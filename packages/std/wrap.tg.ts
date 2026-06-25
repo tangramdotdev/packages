@@ -2202,7 +2202,7 @@ const mutationFromManifestMutation = (
 const manifestValueFromValue = async (
 	value: tg.Value,
 ): Promise<wrap.Manifest.Value> => {
-	if (typeof value === undefined) {
+	if (value === undefined || value === null) {
 		return undefined;
 	} else if (typeof value === "boolean") {
 		return value;

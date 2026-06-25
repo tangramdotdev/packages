@@ -767,7 +767,7 @@ export const constructBodyTemplate = async (
 export const maybeMutationToTemplate = async (
 	arg: tg.MaybeMutation,
 ): Promise<tg.Template> => {
-	if (arg === undefined) {
+	if (arg === undefined || arg === null) {
 		return tg.template();
 	} else if (arg instanceof tg.Mutation) {
 		if (arg.inner.kind === "unset") {

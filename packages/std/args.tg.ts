@@ -53,6 +53,7 @@ export type MakeArrayKeys<T, K extends keyof T> = {
 
 type ValueOrMaybeMutationMap<T extends tg.Value = tg.Value> = T extends
 	| undefined
+	| null
 	| boolean
 	| number
 	| string
